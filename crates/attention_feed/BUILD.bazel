@@ -1,0 +1,69 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "attention_feed",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [
+        "default",
+        "inbound",
+        "outbound",
+        "test-utils",
+    ],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/attention_feed"},
+    deps = [
+        "//crates/activity:activity",
+        "//crates/cowlike:cowlike",
+        "//crates/email:email",
+        "//crates/entity_access:entity_access",
+        "//crates/item_filters:item_filters",
+        "//crates/macro_user_id:macro_user_id",
+        "//crates/model-entity:model_entity",
+        "//crates/model_notifications:model_notifications",
+        "//crates/models_soup:models_soup",
+        "//crates/notification:notification",
+        "//crates/soup:soup",
+        "//crates/soup_realtime:soup_realtime",
+        "@crates//:async-stream-0.3.6",
+        "@crates//:base64-0.22.1",
+        "@crates//:chrono-0.4.45",
+        "@crates//:futures-0.3.32",
+        "@crates//:rootcause-0.12.1",
+        "@crates//:serde-1.0.228",
+        "@crates//:serde_json-1.0.150",
+        "@crates//:thiserror-2.0.18",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tracing-0.1.44",
+        "@crates//:uuid-1.23.1",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "attention_feed_unit",
+    crate = ":attention_feed",
+    crate_features = [
+        "default",
+        "inbound",
+        "outbound",
+        "test-utils",
+    ],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/attention_feed"},
+    deps = [],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/attention_feed"},
+)
+

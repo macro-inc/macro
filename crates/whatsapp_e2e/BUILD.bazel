@@ -1,0 +1,57 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "whatsapp_e2e",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + ["//crates/macro_db_client:migrations", "//:sqlx_offline_data", "//tooling/bazel-proto:fake_cargo.sh"],
+    rustc_env = {"BAZEL_WS_ROOT": "/proc/self/cwd", "CARGO": "/proc/self/cwd/../../tooling/bazel-proto/fake_cargo.sh", "CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/whatsapp_e2e", "SQLX_OFFLINE": "true"},
+    deps = [
+        "//crates/entity_access:entity_access",
+        "//crates/entity_access_db_utils:entity_access_db_utils",
+        "//crates/external_chat:external_chat",
+        "//crates/whatsapp_fake_server:whatsapp_fake_server",
+        "//crates/whatsapp_linked:whatsapp_linked",
+        "//crates/whatsapp_store_pg:whatsapp_store_pg",
+        "//crates/whatsmeow:whatsmeow",
+        "//services/whatsapp_session_service:whatsapp_session_service",
+        "@crates//:sqlx-0.8.6",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tokio-util-0.7.18",
+        "@crates//:tracing-0.1.44",
+        "@crates//:uuid-1.23.1",
+        "@crates//:zeroize-1.9.0",
+    ],
+    proc_macro_deps = [
+        "@crates//:async-trait-0.1.89",
+    ],
+    aliases = {},
+)
+
+rust_test(
+    name = "whatsapp_e2e_unit",
+    crate = ":whatsapp_e2e",
+    crate_features = [],
+    rustc_env = {"BAZEL_WS_ROOT": "/proc/self/cwd", "CARGO": "/proc/self/cwd/../../tooling/bazel-proto/fake_cargo.sh", "CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/whatsapp_e2e", "DATABASE_URL": "postgres://user@127.0.0.1:60097/macrodb", "SQLX_OFFLINE": "false"},
+    deps = [
+        "//crates/macro_db_migrator:macro_db_migrator",
+        "//crates/macro_user_id:macro_user_id",
+        "//crates/whatsmeow_signal:whatsmeow_signal",
+        "@crates//:chrono-0.4.45",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + ["//crates/macro_db_client:migrations"],
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/whatsapp_e2e"},
+)
+

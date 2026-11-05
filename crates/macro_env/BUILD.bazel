@@ -1,0 +1,45 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "macro_env",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [
+        "strum",
+    ],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_env"},
+    deps = [
+        "//crates/macro_env_var:macro_env_var",
+        "@crates//:serde-1.0.228",
+        "@crates//:strum-0.27.2",
+        "@crates//:thiserror-2.0.18",
+        "@crates//:tracing-0.1.44",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "macro_env_unit",
+    crate = ":macro_env",
+    crate_features = [
+        "strum",
+    ],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_env"},
+    deps = [],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_env"},
+)
+

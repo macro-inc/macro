@@ -1,0 +1,53 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "graphql_notification",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/graphql_notification"},
+    deps = [
+        "//crates/graphql_common:graphql_common",
+        "//crates/macro_user_id:macro_user_id",
+        "//crates/model-entity:model_entity",
+        "//crates/model_notifications:model_notifications",
+        "//crates/notification:notification",
+        "//crates/notification_state:notification_state",
+        "@crates//:async-graphql-7.2.1",
+        "@crates//:async-stream-0.3.6",
+        "@crates//:rootcause-0.12.1",
+        "@crates//:serde_json-1.0.150",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tokio-stream-0.1.18",
+        "@crates//:tracing-0.1.44",
+        "@crates//:uuid-1.23.1",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "graphql_notification_unit",
+    crate = ":graphql_notification",
+    crate_features = [],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/graphql_notification"},
+    deps = [
+        "@crates//:chrono-0.4.45",
+        "@crates//:futures-0.3.32",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/graphql_notification"},
+)
+

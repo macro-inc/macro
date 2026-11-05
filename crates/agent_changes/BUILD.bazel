@@ -1,0 +1,74 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "agent_changes",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [
+        "default",
+        "inbound",
+        "outbound",
+        "schema",
+        "test-utils",
+    ],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + ["//crates/macro_db_client:migrations", "//:sqlx_offline_data", "//tooling/bazel-proto:fake_cargo.sh"],
+    rustc_env = {"BAZEL_WS_ROOT": "/proc/self/cwd", "CARGO": "/proc/self/cwd/../../tooling/bazel-proto/fake_cargo.sh", "CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/agent_changes", "SQLX_OFFLINE": "true"},
+    deps = [
+        "//crates/agent_session:agent_session",
+        "//crates/entity_access:entity_access",
+        "//crates/folds/agent_fold:agent_fold",
+        "//crates/git_patch:git_patch",
+        "//crates/github_pull_requests:github_pull_requests",
+        "//crates/macro_authorization:macro_authorization",
+        "//crates/macro_user_id:macro_user_id",
+        "//crates/macro_uuid:macro_uuid",
+        "@crates//:anyhow-1.0.103",
+        "@crates//:aws-sdk-s3-1.133.0",
+        "@crates//:axum-0.8.9",
+        "@crates//:chrono-0.4.45",
+        "@crates//:dashmap-6.2.1",
+        "@crates//:rootcause-0.12.1",
+        "@crates//:serde-1.0.228",
+        "@crates//:serde_json-1.0.150",
+        "@crates//:sqlx-0.8.6",
+        "@crates//:strum-0.27.2",
+        "@crates//:thiserror-2.0.18",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tracing-0.1.44",
+        "@crates//:utoipa-5.5.0",
+        "@crates//:uuid-1.23.1",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "agent_changes_unit",
+    crate = ":agent_changes",
+    crate_features = [
+        "default",
+        "inbound",
+        "outbound",
+        "schema",
+        "test-utils",
+    ],
+    rustc_env = {"BAZEL_WS_ROOT": "/proc/self/cwd", "CARGO": "/proc/self/cwd/../../tooling/bazel-proto/fake_cargo.sh", "CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/agent_changes", "DATABASE_URL": "postgres://user@127.0.0.1:60097/macrodb", "SQLX_OFFLINE": "false"},
+    deps = [
+        "//crates/bot_id:bot_id",
+        "//crates/macro_db_migrator:macro_db_migrator",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + ["//crates/macro_db_client:migrations"],
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/agent_changes"},
+)
+

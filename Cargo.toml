@@ -4,6 +4,7 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "tooling/bazel-proto/all_features",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",

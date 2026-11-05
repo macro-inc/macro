@@ -1,0 +1,46 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "sync_service_hex",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [
+        "default",
+        "inbound",
+    ],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/sync_service"},
+    deps = [
+        "//crates/macro_authorization:macro_authorization",
+        "@crates//:axum-0.8.9",
+        "@crates//:serde-1.0.228",
+        "@crates//:utoipa-5.5.0",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "sync_service_hex_unit",
+    crate = ":sync_service_hex",
+    crate_features = [
+        "default",
+        "inbound",
+    ],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/sync_service"},
+    deps = [],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/sync_service"},
+)
+

@@ -1,0 +1,88 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "sha_cleanup_worker",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [
+        "local",
+        "redis_client_test",
+    ],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + ["//crates/macro_db_client:migrations", "//:sqlx_offline_data", "//tooling/bazel-proto:fake_cargo.sh"],
+    rustc_env = {"BAZEL_WS_ROOT": "/proc/self/cwd", "CARGO": "/proc/self/cwd/../../tooling/bazel-proto/fake_cargo.sh", "CARGO_MANIFEST_DIR": "/proc/self/cwd/services/sha_cleanup_worker", "SQLX_OFFLINE": "true"},
+    deps = [
+        "//crates/macro_aws_config:macro_aws_config",
+        "//crates/macro_entrypoint:macro_entrypoint",
+        "//crates/macro_env:macro_env",
+        "//crates/macro_env_var:macro_env_var",
+        "//crates/macro_sha_count_client:macro_sha_count_client",
+        "@crates//:anyhow-1.0.103",
+        "@crates//:aws-sdk-s3-1.133.0",
+        "@crates//:futures-0.3.32",
+        "@crates//:mockall-0.13.1",
+        "@crates//:redis-1.2.1",
+        "@crates//:sqlx-0.8.6",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tracing-0.1.44",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "sha_cleanup_worker_unit",
+    crate = ":sha_cleanup_worker",
+    crate_features = [
+        "local",
+        "redis_client_test",
+    ],
+    rustc_env = {"BAZEL_WS_ROOT": "/proc/self/cwd", "CARGO": "/proc/self/cwd/../../tooling/bazel-proto/fake_cargo.sh", "CARGO_MANIFEST_DIR": "/proc/self/cwd/services/sha_cleanup_worker", "DATABASE_URL": "postgres://user@127.0.0.1:60097/macrodb", "SQLX_OFFLINE": "false"},
+    deps = [],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + ["//crates/macro_db_client:migrations"],
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/services/sha_cleanup_worker"},
+)
+
+rust_binary(
+    name = "sha_cleanup_worker_bin",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_name = "sha_cleanup_worker",
+    crate_root = "src/main.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [
+        "local",
+        "redis_client_test",
+    ],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + ["//crates/macro_db_client:migrations", "//:sqlx_offline_data", "//tooling/bazel-proto:fake_cargo.sh"],
+    rustc_env = {"BAZEL_WS_ROOT": "/proc/self/cwd", "CARGO": "/proc/self/cwd/../../tooling/bazel-proto/fake_cargo.sh", "CARGO_MANIFEST_DIR": "/proc/self/cwd/services/sha_cleanup_worker", "SQLX_OFFLINE": "true"},
+    deps = [
+        "//crates/macro_aws_config:macro_aws_config",
+        "//crates/macro_entrypoint:macro_entrypoint",
+        "//crates/macro_env:macro_env",
+        "//crates/macro_env_var:macro_env_var",
+        "//crates/macro_sha_count_client:macro_sha_count_client",
+        ":sha_cleanup_worker",
+        "@crates//:anyhow-1.0.103",
+        "@crates//:aws-sdk-s3-1.133.0",
+        "@crates//:futures-0.3.32",
+        "@crates//:mockall-0.13.1",
+        "@crates//:redis-1.2.1",
+        "@crates//:sqlx-0.8.6",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tracing-0.1.44",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+

@@ -1,0 +1,51 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "graphql_databases",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/graphql_databases"},
+    deps = [
+        "//crates/databases:databases",
+        "//crates/databases_sql:databases_sql",
+        "//crates/entity_access:entity_access",
+        "//crates/graphql_common:graphql_common",
+        "//crates/graphql_soup:graphql_soup",
+        "//crates/macro_user_id:macro_user_id",
+        "//crates/model-entity:model_entity",
+        "//crates/models_databases:models_databases",
+        "@crates//:async-graphql-7.2.1",
+        "@crates//:chrono-0.4.45",
+        "@crates//:futures-0.3.32",
+        "@crates//:tracing-0.1.44",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "graphql_databases_unit",
+    crate = ":graphql_databases",
+    crate_features = [],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/graphql_databases"},
+    deps = [
+        "@crates//:rootcause-0.12.1",
+        "@crates//:tokio-1.54.1",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/graphql_databases"},
+)
+

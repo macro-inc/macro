@@ -1,0 +1,60 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "jev",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [
+        "decisions",
+        "default",
+        "outbound",
+    ],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/jev"},
+    deps = [
+        "//crates/ai_billing:ai_billing",
+        "//crates/ai_usage:ai_usage",
+        "//crates/macro_env_var:macro_env_var",
+        "//crates/macro_user_id:macro_user_id",
+        "@crates//:reqwest-0.13.4",
+        "@crates//:schemars-1.2.1",
+        "@crates//:serde-1.0.228",
+        "@crates//:serde_json-1.0.150",
+        "@crates//:thiserror-2.0.18",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tracing-0.1.44",
+        "@crates//:utoipa-5.5.0",
+    ],
+    proc_macro_deps = [
+        "@crates//:async-trait-0.1.89",
+    ],
+    aliases = {},
+)
+
+rust_test(
+    name = "jev_unit",
+    crate = ":jev",
+    crate_features = [
+        "decisions",
+        "default",
+        "outbound",
+    ],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/jev"},
+    deps = [
+        "@crates//:wiremock-0.6.5",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/jev"},
+)
+

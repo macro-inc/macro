@@ -1,0 +1,52 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "sync_router",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/sync_router"},
+    deps = [
+        "//services/sync-service/bebop-schema:sync_service_bebop_schema",
+        "@crates//:anyhow-1.0.103",
+        "@crates//:bebop-3.2.3",
+        "@crates//:futures-0.3.32",
+        "@crates//:opentelemetry-0.31.0",
+        "@crates//:rustls-0.23.46",
+        "@crates//:thiserror-2.0.18",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tokio-tungstenite-0.28.0",
+        "@crates//:tokio-util-0.7.18",
+        "@crates//:tracing-0.1.44",
+        "@crates//:tracing-opentelemetry-0.32.1",
+        "@crates//:url-2.5.8",
+        "@crates//:webpki-roots-1.0.10",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "sync_router_unit",
+    crate = ":sync_router",
+    crate_features = [],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/sync_router"},
+    deps = [
+        "@crates//:mockall-0.13.1",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/sync_router"},
+)
+

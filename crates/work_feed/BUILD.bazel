@@ -1,0 +1,52 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "work_feed",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/work_feed"},
+    deps = [
+        "//crates/attention_feed:attention_feed",
+        "//crates/document_sub_type:document_sub_type",
+        "//crates/filter_ast:filter_ast",
+        "//crates/item_filters:item_filters",
+        "//crates/macro_user_id:macro_user_id",
+        "//crates/model-entity:model_entity",
+        "//crates/model_notifications:model_notifications",
+        "@crates//:chrono-0.4.45",
+        "@crates//:rootcause-0.12.1",
+        "@crates//:serde-1.0.228",
+        "@crates//:tracing-0.1.44",
+        "@crates//:uuid-1.23.1",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "work_feed_unit",
+    crate = ":work_feed",
+    crate_features = [],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/work_feed"},
+    deps = [
+        "//crates/notification:notification",
+        "@crates//:serde_json-1.0.150",
+        "@crates//:tokio-1.54.1",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/work_feed"},
+)
+

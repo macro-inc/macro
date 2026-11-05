@@ -1,0 +1,76 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "agent",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [
+        "debug-messages",
+    ],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/agent"},
+    deps = [
+        "//crates/ai_toolset:ai_toolset",
+        "//crates/ai_usage:ai_usage",
+        "//crates/attachment:attachment",
+        "//crates/genai_telemetry:genai_telemetry",
+        "//crates/macro_env_var:macro_env_var",
+        "//crates/macro_user_id:macro_user_id",
+        "//crates/prompt:prompt",
+        "@crates//:anyhow-1.0.103",
+        "@crates//:async-openai-0.36.1",
+        "@crates//:async-stream-0.3.6",
+        "@crates//:bytes-1.11.1",
+        "@crates//:chrono-0.4.45",
+        "@crates//:futures-0.3.32",
+        "@crates//:jsonschema-0.58.6",
+        "@crates//:regex-1.13.1",
+        "@crates//:reqwest-0.13.4",
+        "@crates//:rig-agent-0.41.0",
+        "@crates//:rig-core-0.41.0",
+        "@crates//:schemars-1.2.1",
+        "@crates//:serde-1.0.228",
+        "@crates//:serde_json-1.0.150",
+        "@crates//:strum-0.27.2",
+        "@crates//:thiserror-2.0.18",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tokio-util-0.7.18",
+        "@crates//:tracing-0.1.44",
+        "@crates//:utoipa-5.5.0",
+    ],
+    proc_macro_deps = [
+        "@crates//:async-trait-0.1.89",
+    ],
+    aliases = {},
+)
+
+rust_test(
+    name = "agent_unit",
+    crate = ":agent",
+    crate_features = [
+        "debug-messages",
+    ],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/agent"},
+    deps = [
+        "//crates/model-entity:model_entity",
+        "//crates/non_empty:non_empty",
+        "@crates//:opentelemetry-0.31.0",
+        "@crates//:opentelemetry_sdk-0.31.0",
+        "@crates//:tracing-opentelemetry-0.32.1",
+        "@crates//:tracing-subscriber-0.3.23",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/agent"},
+)
+

@@ -1,0 +1,53 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "static_file",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [
+        "attachment",
+        "default",
+        "outbound",
+    ],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/static_file"},
+    deps = [
+        "//crates/attachment:attachment",
+        "//crates/macro_user_id:macro_user_id",
+        "//crates/model-entity:model_entity",
+        "//crates/non_empty:non_empty",
+        "@crates//:anyhow-1.0.103",
+        "@crates//:futures-0.3.32",
+        "@crates//:mime-0.3.17",
+        "@crates//:reqwest-0.13.4",
+        "@crates//:tracing-0.1.44",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "static_file_unit",
+    crate = ":static_file",
+    crate_features = [
+        "attachment",
+        "default",
+        "outbound",
+    ],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/static_file"},
+    deps = [],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/static_file"},
+)
+

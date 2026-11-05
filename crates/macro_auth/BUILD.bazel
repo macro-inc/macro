@@ -1,0 +1,93 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "macro_auth",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [
+        "testing",
+    ],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_auth"},
+    deps = [
+        "//crates/macro_env:macro_env",
+        "//crates/macro_env_var:macro_env_var",
+        "//crates/macro_user_id:macro_user_id",
+        "//crates/remote_env_var:remote_env_var",
+        "@crates//:anyhow-1.0.103",
+        "@crates//:axum-0.8.9",
+        "@crates//:axum-extra-0.10.3",
+        "@crates//:cookie-0.18.1",
+        "@crates//:jsonwebtoken-10.3.0",
+        "@crates//:rand-0.9.4",
+        "@crates//:serde-1.0.228",
+        "@crates//:serde_json-1.0.150",
+        "@crates//:thiserror-2.0.18",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tracing-0.1.44",
+        "@crates//:uuid-1.23.1",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "macro_auth_unit",
+    crate = ":macro_auth",
+    crate_features = [
+        "testing",
+    ],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_auth"},
+    deps = [],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_auth"},
+)
+
+rust_test(
+    name = "internal_api_key_itest",
+    srcs = depset(["tests/internal_api_key.rs"] + glob(["tests/**/*.rs"])).to_list(),
+    crate_name = "internal_api_key",
+    crate_root = "tests/internal_api_key.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [
+        "testing",
+    ],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_auth"},
+    deps = [
+        "//crates/macro_env:macro_env",
+        "//crates/macro_env_var:macro_env_var",
+        "//crates/macro_user_id:macro_user_id",
+        "//crates/remote_env_var:remote_env_var",
+        ":macro_auth",
+        "@crates//:anyhow-1.0.103",
+        "@crates//:axum-0.8.9",
+        "@crates//:axum-extra-0.10.3",
+        "@crates//:cookie-0.18.1",
+        "@crates//:jsonwebtoken-10.3.0",
+        "@crates//:rand-0.9.4",
+        "@crates//:serde-1.0.228",
+        "@crates//:serde_json-1.0.150",
+        "@crates//:thiserror-2.0.18",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tracing-0.1.44",
+        "@crates//:uuid-1.23.1",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + [],
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_auth"},
+)
+

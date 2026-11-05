@@ -1,0 +1,49 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "graphql_entity_mutation",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/graphql_entity_mutation"},
+    deps = [
+        "//crates/entity_mutation:entity_mutation",
+        "//crates/graphql_common:graphql_common",
+        "//crates/graphql_permission:graphql_permission",
+        "//crates/graphql_soup:graphql_soup",
+        "//crates/model-entity:model_entity",
+        "//crates/models_permissions:models_permissions",
+        "@crates//:async-graphql-7.2.1",
+        "@crates//:tracing-0.1.44",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "graphql_entity_mutation_unit",
+    crate = ":graphql_entity_mutation",
+    crate_features = [],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/graphql_entity_mutation"},
+    deps = [
+        "//crates/macro_user_id:macro_user_id",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tracing-subscriber-0.3.23",
+        "@crates//:uuid-1.23.1",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/graphql_entity_mutation"},
+)
+

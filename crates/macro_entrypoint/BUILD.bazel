@@ -1,0 +1,53 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "macro_entrypoint",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_entrypoint"},
+    deps = [
+        "//crates/macro_env:macro_env",
+        "//crates/macro_env_var:macro_env_var",
+        "@crates//:dotenvy-0.15.7",
+        "@crates//:opentelemetry-0.31.0",
+        "@crates//:opentelemetry-appender-tracing-0.31.1",
+        "@crates//:opentelemetry-otlp-0.31.1",
+        "@crates//:opentelemetry_sdk-0.31.0",
+        "@crates//:rootcause-0.12.1",
+        "@crates//:rootcause-tracing-0.12.1",
+        "@crates//:serde_json-1.0.150",
+        "@crates//:thiserror-2.0.18",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tracing-0.1.44",
+        "@crates//:tracing-opentelemetry-0.32.1",
+        "@crates//:tracing-panic-0.1.2",
+        "@crates//:tracing-subscriber-0.3.23",
+        "@crates//:tracing-tree-0.4.1",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "macro_entrypoint_unit",
+    crate = ":macro_entrypoint",
+    crate_features = [],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_entrypoint"},
+    deps = [],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_entrypoint"},
+)
+

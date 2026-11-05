@@ -1,0 +1,77 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_library(
+    name = "worker_trigger",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/services/worker_trigger"},
+    deps = [
+        "//crates/macro_aws_config:macro_aws_config",
+        "//crates/macro_entrypoint:macro_entrypoint",
+        "//crates/macro_env:macro_env",
+        "//crates/macro_env_var:macro_env_var",
+        "@crates//:anyhow-1.0.103",
+        "@crates//:aws-sdk-ecs-1.125.0",
+        "@crates//:aws_lambda_events-0.16.1",
+        "@crates//:lambda_runtime-0.13.0",
+        "@crates//:serde_json-1.0.150",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tracing-0.1.44",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "worker_trigger_unit",
+    crate = ":worker_trigger",
+    crate_features = [],
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/services/worker_trigger"},
+    deps = [
+        "@crates//:mockall-0.13.1",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/services/worker_trigger"},
+)
+
+rust_binary(
+    name = "worker_trigger_bin",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_name = "worker_trigger",
+    crate_root = "src/main.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]),
+    rustc_env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/services/worker_trigger"},
+    deps = [
+        "//crates/macro_aws_config:macro_aws_config",
+        "//crates/macro_entrypoint:macro_entrypoint",
+        "//crates/macro_env:macro_env",
+        "//crates/macro_env_var:macro_env_var",
+        ":worker_trigger",
+        "@crates//:anyhow-1.0.103",
+        "@crates//:aws-sdk-ecs-1.125.0",
+        "@crates//:aws_lambda_events-0.16.1",
+        "@crates//:lambda_runtime-0.13.0",
+        "@crates//:serde_json-1.0.150",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tracing-0.1.44",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+

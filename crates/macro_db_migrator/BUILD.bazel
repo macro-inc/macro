@@ -1,0 +1,53 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+cargo_build_script(
+    name = "build_script",
+    srcs = ["build.rs"],
+    crate_root = "build.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [],
+    deps = [],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + ["//crates/email_db_client:all_files", "//crates/macro_db_client:all_files", "//crates/macro_db_client:migrations"],
+)
+
+rust_library(
+    name = "macro_db_migrator",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + ["//crates/email_db_client:all_files", "//crates/macro_db_client:all_files", "//crates/macro_db_client:migrations", "//:sqlx_offline_data", "//tooling/bazel-proto:fake_cargo.sh"],
+    rustc_env = {"BAZEL_WS_ROOT": "/proc/self/cwd", "CARGO": "/proc/self/cwd/../../tooling/bazel-proto/fake_cargo.sh", "CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_db_migrator", "SQLX_OFFLINE": "true"},
+    deps = [
+        ":build_script",
+        "@crates//:sqlx-0.8.6",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
+rust_test(
+    name = "macro_db_migrator_unit",
+    crate = ":macro_db_migrator",
+    crate_features = [],
+    rustc_env = {"BAZEL_WS_ROOT": "/proc/self/cwd", "CARGO": "/proc/self/cwd/../../tooling/bazel-proto/fake_cargo.sh", "CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_db_migrator", "DATABASE_URL": "postgres://user@127.0.0.1:60097/macrodb", "SQLX_OFFLINE": "false"},
+    deps = [
+        "@crates//:tokio-1.54.1",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+    data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + ["//crates/email_db_client:all_files", "//crates/macro_db_client:all_files", "//crates/macro_db_client:migrations"],
+    env = {"CARGO_MANIFEST_DIR": "/proc/self/cwd/crates/macro_db_migrator"},
+)
+

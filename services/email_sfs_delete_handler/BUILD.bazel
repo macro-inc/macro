@@ -1,0 +1,38 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_binary(
+    name = "email_sfs_delete_handler_bin",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_name = "email_sfs_delete_handler",
+    crate_root = "src/main.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + ["//crates/macro_db_client:migrations", "//:sqlx_offline_data", "//tooling/bazel-proto:fake_cargo.sh"],
+    rustc_env = {"BAZEL_WS_ROOT": "/proc/self/cwd", "CARGO": "/proc/self/cwd/../../tooling/bazel-proto/fake_cargo.sh", "CARGO_MANIFEST_DIR": "/proc/self/cwd/services/email_sfs_delete_handler", "SQLX_OFFLINE": "true"},
+    deps = [
+        "//crates/macro_aws_config:macro_aws_config",
+        "//crates/macro_entrypoint:macro_entrypoint",
+        "//crates/macro_env:macro_env",
+        "//crates/macro_env_var:macro_env_var",
+        "//crates/macro_queues:macro_queues",
+        "//crates/sqs_client:sqs_client",
+        "@crates//:anyhow-1.0.103",
+        "@crates//:aws-sdk-sqs-1.99.0",
+        "@crates//:aws_lambda_events-0.16.1",
+        "@crates//:lambda_runtime-0.13.0",
+        "@crates//:sqlx-0.8.6",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tracing-0.1.44",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+

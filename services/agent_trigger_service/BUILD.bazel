@@ -1,0 +1,61 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_macro", "rust_test")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml"])
+
+filegroup(name = "all_files", srcs = glob(["**"], exclude = ["BUILD.bazel", "target/**"]))
+
+rust_binary(
+    name = "agent_trigger_service_bin",
+    srcs = glob(["**/*.rs"], exclude = ["target/**"]),
+    crate_name = "agent_trigger_service",
+    crate_root = "src/main.rs",
+    edition = "2024",
+    version = "0.1.0",
+    crate_features = [],
+    compile_data = glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + ["//crates/macro_db_client:migrations", "//:sqlx_offline_data", "//tooling/bazel-proto:fake_cargo.sh"],
+    rustc_env = {"BAZEL_WS_ROOT": "/proc/self/cwd", "CARGO": "/proc/self/cwd/../../tooling/bazel-proto/fake_cargo.sh", "CARGO_MANIFEST_DIR": "/proc/self/cwd/services/agent_trigger_service", "SQLX_OFFLINE": "true"},
+    deps = [
+        "//crates/agent_session:agent_session",
+        "//crates/agent_trigger:agent_trigger",
+        "//crates/ai_billing:ai_billing",
+        "//crates/ai_usage:ai_usage",
+        "//crates/bots:bots",
+        "//crates/call:call",
+        "//crates/channels:channels",
+        "//crates/connection_gateway_client:connection_gateway_client",
+        "//crates/crm:crm",
+        "//crates/database_env_vars:database_env_vars",
+        "//crates/document_storage_service_client:document_storage_service_client",
+        "//crates/entity_access:entity_access",
+        "//crates/entity_registry/entity_registry:entity_registry",
+        "//crates/entity_registry/entity_registry_db_utils:entity_registry_db_utils",
+        "//crates/initiative:initiative",
+        "//crates/jev:jev",
+        "//crates/kafka_util:kafka_util",
+        "//crates/lexical_client:lexical_client",
+        "//crates/macro_config:macro_config",
+        "//crates/macro_entrypoint:macro_entrypoint",
+        "//crates/macro_env_var:macro_env_var",
+        "//crates/macro_event_broker:macro_event_broker",
+        "//crates/macro_service_urls:macro_service_urls",
+        "//crates/messages:messages",
+        "//crates/properties:properties",
+        "//crates/roles_and_permissions:roles_and_permissions",
+        "//crates/static_file:static_file",
+        "//crates/system_properties:system_properties",
+        "//crates/teams:teams",
+        "@crates//:anyhow-1.0.103",
+        "@crates//:rdkafka-0.37.0",
+        "@crates//:rootcause-0.12.1",
+        "@crates//:serde_json-1.0.150",
+        "@crates//:sqlx-0.8.6",
+        "@crates//:tokio-1.54.1",
+        "@crates//:tracing-0.1.44",
+    ],
+    proc_macro_deps = [],
+    aliases = {},
+)
+
