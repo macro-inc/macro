@@ -14,7 +14,7 @@ use stripe::{UpdateSubscription, UpdateSubscriptionItems};
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        BillingCadence, CustomerError, ItemQuantityChange, PriceInfo, ScheduledSeatPlan, SeatPlan,
+        BillingCadence, BillingInterval, SeatQuote, CustomerError, ItemQuantityChange, PriceInfo, ScheduledSeatPlan, SeatPlan,
         SeatPrices, SubscriptionTerms,
     },
 };
@@ -572,6 +572,57 @@ impl CustomerRepository for CustomerRepositoryImpl {
             change.effective_at.timestamp() > subscription.current_period_start
         });
         Ok(changes)
+    }
+
+    fn seat_price_id(&self, plan: SeatPlan) -> Result<String, CustomerError> {
+        Ok(self.seat_prices.price_id(plan)?.to_string())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn seat_quote(&self, plan: SeatPlan) -> Result<SeatQuote, CustomerError> {
+        let price_id = self.seat_prices.price_id(plan)?;
+        let parsed_price_id: stripe::PriceId = price_id
+            .parse()
+            .context("configured seat price id is malformed")?;
+        let price = stripe::Price::retrieve(&self.client, &parsed_price_id, &[])
+            .await
+            .map_err(storage)?;
+        let amount = price
+            .unit_amount
+            .context("the seat price has no unit amount")?;
+        let recurring = price
+            .recurring
+            .context("the seat price is not recurring")?;
+        if recurring.interval_count != 1 {
+            return Err(anyhow::anyhow!(
+                "the seat price bills every {} intervals",
+                recurring.interval_count
+            )
+            .into());
+        }
+        let interval = match recurring.interval {
+            stripe::RecurringInterval::Month => BillingInterval::Month,
+            stripe::RecurringInterval::Year => BillingInterval::Year,
+            other => {
+                return Err(anyhow::anyhow!(
+                    "the seat price bills per {}",
+                    other.as_str()
+                )
+                .into());
+            }
+        };
+
+        let currency = price
+            .currency
+            .context("the seat price has no currency")?
+            .to_string();
+
+        Ok(SeatQuote {
+            price_id: price_id.to_string(),
+            amount,
+            currency,
+            interval,
+        })
     }
 
     #[tracing::instrument(skip(self), err)]

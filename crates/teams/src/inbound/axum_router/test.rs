@@ -523,6 +523,29 @@ impl TeamService for FakeTeamService {
     ) -> Result<Option<TeamMember<'static>>, JoinTeamDirectlyError> {
         panic!("unexpected try_join_team_by_domain call")
     }
+
+    async fn add_team_agent(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        _agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<crate::domain::model::SeatSubscriptionItem>, JoinTeamDirectlyError> {
+        panic!("unexpected add_team_agent call")
+    }
+
+    async fn undo_team_agent_join(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        _agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), crate::domain::model::RemoveUserFromTeamError> {
+        panic!("unexpected undo_team_agent_join call")
+    }
+
+    async fn quote_team_agent_seat(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<Option<crate::domain::model::SeatQuote>, TeamError> {
+        panic!("unexpected quote_team_agent_seat call")
+    }
 }
 
 impl TeamInviteLinkService for FakeTeamService {

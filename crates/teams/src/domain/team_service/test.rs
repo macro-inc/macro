@@ -56,7 +56,7 @@ use super::*;
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        AcceptedTeamInvite, CustomerError, DueInviteReminder, ItemQuantityChange,
+        AcceptedTeamInvite, BillingInterval, SeatQuote, CustomerError, DueInviteReminder, ItemQuantityChange,
         JoinTeamDirectlyError, PatchTeamRequest, PatchTeamUserRole, RemoveTeamInviteError,
         RemoveUserFromAllTeamsError, RemoveUserFromTeamError, SeatPlan, SetTeamMemberPlanError,
         Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken,
@@ -1181,6 +1181,24 @@ impl CustomerRepository for MockCustomerRepository {
                 )));
             }
             Ok((!no_active_subscription).then_some(subscription_id))
+        }
+    }
+
+    fn seat_price_id(&self, plan: SeatPlan) -> Result<String, CustomerError> {
+        Ok(format!("price_{plan}"))
+    }
+
+    fn seat_quote(
+        &self,
+        plan: SeatPlan,
+    ) -> impl Future<Output = Result<SeatQuote, CustomerError>> + Send {
+        async move {
+            Ok(SeatQuote {
+                price_id: format!("price_{plan}"),
+                amount: 4000,
+                currency: "usd".to_string(),
+                interval: BillingInterval::Month,
+            })
         }
     }
 

@@ -298,6 +298,38 @@ pub struct PriceInfo {
     pub interval: Option<BillingCadence>,
 }
 
+/// A seat the caller adds to the team subscription in its own update, so the
+/// seat and other items share one invoice.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeatSubscriptionItem {
+    /// The seat's Stripe price.
+    pub price_id: String,
+    /// Seats to add on that price.
+    pub quantity: u64,
+}
+
+/// How often a recurring price bills.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BillingInterval {
+    /// Every month.
+    Month,
+    /// Every year.
+    Year,
+}
+
+/// What one seat on a plan costs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeatQuote {
+    /// The seat's Stripe price.
+    pub price_id: String,
+    /// Price per interval, in the currency's minor unit (cents).
+    pub amount: i64,
+    /// ISO currency code, lowercase.
+    pub currency: String,
+    /// How often the seat bills.
+    pub interval: BillingInterval,
+}
+
 /// Request body for `PATCH /team/members/{member_user_id}/plan`.
 #[derive(Debug, Clone, serde::Deserialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]

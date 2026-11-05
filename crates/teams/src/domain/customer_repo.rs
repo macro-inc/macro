@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::model::{
-    CustomerError, ItemQuantityChange, PriceInfo, ScheduledSeatPlan, SeatPlan, SubscriptionTerms,
+    CustomerError, ItemQuantityChange, PriceInfo, ScheduledSeatPlan, SeatPlan, SubscriptionTerms, SeatQuote,
 };
 
 /// The CustomerRepository defines a set of actions to perform on customer data
@@ -61,6 +61,16 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         &self,
         customer_id: &stripe::CustomerId,
     ) -> impl Future<Output = Result<Option<stripe::SubscriptionId>, CustomerError>> + Send;
+
+    /// The Stripe price a seat on `plan` is billed at. Reads configuration
+    /// only.
+    fn seat_price_id(&self, plan: SeatPlan) -> Result<String, CustomerError>;
+
+    /// What one seat on `plan` costs per billing interval.
+    fn seat_quote(
+        &self,
+        plan: SeatPlan,
+    ) -> impl Future<Output = Result<SeatQuote, CustomerError>> + Send;
 
     /// Add `amount` seats on `plan` to a subscription.
     fn increment_seat_count(

@@ -430,6 +430,69 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_git"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "bytes",
+ "chrono",
+ "constant_time_eq 0.3.1",
+ "futures",
+ "hex",
+ "httparse",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_tower_layers",
+ "macro_user_id",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "sha2 0.10.9",
+ "sqlx",
+ "strum 0.27.2",
+ "teams",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_git_service"
+version = "0.1.0"
+dependencies = [
+ "agent_git",
+ "aws-sdk-secretsmanager",
+ "axum",
+ "database_env_vars",
+ "doppler-config",
+ "macro_auth",
+ "macro_authorization",
+ "macro_aws_config",
+ "macro_config",
+ "macro_cors",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_service_urls",
+ "rootcause",
+ "secretsmanager_client",
+ "serde",
+ "sqlx",
+ "teams",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_harness"
 version = "0.1.0"
 dependencies = [

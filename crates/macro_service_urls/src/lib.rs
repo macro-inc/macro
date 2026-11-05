@@ -634,6 +634,14 @@ service_url! {
             dev: "https://dev-gateway.macro.com/calendar",
             prod: "https://gateway.macro.com/calendar",
         },
+        /// Agent workspace git service: smart-HTTP clone/push of each agent's
+        /// repo and the internal create/delete API, mounted at the root and
+        /// under the `/agent-git` gateway prefix.
+        pub AgentGitServiceUrl {
+            local: "http://localhost:8111",
+            dev: "https://dev-gateway.macro.com/agent-git",
+            prod: "https://gateway.macro.com/agent-git",
+        },
         /// Image proxy service API URL.
         pub ImageProxyServiceUrl {
             local: "http://localhost:8097",

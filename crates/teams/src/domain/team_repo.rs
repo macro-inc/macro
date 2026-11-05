@@ -12,7 +12,7 @@ use crate::domain::model::{
     InviteUsersToTeamError, JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome,
     JoinTeamDirectlyError, JoinTeamError, ManageTeamInviteLinkError, PatchTeamCrmSettingsResponse,
     PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
-    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
+    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan, SeatQuote, SeatSubscriptionItem,
     SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam,
     TeamInviteLinkToken, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
     ToggleAutoJoinDomainError,
@@ -612,6 +612,32 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<TeamMember<'static>>, JoinTeamDirectlyError>> + Send;
+
+    /// Adds a team agent's new account to the receipt's team with the same
+    /// roles and channels as any member joining, but leaves the team
+    /// subscription alone: the returned seat, when the team bills per seat,
+    /// belongs in the caller's own subscription update.
+    fn add_team_agent(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<SeatSubscriptionItem>, JoinTeamDirectlyError>> + Send;
+
+    /// Takes back an [`Self::add_team_agent`] membership whose seat was never
+    /// billed. Only the membership and team seat count; deleting the account
+    /// clears its roles and channels.
+    fn undo_team_agent_join(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), RemoveUserFromTeamError>> + Send;
+
+    /// What the seat [`Self::add_team_agent`] adds costs, or None when the
+    /// team has no subscription to bill it on.
+    fn quote_team_agent_seat(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> impl Future<Output = Result<Option<SeatQuote>, TeamError>> + Send;
 }
 
 /// Manages a team's shareable invite link and joins users through it.

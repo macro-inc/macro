@@ -5,6 +5,7 @@ exclude = ["vendor"]
 
 members = [
   "crates/access_requests",
+  "crates/agent_git",
   "crates/agent_api_keys",
   "crates/routines",
   "crates/activity",
@@ -163,6 +164,7 @@ members = [
   "services/calendar_service",
   "services/call_recording_preview_handler",
   "services/connection_gateway",
+  "services/agent_git_service",
   "services/contacts_service",
   "services/convert_service",
   "services/dataloss_prevention_handler",
@@ -299,6 +301,7 @@ encoding_rs = "0.8"
 http = "1"
 http-body = "1.0.1"
 http-body-util = "0.1.2"
+httparse = "1.10.1"
 httpdate = "1"
 hyper = "1"
 hyper-util = { version = "0.1", features = ["tokio"] }
