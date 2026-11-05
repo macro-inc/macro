@@ -106,12 +106,26 @@ pub enum Billing {
     },
 }
 
+/// Whether the computer's purchase has ever been paid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum PaymentOutcome {
+    /// The purchase has not resolved.
+    Pending,
+    /// Payment was confirmed; this remains true after release.
+    Paid,
+    /// The purchase was refused without billing.
+    Unbilled,
+}
+
 /// Everything the lifecycle knows about one computer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputerState {
     pub phase: Phase,
     pub power: Power,
     pub billing: Billing,
+    pub payment: PaymentOutcome,
     pub macrod_connected: bool,
     /// Crash times inside the current [`CRASH_WINDOW`].
     pub recent_crashes: Vec<DateTime<Utc>>,
@@ -126,6 +140,7 @@ impl ComputerState {
             phase: Phase::PendingPayment { host, since: now },
             power: Power::On,
             billing: Billing::Active,
+            payment: PaymentOutcome::Pending,
             macrod_connected: false,
             recent_crashes: Vec::new(),
             wake_requested: false,
@@ -370,12 +385,14 @@ pub fn transition(
     if let Phase::PendingPayment { .. } = state.phase {
         match event {
             Event::PaymentConfirmed => {
+                next.payment = PaymentOutcome::Paid;
                 let start = state.power == Power::On && context.host_has_room;
                 next.phase = Phase::Provisioning { host, start };
                 next.wake_requested = state.power == Power::On && !start;
                 effects.push(Effect::Create { host, start });
             }
             Event::PurchaseFailed => {
+                next.payment = PaymentOutcome::Unbilled;
                 next.phase = Phase::PaymentFailed;
             }
             _ => {}

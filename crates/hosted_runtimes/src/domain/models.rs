@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::enrollment::Persona;
-use crate::domain::lifecycle::{Billing, ComputerState, HostId, Phase, Power};
+use crate::domain::lifecycle::{Billing, ComputerState, HostId, PaymentOutcome, Phase, Power};
 use crate::domain::size::ComputerSize;
 
 /// One computer a team pays for.
@@ -179,6 +179,7 @@ pub struct ComputerStatus {
     pub name: String,
     pub size: ComputerSize,
     pub status: ComputerStatusKind,
+    pub payment: PaymentOutcome,
     /// Present until the computer first connects.
     pub setup: Option<SetupProgress>,
     pub powered_on: bool,
@@ -235,6 +236,7 @@ impl Computer {
             name: self.name.clone(),
             size: self.size,
             status,
+            payment: self.state.payment,
             setup,
             powered_on: self.state.power == Power::On,
             cancels_at,

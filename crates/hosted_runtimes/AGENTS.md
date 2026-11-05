@@ -42,6 +42,11 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   `computer-add:{computer_id}` and the same extra items. Unknown outcomes stay
   pending and retry indefinitely with capped backoff; definite refusals become
   `PaymentFailed`, visible without holding capacity and clearable by release.
+- **Payment provenance**: Persist `ComputerState.payment` as `pending` until
+  payment confirmation latches `paid` or refusal records `unbilled`; preserve it
+  through release and expose it in every team/internal `ComputerStatus`.
+  Unbilled computers never remove a billing item. Migrate legacy state before
+  running code that requires this field; do not add serde defaults.
 - **Quote**: `ComputerService::quote(team_id, size)` → `Quote { price_id, amount, currency, interval }`
   at the team subscription's interval.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →

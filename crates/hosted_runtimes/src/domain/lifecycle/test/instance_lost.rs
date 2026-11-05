@@ -32,6 +32,7 @@ fn loss_recreates_every_paid_phase_according_to_power_and_capacity() {
                 for billing in [Billing::Active, Billing::CancelAtPeriodEnd { at: now() }] {
                     let state = ComputerState {
                         phase: phase.clone(),
+                        payment: PaymentOutcome::Paid,
                         power,
                         billing,
                         macrod_connected: true,
@@ -56,6 +57,7 @@ fn loss_recreates_every_paid_phase_according_to_power_and_capacity() {
         }
         let state = ComputerState {
             phase,
+            payment: PaymentOutcome::Paid,
             billing: Billing::Canceled {
                 retained_until: now() + RETENTION,
             },

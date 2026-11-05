@@ -5,6 +5,7 @@ use uuid::Uuid;
 use super::*;
 
 mod instance_lost;
+mod payment;
 
 const HOST: HostId = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001);
 
@@ -21,6 +22,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
         },
         power: Power::On,
         billing: Billing::Active,
+        payment: PaymentOutcome::Paid,
         macrod_connected: false,
         recent_crashes: vec![],
         wake_requested: false,
@@ -41,6 +43,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
             phase: Phase::Booting { host: HOST },
             power: Power::On,
             billing: Billing::Active,
+            payment: PaymentOutcome::Paid,
             macrod_connected: false,
             recent_crashes: vec![],
             wake_requested: false,
@@ -866,7 +869,13 @@ fn cases() -> Vec<Case> {
 #[test]
 fn transitions() {
     for case in cases() {
+        let payment = match case.phase {
+            Phase::PendingPayment { .. } => PaymentOutcome::Pending,
+            Phase::PaymentFailed => PaymentOutcome::Unbilled,
+            _ => PaymentOutcome::Paid,
+        };
         let state = ComputerState {
+            payment,
             phase: case.phase,
             power: case.power,
             billing: case.billing,
@@ -1017,6 +1026,23 @@ proptest! {
                 prop_assert!(*phase != Phase::Destroyed || removed.contains(charged_id));
             }
             let after = &fleet.computers[index].1;
+
+            if before.payment == PaymentOutcome::Paid {
+                prop_assert_eq!(after.payment, PaymentOutcome::Paid, "paid is permanent");
+            }
+            if before.payment != PaymentOutcome::Pending {
+                prop_assert_eq!(after.payment, before.payment, "resolved payment never changes");
+            }
+            if after.payment == PaymentOutcome::Unbilled && before.payment != PaymentOutcome::Unbilled {
+                prop_assert_eq!(before.payment, PaymentOutcome::Pending);
+                prop_assert!(matches!(before.phase, Phase::PendingPayment { .. }), "unbilled starts in pending payment");
+                prop_assert_eq!(&event, &Event::PurchaseFailed);
+            }
+            for (computer_index, (_, state)) in fleet.computers.iter().enumerate() {
+                if state.payment == PaymentOutcome::Unbilled {
+                    prop_assert!(!removed.contains(&computer_index), "unbilled computer emitted a billing removal");
+                }
+            }
 
             if before.phase == Phase::Destroyed {
                 prop_assert_eq!(&after.phase, &Phase::Destroyed);

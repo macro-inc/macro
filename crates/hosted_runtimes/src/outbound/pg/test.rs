@@ -397,3 +397,68 @@ async fn payment_resolution_is_serialized_per_computer_across_repositories(pool:
     .unwrap();
     assert!(locked);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn payment_provenance_migration_backfills_legacy_rows_and_preserves_resolved_values(
+    pool: PgPool,
+) {
+    use crate::domain::lifecycle::PaymentOutcome;
+
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool.clone());
+    repo.register_host(HostRegistration {
+        name: "migration-test".to_owned(),
+        memory_gb: 64,
+        reserve_gb: 8,
+        oversell_factor: 3,
+    })
+    .await
+    .unwrap();
+    for id in 1..=5 {
+        repo.reserve(standard(id), now()).await.unwrap();
+    }
+    repo.apply(Uuid::from_u128(2), Event::PurchaseFailed, now())
+        .await
+        .unwrap();
+    repo.apply(Uuid::from_u128(3), Event::PaymentConfirmed, now())
+        .await
+        .unwrap();
+    repo.apply(Uuid::from_u128(4), Event::PaymentConfirmed, now())
+        .await
+        .unwrap();
+    repo.apply(Uuid::from_u128(4), Event::ReleaseNow, now())
+        .await
+        .unwrap();
+    repo.apply(Uuid::from_u128(5), Event::PurchaseFailed, now())
+        .await
+        .unwrap();
+    repo.apply(Uuid::from_u128(5), Event::ReleaseNow, now())
+        .await
+        .unwrap();
+
+    sqlx::query!(
+        "UPDATE hosted_runtime SET state = state - 'payment' WHERE id <> $1",
+        Uuid::from_u128(5),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query_file!(
+        "../macro_db_client/migrations/20261105132859_hosted_runtime_payment_provenance.sql"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    for (id, expected) in [
+        (1, PaymentOutcome::Pending),
+        (2, PaymentOutcome::Unbilled),
+        (3, PaymentOutcome::Paid),
+        (4, PaymentOutcome::Paid),
+        (5, PaymentOutcome::Unbilled),
+    ] {
+        let computer = repo.get(Uuid::from_u128(id)).await.unwrap().unwrap();
+        assert_eq!(computer.state.payment, expected);
+        assert_eq!(computer.status().payment, expected);
+    }
+}

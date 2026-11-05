@@ -7,7 +7,7 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::enrollment::PersonaService;
 use crate::domain::fakes::{FakeRepo, FixedClock, HOST, TEAM, now};
-use crate::domain::lifecycle::{Billing as BillingState, ComputerState, Power};
+use crate::domain::lifecycle::{Billing as BillingState, ComputerState, PaymentOutcome, Power};
 use crate::domain::models::{BillingInterval, SubscriptionItem};
 
 /// Records subscription updates; fails them when `decline` is set.
@@ -214,10 +214,20 @@ async fn declined_payment_drops_the_reservation() {
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
     assert_eq!(*service.billing.calls.lock().unwrap(), vec!["add_computer"]);
     assert!(service.billing.charged.lock().unwrap().is_empty());
-    service
+    assert_eq!(computers[0].payment, PaymentOutcome::Unbilled);
+    let released = service
         .release_now(TEAM, computers[0].id, "Build box")
         .await
         .unwrap();
+    assert_eq!(
+        released.status,
+        crate::domain::models::ComputerStatusKind::Released
+    );
+    assert_eq!(released.payment, PaymentOutcome::Unbilled);
+    assert_eq!(
+        service.status(TEAM, released.id).await.unwrap().payment,
+        PaymentOutcome::Unbilled
+    );
     assert_eq!(service.run_billing_effects().await.unwrap(), 0);
     assert!(service.billing.removals.lock().unwrap().is_empty());
 }
@@ -308,6 +318,11 @@ async fn release_now_needs_the_name_and_removes_the_item_once() {
     assert_eq!(
         released.status,
         crate::domain::models::ComputerStatusKind::Released
+    );
+    assert_eq!(released.payment, PaymentOutcome::Paid);
+    assert_eq!(
+        service.status(TEAM, computer_id).await.unwrap().payment,
+        PaymentOutcome::Paid
     );
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
     assert_eq!(service.run_billing_effects().await.unwrap(), 0);
@@ -414,6 +429,7 @@ async fn retry_failed_computer_restarts_without_billing() {
                 phase: Phase::Failed { host: HOST },
                 power: Power::On,
                 billing: BillingState::Active,
+                payment: PaymentOutcome::Paid,
                 macrod_connected: false,
                 recent_crashes: vec![],
                 wake_requested: false,
@@ -472,6 +488,7 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
                 phase: Phase::Running { host: HOST },
                 power: Power::On,
                 billing: BillingState::Active,
+                payment: PaymentOutcome::Paid,
                 macrod_connected: false,
                 recent_crashes: vec![],
                 wake_requested: false,
@@ -508,6 +525,7 @@ async fn retry_another_teams_computer_is_not_found() {
                 phase: Phase::Failed { host: HOST },
                 power: Power::On,
                 billing: BillingState::Active,
+                payment: PaymentOutcome::Paid,
                 macrod_connected: false,
                 recent_crashes: vec![],
                 wake_requested: false,
