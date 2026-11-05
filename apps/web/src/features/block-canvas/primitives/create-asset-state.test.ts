@@ -8,7 +8,10 @@ import {
 import { createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { CanvasAssetSource, PreparedMedia } from '../core/assets';
-import { setDocumentDisplayCommand } from '../core/document-display';
+import {
+  setDocumentDisplayCommand,
+  setDocumentSubpathCommand,
+} from '../core/document-display';
 import { createAssetState } from './create-asset-state';
 import { createCanvasState } from './create-canvas-state';
 
@@ -23,7 +26,7 @@ const media: PreparedMedia = {
     source: { type: 'static', id: 'asset' },
   },
 };
-function setup(source: CanvasAssetSource) {
+function setup(source: CanvasAssetSource, artifactsEnabled = false) {
   return createRoot((dispose) => {
     disposers.push(dispose);
     const editor = createGraphicsEditor();
@@ -32,7 +35,13 @@ function setup(source: CanvasAssetSource) {
       width: g.width,
       height: g.height,
     }));
-    return { editor, assets: createAssetState(canvas, source), canvas };
+    return {
+      editor,
+      assets: createAssetState(canvas, source, {
+        artifactsEnabled: () => artifactsEnabled,
+      }),
+      canvas,
+    };
   });
 }
 function deferredUpload() {
@@ -251,5 +260,83 @@ it('admits documents and canvases as embeds but leaves unsupported references al
   expect(canvas.embeds.active()).toBeUndefined();
   expect(editor.document.items[id]).toMatchObject({
     geometry: { display: 'preview' },
+  });
+});
+
+it('places an artifact scene as a page-sized embed and switches its scene', () => {
+  const { editor, assets, canvas } = setup(
+    { upload: vi.fn(async () => media), media: vi.fn(async () => media) },
+    true
+  );
+  assets.document(
+    {
+      id: 'artifact',
+      name: 'Proposals',
+      fileType: 'artifact',
+      subpath: 'empty-state',
+    },
+    { x: 0, y: 0 }
+  );
+  const id = editor.getSession().selectedId!;
+  expect(editor.document.items[id]).toMatchObject({
+    type: 'document',
+    geometry: {
+      documentId: 'artifact',
+      fileType: 'artifact',
+      subpath: 'empty-state',
+      display: 'embed',
+      width: 960,
+      height: 600,
+    },
+  });
+  canvas.embeds.enter(id);
+  expect(canvas.embeds.active()).toBe(id);
+
+  editor.execute(setDocumentSubpathCommand, { id, subpath: 'full' });
+  expect(editor.document.items[id]).toMatchObject({
+    geometry: { subpath: 'full' },
+  });
+  editor.execute(setDocumentSubpathCommand, { id, subpath: undefined });
+  const cleared = editor.document.items[id];
+  expect(cleared?.type === 'document' && 'subpath' in cleared.geometry).toBe(
+    false
+  );
+  editor.undo();
+  expect(editor.document.items[id]).toMatchObject({
+    geometry: { subpath: 'full' },
+  });
+});
+
+it('places an artifact as a preview card while artifacts are off', () => {
+  const { editor, assets } = setup({
+    upload: vi.fn(async () => media),
+    media: vi.fn(async () => media),
+  });
+  assets.document(
+    { id: 'artifact', name: 'Proposals', fileType: 'artifact' },
+    { x: 0, y: 0 }
+  );
+  expect(editor.document.items[editor.getSession().selectedId!]).toMatchObject({
+    geometry: { display: 'preview', width: 340, height: 136 },
+  });
+});
+
+it('sizes an artifact as a card or a page when its display switches', () => {
+  const { editor, assets } = setup(
+    { upload: vi.fn(async () => media), media: vi.fn(async () => media) },
+    true
+  );
+  assets.document(
+    { id: 'artifact', name: 'Proposals', fileType: 'artifact' },
+    { x: 0, y: 0 }
+  );
+  const id = editor.getSession().selectedId!;
+  editor.execute(setDocumentDisplayCommand, { id, display: 'preview' });
+  expect(editor.document.items[id]).toMatchObject({
+    geometry: { display: 'preview', width: 340, height: 136 },
+  });
+  editor.execute(setDocumentDisplayCommand, { id, display: 'embed' });
+  expect(editor.document.items[id]).toMatchObject({
+    geometry: { display: 'embed', width: 960, height: 600 },
   });
 });

@@ -20,6 +20,11 @@ export const FileTypeMap = {
     mime: 'application/x-macro-canvas',
     app: 'canvas',
   },
+  artifact: {
+    extension: 'artifact',
+    mime: 'application/x-macro-artifact',
+    app: 'artifact',
+  },
   coffee: { extension: 'coffee', mime: 'text/plain', app: 'code' },
   cson: { extension: 'cson', mime: 'text/plain', app: 'code' },
   iced: { extension: 'iced', mime: 'text/plain', app: 'code' },

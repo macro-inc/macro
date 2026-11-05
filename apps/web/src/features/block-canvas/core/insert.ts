@@ -1,6 +1,11 @@
 export type CanvasInsertMode = 'media' | 'reference';
 
-export function canInsertAsset(mode: CanvasInsertMode, blockType: string) {
+export function canInsertAsset(
+  mode: CanvasInsertMode,
+  blockType: string,
+  artifactsEnabled: boolean
+) {
+  if (blockType === 'artifact') return mode === 'reference' && artifactsEnabled;
   return mode === 'reference' || blockType === 'image' || blockType === 'video';
 }
 

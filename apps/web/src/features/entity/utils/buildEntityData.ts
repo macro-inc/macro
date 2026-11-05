@@ -108,6 +108,7 @@ export function buildEntityData(
         'code',
         'image',
         'canvas',
+        'artifact',
         'spreadsheet',
         'pptx',
         'psd',

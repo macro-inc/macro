@@ -959,6 +959,17 @@ export const enablePsdEditor = defineFlag({
 });
 
 /**
+ * Placing artifacts (agent-published HTML pages) on canvases. Opening an
+ * artifact link always works. On in dev; deployed environments follow
+ * PostHog.
+ */
+export const enableArtifacts = defineFlag({
+  key: 'enable-artifacts',
+  env: 'ENABLE_ARTIFACTS',
+  default: onInDev,
+});
+
+/**
  * The in-browser Figma file viewer (`block-fig`). Off shows uploaded `.fig`
  * files as before: download only. On in dev; deployed environments follow
  * PostHog.

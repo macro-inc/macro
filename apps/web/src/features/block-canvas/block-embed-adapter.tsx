@@ -14,6 +14,7 @@ import type {
 import { createOwnedSlots } from '@components/app/split-layout/utils/createOwnedSlots';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createBlockInstance } from '@core/orchestrator';
+import { lazyNamed } from '@core/util/lazyNamed';
 import {
   createEffect,
   createSignal,
@@ -26,8 +27,15 @@ import { Dynamic } from 'solid-js/web';
 import type { CanvasEmbedViewProps } from './components/embed-view';
 import { CanvasAncestry } from './context/canvas-ancestry';
 
+const ArtifactCanvasEmbed = lazyNamed(
+  () => import('@app/features/block-artifact/views/artifact-canvas'),
+  'ArtifactCanvasEmbed'
+);
+
 /** The existing app's block loader/sync boundary; graphics only stores a reference. */
 export function CanvasBlockEmbed(props: CanvasEmbedViewProps) {
+  if (props.geometry.fileType === 'artifact')
+    return <CanvasArtifactEmbed {...props} />;
   const ancestors = useContext(CanvasAncestry);
   if (ancestors.includes(props.geometry.documentId) || ancestors.length >= 8)
     return (
@@ -36,6 +44,19 @@ export function CanvasBlockEmbed(props: CanvasEmbedViewProps) {
       </div>
     );
   return <CanvasBlockEmbedContent {...props} />;
+}
+
+/** An artifact is a page, not an editor: no block, panel, or hotkeys. */
+export function CanvasArtifactEmbed(props: CanvasEmbedViewProps) {
+  return (
+    <Suspense>
+      <ArtifactCanvasEmbed
+        documentId={props.geometry.documentId}
+        name={props.geometry.name}
+        scene={props.geometry.subpath}
+      />
+    </Suspense>
+  );
 }
 
 function CanvasBlockEmbedContent(props: CanvasEmbedViewProps) {
