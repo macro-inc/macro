@@ -1,6 +1,7 @@
 import type { EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications/types';
 import { type Accessor, createContext, useContext } from 'solid-js';
+import type { InboxClear } from '../core/inbox-filters';
 import type { InboxRow, InboxRowType } from '../core/inbox-row';
 
 /**
@@ -24,6 +25,9 @@ export type InboxScope = {
 /** A completed done, which the caller can reverse once. */
 export type InboxDoneResult = { undo: () => Promise<void> };
 
+/** A completed clear: how many rows it took, and its reversal. */
+export type InboxClearResult = InboxDoneResult & { count: number };
+
 /** One live inbox feed for a scope. */
 export type InboxFeedSource = {
   /**
@@ -44,6 +48,20 @@ export type InboxFeedSource = {
    * the done fails; resolves to the undo otherwise.
    */
   markDone: (rows: readonly NotificationInboxRow[]) => Promise<InboxDoneResult>;
+  /**
+   * Hide one notification of a stack now and complete it, with the hidden
+   * ones about the same message. Rejects, showing it again, when the done
+   * fails; resolves to the undo otherwise.
+   */
+  markNotificationDone: (
+    row: NotificationInboxRow,
+    notification: UnifiedNotification
+  ) => Promise<InboxDoneResult>;
+  /**
+   * Clear the whole inbox of the rows `clear` takes, loaded or not, hiding
+   * the loaded ones at once. Rejects, showing them again, when it fails.
+   */
+  clear: (clear: InboxClear) => Promise<InboxClearResult>;
   /**
    * Read rows as seen now and mark them seen, hidden notifications included;
    * they read as unseen again when that fails.

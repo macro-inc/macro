@@ -14,6 +14,7 @@ fn actor() -> activity::Actor<'static> {
 
 fn record(action: RecordedAction) -> ActivityRecord {
     ActivityRecord {
+        agent_correlation_id: None,
         id: Uuid::from_u128(1),
         actor: actor(),
         subject_id: "macro|teo@example.com".to_string(),

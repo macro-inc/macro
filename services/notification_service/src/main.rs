@@ -139,7 +139,7 @@ pub async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
     let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
-        MacroAuthJwtValidator::new(jwt_args),
+        MacroAuthJwtValidator::new(jwt_args.clone()),
         InternalAuthConfig {
             api_key: config.internal_api_key.as_ref().to_string(),
             default_user_id: None,
@@ -354,6 +354,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     api::setup_and_serve(
         ApiContext {
+            correlation: agent_correlation::inbound::CorrelationState::new(db.clone(), jwt_args),
             item_preferences: ::notification::domain::item_preferences::ItemNotificationPreferenceService::new(
                 ::notification::outbound::item_preferences::PgItemNotificationPreferenceRepository(db.clone()),
             ),

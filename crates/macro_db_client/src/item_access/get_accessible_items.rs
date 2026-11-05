@@ -23,15 +23,16 @@ pub async fn get_user_accessible_items(
     item_type_filter: Option<String>,
     exclude_owned: bool,
 ) -> anyhow::Result<Vec<UserAccessibleItem>> {
+    let source_ids = user_source_ids(db, user_id).await?;
     match item_type_filter.as_deref() {
-        Some("document") => accessible_documents(db, user_id, exclude_owned).await,
-        Some("chat") => accessible_chats(db, user_id, exclude_owned).await,
-        Some("project") => accessible_projects(db, user_id, exclude_owned).await,
+        Some("document") => accessible_documents(db, user_id, &source_ids, exclude_owned).await,
+        Some("chat") => accessible_chats(db, user_id, &source_ids, exclude_owned).await,
+        Some("project") => accessible_projects(db, user_id, &source_ids, exclude_owned).await,
         Some(_) => Ok(vec![]),
         None => {
-            let mut items = accessible_documents(db, user_id, exclude_owned).await?;
-            items.extend(accessible_chats(db, user_id, exclude_owned).await?);
-            items.extend(accessible_projects(db, user_id, exclude_owned).await?);
+            let mut items = accessible_documents(db, user_id, &source_ids, exclude_owned).await?;
+            items.extend(accessible_chats(db, user_id, &source_ids, exclude_owned).await?);
+            items.extend(accessible_projects(db, user_id, &source_ids, exclude_owned).await?);
             Ok(items)
         }
     }
@@ -46,33 +47,60 @@ fn to_items(ids: Vec<String>, item_type: &str) -> Vec<UserAccessibleItem> {
         .collect()
 }
 
+/// The user's active channels, team, and the user id itself: every
+/// `entity_access.source_id` that grants them access.
+///
+/// The per-type queries bind these as a constant `source_id = ANY($2)` rather
+/// than joining the same union as a CTE. Postgres costs a CTE join at the
+/// average source's grant count, so it planned users holding hundreds of
+/// thousands of grants with one item-table probe per grant; a constant array
+/// is estimated from `entity_access.source_id` statistics, which picks a hash
+/// join for them. The per-type queries run as unnamed statements because a
+/// cached prepared statement switches every user to one generic plan after
+/// five calls.
+async fn user_source_ids(db: &Pool<Postgres>, user_id: &str) -> sqlx::Result<Vec<String>> {
+    let source_ids = sqlx::query_scalar!(
+        r#"
+        SELECT cp.channel_id::text FROM comms_channel_participants cp
+            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+        UNION ALL
+        SELECT t.team_id::text FROM team_user t
+            WHERE t.user_id = $1
+        UNION ALL
+        SELECT $1
+        "#,
+        user_id
+    )
+    .fetch_all(db)
+    .await?;
+
+    Ok(source_ids.into_iter().flatten().collect())
+}
+
 async fn accessible_documents(
     db: &Pool<Postgres>,
     user_id: &str,
+    source_ids: &[String],
     exclude_owned: bool,
 ) -> anyhow::Result<Vec<UserAccessibleItem>> {
     let ids = sqlx::query_scalar!(
         r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
-            UNION ALL
-            SELECT t.team_id::text FROM team_user t
-                WHERE t.user_id = $1
-            UNION ALL
-            SELECT $1
-        )
-        SELECT DISTINCT ea.entity_id::text as "item_id!"
-        FROM entity_access ea
-        JOIN user_source_ids us ON us.source_id = ea.source_id
-        JOIN "Document" d ON d.id = ea.entity_id::text
-        WHERE ea.entity_type = 'document'
+        SELECT d.id
+        FROM "Document" d
+        WHERE d.id IN (
+                SELECT ea.entity_id::text
+                FROM entity_access ea
+                WHERE ea.source_id = ANY($2)
+                    AND ea.entity_type = 'document'
+            )
             AND d."deletedAt" IS NULL
-            AND (NOT $2 OR d.owner != $1)
+            AND (NOT $3 OR d.owner != $1)
         "#,
         user_id,
+        source_ids,
         exclude_owned
     )
+    .persistent(false)
     .fetch_all(db)
     .await?;
 
@@ -82,30 +110,27 @@ async fn accessible_documents(
 async fn accessible_chats(
     db: &Pool<Postgres>,
     user_id: &str,
+    source_ids: &[String],
     exclude_owned: bool,
 ) -> anyhow::Result<Vec<UserAccessibleItem>> {
     let ids = sqlx::query_scalar!(
         r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
-            UNION ALL
-            SELECT t.team_id::text FROM team_user t
-                WHERE t.user_id = $1
-            UNION ALL
-            SELECT $1
-        )
-        SELECT DISTINCT ea.entity_id::text as "item_id!"
-        FROM entity_access ea
-        JOIN user_source_ids us ON us.source_id = ea.source_id
-        JOIN "Chat" c ON c.id = ea.entity_id::text
-        WHERE ea.entity_type = 'chat'
+        SELECT c.id
+        FROM "Chat" c
+        WHERE c.id IN (
+                SELECT ea.entity_id::text
+                FROM entity_access ea
+                WHERE ea.source_id = ANY($2)
+                    AND ea.entity_type = 'chat'
+            )
             AND c."deletedAt" IS NULL
-            AND (NOT $2 OR c."userId" != $1)
+            AND (NOT $3 OR c."userId" != $1)
         "#,
         user_id,
+        source_ids,
         exclude_owned
     )
+    .persistent(false)
     .fetch_all(db)
     .await?;
 
@@ -115,30 +140,27 @@ async fn accessible_chats(
 async fn accessible_projects(
     db: &Pool<Postgres>,
     user_id: &str,
+    source_ids: &[String],
     exclude_owned: bool,
 ) -> anyhow::Result<Vec<UserAccessibleItem>> {
     let ids = sqlx::query_scalar!(
         r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
-            UNION ALL
-            SELECT t.team_id::text FROM team_user t
-                WHERE t.user_id = $1
-            UNION ALL
-            SELECT $1
-        )
-        SELECT DISTINCT ea.entity_id::text as "item_id!"
-        FROM entity_access ea
-        JOIN user_source_ids us ON us.source_id = ea.source_id
-        JOIN "Project" p ON p.id = ea.entity_id::text
-        WHERE ea.entity_type = 'project'
+        SELECT p.id
+        FROM "Project" p
+        WHERE p.id IN (
+                SELECT ea.entity_id::text
+                FROM entity_access ea
+                WHERE ea.source_id = ANY($2)
+                    AND ea.entity_type = 'project'
+            )
             AND p."deletedAt" IS NULL
-            AND (NOT $2 OR p."userId" != $1)
+            AND (NOT $3 OR p."userId" != $1)
         "#,
         user_id,
+        source_ids,
         exclude_owned
     )
+    .persistent(false)
     .fetch_all(db)
     .await?;
 

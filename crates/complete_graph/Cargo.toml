@@ -38,6 +38,7 @@ graphql_notification = { path = "../graphql_notification" }
 graphql_notification_inbox = { path = "../graphql_notification_inbox" }
 graphql_permission = { path = "../graphql_permission" }
 graphql_properties = { path = "../graphql_properties" }
+graphql_registered_work = { path = "../graphql_registered_work" }
 graphql_scheduled_action = { path = "../graphql_scheduled_action" }
 graphql_soup = { path = "../graphql_soup" }
 graphql_work_feed = { path = "../graphql_work_feed" }

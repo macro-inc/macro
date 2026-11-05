@@ -354,6 +354,7 @@ impl CallRepository for PgCallRepo {
         channel_id: &Uuid,
         room_name: &str,
         created_by: MacroUserIdStr<'_>,
+        channel_thread: bool,
     ) -> Result<Option<Call>, CallError> {
         let mut tx = self.pool.begin().await?;
 
@@ -435,6 +436,16 @@ impl CallRepository for PgCallRepo {
         let Some(r) = row else {
             return Ok(None);
         };
+
+        // The insert above created the durable entity through its trigger.
+        if channel_thread {
+            sqlx::query!(
+                "UPDATE call_entities SET discussion = 'channel_thread' WHERE id = $1",
+                call_id,
+            )
+            .execute(tx.as_mut())
+            .await?;
+        }
 
         tx.commit().await?;
 
@@ -1270,8 +1281,10 @@ impl CallRepository for PgCallRepo {
             SELECT c.id, c.channel_id, c.room_name, c.created_by, c.created_at, c.egress_id, c.recording_key, c.preview_url, c.recording_started_at,
                    (SELECT title FROM call_meetings WHERE id = c.meeting_id) AS custom_name,
                    c.share_with_team,
+                   ce.discussion,
                    sp.team_share_access_level AS "team_share_access_level?: AccessLevel"
             FROM calls c
+            JOIN call_entities ce ON ce.id = c.id
             JOIN "SharePermission" sp ON sp.id = c.share_permission_id
             WHERE c.id = $1
             "#,
@@ -1348,6 +1361,11 @@ impl CallRepository for PgCallRepo {
                 call_id: active.id,
                 user_access_level: None,
                 channel_id: active.channel_id,
+                discussion: crate::domain::models::CallDiscussion::from_stored(
+                    &active.discussion,
+                    active.id,
+                    active.channel_id,
+                ),
                 room_name: Some(active.room_name),
                 created_by: active.created_by,
                 started_at: active.created_at,
@@ -1380,8 +1398,10 @@ impl CallRepository for PgCallRepo {
         let Some(archived) = sqlx::query!(
             r#"
             SELECT cr.id, cr.channel_id, cr.room_name, cr.created_by, cr.started_at, cr.ended_at, cr.duration_ms, cr.egress_id, cr.recording_key, cr.preview_url, cr.recording_started_at, cr.custom_name, cr.summary,
+                   ce.discussion,
                    sp.team_share_access_level AS "team_share_access_level?: AccessLevel"
             FROM call_records cr
+            JOIN call_entities ce ON ce.id = cr.id
             JOIN "SharePermission" sp ON sp.id = cr.share_permission_id
             WHERE cr.id = $1
             "#,
@@ -1464,6 +1484,11 @@ impl CallRepository for PgCallRepo {
             call_id: archived.id,
             user_access_level: None,
             channel_id: archived.channel_id,
+            discussion: crate::domain::models::CallDiscussion::from_stored(
+                &archived.discussion,
+                archived.id,
+                archived.channel_id,
+            ),
             room_name: Some(archived.room_name),
             created_by: archived.created_by,
             started_at: archived.started_at,
@@ -1968,6 +1993,17 @@ impl CallRepository for PgCallRepo {
         guests_by_call.extend(imported::imported_guests(&mut conn, &imported_ids).await?);
         drop(conn);
 
+        let call_ids: Vec<Uuid> = rows.iter().map(|row| row.call_id).collect();
+        let discussions: HashMap<Uuid, String> = sqlx::query!(
+            "SELECT id, discussion FROM call_entities WHERE id = ANY($1)",
+            &call_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|row| (row.id, row.discussion))
+        .collect();
+
         let mut records = Vec::with_capacity(rows.len());
         for row in rows {
             let participants = participants_by_call
@@ -1979,6 +2015,13 @@ impl CallRepository for PgCallRepo {
                 call_id: row.call_id,
                 user_access_level: None,
                 channel_id: row.channel_id,
+                discussion: crate::domain::models::CallDiscussion::from_stored(
+                    discussions
+                        .get(&row.call_id)
+                        .map_or("call_chat", String::as_str),
+                    row.call_id,
+                    row.channel_id,
+                ),
                 room_name: row.room_name,
                 created_by: row.created_by,
                 started_at: row.started_at,

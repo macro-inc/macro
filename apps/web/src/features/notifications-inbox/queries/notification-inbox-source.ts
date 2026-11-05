@@ -1,6 +1,7 @@
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid/create-urql-infinite-query';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
+import type { UnifiedNotification } from '@notifications/types';
 import { createLiveAttentionFeed } from '@queries/attention-feed/live-attention-feed';
 import {
   NotificationInboxDocument,
@@ -22,11 +23,13 @@ import type {
   InboxScope,
   NotificationInboxRow,
 } from '../context/notifications-inbox-context';
+import { clearIncludes, type InboxClear } from '../core/inbox-filters';
 import {
   markRows,
   type RowMarks,
   settleRowMarks,
   unmarkRows,
+  withoutDoneNotifications,
   withoutDoneRows,
   withSeenRows,
 } from '../core/inbox-row';
@@ -36,6 +39,8 @@ import {
   orderInboxRows,
 } from './notification-inbox-groups';
 import {
+  clearInboxBatch,
+  markInboxNotificationDone,
   markInboxRowsDone,
   markInboxRowsSeen,
   undoInboxRowsDone,
@@ -44,6 +49,8 @@ import { notificationInboxShape } from './notification-inbox-shape';
 
 /** Entries fetched per inbox page. */
 export const INBOX_PAGE_LIMIT = 50;
+/** Most batches one clear sends: 20,000 groups at the server's default. */
+const MAX_CLEAR_BATCHES = 200;
 
 const inboxCachedQuery = {
   query: stringifyDocument(NotificationInboxDocument),
@@ -122,6 +129,17 @@ export function createNotificationInboxSource(
 
   const [done, setDone] = createSignal<RowMarks>(new Map());
   const [seen, setSeen] = createSignal<RowMarks>(new Map());
+  // Notifications done one at a time. Once the server's row no longer shows
+  // one, hiding it does nothing, so it needs no settling.
+  const [doneNotifications, setDoneNotifications] = createSignal<
+    readonly string[]
+  >([]);
+  const hideNotification = (id: string, hidden: boolean) =>
+    setDoneNotifications((current) =>
+      hidden
+        ? [...current, id]
+        : current.filter((candidate) => candidate !== id)
+    );
   // Every change rebuilds the pages. The rows live in a store that each read
   // reconciles into by row id, so a row the change didn't touch keeps its
   // object and a changed one updates in place: what reads them, such as an
@@ -182,7 +200,13 @@ export function createNotificationInboxSource(
   const rows = createMemo(() =>
     query.data === undefined
       ? undefined
-      : withSeenRows(withoutDoneRows(ordered, done()), seen())
+      : withSeenRows(
+          withoutDoneNotifications(
+            withoutDoneRows(ordered, done()),
+            doneNotifications()
+          ),
+          seen()
+        )
   );
 
   /** Patches for a filter that has since changed would add rows it hides. */
@@ -231,6 +255,97 @@ export function createNotificationInboxSource(
     };
   };
 
+  const markNotificationDone = async (
+    row: NotificationInboxRow,
+    notification: UnifiedNotification
+  ) => {
+    const client = options.client();
+    const scope = scopeInput();
+    hideNotification(notification.id, true);
+    const restoreNotifications = options.overrideNotificationsDone?.([
+      notification.id,
+    ]);
+    let done: Awaited<ReturnType<typeof markInboxNotificationDone>>;
+    try {
+      done = await markInboxNotificationDone(
+        client,
+        row.id,
+        notification.id,
+        scope
+      );
+    } catch (error) {
+      restoreNotifications?.();
+      hideNotification(notification.id, false);
+      throw error;
+    }
+    revalidate(client);
+    applyIfCurrent(scope, done.patches);
+    return {
+      undo: async () => {
+        // The filter may have changed since the done; restore into this one.
+        const undoScope = scopeInput();
+        const patches = await undoInboxRowsDone(
+          client,
+          done.undoToken,
+          undoScope
+        );
+        restoreNotifications?.();
+        hideNotification(notification.id, false);
+        revalidate(client);
+        applyIfCurrent(undoScope, patches);
+      },
+    };
+  };
+
+  const clear = async (request: InboxClear) => {
+    const client = options.client();
+    const hidden = (rows() ?? []).filter((row) => clearIncludes(request, row));
+    const hiddenIds = hidden.map((row) => row.id);
+    setDone((current) => markRows(current, hidden));
+    const input = {
+      scope: encodeInboxScope({ rowTypes: request.rowTypes }),
+      unreadOnly: request.unreadOnly,
+      since:
+        request.since === undefined
+          ? null
+          : new Date(request.since).toISOString(),
+    };
+    const undoTokens: string[] = [];
+    let count = 0;
+    let cursor: string | null = null;
+    try {
+      for (let batch = 0; batch < MAX_CLEAR_BATCHES; batch++) {
+        const cleared = await clearInboxBatch(client, { ...input, cursor });
+        undoTokens.push(cleared.undoToken);
+        count += cleared.rowCount;
+        cursor = cleared.nextCursor;
+        if (!cursor) break;
+      }
+    } catch (error) {
+      // Earlier batches stand; a fresh read shows what is left.
+      setDone((current) => unmarkRows(current, hiddenIds));
+      fireAndForget(live.refetch(), 'notifications-inbox');
+      throw error;
+    }
+    revalidate(client);
+    // Pages past those loaded may hold what moves up into view.
+    fireAndForget(live.refetch(), 'notifications-inbox');
+    return {
+      count,
+      undo: async () => {
+        // The filter may have changed since the clear; restore into this one.
+        const scope = scopeInput();
+        for (const token of undoTokens) {
+          const patches = await undoInboxRowsDone(client, token, scope);
+          applyIfCurrent(scope, patches);
+        }
+        setDone((current) => unmarkRows(current, hiddenIds));
+        revalidate(client);
+        fireAndForget(live.refetch(), 'notifications-inbox');
+      },
+    };
+  };
+
   const markSeen = async (targets: readonly NotificationInboxRow[]) => {
     const unseen = targets.filter((row) => row.unseen);
     if (unseen.length === 0) return;
@@ -260,6 +375,8 @@ export function createNotificationInboxSource(
     },
     refresh: live.refetch,
     markDone,
+    markNotificationDone,
+    clear,
     markSeen,
   };
 }

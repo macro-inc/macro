@@ -10,6 +10,11 @@ use crate::tui::app::{App, Mode, Tab};
 pub(super) fn render_header(frame: &mut Frame, app: &App, area: Rect) {
     let (dot, dot_style, state) = match &app.snapshot.harness {
         Some(harness) if harness.connected => ("●", Style::new().fg(OK), "connected"),
+        Some(_) if app.runtime_connected() => (
+            "●",
+            Style::new().fg(ERR),
+            "runtime connected, service reports offline",
+        ),
         Some(_) => ("●", Style::new().fg(WARN), "paired, runtime not dialed in"),
         None if app.paired() => ("○", Style::new().fg(WARN), "paired, unreachable"),
         None => ("○", Style::new().fg(DIM), "not paired"),
