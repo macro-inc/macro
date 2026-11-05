@@ -443,6 +443,32 @@ export type ConnectedServer = {
     url: string;
 };
 
+/**
+ * Setup an admin of the user's organization must do at the vendor.
+ */
+export type ConnectorOrgSetupResponse = {
+    /**
+     * The URL the admin adds, when a step adds one.
+     */
+    allowlist_url?: string | null;
+    /**
+     * Connecting fails until this is done.
+     */
+    required: boolean;
+    /**
+     * Where the admin does it.
+     */
+    settings_url: string;
+    /**
+     * The steps, in order.
+     */
+    steps: Array<string>;
+    /**
+     * One sentence on what the admin does and what happens without it.
+     */
+    summary: string;
+};
+
 export type ConversationRecord = {
     chat_id: string;
     messages: Array<MessageWithAttachments>;
@@ -1443,32 +1469,6 @@ export type PatchChatRequest = {
      */
     projectId?: string | null;
     sharePermission?: null | UpdateSharePermissionRequestV2;
-};
-
-/**
- * Setup an admin of the user's organization must do at the vendor.
- */
-export type ConnectorOrgSetupResponse = {
-    /**
-     * The URL the admin adds, when a step adds one.
-     */
-    allowlist_url?: string | null;
-    /**
-     * Connecting fails until this is done.
-     */
-    required: boolean;
-    /**
-     * Where the admin does it.
-     */
-    settings_url: string;
-    /**
-     * The steps, in order.
-     */
-    steps: Array<string>;
-    /**
-     * One sentence on what the admin does and what happens without it.
-     */
-    summary: string;
 };
 
 /**
