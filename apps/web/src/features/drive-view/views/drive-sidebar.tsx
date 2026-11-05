@@ -7,6 +7,7 @@ import {
 import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
 import { createFolderDropTargets } from '@app/features/next-soup/actions';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
@@ -83,6 +84,7 @@ function DriveFavorite(props: { favorite: Favorite; onNavigate?: () => void }) {
           <FavoriteIcon favorite={props.favorite} class="size-4" />
         </ViewSidebar.Icon>
         <span class="truncate">{name()}</span>
+        <FavoriteUnreadIndicator favorite={props.favorite} />
       </ViewSidebar.Item>
     </FavoriteContextMenu>
   );

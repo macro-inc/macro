@@ -135,6 +135,9 @@ pub struct GraphqlEmailThreadFocus {
     classified_at: String,
     /// Which way `importance` is moving.
     importance_trend: GraphqlEmailImportanceTrend,
+    /// The day the thread's mail says it is due, as `YYYY-MM-DD`: a calendar date
+    /// the viewer's time zone never shifts. Absent when it names no open deadline.
+    due_on: Option<String>,
 }
 
 impl From<ThreadFocus> for GraphqlEmailThreadFocus {
@@ -147,6 +150,9 @@ impl From<ThreadFocus> for GraphqlEmailThreadFocus {
             needs_follow_up: focus.needs_follow_up,
             classified_at: focus.classified_at.to_rfc3339(),
             importance_trend: focus.importance_trend.into(),
+            due_on: focus
+                .due_on
+                .map(|due_on| due_on.format("%Y-%m-%d").to_string()),
         }
     }
 }

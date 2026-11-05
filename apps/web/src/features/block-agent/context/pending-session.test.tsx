@@ -37,6 +37,12 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: harness,
 }));
+// These cases count the pending navigation's own acquisitions; holding the
+// session open after a view is `recently-viewed.test.ts`'s concern.
+vi.mock('@core/agent-session/recently-viewed', () => ({
+  isRecentlyViewed: () => false,
+  retainRecentlyViewed: () => {},
+}));
 vi.mock('@queries/soup/normalized-cache', () => ({
   refetchSoupEntity: vi.fn(async () => {}),
 }));

@@ -149,6 +149,8 @@ export function ItemDndProvider(props: { children: JSXElement }) {
     pointerPosition = { x: e.clientX, y: e.clientY };
   };
 
+  // The mouse sensor finishes on mouseup, after pointerup. Clearing on
+  // pointerup can erase the drop target during an intervening scroll update.
   const handlePointerEnd = () => {
     queueMicrotask(() => {
       pointerPosition = undefined;
@@ -158,7 +160,6 @@ export function ItemDndProvider(props: { children: JSXElement }) {
   window.addEventListener('keydown', handleKeyDown);
   window.addEventListener('keyup', handleKeyUp);
   window.addEventListener('pointermove', handlePointerMove, { capture: true });
-  window.addEventListener('pointerup', handlePointerEnd, { capture: true });
   window.addEventListener('pointercancel', handlePointerEnd, { capture: true });
   window.addEventListener('mousemove', handleMouseMove, { capture: true });
   window.addEventListener('mouseup', handlePointerEnd, { capture: true });
@@ -167,9 +168,6 @@ export function ItemDndProvider(props: { children: JSXElement }) {
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
     window.removeEventListener('pointermove', handlePointerMove, {
-      capture: true,
-    });
-    window.removeEventListener('pointerup', handlePointerEnd, {
       capture: true,
     });
     window.removeEventListener('pointercancel', handlePointerEnd, {
@@ -185,7 +183,10 @@ export function ItemDndProvider(props: { children: JSXElement }) {
 
   return (
     <DragOperationContext.Provider value={{ isAltKey: isAltPressed }}>
-      <DragDropProvider collisionDetector={pointerWithin}>
+      <DragDropProvider
+        collisionDetector={pointerWithin}
+        onDragEnd={handlePointerEnd}
+      >
         <DragDropSensors />
         {props.children}
         <DragOverlay class="z-drag pointer-events-none">

@@ -84,7 +84,17 @@ new page cursor before deciding whether to request another page.
 
 An empty human DM shows the centered conversations illustration and “Say hello”
 above the composer. The copy explains that recipients without a Macro account
-receive the message by email. Opening the DM sends nothing. Sending a human
+receive the message by email. Opening the DM sends nothing.
+
+Opening a person you have no DM with shows this same empty DM, with their name
+and avatar in the header, under a temporary `pending-dm-` id kept only in that
+tab. Nothing exists on the server, so the DM is in neither person's list until
+the first message creates it and the view becomes the real conversation. Check
+that leaving without sending creates nothing, that the other person's list gains
+the DM only after the send, and that reloading a `pending-dm-` URL opens the
+Chat list on desktop and closes the pane on touch.
+
+Sending a human
 message queues an immediate email for nonusers, including follow-up messages,
 replies, and mentions; registered users retain their notification preferences.
 Check narrow and wide panes: the composer stays usable, and the empty state
@@ -557,7 +567,7 @@ for the user to confirm a composer card). For an event with attendees the bot is
 ask for confirmation in the thread first, since Google sends the invitations the moment the
 event is created — no invitation goes out from the initial request. It cannot draft or send
 email at all. A bot or agent reply posted for a person shares, as that person, the linked items
-(chips or attachments) that the replying bot created for them while answering: those with a
+(chips, attachments, or forms presented as cards in the reply's steps) that the replying bot created for them while answering: those with a
 `created` activity row by that bot on the person's behalf since the person's latest message in
 the thread before the reply, or, for a bot message that starts its own thread (a poll card
 posted top-level), their latest message in the channel. Forms and databases an agent creates
@@ -950,6 +960,43 @@ brings that row back into the inbox, displays the reaction and channel name, and
 opens the reacted-to message. Marking the row done should clear its reaction
 notifications along with the other notifications for that thread.
 
+## Requests to join
+
+Opening a private or team channel you are not in shows **You don't have access
+to this channel**, the signed-in email, and **Ask to join**. Public channels are
+open to everyone, and direct messages offer no request. Sending shows **Request
+sent** with **Withdraw request**. After withdrawing, asking again waits a
+minute; after a denial it waits 24 hours, and the panel shows when.
+
+The request appears in the channel timeline as "<name> (<account email>) asked
+to join the channel" with **Approve** and **Deny** for any participant. The name
+and full account email wrap at phone widths so reviewers can identify the
+requester before answering. If the display name already is the email, it appears
+only once. Every participant
+also gets a **Requests to join** notification (turn it off under notification
+settings) that opens the channel and marks it unread. The first answer wins: the
+row then shows **Approved by** or **Denied by** for everyone, a withdrawn request
+shows **Request withdrawn**, and the other participants' notifications are marked
+done. Approval adds the requester, who gets the usual "added you" invite
+notification, and the timeline shows the usual added row. A requester waiting on
+the denied view is taken into the channel when the approval arrives.
+
+Verify with two accounts: ask from a non-member, approve or deny from a member
+in another tab, and check the row, the requester's view, and the member's inbox
+update without reloading. Check the panel, full requester email, and the row's
+buttons at phone width.
+Use a copied `/app/channels/<id>` link for a private channel absent from the
+requester's channel list. The Chat workspace must offer **Ask to join** there
+and open the conversation after approval. A transient loading failure still
+offers **Retry** rather than an access request.
+
+Returning to a denied channel waits for that screen's fresh request read, even
+when an earlier request is cached or the read is paused offline. A missing
+channel shows **Conversation unavailable** with **Retry**, without cached request
+controls. Other request-read failures show an inline error and **Retry**. Retry
+and background metadata refreshes keep the current unavailable or denied screen
+in place until the result arrives.
+
 ## Chat navigation rail
 
 Following a channel mention or browser notification for the conversation already
@@ -1130,8 +1177,10 @@ move it to that position; an accent insertion line shows the exact destination
 above or below the target row. The order saves through the shared favorites API
 and survives reloads. Hidden favorites and favorites of other entity types keep
 their positions. **Sort → Custom order** restores dragging after choosing an
-automatic sort. Dropping a favorite does not open its conversation or move it
-into a custom section. Failed saves roll back and show an error toast.
+automatic sort. Releasing over a favorite preserves the drop target through
+scroll updates; releasing outside the list leaves the order unchanged. Dropping
+a favorite does not open its conversation or move it into a custom section.
+Failed saves roll back and show an error toast.
 
 ### Sections
 

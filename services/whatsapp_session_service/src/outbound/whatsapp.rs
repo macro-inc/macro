@@ -13,8 +13,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ChatUpdate, ClaimedSend, InboundEvent, LookupAnswer, MediaImport, MessageAnchor, OutboundMedia,
-    OutgoingContent, SessionScope, Target,
+    ChatUpdate, ClaimedSend, InboundEvent, InboundKind, LookupAnswer, MediaImport, MessageAnchor,
+    OutboundMedia, OutgoingContent, SessionScope, Target,
 };
 use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
@@ -316,6 +316,9 @@ impl Forwarder {
             unreadable = tracing::field::Empty,
             skipped = tracing::field::Empty,
             skipped_stub_types = tracing::field::Empty,
+            push_named = tracing::field::Empty,
+            contact_named = tracing::field::Empty,
+            unnamed = tracing::field::Empty,
             outcome = tracing::field::Empty,
         );
         async {
@@ -323,6 +326,7 @@ impl Forwarder {
                 return;
             };
             let mut stored = 0usize;
+            let mut names = SenderNames::default();
             let mut unreadable: Vec<i32> = vec![];
             // Messages Macro does not import, by WhatsApp stub type (0: not
             // a stub), so a page that stores less than it got is explained.
@@ -356,8 +360,9 @@ impl Forwarder {
                 let votes = events::history_poll_votes(self.account, &parsed, now);
                 let mut message_kept = true;
                 for mut event in std::iter::once(event).chain(votes) {
-                    message_kept &= self.complete_addresses(&mut event).await
-                        && Box::pin(self.inbound.accept(&event)).await;
+                    let completed = self.complete_addresses(&mut event).await;
+                    names.count(self.store.as_ref(), &event).await;
+                    message_kept &= completed && Box::pin(self.inbound.accept(&event)).await;
                 }
                 if message_kept {
                     stored += 1;
@@ -367,6 +372,9 @@ impl Forwarder {
             }
             let span = tracing::Span::current();
             span.record("stored", stored);
+            span.record("push_named", names.push);
+            span.record("contact_named", names.contact);
+            span.record("unnamed", names.none);
             span.record("unreadable", unreadable.len());
             span.record("skipped", skipped.len());
             span.record("skipped_stub_types", format!("{skipped:?}"));
@@ -388,6 +396,34 @@ impl Forwarder {
         }
         .instrument(span)
         .await;
+    }
+}
+
+/// How the senders of a history page could be named, for its span: by a
+/// WhatsApp name the message carries, by the account's contact store, or
+/// not at all. Counts only; never the names.
+#[derive(Default)]
+struct SenderNames {
+    push: usize,
+    contact: usize,
+    none: usize,
+}
+
+impl SenderNames {
+    async fn count(&mut self, contacts: &dyn ContactStore, event: &InboundEvent) {
+        let InboundKind::Message(message) = &event.kind else {
+            return;
+        };
+        if message.sender.display_name.is_some() {
+            self.push += 1;
+        } else if matches!(
+            events::contact_name(contacts, &message.sender).await,
+            Ok(Some(_))
+        ) {
+            self.contact += 1;
+        } else {
+            self.none += 1;
+        }
     }
 }
 

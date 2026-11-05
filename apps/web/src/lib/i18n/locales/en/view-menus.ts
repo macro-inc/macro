@@ -80,6 +80,7 @@ export default {
   groupList: 'Group list',
   filterList: 'Filter list',
   clearFilters: 'Clear filters',
+  showHiddenRoutineRuns: 'Show hidden routine runs',
 
   // Filter menu
   filter: 'Filter',

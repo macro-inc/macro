@@ -1,6 +1,7 @@
-//! Windows to IANA global mappings from Unicode CLDR 48.
-//! Source: https://github.com/unicode-org/cldr/blob/release-48/common/supplemental/windowsZones.xml
-//! License: CLDR-LICENSE.txt in this directory. Generated territory="001" entries.
+//! Windows to IANA global mappings from Unicode CLDR 49.
+//! Source: https://github.com/unicode-org/cldr/blob/release-49/common/supplemental/windowsZones.xml
+//! License: CLDR-LICENSE.txt in this directory. Generated territory="001" entries;
+//! three are held out, as the comment in the table explains.
 use chrono_tz::Tz;
 
 /// Graph's own name for UTC, which it gives meetings Exchange imported from
@@ -23,6 +24,10 @@ pub(super) fn zone(name: &str) -> Option<Tz> {
         "US Mountain Standard Time" => "America/Phoenix",
         "Mountain Standard Time (Mexico)" => "America/Mazatlan",
         "Mountain Standard Time" => "America/Denver",
+        // British Columbia, Alberta and Manitoba Standard Time (America/Vancouver,
+        // America/Edmonton, America/Winnipeg) are held out: chrono-tz's bundled
+        // tzdata (2025b) predates their 2026 changes, so mapping them would make
+        // Outlook writes land an hour off. Add them when current tz data ships.
         "Yukon Standard Time" => "America/Whitehorse",
         "Central America Standard Time" => "America/Guatemala",
         "Central Standard Time" => "America/Chicago",
