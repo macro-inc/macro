@@ -17,6 +17,7 @@ import {
   DriveListFilterFixture,
   NotesListFilterFixture,
 } from './list-filter-fixture';
+import { NameCacheFixture } from './name-cache-fixture';
 import { changeViewer, fetchContactDirectoryPage } from './network';
 import { OnboardingContactsFixture } from './onboarding-contacts-fixture';
 import { RecipientDirectoryFixture } from './recipient-directory-fixture';
@@ -147,6 +148,9 @@ render(
   () => (
     <QueryClientProvider client={client}>
       <Switch fallback={<App />}>
+        <Match when={new URLSearchParams(location.search).has('name-cache')}>
+          <NameCacheFixture />
+        </Match>
         <Match when={new URLSearchParams(location.search).has('sql-people')}>
           <SqlPeopleFixture />
         </Match>

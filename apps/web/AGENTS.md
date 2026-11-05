@@ -27,6 +27,18 @@
 
 ## Account-scoped source queries
 
+Shared display names and `useUserNames` participant labels use the same account/session-
+scoped QueryClient cache (`queries/auth/user-name-cache.ts`), never a second name map.
+Pin only tracked active readers; bound idle names by count/bytes and batch/pending IDs.
+Retain pins across synchronous reevaluation and drop closed-reader interests. Keep
+old names during transient refresh failures, but clear them on authority changes;
+late responses and captured mutations cannot cross account/session or entry generations.
+Cancel obsolete transports and bound request lifetime; native participant metadata
+must publish fallbacks for pending new-scope names rather than retain old labels.
+Debug name seeds require a mounted authenticated scope, not module initialization.
+Editable own-profile queries stay separate and session-keyed. Reset cached Macro
+bearer tokens on login/account replacement, including pending token responses.
+
 Key channel lists/activity, cached Quick Access channels, email links and inbox
 health probes by viewer. Use `queries/auth/account-scope.ts` to fence requests
 and cache writes; mutation ownership comes from the execute-time
@@ -80,7 +92,7 @@ can advance empty windows. Main email To/Cc/Bcc inputs receive the factory throu
 `undefined`. Thread extras and personal hits deduplicate by canonical email while
 preserving the selected representation. Keep selection/outside dismissal synchronous;
 a delayed combobox close must not cancel a new query after refocus. Pass supplied
-names to option/chip avatars instead of filling the global name store. The internal
+names to option/chip avatars instead of duplicating resolved names in the shared name cache. The internal
 recipient and email app-browser fixtures cover desktop/touch. Channel invitation
 and participant pickers use the same source with explicit roster exclusions; keep
 whole-team selection separate. Exclude up to the native IPC budget before ranking,
@@ -127,7 +139,7 @@ without a people catalog, then resolves complete per-label evidence before apply
 any constraints. Preserve semantic Me separately from fixed self and resolve saved
 summary labels from their own IDs. Inline checklist labels resolve only referenced
 task assignees, in lookup-sized batches whose owners disappear with those references;
-never populate a personal-directory map or the global display-name store for them.
+never populate a personal-directory map or the shared name cache for them.
 Onboarding team prefill searches only the server-approved domain, follows bounded
 continuations until six distinct non-self emails or exhaustion, and retains only
 that seed. No approved domain means no contact reads. Scope the source by account,
@@ -736,7 +748,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep Quick Access cache availability reactive to the GraphQL rollout flag; it can arrive after the provider mounts, and email has no legacy source fallback.
 - Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
 - Contact backfill shares Soup's authenticated tab leadership, uses `ContactDirectoryBackfill`, and requires projection 5. Fetch-only transport must check cancellation before scoped hydration; the engine checks account/generation under its write lock. Keep the 15-minute coalescing floor, hourly name refresh, and no deletion from scan omissions. See `../../docs/design/disk-backed-contacts.md` for the unfinished consumer migration.
-- Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid refilling the global name store. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
+- Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
 - Cmd+K and mobile name search take task projects from the Quick Access `initiative` bucket (typed All queries and the Projects category), searched from the GraphQL cache like other entities. Don't give them a per-query server search: its rows drop out while each new query loads, so projects flash as you type.
 - Merge the complete channel list into Quick Access even with the GraphQL cache enabled; preserve newer viewed timestamps and apply the channel boost before the extra DM boost in shared command/mobile name ranking.
 - Include all channel metadata in Quick Access item versions; record complete, cached-recent, and merged channel counts plus the last index-build duration on cache-search traces.

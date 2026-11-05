@@ -15,6 +15,11 @@ export default defineConfig({
       name: 'soup-filter-test-adapters',
       enforce: 'pre',
       resolveId(source, importer) {
+        if (
+          importer?.endsWith('/service-auth/client.ts') &&
+          source === '@core/constant/servers'
+        )
+          return `${directory}/name-cache-services.ts`;
         if (importer?.includes('/integrations/import-linear/')) {
           if (
             [

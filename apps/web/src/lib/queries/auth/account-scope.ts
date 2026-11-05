@@ -1,4 +1,5 @@
 import { thrownResultErrorHasCode } from '@core/util/result';
+import { resetMacroApiToken } from '@service-auth/fetch';
 import {
   hashKey,
   type MutationFunctionContext,
@@ -16,6 +17,7 @@ const ACCOUNT_SOURCE_PREFIXES = [
   channelKeys.quickAccessGraphql._def,
   emailKeys.links._def,
   emailKeys.linksHealthProbe._def,
+  authKeys.userNameSelf._def,
 ];
 
 /** Captured before async work; a new login fences even a return to the same account. */
@@ -94,6 +96,7 @@ export function mutationQueryAccount(
  * cannot reopen this gate. An old auth request is canceled before invalidation. */
 export async function resetQueryAccountSession(): Promise<void> {
   stopWaitingForIdentity?.();
+  resetMacroApiToken();
   const epoch = session().epoch + 1;
   setSession({ epoch, pending: true });
   const cache = queryClient.getQueryCache();

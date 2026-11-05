@@ -117,6 +117,12 @@ tests run fresh queries offline, reject writes/missing local capability, and fen
 replacement sessions while a native reply is held. Neither SQL server endpoint is
 used. Storage tests separately exercise 100k contacts plus self and persisted reopen.
 
+`/?name-cache` uses the production display-name getters, participant adapter,
+QueryClient cache and auth client against synthetic name responses. Desktop/phone
+cases keep active labels during 100k unowned reads, enforce idle/request budgets,
+and reject delayed account-return results, old overrides and authorization failures.
+It measures retained entry/queue bounds, not a full-app heap or native CallKit UI.
+
 This is synthetic UI/storage coverage, not whole-app memory acceptance, physical
 mobile hardware or a live-backend trace. Further Turso/OPFS coverage lives in
 `crates/client/cache-turso`.

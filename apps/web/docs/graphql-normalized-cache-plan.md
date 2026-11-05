@@ -1318,7 +1318,7 @@ compiler metadata and input ownership fence answers, and each observer retains o
 physical operation plus one replaceable input. The unnecessary `/databases/read`
 endpoint/client is removed. Fresh queries work offline once synchronization is
 complete; unsupported/incomplete reads stay explicit. Wider join parity, removal
-reconciliation and shared-name storage bounds remain open.
+reconciliation and whole-app acceptance remain open.
 Calendar create/edit, event-detail guest actions and AI-draft
 composers now use bounded property windows with event-owned guest extras. Chosen
 names stay in selection metadata rather than a directory map, and person pages
@@ -1329,8 +1329,18 @@ per-label reference evidence instead of the shared pool, with ambiguous/incomple
 names unresolved and manual properties taking precedence. Other Universal Input
 modes prefer a unique full name before first-name matching; explicit addresses
 never match another person's display-name alias. Chosen display metadata stays
-separate from automatic name evidence. Whole-app memory completion and bounded
-shared name storage remain pending.
+separate from automatic name evidence.
+Shared display-name getters and participant labels now share the existing QueryClient:
+active readers pin their names, while idle entries cap at 512/512 KiB and expire after
+ten minutes. Requests are serialized in at most 500-ID batches with 500 queued IDs;
+no separate promise backlog or directory map is retained. Scope changes/disposal
+cancel transport and a 30-second abort deadline bounds requests. Name TTL is ten minutes,
+with stale labels retained during refresh and a 30-second later-access failure retry;
+reconnection wakes active failures without refetching idle history.
+Private labels and bearer-token reuse are fenced by account/session transitions;
+manual overrides and released/replaced entries reject old responses. Debug seeds
+are session-owned. This cache does not establish personal-contact membership.
+Whole-app memory/latency acceptance remains pending.
 
 ## Cached email Quick Access
 
