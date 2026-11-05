@@ -309,10 +309,10 @@ fn inline_guides_carry_every_area_but_the_search_guide() {
         let Some(guide) = doc.guide.as_deref() else {
             continue;
         };
-        assert_eq!(code.contains(guide), doc.name != "core", "{}", doc.name);
+        assert_eq!(code.contains(guide), doc.name != "search", "{}", doc.name);
         assert_eq!(
             direct.contains(guide),
-            !["core", "agentSessions", "tasks"].contains(&doc.name.as_str()),
+            !["search", "agentSessions", "tasks"].contains(&doc.name.as_str()),
             "{}",
             doc.name
         );

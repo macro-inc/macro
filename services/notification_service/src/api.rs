@@ -101,6 +101,31 @@ mod tests {
     };
     use tower::ServiceExt;
 
+    /// The router answers an unknown `/{version}` with "404 invalid api
+    /// version", so a documented path must use a version the service
+    /// accepts, or every client generated from the spec calls a route that
+    /// doesn't exist.
+    #[test]
+    fn documented_paths_use_versions_the_service_accepts() {
+        use std::str::FromStr;
+        let spec = swagger::ApiDoc::openapi();
+        for path in spec.paths.paths.keys() {
+            let Some(version) = path
+                .strip_prefix('/')
+                .and_then(|path| path.split('/').next())
+                .filter(|segment| {
+                    segment.starts_with('v') && segment[1..].chars().all(|c| c.is_ascii_digit())
+                })
+            else {
+                continue;
+            };
+            assert!(
+                model::version::NotificationServiceApiVersion::from_str(version).is_ok(),
+                "{path} is documented under {version}, which the service doesn't serve"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn openapi_is_served_at_root_and_gateway_prefix() {
         let api = swagger_ui();

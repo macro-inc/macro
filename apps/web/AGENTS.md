@@ -25,6 +25,13 @@
 
 ## Verifying a change in a real browser
 
+`just test-functional` builds a production-like bundle of its fixtures and runs
+Playwright against it, not a dev server: each page otherwise fetches thousands of
+modules through the test's own routes, which limits how many tests can run at
+once. A fixture that depends on dev-only behavior won't work there. CI sets
+`FUNCTIONAL_TEST_WORKERS` and retries a failed test once; locally it defaults to
+one worker and no retries.
+
 ID-only user mention rendering, name lookup failure, and composer save/reopen
 are covered on desktop/tablet/phone by `user-mentions.browser.e2e.ts` in the
 LexicalMarkdown core browser suite (see its README).
@@ -87,10 +94,9 @@ searches, and picks by keyboard:
 Focus rows have a backend-free browser regression over the real row and mapping
 at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
 extra height or lost subject, touch rows of at least 44px, and the importance
-meter only under its sort, with the direction in its label while importance moves:
+meter on every row except on phones, with the direction in its label while
+importance moves:
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
-The fixture has its own sort buttons: the real touch layouts have no sort menu, so
-that coverage proves the meter's layout there, not that touch users can reach it.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
@@ -530,6 +536,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   pending edits against the persisted server snapshot instead of replaying an older one.
 - Mobile dock customization shares the navigation island’s measured capacity; persist ordering per user with `mobile-dock-order.ts`, preserve gated destinations, and keep Search and More fixed. Reorder handles drag without a hold delay; the rest of each row scrolls.
 - Share sidebar and mobile dock unread presence through `components/app/use-navigation-unread.ts`; keep badges reactive to read/done changes, guard all query data with `queryReadyGate` so pending preferences or paused queries cannot suspend the shell, and avoid fetching extra pages for counts.
+- Show notification unread dots on favorite rows in Chat, Tasks, Drive, and Reviews; reuse Chat's channel activity and the existing Soup entity hydration plus `getEntityNotifications` elsewhere, without a separate notification query or refresh registry. Never paginate favorites or the global notification feed just for dots.
 - Name Home thread rows from their latest scoped notification, including document mentions and reactions; use the thread author only when no notification exists. Document rows whose newest outstanding notification is a comment, and calendar event rows whose newest is a join request, say who did it (`row-notification.ts`).
 - Use `ChannelTitleIcon` for conversation breadcrumbs so DMs retain participant or agent avatars and named channels retain their pictures; suppress avatar actions inside breadcrumb buttons.
 - Normalize thread-only conversation URLs in `channelsSearch` before Home, Chat, or touch views derive their message target.
@@ -653,7 +660,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
   bump its checkpoint version when changing the hydration input contract.
 - Refresh the channel list's bounded unread edge when opening a conversation,
-  including an empty unread result after a read on another device.
+  including an empty unread result after a read on another device. Include
+  off-page favorites in unread presence without adding them to section counts.
 - Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
 - Read folders for picking or moving through `createFolderList`
   (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
@@ -687,7 +695,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Offer Add channels on manual-section headers and empty states; keep the picker scoped to eligible joined channels, explain scope and assignment moves in concise helper text, and leave smart membership rule-driven.
   Place the smart rule Input below Name contains; show a match count with hover/focus channel preview, and keep preview queries reactive to the selected scope without briefly reporting pending matches as empty.
   Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section.
-  Default Favorites to Custom order and persist drag reordering through the shared favorites mutation; preserve hidden and non-channel favorite positions, disable dragging under automatic sorts, show an insertion line at the actual destination edge, and keep the original rail unchanged.
+  Default Favorites to Custom order and persist drag reordering through the shared favorites mutation; preserve hidden and non-channel favorite positions, disable dragging under automatic sorts, show an insertion line at the actual destination edge, and keep the original rail unchanged. Retain pointer hit-testing coordinates until the drag sensor finishes so intervening scroll updates cannot discard a valid drop.
   Share the sliders-icon section menu's Sort, Filter, and actions with a header context menu; use trailing `SingleSelectCheck` marks for sorting, keep the Unread only label left and its switch right, and keep the filter submenu open when toggled.
   Compose the section click and right-click menus with `ContextMenuContent`, `MenuItem`, `MenuGroup`, and `MenuSeparator`; do not nest padded `Dropdown.Group` elements inside a context-menu surface.
   Keep all section mute, unmute, and snooze actions personal to the viewer; use the complete current membership, not filtered or hydrated rows, and never apply the change to later additions. Resolve built-in membership through the complete channel list, including custom-section assignments and preserving participant checks; Favorites targets channel favorites only. Use the bulk item-preference endpoints and shared snooze picker, applying confirmed changes to the cache once and preserving successful chunks on partial failure.
@@ -1102,6 +1110,18 @@ browser moves focus off a disabled field, so a failed save would strand it. Ente
 and Escape return focus to the value through `Property.Root`; tabbing or clicking
 away leaves focus where the user put it. The backend-free regression is
 `bunx playwright test --config src/features/property/editors/inline/browser-test/playwright.config.ts`.
+
+### Assignee people scope
+
+Use only the current team roster and available agents for new Assignee selections.
+Keep existing selected outsiders visible and removable, without contact discovery.
+Reuse the existing selected-first ordering at opening and keep row positions
+stable while selecting. Keep the generic roster hook in `src/lib/queries/team/members.ts`.
+Preserve each picker’s existing placeholder, sizing, and row styling.
+Preserve filter-only Me/Unassigned choices, company-owner scope, and unrelated
+people/contact fields.
+Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
+import it directly from Tasks and legacy `next-soup` consumers.
 
 ### Sidebar tag dragging
 

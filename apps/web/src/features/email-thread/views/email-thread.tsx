@@ -68,7 +68,7 @@ export function EmailThreadView(props: EmailThreadViewProps) {
     isTouch: threadContext.isTouch,
     messages: context.messages.list,
     allMessages: context.messages.unfiltered,
-    canCompose: () => context.permissions().isOwner,
+    canCompose: () => context.permissions().canReply,
     drafts: context.drafts,
     bottomReply: {
       open: context.messages.bottomReplyOpen,
@@ -110,6 +110,7 @@ export function EmailThreadView(props: EmailThreadViewProps) {
             context={{
               viewerEmail: viewContext.compose.viewerEmail,
               inboxes: viewContext.compose.accounts.inboxes,
+              primaryInboxId: viewContext.compose.accounts.primaryId,
             }}
             formOptions={{
               getMessageById: (id) =>

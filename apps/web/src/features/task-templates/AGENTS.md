@@ -20,6 +20,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Detach a deleted selected template without resetting the current draft.
 - Treat zero and false as populated values; treat empty lists and text as blank.
 - Retain blank selected fields so creation can pin them below the task title.
+- Include host-controlled fields in template defaults and pins without duplicating their controls.
 - Keep Source references contextual; capture the Source field without its current value.
 - Wait for property definitions before applying, editing, or saving templates; apply only definitions available to the viewer.
 - Preserve settings for unavailable fields when editing a template.

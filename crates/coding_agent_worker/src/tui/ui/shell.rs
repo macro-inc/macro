@@ -18,9 +18,7 @@ pub(super) fn render_header(frame: &mut Frame, app: &App, area: Rect) {
         .snapshot
         .harness
         .as_ref()
-        .map(|harness| harness.name.clone())
-        .or_else(|| app.config.identity.name.clone())
-        .unwrap_or_else(|| "macrod".to_owned());
+        .map_or_else(|| app.machine_name.clone(), |harness| harness.name.clone());
 
     let serving: Vec<Span> = if app.serving() {
         vec![Span::styled("  ⏵ serving SSE", Style::new().fg(OK))]
@@ -92,6 +90,7 @@ pub(super) fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
             (_, Tab::Config) => &[
                 ("↑↓", "select"),
                 ("enter", "edit/toggle"),
+                ("o", "web settings"),
                 ("←→/hl", "tabs"),
                 ("q", "quit"),
             ],

@@ -1,7 +1,7 @@
 import type { MacroClient } from '../../utils/client';
 import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
-import type { SearchOpts } from '../search';
+import type { SearchOpts } from '../search/options';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
 import { type SimilarTask, Task, type TaskSummary } from './task';

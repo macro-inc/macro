@@ -73,6 +73,10 @@ import {
   templateContextualIds,
 } from '../core/template-state';
 import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
+import {
+  CUSTOMER_CONTACT_PROPERTY_IDS,
+  customerContactEnabled,
+} from '../customer-contact';
 import { showTaskCreatedToast } from './taskCreatedToast';
 import { applyTemplateToEditor } from './template-editor';
 
@@ -286,13 +290,17 @@ export function createTaskComposer(
     }
   };
 
+  // Read once per opening, so a flag change leaves an open draft's row alone.
+  const showCustomerContact = customerContactEnabled();
+
   const {
     propertyValues,
     setPropertyValues,
     properties,
-    visiblePropertyIds,
+    selectedPropertyIds: visiblePropertyIds,
     setVisiblePropertyIds,
     availableProperties,
+    writableProperties: templateProperties,
     definitionsReady,
     addProperty,
     saveHandler,
@@ -302,6 +310,9 @@ export function createTaskComposer(
   } = createTaskComposerProperties({
     initialValues: initialState.propertyValues,
     initialVisiblePropertyIds: initialState.visiblePropertyIds,
+    hiddenPropertyIds: showCustomerContact
+      ? CUSTOMER_CONTACT_PROPERTY_IDS
+      : undefined,
     allDefinitions: true,
   });
   const originalTemplateContents: TaskTemplateContents = {
@@ -507,7 +518,7 @@ export function createTaskComposer(
     setIsCreating(true);
     const keepOpen = createMore() && !inSplit && !recovered;
     submittedInput = true;
-    const available = availableProperties();
+    const available = templateProperties();
     if (selection.kind === 'new') {
       const contents = captureTaskTemplate(
         {
@@ -814,7 +825,7 @@ export function createTaskComposer(
       freshTaskFromTemplate(
         originalTemplateContents,
         { propertyIds: [], propertyDefaults: {}, descriptionMarkdown: '' },
-        new Set(availableProperties().map((definition) => definition.id)),
+        new Set(templateProperties().map((definition) => definition.id)),
         contextualPropertyIds,
         unwrap(propertyValues)
       )
@@ -856,7 +867,7 @@ export function createTaskComposer(
     const next = freshTaskFromTemplate(
       { ...originalTemplateContents, descriptionMarkdown: '' },
       template.contents,
-      new Set(availableProperties().map((definition) => definition.id)),
+      new Set(templateProperties().map((definition) => definition.id)),
       contextualPropertyIds,
       unwrap(propertyValues)
     );
@@ -956,6 +967,8 @@ export function createTaskComposer(
     handleTitleTagPickerActive,
     deleteTitleTagsAtStart,
     properties,
+    showCustomerContact,
+    propertyValues,
     setPropertyValues,
     templateSelection,
     selectNoTemplate,
@@ -969,6 +982,7 @@ export function createTaskComposer(
     canSubmit,
     isSavingTemplate,
     availableProperties,
+    templateProperties,
     definitionsReady,
     addProperty,
     saveHandler,

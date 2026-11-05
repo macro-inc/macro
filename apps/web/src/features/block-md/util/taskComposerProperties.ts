@@ -264,6 +264,8 @@ export function createTaskComposerProperties(args: {
   values?: Accessor<Record<string, PropertyApiValues>>;
   additionalPropertyIds?: Accessor<string[]>;
   initialVisiblePropertyIds?: string[];
+  /** Properties a host edits with its own control: no pill, not addable. */
+  hiddenPropertyIds?: readonly string[];
   allDefinitions?: boolean;
 }) {
   const [propertyValues, setPropertyValues] = createStore<
@@ -343,6 +345,16 @@ export function createTaskComposerProperties(args: {
 
   const projects = useFeatureFlag(enableProjects);
 
+  // Host-controlled fields still belong to the draft even without separate pills.
+  const selectedPropertyIds = () => {
+    const values = args.values?.() ?? propertyValues;
+    return [
+      ...new Set([
+        ...visiblePropertyIds(),
+        ...(args.hiddenPropertyIds ?? []).filter((id) => id in values),
+      ]),
+    ];
+  };
   const visibleIds = () =>
     taskComposerVisiblePropertyIds(
       [
@@ -353,7 +365,7 @@ export function createTaskComposerProperties(args: {
       ],
       availableDefinitions(),
       projects().enabled
-    );
+    ).filter((id) => !args.hiddenPropertyIds?.includes(id));
   const addableDefinitions = () =>
     availableDefinitions().filter(
       (definition) =>
@@ -374,7 +386,7 @@ export function createTaskComposerProperties(args: {
       return;
     setVisiblePropertyIds((current) => [...current, id]);
   };
-  const availableProperties = () =>
+  const writableProperties = () =>
     availableDefinitions()
       .filter(
         (definition) =>
@@ -383,6 +395,10 @@ export function createTaskComposerProperties(args: {
       .map((definition) =>
         toPropertyDefinitionDomain(definition, options().get(definition.id))
       );
+  const availableProperties = () =>
+    writableProperties().filter(
+      (definition) => !args.hiddenPropertyIds?.includes(definition.id)
+    );
 
   const properties = (): Property[] => {
     return filterMap(visibleIds(), (id) => {
@@ -453,6 +469,8 @@ export function createTaskComposerProperties(args: {
     properties,
     visiblePropertyIds,
     setVisiblePropertyIds,
+    selectedPropertyIds,
+    writableProperties,
     availableProperties,
     definitionsReady: () => systemPropertiesQuery.isSuccess,
     addProperty,

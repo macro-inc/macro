@@ -607,6 +607,12 @@ function harness(
     query: vi.fn((_query, _variables, _context) => ({
       toPromise: () => Promise.resolve({ data: {} }),
     })),
+    createRequestOperation: vi.fn((kind, request, context) =>
+      makeOperation(kind, request, context)
+    ),
+    executeRequestOperation: vi.fn((_operation) => ({
+      toPromise: () => Promise.resolve({ data: {} }),
+    })),
     mutation: vi.fn((query, variables, context) => ({
       toPromise: () => {
         const request = createRequest(query, variables);
@@ -5479,13 +5485,19 @@ describe('normalizedCacheExchange', () => {
           const { ops, client, results, forwarded } = harness(host, undefined, {
             onCacheError,
           });
-          vi.mocked(client.query).mockReturnValue({
+          vi.mocked(client.executeRequestOperation).mockReturnValue({
             toPromise: () => read.promise,
           } as never);
           ops.next(makeMutationOp(1, optimistic));
           await vi.advanceTimersByTimeAsync(0);
           expect(host.commits).toHaveLength(1);
-          expect(client.query).toHaveBeenCalledOnce();
+          expect(client.query).not.toHaveBeenCalled();
+          expect(client.executeRequestOperation).toHaveBeenCalledOnce();
+          // urql drops a query whose key has a dispatch outstanding.
+          const [repair] = vi.mocked(client.executeRequestOperation).mock
+            .calls[0];
+          expect(repair.key).toBeLessThan(0);
+          expect(repair.key).not.toBe(createRequest(QUERY, {}).key);
           if (stage === 'persistence') {
             read.resolve({
               ...queryResult(makeOp(2, 'network-only')),

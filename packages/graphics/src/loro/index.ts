@@ -1,4 +1,10 @@
 export {
+  ARTIFACT_LIBRARY_ENTRY_MAX_LENGTH,
+  type ArtifactLibrary,
+  type ArtifactLibraryEdit,
+  type ArtifactLibraryKind,
+} from './artifact-library';
+export {
   createLoroGraphicsBackend,
   createLoroGraphicsBackendFromDoc,
   createLoroSeed,

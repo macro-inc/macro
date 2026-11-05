@@ -50,7 +50,7 @@ mod threads;
 // auth based constants
 pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
-pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
+pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let sync_sessions = state.sync_sessions.clone();
     let app = api_router(state.clone())
         .layer(

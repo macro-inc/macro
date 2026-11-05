@@ -65,6 +65,15 @@ pub enum CanvasRequest {
     },
 }
 
+/// Per-user answer to whether Canvas artifacts are on. Flags never grant access.
+pub type CanvasArtifactsRollout = std::sync::Arc<
+    dyn Fn(
+            MacroUserIdStr<'static>,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send>>
+        + Send
+        + Sync,
+>;
+
 /// Scene representation requested by a reader.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
@@ -204,6 +213,7 @@ impl<D: DocumentService> CanvasDocumentLookup for D {
 pub struct CanvasService<D, W> {
     documents: Arc<D>,
     worker: Arc<W>,
+    artifacts: bool,
     token_secret: String,
     admission: Arc<dyn AiAdmissionService>,
     recorder: Arc<dyn UsageRecorder>,
@@ -221,10 +231,17 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasService<D, W> {
         Self {
             documents,
             worker,
+            artifacts: false,
             token_secret,
             admission,
             recorder,
         }
+    }
+
+    /// Say whether the requesting user has the artifacts rollout.
+    pub fn with_artifacts(mut self, artifacts: bool) -> Self {
+        self.artifacts = artifacts;
+        self
     }
 
     /// Read with a view-only capability. No model is called.
@@ -445,7 +462,9 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasService<D, W> {
             &self.token_secret,
             Some(actor.to_owned()),
         )?;
-        self.worker.canvas(document_id, &token, &request).await
+        self.worker
+            .canvas(document_id, &token, &request, self.artifacts)
+            .await
     }
 }
 

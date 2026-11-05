@@ -336,20 +336,19 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
         &self,
         token: &str,
         binding: CalendarGrantBinding,
-    ) -> Result<Vec<OutlookCalendar>, CalendarProviderError> {
+    ) -> Result<OutlookDiscovery, CalendarProviderError> {
         let api = self.for_mailbox(access(binding));
         let token = AccessToken::new(token.to_owned());
         let settings = api
             .calendar_get(&token, api.calendar_endpoint(&["me", "mailboxSettings"])?)
             .await?;
-        let zone = zones::zone(settings["timeZone"].as_str().unwrap_or("UTC"))
-            .ok_or_else(invalid)?
-            .name()
-            .to_owned();
+        let named = settings["timeZone"].as_str().unwrap_or("UTC");
+        let zone = zones::zone(named).map(|zone| zone.name().to_owned());
+        let unmapped_time_zone = zone.is_none().then(|| named.to_owned());
         let (calendars, _) = api
             .calendar_pages(&token, api.calendar_endpoint(&["me", "calendars"])?)
             .await?;
-        calendars
+        let calendars = calendars
             .into_iter()
             .map(|c| {
                 Ok(OutlookCalendar {
@@ -357,7 +356,7 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
                         provider_calendar_id: string(&c, "id")?.into(),
                         name: c["name"].as_str().unwrap_or("Calendar").into(),
                         description: None,
-                        time_zone: Some(zone.clone()),
+                        time_zone: zone.clone(),
                         color: c["hexColor"]
                             .as_str()
                             .filter(|c| !c.is_empty())
@@ -385,7 +384,11 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
                         .collect(),
                 })
             })
-            .collect()
+            .collect::<Result<_, CalendarProviderError>>()?;
+        Ok(OutlookDiscovery {
+            calendars,
+            unmapped_time_zone,
+        })
     }
     async fn calendar_page(
         &self,

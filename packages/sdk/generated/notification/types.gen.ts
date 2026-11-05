@@ -1816,6 +1816,82 @@ export type ListTypedNotificationsResponses = {
 
 export type ListTypedNotificationsResponse = ListTypedNotificationsResponses[keyof ListTypedNotificationsResponses];
 
+export type BulkDeleteUserNotificationsV2Data = {
+    body: NotificationBulkRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/user_notifications/bulk';
+};
+
+export type BulkDeleteUserNotificationsV2Errors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type BulkDeleteUserNotificationsV2Error = BulkDeleteUserNotificationsV2Errors[keyof BulkDeleteUserNotificationsV2Errors];
+
+export type BulkDeleteUserNotificationsV2Responses = {
+    200: unknown;
+};
+
+export type BulkMarkNotificationsDoneData = {
+    body: NotificationBulkRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/user_notifications/bulk/done';
+};
+
+export type BulkMarkNotificationsDoneErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type BulkMarkNotificationsDoneError = BulkMarkNotificationsDoneErrors[keyof BulkMarkNotificationsDoneErrors];
+
+export type BulkMarkNotificationsDoneResponses = {
+    200: unknown;
+};
+
+export type BulkMarkNotificationsSeenData = {
+    body: NotificationBulkRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/user_notifications/bulk/seen';
+};
+
+export type BulkMarkNotificationsSeenErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type BulkMarkNotificationsSeenError = BulkMarkNotificationsSeenErrors[keyof BulkMarkNotificationsSeenErrors];
+
+export type BulkMarkNotificationsSeenResponses = {
+    200: unknown;
+};
+
+export type BulkMarkNotificationsUndoneData = {
+    body: NotificationBulkRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/user_notifications/bulk/undone';
+};
+
+export type BulkMarkNotificationsUndoneErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type BulkMarkNotificationsUndoneError = BulkMarkNotificationsUndoneErrors[keyof BulkMarkNotificationsUndoneErrors];
+
+export type BulkMarkNotificationsUndoneResponses = {
+    200: unknown;
+};
+
 export type BulkGetTypedNotificationsByEventItemIdsData = {
     body: BulkGetByEventItemIdsRequest;
     path?: never;
@@ -1956,6 +2032,30 @@ export type EnableNotificationTypeResponses = {
     200: unknown;
 };
 
+export type DeleteUserNotificationV2Data = {
+    body?: never;
+    path: {
+        /**
+         * ID of the notification
+         */
+        notification_id: string;
+    };
+    query?: never;
+    url: '/v1/user_notifications/{notification_id}';
+};
+
+export type DeleteUserNotificationV2Errors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteUserNotificationV2Error = DeleteUserNotificationV2Errors[keyof DeleteUserNotificationV2Errors];
+
+export type DeleteUserNotificationV2Responses = {
+    200: unknown;
+};
+
 export type GetTypedNotificationByIdData = {
     body?: never;
     path: {
@@ -1982,103 +2082,3 @@ export type GetTypedNotificationByIdResponses = {
 };
 
 export type GetTypedNotificationByIdResponse = GetTypedNotificationByIdResponses[keyof GetTypedNotificationByIdResponses];
-
-export type BulkDeleteUserNotificationsV2Data = {
-    body: NotificationBulkRequest;
-    path?: never;
-    query?: never;
-    url: '/v2/user_notifications/bulk';
-};
-
-export type BulkDeleteUserNotificationsV2Errors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type BulkDeleteUserNotificationsV2Error = BulkDeleteUserNotificationsV2Errors[keyof BulkDeleteUserNotificationsV2Errors];
-
-export type BulkDeleteUserNotificationsV2Responses = {
-    200: unknown;
-};
-
-export type BulkMarkNotificationsDoneData = {
-    body: NotificationBulkRequest;
-    path?: never;
-    query?: never;
-    url: '/v2/user_notifications/bulk/done';
-};
-
-export type BulkMarkNotificationsDoneErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type BulkMarkNotificationsDoneError = BulkMarkNotificationsDoneErrors[keyof BulkMarkNotificationsDoneErrors];
-
-export type BulkMarkNotificationsDoneResponses = {
-    200: unknown;
-};
-
-export type BulkMarkNotificationsSeenData = {
-    body: NotificationBulkRequest;
-    path?: never;
-    query?: never;
-    url: '/v2/user_notifications/bulk/seen';
-};
-
-export type BulkMarkNotificationsSeenErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type BulkMarkNotificationsSeenError = BulkMarkNotificationsSeenErrors[keyof BulkMarkNotificationsSeenErrors];
-
-export type BulkMarkNotificationsSeenResponses = {
-    200: unknown;
-};
-
-export type BulkMarkNotificationsUndoneData = {
-    body: NotificationBulkRequest;
-    path?: never;
-    query?: never;
-    url: '/v2/user_notifications/bulk/undone';
-};
-
-export type BulkMarkNotificationsUndoneErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type BulkMarkNotificationsUndoneError = BulkMarkNotificationsUndoneErrors[keyof BulkMarkNotificationsUndoneErrors];
-
-export type BulkMarkNotificationsUndoneResponses = {
-    200: unknown;
-};
-
-export type DeleteUserNotificationV2Data = {
-    body?: never;
-    path: {
-        /**
-         * ID of the notification
-         */
-        notification_id: string;
-    };
-    query?: never;
-    url: '/v2/user_notifications/{notification_id}';
-};
-
-export type DeleteUserNotificationV2Errors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteUserNotificationV2Error = DeleteUserNotificationV2Errors[keyof DeleteUserNotificationV2Errors];
-
-export type DeleteUserNotificationV2Responses = {
-    200: unknown;
-};

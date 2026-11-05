@@ -122,11 +122,13 @@ export function BottomReplyButtons(props: {
                 label="Reply"
                 onClick={open('reply-all')}
               />
-              <ReplyActionButton
-                icon={ArrowBendUpRight}
-                label="Forward"
-                onClick={open('forward')}
-              />
+              <Show when={ctx.permissions().isOwner}>
+                <ReplyActionButton
+                  icon={ArrowBendUpRight}
+                  label="Forward"
+                  onClick={open('forward')}
+                />
+              </Show>
             </div>
 
             <div class="ml-auto flex items-center gap-2">

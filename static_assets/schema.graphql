@@ -4760,6 +4760,11 @@ type GraphqlEmailThreadFocus {
 	Which way `importance` is moving.
 	"""
 	importanceTrend: GraphqlEmailImportanceTrend!
+	"""
+	The day the thread's mail says it is due, as `YYYY-MM-DD`: a calendar date
+	the viewer's time zone never shifts. Absent when it names no open deadline.
+	"""
+	dueOn: String
 }
 
 """
@@ -7385,7 +7390,8 @@ type GraphqlScheduledAction {
 	"""
 	trigger: GraphqlScheduledActionTrigger!
 	"""
-	Agent task for this routine. Null when the stored task is not an agent task.
+	The agent step this routine hands off to: its only one, or the first of
+	several in different branches. Null when no step runs an agent.
 	"""
 	agentTask: GraphqlScheduledActionAgentTask
 	"""
@@ -7426,11 +7432,11 @@ type GraphqlScheduledActionAgentTask {
 	"""
 	agent: GraphqlScheduledActionAgent
 	"""
-	System prompt for the agent.
+	Always empty: the agent step's instructions are in `userPrompt`.
 	"""
 	prompt: String!
 	"""
-	User prompt for the agent.
+	The agent step's instructions.
 	"""
 	userPrompt: String!
 }

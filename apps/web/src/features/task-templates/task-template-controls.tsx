@@ -188,7 +188,7 @@ export function TaskTemplateControls(props: {
     revision: template.revision,
     contents: taskTemplateContents(
       template.configuration,
-      props.composer.availableProperties()
+      props.composer.templateProperties()
     ),
   });
   const editTemplate = (template: TaskTemplate) => {
@@ -240,7 +240,7 @@ export function TaskTemplateControls(props: {
           props.composer.selectTemplate(editableTemplate(template));
           const available = new Set(
             props.composer
-              .availableProperties()
+              .templateProperties()
               .map((definition) => definition.id)
           );
           if (
