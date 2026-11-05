@@ -252,12 +252,11 @@ export const I_DOCUMENT_MENTION: TextMatchTransformer = {
   replace: (node: TextNode, match: RegExpMatchArray) => {
     try {
       const data = JSON.parse(match[1]);
-      for (const field of ['documentId', 'documentName']) {
-        if (!(field in data)) throw new Error(`Missing field ${field}`);
-      }
+      if (!('documentId' in data)) throw new Error('Missing field documentId');
+      // documentName only caches the label; the chip loads the real name.
       const documentMentionNode = new DocumentMentionNode(
         data.documentId,
-        data.documentName,
+        data.documentName ?? '',
         data.blockName ?? 'unknown',
         data.blockParams,
         undefined,
@@ -560,12 +559,12 @@ export const I_DOCUMENT_CARD: ElementTransformer = {
   ) => {
     try {
       const data = JSON.parse(match[1]);
-      for (const field of ['documentId', 'documentName', 'blockName']) {
+      for (const field of ['documentId', 'blockName']) {
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }
       const documentCardNode = new DocumentCardNode(
         data.documentId,
-        data.documentName,
+        data.documentName ?? '',
         data.blockName,
         data.blockParams,
         data.previewBox,

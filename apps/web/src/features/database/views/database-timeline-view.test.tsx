@@ -93,6 +93,56 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it.each([true, false])(
+  'keeps the timeline range and stage when creating with a host composer: %s',
+  async (composed) => {
+    const onCompose = vi.fn();
+    const onCreate = vi.fn(async () => true);
+    const { container } = render(() => (
+      <DatabaseTimelineView
+        view={{
+          query: { filter: null, sort: [] },
+          layout: {
+            kind: 'timeline',
+            range: 'dates',
+            title: 'name',
+            groupBy: 'stage',
+            colorBy: null,
+          },
+        }}
+        rows={rows}
+        columns={[name, dates, stage]}
+        canEdit
+        filtered={false}
+        rowPending={() => false}
+        onOpen={() => {}}
+        onCreate={onCreate}
+        onCompose={composed ? onCompose : undefined}
+        onWrite={async () => true}
+      />
+    ));
+    const group = container.querySelector<HTMLElement>(
+      '[data-timeline-group="option:build"]'
+    );
+    expect(group).not.toBeNull();
+    fireEvent.contextMenu(group!, { clientX: 800, clientY: 200 });
+    await selectMenu('New record here');
+    const values = {
+      dates: expect.stringMatching(/^\d{4}-.*Z\/\d{4}-.*Z$/),
+      stage: 'Build',
+    };
+    if (composed) {
+      await waitFor(() => expect(onCompose).toHaveBeenCalledWith(values));
+      expect(onCreate).not.toHaveBeenCalled();
+    } else {
+      await waitFor(() =>
+        expect(onCreate).toHaveBeenCalledWith({ values, open: true })
+      );
+      expect(onCompose).not.toHaveBeenCalled();
+    }
+  }
+);
+
 it('draws a bar for each dated record and a chip for each undated one, opening either, with the drawer closed', () => {
   const onOpen = vi.fn();
   render(() => (

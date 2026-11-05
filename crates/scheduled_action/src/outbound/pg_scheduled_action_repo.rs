@@ -97,7 +97,7 @@ impl TryFrom<ActionRow> for ScheduledAction {
                     row.event_filters.context("event filters missing")?,
                 )?,
             },
-            "multiple" => {
+            "multiple" | "once" => {
                 serde_json::from_value(row.trigger_config.context("routine triggers missing")?)?
             }
             other => bail!("unknown action trigger: {other}"),
@@ -153,6 +153,13 @@ impl TryFrom<&ActionTrigger> for TriggerColumns {
                 timezone: None,
                 event_filters: Some(serde_json::to_value(filters)?),
                 trigger_config: None,
+            }),
+            ActionTrigger::Once { .. } => Ok(Self {
+                trigger_type: "once",
+                schedule: None,
+                timezone: None,
+                event_filters: None,
+                trigger_config: Some(serde_json::to_value(trigger)?),
             }),
             ActionTrigger::Multiple { .. } => Ok(Self {
                 trigger_type: "multiple",
@@ -294,7 +301,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
                    configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
             FROM scheduled_action
-            WHERE enabled AND trigger_type IN ('cron', 'multiple') AND next_run_at IS NOT NULL
+            WHERE enabled AND trigger_type IN ('cron', 'once', 'multiple') AND next_run_at IS NOT NULL
               AND (claimed IS NULL OR claimed < $1)
             ORDER BY next_run_at ASC, id ASC
             LIMIT $2
@@ -535,7 +542,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         .fetch_one(&mut *tx)
         .await?;
 
-        if row.trigger_type == "cron" || row.trigger_type == "multiple" {
+        if matches!(row.trigger_type.as_str(), "cron" | "once" | "multiple") {
             let trigger = if row.trigger_type == "cron" {
                 ActionTrigger::Cron {
                     schedule: Schedule::from_cron(row.schedule.context("cron schedule missing")?)?,
@@ -549,7 +556,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                 r#"
                     UPDATE scheduled_action
                     SET next_run_at = $1, updated_at = now()
-                    WHERE id = $2 AND trigger_type IN ('cron', 'multiple')
+                    WHERE id = $2 AND trigger_type IN ('cron', 'once', 'multiple')
                     "#,
                 next_run_at,
                 *id,

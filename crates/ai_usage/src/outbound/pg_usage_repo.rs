@@ -26,54 +26,85 @@ impl PgUsageRepo {
 impl UsageRepo for PgUsageRepo {
     async fn insert_usage(&self, usage: &CompletionUsage, count_usage: bool) -> Result<()> {
         let id = macro_uuid::generate_uuid_v7();
-        let (input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, audio_seconds) =
-            match usage.cost.amount {
-                UsageAmount::Tokens {
-                    input,
-                    output,
-                    cache_read,
-                    cache_write,
-                } => (
-                    token_column(input),
-                    token_column(output),
-                    token_column(cache_read),
-                    token_column(cache_write),
-                    None,
-                ),
-                UsageAmount::Audio { duration } => (0, 0, 0, 0, Some(duration.as_secs_f64())),
-            };
-        let (per_in, per_out, per_cache_read, per_cache_write, per_audio_minute, total) =
-            match usage.cost.price {
-                Some(Price {
-                    pricing:
-                        ModelPricing::Tokens {
-                            input,
-                            output,
-                            cache_read,
-                            cache_write,
-                        },
-                    total,
-                }) => (
-                    Some(input),
-                    Some(output),
-                    cache_read,
-                    cache_write,
-                    None,
-                    Some(total),
-                ),
-                Some(Price {
-                    pricing: ModelPricing::Audio { per_minute },
-                    total,
-                }) => (
-                    Some(0.0),
-                    Some(0.0),
-                    None,
-                    None,
-                    Some(per_minute),
-                    Some(total),
-                ),
-                None => (None, None, None, None, None, None),
-            };
+        let (
+            input_tokens,
+            output_tokens,
+            cache_read_tokens,
+            cache_write_tokens,
+            audio_seconds,
+            provider_credits,
+        ) = match usage.cost.amount {
+            UsageAmount::Tokens {
+                input,
+                output,
+                cache_read,
+                cache_write,
+            } => (
+                token_column(input),
+                token_column(output),
+                token_column(cache_read),
+                token_column(cache_write),
+                None,
+                None,
+            ),
+            UsageAmount::Audio { duration } => (0, 0, 0, 0, Some(duration.as_secs_f64()), None),
+            UsageAmount::ProviderCredits { credits } => {
+                (0, 0, 0, 0, None, Some(token_column(credits)))
+            }
+        };
+        let (
+            per_in,
+            per_out,
+            per_cache_read,
+            per_cache_write,
+            per_audio_minute,
+            per_provider_credit,
+            total,
+        ) = match usage.cost.price {
+            Some(Price {
+                pricing:
+                    ModelPricing::Tokens {
+                        input,
+                        output,
+                        cache_read,
+                        cache_write,
+                    },
+                total,
+            }) => (
+                Some(input),
+                Some(output),
+                cache_read,
+                cache_write,
+                None,
+                None,
+                Some(total),
+            ),
+            Some(Price {
+                pricing: ModelPricing::Audio { per_minute },
+                total,
+            }) => (
+                Some(0.0),
+                Some(0.0),
+                None,
+                None,
+                Some(per_minute),
+                None,
+                Some(total),
+            ),
+            Some(Price {
+                pricing: ModelPricing::ProviderCredits { per_credit },
+                total,
+            }) => (
+                Some(0.0),
+                Some(0.0),
+                None,
+                None,
+                None,
+                Some(per_credit),
+                Some(total),
+            ),
+            None => (None, None, None, None, None, None, None),
+        };
 
         sqlx::query!(
             r#"
@@ -81,13 +112,15 @@ impl UsageRepo for PgUsageRepo {
                 id, feature, user_id, entity, model,
                 input_tokens, output_tokens,
                 cache_read_input_tokens, cache_write_input_tokens, audio_seconds,
+                provider_credits,
                 price_per_million_in, price_per_million_out,
                 price_per_million_cache_read, price_per_million_cache_write,
-                price_per_audio_minute, total,
+                price_per_audio_minute, price_per_provider_credit, total,
                 count_usage, agent_api_key_id
             )
             VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+                $19, $20
             )
             "#,
             id,
@@ -100,11 +133,13 @@ impl UsageRepo for PgUsageRepo {
             cache_read_tokens,
             cache_write_tokens,
             audio_seconds,
+            provider_credits,
             per_in,
             per_out,
             per_cache_read,
             per_cache_write,
             per_audio_minute,
+            per_provider_credit,
             total,
             count_usage,
             usage.agent_api_key_id,
@@ -123,7 +158,8 @@ impl UsageRepo for PgUsageRepo {
                 price_per_million_out AS "price_per_million_out!",
                 price_per_million_cache_read,
                 price_per_million_cache_write,
-                price_per_audio_minute
+                price_per_audio_minute,
+                price_per_provider_credit
             FROM ai_effective_pricing
             WHERE model = $1
             "#,
@@ -132,26 +168,39 @@ impl UsageRepo for PgUsageRepo {
         .fetch_optional(&self.inner)
         .await?;
 
-        Ok(row.map(|r| match r.price_per_audio_minute {
-            Some(per_minute) => ModelPricing::Audio { per_minute },
-            None => ModelPricing::Tokens {
-                input: r.price_per_million_in,
-                output: r.price_per_million_out,
-                cache_read: r.price_per_million_cache_read,
-                cache_write: r.price_per_million_cache_write,
+        Ok(row.map(
+            |r| match (r.price_per_audio_minute, r.price_per_provider_credit) {
+                (_, Some(per_credit)) => ModelPricing::ProviderCredits { per_credit },
+                (Some(per_minute), None) => ModelPricing::Audio { per_minute },
+                (None, None) => ModelPricing::Tokens {
+                    input: r.price_per_million_in,
+                    output: r.price_per_million_out,
+                    cache_read: r.price_per_million_cache_read,
+                    cache_write: r.price_per_million_cache_write,
+                },
             },
-        }))
+        ))
     }
 
     async fn set_pricing(&self, model: &str, pricing: ModelPricing) -> Result<()> {
-        let (per_in, per_out, per_cache_read, per_cache_write, per_audio_minute) = match pricing {
+        let (
+            per_in,
+            per_out,
+            per_cache_read,
+            per_cache_write,
+            per_audio_minute,
+            per_provider_credit,
+        ) = match pricing {
             ModelPricing::Tokens {
                 input,
                 output,
                 cache_read,
                 cache_write,
-            } => (input, output, cache_read, cache_write, None),
-            ModelPricing::Audio { per_minute } => (0.0, 0.0, None, None, Some(per_minute)),
+            } => (input, output, cache_read, cache_write, None, None),
+            ModelPricing::Audio { per_minute } => (0.0, 0.0, None, None, Some(per_minute), None),
+            ModelPricing::ProviderCredits { per_credit } => {
+                (0.0, 0.0, None, None, None, Some(per_credit))
+            }
         };
         let mut tx = self.inner.begin().await?;
 
@@ -160,15 +209,16 @@ impl UsageRepo for PgUsageRepo {
             INSERT INTO ai_pricing (
                 model, price_per_million_in, price_per_million_out,
                 price_per_million_cache_read, price_per_million_cache_write,
-                price_per_audio_minute
+                price_per_audio_minute, price_per_provider_credit
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (model) DO UPDATE
             SET price_per_million_in = EXCLUDED.price_per_million_in,
                 price_per_million_out = EXCLUDED.price_per_million_out,
                 price_per_million_cache_read = EXCLUDED.price_per_million_cache_read,
                 price_per_million_cache_write = EXCLUDED.price_per_million_cache_write,
                 price_per_audio_minute = EXCLUDED.price_per_audio_minute,
+                price_per_provider_credit = EXCLUDED.price_per_provider_credit,
                 updated_at = NOW()
             "#,
             model,
@@ -177,6 +227,7 @@ impl UsageRepo for PgUsageRepo {
             per_cache_read,
             per_cache_write,
             per_audio_minute,
+            per_provider_credit,
         )
         .execute(&mut *tx)
         .await?;
@@ -191,8 +242,10 @@ impl UsageRepo for PgUsageRepo {
                 price_per_million_cache_read = e.price_per_million_cache_read,
                 price_per_million_cache_write = e.price_per_million_cache_write,
                 price_per_audio_minute = e.price_per_audio_minute,
+                price_per_provider_credit = e.price_per_provider_credit,
                 total = CASE
                     WHEN (ai_usage.audio_seconds IS NULL) <> (e.price_per_audio_minute IS NULL) THEN NULL
+                    WHEN (ai_usage.provider_credits IS NULL) <> (e.price_per_provider_credit IS NULL) THEN NULL
                     WHEN ai_usage.cache_read_input_tokens > 0 AND e.price_per_million_cache_read IS NULL THEN NULL
                     WHEN ai_usage.cache_write_input_tokens > 0 AND e.price_per_million_cache_write IS NULL THEN NULL
                     ELSE (ai_usage.input_tokens::real / 1000000.0::real) * e.price_per_million_in
@@ -200,6 +253,7 @@ impl UsageRepo for PgUsageRepo {
                       + (ai_usage.cache_read_input_tokens::real / 1000000.0::real) * COALESCE(e.price_per_million_cache_read, 0)
                       + (ai_usage.cache_write_input_tokens::real / 1000000.0::real) * COALESCE(e.price_per_million_cache_write, 0)
                       + (COALESCE(ai_usage.audio_seconds, 0) / 60.0 * COALESCE(e.price_per_audio_minute, 0))::real
+                      + (COALESCE(ai_usage.provider_credits, 0)::double precision * COALESCE(e.price_per_provider_credit, 0))::real
                 END
             FROM ai_effective_pricing e
             WHERE ai_usage.model = $1 AND e.model = $1
@@ -234,11 +288,13 @@ impl UsageRepo for PgUsageRepo {
                 cache_read_input_tokens,
                 cache_write_input_tokens,
                 audio_seconds,
+                provider_credits,
                 price_per_million_in,
                 price_per_million_out,
                 price_per_million_cache_read,
                 price_per_million_cache_write,
                 price_per_audio_minute,
+                price_per_provider_credit,
                 total,
                 created_at
             FROM ai_usage
@@ -267,9 +323,10 @@ impl UsageRepo for PgUsageRepo {
 
                 let price = match (r.price_per_million_in, r.price_per_million_out, r.total) {
                     (Some(per_in), Some(per_out), Some(total)) => Some(Price {
-                        pricing: match r.price_per_audio_minute {
-                            Some(per_minute) => ModelPricing::Audio { per_minute },
-                            None => ModelPricing::Tokens {
+                        pricing: match (r.price_per_audio_minute, r.price_per_provider_credit) {
+                            (_, Some(per_credit)) => ModelPricing::ProviderCredits { per_credit },
+                            (Some(per_minute), None) => ModelPricing::Audio { per_minute },
+                            (None, None) => ModelPricing::Tokens {
                                 input: per_in,
                                 output: per_out,
                                 cache_read: r.price_per_million_cache_read,
@@ -287,12 +344,15 @@ impl UsageRepo for PgUsageRepo {
                     entity: r.entity,
                     agent_api_key_id: r.agent_api_key_id,
                     cost: Usage {
-                        amount: match r.audio_seconds {
-                            Some(seconds) => UsageAmount::Audio {
+                        amount: match (r.audio_seconds, r.provider_credits) {
+                            (Some(seconds), _) => UsageAmount::Audio {
                                 duration: std::time::Duration::try_from_secs_f64(seconds)
                                     .map_err(|error| UsageError::Other(error.into()))?,
                             },
-                            None => UsageAmount::Tokens {
+                            (None, Some(credits)) => UsageAmount::ProviderCredits {
+                                credits: credits.max(0) as u64,
+                            },
+                            (None, None) => UsageAmount::Tokens {
                                 input: r.input_tokens.max(0) as u64,
                                 output: r.output_tokens.max(0) as u64,
                                 cache_read: r.cache_read_input_tokens.max(0) as u64,
@@ -309,7 +369,7 @@ impl UsageRepo for PgUsageRepo {
     }
 }
 
-/// Token counts are `BIGINT`; a count past `i64::MAX` saturates.
+/// Token and credit counts are `BIGINT`; a count past `i64::MAX` saturates.
 fn token_column(tokens: u64) -> i64 {
     i64::try_from(tokens).unwrap_or(i64::MAX)
 }

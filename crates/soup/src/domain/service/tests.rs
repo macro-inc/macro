@@ -45,10 +45,10 @@ use uuid::Uuid;
 use super::*;
 
 mod agent_metadata;
+mod attention;
 mod crm_association;
 mod exclusions;
 mod favorites;
-mod work_feed;
 
 struct NoopEmailPreviewService;
 

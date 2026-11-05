@@ -37,11 +37,26 @@ export function createNativeStagedUploadFile(
   source: NativeStagedUploadSource,
   media: NativeStagedUploadData
 ): File | null {
+  const file = new File([], media.name ?? '', {
+    type: media.mimeType ?? undefined,
+  });
+  return tagNativeStagedUpload(file, source, media) ? file : null;
+}
+
+/**
+ * Marks `file` as staged natively, so uploads send the staged copy from Rust
+ * instead of reading `file` into JS. Desktop tags the real pasted `File`, which
+ * keeps its bytes for local previews.
+ */
+export function tagNativeStagedUpload(
+  file: File,
+  source: NativeStagedUploadSource,
+  media: NativeStagedUploadData
+): boolean {
   if (!media.token || !media.name || !media.mimeType || media.size == null) {
-    return null;
+    return false;
   }
 
-  const file = new File([], media.name, { type: media.mimeType });
   nativeStagedUploads.set(file, {
     source,
     token: media.token,
@@ -53,7 +68,7 @@ export function createNativeStagedUploadFile(
       ? convertFileSrc(media.previewPath)
       : undefined,
   });
-  return file;
+  return true;
 }
 
 export function getNativeStagedUpload(

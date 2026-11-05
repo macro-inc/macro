@@ -1,3 +1,4 @@
+import { externalWriteVersion, predatesExternalWrite } from './external-writes';
 /**
  * urql exchange backed by the normalized wasm cache (via a `CacheHost`).
  *
@@ -127,6 +128,8 @@ declare module '@urql/core' {
   interface OperationContext {
     /** Publish the network result without storing it in the cache. */
     persistResult?: false;
+    /** Types that can change this query's membership, even in an empty response. */
+    externalCacheWriteTypes?: readonly string[];
   }
 }
 
@@ -416,6 +419,8 @@ export interface NormalizedCacheExchangeOptions {
   /** Return true to transfer a committed query refresh to an active reader's queue.
    * Persisted descriptors without an owner retain the normal network fallback. */
   delegateRevalidation?: (client: Client, query: QueryRevalidation) => boolean;
+  /** Recover membership dependencies for imperative or durably replayed queries. */
+  externalWriteTypes?: (operation: Operation) => readonly string[] | undefined;
   /** Schema-typed singular entity relations derived from field arguments. */
   entityResolvers?: EntityResolverConfig;
   /** Called when cache work fails; the operation may degrade or emit uncertainty. */
@@ -813,6 +818,10 @@ export function normalizedCacheExchange(
         makeOperation('query', op, {
           ...op.context,
           [QUERY_MUTATION_VERSION_CONTEXT_KEY]: mutationVersion,
+          externalCacheWriteVersion: externalWriteVersion(host),
+          externalCacheWriteTypes:
+            op.context.externalCacheWriteTypes ??
+            options.externalWriteTypes?.(op),
         });
 
       const enqueueHydrationForward = (op: Operation): void => {
@@ -1299,7 +1308,15 @@ export function normalizedCacheExchange(
           await invalidateOlderRetainedFallback(state, resultVersion);
           // A previous write turn may have delayed this response until after
           // mutation settlement, even though publication happened earlier.
-          if (predatesMutation(op)) {
+          if (
+            predatesMutation(op) ||
+            predatesExternalWrite(
+              host,
+              op.context.externalCacheWriteVersion,
+              result.data,
+              op.context.externalCacheWriteTypes
+            )
+          ) {
             refreshObsoleteQuery(op);
             return undefined;
           }
@@ -1455,7 +1472,15 @@ export function normalizedCacheExchange(
             }
           }
         } else if (op.kind === 'query' && isHydrateOnly(op)) {
-          if (predatesMutation(op)) {
+          if (
+            predatesMutation(op) ||
+            predatesExternalWrite(
+              host,
+              op.context.externalCacheWriteVersion,
+              result.data,
+              op.context.externalCacheWriteTypes
+            )
+          ) {
             if (!result.hasNext && hydrationRequests.has(op.key)) {
               enqueueHydrationForward(op);
             }
@@ -1497,7 +1522,15 @@ export function normalizedCacheExchange(
           }
         } else if (op.kind === 'query') {
           const state = queryState(op.key);
-          if (predatesMutation(op)) {
+          if (
+            predatesMutation(op) ||
+            predatesExternalWrite(
+              host,
+              op.context.externalCacheWriteVersion,
+              result.data,
+              op.context.externalCacheWriteTypes
+            )
+          ) {
             if (result.hasNext !== true) {
               state.networkRequestsInFlight = Math.max(
                 0,
@@ -1555,9 +1588,21 @@ export function normalizedCacheExchange(
         shared,
         filter((op) => op.kind === 'query'),
         mergeMap((op) => {
-          if (!isHydrateOnly(op)) activeOps.set(op.key, op);
+          // A contextless same-key revalidation shares the mounted reader's scope.
+          const types =
+            op.context.externalCacheWriteTypes ??
+            activeOps.get(op.key)?.context.externalCacheWriteTypes;
+          const operation =
+            types === undefined
+              ? op
+              : makeOperation('query', op, {
+                  ...op.context,
+                  externalCacheWriteTypes: types,
+                });
+          if (!isHydrateOnly(operation))
+            activeOps.set(operation.key, operation);
           return pipe(
-            fromPromise(readThenRoute(op)),
+            fromPromise(readThenRoute(operation)),
             mergeMap((result) =>
               result ? fromValue(result) : (empty as Source<OperationResult>)
             )

@@ -16,6 +16,7 @@ const defaultPrefs = (overrides: Partial<SidebarPrefs> = {}): SidebarPrefs => ({
 });
 
 const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
+  showNotifications: true,
   showCalendar: true,
   showScheduling: true,
   showCustomers: true,

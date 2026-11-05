@@ -106,6 +106,7 @@ pub(super) fn form_detail(
                 title,
                 description,
                 questions,
+                show_when,
             } => FormSectionDetail::Questions {
                 id,
                 title,
@@ -126,6 +127,7 @@ pub(super) fn form_detail(
                         })
                     })
                     .collect(),
+                show_when,
             },
             FormSection::Gate {
                 id,
@@ -152,9 +154,9 @@ pub(super) fn form_detail(
 
 /// Check a layout against the form's table as a whole: every column is the
 /// table's, asked once and not written by the form itself; every widget fits
-/// its column and a public form asks for no file; every gate tests only
-/// columns asked before it, as a view filter would test them; ids are
-/// unique and texts within bounds.
+/// its column and a public form asks for no file; every gate and every
+/// section's show-when rules test only columns asked before it, as a view
+/// filter would test them; ids are unique and texts within bounds.
 pub(super) fn validate_layout(
     layout: &FormLayout,
     form: &Form,
@@ -194,10 +196,14 @@ pub(super) fn validate_layout(
                 title,
                 description,
                 questions,
+                show_when,
             } => {
                 unique(*id.as_uuid())?;
                 within(title, MAX_TITLE_LENGTH)?;
                 within(description, MAX_TEXT_LENGTH)?;
+                if let Some(rules) = show_when {
+                    condition_fits(rules, &asked, &columns)?;
+                }
                 for question in questions {
                     unique(*question.id.as_uuid())?;
                     within(&question.help_text, MAX_TEXT_LENGTH)?;
@@ -213,7 +219,7 @@ pub(super) fn validate_layout(
                             .ok_or(LayoutProblem::UnknownColumn {
                                 column: question.column,
                             })?;
-                    // A gate only reads `asked` at its own section, so a
+                    // Rules read `asked` only at a section's start, so a
                     // column is asked from here on as soon as it is seen.
                     if !asked.insert(question.column) {
                         return Err(LayoutProblem::RepeatedColumn {
@@ -282,13 +288,41 @@ fn gate_fits(
     asked: &HashSet<ColumnId>,
     columns: &HashMap<ColumnId, QuestionColumn>,
 ) -> Result<(), LayoutProblem> {
-    for condition in rules.conditions() {
-        if !asked.contains(&condition.column) {
-            return Err(LayoutProblem::GateNamesLaterColumn {
-                column: condition.column,
-            });
-        }
+    if let Some(column) = later_column(rules, asked) {
+        return Err(LayoutProblem::GateNamesLaterColumn { column });
     }
+    rules_fit(rules, asked, columns).map_err(|reason| LayoutProblem::GateRule { reason })
+}
+
+/// Check a section's show-when rules against the columns asked before it,
+/// as a gate's are checked.
+fn condition_fits(
+    rules: &FilterGroup,
+    asked: &HashSet<ColumnId>,
+    columns: &HashMap<ColumnId, QuestionColumn>,
+) -> Result<(), LayoutProblem> {
+    if let Some(column) = later_column(rules, asked) {
+        return Err(LayoutProblem::ConditionNamesLaterColumn { column });
+    }
+    rules_fit(rules, asked, columns).map_err(|reason| LayoutProblem::ConditionRule { reason })
+}
+
+/// The first column `rules` test that is not among `asked`.
+fn later_column(rules: &FilterGroup, asked: &HashSet<ColumnId>) -> Option<ColumnId> {
+    rules
+        .conditions()
+        .into_iter()
+        .map(|condition| condition.column)
+        .find(|column| !asked.contains(column))
+}
+
+/// Whether each test of `rules` fits its column, among those `asked`, as a
+/// view filter's would; why not, when one does not.
+fn rules_fit(
+    rules: &FilterGroup,
+    asked: &HashSet<ColumnId>,
+    columns: &HashMap<ColumnId, QuestionColumn>,
+) -> Result<(), String> {
     let earlier: Vec<SchemaColumn> = asked
         .iter()
         .filter_map(|column| columns.get(column))
@@ -302,15 +336,14 @@ fn gate_fits(
         &ViewLayout::Table { columns: vec![] },
         &earlier,
     )
-    .map_err(|problem| LayoutProblem::GateRule {
-        reason: problem.to_string(),
-    })
+    .map_err(|problem| problem.to_string())
 }
 
-/// Check a stored layout's gates against the table as it is now: a column
-/// deleted or retyped in the grid can leave a gate naming a question the
-/// form no longer asks, or testing a column as it no longer is. Such a gate
-/// would stop every respondent, so responding is refused instead until an
+/// Check a stored layout's gates and show-when rules against the table as
+/// it is now: a column deleted or retyped in the grid can leave rules naming
+/// a question the form no longer asks, or testing a column as it no longer
+/// is. Such a gate would stop every respondent, and such a section would be
+/// skipped for all of them, so responding is refused instead until an
 /// editor repairs the layout.
 pub(super) fn gates_fit_table(
     layout: &FormLayout,
@@ -320,12 +353,21 @@ pub(super) fn gates_fit_table(
     for section in &layout.sections {
         match section {
             FormSection::Booking { .. } => {}
-            FormSection::Questions { questions, .. } => asked.extend(
-                questions
-                    .iter()
-                    .map(|question| question.column)
-                    .filter(|column| columns.contains_key(column)),
-            ),
+            FormSection::Questions {
+                questions,
+                show_when,
+                ..
+            } => {
+                if let Some(rules) = show_when {
+                    condition_fits(rules, &asked, columns)?;
+                }
+                asked.extend(
+                    questions
+                        .iter()
+                        .map(|question| question.column)
+                        .filter(|column| columns.contains_key(column)),
+                );
+            }
             FormSection::Gate { rules, .. } => gate_fits(rules, &asked, columns)?,
         }
     }

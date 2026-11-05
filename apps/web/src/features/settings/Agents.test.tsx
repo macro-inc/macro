@@ -281,6 +281,10 @@ vi.mock('@queries/pipedream-connectors', () => ({
     slugs: () => new Set(pipedreamMocks.connected),
     ready: () => true,
   }),
+  usePipedreamCatalogIconsQuery: () => ({
+    isPending: false,
+    data: new Map(),
+  }),
   usePipedreamCatalogQuery: (search: () => string) => ({
     get data() {
       const term = search().trim().toLowerCase();
