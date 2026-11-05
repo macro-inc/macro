@@ -37,7 +37,7 @@ export default {
   // App update waiting for Wi-Fi
   updateOffWifiTitle: 'Update available',
   updateOffWifiDescription:
-    'A new version of Macro is available. Updates download automatically on Wi-Fi. Download it now? This may use mobile data.',
+    'A new update to Macro is available. Updates download automatically on Wi-Fi. Download it now? This may use mobile data.',
   updateNotNow: 'Not now',
   updateDownload: 'Download',
   updateDownloadingTitle: 'Downloading update',
