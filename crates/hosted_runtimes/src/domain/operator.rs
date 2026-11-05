@@ -18,7 +18,7 @@ use crate::domain::service::{Clock, ComputerError};
 #[cfg(test)]
 mod test;
 
-/// A computer whose sessions have been quiet this long is frozen.
+/// A session-only computer whose sessions have been quiet this long is frozen.
 pub const IDLE_AFTER: Duration = Duration::minutes(10);
 /// A fleet effect is retried this many times before the computer fails.
 pub const MAX_EFFECT_ATTEMPTS: u32 = 5;
@@ -333,7 +333,7 @@ where
         Ok(())
     }
 
-    /// Freeze running computers whose sessions have been quiet for [`IDLE_AFTER`].
+    /// Freeze running session-only computers quiet for [`IDLE_AFTER`].
     #[tracing::instrument(skip(self, activity), err)]
     pub async fn sleep_idle<Activity: SessionActivity>(
         &self,
@@ -342,6 +342,9 @@ where
         let since = self.clock.now() - IDLE_AFTER;
         let mut frozen = 0;
         for computer in self.repo.running().await.map_err(internal)? {
+            if computer.persona.is_some() {
+                continue;
+            }
             let Some(harness_id) = computer.harness_id else {
                 continue;
             };
