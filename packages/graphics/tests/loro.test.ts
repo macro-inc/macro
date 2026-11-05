@@ -341,3 +341,54 @@ it('artifact content and pose merge independently and survive a reload', () => {
     b.execute(setArtifactCommand, { id: 'art', content: { designWidth: 0 } })
   ).toThrow('Invalid artifact geometry');
 });
+
+it('syncs the artifact library between peers in one update with a scene change', async () => {
+  const seed = createLoroSeed(
+    createScene([
+      {
+        id: 'box',
+        type: 'rectangle',
+        placement: { parentId: 'scene-root', sortKey: 'a0' },
+        transform: translation(0, 0),
+        geometry: { width: 10, height: 10 },
+        appearance: { fill: '#000', stroke: '#000' },
+      },
+    ])
+  );
+  const left = createLoroGraphicsBackend(seed, '1', 'scene-root');
+  const right = createLoroGraphicsBackend(seed, '2', 'scene-root');
+  const updates: Uint8Array[] = [];
+  left.subscribeUpdates((bytes) => updates.push(bytes));
+
+  const notified = vi.fn();
+  right.artifactLibrary.subscribe(notified);
+
+  const moved = left.getDocument();
+  const box = moved.items.box;
+  if (box?.type !== 'rectangle') throw new Error('Missing box');
+  left.commit(
+    {
+      ...moved,
+      items: { ...moved.items, box: { ...box, transform: translation(5, 5) } },
+    },
+    [{ kind: 'styles', name: 'brand', source: 'h1{color:red}' }]
+  );
+  expect(updates).toHaveLength(1);
+
+  right.receive(updates[0]!);
+  await Promise.resolve();
+  expect(notified).toHaveBeenCalled();
+  expect(right.artifactLibrary.read().styles).toEqual({
+    brand: 'h1{color:red}',
+  });
+  expect(right.getDocument().items.box).toMatchObject({
+    transform: translation(5, 5),
+  });
+
+  left.artifactLibrary.edit({ kind: 'styles', name: 'brand', source: null });
+  right.receive(updates[1]!);
+  expect(right.artifactLibrary.read().styles).toEqual({});
+
+  left.dispose();
+  right.dispose();
+});

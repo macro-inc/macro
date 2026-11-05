@@ -408,6 +408,12 @@ pub async fn run() -> anyhow::Result<()> {
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
+    let entity_access_service = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(db.clone()),
+        ),
+    );
+
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
         frecency_service.clone(),
@@ -430,6 +436,10 @@ pub async fn run() -> anyhow::Result<()> {
                 macro_service_urls::AuthServiceUrl::new()?.to_string(),
             )),
         ),
+    ))
+    .with_shared_thread_replies(email::outbound::EntityAccessSharedThreadReplies::new(
+        db.clone(),
+        (*entity_access_service).clone(),
     ))
     .with_macro_event_broker(macro_event_broker.clone());
     let readonly_email_service = ReadonlyEmailPreviewAdapter(
@@ -469,12 +479,6 @@ pub async fn run() -> anyhow::Result<()> {
             realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
         });
     tracing::trace!("initialized notification ingress service");
-
-    let entity_access_service = Arc::new(
-        entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(db.clone()),
-        ),
-    );
 
     let permission_checker = PermissionServiceImpl::new(db.clone(), entity_access_service.clone());
     let notification_service = NotificationServiceImpl::new(

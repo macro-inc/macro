@@ -21,3 +21,20 @@ export function nextPresentOrder(document: GraphicsDocument): string {
   const last = presentationOrder(document).at(-1);
   return sortKeysBetween(last?.geometry.presentOrder ?? null, null, 1)[0]!;
 }
+
+/** The whole presentation with one artifact moved by `delta` places, or undefined
+ * when it would leave the ends. */
+export function movedInPresentation(
+  document: GraphicsDocument,
+  id: string,
+  delta: number
+): string[] | undefined {
+  const ids = presentationOrder(document).map((item) => item.id);
+  const from = ids.indexOf(id);
+  const to = from + delta;
+  if (from === -1 || to < 0 || to >= ids.length) return undefined;
+
+  ids.splice(from, 1);
+  ids.splice(to, 0, id);
+  return ids;
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE ai_usage\n            SET price_per_million_in = e.price_per_million_in,\n                price_per_million_out = e.price_per_million_out,\n                price_per_million_cache_read = e.price_per_million_cache_read,\n                price_per_million_cache_write = e.price_per_million_cache_write,\n                price_per_audio_minute = e.price_per_audio_minute,\n                price_per_provider_credit = e.price_per_provider_credit,\n                total = CASE\n                    WHEN (ai_usage.audio_seconds IS NULL) <> (e.price_per_audio_minute IS NULL) THEN NULL\n                    WHEN (ai_usage.provider_credits IS NULL) <> (e.price_per_provider_credit IS NULL) THEN NULL\n                    WHEN ai_usage.cache_read_input_tokens > 0 AND e.price_per_million_cache_read IS NULL THEN NULL\n                    WHEN ai_usage.cache_write_input_tokens > 0 AND e.price_per_million_cache_write IS NULL THEN NULL\n                    ELSE (ai_usage.input_tokens::real / 1000000.0::real) * e.price_per_million_in\n                      + (ai_usage.output_tokens::real / 1000000.0::real) * e.price_per_million_out\n                      + (ai_usage.cache_read_input_tokens::real / 1000000.0::real) * COALESCE(e.price_per_million_cache_read, 0)\n                      + (ai_usage.cache_write_input_tokens::real / 1000000.0::real) * COALESCE(e.price_per_million_cache_write, 0)\n                      + (COALESCE(ai_usage.audio_seconds, 0) / 60.0 * COALESCE(e.price_per_audio_minute, 0))::real\n                      + (COALESCE(ai_usage.provider_credits, 0)::double precision * COALESCE(e.price_per_provider_credit, 0))::real\n                END\n            FROM ai_effective_pricing e\n            WHERE ai_usage.model = $1 AND e.model = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8c9182ecd5f9e441857928105f0515902e2a9cd700bc9c636889bfa4497bcd1f"
+}
