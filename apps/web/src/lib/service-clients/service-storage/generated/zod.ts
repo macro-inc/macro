@@ -875,6 +875,39 @@ export const getArtifactResponse = zod
   .describe('An artifact with its current version.');
 
 /**
+ * @summary Place the artifact, or one of its scenes, on a canvas as an embedded
+document node, recording the canvas's reference to it like the canvas UI
+does.
+ */
+export const placeArtifactParams = zod.object({
+  document_id: zod.string().describe('Artifact document ID'),
+});
+
+export const placeArtifactBody = zod
+  .object({
+    canvas_id: zod
+      .string()
+      .describe('The canvas document; needs edit access to it.'),
+    height: zod.number().describe('Node height.'),
+    item_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The node's canvas item id. Retry a placement with the same id to get\none node and one reference; a new id when omitted."
+      ),
+    scene: zod
+      .string()
+      .nullish()
+      .describe(
+        'Scene to show instead of `index.html`; it must exist in the current\nversion.'
+      ),
+    width: zod.number().describe('Node width.'),
+    x: zod.number().describe("World x of the node's top-left corner."),
+    y: zod.number().describe("World y of the node's top-left corner."),
+  })
+  .describe('Place an artifact, or one of its scenes, on a canvas.');
+
+/**
  * @summary Presigned uploads for the objects not yet stored for this artifact.
  */
 export const createArtifactUploadsParams = zod.object({

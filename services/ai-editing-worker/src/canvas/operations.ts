@@ -16,7 +16,7 @@ import type { ArtifactLibraryEdit } from '@macro-inc/graphics/loro';
 import { plainRichText } from '@macro-inc/lexical-core/canvas-text';
 import { match } from 'ts-pattern';
 import { insertCanvasUserMention } from './mentions';
-import type { CanvasOp } from './schema';
+import type { CanvasCommitOp } from './schema';
 
 function replaceOnce(html: string, find: string, replace: string) {
   const first = html.indexOf(find);
@@ -37,7 +37,9 @@ function replaceOnce(html: string, find: string, replace: string) {
 }
 
 /** Shared library changes in a batch, committed with its scene change. */
-export function artifactLibraryEdits(ops: CanvasOp[]): ArtifactLibraryEdit[] {
+export function artifactLibraryEdits(
+  ops: readonly CanvasCommitOp[]
+): ArtifactLibraryEdit[] {
   return ops.flatMap((op): ArtifactLibraryEdit[] => {
     if (op.kind === 'defineStyle')
       return [{ kind: 'styles', name: op.name, source: op.css }];
@@ -66,7 +68,7 @@ function label(
 /** Validate a complete snippet on a disposable editor before touching the live peer. */
 export function prepareCanvasEdit(
   document: GraphicsDocument,
-  ops: CanvasOp[]
+  ops: readonly CanvasCommitOp[]
 ): GraphicsDocument {
   const editor = createGraphicsEditor(document);
   try {
@@ -76,7 +78,12 @@ export function prepareCanvasEdit(
         'ids' in op
           ? op.ids
           : 'id' in op &&
-              !['create', 'connect', 'createArtifact'].includes(op.kind)
+              ![
+                'create',
+                'connect',
+                'createArtifact',
+                'embedDocument',
+              ].includes(op.kind)
             ? [op.id]
             : [];
       // A group's id is new; its members must already exist.
@@ -168,6 +175,42 @@ export function prepareCanvasEdit(
         })
         // Library entries live beside the scene, not in it.
         .with({ kind: 'defineStyle' }, { kind: 'defineComponent' }, () => {})
+        .with({ kind: 'embedDocument' }, (op) => {
+          const existing = current.items[op.id];
+          // A retried embed: the node is already there, as it was left.
+          if (
+            existing?.type === 'document' &&
+            existing.geometry.documentId === op.documentId
+          )
+            return;
+          if (existing)
+            throw new Error(`Item ${op.id} is already another item.`);
+          editor.execute(insertShapesCommand, [
+            {
+              point: { x: op.x, y: op.y },
+              item: {
+                id: op.id,
+                type: 'document',
+                // The Canvas UI's embedded-item appearance.
+                appearance: {
+                  fill: 'transparent',
+                  stroke: 'transparent',
+                  strokeWidth: 0,
+                  opacity: 1,
+                },
+                geometry: {
+                  documentId: op.documentId,
+                  name: op.name,
+                  fileType: op.fileType,
+                  ...(op.subpath === undefined ? {} : { subpath: op.subpath }),
+                  width: op.width,
+                  height: op.height,
+                  display: 'embed',
+                },
+              },
+            },
+          ]);
+        })
         .with({ kind: 'connect' }, (op) => {
           for (const end of [op.start, op.end]) {
             const target = end.binding && current.items[end.binding.targetId];

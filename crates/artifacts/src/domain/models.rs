@@ -249,6 +249,38 @@ pub struct Publisher {
     pub agent: Option<String>,
 }
 
+/// Farthest a canvas coordinate may be from the origin, as the canvas
+/// editing path accepts it.
+pub const MAX_CANVAS_COORDINATE: f64 = 1_000_000.0;
+/// Largest width or height of a canvas node.
+pub const MAX_CANVAS_SIZE: f64 = 100_000.0;
+
+/// Place an artifact, or one of its scenes, on a canvas.
+#[derive(Debug, Clone)]
+pub struct PlaceArtifact {
+    /// The new node's canvas item id. Retrying a placement with the same id
+    /// converges on one node and one reference; a new id when `None`.
+    pub item_id: Option<uuid::Uuid>,
+    /// The scene to show instead of `index.html`; it must exist in the
+    /// current version.
+    pub scene: Option<String>,
+    /// World x of the node's top-left corner.
+    pub x: f64,
+    /// World y of the node's top-left corner.
+    pub y: f64,
+    /// Node width.
+    pub width: f64,
+    /// Node height.
+    pub height: f64,
+}
+
+/// An artifact placed on a canvas.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Placement {
+    /// The canvas item id of the node.
+    pub item_id: uuid::Uuid,
+}
+
 /// Who views: the identity a view token is minted for.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Viewer {

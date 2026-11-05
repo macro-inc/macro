@@ -9,7 +9,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use axum::body::Body;
-use axum::extract::{DefaultBodyLimit, FromRef, FromRequest, Path, Request, State};
+use axum::extract::{
+    DefaultBodyLimit, FromRef, FromRequest, FromRequestParts, Path, Request, State,
+};
 use axum::http::StatusCode;
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
@@ -17,7 +19,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::Engine;
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
+use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{
     DocumentAccessExtractor, ExtractorError, ProjectBodyAccessLevelExtractorV2,
@@ -34,8 +36,8 @@ use utoipa::{OpenApi, ToSchema};
 
 use crate::domain::models::{
     Artifact, ArtifactError, ArtifactVersion, ArtifactVersionSummary, CreateArtifact, FileInput,
-    PublishVersion, Publisher, SceneInput, Theme, UploadInput, UploadTarget, ViewUrl,
-    ViewUrlRequest, Viewer,
+    PlaceArtifact, PublishVersion, Publisher, SceneInput, Theme, UploadInput, UploadTarget,
+    ViewUrl, ViewUrlRequest, Viewer,
 };
 use crate::domain::ports::ArtifactService;
 
@@ -166,6 +168,10 @@ where
         .route(
             "/{document_id}/view_url",
             post(view_url_handler::<Service, EntityAccess, Authorization>),
+        )
+        .route(
+            "/{document_id}/place",
+            post(place_handler::<Service, EntityAccess, Authorization>),
         )
         .layer(middleware::from_fn_with_state(
             state.clone(),
@@ -955,6 +961,148 @@ where
     Ok(Json(view_url.into()))
 }
 
+/// Place an artifact, or one of its scenes, on a canvas.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct PlaceArtifactRequest {
+    /// The node's canvas item id. Retry a placement with the same id to get
+    /// one node and one reference; a new id when omitted.
+    #[serde(default)]
+    pub item_id: Option<uuid::Uuid>,
+    /// The canvas document; needs edit access to it.
+    pub canvas_id: String,
+    /// Scene to show instead of `index.html`; it must exist in the current
+    /// version.
+    #[serde(default)]
+    pub scene: Option<String>,
+    /// World x of the node's top-left corner.
+    pub x: f64,
+    /// World y of the node's top-left corner.
+    pub y: f64,
+    /// Node width.
+    pub width: f64,
+    /// Node height.
+    pub height: f64,
+}
+
+/// The node an artifact was placed as.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PlaceArtifactResponse {
+    /// The canvas item id of the node.
+    pub item_id: uuid::Uuid,
+}
+
+/// The place body with edit access to its canvas checked by the same
+/// [`DocumentAccessExtractor`] as every document route, run against the
+/// canvas document instead of the artifact.
+pub struct PlaceArtifactBody<EntityAccess, Authorization> {
+    /// The request.
+    pub request: PlaceArtifactRequest,
+    /// Edit access to the canvas.
+    pub canvas: EntityAccessReceipt<EditAccessLevel>,
+    _marker: std::marker::PhantomData<(EntityAccess, Authorization)>,
+}
+
+impl<Service, EntityAccess, Authorization>
+    FromRequest<ArtifactsRouterState<Service, EntityAccess, Authorization>>
+    for PlaceArtifactBody<EntityAccess, Authorization>
+where
+    Service: ArtifactService,
+    EntityAccess: EntityAccessService,
+    Authorization: MacroAuthorizationService,
+{
+    type Rejection = Response;
+
+    async fn from_request(
+        request: Request,
+        state: &ArtifactsRouterState<Service, EntityAccess, Authorization>,
+    ) -> Result<Self, Self::Rejection> {
+        let (mut parts, body) = request.into_parts();
+        let Json(request) = Json::<PlaceArtifactRequest>::from_request(
+            Request::from_parts(parts.clone(), body),
+            state,
+        )
+        .await
+        .map_err(IntoResponse::into_response)?;
+
+        let canvas = state
+            .service
+            .load_canvas(&request.canvas_id)
+            .await
+            .map_err(IntoResponse::into_response)?;
+        parts.extensions.insert(canvas);
+        let access = DocumentAccessExtractor::<EditAccessLevel, EntityAccess, Authorization>::from_request_parts(
+            &mut parts, state,
+        )
+        .await
+        .map_err(IntoResponse::into_response)?;
+
+        Ok(Self {
+            request,
+            canvas: access.entity_access_receipt,
+            _marker: std::marker::PhantomData,
+        })
+    }
+}
+
+/// Place the artifact, or one of its scenes, on a canvas as an embedded
+/// document node, recording the canvas's reference to it like the canvas UI
+/// does.
+#[utoipa::path(
+    tag = "artifacts",
+    post,
+    path = "/artifacts/{document_id}/place",
+    operation_id = "place_artifact",
+    params(("document_id" = String, Path, description = "Artifact document ID")),
+    request_body = PlaceArtifactRequest,
+    responses(
+        (status = 201, body = PlaceArtifactResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(skip_all)]
+pub async fn place_handler<Service, EntityAccess, Authorization>(
+    State(state): State<ArtifactsRouterState<Service, EntityAccess, Authorization>>,
+    access: DocumentAccessExtractor<ViewAccessLevel, EntityAccess, Authorization>,
+    caller: MacroAuthorizationExtractor<Authorization, AnyPrincipal>,
+    body: PlaceArtifactBody<EntityAccess, Authorization>,
+) -> Result<(StatusCode, Json<PlaceArtifactResponse>), ArtifactError>
+where
+    Service: ArtifactService,
+    EntityAccess: EntityAccessService,
+    Authorization: MacroAuthorizationService,
+{
+    let publisher = publisher_of(&caller.authorization)?;
+    let PlaceArtifactBody {
+        request, canvas, ..
+    } = body;
+    let placement = state
+        .service
+        .place(
+            access.entity_access_receipt,
+            canvas,
+            &publisher,
+            PlaceArtifact {
+                item_id: request.item_id,
+                scene: request.scene,
+                x: request.x,
+                y: request.y,
+                width: request.width,
+                height: request.height,
+            },
+        )
+        .await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(PlaceArtifactResponse {
+            item_id: placement.item_id,
+        }),
+    ))
+}
+
 /// The artifacts endpoints and their schemas, for the host's OpenAPI document.
 #[derive(OpenApi)]
 #[openapi(
@@ -967,6 +1115,7 @@ where
         get_version_handler,
         restore_handler,
         view_url_handler,
+        place_handler,
     ),
     components(schemas(
         CreateArtifactRequest,
@@ -985,6 +1134,8 @@ where
         ArtifactTheme,
         ArtifactViewUrlRequest,
         ArtifactViewUrlResponse,
+        PlaceArtifactRequest,
+        PlaceArtifactResponse,
     )),
     tags((name = "artifacts", description = "Agent-published web pages"))
 )]

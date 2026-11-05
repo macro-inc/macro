@@ -4,7 +4,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use super::*;
 use crate::domain::models::{FileInput, SceneInput, Theme};
 use crate::testing::{
-    FakeTokens, MemoryDocuments, MemoryObjectStore, MemoryRepository, RecordingNotifier,
+    FakeCanvases, FakeTokens, MemoryDocuments, MemoryObjectStore, MemoryRepository,
+    RecordingNotifier,
 };
 
 const DOCUMENT_ID: &str = "0193f3a4-7d1e-7c2a-9f00-5a1b2c3d4e5f";
@@ -18,6 +19,7 @@ type TestService = ArtifactServiceImpl<
     MemoryDocuments,
     FakeTokens,
     RecordingNotifier,
+    FakeCanvases,
 >;
 
 fn service() -> TestService {
@@ -27,6 +29,7 @@ fn service() -> TestService {
         MemoryDocuments::new(DOCUMENT_ID),
         FakeTokens::default(),
         RecordingNotifier::default(),
+        FakeCanvases::default(),
         ContentOrigin {
             scheme: "https".to_string(),
             host: "artifacts.test".to_string(),
@@ -456,4 +459,337 @@ async fn load_document_finds_only_artifacts() {
     let result = service.load_document("markdown-document").await;
 
     assert!(matches!(result, Err(ArtifactError::NotFound(_))));
+}
+
+const CANVAS_ID: &str = "0193f3a4-7d1e-7c2a-9f00-00000000ca17";
+
+fn canvas_edit_receipt() -> EntityAccessReceipt<EditAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        MacroUserIdStr::parse_from_str(ALICE).unwrap(),
+        CANVAS_ID,
+        EntityType::Document,
+    )
+}
+
+fn insert_document(service: &TestService, document_id: &str, file_type: &str) {
+    service.documents.documents.lock().unwrap().insert(
+        document_id.to_string(),
+        DocumentBasic {
+            document_id: document_id.to_string(),
+            document_name: "Board".to_string(),
+            owner: model_owner::Owner::from_principal_str(ALICE).unwrap(),
+            file_type: Some(file_type.to_string()),
+            sub_type: None,
+            branched_from_id: None,
+            branched_from_version_id: None,
+            document_family_id: None,
+            project_id: None,
+            deleted_at: None,
+        },
+    );
+}
+
+/// An artifact named "Onboarding" whose version 1 has the scene `empty`.
+async fn artifact_with_a_scene(service: &TestService) {
+    service
+        .create(
+            &alice(),
+            &alice_publishing(),
+            CreateArtifact {
+                name: "Onboarding".to_string(),
+                project_id: None,
+                files: vec![FileInput {
+                    path: "index.html".to_string(),
+                    content_type: "text/html".to_string(),
+                    sha256: PAGE_SHA.to_string(),
+                    content: Some(b"<h1>Hi</h1>".to_vec()),
+                }],
+                scenes: vec![SceneInput {
+                    id: "empty".to_string(),
+                    title: "Empty".to_string(),
+                    path: "index.html".to_string(),
+                }],
+                message: None,
+            },
+        )
+        .await
+        .unwrap();
+}
+
+const ITEM_ID: &str = "0193f3a4-7d1e-7c2a-9f00-0000000001e7";
+
+#[tokio::test]
+async fn place_records_the_reference_then_embeds_a_document_node() {
+    let service = service();
+    artifact_with_a_scene(&service).await;
+    let publisher = Publisher {
+        user_id: ALICE.to_string(),
+        agent: Some("bot-1".to_string()),
+    };
+    let item_id = uuid::Uuid::parse_str(ITEM_ID).unwrap();
+    let mention_id = uuid::Uuid::new_v5(&item_id, CANVAS_REFERENCE_NAMESPACE);
+
+    let placement = service
+        .place(
+            view_receipt(),
+            canvas_edit_receipt(),
+            &publisher,
+            PlaceArtifact {
+                item_id: Some(item_id),
+                scene: Some("empty".to_string()),
+                x: -40.0,
+                y: 120.5,
+                width: 640.0,
+                height: 480.0,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(placement, Placement { item_id });
+    assert_eq!(
+        *service.canvases.references.lock().unwrap(),
+        vec![(
+            mention_id,
+            CANVAS_ID.to_string(),
+            DOCUMENT_ID.to_string(),
+            ALICE.to_string()
+        )]
+    );
+    assert_eq!(
+        *service.canvases.embedded.lock().unwrap(),
+        vec![(
+            CANVAS_ID.to_string(),
+            publisher,
+            CanvasDocumentNode {
+                item_id,
+                document_id: DOCUMENT_ID.to_string(),
+                name: "Onboarding".to_string(),
+                file_type: "artifact".to_string(),
+                subpath: Some("empty".to_string()),
+                x: -40.0,
+                y: 120.5,
+                width: 640.0,
+                height: 480.0,
+                mention_id,
+            }
+        )]
+    );
+}
+
+#[tokio::test]
+async fn repeating_a_placement_with_its_item_id_leaves_one_node_and_one_reference() {
+    let service = service();
+    artifact_with_a_scene(&service).await;
+    let item_id = uuid::Uuid::parse_str(ITEM_ID).unwrap();
+    let place = || PlaceArtifact {
+        item_id: Some(item_id),
+        scene: None,
+        x: 0.0,
+        y: 0.0,
+        width: 640.0,
+        height: 480.0,
+    };
+
+    let first = service
+        .place(
+            view_receipt(),
+            canvas_edit_receipt(),
+            &alice_publishing(),
+            place(),
+        )
+        .await
+        .unwrap();
+    let second = service
+        .place(
+            view_receipt(),
+            canvas_edit_receipt(),
+            &alice_publishing(),
+            place(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(first, second);
+    assert_eq!(service.canvases.references.lock().unwrap().len(), 1);
+    assert_eq!(service.canvases.embedded.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_placement_without_an_item_id_gets_a_new_one() {
+    let service = service();
+    artifact_with_a_scene(&service).await;
+    let place = || PlaceArtifact {
+        item_id: None,
+        scene: None,
+        x: 0.0,
+        y: 0.0,
+        width: 640.0,
+        height: 480.0,
+    };
+
+    let first = service
+        .place(
+            view_receipt(),
+            canvas_edit_receipt(),
+            &alice_publishing(),
+            place(),
+        )
+        .await
+        .unwrap();
+    let second = service
+        .place(
+            view_receipt(),
+            canvas_edit_receipt(),
+            &alice_publishing(),
+            place(),
+        )
+        .await
+        .unwrap();
+
+    assert_ne!(first.item_id, second.item_id);
+    assert_eq!(service.canvases.embedded.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn place_refuses_a_missing_scene_and_bad_geometry_before_recording_anything() {
+    let service = service();
+    artifact_with_a_scene(&service).await;
+    let place = |scene: Option<&str>, width: f64, x: f64| PlaceArtifact {
+        item_id: None,
+        scene: scene.map(str::to_string),
+        x,
+        y: 0.0,
+        width,
+        height: 300.0,
+    };
+
+    let missing_scene = service
+        .place(
+            view_receipt(),
+            canvas_edit_receipt(),
+            &alice_publishing(),
+            place(Some("full"), 400.0, 0.0),
+        )
+        .await;
+    let zero_width = service
+        .place(
+            view_receipt(),
+            canvas_edit_receipt(),
+            &alice_publishing(),
+            place(None, 0.0, 0.0),
+        )
+        .await;
+    let far_away = service
+        .place(
+            view_receipt(),
+            canvas_edit_receipt(),
+            &alice_publishing(),
+            place(None, 400.0, f64::INFINITY),
+        )
+        .await;
+
+    assert!(matches!(missing_scene, Err(ArtifactError::NotFound(_))));
+    assert!(matches!(zero_width, Err(ArtifactError::BadRequest(_))));
+    assert!(matches!(far_away, Err(ArtifactError::BadRequest(_))));
+    assert!(service.canvases.references.lock().unwrap().is_empty());
+    assert!(service.canvases.embedded.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn place_refuses_an_artifact_without_a_version() {
+    let service = service();
+    service
+        .create(
+            &alice(),
+            &alice_publishing(),
+            CreateArtifact {
+                name: "Draft".to_string(),
+                project_id: None,
+                files: vec![],
+                scenes: vec![],
+                message: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    let result = service
+        .place(
+            view_receipt(),
+            canvas_edit_receipt(),
+            &alice_publishing(),
+            PlaceArtifact {
+                item_id: None,
+                scene: None,
+                x: 0.0,
+                y: 0.0,
+                width: 640.0,
+                height: 480.0,
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(ArtifactError::NotFound(_))));
+    assert!(service.canvases.references.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_refused_embed_keeps_the_reference_for_a_retry() {
+    let service = ArtifactServiceImpl::new(
+        MemoryRepository::default(),
+        MemoryObjectStore::default(),
+        MemoryDocuments::new(DOCUMENT_ID),
+        FakeTokens::default(),
+        RecordingNotifier::default(),
+        FakeCanvases {
+            refuse_embed: true,
+            ..FakeCanvases::default()
+        },
+        ContentOrigin {
+            scheme: "https".to_string(),
+            host: "artifacts.test".to_string(),
+            port: None,
+        },
+    );
+    artifact_with_a_scene(&service).await;
+
+    let result = service
+        .place(
+            view_receipt(),
+            canvas_edit_receipt(),
+            &alice_publishing(),
+            PlaceArtifact {
+                item_id: None,
+                scene: None,
+                x: 0.0,
+                y: 0.0,
+                width: 640.0,
+                height: 480.0,
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(ArtifactError::BadRequest(_))));
+    assert_eq!(service.canvases.references.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn load_canvas_refuses_documents_that_are_not_canvases() {
+    let service = service();
+    insert_document(&service, CANVAS_ID, "canvas");
+    insert_document(&service, "markdown-document", "md");
+
+    assert_eq!(
+        service.load_canvas(CANVAS_ID).await.unwrap().document_id,
+        CANVAS_ID
+    );
+    assert!(matches!(
+        service.load_canvas("markdown-document").await,
+        Err(ArtifactError::BadRequest(_))
+    ));
+    assert!(matches!(
+        service.load_canvas("missing").await,
+        Err(ArtifactError::NotFound(_))
+    ));
 }

@@ -134,6 +134,50 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
 
     #[cfg(feature = "ai_tools")]
     #[tracing::instrument(skip_all, fields(document_id), err)]
+    async fn embed_canvas_document(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        embed: &crate::domain::canvas::CanvasDocumentEmbed,
+    ) -> anyhow::Result<()> {
+        let Some(internal_auth_key) = self.internal_auth_key.as_deref() else {
+            anyhow::bail!("editing worker client has no internal auth key configured");
+        };
+        let mut request = serde_json::to_value(embed)?;
+        request["action"] = "embed".into();
+
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = self
+            .client
+            .post(format!("{}/canvas", self.worker_url))
+            .headers(headers)
+            .header("x-internal-auth-key", internal_auth_key)
+            .timeout(std::time::Duration::from_secs(60))
+            .json(&serde_json::json!({
+                "documentId": document_id,
+                "documentToken": document_token.as_str(),
+                "request": request,
+            }))
+            .send()
+            .await?;
+        let status = response.status();
+        let body = response
+            .json::<serde_json::Value>()
+            .await
+            .unwrap_or_default();
+        anyhow::ensure!(
+            status.is_success(),
+            "{} (HTTP {status})",
+            body.get("error")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("Embedding a document on the canvas failed")
+        );
+        Ok(())
+    }
+
+    #[cfg(feature = "ai_tools")]
+    #[tracing::instrument(skip_all, fields(document_id), err)]
     async fn spreadsheet(
         &self,
         document_id: &str,

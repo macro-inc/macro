@@ -6,24 +6,31 @@ mod test;
 
 use std::sync::Arc;
 
-use artifacts::domain::models::{ArtifactError, MintedToken, Viewer};
+use artifacts::domain::models::{ArtifactError, MintedToken, Publisher, Viewer};
 use artifacts::domain::ports::{
-    ArtifactDocuments, ArtifactNotifier, CreatedArtifactDocument, VerifiedToken, ViewTokens,
+    ArtifactCanvases, ArtifactDocuments, ArtifactNotifier, CanvasDocumentNode,
+    CreatedArtifactDocument, VerifiedToken, ViewTokens,
 };
+use channels::domain::models::CreateEntityMentionOptions;
+use channels::domain::ports::ChannelService as _;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use documents_hex::domain::canvas::{CanvasDocumentEmbed, CanvasEmbedder};
 use documents_hex::domain::create::NewDocumentMetadata;
 use documents_hex::domain::models::DocumentError;
 
 use documents_hex::domain::ports::DocumentService as _;
 use documents_hex::inbound::axum_router::DefaultDocumentCreator;
+use documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient;
+use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
 use macro_sync_service_jwt::artifact_content::{
     ArtifactContentClaims, decode_artifact_content, encode_artifact_content,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use model::document::DocumentBasic;
 use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 
-use crate::api::context::DocumentService;
+use crate::api::context::{DocumentService, DssChannelService};
 
 fn artifact_error(error: DocumentError) -> ArtifactError {
     match error {
@@ -182,5 +189,96 @@ impl ArtifactNotifier for ConnectionGatewayArtifactNotifier {
         if let Err(error) = sent {
             tracing::warn!(error = ?error, "failed to send artifact_published");
         }
+    }
+}
+
+/// Places artifacts on canvases: the reference is the entity mention the
+/// canvas UI records through `POST /channels/mentions`, and the node goes
+/// through the editing worker's internal canvas embed request.
+pub(crate) struct CanvasesForArtifacts {
+    channels: Arc<DssChannelService>,
+    embedder: CanvasEmbedder<DocumentService, ReqwestEditingWorkerClient>,
+}
+
+impl CanvasesForArtifacts {
+    /// Adapter over the host's channel service and canvas embedder.
+    pub(crate) fn new(
+        channels: Arc<DssChannelService>,
+        embedder: CanvasEmbedder<DocumentService, ReqwestEditingWorkerClient>,
+    ) -> Self {
+        Self { channels, embedder }
+    }
+}
+
+impl CanvasesForArtifacts {
+    async fn recorded(&self, mention_id: uuid::Uuid) -> Result<bool, ArtifactError> {
+        Ok(self
+            .channels
+            .get_entity_mention(mention_id)
+            .await
+            .map_err(|error| ArtifactError::Internal(anyhow::Error::new(error)))?
+            .is_some())
+    }
+}
+
+impl ArtifactCanvases for CanvasesForArtifacts {
+    async fn record_reference(
+        &self,
+        mention_id: uuid::Uuid,
+        canvas_id: &str,
+        document_id: &str,
+        user_id: &str,
+    ) -> Result<(), ArtifactError> {
+        if self.recorded(mention_id).await? {
+            return Ok(());
+        }
+        let created = self
+            .channels
+            .create_entity_mention(CreateEntityMentionOptions {
+                id: Some(mention_id),
+                source_entity_type: "document".to_string(),
+                source_entity_id: canvas_id.to_string(),
+                entity_type: "document".to_string(),
+                entity_id: document_id.to_string(),
+                user_id: Some(user_id.to_string()),
+            })
+            .await;
+        match created {
+            Ok(_) => Ok(()),
+            // A concurrent retry recorded it first.
+            Err(_) if self.recorded(mention_id).await? => Ok(()),
+            Err(error) => Err(ArtifactError::Internal(anyhow::Error::new(error))),
+        }
+    }
+
+    async fn embed(
+        &self,
+        canvas: EntityAccessReceipt<EditAccessLevel>,
+        publisher: &Publisher,
+        node: CanvasDocumentNode,
+    ) -> Result<(), ArtifactError> {
+        let user = MacroUserIdStr::try_from(publisher.user_id.clone()).map_err(|error| {
+            ArtifactError::Internal(anyhow::anyhow!("invalid user id: {error}"))
+        })?;
+        self.embedder
+            .embed_document(
+                canvas,
+                &user,
+                publisher.agent.as_deref(),
+                CanvasDocumentEmbed {
+                    item_id: node.item_id,
+                    document_id: node.document_id,
+                    name: node.name,
+                    file_type: node.file_type,
+                    subpath: node.subpath,
+                    x: node.x,
+                    y: node.y,
+                    width: node.width,
+                    height: node.height,
+                    mention_id: node.mention_id,
+                },
+            )
+            .await
+            .map_err(ArtifactError::Internal)
     }
 }

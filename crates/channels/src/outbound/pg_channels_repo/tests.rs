@@ -2393,12 +2393,32 @@ fn mention_opts(
     user_id: Option<&str>,
 ) -> CreateEntityMentionOptions {
     CreateEntityMentionOptions {
+        id: None,
         source_entity_type: "document".to_string(),
         source_entity_id: source_id.to_string(),
         entity_type: entity_type.to_string(),
         entity_id: entity_id.to_string(),
         user_id: user_id.map(str::to_string),
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_entity_mention_keeps_a_caller_chosen_id(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let id = Uuid::new_v4();
+
+    let mention = repo
+        .create_entity_mention(CreateEntityMentionOptions {
+            id: Some(id),
+            ..mention_opts("doc-2", "document", "doc-3", Some(USER_A))
+        })
+        .await?;
+
+    assert_eq!(mention.id, id);
+    assert!(repo.get_entity_mention_by_id(id).await?.is_some());
+    Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -2207,6 +2207,19 @@ pub async fn run() -> anyhow::Result<()> {
         crate::outbound::artifacts::ConnectionGatewayArtifactNotifier::new(
             conn_gateway_client.clone(),
         ),
+        crate::outbound::artifacts::CanvasesForArtifacts::new(
+            channels_service.clone(),
+            documents_hex::domain::canvas::CanvasEmbedder::new(
+                document_service.clone(),
+                Arc::new(
+                    documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                        AiEditingWorkerUrl::new()?.to_string(),
+                    )
+                    .with_internal_auth_key(Some(config.internal_api_key.to_string())),
+                ),
+                config.document_permission_jwt.as_ref().to_string(),
+            ),
+        ),
         artifact_origin.clone(),
     ));
     let artifact_content = crate::api::context::DssArtifactContent {

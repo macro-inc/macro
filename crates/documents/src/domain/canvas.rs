@@ -190,6 +190,38 @@ pub struct CanvasResult {
     pub usage: Vec<EditUsage>,
 }
 
+/// A document node a server-side flow adds to a canvas, shaped like the
+/// node the canvas UI inserts. Agents' CanvasEditor snippets cannot create
+/// one; only this request, which the worker accepts from internal callers,
+/// can.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CanvasDocumentEmbed {
+    /// The node's canvas item id. The worker leaves a node already committed
+    /// under it as it is, so a retried embed adds one node.
+    pub item_id: uuid::Uuid,
+    /// The embedded document.
+    pub document_id: String,
+    /// Its name, shown on the node.
+    pub name: String,
+    /// Its file type.
+    pub file_type: String,
+    /// Host navigation state inside the document.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subpath: Option<String>,
+    /// World x of the top-left corner.
+    pub x: f64,
+    /// World y of the top-left corner.
+    pub y: f64,
+    /// Width.
+    pub width: f64,
+    /// Height.
+    pub height: f64,
+    /// The canvas's entity mention of the document, tracked next to the node
+    /// in the same commit so the canvas UI sees the reference as recorded.
+    pub mention_id: uuid::Uuid,
+}
+
 /// Metadata needed to select the Canvas workflow after access is checked.
 #[cfg_attr(test, mockall::automock)]
 pub trait CanvasDocumentLookup: Send + Sync + 'static {
@@ -464,6 +496,58 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasService<D, W> {
         )?;
         self.worker
             .canvas(document_id, &token, &request, self.artifacts)
+            .await
+    }
+}
+
+/// Commits document nodes that server-side flows place on canvases. No
+/// model runs, so there is no admission or metering.
+pub struct CanvasEmbedder<D, W> {
+    documents: Arc<D>,
+    worker: Arc<W>,
+    token_secret: String,
+}
+
+impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasEmbedder<D, W> {
+    /// Construct over the document lookup, the editing worker and the
+    /// permission token secret.
+    pub fn new(documents: Arc<D>, worker: Arc<W>, token_secret: String) -> Self {
+        Self {
+            documents,
+            worker,
+            token_secret,
+        }
+    }
+
+    /// Commit `embed` to the canvas the receipt grants edit access to, as
+    /// `user` acting through `actor`. Repeating it is a no-op.
+    #[tracing::instrument(
+        skip_all,
+        fields(document_id = %receipt.entity().entity_id, embedded_id = %embed.document_id),
+        err
+    )]
+    pub async fn embed_document(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        user: &MacroUserIdStr<'static>,
+        actor: Option<&str>,
+        embed: CanvasDocumentEmbed,
+    ) -> anyhow::Result<()> {
+        let document_id = &receipt.entity().entity_id;
+        let file_type = self.documents.file_type(document_id).await?;
+        anyhow::ensure!(
+            file_type.as_deref() == Some("canvas"),
+            "Only canvases take embedded documents."
+        );
+        let token = encode_permission_token(
+            Some(user.to_string()),
+            document_id.to_owned(),
+            AccessLevel::Edit,
+            &self.token_secret,
+            actor.map(str::to_owned),
+        )?;
+        self.worker
+            .embed_canvas_document(document_id, &token, &embed)
             .await
     }
 }
