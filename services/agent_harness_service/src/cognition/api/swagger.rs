@@ -122,6 +122,7 @@ use utoipa::OpenApi;
             mcp_api::client_metadata,
             mcp_api::auth_callback,
             pipedream_api::list_connections,
+            pipedream_api::list_reconnects,
             pipedream_api::update_connection,
             pipedream_api::delete_connection,
             pipedream_api::create_connect_token,

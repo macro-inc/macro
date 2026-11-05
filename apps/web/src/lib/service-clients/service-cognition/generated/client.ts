@@ -2954,6 +2954,64 @@ export const listPipedreamMcpOverlays = async (
 };
 
 /**
+ * @summary List the Pipedream connections the authenticated user must reconnect
+through Macro Connect. Empty for a user who isn't on Connect.
+ */
+export type listPipedreamMcpReconnectsResponse200 = {
+  data: PipedreamConnectionResponse[];
+  status: 200;
+};
+
+export type listPipedreamMcpReconnectsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listPipedreamMcpReconnectsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listPipedreamMcpReconnectsResponseSuccess =
+  listPipedreamMcpReconnectsResponse200 & {
+    headers: Headers;
+  };
+export type listPipedreamMcpReconnectsResponseError = (
+  | listPipedreamMcpReconnectsResponse401
+  | listPipedreamMcpReconnectsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listPipedreamMcpReconnectsResponse =
+  | listPipedreamMcpReconnectsResponseSuccess
+  | listPipedreamMcpReconnectsResponseError;
+
+export const getListPipedreamMcpReconnectsUrl = () => {
+  return `/pipedream/mcp/reconnects`;
+};
+
+export const listPipedreamMcpReconnects = async (
+  options?: RequestInit
+): Promise<listPipedreamMcpReconnectsResponse> => {
+  const res = await fetch(getListPipedreamMcpReconnectsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listPipedreamMcpReconnectsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listPipedreamMcpReconnectsResponse;
+};
+
+/**
  * Called after the Connect UI closes without a success event. Answers 404
 when Pipedream has no new account for this user and app.
 An overlaid app is refused with 409, as in [`complete_connection`].

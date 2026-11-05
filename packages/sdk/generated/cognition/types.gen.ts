@@ -3732,6 +3732,26 @@ export type ListPipedreamMcpOverlaysResponses = {
 
 export type ListPipedreamMcpOverlaysResponse = ListPipedreamMcpOverlaysResponses[keyof ListPipedreamMcpOverlaysResponses];
 
+export type ListPipedreamMcpReconnectsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/pipedream/mcp/reconnects';
+};
+
+export type ListPipedreamMcpReconnectsErrors = {
+    401: string;
+    500: ErrorResponse;
+};
+
+export type ListPipedreamMcpReconnectsError = ListPipedreamMcpReconnectsErrors[keyof ListPipedreamMcpReconnectsErrors];
+
+export type ListPipedreamMcpReconnectsResponses = {
+    200: Array<PipedreamConnectionResponse>;
+};
+
+export type ListPipedreamMcpReconnectsResponse = ListPipedreamMcpReconnectsResponses[keyof ListPipedreamMcpReconnectsResponses];
+
 export type RecoverPipedreamMcpConnectionData = {
     body: PipedreamRecoverRequest;
     path?: never;

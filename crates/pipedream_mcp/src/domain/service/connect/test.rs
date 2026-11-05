@@ -715,3 +715,62 @@ async fn disconnecting_a_connect_app_deletes_it_from_connect() {
     assert!(pd.deleted.lock().unwrap().is_empty());
     assert!(store.records.lock().unwrap().is_empty());
 }
+
+fn record(app_slug: &str, provider: ConnectionProvider, enabled: bool) -> PipedreamConnection {
+    PipedreamConnection {
+        user_id: user("macro|a@b.c"),
+        app_slug: app_slug.to_owned(),
+        server_name: app_slug.to_owned(),
+        account_id: format!("acc_{app_slug}"),
+        enabled,
+        provider,
+    }
+}
+
+#[tokio::test]
+async fn reconnects_are_enabled_pipedream_rows_for_apps_connect_serves() {
+    let store = FakeStore::default();
+    for row in [
+        record("linear", ConnectionProvider::Pipedream, true),
+        record("notion", ConnectionProvider::Connect, true),
+        record("sentry", ConnectionProvider::Pipedream, false),
+        record("zoom", ConnectionProvider::Pipedream, true),
+    ] {
+        store.save(&row).await.unwrap();
+    }
+    let connect = FakePipedream::default()
+        .with_connect_app("linear", "linear")
+        .with_connect_app("notion", "notion")
+        .with_connect_app("sentry", "sentry");
+
+    let slugs: Vec<String> = connections_to_reconnect(&store, &connect, &user("macro|a@b.c"))
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| row.app_slug)
+        .collect();
+
+    assert_eq!(slugs, ["linear"]);
+}
+
+#[tokio::test]
+async fn reconnecting_clears_the_prompt() {
+    let store = FakeStore::default();
+    store
+        .save(&record("linear", ConnectionProvider::Pipedream, true))
+        .await
+        .unwrap();
+    let id = user("macro|a@b.c");
+    let backends = FakePipedream::default()
+        .with_connect_app("linear", "linear")
+        .connected_on_connect("macro|a@b.c", "linear");
+
+    complete_connect_connection(&store, &backends, &id, "linear", None)
+        .await
+        .unwrap();
+
+    let left = connections_to_reconnect(&store, &backends, &id)
+        .await
+        .unwrap();
+    assert!(left.is_empty());
+}

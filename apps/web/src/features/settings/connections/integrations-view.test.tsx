@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   granolaConnected: false,
   leftovers: [] as Leftover[],
   overlaysLoading: false,
+  reconnects: [] as { app_slug: string; server_name: string }[],
 }));
 const [state, setState] = createSignal<ImportState>({ runs: [], entities: [] });
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
@@ -52,6 +53,12 @@ vi.mock('@queries/pipedream-connectors', () => ({
     },
   }),
   overlaidAppSlug: () => undefined,
+  usePipedreamReconnectsQuery: () => ({
+    isPending: false,
+    get data() {
+      return mocks.reconnects;
+    },
+  }),
 }));
 vi.mock('./use-connections-model', () => ({
   useConnectionsModel: () => ({
@@ -66,7 +73,8 @@ vi.mock('./use-connections-model', () => ({
     retry: vi.fn(),
   }),
 }));
-vi.mock('./model', () => ({
+vi.mock('./model', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./model')>()),
   capabilitiesFor: () =>
     mocks.connected ? [{ mechanism: 'pipedream', status: 'connected' }] : [],
 }));
@@ -116,6 +124,12 @@ vi.mock('./catalog-rows', () => ({
   CatalogRows: () => <p>Integration catalog</p>,
 }));
 vi.mock('@core/pipedream/catalog', () => ({
+  createPipedreamCatalogConnect: (options: {
+    entry: () => { app_slug: string };
+  }) => ({
+    connect: () => mocks.connect({ appSlug: options.entry().app_slug }),
+    busy: () => false,
+  }),
   createPipedreamCatalogSearch: () => ({
     search: () => '',
     searchInput: () => '',
@@ -200,6 +214,7 @@ const CUSTOM_SERVER: Leftover = {
 };
 
 beforeEach(() => {
+  mocks.reconnects = [];
   vi.clearAllMocks();
   clearPendingConnectApp();
   mocks.connected = false;
@@ -310,6 +325,47 @@ describe('Slack channel import handoff', () => {
 });
 
 describe('unified Integrations page', () => {
+  it('prompts for each connection to reconnect and starts the connect flow', async () => {
+    mocks.reconnects = [{ app_slug: 'todoist', server_name: 'Todoist' }];
+    mocks.connect.mockResolvedValue('closed');
+    render(() => (
+      <IntegrationsView
+        onOpenEmailSettings={() => {}}
+        onOpenMacroMcp={() => {}}
+      />
+    ));
+
+    expect(screen.getByText('1 app needs reconnecting.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Todoist' }));
+
+    await waitFor(() =>
+      expect(mocks.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ appSlug: 'todoist' })
+      )
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByText('1 app needs reconnecting.')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Reconnect Todoist' })
+    ).toBeTruthy();
+  });
+
+  it('adds no row for a reconnect whose app already has one', () => {
+    mocks.reconnects = [{ app_slug: 'slack_v2', server_name: 'Slack' }];
+    render(() => (
+      <IntegrationsView
+        onOpenEmailSettings={() => {}}
+        onOpenMacroMcp={() => {}}
+      />
+    ));
+
+    expect(screen.getByText('1 app needs reconnecting.')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Reconnect Slack' })
+    ).toBeNull();
+  });
+
   it('hides local harness setup when no allowed entry point is supplied', () => {
     render(() => (
       <IntegrationsView

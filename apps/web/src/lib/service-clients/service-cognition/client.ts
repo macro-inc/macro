@@ -418,6 +418,17 @@ export const cognitionApiServiceClient = {
     ).map((result) => result);
   },
 
+  async listPipedreamReconnects() {
+    return (
+      await dcsFetch<PipedreamConnectionResponse[]>(
+        `/pipedream/mcp/reconnects`,
+        {
+          method: 'GET',
+        }
+      )
+    ).map((result) => result);
+  },
+
   async listPipedreamConnections() {
     return (
       await dcsFetch<PipedreamConnectionResponse[]>(

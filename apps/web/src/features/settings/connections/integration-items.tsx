@@ -17,6 +17,7 @@ import DesktopIcon from '@icon/system/regular/desktop.svg';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
+import type { PipedreamConnectionResponse } from '@service-cognition/client';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -38,8 +39,10 @@ import {
   CURATED_AI,
   type CuratedAiProvider,
   capabilitiesFor,
+  curatedPipedreamSlugs,
 } from './model';
 import { providerIcon } from './provider-meta';
+import { ReconnectAction, reconnectDescription } from './reconnect-rows';
 import { useConnectionsView } from './view-state';
 
 export type IntegrationItemHosts = {
@@ -290,14 +293,24 @@ const AGENT_PROVIDER_CATEGORIES: Record<CuratedAiProvider, string[]> = {
   slack: ['Chat', 'Agent tools'],
 };
 
-/** Slack, Linear and Notion: agent tools with Macro's importer beside them. */
+/**
+ * Slack, Linear and Notion: agent tools with Macro's importer beside them.
+ * Owns the provider's reconnect prompt, so the app isn't listed twice.
+ */
 export function useAgentProviderItem(
   model: Accessor<ConnectionsModel>,
-  provider: Exclude<CuratedAiProvider, 'github'>
+  provider: Exclude<CuratedAiProvider, 'github'>,
+  reconnects: Accessor<PipedreamConnectionResponse[]>
 ): IntegrationItem {
   const view = useConnectionsView();
   const name = CURATED_AI[provider].title;
   const status = () => agentToolStatus(model, provider);
+  const reconnect = () =>
+    status() === 'available'
+      ? reconnects().find((connection) =>
+          curatedPipedreamSlugs(provider).includes(connection.app_slug)
+        )
+      : undefined;
 
   function Actions() {
     return (
@@ -308,12 +321,20 @@ export function useAgentProviderItem(
         >
           <SlackImportAction />
         </Show>
-        <ConnectAction
-          label={status() === 'available' ? 'Connect' : 'Manage'}
-          variant={status() === 'available' ? 'connect' : 'neutral'}
-          ariaLabel={`${status() === 'available' ? 'Connect' : 'Manage'} ${name}`}
-          onClick={() => view.openProvider(provider)}
-        />
+        <Show
+          when={reconnect()}
+          keyed
+          fallback={
+            <ConnectAction
+              label={status() === 'available' ? 'Connect' : 'Manage'}
+              variant={status() === 'available' ? 'connect' : 'neutral'}
+              ariaLabel={`${status() === 'available' ? 'Connect' : 'Manage'} ${name}`}
+              onClick={() => view.openProvider(provider)}
+            />
+          }
+        >
+          {(connection) => <ReconnectAction connection={connection} />}
+        </Show>
       </>
     );
   }
@@ -323,10 +344,17 @@ export function useAgentProviderItem(
     name,
     kind: 'mcp',
     icon: providerIcon(provider),
-    description: CURATED_AI[provider].outcome,
+    get description() {
+      return reconnect()
+        ? reconnectDescription(name)
+        : CURATED_AI[provider].outcome;
+    },
     categories: AGENT_PROVIDER_CATEGORIES[provider],
     get status() {
-      return status();
+      return reconnect() ? 'attention' : status();
+    },
+    get statusLabel() {
+      return reconnect() ? 'Reconnect required' : undefined;
     },
     Actions,
   };

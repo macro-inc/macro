@@ -7,7 +7,8 @@ use crate::domain::{
         catalog::browse_catalog,
         connect::{
             PipedreamConnectError, complete_connect_connection, complete_pipedream_connection,
-            disconnect_mcp_server, recover_pipedream_connection, start_connect_session,
+            connections_to_reconnect, disconnect_mcp_server, recover_pipedream_connection,
+            start_connect_session,
         },
     },
 };
@@ -156,6 +157,10 @@ where
         .route(
             "/pipedream/mcp/connections",
             delete(delete_connection::<S, P, Auth>),
+        )
+        .route(
+            "/pipedream/mcp/reconnects",
+            get(list_reconnects::<S, P, Auth>),
         )
         .route(
             "/pipedream/mcp/token",
@@ -588,6 +593,49 @@ where
         records
             .iter()
             .filter(|record| !connect_only || record.provider == ConnectionProvider::Connect)
+            .map(PipedreamConnectionResponse::from_record)
+            .collect(),
+    ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/pipedream/mcp/reconnects",
+    tag = "pipedream-mcp",
+    operation_id = "list_pipedream_mcp_reconnects",
+    responses(
+        (status = 200, body = Vec<PipedreamConnectionResponse>),
+        (status = 401, body = String),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+/// List the Pipedream connections the authenticated user must reconnect
+/// through Macro Connect. Empty for a user who isn't on Connect.
+#[tracing::instrument(skip_all, err)]
+pub async fn list_reconnects<S, P, Auth>(
+    State(state): State<PipedreamRouterState<S, P, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<Vec<PipedreamConnectionResponse>>, PipedreamHandlerErr>
+where
+    S: ConnectionStore,
+    P: PipedreamConnect + ConnectorDirectory + MacroConnect,
+    Auth: MacroAuthorizationService,
+    anyhow::Error: From<S::Err>,
+{
+    let user = &authorization.authorization.user;
+    if !state.connect_only(&user.macro_user_id).await {
+        return Ok(Json(Vec::new()));
+    }
+    let records = connections_to_reconnect(
+        state.store.as_ref(),
+        state.pipedream()?.as_ref(),
+        &user.macro_user_id,
+    )
+    .await?;
+
+    Ok(Json(
+        records
+            .iter()
             .map(PipedreamConnectionResponse::from_record)
             .collect(),
     ))

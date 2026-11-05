@@ -2407,6 +2407,48 @@
         }
       }
     },
+    "/pipedream/mcp/reconnects": {
+      "get": {
+        "tags": ["pipedream-mcp"],
+        "summary": "List the Pipedream connections the authenticated user must reconnect\nthrough Macro Connect. Empty for a user who isn't on Connect.",
+        "operationId": "list_pipedream_mcp_reconnects",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PipedreamConnectionResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pipedream/mcp/recover": {
       "post": {
         "tags": ["pipedream-mcp"],

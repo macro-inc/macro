@@ -41,6 +41,8 @@ import { type Accessor, createMemo } from 'solid-js';
 const KEYS = {
   all: ['pipedreamConnectors'] as const,
   list: ['pipedreamConnectors', 'list'] as const,
+  // Under `list`, so invalidating connections refreshes it too.
+  reconnects: ['pipedreamConnectors', 'list', 'reconnects'] as const,
   overlays: ['pipedreamConnectors', 'overlays'] as const,
   catalog: (search: string) =>
     ['pipedreamConnectors', 'catalog', search] as const,
@@ -81,6 +83,25 @@ export function usePipedreamConnectionsQuery(options?: {
     refetchOnWindowFocus: 'always' as const,
     refetchInterval: options?.refetchInterval,
     placeholderData: options?.neverSuspend ? NO_CONNECTIONS : undefined,
+  }));
+}
+
+function fetchPipedreamReconnects() {
+  return throwOnErr(
+    async () => await cognitionApiServiceClient.listPipedreamReconnects()
+  );
+}
+
+/**
+ * Connections a user on Macro Connect must reconnect. They aren't connected:
+ * they're apart from the connections list so no surface reads them as usable.
+ */
+export function usePipedreamReconnectsQuery() {
+  return useQuery(() => ({
+    queryKey: KEYS.reconnects,
+    queryFn: fetchPipedreamReconnects,
+    enabled: isFeatureEnabled(macroConnect),
+    placeholderData: NO_CONNECTIONS,
   }));
 }
 

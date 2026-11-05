@@ -10,6 +10,6 @@ pub mod toolset;
 pub use catalog::browse_catalog;
 pub use connect::{
     PipedreamConnectError, complete_connect_connection, complete_pipedream_connection,
-    connect_app_for, disconnect_mcp_server, start_connect_session,
+    connect_app_for, connections_to_reconnect, disconnect_mcp_server, start_connect_session,
 };
 pub use toolset::PipedreamToolSet;

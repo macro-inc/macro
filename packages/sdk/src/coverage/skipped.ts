@@ -180,6 +180,7 @@ export const cognitionExcluded = [
   'listMcpServers',
   'listPipedreamMcpConnections',
   'listPipedreamMcpOverlays',
+  'listPipedreamMcpReconnects',
   'mcpAuthCallback',
   'mcpOauthClientMetadata',
   'recoverPipedreamMcpConnection',

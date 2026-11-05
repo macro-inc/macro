@@ -13,6 +13,7 @@ import {
   overlaidAppSlug,
   usePipedreamConnectedSlugs,
   usePipedreamOverlaysQuery,
+  usePipedreamReconnectsQuery,
 } from '@queries/pipedream-connectors';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { Button } from '@ui';
@@ -46,11 +47,13 @@ import { LeftoverRow, leftoverCategories } from './leftover-row';
 import {
   type ConnectionsModel,
   capabilitiesFor,
+  curatedPipedreamSlugs,
   type Leftover,
   type ProviderId,
 } from './model';
 import { PipedreamAiProvider } from './PipedreamAiProvider';
 import { PIPEDREAM_BROWSE_HIDDEN_SLUGS } from './provider-meta';
+import { ReconnectBanner, ReconnectRow } from './reconnect-rows';
 import { SlackChannelImportFlow } from './slack-channel-import/SlackChannelImportFlow';
 import { useConnectionsModel } from './use-connections-model';
 import {
@@ -213,10 +216,13 @@ function IntegrationsOverview(
     catalog.onSearchInput(value);
   };
 
+  const reconnectsQuery = usePipedreamReconnectsQuery();
+  const allReconnects = () =>
+    queryReadyGate(reconnectsQuery) ? reconnectsQuery.data : [];
   const agentTools = [
-    useAgentProviderItem(props.model, 'slack'),
-    useAgentProviderItem(props.model, 'linear'),
-    useAgentProviderItem(props.model, 'notion'),
+    useAgentProviderItem(props.model, 'slack', allReconnects),
+    useAgentProviderItem(props.model, 'linear', allReconnects),
+    useAgentProviderItem(props.model, 'notion', allReconnects),
   ];
   const emailItems = useEmailItems(props);
   const otherItems = [
@@ -258,6 +264,26 @@ function IntegrationsOverview(
   const otherLeftovers = () =>
     leftovers().filter((leftover) => !isCustom(leftover));
 
+  // Agent tool rows carry their own reconnect prompt when they're showing.
+  const hasAgentToolRow = (slug: string) =>
+    props.agentToolsAvailable &&
+    (['slack', 'linear', 'notion'] as const).some((provider) =>
+      curatedPipedreamSlugs(provider).includes(slug)
+    );
+  const reconnects = () =>
+    allReconnects().filter(
+      (connection) =>
+        !hasAgentToolRow(connection.app_slug) &&
+        matchesIntegration(
+          {
+            name: connection.server_name,
+            description: connection.app_slug,
+            categories: [],
+          },
+          query()
+        )
+    );
+
   // Includes overlaid apps, which are connected as native MCP servers.
   const connected = usePipedreamConnectedSlugs();
   const alreadyHave = createMemo(() => {
@@ -268,6 +294,7 @@ function IntegrationsOverview(
     for (const leftover of props.model().leftovers) {
       if (leftover.kind === 'pipedream') slugs.add(leftover.appSlug);
     }
+    for (const connection of allReconnects()) slugs.add(connection.app_slug);
     return slugs;
   });
   const catalogEntries = createMemo(() =>
@@ -289,11 +316,13 @@ function IntegrationsOverview(
   const nothingMatches = () =>
     matching().length === 0 &&
     leftovers().length === 0 &&
+    reconnects().length === 0 &&
     catalogEntries().length === 0 &&
     !catalog.query.isFetching;
 
   return (
     <>
+      <ReconnectBanner count={allReconnects().length} />
       <div class="flex items-center gap-2">
         <SearchBar
           size="sm"
@@ -324,6 +353,9 @@ function IntegrationsOverview(
           role="rowgroup"
           class="flex flex-col [&>[role=row]:not(:first-child)]:border-t [&>[role=row]:not(:first-child)]:border-ink/5"
         >
+          <For each={reconnects()}>
+            {(connection) => <ReconnectRow connection={connection} />}
+          </For>
           <For each={customLeftovers()}>
             {(leftover) => <LeftoverRow leftover={leftover} />}
           </For>
