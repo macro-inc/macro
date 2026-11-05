@@ -15,6 +15,18 @@ fn path_with(dir: &Path) -> String {
     format!("{}:{}", dir.display(), std::env::var("PATH").unwrap())
 }
 
+/// Runs a script from `.github/scripts` so the fakes on `path` win: CI's Nix dev
+/// shell sets `BASH_ENV`, which would otherwise put the real tools back in front.
+fn script_command(name: &str, dir: &Path, path: &str) -> Command {
+    let mut command = Command::new("bash");
+    command
+        .arg(scripts_dir().join(name))
+        .current_dir(dir)
+        .env("PATH", path)
+        .env_remove("BASH_ENV");
+    command
+}
+
 /// Runs the state script with a fake `npx` and returns (`unchanged`, `wait_seconds`, success).
 fn worker_state(key: &str, status: &str, view: &str) -> (String, i64, bool) {
     let dir = tempfile::tempdir().unwrap();
@@ -26,10 +38,7 @@ fn worker_state(key: &str, status: &str, view: &str) -> (String, i64, bool) {
     );
     let output_path = dir.path().join("output");
     std::fs::write(&output_path, "").unwrap();
-    let output = Command::new("bash")
-        .arg(scripts_dir().join("sync-worker-state.sh"))
-        .current_dir(dir.path())
-        .env("PATH", path_with(dir.path()))
+    let output = script_command("sync-worker-state.sh", dir.path(), &path_with(dir.path()))
         .env("GITHUB_OUTPUT", &output_path)
         .env("ENVIRONMENT", "dev")
         .env("WORKER_KEY", key)
@@ -132,10 +141,7 @@ fn commit_change(dir: &Path, file: &str, contents: &str) {
 }
 
 fn worker_key(dir: &Path) -> String {
-    let output = Command::new("bash")
-        .arg(scripts_dir().join("sync-worker-key.sh"))
-        .current_dir(dir)
-        .env("PATH", path_with(&dir.join("bin")))
+    let output = script_command("sync-worker-key.sh", dir, &path_with(&dir.join("bin")))
         .output()
         .unwrap();
     assert!(
@@ -224,10 +230,7 @@ fn a_failed_input_read_prints_no_key() {
     commit_change(dir, "services/sync-service/src/lib.rs", "one");
     commit_change(dir, "Cargo.toml", "");
 
-    let output = Command::new("bash")
-        .arg(scripts_dir().join("sync-worker-key.sh"))
-        .current_dir(dir)
-        .env("PATH", path_with(&bin))
+    let output = script_command("sync-worker-key.sh", dir, &path_with(&bin))
         .output()
         .unwrap();
 
