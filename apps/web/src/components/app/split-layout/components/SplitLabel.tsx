@@ -32,6 +32,7 @@ import {
   createSignal,
   For,
   type JSX,
+  onCleanup,
   type ParentProps,
   Show,
 } from 'solid-js';
@@ -39,6 +40,7 @@ import { Portal } from 'solid-js/web';
 import {
   getSplitFileMenuActionSections,
   type SplitFileMenuAction,
+  type SplitPanelContextType,
 } from '../context';
 import { useSplitDisplayName, useSplitPanelOrThrow } from '../layoutUtils';
 import { HeaderIsland } from './HeaderIsland';
@@ -143,9 +145,7 @@ export function StaticSplitLabel(props: {
           </span>
           <div
             class="shrink-0 flex items-center h-full"
-            ref={(ref) => {
-              panel.setTitleFileMenuRef(ref);
-            }}
+            ref={titleFileMenuMount(panel)}
           />
         </div>
       </HeaderIsland>
@@ -316,9 +316,7 @@ export function BlockItemSplitLabel(props: {
           {props.trailingBadges}
           <div
             class="shrink-0 flex items-center h-full"
-            ref={(ref) => {
-              panel.setTitleFileMenuRef(ref);
-            }}
+            ref={titleFileMenuMount(panel)}
           />
         </div>
       </HeaderIsland>
@@ -403,6 +401,24 @@ function SplitLabelContextMenu(props: ParentProps) {
       </ContextMenu>
     </Show>
   );
+}
+
+/**
+ * A ref that makes its element the split title's file menu mount until the
+ * element's owner is disposed. The split outlives the views in it, so a mount
+ * left behind would keep a view that has gone alive.
+ */
+export function titleFileMenuMount(
+  panel: Pick<SplitPanelContextType, 'titleFileMenuRef' | 'setTitleFileMenuRef'>
+) {
+  return (element: HTMLDivElement) => {
+    panel.setTitleFileMenuRef(element);
+    onCleanup(() => {
+      if (panel.titleFileMenuRef() === element) {
+        panel.setTitleFileMenuRef(undefined);
+      }
+    });
+  };
 }
 
 export function SplitTitleFileMenu(props: ParentProps) {

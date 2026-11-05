@@ -39,7 +39,10 @@ export function createSplitFocusTracker(props: {
   const activeSplitId = () => props.splitManager.activeSplitId();
 
   const currentSplitsIds = () => new Set(props.splits().map((s) => s.id));
-  const lastFocusedChildBySplitId: Map<SplitId, HTMLElement | null> = new Map();
+  // Weak, so the element last focused in a split doesn't keep a view the
+  // split has left alive.
+  const lastFocusedChildBySplitId: Map<SplitId, WeakRef<HTMLElement>> =
+    new Map();
   createEffect(
     on(currentSplitsIds, (ids) => {
       for (const key of lastFocusedChildBySplitId.keys()) {
@@ -74,7 +77,7 @@ export function createSplitFocusTracker(props: {
       return;
 
     // look for a child to return focus to.
-    const child = lastFocusedChildBySplitId.get(id);
+    const child = lastFocusedChildBySplitId.get(id)?.deref();
     if (child && child.isConnected && splitPanelRef.contains(child)) {
       child.focus();
       return;
@@ -222,7 +225,7 @@ export function createSplitFocusTracker(props: {
         element instanceof HTMLElement &&
         !element.closest('[data-no-focus-restore]')
       ) {
-        lastFocusedChildBySplitId.set(parentId, element);
+        lastFocusedChildBySplitId.set(parentId, new WeakRef(element));
       }
 
       activateTimeout = setTimeout(() => {
