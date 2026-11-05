@@ -42,6 +42,13 @@ word docs, Illustrator/Photoshop files).
   `edit_refused` is the worker's clarification, 502 `edit_failed` may have
   partly applied, and a client disconnect drops the worker call (never spawn
   it).
+- `src/domain/lexical.rs`: model-free Lexical editing of markdown documents
+  and tasks. `GET /{id}/lexical` (view token) and `POST /{id}/lexical` (edit
+  token, at most 500 top-level blocks, 16 MiB body) call the editing worker's
+  `/lexical-state` and `/lexical-commit`, which merges three-way against the
+  revision: 409 `conflict` and 422 `invalid` applied nothing; 502
+  `edit_outcome_unknown` (unacknowledged, a worker 5xx, or a transport failure
+  after sending) may have applied.
 
 ## Scope
 
