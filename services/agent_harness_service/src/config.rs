@@ -387,4 +387,4 @@ macro_env_var::maybe_env_vars! {
     /// Optional public MCP OAuth configuration.
     pub struct McpAllowedRedirectHosts;
 }
-// ci-bench-token dctl-2
+// ci-bench-token dctl-3
