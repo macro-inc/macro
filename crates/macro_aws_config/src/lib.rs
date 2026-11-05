@@ -152,3 +152,7 @@ pub fn transform_aws_url_for_internal_fetch(url: &str) -> String {
 
 #[cfg(test)]
 mod test;
+
+/// Experiment marker, changed each round so dependents recompile.
+#[doc(hidden)]
+pub const CI_SPEED_NONCE: u32 = 2001;
