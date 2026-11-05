@@ -32,7 +32,7 @@ test.afterEach(async ({ page }) => {
 test('the pipeline API powers the shared editor and respects column protections and grants', async ({
   page,
 }) => {
-  await expect(page.getByText('Acme', { exact: true })).toBeVisible();
+  await expect(page.getByText('Acme', { exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Sort', exact: true }).click();
   await page.getByRole('button', { name: 'Add sort', exact: true }).click();
   await page.getByRole('button', { name: 'Close sort' }).click();
@@ -73,4 +73,43 @@ test('a cell in a row taller than its value takes clicks across its full height'
   if (!box) throw new Error('Notes cell is not laid out');
   await page.mouse.click(box.x + box.width / 2, box.y + box.height - 8);
   await expect(page.getByRole('textbox', { name: 'Edit Notes' })).toBeVisible();
+});
+
+test('a wrapping cell opens and closes in place over opaque row cells', async ({
+  page,
+}) => {
+  const rows = page.locator('[data-grid-row-id]');
+  const heights = () =>
+    rows.evaluateAll((elements) =>
+      elements.map((row) => row.getBoundingClientRect().height)
+    );
+  const closed = await heights();
+  await page.getByRole('button', { name: /^Notes: Oct 21 emailed/ }).dblclick();
+  const editor = page.getByRole('textbox', { name: 'Edit Notes' });
+  await editor.press('End');
+  await editor.pressSequentially(' and a follow-up call');
+  await expect
+    .poll(async () => (await heights())[0])
+    .toBeGreaterThan(closed[0]);
+  const layout = await rows.evaluateAll((elements) =>
+    elements.map((row) => {
+      const box = row.getBoundingClientRect();
+      // Paint the row's and each cell's background alone to read its opacity.
+      const canvas = document.createElement('canvas').getContext('2d')!;
+      const alphas = [row, ...row.querySelectorAll('[role="gridcell"]')].map(
+        (element) => {
+          canvas.clearRect(0, 0, 1, 1);
+          canvas.fillStyle = getComputedStyle(element).backgroundColor;
+          canvas.fillRect(0, 0, 1, 1);
+          return canvas.getImageData(0, 0, 1, 1).data[3];
+        }
+      );
+      return { top: box.top, bottom: box.bottom, alphas };
+    })
+  );
+  expect(layout[1].top).toBeCloseTo(layout[0].bottom, 0);
+  for (const row of layout)
+    expect(row.alphas).toEqual(row.alphas.map(() => 255));
+  await page.keyboard.press('Escape');
+  await expect.poll(heights).toEqual(closed);
 });
