@@ -218,8 +218,13 @@ it('suggests the tools the inbox shows, with why, and always another inbox', asy
       screen.getByRole('region', { name: 'Available integrations' })
     ).queryByRole('button', { name: 'Connect Linear' })
   ).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Add another inbox' }));
-  await waitFor(() => expect(fake.calls()).toContain('connectInbox'));
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Add another inbox' }), {
+    key: 'Enter',
+  });
+  fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Outlook' }), {
+    key: 'Enter',
+  });
+  await waitFor(() => expect(fake.calls()).toContain('connectInbox:OUTLOOK'));
 });
 it('suggests the defaults when the inbox check fails', () => {
   renderWithFakeOnboarding(() => <ToolsStep onContinue={vi.fn()} />, {

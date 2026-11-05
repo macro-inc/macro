@@ -1,40 +1,34 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import GmailIcon from '@icon/gmail-color.svg';
+import OutlookIcon from '@icon/outlook-color.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
-import { Badge } from '@ui';
+import { Badge, Dropdown } from '@ui';
 import { type JSX, Match, Show, Switch } from 'solid-js';
+import type { InboxProvider } from '../context/onboarding-context';
 
-/** One recommended connection: what it is, why to connect it, and the action. */
+/** One recommended connection: what it is, why to connect it, and its action. */
 export function SuggestionRow(props: {
   icon: JSX.Element;
-  /** Frame several logos in one pill instead of a square tile. */
-  pill?: boolean;
+  /** Show a second card behind the tile: there is more than one of these. */
+  stacked?: boolean;
   name: string;
   /** How it reaches Macro, labelled as in Settings → Integrations. */
   kind: 'native' | 'mcp';
   /** Context after the badge, e.g. the inbox already connected. */
   detail?: string;
   reason: string;
-  state: 'available' | 'busy' | 'connected' | 'unavailable';
-  /** The button's text while it can be pressed. */
-  actionLabel: string;
-  /** The button's accessible name while it can be pressed. */
-  actionName: string;
-  connectedLabel?: string;
-  disabled: boolean;
-  onConnect: () => void;
+  /** The row's action, e.g. a ConnectAction. */
+  children: JSX.Element;
 }) {
   return (
-    <li class="flex items-start gap-2 py-4 sm:items-center sm:gap-3">
-      {/* One column width for tiles and pills keeps every row's text aligned. */}
-      <span aria-hidden="true" class="flex w-[66px] shrink-0">
-        <span
-          class="flex h-10 items-center justify-center border border-edge-muted bg-surface shadow-sm sm:h-11"
-          classList={{
-            'w-10 rounded-xl sm:w-11': !props.pill,
-            'gap-1 rounded-full px-2.5': props.pill,
-          }}
-        >
+    <li class="flex items-start gap-3 py-4 sm:items-center sm:gap-4">
+      <span aria-hidden="true" class="relative size-10 shrink-0 sm:size-11">
+        <Show when={props.stacked}>
+          <span class="absolute inset-0 translate-x-1.5 -translate-y-1.5 rotate-[8deg] rounded-xl border border-edge-muted bg-surface shadow-sm" />
+        </Show>
+        <span class="relative flex size-full items-center justify-center rounded-xl border border-edge-muted bg-surface shadow-sm">
           {props.icon}
         </span>
       </span>
@@ -61,47 +55,108 @@ export function SuggestionRow(props: {
         </div>
         <p class="text-xs leading-relaxed text-ink-muted">{props.reason}</p>
       </div>
-      <button
-        type="button"
-        aria-label={
-          props.state === 'connected'
-            ? `${props.connectedLabel === 'Account linked' ? 'Account linked to' : 'Connected to'} ${props.name}`
-            : props.state === 'busy'
-              ? `Connecting ${props.name}`
-              : props.actionName
-        }
-        aria-busy={props.state === 'busy'}
-        disabled={props.disabled || props.state !== 'available'}
-        onClick={() => props.onConnect()}
-        class="flex min-h-9 shrink-0 items-center gap-1.5 self-center rounded-full px-4 pt-[3px] text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-        classList={{
-          'border border-edge bg-surface text-ink shadow-[0_2px_10px_-3px_rgb(0_0_0/0.07)] transition-colors hover:bg-ink/5 disabled:opacity-40':
-            props.state !== 'connected',
-          'text-ink-muted': props.state === 'connected',
-        }}
-      >
-        <Switch fallback={props.actionLabel}>
-          <Match when={props.state === 'connected'}>
-            <CheckIcon aria-hidden="true" class="size-4 text-success" />
-            {props.connectedLabel ?? 'Connected'}
-          </Match>
-          <Match when={props.state === 'busy'}>
-            <SpinnerIcon aria-hidden="true" class="size-3.5 animate-spin" />
-            {props.actionLabel}
-          </Match>
-        </Switch>
-      </button>
+      {props.children}
     </li>
+  );
+}
+
+/** Connect, or the connection's state once it lands. */
+export function ConnectAction(props: {
+  name: string;
+  state: 'available' | 'busy' | 'connected' | 'unavailable';
+  /** The button's text while it can be pressed. */
+  label: string;
+  connectedLabel?: string;
+  disabled: boolean;
+  onConnect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={
+        props.state === 'connected'
+          ? `${props.connectedLabel === 'Account linked' ? 'Account linked to' : 'Connected to'} ${props.name}`
+          : props.state === 'busy'
+            ? `Connecting ${props.name}`
+            : `${props.label} ${props.name}`
+      }
+      aria-busy={props.state === 'busy'}
+      disabled={props.disabled || props.state !== 'available'}
+      onClick={() => props.onConnect()}
+      class="flex min-h-9 shrink-0 items-center gap-1.5 self-center rounded-full px-4 pt-[3px] text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+      classList={{
+        'border border-edge bg-surface text-ink shadow-[0_2px_10px_-3px_rgb(0_0_0/0.07)] transition-colors hover:bg-ink/5 disabled:opacity-40':
+          props.state !== 'connected',
+        'text-ink-muted': props.state === 'connected',
+      }}
+    >
+      <Switch fallback={props.label}>
+        <Match when={props.state === 'connected'}>
+          <CheckIcon aria-hidden="true" class="size-4 text-success" />
+          {props.connectedLabel ?? 'Connected'}
+        </Match>
+        <Match when={props.state === 'busy'}>
+          <SpinnerIcon aria-hidden="true" class="size-3.5 animate-spin" />
+          {props.label}
+        </Match>
+      </Switch>
+    </button>
+  );
+}
+
+/** Add, opening a menu of the providers this account can connect. */
+export function AddInboxMenu(props: {
+  busy: boolean;
+  disabled: boolean;
+  outlookAvailable: boolean;
+  onSelect: (provider: InboxProvider) => void;
+}) {
+  let trigger: HTMLButtonElement | undefined;
+  return (
+    <Dropdown placement="bottom-end">
+      <Dropdown.Trigger
+        ref={(el: HTMLButtonElement) => {
+          trigger = el;
+        }}
+        as="button"
+        aria-label={props.busy ? 'Adding an inbox' : 'Add another inbox'}
+        aria-busy={props.busy}
+        disabled={props.disabled || props.busy}
+        class="flex min-h-9 shrink-0 items-center gap-1.5 self-center rounded-full border border-edge bg-surface px-4 pt-[3px] text-sm font-medium text-ink shadow-[0_2px_10px_-3px_rgb(0_0_0/0.07)] transition-colors hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-40"
+      >
+        <Show when={props.busy}>
+          <SpinnerIcon aria-hidden="true" class="size-3.5 animate-spin" />
+        </Show>
+        Add
+        <CaretDownIcon aria-hidden="true" class="-mt-[3px] size-3.5" />
+      </Dropdown.Trigger>
+      {/* Inside the flow, the menu takes the onboarding palette, not the app's. */}
+      <Dropdown.Content
+        class="min-w-44"
+        mount={trigger?.closest<HTMLElement>('.onboarding-flow') ?? undefined}
+      >
+        <Dropdown.Group>
+          <Dropdown.Item onSelect={() => props.onSelect('GMAIL')}>
+            <GmailIcon aria-hidden="true" class="size-4" />
+            Google
+          </Dropdown.Item>
+          <Show when={props.outlookAvailable}>
+            <Dropdown.Item onSelect={() => props.onSelect('OUTLOOK')}>
+              <OutlookIcon aria-hidden="true" class="size-4" />
+              Outlook
+            </Dropdown.Item>
+          </Show>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }
 
 /** A placeholder row while the inbox is checked. */
 export function SuggestionRowSkeleton() {
   return (
-    <li aria-hidden="true" class="flex items-center gap-3 py-4">
-      <span class="flex w-[66px] shrink-0">
-        <ListSkeleton.Bar class="size-10 rounded-xl sm:size-11" />
-      </span>
+    <li aria-hidden="true" class="flex items-center gap-4 py-4">
+      <ListSkeleton.Bar class="size-10 shrink-0 rounded-xl sm:size-11" />
       <div class="flex flex-1 flex-col gap-2">
         <ListSkeleton.Bar class="h-3.5 w-28" />
         <ListSkeleton.Bar class="h-3 w-3/4" />

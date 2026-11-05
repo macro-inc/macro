@@ -30,6 +30,8 @@ export type FakeOnboardingWorld = {
     licensed: boolean;
   } | null;
   emailAccounts: EmailAccount[];
+  /** Whether the account may connect an Outlook inbox. */
+  outlookAvailable: boolean;
   /** Addresses the next inbox connects link, in order. */
   inboxesToConnect: string[];
   record: OnboardingRecord;
@@ -88,6 +90,7 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
       licensed: false,
     },
     emailAccounts: [],
+    outlookAvailable: true,
     inboxesToConnect: ['ada@acme.com', 'ada.personal@gmail.com'],
     record: { status: 'active', suggestedTeamDomain: 'acme.com' },
     teams: [],
@@ -219,8 +222,9 @@ export function createFakeOnboarding(
       accounts: () => loadable('emailAccounts', () => world.emailAccounts),
       refresh: async () => {},
     }),
-    connectInbox: () => {
-      call('connectInbox');
+    createOutlookAvailability: () => () => world.outlookAvailable,
+    connectInbox: (provider) => {
+      call(provider ? `connectInbox:${provider}` : 'connectInbox');
       return roundTrip(() =>
         update((draft) => {
           const address = draft.inboxesToConnect.shift();

@@ -2,17 +2,22 @@ import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { canonicalPipedreamSlug } from '@core/pipedream/slugs';
 import { fireAndForget } from '@core/util/fireAndForget';
 import GmailIcon from '@icon/gmail-color.svg';
-import OutlookIcon from '@icon/outlook-color.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { ContinueButton } from '../components/controls';
 import {
+  AddInboxMenu,
+  ConnectAction,
   SuggestionRow,
   SuggestionRowSkeleton,
 } from '../components/suggestion-row';
 import { ToolTile } from '../components/tool-tile';
-import { type Tool, useOnboardingContext } from '../context/onboarding-context';
+import {
+  type InboxProvider,
+  type Tool,
+  useOnboardingContext,
+} from '../context/onboarding-context';
 import { SUGGESTED_TOOL_LIMIT } from '../core/tools';
 import {
   readPendingConnectors,
@@ -34,6 +39,7 @@ export function ToolsStep(props: { onContinue: () => void }) {
   const connected = context.createConnectedTools({ poll: true });
   const suggestions = createToolSuggestions(context);
   const emailAccounts = context.createEmailAccounts();
+  const outlookAvailable = context.createOutlookAvailability();
   const suggestedSlugs = () =>
     (suggestions() ?? []).map((suggestion) =>
       canonicalPipedreamSlug(suggestion.tool.slug)
@@ -92,11 +98,11 @@ export function ToolsStep(props: { onContinue: () => void }) {
     }
   };
 
-  const addInbox = async () => {
+  const addInbox = async (provider: InboxProvider) => {
     if (busy()) return;
     setBusy(ADD_INBOX);
     try {
-      await context.connectInbox();
+      await context.connectInbox(provider);
     } finally {
       setBusy(undefined);
     }
@@ -134,23 +140,22 @@ export function ToolsStep(props: { onContinue: () => void }) {
           class="flex flex-col [&>li:not(:first-child)]:border-t [&>li:not(:first-child)]:border-ink/10"
         >
           <SuggestionRow
-            pill
-            icon={
-              <>
-                <GmailIcon class="size-5" />
-                <OutlookIcon class="size-5" />
-              </>
-            }
+            stacked
+            icon={<GmailIcon class="size-6" />}
             name="Add another inbox"
             kind="native"
             detail={inboxDetail()}
             reason="Sync another email account into the same inbox, search and agents."
-            state={busy() === ADD_INBOX ? 'busy' : 'available'}
-            actionLabel="Add"
-            actionName="Add another inbox"
-            disabled={busy() !== undefined}
-            onConnect={() => fireAndForget(addInbox(), 'onboarding')}
-          />
+          >
+            <AddInboxMenu
+              busy={busy() === ADD_INBOX}
+              disabled={busy() !== undefined}
+              outlookAvailable={outlookAvailable()}
+              onSelect={(provider) =>
+                fireAndForget(addInbox(provider), 'onboarding')
+              }
+            />
+          </SuggestionRow>
           <Show
             when={suggestions()}
             fallback={
@@ -173,23 +178,27 @@ export function ToolsStep(props: { onContinue: () => void }) {
                     name={suggestion.tool.name}
                     kind={suggestion.kind}
                     reason={suggestion.reason}
-                    state={rowState(suggestion.tool.slug)}
-                    actionLabel={
-                      connected.state(suggestion.tool.slug) === 'disabled'
-                        ? 'Enable'
-                        : 'Connect'
-                    }
-                    actionName={`${connected.state(suggestion.tool.slug) === 'disabled' ? 'Enable' : 'Connect'} ${suggestion.tool.name}`}
-                    connectedLabel={
-                      connected.state(suggestion.tool.slug) === 'account-linked'
-                        ? 'Account linked'
-                        : undefined
-                    }
-                    disabled={busy() !== undefined}
-                    onConnect={() =>
-                      fireAndForget(connect(suggestion.tool), 'onboarding')
-                    }
-                  />
+                  >
+                    <ConnectAction
+                      name={suggestion.tool.name}
+                      state={rowState(suggestion.tool.slug)}
+                      label={
+                        connected.state(suggestion.tool.slug) === 'disabled'
+                          ? 'Enable'
+                          : 'Connect'
+                      }
+                      connectedLabel={
+                        connected.state(suggestion.tool.slug) ===
+                        'account-linked'
+                          ? 'Account linked'
+                          : undefined
+                      }
+                      disabled={busy() !== undefined}
+                      onConnect={() =>
+                        fireAndForget(connect(suggestion.tool), 'onboarding')
+                      }
+                    />
+                  </SuggestionRow>
                 )}
               </For>
             )}

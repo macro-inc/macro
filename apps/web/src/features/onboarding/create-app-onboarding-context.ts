@@ -17,6 +17,7 @@ import {
   useGithubLinkStatusQuery,
   useTrialEligibilityQuery,
 } from '@queries/auth';
+import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
@@ -219,7 +220,8 @@ export function createAppOnboardingContext(): OnboardingContext {
         refresh: async () => invalidateEmailLinks(),
       };
     },
-    connectInbox: () => startAddInbox(),
+    connectInbox: (provider) => startAddInbox(provider && { provider }),
+    createOutlookAvailability: () => useOutlookAvailable(),
 
     createToolCatalog: createOnboardingToolCatalog,
     createSenderDomainCounts: (domains) => {
