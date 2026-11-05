@@ -335,6 +335,8 @@ reads as from the agent (its name and avatar as they were when sent); without
 an agent it reads as from the sending user. Opening one opens the link:
 documents and tasks by their file type, plus chats, channels, projects, email
 threads, agent sessions, routines, databases and forms.
+In the unified Notifications view a manual notification is an agent row on its
+linked entity, from the agent (or the sending user when no agent sent it).
 
 Verify from an agent session: ask the agent to notify you about a task, and a
 teammate who can and one who cannot see it. You get an inbox row with the
