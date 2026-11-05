@@ -1,0 +1,29 @@
+# Experiment only: no secrets, no deploy, no AWS. Every S3 call goes to a server on the runner.
+name: ci-speed retention bench
+on:
+  pull_request:
+    paths: ['.github/ci-speed/**', '.github/workflows/ci_speed_retention_bench.yml']
+permissions: { contents: read }
+jobs:
+  bench:
+    name: ${{ matrix.arm }} ${{ matrix.attempt }}
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-deploy-bench
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        arm: [old, new]
+        attempt: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { fetch-depth: 0, persist-credentials: false }
+      - run: pip install --quiet --break-system-packages 'moto[server,s3]' boto3
+      - run: bash .github/ci-speed/retention_bench.sh "${{ matrix.arm }}" "${{ matrix.attempt }}" 1000
+        env: { BASE_SHA: "${{ github.event.pull_request.base.sha }}" }
+  refusal:
+    name: refusal fails the script
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-deploy-bench
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { persist-credentials: false }
+      - run: bash .github/ci-speed/retention_refuse.sh
