@@ -145,7 +145,7 @@ export function ToolsStep(props: { onContinue: () => void }) {
             name="Add another inbox"
             kind="native"
             detail={inboxDetail()}
-            reason="Sync another email account into the same inbox, search and agents."
+            reason="Sync another email account into the same inbox, search and agents, so all of your mail lives in one place."
           >
             <AddInboxMenu
               busy={busy() === ADD_INBOX}

@@ -205,7 +205,7 @@ it('suggests the tools the inbox shows, with why, and always another inbox', asy
   expect(within(list).getAllByText('mcp')).toHaveLength(4);
   expect(
     within(list).getByText(
-      'Import Linear issues into Macro tasks, and let agents create and update issues.'
+      'Import Linear issues into Macro tasks, and let agents create and update issues straight from your email.'
     )
   ).toBeTruthy();
   expect(within(list).getByText('ada@example.com connected')).toBeTruthy();

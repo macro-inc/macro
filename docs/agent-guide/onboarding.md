@@ -29,7 +29,8 @@ chooses Google, or Outlook when the account may connect one), then four
 suggested tools, each with its `native`/`mcp` badge and what connecting it does in Macro. The
 tools are ranked by mail from their sender domains in the last six months,
 searched live at Gmail or Outlook (`POST /email/senders/domain-counts`)
-because the inbox backfill hasn't run yet; with no such mail, or if the search
+because the inbox backfill hasn't run yet. The flow starts that search as soon
+as an inbox is connected, so the step usually finds it done; with no such mail, or if the search
 fails, Slack, Linear, Notion and GitHub are suggested. **Browse all
 integrations** opens the searchable catalog without the suggested tools. The
 backend-free check is

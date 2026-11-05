@@ -225,8 +225,19 @@ export function createAppOnboardingContext(): OnboardingContext {
 
     createToolCatalog: createOnboardingToolCatalog,
     createSenderDomainCounts: (domains) => {
-      const query = useSenderDomainCountsQuery(domains);
-      return () => loadableQuery(query, (counts) => counts);
+      const links = useEmailLinksQuery();
+      const inboxIds = () =>
+        queryReadyGate(links)
+          ? links.data.links.map((link) => link.id).sort()
+          : [];
+      const query = useSenderDomainCountsQuery(domains, inboxIds);
+      return () => {
+        if (!queryReadyGate(links))
+          return links.isError ? { t: 'error' } : { t: 'loading' };
+        // Without an inbox there is no mail to read; every count is zero.
+        if (inboxIds().length === 0) return { t: 'ready', value: {} };
+        return loadableQuery(query, (counts) => counts);
+      };
     },
     createConnectedTools: ({ poll }) => {
       const connected = usePipedreamConnectionsQuery({

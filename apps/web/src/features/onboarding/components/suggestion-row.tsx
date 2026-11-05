@@ -26,9 +26,9 @@ export function SuggestionRow(props: {
     <li class="flex items-start gap-3 py-4 sm:items-center sm:gap-4">
       <span aria-hidden="true" class="relative size-10 shrink-0 sm:size-11">
         <Show when={props.stacked}>
-          <span class="absolute inset-0 translate-x-1.5 -translate-y-1.5 rotate-[8deg] rounded-xl border border-edge-muted bg-surface shadow-sm" />
+          <span class="absolute inset-0 translate-x-1.5 -translate-y-1.5 rotate-[8deg] rounded-xl border border-edge-muted bg-surface shadow-[0_3px_12px_-2px_rgb(0_0_0/0.05)]" />
         </Show>
-        <span class="relative flex size-full items-center justify-center rounded-xl border border-edge-muted bg-surface shadow-sm">
+        <span class="relative flex size-full items-center justify-center rounded-xl border border-edge-muted bg-surface shadow-[0_3px_12px_-2px_rgb(0_0_0/0.05)]">
           {props.icon}
         </span>
       </span>
@@ -53,7 +53,10 @@ export function SuggestionRow(props: {
             </span>
           </Show>
         </div>
-        <p class="text-xs leading-relaxed text-ink-muted">{props.reason}</p>
+        {/* Keep descriptions at least 100px clear of the action on wider screens. */}
+        <p class="text-xs leading-relaxed text-ink-muted sm:pr-[84px]">
+          {props.reason}
+        </p>
       </div>
       {props.children}
     </li>

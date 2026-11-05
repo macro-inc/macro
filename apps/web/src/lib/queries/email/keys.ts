@@ -29,8 +29,11 @@ export const emailKeys = createQueryKeys('email', {
   }) => ({
     queryKey: ['compose-draft-state', params],
   }),
-  senderDomainCounts: (domains: readonly string[]) => ({
-    queryKey: [{ domains }],
+  senderDomainCounts: (
+    domains: readonly string[],
+    inboxIds: readonly string[]
+  ) => ({
+    queryKey: [{ domains, inboxIds }],
   }),
   scheduledMessages: (linkIds: string[]) => ({
     queryKey: [{ linkIds }],

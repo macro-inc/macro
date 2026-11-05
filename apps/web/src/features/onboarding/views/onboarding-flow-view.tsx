@@ -17,6 +17,7 @@ import {
   previousOnboardingStep,
   type StepOutcome,
 } from '../core/steps';
+import { ONBOARDING_SENDER_DOMAINS } from '../core/tools';
 import { createFlowFinish } from '../primitives/flow-finish';
 import { createOnboardingFlow } from '../primitives/onboarding-flow';
 import { EmailStep } from './email-step';
@@ -46,6 +47,9 @@ export function OnboardingFlowView(props: {
   const connectedTools = context.createConnectedTools({ poll: false });
   const record = context.createOnboardingRecord();
   const teamDirectory = context.createTeamDirectory();
+  // Start the inbox search as soon as an inbox is connected, so the tools step
+  // usually finds its answer cached instead of waiting on the provider.
+  context.createSenderDomainCounts(ONBOARDING_SENDER_DOMAINS);
 
   const finish = createFlowFinish(context, {
     next: () => props.next,
