@@ -252,6 +252,10 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ListForms"
                 | "SetFormAccess"
                 | "CreateSkill"
+                // macro.documents.skills() and SystemSkill.content().
+                | "ListSkills"
+                | "SearchSkills"
+                | "ReadSkill"
                 | "Decide"
                 | "GenerateObject"
                 // macro.web.search() and macro.web.fetch().
