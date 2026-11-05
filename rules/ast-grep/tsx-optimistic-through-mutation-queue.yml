@@ -1,0 +1,55 @@
+id: tsx-optimistic-through-mutation-queue
+language: tsx
+# Twin of ts-optimistic-through-mutation-queue — ast-grep rules are
+# single-language, and `typescript` only scans .ts files.
+severity: warning
+message: Make optimistic updates through the normalized cache mutation queue, not a feature-local helper or TanStack onMutate.
+note: |-
+  Rule FE-70 in .agents/rules/web/optimistic-updates.md. Register an
+  optimisticResolver for the GraphQL mutation in src/lib/queries/optimistic-resolvers.ts
+  (field predictions), or call executeOptimisticMutation with link updates
+  (list membership). The queue persists, orders, retries and rolls back the
+  write, and every normalized reader sees one value. If the cache lacks a
+  capability you need, add it to src/lib/graphql-cache with tests rather than
+  writing a one-off. Existing legacy sites are tracked for migration; don't
+  add new ones.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/lib/graphql-cache/**
+  - apps/web/src/lib/urql-solid/**
+  - apps/web/src/lib/queries/optimistic-resolvers.ts
+  - apps/web/src/lib/queries/entity-optimistic-resolvers.ts
+  # Documented FE-70 exceptions: the email send journal and call media state.
+  - apps/web/src/features/email-thread/primitives/optimistic-send.ts
+  - apps/web/src/features/channel/Call/**
+  - '**/*.test.tsx'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/browser-test/**'
+rule:
+  any:
+    # A TanStack/urql mutation's optimistic hook: `onMutate: …` or `onMutate() {}`.
+    - kind: pair
+      has:
+        field: key
+        regex: ^onMutate$
+    - kind: method_definition
+      has:
+        field: name
+        regex: ^onMutate$
+    # A feature-local optimistic helper: function optimisticX / applyXOptimistic.
+    - kind: function_declaration
+      has:
+        field: name
+        regex: '[Oo]ptimistic'
+    - kind: variable_declarator
+      all:
+        - has:
+            field: name
+            regex: '[Oo]ptimistic'
+        - has:
+            field: value
+            any:
+              - kind: arrow_function
+              - kind: function_expression
