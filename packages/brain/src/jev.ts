@@ -44,57 +44,76 @@ export function parseJevConfig(raw: unknown): JevConfig {
     return fail(`max_question_chars must be 1..${DEFAULT_MAX_QUESTION_CHARS}`);
   }
 
-  const questions = value.questions;
-  if (typeof questions !== 'object' || questions === null)
-    return fail('questions must be an object');
-  const entries = Object.entries(questions as Record<string, unknown>);
-  if (entries.length === 0 || entries.length > MAX_QUESTIONS) {
-    return fail(`needs 1 to ${MAX_QUESTIONS} questions, has ${entries.length}`);
-  }
-  for (const [key, question] of entries) {
-    if (
-      key.length === 0 ||
-      new TextEncoder().encode(key).length > MAX_KEY_BYTES
-    ) {
-      return fail(
-        `question key ${JSON.stringify(key)} must be 1 to ${MAX_KEY_BYTES} bytes`
-      );
-    }
-    if (
-      typeof question !== 'string' ||
-      question.trim() === '' ||
-      [...question].length > maxQuestionChars
-    ) {
-      return fail(
-        `question ${JSON.stringify(key)} must be 1 to ${maxQuestionChars} characters`
-      );
-    }
-  }
+  const questions = parseQuestions(value.questions, maxQuestionChars);
 
   const rule = value.rule;
   if (typeof rule !== 'string')
     return fail('rule must describe the wake rule in words');
 
-  const wakeIf = value.wakeIf;
-  if (!Array.isArray(wakeIf) || wakeIf.length === 0)
-    return fail('wakeIf needs at least one group');
-  for (const group of wakeIf) {
-    if (!Array.isArray(group) || group.length === 0)
-      return fail('wakeIf has an empty group');
-    for (const key of group) {
-      if (typeof key !== 'string' || !(key in (questions as object))) {
-        return fail(`wakeIf names unknown question ${JSON.stringify(key)}`);
-      }
-    }
-  }
-
   return {
     threshold,
-    questions: questions as Record<string, string>,
+    questions,
     rule,
-    wakeIf: wakeIf as string[][],
+    wakeIf: parseWakeIf(value.wakeIf, questions),
     maxQuestionChars,
   };
+}
+
+function parseQuestions(
+  raw: unknown,
+  maxQuestionChars: number
+): Record<string, string> {
+  if (typeof raw !== 'object' || raw === null)
+    throw new JevConfigError('config/jev.json: questions must be an object');
+  const entries = Object.entries(raw as Record<string, unknown>);
+  if (entries.length === 0 || entries.length > MAX_QUESTIONS) {
+    throw new JevConfigError(
+      `config/jev.json: needs 1 to ${MAX_QUESTIONS} questions, has ${entries.length}`
+    );
+  }
+  const questions: Record<string, string> = {};
+  for (const [key, question] of entries) {
+    const keyBytes = new TextEncoder().encode(key).length;
+    if (keyBytes === 0 || keyBytes > MAX_KEY_BYTES) {
+      throw new JevConfigError(
+        `config/jev.json: question key ${JSON.stringify(key)} must be 1 to ${MAX_KEY_BYTES} bytes`
+      );
+    }
+    const length = typeof question === 'string' ? [...question].length : 0;
+    if (
+      typeof question !== 'string' ||
+      question.trim() === '' ||
+      length > maxQuestionChars
+    ) {
+      throw new JevConfigError(
+        `config/jev.json: question ${JSON.stringify(key)} must be 1 to ${maxQuestionChars} characters`
+      );
+    }
+    questions[key] = question;
+  }
+  return questions;
+}
+
+function parseWakeIf(
+  raw: unknown,
+  questions: Record<string, string>
+): string[][] {
+  if (!Array.isArray(raw) || raw.length === 0)
+    throw new JevConfigError(
+      'config/jev.json: wakeIf needs at least one group'
+    );
+  return raw.map((group: unknown) => {
+    if (!Array.isArray(group) || group.length === 0)
+      throw new JevConfigError('config/jev.json: wakeIf has an empty group');
+    return group.map((key: unknown) => {
+      if (typeof key !== 'string' || !(key in questions)) {
+        throw new JevConfigError(
+          `config/jev.json: wakeIf names unknown question ${JSON.stringify(key)}`
+        );
+      }
+      return key;
+    });
+  });
 }
 
 /** Whether `probabilities` satisfy the wake rule; missing keys count as 0. */
