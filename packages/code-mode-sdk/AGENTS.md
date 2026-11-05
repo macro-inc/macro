@@ -8,28 +8,41 @@ HTML worker belong to `packages/sdk-docs`.
 
 ## Start here
 
-- `scripts/generate.ts`: bundle and backend artifact generation.
+- `scripts/generate.ts`: builds the Deno bundles and backend documentation into
+  the directory it is given; `crates/code_mode_assets` runs it at build time.
 - `scripts/typedoc.ts`: index each entity and split linked Markdown into
   per-symbol references (classes, methods, types).
-- `scripts/catalog.ts`: compact entity descriptions; agent and harness docs share
-  a topic, as do native channels, external chats and WhatsApp, so discovery stays
-  within its 32-question classifier limit.
+- `scripts/catalog.ts`: the entity directories agents discover; agent and
+  harness docs share a topic, as do native channels, external chats and
+  WhatsApp, and cross-type search, workspace browsing and AI chats
+  (`search`, whose guide is the `search` topic), and the web and URL previews
+  (`web`). Keep the catalog at 32
+  entities or fewer: Jev ranks them in one 32-question call.
+- Each entity's description is its one `@routing` sentence ("Use when …; not
+  …") and its `guide` every `@agent` block, both from the SDK's TSDoc and
+  collected by `packages/sdk-docs/src/render.ts`. Generation fails for an
+  entity without exactly one `@routing` sentence, or a tag outside every
+  entity. Agents route on the sentence; the guide is how that area works,
+  inlined into unrouted prompts and loaded with the entity on routed turns.
 - `src/index.ts`: public SDK exports used by programs.
 
 ## Tool contracts
 
 - External chat sends/uploads use only the credential owner's connection and accept their session or own API token (including signed agent attribution); bots never send. Pairing and account/access controls require the person's session.
-- Agent documentation excludes the legacy chats/workspace namespaces and their Macro properties; public SDK APIs remain compatible for existing callers.
 
 ## Checks
 
 - Run root `just check` for formatting; CodeMode uses `apps/web/biome.jsonc`, while the standalone SDK has its own formatter.
 
-- `bun run generate`, then `bun run check:generated`.
-- `bun run type-check` and `bun run test`.
+- `bun run type-check` and `bun run test` (generates into ignored `dist/` first).
+- `cargo test -p code_execution -- --include-ignored` runs the bundle in Deno.
 
 Run from this directory after installing the root workspace and the standalone
-`packages/sdk` dependencies. Generated Rust documentation JSON and Deno bundles
-must match the public SDK; edit source and regenerate them together.
-Use the repository's pinned Bun version (via `nix develop`); different Bun
-bundlers produce different checked-in output even from identical SDK source.
+`packages/sdk` dependencies with `bun install --frozen-lockfile`, as CI does;
+the generator refuses to run without `packages/sdk/node_modules`.
+
+## Gotchas
+
+- The outputs are never committed. A new file the generator reads must be added
+  to `GENERATOR_INPUTS` in `crates/code_mode_assets/build.rs` and to
+  `codeModeAssetsSrc` in `nix/cloud-storage.nix`.

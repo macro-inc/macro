@@ -3,7 +3,11 @@ import type { Database } from '../databases/database';
 import type { DatabaseTable } from '../databases/table';
 import { Form } from './form';
 
-/** Forms collect answers into a database table without granting respondents table access. */
+/**
+ * Forms collect answers into a database table without granting respondents table access.
+ *
+ * @routing Use when building a form, poll or survey, or reading its responses; not database tables.
+ */
 export class FormNamespace {
   constructor(private readonly client: MacroClient) {}
 

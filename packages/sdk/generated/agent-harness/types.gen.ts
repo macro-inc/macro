@@ -776,6 +776,22 @@ export type CalendarSuggestions = {
 };
 
 /**
+ * Call one tool of a connected app.
+ */
+export type CallConnectedTool = {
+    /**
+     * The tool's arguments, matching its input schema.
+     */
+    arguments?: {
+        [key: string]: unknown;
+    };
+    /**
+     * The tool's name on its server.
+     */
+    tool: string;
+};
+
+/**
  * Call search supports speakers, channels and attendance status.
  */
 export type CallSearchSuggestions = {
@@ -997,6 +1013,158 @@ export type CodingPreferencesBody = {
 };
 
 /**
+ * Add a custom MCP server to the user's connections.
+ */
+export type ConnectMcpServer = {
+    /**
+     * Display name for the server.
+     */
+    serverName: string;
+    /**
+     * The server's URL.
+     */
+    url: string;
+};
+
+/**
+ * Response from [`ConnectMcpServer`].
+ */
+export type ConnectMcpServerResponse = {
+    /**
+     * Whether the user already had this server before the call.
+     */
+    alreadyConnected: boolean;
+    /**
+     * Whether the server holds the user's sign-in.
+     */
+    authenticated: boolean;
+    /**
+     * Whether the server's tools are turned on.
+     */
+    enabled: boolean;
+    /**
+     * The server's display name.
+     */
+    serverName: string;
+    /**
+     * What happened and what the user still has to do.
+     */
+    summary: string;
+    /**
+     * The server's URL.
+     */
+    url: string;
+};
+
+/**
+ * A connected app the session's agent may use.
+ */
+export type ConnectedApp = {
+    /**
+     * The app's slug, or its custom server key.
+     */
+    key: string;
+    /**
+     * Which store the app comes from.
+     */
+    kind: ConnectedAppKind;
+    /**
+     * Display name, e.g. `Slack` or the owner's name for a custom server.
+     */
+    name: string;
+};
+
+/**
+ * Which store a connected app comes from.
+ */
+export type ConnectedAppKind = 'app' | 'custom';
+
+/**
+ * One tool a connected app serves.
+ */
+export type ConnectedTool = {
+    /**
+     * What the server says the tool does.
+     */
+    description?: string | null;
+    /**
+     * JSON Schema for the tool's arguments.
+     */
+    inputSchema: {
+        [key: string]: unknown;
+    };
+    /**
+     * The tool's name on its server.
+     */
+    name: string;
+};
+
+/**
+ * One tool found by a search across the agent's connected apps.
+ */
+export type ConnectedToolMatch = {
+    /**
+     * The app serving the tool.
+     */
+    app: ConnectedApp;
+    /**
+     * The tool.
+     */
+    tool: ConnectedTool;
+};
+
+/**
+ * A connected tool's answer: MCP's `CallToolResult`.
+ */
+export type ConnectedToolResult = {
+    /**
+     * MCP content blocks, e.g. `{type: "text", text}`.
+     */
+    content: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * The tool failed, or could not run; `content` says why.
+     */
+    isError: boolean;
+    /**
+     * Structured output, for tools that declare an output schema.
+     */
+    structuredContent?: {
+        [key: string]: unknown;
+    } | null;
+};
+
+/**
+ * The best matches across the agent's connected apps, and the apps whose
+ * tools could not be listed, which the search did not cover.
+ */
+export type ConnectedToolSearch = {
+    /**
+     * At most [`MAX_TOOL_MATCHES`] tools, best first.
+     */
+    matches: Array<ConnectedToolMatch>;
+    /**
+     * Apps whose tools could not be listed.
+     */
+    unsearched: Array<ConnectedApp>;
+};
+
+/**
+ * An advertised action, not a tool loaded into the current turn.
+ */
+export type ConnectorTool = {
+    /**
+     * What the action supports.
+     */
+    description: string;
+    /**
+     * Upstream tool name.
+     */
+    name: string;
+};
+
+/**
  * Request body for a control operation on a live session.
  *
  * A wrapper around the operation rather than the bare enum so that fields
@@ -1156,26 +1324,13 @@ export type CreateAgentSessionResponse = {
 };
 
 /**
- * Review creation. Drafts are validated by the action's owning adapter.
+ * Review creation. Decoding it validates every draft; creating a review only
+ * presents the drafts, and the account holder acts separately.
  */
 export type CreateReview = {
-    /**
-     * One to one hundred independent drafts. Email: {subject, body: Markdown,
-     * to: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],
-     * replyingToId?, attachments?: [{documentId}]}. Calendar: {title,
-     * time: {kind: "timed", startsAt: ISO datetime, endsAt: ISO datetime,
-     * timeZone?: IANA zone} or {kind: "allDay", startDate: ISO date,
-     * endDate: exclusive ISO date}, description?, location?, attendees?:
-     * [{email, isOptional?}]}. Import: exactly one draft {source: "notion" | "linear" | "jira"},
-     * presenting the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged.
-     * Creating any review only presents these drafts; the user acts separately.
-     */
-    drafts: Array<unknown>;
+    [key: string]: unknown;
+} & {
     executionId?: null | ExecutionId;
-    /**
-     * Existing UI and action to use.
-     */
-    kind: ReviewKind;
     /**
      * Stack label.
      */
@@ -1244,6 +1399,90 @@ export type DiscoverAgentCapabilitiesResponse = {
      * Complete ordered ACP session configuration advertised by the agent.
      */
     configOptions: Array<AgentConfigOptionDto>;
+};
+
+/**
+ * Discovery metadata and optional markup for a user-controlled auth flow.
+ */
+export type DiscoverConnectorsResponse = {
+    /**
+     * Include verbatim only if an advertised tool supports the requested task.
+     */
+    connect_markup?: string | null;
+    /**
+     * Catalog or capability results.
+     */
+    result: DiscoveryResult;
+};
+
+/**
+ * A verified app identity from the directory.
+ */
+export type DiscoveredApp = {
+    /**
+     * Exact identity to inspect or connect.
+     */
+    app_slug: string;
+    /**
+     * Directory description; inspect tools to verify specific capabilities.
+     */
+    description?: string | null;
+    /**
+     * Human-readable app name.
+     */
+    name: string;
+};
+
+/**
+ * Search by app name, then inspect a returned slug before recommending auth.
+ */
+export type DiscoveryRequest = {
+    operation: 'search';
+    /**
+     * App name, e.g. "Notion" or "Linear", not a task description.
+     */
+    query: string;
+} | {
+    /**
+     * Exact app slug from search results.
+     */
+    app_slug: string;
+    operation: 'inspect';
+};
+
+/**
+ * Discovery results never execute tools or change connections.
+ */
+export type DiscoveryResult = {
+    /**
+     * Matching apps.
+     */
+    apps: Array<DiscoveredApp>;
+    /**
+     * Narrow the app name if this is true.
+     */
+    more_results: boolean;
+    operation: 'search';
+} | {
+    /**
+     * App from the directory.
+     */
+    app: DiscoveredApp;
+    /**
+     * Whether this caller has an enabled connection. For an app that
+     * connects through its own MCP server, that connection is checked
+     * there, not in Pipedream.
+     */
+    connected: boolean;
+    operation: 'inspect';
+    /**
+     * Advertised tools. Use SearchTools after connecting to load them.
+     */
+    tools: Array<ConnectorTool>;
+    /**
+     * True when some advertised tools were omitted.
+     */
+    tools_truncated: boolean;
 };
 
 /**
@@ -2067,9 +2306,11 @@ export type RetryAgentConversationTurnRequest = {
 export type ReviewDecision = {
     action: 'edit';
     /**
-     * Replacement action arguments.
+     * Replacement action arguments, keyed by the review's kind.
      */
-    draft: unknown;
+    draft: {
+        [key: string]: unknown;
+    };
     /**
      * Pending item to update.
      */
@@ -2128,67 +2369,21 @@ export type ReviewDecisionContext = {
 export type ReviewId = string;
 
 /**
- * One editable item and its durable outcome.
- */
-export type ReviewItem = {
-    /**
-     * Validated arguments for the existing composer/action.
-     */
-    draft: unknown;
-    /**
-     * Whether the account holder edited this draft before deciding.
-     */
-    edited?: boolean;
-    /**
-     * Failure or uncertainty description.
-     */
-    error?: string | null;
-    /**
-     * Stable item identity across stack navigation and edits.
-     */
-    id: string;
-    /**
-     * Actual backend response, never a model assertion.
-     */
-    result?: unknown;
-    /**
-     * Current outcome.
-     */
-    status: ReviewItemStatus;
-};
-
-/**
- * Review item state, shared with notification consumers.
- */
-export type ReviewItemStatus = 'pending' | 'submitting' | 'completed' | 'dismissed' | 'unknown';
-
-/**
- * The component and action used to finish a review.
- */
-export type ReviewKind = 'email' | 'calendar' | 'import';
-
-/**
  * Full UI record, fetched outside the model context.
  */
 export type ReviewRecord = {
+    [key: string]: unknown;
+} & {
     /**
-     * Account whose email/calendar the drafts use; historical records use the session owner.
+     * Account whose email/calendar the drafts use.
      */
-    actingUser?: string | null;
+    actingUser: string;
     decision?: null | ReviewDecisionContext;
     executionId?: null | ExecutionId;
     /**
      * Review identity.
      */
     id: ReviewId;
-    /**
-     * Drafts and per-item outcomes.
-     */
-    items: Array<ReviewItem>;
-    /**
-     * Component kind.
-     */
-    kind: ReviewKind;
     /**
      * Durable presentation acknowledgment, separate from user decisions.
      */
@@ -2508,6 +2703,28 @@ export type WithAgentSessionId = {
      * The session id.
      */
     id: string;
+};
+
+/**
+ * One account's active registration of one session as its work.
+ */
+export type WorkRegistrationResponse = {
+    /**
+     * The account whose work this is.
+     */
+    accountId: string;
+    /**
+     * The session registered.
+     */
+    agentSessionId: string;
+    /**
+     * The registration.
+     */
+    id: string;
+    /**
+     * When the account registered it.
+     */
+    registeredAt: string;
 };
 
 export type GetAgentAutoArchivePreferencesData = {
@@ -3320,6 +3537,153 @@ export type GetCodeExecutionResponses = {
 
 export type GetCodeExecutionResponse = GetCodeExecutionResponses[keyof GetCodeExecutionResponses];
 
+export type ListExecutionConnectedAppsData = {
+    body?: never;
+    path: {
+        session_id: string;
+        /**
+         * A running execution of the session's current turn
+         */
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps';
+};
+
+export type ListExecutionConnectedAppsErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type ListExecutionConnectedAppsResponses = {
+    200: Array<ConnectedApp>;
+};
+
+export type ListExecutionConnectedAppsResponse = ListExecutionConnectedAppsResponses[keyof ListExecutionConnectedAppsResponses];
+
+export type DiscoverConnectedAppsData = {
+    body: DiscoveryRequest;
+    path: {
+        session_id: string;
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/discover';
+};
+
+export type DiscoverConnectedAppsErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type DiscoverConnectedAppsResponses = {
+    200: DiscoverConnectorsResponse;
+};
+
+export type DiscoverConnectedAppsResponse = DiscoverConnectedAppsResponses[keyof DiscoverConnectedAppsResponses];
+
+export type AddConnectedMcpServerData = {
+    body: ConnectMcpServer;
+    path: {
+        session_id: string;
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/servers';
+};
+
+export type AddConnectedMcpServerErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type AddConnectedMcpServerResponses = {
+    200: ConnectMcpServerResponse;
+};
+
+export type AddConnectedMcpServerResponse = AddConnectedMcpServerResponses[keyof AddConnectedMcpServerResponses];
+
+export type SearchConnectedAppToolsData = {
+    body?: never;
+    path: {
+        session_id: string;
+        execution_id: string;
+    };
+    query: {
+        /**
+         * Keywords matched against tool names and descriptions, e.g. `linear issue`.
+         */
+        query: string;
+    };
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/tools';
+};
+
+export type SearchConnectedAppToolsErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type SearchConnectedAppToolsResponses = {
+    200: ConnectedToolSearch;
+};
+
+export type SearchConnectedAppToolsResponse = SearchConnectedAppToolsResponses[keyof SearchConnectedAppToolsResponses];
+
+export type CallConnectedAppToolData = {
+    body: CallConnectedTool;
+    path: {
+        session_id: string;
+        execution_id: string;
+        kind: ConnectedAppKind;
+        /**
+         * The app's slug or custom server key
+         */
+        key: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/calls';
+};
+
+export type CallConnectedAppToolErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type CallConnectedAppToolResponses = {
+    200: ConnectedToolResult;
+};
+
+export type CallConnectedAppToolResponse = CallConnectedAppToolResponses[keyof CallConnectedAppToolResponses];
+
+export type ListConnectedAppToolsData = {
+    body?: never;
+    path: {
+        session_id: string;
+        execution_id: string;
+        kind: ConnectedAppKind;
+        /**
+         * The app's slug or custom server key
+         */
+        key: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/tools';
+};
+
+export type ListConnectedAppToolsErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type ListConnectedAppToolsResponses = {
+    200: Array<ConnectedTool>;
+};
+
+export type ListConnectedAppToolsResponse = ListConnectedAppToolsResponses[keyof ListConnectedAppToolsResponses];
+
 export type ListExecutionReviewsData = {
     body?: never;
     path: {
@@ -3879,6 +4243,81 @@ export type PresentSessionViewResponses = {
 };
 
 export type PresentSessionViewResponse = PresentSessionViewResponses[keyof PresentSessionViewResponses];
+
+export type UnregisterAgentSessionWorkData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/work-registration';
+};
+
+export type UnregisterAgentSessionWorkErrors = {
+    401: string;
+    500: string;
+};
+
+export type UnregisterAgentSessionWorkError = UnregisterAgentSessionWorkErrors[keyof UnregisterAgentSessionWorkErrors];
+
+export type UnregisterAgentSessionWorkResponses = {
+    /**
+     * The caller has no active registration of the session
+     */
+    204: void;
+};
+
+export type UnregisterAgentSessionWorkResponse = UnregisterAgentSessionWorkResponses[keyof UnregisterAgentSessionWorkResponses];
+
+export type RegisterAgentSessionWorkData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/work-registration';
+};
+
+export type RegisterAgentSessionWorkErrors = {
+    401: string;
+    403: string;
+    409: string;
+    500: string;
+};
+
+export type RegisterAgentSessionWorkError = RegisterAgentSessionWorkErrors[keyof RegisterAgentSessionWorkErrors];
+
+export type RegisterAgentSessionWorkResponses = {
+    200: WorkRegistrationResponse;
+};
+
+export type RegisterAgentSessionWorkResponse = RegisterAgentSessionWorkResponses[keyof RegisterAgentSessionWorkResponses];
+
+export type ListAgentWorkRegistrationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-work-registrations';
+};
+
+export type ListAgentWorkRegistrationsErrors = {
+    401: string;
+    500: string;
+};
+
+export type ListAgentWorkRegistrationsError = ListAgentWorkRegistrationsErrors[keyof ListAgentWorkRegistrationsErrors];
+
+export type ListAgentWorkRegistrationsResponses = {
+    200: Array<WorkRegistrationResponse>;
+};
+
+export type ListAgentWorkRegistrationsResponse = ListAgentWorkRegistrationsResponses[keyof ListAgentWorkRegistrationsResponses];
 
 export type ClassifyData = {
     body: ClassifyInputRequest;

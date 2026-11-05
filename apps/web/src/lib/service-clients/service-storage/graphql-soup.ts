@@ -16,6 +16,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import { reloadForNewerBuild } from '@core/util/reloadForNewerBuild';
+import { ThrownResultError } from '@core/util/result';
 import {
   createMutationQueueTelemetry,
   type MutationQueueClearCause,
@@ -86,6 +87,7 @@ import { batch, createSignal, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
+import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
 import { createCacheRecovery } from './cache-recovery';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
 import { emailThreadSortTs } from './email-thread-sort';
@@ -123,6 +125,7 @@ import {
   waitToRetryGraphqlSoupWebSocket,
 } from './graphql-soup-websocket';
 import { mailCacheProfile } from './mail-cache-profile';
+import { createPresenceRequestCoalescer } from './presence-request-coalescer';
 
 export { emailThreadSortTs } from './email-thread-sort';
 
@@ -159,8 +162,18 @@ async function authorizedDssGraphqlFetch(
   let response = await fetchWithCredentials();
   if (response.status !== 401) return response;
 
-  const tokenResult = await parent.run(fetchToken);
-  if (tokenResult.isErr()) return response;
+  const tokenResult = await parent.run(() => fetchToken(init?.signal));
+  if (tokenResult.isErr()) {
+    if (init?.signal?.aborted)
+      throw (
+        init.signal.reason ?? new DOMException('Request aborted', 'AbortError')
+      );
+    if (tokenResult.error.some((error) => error.code === 'UNAUTHORIZED'))
+      return response;
+    // A stalled refresh is a retryable transport failure, not proof that the
+    // session expired. Do not turn it back into the original HTTP 401.
+    throw new ThrownResultError(tokenResult.error);
+  }
 
   response = await fetchWithCredentials();
   return response;
@@ -292,7 +305,22 @@ async function isLegacyProjectionValidationError(
   }
 }
 
-export async function dssGraphqlFetch(
+const presenceRequests = createPresenceRequestCoalescer();
+
+/** Drops coalesced presence requests that belong to the previous session. */
+export const resetGraphqlPresenceRequests = presenceRequests.reset;
+
+export function dssGraphqlFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  queueOwner?: CacheHost
+): Promise<Response> {
+  return presenceRequests.coalesce(init, (coalescedInit) =>
+    sendDssGraphqlRequest(input, coalescedInit, queueOwner)
+  );
+}
+
+async function sendDssGraphqlRequest(
   input: RequestInfo | URL,
   init?: RequestInit,
   queueOwner?: CacheHost
@@ -597,6 +625,7 @@ export function setGraphqlSoupSessionActive(active: boolean): void {
 
 function disposeSessionClients(): void {
   cacheSessionGeneration += 1;
+  presenceRequests.reset();
   cacheRecovery.reset();
   cacheInitializationFailed = false;
   const cleanup = cachedCacheCleanup;
@@ -848,6 +877,9 @@ export function getGraphqlSoupClient(): Client {
                   'input',
                   'threadId',
                 ]),
+                initiative: entityFromArgument('GraphqlSoupInitiative', [
+                  'initiativeId',
+                ]),
               },
             },
             // Session identity witness: the viewer id present on every soup
@@ -860,6 +892,7 @@ export function getGraphqlSoupClient(): Client {
             shouldRetryMutation: shouldRetryGraphqlMutation,
             mutationQueueTelemetry,
             delegateRevalidation: delegateChannelNotificationRefresh,
+            externalWriteTypes: resolveCrmExternalWriteTypes,
           }),
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
@@ -1362,6 +1395,21 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'channel_message_reaction'>
     )
     .with(
+      { __typename: 'GraphqlChannelAccessRequestedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'channel_access_requested',
+          content: {
+            requestId: metadata.channelAccessRequestedRequestId,
+            channelType:
+              metadata.channelAccessRequestedChannelType.toLowerCase() as ChannelType,
+            channelName: metadata.channelAccessRequestedChannelName,
+            senderProfilePictureUrl:
+              metadata.channelAccessRequestedSenderProfilePictureUrl,
+          },
+        }) satisfies NotifEventMember<'channel_access_requested'>
+    )
+    .with(
       { __typename: 'GraphqlChannelReplyMetadata' },
       (metadata) =>
         ({
@@ -1417,6 +1465,20 @@ function mapGraphqlNotificationMetadata(
             emailAddress: metadata.inboxReauthRequiredEmailAddress,
           },
         }) satisfies NotifEventMember<'inbox_reauth_required'>
+    )
+    .with(
+      { __typename: 'GraphqlRoutineRunFinishedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'routine_run_finished',
+          content: {
+            routineId: metadata.routineRunFinishedRoutineId,
+            routineName: metadata.routineRunFinishedRoutineName,
+            outcome: metadata.routineRunFinishedSucceeded
+              ? 'succeeded'
+              : 'failed',
+          },
+        }) satisfies NotifEventMember<'routine_run_finished'>
     )
     .with(
       { __typename: 'GraphqlInviteToTeamMetadata' },
@@ -2108,9 +2170,9 @@ export function mapGraphqlSoupItem(
           data: {
             id: entity.id,
             teamId: entity.contactTeamId,
-            companyId: entity.companyId,
-            companyName: entity.companyName,
-            email: entity.email,
+            companyId: entity.contactCompanyId,
+            companyName: entity.contactCompanyName,
+            email: entity.contactEmail,
             name: entity.crmContactName,
             hidden: entity.hidden,
             firstInteraction: entity.firstInteraction,

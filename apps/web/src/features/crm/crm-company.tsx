@@ -4,6 +4,7 @@ import { CrmProvider } from './context/crm-context';
 import { COMPANY_SECTIONS, type CompanySection } from './core/record';
 import { createAppCrmContext } from './crm-adapter';
 import { Company as View } from './views/company-detail';
+import { CompanyVisibilityButton as VisibilityButton } from './views/company-visibility-button';
 
 export type { CompanySection } from './core/record';
 
@@ -22,4 +23,15 @@ export function CompanyTabs(props: {
   compact?: boolean;
 }) {
   return <RecordTabs sections={COMPANY_SECTIONS} {...props} />;
+}
+
+/** Company archive action for a host's top bar. */
+export function CompanyVisibilityButton(
+  props: ComponentProps<typeof VisibilityButton>
+) {
+  return (
+    <CrmProvider value={createAppCrmContext()}>
+      <VisibilityButton {...props} />
+    </CrmProvider>
+  );
 }

@@ -27,7 +27,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation' | 'email_focus';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation' | 'email_focus' | 'web_search';
 
 /**
  * A structured part within an assistant message.
@@ -402,6 +402,11 @@ export type CompleteOnboardingRequest = {
      */
     skipped?: boolean;
 };
+
+/**
+ * How much a model may think before it gives a structured answer.
+ */
+export type CompletionThinking = 'default' | 'low';
 
 /**
  * User and feature attribution for one invocation.
@@ -1501,6 +1506,20 @@ export type PipedreamCompleteRequest = {
 };
 
 /**
+ * Request body for recording a finished Macro Connect flow.
+ */
+export type PipedreamConnectCompleteRequest = {
+    /**
+     * The app that was connected, by Pipedream slug.
+     */
+    app_slug: string;
+    /**
+     * Optional display name for the connector, as for completion.
+     */
+    server_name?: string | null;
+};
+
+/**
  * A connected MCP app as returned by the API.
  */
 export type PipedreamConnectionResponse = {
@@ -1512,6 +1531,10 @@ export type PipedreamConnectionResponse = {
      * Whether the connector is enabled for tool use.
      */
     enabled: boolean;
+    /**
+     * The backend holding the grant.
+     */
+    provider: PipedreamProviderResponse;
     /**
      * Human-readable display name.
      */
@@ -1534,6 +1557,11 @@ export type PipedreamOverlayResponse = {
 };
 
 /**
+ * Which backend a connection or connect flow uses.
+ */
+export type PipedreamProviderResponse = 'pipedream' | 'connect';
+
+/**
  * Request body for recovering a connect flow whose result the Connect UI
  * never reported.
  */
@@ -1549,21 +1577,44 @@ export type PipedreamRecoverRequest = {
 };
 
 /**
- * Response from creating a Pipedream Connect token.
+ * Request body for starting a connect flow.
+ */
+export type PipedreamTokenRequest = {
+    /**
+     * The app to connect, by Pipedream slug. With it, an app Macro Connect
+     * serves can answer with a Connect URL instead of a Pipedream token.
+     */
+    app_slug?: string | null;
+};
+
+/**
+ * Response from starting a connect flow: a Pipedream Connect token, or for
+ * `provider = connect` a Macro Connect URL.
  */
 export type PipedreamTokenResponse = {
     /**
      * Shareable link that opens the same connect flow in a browser tab.
+     * Pipedream only.
      */
-    connect_link_url: string;
+    connect_link_url?: string | null;
     /**
-     * RFC 3339 expiry of the token.
+     * URL to open in a popup or browser tab for Macro Connect's consent
+     * flow; once it finishes, call `/pipedream/mcp/connect/complete`.
+     * Connect only.
      */
-    expires_at: string;
+    connect_url?: string | null;
     /**
-     * Short-lived token to open the Pipedream Connect UI with.
+     * RFC 3339 expiry of the token. Pipedream only.
      */
-    token: string;
+    expires_at?: string | null;
+    /**
+     * The backend this flow connects through.
+     */
+    provider: PipedreamProviderResponse;
+    /**
+     * Short-lived token to open the Pipedream Connect UI with. Pipedream only.
+     */
+    token?: string | null;
 };
 
 /**
@@ -1589,27 +1640,31 @@ export type PipedreamUpdateRequest = {
  */
 export type Price = {
     /**
-     * Price per audio minute (USD), absent for token billing.
+     * Price per audio minute (USD), absent for token and credit billing.
      */
     price_per_audio_minute?: number | null;
     /**
      * Price per million cache-read input tokens (USD), absent when the model
-     * has no published rate and for audio billing.
+     * has no published rate and for audio and credit billing.
      */
     price_per_million_cache_read?: number | null;
     /**
      * Price per million cache-write input tokens (USD), absent when the model
-     * has no published rate and for audio billing.
+     * has no published rate and for audio and credit billing.
      */
     price_per_million_cache_write?: number | null;
     /**
-     * Price per million input tokens (USD); zero for audio billing.
+     * Price per million input tokens (USD); zero for audio and credit billing.
      */
     price_per_million_in: number;
     /**
-     * Price per million output tokens (USD); zero for audio billing.
+     * Price per million output tokens (USD); zero for audio and credit billing.
      */
     price_per_million_out: number;
+    /**
+     * Price per vendor credit (USD), absent for token and audio billing.
+     */
+    price_per_provider_credit?: number | null;
     /**
      * Total cost (USD).
      */
@@ -1824,6 +1879,10 @@ export type SetPricingRequest = {
      * New price per million output tokens (USD). Required for token pricing.
      */
     price_per_mil_out?: number | null;
+    /**
+     * Price per vendor credit (USD), or null unless the model bills in credits.
+     */
+    price_per_provider_credit?: number | null;
 };
 
 export type SharePermissionV2 = {
@@ -1989,6 +2048,11 @@ export type StructuredCompletionRequest = {
     model: string;
     output_schema: DynamicSchema;
     prompt: string;
+    /**
+     * How much the model may think first; `low` answers faster. Applies to
+     * completions without tools.
+     */
+    thinking?: CompletionThinking;
     toolset?: ToolSet;
 };
 
@@ -2165,15 +2229,15 @@ export type UpsertProjectionRequest = {
  */
 export type Usage = {
     /**
-     * Audio duration in seconds, absent for token billing.
+     * Audio duration in seconds, absent for token and credit billing.
      */
     audio_seconds?: number | null;
     /**
-     * Input tokens read from a prompt cache; zero for audio billing.
+     * Input tokens read from a prompt cache; zero for audio and credit billing.
      */
     cache_read_input_tokens: number;
     /**
-     * Input tokens written to a prompt cache; zero for audio billing.
+     * Input tokens written to a prompt cache; zero for audio and credit billing.
      */
     cache_write_input_tokens: number;
     /**
@@ -2181,7 +2245,7 @@ export type Usage = {
      */
     created_at: string;
     /**
-     * Uncached input tokens; zero for audio billing.
+     * Uncached input tokens; zero for audio and credit billing.
      */
     input_tokens: number;
     /**
@@ -2189,10 +2253,14 @@ export type Usage = {
      */
     model: string;
     /**
-     * Output tokens; zero for audio billing.
+     * Output tokens; zero for audio and credit billing.
      */
     output_tokens: number;
     price?: null | Price;
+    /**
+     * Vendor credits consumed, absent for token and audio billing.
+     */
+    provider_credits?: number | null;
 };
 
 /**
@@ -2277,6 +2345,128 @@ export type WebCitation = {
      */
     url: string;
 };
+
+/**
+ * Machine-readable failure of a web request.
+ */
+export type WebErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Explanation without provider diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * Read one public web page.
+ */
+export type WebFetch = {
+    /**
+     * Most characters of page text to return, 1 to 100,000 (default 20,000).
+     */
+    maxChars?: number | null;
+    /**
+     * The `http` or `https` URL of the page.
+     */
+    url: string;
+};
+
+/**
+ * The text of a fetched page.
+ */
+export type WebFetchResponse = {
+    /**
+     * The page text as Markdown, cut to `maxChars`.
+     */
+    content: string;
+    /**
+     * The page title, when the provider reports one.
+     */
+    title?: string | null;
+    /**
+     * Whether `content` was cut to `maxChars`.
+     */
+    truncated: boolean;
+    /**
+     * The URL that was read.
+     */
+    url: string;
+};
+
+/**
+ * Search the public web.
+ */
+export type WebSearch = {
+    /**
+     * Only return pages from these domains, e.g. `["docs.rs", "github.com"]`.
+     */
+    domains?: Array<string> | null;
+    /**
+     * Never return pages from these domains.
+     */
+    excludeDomains?: Array<string> | null;
+    /**
+     * Also return each page's text as Markdown (up to 8,000 characters per result).
+     */
+    includeContent?: boolean | null;
+    /**
+     * How many results to return, 1 to 20 (default 5).
+     */
+    maxResults?: number | null;
+    /**
+     * What to search for, in natural language or keywords (at most 400 characters).
+     */
+    query: string;
+    /**
+     * Only return pages published on or after this date (`YYYY-MM-DD`).
+     */
+    since?: string | null;
+    topic?: null | WebSearchTopic;
+};
+
+/**
+ * The pages a search found, best match first.
+ */
+export type WebSearchResponse = {
+    /**
+     * Results, best match first. Empty when nothing matched.
+     */
+    results: Array<WebSearchResult>;
+};
+
+/**
+ * One page a search found.
+ */
+export type WebSearchResult = {
+    /**
+     * The page text as Markdown, when `includeContent` was set.
+     */
+    content?: string | null;
+    /**
+     * When the page was published, as the search provider reports it.
+     */
+    publishedAt?: string | null;
+    /**
+     * The part of the page most relevant to the query.
+     */
+    snippet: string;
+    /**
+     * The page title.
+     */
+    title: string;
+    /**
+     * The page URL; cite it when you use the result.
+     */
+    url: string;
+};
+
+/**
+ * The kind of results a search favours.
+ */
+export type WebSearchTopic = 'general' | 'news';
 
 export type WithChatId = {
     chat_id: string;
@@ -2392,6 +2582,46 @@ export type GetChatsForAttachmentHandlerResponses = {
 };
 
 export type GetChatsForAttachmentHandlerResponse = GetChatsForAttachmentHandlerResponses[keyof GetChatsForAttachmentHandlerResponses];
+
+export type CreateConfirmedCalendarEventData = {
+    /**
+     * CreateConfirmedCalendarEvent arguments: CreateCalendarEvent's, plus userConfirmation
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/calendar/events/create-confirmed';
+};
+
+export type CreateConfirmedCalendarEventErrors = {
+    /**
+     * Malformed, or missing userConfirmation
+     */
+    400: GenericErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Not created: a blank confirmation, a calendar the user cannot write, or a provider failure
+     */
+    422: GenericErrorResponse;
+};
+
+export type CreateConfirmedCalendarEventError = CreateConfirmedCalendarEventErrors[keyof CreateConfirmedCalendarEventErrors];
+
+export type CreateConfirmedCalendarEventResponses = {
+    /**
+     * ToolCalendarEvent
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type CreateConfirmedCalendarEventResponse = CreateConfirmedCalendarEventResponses[keyof CreateConfirmedCalendarEventResponses];
 
 export type DeleteChatData = {
     body?: never;
@@ -2874,6 +3104,46 @@ export type DecisionsResponses = {
 };
 
 export type DecisionsResponse = DecisionsResponses[keyof DecisionsResponses];
+
+export type SendConfirmedEmailData = {
+    /**
+     * SendConfirmedEmail arguments: SendEmail's, plus userConfirmation
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/email/send-confirmed';
+};
+
+export type SendConfirmedEmailErrors = {
+    /**
+     * Malformed, or missing userConfirmation
+     */
+    400: GenericErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Not sent: a blank confirmation, an inbox or attachment the user cannot use, or a delivery failure
+     */
+    422: GenericErrorResponse;
+};
+
+export type SendConfirmedEmailError = SendConfirmedEmailErrors[keyof SendConfirmedEmailErrors];
+
+export type SendConfirmedEmailResponses = {
+    /**
+     * SendEmailResponse
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type SendConfirmedEmailResponse = SendConfirmedEmailResponses[keyof SendConfirmedEmailResponses];
 
 export type HealthHandlerData = {
     body?: never;
@@ -3444,6 +3714,28 @@ export type CompletePipedreamMcpConnectionResponses = {
 
 export type CompletePipedreamMcpConnectionResponse = CompletePipedreamMcpConnectionResponses[keyof CompletePipedreamMcpConnectionResponses];
 
+export type CompletePipedreamMcpConnectData = {
+    body: PipedreamConnectCompleteRequest;
+    path?: never;
+    query?: never;
+    url: '/pipedream/mcp/connect/complete';
+};
+
+export type CompletePipedreamMcpConnectErrors = {
+    401: string;
+    404: ErrorResponse;
+    500: ErrorResponse;
+    501: ErrorResponse;
+};
+
+export type CompletePipedreamMcpConnectError = CompletePipedreamMcpConnectErrors[keyof CompletePipedreamMcpConnectErrors];
+
+export type CompletePipedreamMcpConnectResponses = {
+    200: PipedreamConnectionResponse;
+};
+
+export type CompletePipedreamMcpConnectResponse = CompletePipedreamMcpConnectResponses[keyof CompletePipedreamMcpConnectResponses];
+
 export type DeletePipedreamMcpConnectionData = {
     body?: never;
     path?: never;
@@ -3554,7 +3846,7 @@ export type RecoverPipedreamMcpConnectionResponses = {
 export type RecoverPipedreamMcpConnectionResponse = RecoverPipedreamMcpConnectionResponses[keyof RecoverPipedreamMcpConnectionResponses];
 
 export type CreatePipedreamMcpTokenData = {
-    body?: never;
+    body?: null | PipedreamTokenRequest;
     path?: never;
     query?: never;
     url: '/pipedream/mcp/token';
@@ -3708,3 +4000,97 @@ export type StructuredCompletionResponses = {
 };
 
 export type StructuredCompletionResponse2 = StructuredCompletionResponses[keyof StructuredCompletionResponses];
+
+export type FetchWebPageData = {
+    body: WebFetch;
+    path?: never;
+    query?: never;
+    url: '/web/fetch';
+};
+
+export type FetchWebPageErrors = {
+    /**
+     * Invalid URL or length
+     */
+    400: WebErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: WebErrorBody;
+    /**
+     * The page could not be read
+     */
+    422: WebErrorBody;
+    /**
+     * Per-user hourly rate limit exceeded
+     */
+    429: unknown;
+    /**
+     * The fetch provider failed
+     */
+    502: WebErrorBody;
+    /**
+     * Web fetch unconfigured, busy, or usage validation unavailable
+     */
+    503: WebErrorBody;
+};
+
+export type FetchWebPageError = FetchWebPageErrors[keyof FetchWebPageErrors];
+
+export type FetchWebPageResponses = {
+    /**
+     * The page text
+     */
+    200: WebFetchResponse;
+};
+
+export type FetchWebPageResponse = FetchWebPageResponses[keyof FetchWebPageResponses];
+
+export type SearchWebData = {
+    body: WebSearch;
+    path?: never;
+    query?: never;
+    url: '/web/search';
+};
+
+export type SearchWebErrors = {
+    /**
+     * Invalid query or filters
+     */
+    400: WebErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: WebErrorBody;
+    /**
+     * Per-user hourly rate limit exceeded
+     */
+    429: unknown;
+    /**
+     * The search provider failed
+     */
+    502: WebErrorBody;
+    /**
+     * Web search unconfigured, busy, or usage validation unavailable
+     */
+    503: WebErrorBody;
+};
+
+export type SearchWebError = SearchWebErrors[keyof SearchWebErrors];
+
+export type SearchWebResponses = {
+    /**
+     * Results, best match first
+     */
+    200: WebSearchResponse;
+};
+
+export type SearchWebResponse = SearchWebResponses[keyof SearchWebResponses];

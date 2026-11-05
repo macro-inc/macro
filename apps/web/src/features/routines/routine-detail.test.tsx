@@ -1,7 +1,16 @@
 import { toast } from '@core/component/Toast/Toast';
-import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, type JSX, type Setter } from 'solid-js';
+import type {
+  CodeUpgrade,
+  ScheduledAction,
+} from '@service-scheduled-action/generated/schemas';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
+import { createSignal, type JSX, type Setter, untrack } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RoutineTarget } from './core/routine-target';
 import { Routine } from './routine-detail';
@@ -28,8 +37,11 @@ vi.mock('@app/lib/split-router', () => ({
 
 const mocks = vi.hoisted(() => ({
   readSchedules: (): ScheduledAction[] => [],
+  openChat: vi.fn(async (_input: string) => {}),
   status: (): string => 'success',
   history: (): HistoryRecord[] => [],
+  codeUpgrades: (): CodeUpgrade[] => [],
+  refetchUpgrades: vi.fn(async () => {}),
   metadataStatus: (): string => 'success',
   chatMetadata: (): { chat?: { name: string } } | undefined => ({
     chat: { name: 'Run transcript' },
@@ -80,8 +92,12 @@ vi.mock('./routine-template', () => ({
   ),
   openShareRoutineDialog: vi.fn(),
 }));
-vi.mock('@core/block', () => ({ useBlockId: () => 'routine-id' }));
+vi.mock('@core/block', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/block')>()),
+  useBlockId: () => 'routine-id',
+}));
 vi.mock('@core/component/AI/constant', () => ({
+  DEFAULT_MODEL: 'claude-sonnet-4-6',
   defaultModelForPlan: () => 'claude-sonnet-4-6',
 }));
 vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => true }));
@@ -119,6 +135,7 @@ vi.mock('@components/app/split-layout/layout', () => ({
   }),
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
+  useSplitPanel: () => undefined,
   useSplitPanelOrThrow: () => ({
     handle: { setDisplayName: mocks.setDisplayName },
     setTitleFileMenuRef: vi.fn(),
@@ -150,6 +167,32 @@ vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
     );
   },
 }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled: flag.key === 'enable-routine-conditions',
+  }),
+}));
+vi.mock('./routine-ai-composer', () => ({
+  RoutineAiComposer: () => null,
+  useComposerContext: () => () => ({}),
+}));
+vi.mock('@queries/storage/system-skills', () => ({
+  useSystemSkillsQuery: () => ({
+    skills: () => [{ id: 'compose-skill-id', name: 'Compose Routines' }],
+  }),
+}));
+vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
+  openChatWithInput: mocks.openChat,
+}));
+vi.mock('./routine-step-pickers', () => ({
+  routineToolSlots: {
+    LabelPicker: () => null,
+    TagPicker: () => null,
+    ChannelPicker: () => null,
+    AssigneePicker: () => null,
+    FolderPicker: () => null,
+  },
+}));
 vi.mock('./routine-prompt-editor', () => ({
   RoutinePromptEditor: (props: {
     initialValue: string;
@@ -157,11 +200,13 @@ vi.mock('./routine-prompt-editor', () => ({
     onChange: (value: string) => void;
   }) => {
     mocks.changePrompt = props.onChange;
+    // Like the real editor, read the initial value only once.
+    const initialValue = untrack(() => props.initialValue);
     return (
       <textarea
         aria-label="Instructions"
         disabled={props.disabled}
-        value={props.initialValue}
+        value={initialValue}
         onInput={(event) => props.onChange(event.currentTarget.value)}
       />
     );
@@ -256,6 +301,14 @@ vi.mock('./queries/schedules', () => ({
       return mocks.history();
     },
   }),
+  useCodeUpgradesQuery: () => ({
+    isSuccess: true,
+    isPending: false,
+    get data() {
+      return mocks.codeUpgrades();
+    },
+    refetch: mocks.refetchUpgrades,
+  }),
   useUpdateScheduleMutation: () => ({ mutateAsync: mocks.update }),
   useCreateScheduleMutation: () => ({ mutate: mocks.create, isPending: false }),
   useRunScheduleNowMutation: () => ({ mutate: mocks.run, isPending: false }),
@@ -317,6 +370,7 @@ beforeEach(() => {
   mocks.metadataStatus = () => 'success';
   mocks.chatMetadata = () => ({ chat: { name: 'Run transcript' } });
   mocks.agentMetadata = () => ({ name: 'Agent transcript' });
+  mocks.codeUpgrades = () => [];
   mocks.history = () => [
     {
       id: 'run-id',
@@ -356,7 +410,7 @@ function openRunOptions() {
 }
 
 function activationItem(): HTMLElement {
-  const name = /^(Enable|Disable) routine$/;
+  const name = /^Turn (on|off)$/;
   if (!screen.queryByRole('menuitem', { name })) openRunOptions();
   return screen.getByRole('menuitem', { name });
 }
@@ -389,7 +443,7 @@ describe('routine execution target autosave', () => {
     expect(
       screen.queryByRole('button', { name: 'Routine actions' })
     ).toBeNull();
-    expect(screen.queryByRole('tab', { name: 'Run History' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Runs' })).toBeNull();
     mocks.changePrompt('Changed');
     expect(mocks.update).not.toHaveBeenCalled();
   });
@@ -582,7 +636,7 @@ describe('routine execution target autosave', () => {
       enabled: false,
     });
     setSchedules([{ ...cron, claimed, enabled: false }]);
-    expect(activationItem().textContent).toContain('Enable routine');
+    expect(activationItem().textContent).toContain('Turn on');
     expect(activationItem().getAttribute('aria-disabled')).toBe('true');
     setSchedules([{ ...cron, enabled: false }]);
     expect(activationItem().getAttribute('aria-disabled')).not.toBe('true');
@@ -590,11 +644,11 @@ describe('routine execution target autosave', () => {
 
   it('shows a paused routine and still runs it on demand', async () => {
     render(() => <Routine />);
-    expect(activationItem().textContent).toContain('Disable routine');
+    expect(activationItem().textContent).toContain('Turn off');
     expect(screen.getByText(/Next run/)).toBeTruthy();
     setSchedules([{ ...cron, enabled: false }]);
-    expect(activationItem().textContent).toContain('Enable routine');
-    expect(screen.getByText('Paused')).toBeTruthy();
+    expect(activationItem().textContent).toContain('Turn on');
+    expect(screen.getByText('Next run: Paused')).toBeTruthy();
     fireEvent.keyDown(activationItem(), { key: 'Escape' });
     await vi.advanceTimersByTimeAsync(0);
     fireEvent.click(runButton());
@@ -653,8 +707,8 @@ describe('routine history integration', () => {
       await vi.advanceTimersByTimeAsync(300);
       const saved = mocks.update.mock.lastCall![0].body;
       setSchedules([{ ...cron, ...saved }]);
-      fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
-      fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
+      fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
+      fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
       fireEvent.click(screen.getByText('Run transcript'));
       expect(mocks.openWithSplit).toHaveBeenLastCalledWith(
         { type: 'chat', id: 'chat-id' },
@@ -689,7 +743,7 @@ describe('routine history integration', () => {
       expect(
         screen.getByRole('textbox', { name: 'Instructions' })
       ).toBeTruthy();
-      fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
+      fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
       const labels = screen.getAllByText(
         status === 'pending' ? 'Loading…' : 'Run unavailable'
       );
@@ -704,7 +758,7 @@ describe('routine history integration', () => {
     mocks.chatMetadata = () => ({});
     mocks.agentMetadata = () => undefined;
     render(() => <Routine />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
     const unavailable = screen.getAllByText('Run unavailable');
     expect(unavailable).toHaveLength(2);
     for (const label of unavailable) fireEvent.click(label);
@@ -743,16 +797,39 @@ describe('routine editor triggers', () => {
     });
   });
 
+  it('refreshes clean settings rewritten on the server at the same revision', async () => {
+    render(() => <Routine />);
+    // A code upgrade changes the configuration but keeps its revision.
+    setSchedules([{ ...cron, name: 'Rewritten elsewhere' }]);
+    mocks.changePrompt('Edit after the rewrite');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledWith({
+      scheduleId: cron.id,
+      body: expect.objectContaining({ name: 'Rewritten elsewhere' }),
+    });
+  });
+
+  it('does not overwrite a same-revision rewrite while a local edit is queued', async () => {
+    render(() => <Routine />);
+    mocks.changePrompt('Unsaved local instructions');
+    setSchedules([{ ...cron, name: 'Rewritten elsewhere' }]);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toContain(
+      'changed elsewhere'
+    );
+  });
+
   it('supports keyboard switching between settings and run history', async () => {
     render(() => <Routine />);
     const settings = screen.getByRole('tab', { name: 'Overview' });
     settings.focus();
     fireEvent.keyDown(settings, { key: 'ArrowRight' });
     await vi.advanceTimersByTimeAsync(300);
-    const history = screen.getByRole('tab', { name: 'Run History' });
+    const history = screen.getByRole('tab', { name: 'Runs' });
     expect(history.getAttribute('aria-selected')).toBe('true');
     expect(history.getAttribute('aria-controls')).toBe(
-      screen.getByRole('tabpanel', { name: 'Run History' }).id
+      screen.getByRole('tabpanel', { name: 'Runs' }).id
     );
     expect(screen.getByText('Run transcript')).toBeTruthy();
   });
@@ -773,7 +850,7 @@ describe('routine editor triggers', () => {
         }),
       }),
     });
-    fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
     expect(screen.getByText('Run transcript')).toBeTruthy();
   });
   it('retains cron editing, duplication, run-now, and history navigation', async () => {
@@ -813,7 +890,7 @@ describe('routine editor triggers', () => {
     expect(mocks.run).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
     });
-    fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
     fireEvent.click(screen.getByText('Run transcript'));
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
       { type: 'chat', id: 'chat-id' },
@@ -821,15 +898,31 @@ describe('routine editor triggers', () => {
     );
   });
 
+  it('turns the routine on and off beside its title', () => {
+    render(() => <Routine />);
+    const enabled = screen.getByRole('switch', { name: 'Enabled' });
+    expect((enabled as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(enabled);
+    expect(mocks.setEnabled).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      enabled: false,
+    });
+    // An Ask AI routine lists the apps it can use on the page.
+    expect(
+      within(screen.getByRole('region', { name: 'Connections' })).getByText(
+        'No connections added'
+      )
+    ).toBeTruthy();
+  });
+
   it('saves whether the routine’s runs show in Home and Agents', async () => {
     render(() => <Routine />);
-    const visibility = screen.getByRole('button', { name: 'Runs hidden' });
-    visibility.focus();
-    fireEvent.keyDown(visibility, { key: 'Enter' });
-    fireEvent.keyDown(
-      await screen.findByRole('menuitemradio', { name: 'Show runs' }),
-      { key: 'Enter' }
-    );
+    // Runs & notifications sits on the page, below the steps.
+    const visibility = screen.getByRole('switch', {
+      name: 'Show runs in Home and Agents',
+    });
+    expect((visibility as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(visibility);
     await vi.advanceTimersByTimeAsync(300);
     expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
@@ -838,6 +931,36 @@ describe('routine editor triggers', () => {
         run_visibility: 'listed',
       }),
     });
+  });
+
+  it('saves a description typed under the title, on blur', async () => {
+    render(() => <Routine />);
+    const description = screen.getByRole('textbox', {
+      name: 'Routine description',
+    });
+    fireEvent.input(description, {
+      target: { value: '  Sum up my day before standup.  ' },
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).not.toHaveBeenCalled();
+    fireEvent.blur(description);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      body: expect.objectContaining({
+        task: cron.task,
+        description: 'Sum up my day before standup.',
+      }),
+    });
+  });
+
+  it('composes with an agent: the routine and its skill in a new conversation', () => {
+    render(() => <Routine />);
+    fireEvent.click(screen.getByRole('button', { name: 'Compose with agent' }));
+    expect(mocks.openChat).toHaveBeenCalledOnce();
+    const input = mocks.openChat.mock.calls[0]?.[0] ?? '';
+    expect(input).toContain('compose-skill-id');
+    expect(input).toContain('routine-id');
   });
 
   it('cancels pending saves when the editor unmounts', async () => {
@@ -893,5 +1016,72 @@ describe('routine editor triggers', () => {
     setSchedules([]);
     render(() => <Routine />);
     expect(screen.getByText('Routine not found.')).toBeTruthy();
+  });
+});
+
+describe('routine code that needs an update', () => {
+  const code = (source: string, sdk: string) => ({
+    steps: [{ type: 'code', title: 'File invoices', source }],
+    sdk,
+  });
+  const paused: ScheduledAction = {
+    ...cron,
+    enabled: false,
+    task: code('macro.tasks.create(x)', '0.2.0+old'),
+  };
+  const upgrade = (task?: Record<string, unknown>): CodeUpgrade => ({
+    id: 'upgrade',
+    fromSdk: '0.2.0+old',
+    toSdk: '0.3.0+new',
+    outcome: 'needs_update',
+    reason: '“File invoices” failed a dry run.',
+    previousTask: paused.task,
+    task,
+    createdAt: '2026-11-01T09:00:00Z',
+    updatedAt: '2026-11-01T09:00:00Z',
+  });
+
+  it('shows why it paused and saves the proposed update when approved', async () => {
+    setSchedules([paused]);
+    mocks.update.mockResolvedValue({
+      ...paused,
+      task: code('macro.tasks.add(x)', '0.3.0+new'),
+    });
+    mocks.codeUpgrades = () => [
+      upgrade(code('macro.tasks.add(x)', '0.3.0+new')),
+    ];
+    render(() => <Routine />);
+    expect(screen.getByText('Paused: its code needs an update')).toBeTruthy();
+    expect(screen.getByText('“File invoices” failed a dry run.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Review the update' }));
+    expect(screen.getByText('macro.tasks.add(x)')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and resume' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.update).toHaveBeenCalledWith({
+      scheduleId: cron.id,
+      body: expect.objectContaining({
+        task: expect.objectContaining({
+          steps: [
+            {
+              type: 'code',
+              title: 'File invoices',
+              source: 'macro.tasks.add(x)',
+            },
+          ],
+        }),
+      }),
+    });
+    expect(mocks.setEnabled).toHaveBeenCalledWith({
+      scheduleId: 'routine-id',
+      enabled: true,
+    });
+    expect(mocks.refetchUpgrades).toHaveBeenCalled();
+  });
+
+  it('shows nothing once its code checks against that SDK', () => {
+    setSchedules([{ ...paused, task: code('x', '0.3.0+new') }]);
+    mocks.codeUpgrades = () => [upgrade()];
+    render(() => <Routine />);
+    expect(screen.queryByText('Paused: its code needs an update')).toBeNull();
   });
 });

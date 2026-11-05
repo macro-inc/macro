@@ -1,5 +1,6 @@
 export default {
   add: 'Add',
+  back: 'Back',
   addProperty: 'Add property',
   addTags: 'Add tags',
   emptyCollection: 'No items added yet',
@@ -20,6 +21,8 @@ export default {
   changePriority: 'Change priority',
   cancel: 'Cancel',
   close: 'Close',
+  dismiss: 'Dismiss',
+  loading: 'Loading…',
   delete: 'Delete',
   rename: 'Rename',
   more: 'More',

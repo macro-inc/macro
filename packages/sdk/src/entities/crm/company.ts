@@ -8,7 +8,7 @@ import {
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { Team } from '../teams/team';
 import {
   CrmComment,
@@ -169,8 +169,15 @@ export class Company extends PropertiedEntity<CompanyDetail> {
     );
   }
 
-  /** Create a contact under this company. */
-  async createContact(opts: { email: string; name: string }): Promise<Contact> {
+  /**
+   * Create a contact under this company. The email is optional and need not
+   * match the company's domains, so personal addresses work too; omitting it
+   * adds the contact by name alone.
+   */
+  async createContact(opts: {
+    email?: string;
+    name: string;
+  }): Promise<Contact> {
     const contact = await this.mutate((c) =>
       c.storage.createCrmContact({
         path: { company_id: this.id },

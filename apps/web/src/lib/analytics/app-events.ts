@@ -157,7 +157,8 @@ export type AppEvents = {
   hotkey_use: Record<string, unknown>;
   mentions_menu_use: { itemType: string };
   snippets_menu_use: Record<string, unknown>;
-  split_created: { from: string };
+  /** `side` is where a split opened beside another; absent, it opened at the end. */
+  split_created: { from: string; side?: 'left' | 'right' | 'above' | 'below' };
 
   // --- Entity lifecycle ----------------------------------------------------
   // Fired at data-layer chokepoints (core/util/create.ts, FileList
@@ -371,14 +372,14 @@ export type AppEvents = {
 
   // --- CRM -----------------------------------------------------------------
   crm_company_created: { companyId: string };
-  crm_contact_created: { companyId: string; contactId: string };
+  crm_contact_created: { companyId?: string; contactId: string };
   /**
    * A committed pipeline write: inserted rows are entries added, updated
    * rows include stage moves and other cell edits.
    */
   crm_pipeline_entries_edited: {
     pipelineId: string;
-    recordType?: 'company' | 'contact';
+    recordType?: 'company' | 'contact' | 'generic';
     /** The pipeline editor or the record page's pipeline cards. */
     surface: 'pipeline' | 'record';
     insertedRows: number;
@@ -393,13 +394,14 @@ export type AppEvents = {
     routineId?: string;
     source: 'new' | 'duplicate';
     triggerType: string;
-    targetKind?: 'agent' | 'model';
+    /** A single agent's model or agent, or `steps` for a routine with steps. */
+    targetKind?: 'agent' | 'model' | 'steps';
   };
   /** A manual Run now the server accepted, not the run's outcome. */
   routine_run: {
     routineId: string;
     trigger: 'manual';
-    targetKind?: 'agent' | 'model';
+    targetKind?: 'agent' | 'model' | 'steps';
   };
 };
 

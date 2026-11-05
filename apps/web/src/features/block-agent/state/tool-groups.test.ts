@@ -4,7 +4,7 @@ import type {
   ToolName,
 } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
-import { presentedView, rendersOwnView, segmentParts } from './tool-groups';
+import { rendersOwnView, segmentParts } from './tool-groups';
 
 const text = (): MessagePart => ({ kind: 'text', text: 'hi' });
 type ToolUsePart = Extract<MessagePart, { kind: 'tool_use' }>;
@@ -26,12 +26,7 @@ const displayResults = (): Extract<MessagePart, { kind: 'tool_use' }> => ({
   id: 'view',
   name: { kind: 'native', name: 'DisplayResults' },
   status: 'completed',
-  detail: {
-    kind: 'macro',
-    input: { view: { widgets: [] } },
-    output: { message: 'done' },
-    error: null,
-  },
+  detail: { kind: 'view', view: { widgets: [] }, error: null },
 });
 const permission = (): MessagePart => ({
   kind: 'permission',
@@ -120,18 +115,9 @@ describe('segmentParts', () => {
       'breaks tool groups before and after a %s call',
       (status) => {
         const details: ToolDetail[] = [
-          { kind: 'macro', input: null, output: null, error: null },
-          {
-            kind: 'other',
-            acpKind: 'other',
-            input: null,
-            output: null,
-            result: null,
-            error: null,
-          },
+          { kind: 'view', view: null, error: null },
         ];
         for (const detail of details) {
-          if (name.kind === 'native' && detail.kind === 'other') continue;
           const display = tool({ name, status, detail });
           expect(
             segmentParts([tool(), tool(), display, tool(), tool()])
@@ -511,38 +497,22 @@ describe('persistent review presentation', () => {
 });
 
 describe('presented views', () => {
-  const view = { title: 'Launch notes', widgets: [] };
-  const presentation = (
-    server = 'macro_internal',
-    callId = 'view_019a0000-0000-7000-8000-000000000006'
-  ): ToolUsePart =>
+  const presentation = (): ToolUsePart =>
     tool({
-      id: callId,
-      name: { kind: 'mcp', server, tool: 'PresentView' },
+      id: 'view_019a0000-0000-7000-8000-000000000006',
+      name: { kind: 'mcp', server: 'macro_internal', tool: 'PresentView' },
       detail: {
-        kind: 'other',
-        acpKind: 'other',
-        input: { view },
-        output: null,
-        result: { message: 'Presented to the user' },
+        kind: 'view',
+        view: { title: 'Launch notes', widgets: [] },
         error: null,
       },
     });
   it('draws the view the harness presented, outside collapsed tool groups', () => {
-    expect(presentedView(presentation())).toEqual(view);
+    expect(rendersOwnView(presentation())).toBe(true);
     expect(segmentParts([tool(), presentation(), tool()])).toEqual([
       { kind: 'tools', start: 0, end: 1 },
       { kind: 'part', start: 1, end: 2 },
       { kind: 'tools', start: 2, end: 3 },
     ]);
-  });
-  it('draws only the harness’s view_ calls, and ignores other servers', () => {
-    expect(
-      presentedView(presentation('macro_internal', 'ordinary-call'))
-    ).toBeUndefined();
-    expect(
-      rendersOwnView(presentation('macro_internal', 'ordinary-call'))
-    ).toBe(false);
-    expect(presentedView(presentation('untrusted'))).toBeUndefined();
   });
 });

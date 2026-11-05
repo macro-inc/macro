@@ -112,7 +112,7 @@ function CheckboxControl(props: ControlProps) {
       <KobalteCheckbox.Control
         class={cn(
           checkboxVariants({ size: size() }),
-          'data-disabled:cursor-not-allowed data-invalid:border-failure peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent',
+          'data-disabled:cursor-not-allowed data-readonly:not-data-checked:not-data-indeterminate:border-ink-muted data-invalid:border-failure peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent',
           local.class
         )}
         {...rest}
@@ -135,6 +135,7 @@ function CheckboxLabel(props: LabelProps) {
  * @do Render a Checkbox.Label or provide an accessible name on the root.
  * @do Use indeterminate when only part of a select-all group is checked.
  * @do Use InlineCheckbox when an enclosing option owns the interaction.
+ * @do Mark displayed values readOnly to preserve contrast, even when disabled.
  * @dont Add Checkbox.Input yourself; Checkbox.Control already renders one.
  * @dont Use a checkbox for an immediate setting change; use ToggleSwitch.
  */
@@ -145,7 +146,7 @@ export const Checkbox = Object.assign(
       <CheckboxSizeContext.Provider value={() => local.size ?? 'md'}>
         <KobalteCheckbox
           class={cn(
-            'relative inline-flex items-center gap-2 data-disabled:cursor-not-allowed data-disabled:opacity-50',
+            'relative inline-flex items-center gap-2 data-disabled:cursor-not-allowed data-disabled:not-data-readonly:opacity-50',
             local.class
           )}
           {...rest}

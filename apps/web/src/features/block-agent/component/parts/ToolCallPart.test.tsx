@@ -842,80 +842,38 @@ describe('ToolCallPart inline results', () => {
     }
   );
 
-  it.each(['macro', 'other'] as const)(
-    'renders %s DisplayResults from call arguments before any response',
-    (kind) => {
-      const input = { view: { kind: 'text', text: 'Launch checklist' } };
-      const part = toolUse(
-        kind === 'macro'
-          ? { kind, input, output: null, error: null }
-          : {
-              kind,
-              input,
-              result: null,
-              output: null,
-              error: null,
-              acpKind: 'other',
-            },
-        { name: 'DisplayResults', status: 'running' }
-      );
-      if (kind === 'other')
-        part.name = { kind: 'mcp', server: 'macro', tool: 'DisplayResults' };
-      const rendered = render(() => (
-        <ToolCallPart part={part} context={context(true)} />
-      ));
-      expect(rendered.getByTestId('dashboard-view').textContent).toBe(
-        JSON.stringify(input.view)
-      );
-      expect(rendered.queryByTestId('tool-card')).toBeNull();
-      expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    }
-  );
-
-  it('updates inline results as the call arguments change', () => {
-    const [part, setPart] = createSignal(
-      toolUse(
-        {
-          kind: 'macro',
-          input: { view: { text: 'First' } },
-          output: null,
-          error: null,
-        },
-        { name: 'DisplayResults', status: 'running' }
-      )
-    );
-    const rendered = render(() => (
-      <ToolCallPart part={part()} context={context(true)} />
-    ));
-    const dashboard = rendered.getByTestId('dashboard-view');
-    setPart(
-      toolUse(
-        {
-          kind: 'macro',
-          input: { view: { text: 'Updated' } },
-          output: null,
-          error: null,
-        },
-        { name: 'DisplayResults', status: 'running' }
-      )
-    );
-    expect(rendered.getByTestId('dashboard-view')).toBe(dashboard);
-    expect(dashboard.textContent).toBe('{"text":"Updated"}');
-  });
-
-  it('passes settled missing input to dashboard validation without a tool disclosure', () => {
+  it('renders the view a view tool returned, without a tool disclosure', () => {
+    const view = {
+      title: 'Launch checklist',
+      widgets: [{ type: 'md' as const, markdown: 'Ship it' }],
+    };
     const rendered = render(() => (
       <ToolCallPart
         part={toolUse(
-          { kind: 'macro', input: null, output: null, error: null },
+          { kind: 'view', view, error: null },
           { name: 'DisplayResults' }
         )}
         context={context(false)}
       />
     ));
-    expect(rendered.getByTestId('dashboard-view').dataset.pending).toBe(
-      'false'
+    expect(rendered.getByTestId('dashboard-view').textContent).toBe(
+      JSON.stringify(view)
     );
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
+    expect(rendered.queryByTestId('macro-tool')).toBeNull();
+  });
+
+  it('waits for a running view tool to return its view', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          { kind: 'view', view: null, error: null },
+          { name: 'DisplayResults', status: 'running' }
+        )}
+        context={context(true)}
+      />
+    ));
+    expect(rendered.getByTestId('dashboard-view').dataset.pending).toBe('true');
     expect(rendered.queryByTestId('tool-card')).toBeNull();
   });
 });
@@ -1206,30 +1164,6 @@ describe('ToolCallPart result summaries', () => {
       },
       output: { success: false, message: 'Denied' },
       reason: 'Denied',
-    },
-    {
-      name: 'WebFetch',
-      input: { input: 'https://status.macro.com' },
-      output: {
-        tool_use_id: 'call-1',
-        content: {
-          type: 'web_fetch_tool_result_error',
-          error_code: 'url_not_accessible',
-        },
-      },
-      reason: 'url_not_accessible',
-    },
-    {
-      name: 'WebSearch',
-      input: { input: 'launch checklist' },
-      output: {
-        tool_use_id: 'call-1',
-        content: {
-          type: 'web_search_tool_result_error',
-          error_code: 'unavailable',
-        },
-      },
-      reason: 'unavailable',
     },
   ])(
     'shows a validated $name response failure even if the call completed',
@@ -1531,15 +1465,6 @@ describe('code execution results', () => {
           outputOmitted: false,
         },
         {
-          id: 'call-2',
-          name: 'DisplayResults',
-          input: { view: { widgets: [] } },
-          output: { message: 'done' },
-          error: null,
-          status: 'completed',
-          outputOmitted: false,
-        },
-        {
           id: 'call-3',
           name: 'CreateDocument',
           input: {},
@@ -1640,7 +1565,6 @@ describe('code execution results', () => {
     expect(rendered.getAllByTestId('tool-card')[0].textContent).toContain(
       'Failed'
     );
-    expect(rendered.getByTestId('dashboard-view')).toBeDefined();
     expect(rendered.container.textContent).toContain('Outcome unknown');
     expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
     expect(

@@ -53,6 +53,8 @@ export interface EmailMessageViewProps {
   onUnhover?: () => void;
   onFocus?: (element: HTMLElement) => void;
   onReply?: (action: EmailMessageAction) => void;
+  /** Reply actions to leave out when `onReply` is set. */
+  hiddenActions?: EmailMessageAction[];
   onOpenAttachment?: (attachment: EmailAttachment) => void;
   onDownloadAttachment?: (attachment: EmailAttachment) => void;
   children?: JSX.Element;
@@ -146,15 +148,6 @@ export function EmailMessageView(props: EmailMessageViewProps) {
     );
   });
 
-  const otherAttachments = createMemo(() => {
-    return visibleAttachments().filter(
-      (a) =>
-        !a.sfs_id ||
-        (!a.mime_type?.startsWith('image/') &&
-          !a.mime_type?.startsWith('video/'))
-    );
-  });
-
   return (
     <MessageCard
       messageId={props.message.db_id}
@@ -174,6 +167,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
             message={props.message}
             currentUserEmail={props.viewerEmail}
             avatar={props.renderAvatar?.(props.message)}
+            isTouch={props.isTouch}
           />
         }
       >
@@ -193,7 +187,9 @@ export function EmailMessageView(props: EmailMessageViewProps) {
             viewerEmail={props.viewerEmail}
             readReceipt={props.readReceipt}
             hiddenActions={
-              props.onReply ? undefined : ['reply', 'reply-all', 'forward']
+              props.onReply
+                ? props.hiddenActions
+                : ['reply', 'reply-all', 'forward']
             }
             avatar={
               <div class="shrink-0 flex justify-center items-center size-6">
@@ -259,13 +255,13 @@ export function EmailMessageView(props: EmailMessageViewProps) {
             </For>
           </Show>
 
-          {/* Other attachments (non-media or without sfs_id) */}
-          <Show when={otherAttachments().length > 0}>
+          {/* One chip per received file, of any type. Previews stay above. */}
+          <Show when={visibleAttachments().length > 0}>
             <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
               {/* Keyed so a thread refresh keeps each chip, and with it the
                   calendar file dialog's focus target. */}
               <Key
-                each={otherAttachments()}
+                each={visibleAttachments()}
                 by={(attachment) => attachment.db_id}
               >
                 {(attachment) => (
@@ -277,6 +273,11 @@ export function EmailMessageView(props: EmailMessageViewProps) {
                     onClick={
                       props.onOpenAttachment
                         ? (chip) => openAttachment(attachment(), chip)
+                        : undefined
+                    }
+                    onDownload={
+                      props.onDownloadAttachment && !attachment().reference_url
+                        ? () => props.onDownloadAttachment?.(attachment())
                         : undefined
                     }
                   />

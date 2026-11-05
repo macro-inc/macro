@@ -570,6 +570,72 @@ it.each([true, false])(
   }
 );
 
+it.each([true, false])(
+  'keeps assigned public and private channels in All channels when custom sections are open=%s',
+  (open) => {
+    const publicChannel = channel('public', 'Public', 'public');
+    const privateChannel = channel('private', 'Private', 'private');
+    const channels = [publicChannel, privateChannel];
+    const channelsById = new Map(channels.map((item) => [item.id, item]));
+    const sections = buildSectionedChannelRows({
+      labels: [
+        { ...label('manual', 'Manual', ['public']), teamId: undefined },
+        {
+          ...label('smart', 'Smart', ['private']),
+          teamId: undefined,
+          rule: { attribute: 'name', contains: 'Private' },
+        },
+      ],
+      channels,
+      channelsById,
+      isLabelOpen: () => open,
+    });
+    const rows = buildSectionedRailRows(
+      'browse',
+      {
+        favorites: true,
+        direct_messages: true,
+        team_channels: true,
+        channels: true,
+      },
+      {
+        favorites: [],
+        direct_messages: [],
+        team_channels: [],
+        channels,
+        recents: [],
+        threads: [],
+      },
+      sections
+    );
+    const grouped = groupChannelRailSections(rows);
+
+    expect([...grouped.keys()]).toEqual([
+      'favorites',
+      'direct_messages',
+      'team_channels',
+      'label:manual',
+      'label:smart',
+      'channels',
+    ]);
+    expect(grouped.get('team_channels')?.rows.map((row) => row.id)).toEqual([
+      'status:team_channels',
+    ]);
+    expect(grouped.get('channels')?.rows.map((row) => row.id)).toEqual([
+      'channel:public',
+      'channel:private',
+      'status:channels',
+    ]);
+    expect(grouped.get('label:manual')?.rows.map((row) => row.id)).toEqual(
+      open ? ['channel:public:label:manual'] : []
+    );
+    expect(grouped.get('label:smart')?.rows.map((row) => row.id)).toEqual(
+      open ? ['channel:private:label:smart'] : []
+    );
+    expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+  }
+);
+
 it('keeps section membership and navigation together after reordering with stale or duplicate keys', () => {
   const rows = buildSectionedRailRows(
     'browse',

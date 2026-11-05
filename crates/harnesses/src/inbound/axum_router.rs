@@ -5,9 +5,9 @@ use std::sync::Arc;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
 };
 use harness_id::HarnessId;
 use macro_authorization::{
@@ -22,10 +22,13 @@ use crate::domain::{
     models::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
         CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessSession,
-        PairingDetails,
+        PairingDetails, PatchHarnessRequest, RUNTIME_CONNECTED_HEADER,
     },
     ports::{HarnessError, HarnessService},
 };
+
+#[cfg(test)]
+mod test;
 
 /// State for the harnesses router.
 pub struct HarnessesRouterState<S, Auth> {
@@ -116,7 +119,8 @@ where
         )
         .route(
             "/harnesses/{harness_id}",
-            delete(delete_harness_handler::<S, Auth>),
+            delete(delete_harness_handler::<S, Auth>)
+                .merge(patch(patch_harness_handler::<S, Auth>)),
         )
         .with_state(state)
 }
@@ -272,6 +276,40 @@ pub async fn list_harnesses_handler<S: HarnessService, Auth: MacroAuthorizationS
     ))
 }
 
+/// Handler for `PATCH /harnesses/{harness_id}`.
+#[utoipa::path(
+    patch,
+    tag = "harnesses",
+    operation_id = "patch_harness",
+    path = "/harnesses/{harness_id}",
+    params(("harness_id" = HarnessId, Path, description = "Harness ID")),
+    request_body = PatchHarnessRequest,
+    responses(
+        (status = 200, body = Harness),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn patch_harness_handler<S: HarnessService, Auth: MacroAuthorizationService>(
+    State(state): State<HarnessesRouterState<S, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<HarnessPath>,
+    Json(req): Json<PatchHarnessRequest>,
+) -> Result<Json<Harness>, HarnessesHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .patch_harness(
+                authorization.authorization.user.macro_user_id,
+                path.harness_id,
+                req,
+            )
+            .await?,
+    ))
+}
+
 /// Handler for `DELETE /harnesses/{harness_id}`.
 #[utoipa::path(
     delete,
@@ -317,13 +355,29 @@ pub async fn delete_harness_handler<S: HarnessService, Auth: MacroAuthorizationS
 pub async fn get_self_harness_handler<S: HarnessService, Auth: MacroAuthorizationService>(
     State(state): State<HarnessesRouterState<S, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, HarnessOnly>,
+    headers: HeaderMap,
 ) -> Result<Json<Harness>, HarnessesHandlerErr> {
-    Ok(Json(
-        state
-            .service
-            .get_self(authorization.authorization.harness_id)
-            .await?,
-    ))
+    let harness = state
+        .service
+        .get_self(authorization.authorization.harness_id)
+        .await?;
+
+    if runtime_presence_disagrees(&headers, &harness) {
+        tracing::warn!(
+            telemetry_event = "harness_presence_disagreement",
+            harness = %harness.id,
+            last_connected_at = ?harness.last_connected_at,
+            "a daemon holds a runtime connection this harness reads as offline"
+        );
+    }
+
+    Ok(Json(harness))
+}
+
+/// Whether the daemon asking says it holds a connection the harness reads as not
+/// having. Only the daemon can see this: the service's own answer is what is wrong.
+fn runtime_presence_disagrees(headers: &HeaderMap, harness: &Harness) -> bool {
+    headers.contains_key(RUNTIME_CONNECTED_HEADER) && !harness.connected
 }
 
 /// Handler for `DELETE /harnesses/me`.

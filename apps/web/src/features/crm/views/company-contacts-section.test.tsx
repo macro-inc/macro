@@ -9,6 +9,12 @@ const { openCreateContact } = vi.hoisted(() => ({
   openCreateContact: vi.fn(),
 }));
 
+vi.mock('../components/record-visibility-filter', () => ({
+  RecordVisibilityFilter: () => null,
+}));
+vi.mock('../components/record-archived-status', () => ({
+  ArchivedRecordBadge: () => null,
+}));
 vi.mock('@entity', () => ({
   ListEntity: (props: {
     entity: { name: string };
@@ -59,6 +65,8 @@ vi.mock('@app/components/view-shell', () => ({
 }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
+    userId: () => 'user-1',
+    isTeamAdmin: () => () => true,
     openCreateContact,
     createNavigation: () => ({ openWithSplit: vi.fn() }),
     createContactPhoto: (email: string) => () =>
@@ -152,4 +160,29 @@ it('filters by email and keeps the search available with no results', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
   screen.getByRole('button', { name: /Avery Chen/ });
   expect(screen.getByRole('textbox', { name: 'Search team' })).toBe(search);
+});
+
+it('excludes hidden contacts from an admin response, including search matches', () => {
+  const removed = {
+    ...contacts[0],
+    id: 'removed',
+    hidden: true,
+    name: 'Removed person',
+  };
+  const response = [...contacts, removed];
+  render(() => (
+    <CompanyContactsSection
+      company={{ id: 'co' } as CrmCompanyEntity}
+      contacts={response}
+    />
+  ));
+  screen.getByRole('button', { name: /Avery Chen/ });
+  expect(screen.queryByRole('button', { name: /Removed person/ })).toBeNull();
+  fireEvent.input(screen.getByRole('textbox', { name: 'Search team' }), {
+    target: { value: 'Removed person' },
+  });
+  screen.getByText('No matching contacts.');
+  // Presentation must preserve the record for authorized detail/restore access.
+  expect(response).toContain(removed);
+  expect(removed.companyId).toBe('co');
 });

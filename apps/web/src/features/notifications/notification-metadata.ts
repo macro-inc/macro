@@ -56,6 +56,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('channel_message_reply', () => 'replied in')
       .with('call_started', () => 'started a call')
       .with('channel_invite', () => 'invited you to')
+      .with('channel_access_requested', () => 'asked to join')
       .with('new_email', () => 'sent a new email')
       .with('external_chat_message', () => {
         const meta = n.notification_metadata;
@@ -92,6 +93,10 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer in')
       .with('agent_session_mentioned', () => 'mentioned you in')
+      // The routine is the actor: "<routine> failed".
+      .with('routine_run_finished', () =>
+        routineRunFailed(n) ? 'failed' : 'finished'
+      )
       .exhaustive(() => 'notified you about')
   );
 }
@@ -103,6 +108,7 @@ export function getNotificationTargetName(
   return (
     match(m)
       .with({ tag: 'channel_invite' }, (m) => m.content.channelName)
+      .with({ tag: 'channel_access_requested' }, (m) => m.content.channelName)
       .with({ tag: 'document_mention' }, (m) => m.content.documentName)
       .with(
         { tag: 'mentioned_in_document_comment' },
@@ -153,6 +159,7 @@ export function getNotificationTargetName(
         (m) => m.content.title || '(No title)'
       )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
+      .with({ tag: 'routine_run_finished' }, () => undefined)
       .with(
         {
           tag: P.union(
@@ -224,6 +231,7 @@ export function getNotificationContent(
           m.content.reviewSnippet || m.content.title || m.content.displayName
       )
       .with({ tag: 'channel_invite' }, () => undefined)
+      .with({ tag: 'channel_access_requested' }, () => undefined)
       .with({ tag: 'invite_to_team' }, () => undefined)
       // The description the user wrote is the whole point of a reminder.
       .with({ tag: 'reminder' }, (m) => m.content.description)
@@ -241,6 +249,9 @@ export function getNotificationContent(
         (m) => m.content.question
       )
       .with({ tag: 'agent_session_mentioned' }, () => undefined)
+      .with({ tag: 'routine_run_finished' }, (m) =>
+        m.content.outcome === 'failed' ? 'Its run failed.' : 'Its run finished.'
+      )
       .exhaustive(() => undefined)
   );
 }
@@ -300,6 +311,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'commented_on_document' }, () => true)
       .with({ tag: 'crm_discussion' }, () => true)
       .with({ tag: 'channel_invite' }, () => true)
+      .with({ tag: 'channel_access_requested' }, () => true)
       .with({ tag: 'invite_to_team' }, () => true)
       // Shown so "Reminder" reads as being about something; a standalone
       // reminder resolves to no target name and renders without one anyway.
@@ -307,6 +319,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'calendar_event_reminder' }, () => true)
       .with({ tag: 'calendar_event_join_request' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
+      .with({ tag: 'routine_run_finished' }, () => false)
       .with(
         {
           tag: P.union(
@@ -318,5 +331,12 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
         () => true
       )
       .exhaustive(() => true)
+  );
+}
+
+function routineRunFailed(n: UnifiedNotification): boolean {
+  const meta = n.notification_metadata;
+  return (
+    meta.tag === 'routine_run_finished' && meta.content.outcome === 'failed'
   );
 }

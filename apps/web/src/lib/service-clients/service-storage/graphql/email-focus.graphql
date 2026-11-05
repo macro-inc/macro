@@ -4,9 +4,12 @@ query EmailFocus($days: Int) {
 		emailFocus(days: $days) {
 			...SoupItemFields
 			focus {
+				category
 				importance
 				needsReply
 				needsFollowUp
+				importanceTrend
+				dueOn
 			}
 		}
 	}

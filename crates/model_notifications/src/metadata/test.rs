@@ -147,6 +147,30 @@ fn channel_reaction_round_trips_as_notif_event() {
     assert!(matches!(event, NotifEvent::ChannelMessageReaction(_)));
 }
 
+#[test]
+fn channel_access_request_round_trips_and_names_the_channel() {
+    let value = serde_json::json!({
+        "tag": "channel_access_requested",
+        "content": {
+            "requestId": "00000000-0000-0000-0000-000000000001",
+            "channelType": "private",
+            "channelName": "design",
+        },
+    });
+    let event: NotifEvent = serde_json::from_value(value).unwrap();
+    let NotifEvent::ChannelAccessRequested(request) = &event else {
+        panic!("expected a channel access request, got {event:?}");
+    };
+    assert_eq!(request.request_id, Uuid::from_u128(1));
+    assert_eq!(
+        event
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo@macro.com asked to join #design"
+    );
+    assert_eq!(event.format_body(None).unwrap(), "#design");
+}
+
 fn github_pr_common() -> GithubPrNotificationCommon {
     GithubPrNotificationCommon {
         foreign_entity_id: Uuid::parse_str("11111111-1111-4111-8111-111111111111").unwrap(),
@@ -1360,4 +1384,34 @@ fn calendar_email_reminder_escapes_content_and_limits_each_distinct_alarm() {
     let mut second = metadata.clone();
     second.minutes_before = 5;
     assert_ne!(first.as_bytes(), second.rate_limit_key().as_bytes());
+}
+
+#[test]
+fn routine_run_finished_names_the_routine_and_its_outcome() {
+    let failed = RoutineRunFinishedMetadata {
+        routine_id: Uuid::nil(),
+        routine_name: "Morning brief".to_string(),
+        outcome: RoutineRunOutcome::Failed,
+    };
+    let succeeded = RoutineRunFinishedMetadata {
+        outcome: RoutineRunOutcome::Succeeded,
+        ..failed.clone()
+    };
+
+    let value = serde_json::to_value(&failed).unwrap();
+    assert_eq!(value["routineId"], "00000000-0000-0000-0000-000000000000");
+    assert_eq!(value["routineName"], "Morning brief");
+    assert_eq!(value["outcome"], "failed");
+    assert_eq!(failed.format_title(None).unwrap(), "Morning brief failed");
+    assert_eq!(
+        succeeded.format_title(None).unwrap(),
+        "Morning brief finished"
+    );
+
+    let event: NotifEvent = serde_json::from_value(serde_json::json!({
+        "tag": "routine_run_finished",
+        "content": value,
+    }))
+    .unwrap();
+    assert!(matches!(event, NotifEvent::RoutineRunFinished(_)));
 }

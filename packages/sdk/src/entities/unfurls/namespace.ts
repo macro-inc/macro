@@ -1,7 +1,9 @@
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 
-/** URL metadata lookup. */
+/**
+ * URL metadata lookup. Discovered with `macro.web`.
+ */
 export class UnfurlNamespace {
   constructor(private readonly client: MacroClient) {}
 

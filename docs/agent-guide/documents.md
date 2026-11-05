@@ -334,7 +334,9 @@ The **Filter** and **Sort** icons open their panels. The pickers support keyboar
 navigation and mark the selected table. Rows added or edited elsewhere, including
 by AI, appear through the database's gateway subscription. The editor catches up after
 reconnecting or returning to the tab after a long absence.
-Edits write to the original database. **Open** opens the full database.
+Edits write to the original database. **Open** opens the full database; opening
+a row (its row-number button, a board card or a timeline bar) opens the full
+database at that row.
 **Collapse** converts the editor to a small mention; **Expand** brings it back.
 Removing either reference leaves the database and its rows intact.
 
@@ -2690,9 +2692,11 @@ access to the title and property controls.
 
 ## AI edit
 
-1. Click `Edit with AI` (button directly under the editor body).
-2. A focused prompt box appears (placeholder `Describe the edit…`). Type the instruction,
-   press Enter (or click `Send`).
+1. Select text in the document, then click `AI edit` in the selection toolbar (on touch,
+   `Edit with AI` in the selection toolbar opens the same prompt in a drawer).
+2. A focused prompt box appears (placeholder `Describe changes`). Type the instruction,
+   press Enter (or click `Send`). The edit runs in fast mode and its changes apply
+   client-side, so they land in the user's undo stack.
    Selected-text AI edit uses the shared Send button: muted and disabled for an
    empty or whitespace-only prompt, black with a white arrow in light mode once
    an instruction is entered (inverted for dark mode), on desktop and mobile.
@@ -2740,6 +2744,36 @@ On touch devices, the Discussion section is hidden until it contains a comment;
 the floating **Leave a comment...** input remains available. If the discussion
 becomes empty again, the section disappears. Desktop keeps the empty section
 and inline input.
+
+Select plain text or text already covered by a comment, then press **Comment**.
+The press keeps the editor selection until the draft opens. Cancel with Escape
+or the composer's close control, then select the same text and try again: the
+new draft highlight should clear on cancellation and the existing comment
+should keep its full range. Repeat with a selection spanning paragraphs and
+with a collaborator editing another part of the document. Draft marks stay
+local until the comment is posted. Posting first saves the highlight, then the
+message. Refuse an anchor update and verify that no message is posted, the input
+survives, and cancelling lets another comment open without changing document text.
+Document typing briefly pauses during anchor publication so pending text is
+flushed before the highlight is saved. Repeat posting and starting another comment
+with both edit and comment-only access; creating a document tests the owner path.
+For comment-only access, use a document no editor has opened since it was
+created: a commenter's session writes nothing to the document, so its comments
+still post.
+Also withhold a collaborator's update before posting: catch up its missing history
+before publishing the highlight, preserving both the remote text and the comment.
+Confirm the posted comment appears in a separate browser, since reopening the
+same client can restore an unsynced mark from its local snapshot. When messages
+and notifications exist but another browser has no inline highlights, check WAL
+acknowledgements and sync-service's comment-validation errors.
+Cancellation retries unconfirmed highlight cleanup after reconnect or reopening.
+An uncertain message response preserves its highlight rather than risking a saved
+comment becoming invisible.
+
+Discussion and thread loading errors use compact muted text and a separate
+**Retry** button. Retry is disabled while fetching. A missing parent or thread
+shows an unavailable message without Retry; a deleted task cannot load comments
+until it is restored. Verify that an unavailable discussion hides its composer.
 
 Comments anchored to selected text open in a floating margin card on desktop and
 a `Comments` drawer on touch devices. Hovering a desktop card reveals its actions
@@ -2835,9 +2869,13 @@ Discussion's timeline or expanding it. Existing highlights locate threads by
 their stable mark IDs. Replies, attachments, reactions, and editing use the same
 message controls as channels. In every floating comment card (the Markdown,
 PDF, and Word margins and expanded minimized threads), a long comment folds to
-a faded preview with **Show more**; **Show less** folds it again. Short
-comments, the phone drawer, the bottom Discussion, and channels always show the
-full text. Markdown and Word margin cards stack without overlapping: a tall or expanded card
+a faded preview with **Show more**; **Show less** folds it again. A press
+outside the card does the same, including the press that closes an expanded
+minimized card. Presses on the card, its margin badge, and menus or dialogs
+the card opened leave the body expanded. In that card, Open session is the
+icon-only button from a narrow agent card, so the label does not take a line
+of its own. Channels keep the labeled chip. Short comments, the phone drawer,
+the bottom Discussion, and channels always show the full text. Markdown and Word margin cards stack without overlapping: a tall or expanded card
 pushes the cards below it down (past the end of a short document if needed),
 and no card starts above the top of the document. Check this with a long
 thread active near the bottom of a short document that has another thread
@@ -3116,3 +3154,7 @@ an empty circle, and subtype-only previews use their completion flag. See
 Sharing labels describe their audience: Only people with access, Anyone with the link, and Team members with the link. Permission choices say Can view, Can comment, and Can edit. Copying a restricted link still does not grant access. The existing immediately opening dialog and its deferred loading remain unchanged.
 
 Drive's existing New controls open a wide menu with icons and short descriptions for creation and uploads, while preserving the current destination and feature gates.
+
+Opening a row clears its unread state immediately; direct details mark read when
+ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
+mobile, and email inbox checks.

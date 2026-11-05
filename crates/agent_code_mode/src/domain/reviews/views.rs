@@ -4,6 +4,7 @@
 use super::{ReviewService, invalid};
 use crate::domain::{CodeModeError, ExecutionId};
 use agent_session::domain::model::AgentSessionId;
+use dynamic_ui::View;
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -15,9 +16,6 @@ use utoipa::ToSchema;
 /// stored with the session and with any message it is posted in; one this
 /// large is a runaway.
 const MAX_VIEW_BYTES: usize = 32 * 1024;
-
-/// How many of a view's problems the agent is told at once.
-const PROBLEMS_LISTED: usize = 10;
 
 /// A view to present.
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
@@ -37,8 +35,8 @@ pub struct PresentView {
 pub struct PresentedView {
     /// Identifies the presented call, so a retried frame is not drawn twice.
     pub id: Uuid,
-    /// The view, unchanged.
-    pub view: Value,
+    /// The view, decoded.
+    pub view: View,
 }
 
 impl ReviewService {
@@ -53,8 +51,8 @@ impl ReviewService {
         self.present_view_owned(session, input).await
     }
 
-    /// The span records how big the view was and how many problems turned it
-    /// back, never what it holds.
+    /// The span records how big the view was and whether it decoded, never
+    /// what it holds.
     #[tracing::instrument(
         name = "view.present",
         skip_all,
@@ -62,7 +60,7 @@ impl ReviewService {
             session_id = %session,
             from_code = input.execution_id.is_some(),
             view_bytes = tracing::field::Empty,
-            problems = tracing::field::Empty,
+            decoded = tracing::field::Empty,
         ),
         err
     )]
@@ -83,11 +81,13 @@ impl ReviewService {
                 "The view was not presented: it is {size} bytes, over the {MAX_VIEW_BYTES}-byte limit. Present fewer widgets."
             )));
         }
-        let problems = dynamic_ui::view_problems(&input.view);
-        tracing::Span::current().record("problems", problems.len());
-        if !problems.is_empty() {
-            return Err(CodeModeError::Invalid(problems_message(&problems)));
-        }
+        let view = dynamic_ui::decode_view(&input.view);
+        tracing::Span::current().record("decoded", view.is_ok());
+        let view = view.map_err(|problem| {
+            CodeModeError::Invalid(format!(
+                "The view was not presented: it does not match the PresentView schema. {problem}. Fix it and present the whole view again."
+            ))
+        })?;
         // As for a review, presentation writes the session transcript, whose
         // capability belongs to the session owner.
         let owner = self.owner(session).await?;
@@ -97,26 +97,9 @@ impl ReviewService {
                 session,
                 &PresentedView {
                     id: macro_uuid::generate_uuid_v7(),
-                    view: input.view,
+                    view,
                 },
             )
             .await
     }
-}
-
-/// What to fix in a view the renderer would not draw, so the agent can
-/// present it again.
-fn problems_message(problems: &[String]) -> String {
-    let mut lines: Vec<String> = problems
-        .iter()
-        .take(PROBLEMS_LISTED)
-        .map(|problem| format!("- {problem}"))
-        .collect();
-    if problems.len() > PROBLEMS_LISTED {
-        lines.push(format!("- and {} more", problems.len() - PROBLEMS_LISTED));
-    }
-    format!(
-        "The view was not presented: it does not match the PresentView schema.\n{}\nFix these and present the whole view again.",
-        lines.join("\n")
-    )
 }

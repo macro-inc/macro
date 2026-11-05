@@ -1,11 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
-import { packageEntityDocs, type SdkDocs } from '../scripts/typedoc';
+import {
+  type AgentNotes,
+  packageEntityDocs,
+  type SdkDocs,
+} from '../scripts/typedoc';
 
-const artifact = new URL(
-  '../../../crates/agent_code_mode/src/domain/documentation.json',
-  import.meta.url
-);
+// Written by `bun run generate`, which `bun run test` runs first.
+const artifact = new URL('../dist/documentation.json', import.meta.url);
 
 const NAMESPACE = `# Class: ExampleNamespace
 
@@ -92,8 +94,22 @@ function fixturePages() {
   ]);
 }
 
-function pack(pages = fixturePages()) {
-  return packageEntityDocs(pages, { example: 'An example.' });
+const NOTES: AgentNotes[] = [
+  {
+    module: 'src/entities/example/namespace',
+    name: 'ExampleNamespace',
+    routing: 'Use when working with examples; not with anything else.',
+    guide: 'Examples are shared with the whole team.',
+  },
+  {
+    module: 'src/entities/entity',
+    name: 'Base',
+    routing: 'Use when building on entity handles; not for one area.',
+  },
+];
+
+function pack(pages = fixturePages(), notes = NOTES) {
+  return packageEntityDocs(pages, ['example'], notes);
 }
 
 describe('TypeDoc documentation packaging', () => {
@@ -134,25 +150,84 @@ describe('TypeDoc documentation packaging', () => {
     expect(symbols['other.Child']).toBe('# Child\nAnother service');
   });
 
-  it('omits legacy namespaces without removing adjacent current session methods', () => {
-    const pages = fixturePages();
-    pages.set(
-      'src/macro/classes/Macro.md',
-      '# Class: Macro\n\n## Methods\n\n### chats()\n[Chats](../../entities/chats/namespace/classes/Chats.md)\n\n### agentSessions()\n\nCurrent sessions\n\n### workspace()\n\nLegacy feed'
-    );
-    const { symbols } = pack(pages);
-    expect(symbols['Macro.agentSessions']).toContain('Current sessions');
-    expect(symbols['Macro.chats']).toBeUndefined();
-    expect(symbols['Macro.workspace']).toBeUndefined();
-  });
-
   it('fails generation on a missing referenced contract or missing namespace', () => {
     const pages = fixturePages();
     pages.delete('generated/example/types.gen/type-aliases/Child.md');
     expect(() => pack(pages)).toThrow('Broken TypeDoc link');
-    expect(() =>
-      packageEntityDocs(new Map(), { example: 'An example.' })
-    ).toThrow('no pages');
+    expect(() => packageEntityDocs(new Map(), ['example'], NOTES)).toThrow(
+      'no pages'
+    );
+  });
+
+  it('describes each entity by its routing sentence and carries its agent guidance', () => {
+    const { entities, symbols } = pack();
+    const example = entities.find((entity) => entity.name === 'example');
+    expect(example?.description).toBe(
+      'Use when working with examples; not with anything else.'
+    );
+    expect(example?.guide).toBe('Examples are shared with the whole team.');
+    expect(example?.index).toContain(
+      'Use when working with examples; not with anything else.'
+    );
+    const core = entities.find((entity) => entity.name === 'core');
+    expect(core?.guide).toBeUndefined();
+    expect(symbols.ExampleNamespace).toContain(
+      '## Agent guidance\n\nExamples are shared with the whole team.'
+    );
+    expect(symbols.Example).not.toContain('Agent guidance');
+  });
+
+  it('fails generation on an entity without exactly one routing sentence, or a stray note', () => {
+    expect(() => pack(fixturePages(), NOTES.slice(0, 1))).toThrow(
+      'SDK entity core needs exactly one @routing sentence'
+    );
+    const doubled: AgentNotes[] = [
+      ...NOTES,
+      {
+        module: 'src/entities/example/example',
+        name: 'Example',
+        routing: 'Use when again; not twice.',
+      },
+    ];
+    expect(() => pack(fixturePages(), doubled)).toThrow(
+      'SDK entity example needs exactly one @routing sentence'
+    );
+    const stray: AgentNotes[] = [
+      ...NOTES,
+      { module: 'src/elsewhere', name: 'Lost', guide: 'Nobody reads this.' },
+    ];
+    expect(() => pack(fixturePages(), stray)).toThrow(
+      '@routing or @agent outside every SDK entity: src/elsewhere#Lost'
+    );
+  });
+
+  it('routes every real entity on a "Use when …; not …" sentence', async () => {
+    const docs = JSON.parse(await readFile(artifact, 'utf8')) as SdkDocs;
+    for (const doc of docs.entities) {
+      expect(doc.description, doc.name).toMatch(/^Use when .+; not .+/);
+      expect(doc.description.length, doc.name).toBeLessThanOrEqual(300);
+    }
+    const guide = (name: string) =>
+      docs.entities.find((doc) => doc.name === name)?.guide ?? '';
+    expect(guide('databases')).toContain("check every database's tables");
+    expect(guide('crm')).toContain('not a Macro database');
+    expect(guide('email')).toContain('Labels are per inbox');
+    expect(guide('calendar')).toContain(
+      'Booking links use conversational confirmation'
+    );
+    expect(guide('channels')).toContain('A form for a channel is a poll:');
+    expect(guide('tasks')).toContain('Never edit, merge or delete');
+    expect(guide('agentSessions')).toContain(
+      'macro.agentSessions.createManaged'
+    );
+    expect(guide('routines')).toContain('never sees this conversation');
+    expect(guide('documents')).toContain('<m-document-mention>');
+    expect(guide('documents')).toContain('document.edit(instructions)');
+    expect(guide('search')).toContain('macro.search.all');
+    expect(guide('search')).toContain('macro.documents.search');
+    expect(guide('search')).toContain('macro.workspace.page');
+    expect(guide('core')).toBe('');
+    expect(docs.symbols.DatabaseNamespace).toContain('## Agent guidance');
   });
 
   it('documents real public SDK handles in small indexes and references', async () => {
@@ -164,24 +239,33 @@ describe('TypeDoc documentation packaging', () => {
     };
     expect(entity('agentSessions')).toContain('### SessionReview');
     expect(entity('agentSessions')).toContain('`SessionReview.submitAll`');
-    expect(docs.symbols.ReviewRecord).toContain('presentedAt');
+    expect(docs.symbols.ReviewRecord_Serialize).toContain('presentedAt');
     expect(docs.symbols.SessionReview).not.toContain('property-parent');
     expect(docs.symbols.SessionReview).not.toContain('property-client');
     expect(docs.symbols.SessionReview).not.toContain('private constructor');
     expect(entity('documents')).toContain('`Document.content`');
     expect(entity('core')).toContain('### Macro');
     expect(docs.symbols.Macro).toContain('`agentSessions`');
-    expect(docs.symbols.Macro).not.toContain('property-chats');
-    expect(docs.symbols.Macro).not.toContain('property-workspace');
+    expect(docs.symbols.Macro).toContain('`search`');
+    expect(docs.symbols.Macro).toContain('`workspace`');
+    expect(docs.symbols.Macro).toContain('`chats`');
     expect(entity('routines')).toContain('`RoutineOptions`');
     expect(entity('agents')).toContain('### HarnessNamespace');
     expect(entity('apiKeys')).toContain('### UserApiKey');
     expect(entity('entityMentions')).toContain('EntityMentionNamespace');
     expect(entity('githubPullRequests')).toContain('PullRequestChangeset');
     expect(entity('core')).toContain('`SharePermissionOptions`');
-    expect(
-      docs.entities.some((doc) => ['chats', 'workspace'].includes(doc.name))
-    ).toBe(false);
+    // Searching, browsing the workspace and reading AI chats share one entity.
+    expect(entity('search')).toContain('### SearchNamespace (`macro.search`)');
+    expect(entity('search')).toContain('`SearchNamespace.all`');
+    expect(entity('search')).toContain(
+      '### WorkspaceNamespace (`macro.workspace`)'
+    );
+    expect(entity('search')).toContain('### ChatNamespace (`macro.chats`)');
+    expect(entity('search')).toContain('`Chat.history`');
+    expect(entity('core')).not.toContain('SearchNamespace');
+    expect(docs.symbols.SearchOptions).toContain('agentSessions');
+    expect(docs.symbols.WorkspaceType).toContain('agent_session');
     expect(docs.entities.length).toBeLessThanOrEqual(32);
     for (const doc of docs.entities)
       expect(Buffer.byteLength(doc.index)).toBeLessThan(16 * 1024);

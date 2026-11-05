@@ -169,7 +169,9 @@ function ContactDisplay(props: { contact: CrmContactEntity }) {
       <span class="truncate">
         <Show when={showEmail()} fallback={props.contact.email}>
           {props.contact.name}
-          <span class="ml-[0.5em] opacity-50">{props.contact.email}</span>
+          {/* An en space is the 0.5em gap; unlike a margin, Safari's truncated-text tooltip keeps it. */}
+          {' '}
+          <span class="opacity-50">{props.contact.email}</span>
         </Show>
       </span>
     </div>
@@ -189,7 +191,9 @@ function UserDisplay(props: { item: UserItem }) {
       <span class="truncate">
         <Show when={showEmail()} fallback={email()}>
           {name()}
-          <span class="ml-[0.5em] opacity-50">{email()}</span>
+          {/* An en space is the 0.5em gap; unlike a margin, Safari's truncated-text tooltip keeps it. */}
+          {' '}
+          <span class="opacity-50">{email()}</span>
         </Show>
       </span>
     </div>

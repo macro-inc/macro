@@ -9,6 +9,7 @@
 //! files — [`runners`] (runner labels), [`vars`] (env / secrets / concurrency),
 //! and [`steps`] (reusable step + job helpers).
 
+mod android_play_publish;
 mod android_play_release;
 mod android_release_drift;
 mod android_release_watch;
@@ -36,7 +37,6 @@ mod deploy_all_services;
 mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
 mod deploy_on_push;
-mod deploy_preview;
 mod deploy_sdk_docs;
 mod deploy_sync_service;
 mod deploy_web_app;
@@ -263,11 +263,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
         },
     },
     WorkflowFile {
-        slug: "deploy_preview",
-        file_name: "deploy_preview.yml",
-        render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
-    },
-    WorkflowFile {
         slug: "deploy_sync_service",
         file_name: "deploy_sync_service.yml",
         render_yaml: || {
@@ -346,6 +341,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "android_play_release",
         file_name: "android-play-release.yml",
         render_yaml: || render_gh_workflow(android_play_release::android_play_release)(),
+    },
+    WorkflowFile {
+        slug: "android_play_publish",
+        file_name: "android-play-publish.yml",
+        render_yaml: || render_gh_workflow(android_play_publish::android_play_publish)(),
     },
     WorkflowFile {
         slug: "android_release_watch",

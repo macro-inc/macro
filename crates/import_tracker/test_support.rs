@@ -20,6 +20,7 @@ impl ConnectionStore for Store {
             server_name: slug.into(),
             account_id: "apn_test".into(),
             enabled: true,
+            provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
         }))
     }
     async fn save(&self, _: &PipedreamConnection) -> Result<(), Self::Err> {

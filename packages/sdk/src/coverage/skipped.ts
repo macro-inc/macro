@@ -61,7 +61,6 @@ export const authExcluded = [
   'deleteCursorApiKey',
   'deleteGithubLink',
   'deleteTeam',
-  'deleteTeamInviteHandler',
   'deleteTeamInviteLink',
   'deleteUser',
   'disconnectCodex',
@@ -76,13 +75,11 @@ export const authExcluded = [
   'getGtmInviteOffer',
   'getLegacyUserPermissions',
   'getPermissions',
-  'getReferralCode',
   // Renewal and scheduled-plan details are part of the app's billing settings.
   'getSubscriptionStatus',
   'getTeamByInviteLink',
   'getTeamInviteLink',
   'getSystemStatus',
-  'getTeamInvites',
   // Introductory offers belong to the app's subscription checkout flow.
   'getTrialEligibility',
   'getUserInvites',
@@ -98,7 +95,6 @@ export const authExcluded = [
   'initGithubLink',
   'initGmailLink',
   'initOutlookLink',
-  'inviteToTeam',
   'joinTeam',
   'joinTeamByInviteLink',
   'listCodexEnvironments',
@@ -125,8 +121,9 @@ export const authExcluded = [
   'putCursorApiKey',
   'putCursorDefaultModel',
   'putProfilePicture',
+  // Internal to the web app's agent signup; the token is shown in its modal.
+  'agentSetup',
   'putUserLanguage',
-  'putUserName',
   'redeemGtmInviteLink',
   'refresh',
   'rejectInvitation',
@@ -136,7 +133,6 @@ export const authExcluded = [
   'revokeGtmInviteLink',
   'sendMobileWelcomeEmail',
   'sendTeamDomainNotice',
-  'sendReferralCode',
   'sessionCreation',
   'sessionLogin',
   'setGithubPullRequestDraft',
@@ -169,6 +165,7 @@ export const cognitionExcluded = [
   'addMcpServer',
   'browsePipedreamMcpCatalog',
   'callTool',
+  'completePipedreamMcpConnect',
   'completePipedreamMcpConnection',
   'createPipedreamMcpToken',
   'deletePipedreamMcpConnection',
@@ -262,9 +259,11 @@ export const notificationExcluded = [
   'healthHandler',
   'removeUnsubscribeAll',
   'removeUnsubscribeItem',
+  'removeUnsubscribeItems',
   'unsubscribeAll',
   'unsubscribeEmail',
   'unsubscribeItem',
+  'unsubscribeItems',
 ] as const satisfies readonly (keyof NotificationSdk)[];
 
 export const notificationBacklog =
@@ -280,6 +279,9 @@ export const propertiesBacklog =
   [] as const satisfies readonly (keyof PropertiesSdk)[];
 
 export const scheduledActionExcluded = [
+  'draftRoutine', // The routine editor's AI drafting; agents use CreateRoutine.
+  'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
+  'routineCodeStarters', // The new-routine flow's starter code steps.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
@@ -390,7 +392,6 @@ export const storageExcluded = [
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',
-  'removeBotFromChannelByBot',
   // Storage for the web app's saved questions, not a user-facing surface.
   'saveDatabaseQuery',
   // Live presence between viewers of a database, internal to the web app.

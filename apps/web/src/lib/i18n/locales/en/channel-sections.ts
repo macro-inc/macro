@@ -36,7 +36,7 @@ export default {
   markLabelReadFailed: 'Failed to mark channel label as read',
   muteAllChannels: 'Mute all channels',
   unmuteAllChannels: 'Unmute all channels',
-  snoozeAllChannels: 'Snooze all channels…',
+  snoozeAllChannels: 'Snooze all channels',
   notificationsFailed:
     'Could not update section notifications. Please try again.',
   deleteForEveryone: 'Delete for everyone',
@@ -49,7 +49,7 @@ export default {
   resizeSection: 'Resize {{name}}',
   resizeSectionHint: 'Drag to resize. Double-click to reset.',
   reorderSection: 'Reorder {{name}}',
-  reorderSectionHint: 'Drag to reorder. Use arrow keys to move up or down.',
+  reorderSectionHint: 'Drag to reorder.',
   expandAllSections: 'Expand all sections',
   collapseAllSections: 'Collapse all sections',
   loading: 'Loading sections…',
@@ -66,6 +66,18 @@ export default {
   sharedShort: 'Shared',
   personal: 'Personal',
   shared: 'Shared with team',
+  sharingHelpLabel: 'About shared sections',
+  sharingHelp:
+    'Team members can see and organize shared sections. Only team channels can be added.',
+  checkingSharing: 'Checking channel eligibility…',
+  sharingIneligibleChannels:
+    'This section contains channels outside your team. Remove them before sharing.',
+  sharingUnavailableChannels:
+    'All section channels must be available to you before changing sharing.',
+  makePersonalTitle: 'Make section personal?',
+  makePersonalBody:
+    '“{{name}}” will disappear from your teammates’ sidebars. Its channels will remain unchanged.',
+  makePersonal: 'Make personal',
   sharedSectionHint: 'Shared with your team. Team channels only.',
   cannotDropHere: 'This item cannot be added here.',
   smartSectionDropHint: 'Smart sections add channels by name, not by dragging.',
@@ -112,10 +124,7 @@ export default {
   loadingChannels: 'Loading channels…',
   channelsUnavailable: 'Could not load channels.',
   noChannelsToAdd: 'No more channels are available to add.',
-  teamChannelsOnly:
-    'Shared sections only include channels from your team that you have joined. Private and public channels belong in personal sections.',
-  personalChannelsHint:
-    'Personal sections can include team, public, and private channels you have joined.',
+  teamChannelsOnly: 'Team channels only',
   addPersonalChannelsHint:
     'Add any joined channel. Moves channels from other personal sections.',
   addSharedChannelsHint:

@@ -1,6 +1,9 @@
 use models_opensearch::SearchIndex;
 
-use crate::{Result, error::OpensearchClientError};
+use crate::{
+    Result,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 #[cfg(test)]
 mod test;
@@ -28,22 +31,19 @@ pub async fn delete_email_by_link_id(client: &opensearch::OpenSearch, link_id: &
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
         .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some("delete_email_by_link_id".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::DeleteEmailByLinkId, &err)
         })?;
 
     let status_code = response.status_code();
 
     if !status_code.is_success() {
-        let body =
-            response
-                .text()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some("delete_email_by_link_id".to_string()),
-                })?;
+        let body = response.text().await.map_err(|err| {
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::DeleteEmailByLinkId,
+                &err,
+            )
+        })?;
 
         tracing::error!(
             status_code = ?status_code,
@@ -53,7 +53,7 @@ pub async fn delete_email_by_link_id(client: &opensearch::OpenSearch, link_id: &
 
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some("delete_email_by_link_id".to_string()),
+            operation: OpensearchOperation::DeleteEmailByLinkId,
         });
     }
 
@@ -82,22 +82,19 @@ pub async fn delete_email_message_by_id(
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
         .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some("delete_email_message_by_id".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::DeleteEmailMessageById, &err)
         })?;
 
     let status_code = response.status_code();
 
     if !status_code.is_success() {
-        let body =
-            response
-                .text()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some("delete_email_message_by_id".to_string()),
-                })?;
+        let body = response.text().await.map_err(|err| {
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::DeleteEmailMessageById,
+                &err,
+            )
+        })?;
 
         tracing::error!(
             status_code = ?status_code,
@@ -107,7 +104,7 @@ pub async fn delete_email_message_by_id(
 
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some("delete_email_message_by_id".to_string()),
+            operation: OpensearchOperation::DeleteEmailMessageById,
         });
     }
 
@@ -133,22 +130,19 @@ pub async fn delete_email_by_user_id(client: &opensearch::OpenSearch, user_id: &
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
         .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some("delete_email_by_user_id".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::DeleteEmailByUserId, &err)
         })?;
 
     let status_code = response.status_code();
 
     if !status_code.is_success() {
-        let body =
-            response
-                .text()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some("delete_email_by_user_id".to_string()),
-                })?;
+        let body = response.text().await.map_err(|err| {
+            OpensearchClientError::deserialization_failed(
+                OpensearchOperation::DeleteEmailByUserId,
+                &err,
+            )
+        })?;
 
         tracing::error!(
             status_code = ?status_code,
@@ -158,7 +152,7 @@ pub async fn delete_email_by_user_id(client: &opensearch::OpenSearch, user_id: &
 
         return Err(OpensearchClientError::Unknown {
             details: body,
-            method: Some("delete_email_by_user_id".to_string()),
+            operation: OpensearchOperation::DeleteEmailByUserId,
         });
     }
 

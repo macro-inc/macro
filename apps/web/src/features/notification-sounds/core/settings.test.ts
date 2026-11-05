@@ -53,6 +53,7 @@ it('plays the sound chosen for the notification category', () => {
       categories: {
         mentions: { enabled: true, sound: 'bloom' },
         email: { enabled: false, sound: 'chime' },
+        other: { enabled: true, sound: 'pluck' },
       },
     })
   );
@@ -62,6 +63,42 @@ it('plays the sound chosen for the notification category', () => {
     'bloom'
   );
   expect(soundForNotification('new_email', settings)).toBeNull();
+  expect(soundForNotification('channel_access_requested', settings)).toBe(
+    'pluck'
+  );
+});
+
+it('stays quiet during quiet hours and plays again outside them', () => {
+  const settings = parseNotificationSoundSettings(
+    JSON.stringify({
+      enabled: true,
+      quietHours: {
+        enabled: true,
+        startMinutes: 22 * 60,
+        endMinutes: 8 * 60,
+        days: ['tue'],
+        timeZone: 'UTC',
+      },
+    })
+  );
+
+  expect(
+    soundForNotification(
+      'channel_mention',
+      settings,
+      new Date('2026-11-03T23:30:00Z')
+    )
+  ).toBeNull();
+  expect(
+    soundForNotification(
+      'channel_mention',
+      settings,
+      new Date('2026-11-03T12:00:00Z')
+    )
+  ).toBe('ding');
+  expect(parseNotificationSoundSettings('{"enabled":true}').quietHours).toEqual(
+    DEFAULT_NOTIFICATION_SOUND_SETTINGS.quietHours
+  );
 });
 
 it('stays quiet for calls, muted volume, and unknown events', () => {
@@ -70,6 +107,7 @@ it('stays quiet for calls, muted volume, and unknown events', () => {
   );
 
   expect(soundForNotification('call_started', settings)).toBeNull();
+  expect(soundForNotification('channel_access_requested', settings)).toBeNull();
   expect(soundForNotification('event_from_a_newer_backend', settings)).toBe(
     null
   );

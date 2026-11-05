@@ -195,9 +195,22 @@ pub async fn resolve_soup_agent_session<Edges>(
 where
     Edges: SoupEntityEdges,
 {
-    let loader = &ctx.data::<AgentSessionEntityLoader>()?.0;
+    let loader = ctx.data::<AgentSessionEntityLoader>()?;
+    load_soup_agent_session(loader, user_id, session_id).await
+}
+
+/// [`resolve_soup_agent_session`] for a caller holding the loader, such as a subscription stream,
+/// which outlives its request context.
+pub async fn load_soup_agent_session<Edges>(
+    loader: &AgentSessionEntityLoader,
+    user_id: MacroUserIdStr<'static>,
+    session_id: uuid::Uuid,
+) -> async_graphql::Result<Option<GraphqlSoupAgentSession<Edges>>>
+where
+    Edges: SoupEntityEdges,
+{
     let entity = EntityType::AgentSession.with_entity_string(session_id.to_string());
-    let Some(item) = loader.load_one((user_id, entity)).await? else {
+    let Some(item) = loader.0.load_one((user_id, entity)).await? else {
         return Ok(None);
     };
 

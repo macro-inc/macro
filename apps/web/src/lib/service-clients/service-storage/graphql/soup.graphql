@@ -606,6 +606,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		channelMessageReactionChannelName: channelName
 		channelMessageReactionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
+	... on GraphqlChannelAccessRequestedMetadata {
+		channelAccessRequestedRequestId: requestId
+		channelAccessRequestedChannelType: channelType
+		channelAccessRequestedChannelName: channelName
+		channelAccessRequestedSenderProfilePictureUrl: senderProfilePictureUrl
+	}
 	... on GraphqlChannelReplyMetadata {
 		channelReplyThreadId: threadId
 		channelReplyMessageId: messageId
@@ -627,6 +633,11 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	}
 	... on GraphqlInboxReauthRequiredMetadata {
 		inboxReauthRequiredEmailAddress: emailAddress
+	}
+	... on GraphqlRoutineRunFinishedMetadata {
+		routineRunFinishedRoutineId: routineId
+		routineRunFinishedRoutineName: routineName
+		routineRunFinishedSucceeded: succeeded
 	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName

@@ -49,7 +49,7 @@ mod threads;
 // auth based constants
 pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
-pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
+pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let sync_sessions = state.sync_sessions.clone();
     let app = api_router(state.clone())
         .layer(
@@ -256,7 +256,11 @@ fn api_router(state: ApiContext) -> Router {
         ))
         .nest(
             "/channels",
-            channels::inbound::axum_router::channels_router(state.channels_state.clone()),
+            channels::inbound::axum_router::channels_router(state.channels_state.clone()).merge(
+                channels::inbound::axum_router::channel_access_requests_router(
+                    state.channels_state.clone(),
+                ),
+            ),
         )
         .nest(
             "/messages",

@@ -39,7 +39,7 @@ export function DatabaseMentionLabel(props: {
         >
           {props.icon}
         </span>
-        <span class="truncate">
+        <span class="truncate" data-database-mention-label>
           {props.name || mentionTypeLabel(props.entityType)}
         </span>
       </span>

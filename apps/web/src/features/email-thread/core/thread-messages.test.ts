@@ -3,6 +3,7 @@ import { message, thread } from '../tests/fixtures';
 import {
   selectEmlMessage,
   selectThreadMessages,
+  selectThreadParticipants,
   selectThreadSender,
 } from './thread-messages';
 
@@ -69,6 +70,43 @@ describe('thread message selection', () => {
     expect(selectThreadSender(thread([own, reply]), 'viewer@example.com')).toBe(
       'external@example.com'
     );
+  });
+  it('invites everyone the thread was from, to or cc, once each, without the viewer, bcc or drafts', () => {
+    const later = message('later', {
+      from: { email: 'Bob@example.com' },
+      to: [{ email: 'VIEWER@example.com' }, { email: 'alice@example.com' }],
+      cc: [{ email: 'carol@example.com' }],
+      bcc: [{ email: 'hidden@example.com' }],
+      internal_date_ts: '2026-09-02T00:00:00Z',
+    });
+    const original = message('original', {
+      from: { email: 'alice@example.com' },
+      to: [{ email: 'viewer@example.com' }, { email: 'bob@example.com' }],
+      internal_date_ts: '2026-09-01T00:00:00Z',
+    });
+    const fromLogin = message('from-login', {
+      from: { email: 'me@macro.example' },
+      to: [{ email: 'dave@example.com' }],
+      internal_date_ts: '2026-09-03T00:00:00Z',
+    });
+    const draft = message('draft', {
+      is_draft: true,
+      replying_to_id: 'later',
+      to: [{ email: 'drafted@example.com' }],
+      internal_date_ts: '2026-09-04T00:00:00Z',
+    });
+    expect(
+      selectThreadParticipants(
+        thread([draft, fromLogin, later, original]),
+        'viewer@example.com',
+        'me@macro.example'
+      )
+    ).toEqual([
+      'alice@example.com',
+      'bob@example.com',
+      'carol@example.com',
+      'dave@example.com',
+    ]);
   });
   it('never offers a deleted draft as the reply draft or the draft to edit', () => {
     const parent = message('parent');

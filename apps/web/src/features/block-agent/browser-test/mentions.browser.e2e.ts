@@ -62,3 +62,25 @@ test('literal mention examples stay code when stopped and reloaded', async ({
   );
   await expect(reply).toContainText('as the tag name.');
 });
+
+test('mentions without a documentName render as typed chips', async ({
+  page,
+}) => {
+  await page.goto('/mentions.html?unnamed');
+  const reply = page.getByRole('region', { name: 'Agent reply' });
+  const chips = reply.locator('[data-document-mention]');
+  await expect(chips).toHaveCount(5, { timeout: 30_000 });
+  for (const [index, blockName] of [
+    'calendar',
+    'email',
+    'call',
+    'channel',
+    'md',
+  ].entries()) {
+    await expect(chips.nth(index)).toHaveAttribute(
+      'data-block-name',
+      blockName
+    );
+  }
+  await expect(reply).not.toContainText('Unknown');
+});

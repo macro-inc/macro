@@ -14,11 +14,16 @@ import type {
   ActionConfiguration,
   ActionConfigurationUpdate,
   ActionExecutionRecord,
+  CodeUpgrade,
+  Draft,
+  DraftRoutineRequest,
   InProgressExecution,
   RoutineTemplate,
   ScheduledAction,
+  ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
+  StarterRoutine,
 } from './generated/schemas';
 
 const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
@@ -47,7 +52,7 @@ export const scheduledActionClient = {
     }),
   // Include every trigger type in the routine list.
   listSchedules: async () =>
-    scheduledActionFetch<ScheduledAction[]>(
+    scheduledActionFetch<ScheduledActionResponse[]>(
       '/scheduled-actions?include_events=true',
       {
         method: 'GET',
@@ -100,6 +105,29 @@ export const scheduledActionClient = {
   listHistory: async (args: { scheduleId: string }) =>
     scheduledActionFetch<ActionExecutionRecord[]>(
       `/scheduled-actions/${args.scheduleId}/history`,
+      { method: 'GET' }
+    ),
+
+  /** Starter routines whose step is code; empty where code can't be saved. */
+  codeStarters: async () =>
+    scheduledActionFetch<StarterRoutine[]>('/scheduled-actions/code/starters', {
+      method: 'GET',
+    }),
+
+  /** Have AI draft a routine or one of its steps, its code checked as saving would. */
+  draftRoutine: async (body: DraftRoutineRequest) =>
+    fetchWithToken<Draft, typeof AI_USAGE_LIMIT_ERROR>(
+      `${scheduledActionHost}/scheduled-actions/drafts`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: aiUsageErrorResponseHandler,
+      }
+    ),
+
+  listCodeUpgrades: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<CodeUpgrade[]>(
+      `/scheduled-actions/${args.scheduleId}/code-upgrades`,
       { method: 'GET' }
     ),
 

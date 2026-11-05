@@ -21,6 +21,32 @@
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
 
+## Agent accounts
+
+`/app/signup/agent` is the agent signup page: Google or an emailed code, without
+the opening slides. The first slide of `/app/signup` links to it (`Sign up as
+agent`), as does `/mobile-signup`, and the marketing site's HTML carries a hidden
+notice pointing agents there. A new account made there, or by redeeming an invite
+sent with **Invite as agent** in Settings → Team → Members or
+`team.invite(email, { agent: true })`, is an agent. An existing account keeps its
+type. An agent invite email links to `/app/signup/agent?team_invite=<id>`; a signed-in
+account that isn't a new agent continues to `/app/team-invite?id=<id>`.
+
+After the code or Google sign-in, an agent skips onboarding and goes to
+`/app/agent-setup`, a markdown page with the SDK token as plain page text, the
+product and SDK docs links, how to set a name and profile picture, install and pair
+`macrod`, and create more tokens, and a link to the app. The app shell sends an unconfirmed agent back here. An
+invited agent also joins the inviting team at this point; if that fails, the page
+says so and the invite stays pending: reloading tries again, and the emailed invite
+link still works after confirming. Each reload before following the link to
+`/app/agent-setup/done` replaces the token; afterwards the page redirects to the app.
+
+An email agent signup skips the seeded content and marketing emails. A Google agent
+signup is flagged when the sign-in returns, after FusionAuth's `user.create` webhook
+has run, so it gets them like a person's signup. Requesting a code outside the agent
+signup page, or signing in with SSO outside it, reverts the account to a person unless
+it holds a token, has confirmed setup, or has a pending agent invite.
+
 Production Google/SSO and inbox/calendar connections may return to either
 `https://macro.com` or `https://www.macro.com`. Verify connections from both hosts;
 the web inbox link flow returns to `/app/inbox-link-callback` on the originating host.
@@ -66,6 +92,12 @@ sign-in still apply. See the [authentication-service configuration guide](../../
 for restoring allowlist enforcement.
 
 ## GraphQL cache session lifecycle
+
+For local browser checks signed in through the passwordless HTTP API, copy the
+returned cookies into the browser context and set localStorage `macro:login` to
+`true` before the app loads. The app uses that hint to start its identity check;
+the HttpOnly session cookie alone does not start it. Normal UI login sets the
+hint automatically. The backend still verifies the session.
 
 Signed-out pages use the network client without creating the GraphQL cache,
 draft queue runner, or live-update subscriptions. Signing in activates them in
@@ -372,6 +404,16 @@ The session lives in cookies (`local-macro-access-token`, `local-macro-refresh-t
 survives page reloads but not a browser-profile restart — if the shared Chromium is restarted
 with a fresh profile you must log in again. Workspace data (docs, channels, tasks) persists on
 the backend across logins for the same email.
+
+### Stalled session refresh
+
+When an expired session triggers cookie-auth refresh, every waiting request and
+socket setup shares one refresh, which settles within 12 seconds as a
+retryable network failure, or sooner when the native network path drops.
+Cancelling one view stops only its own wait. After a timeout the next request
+starts a fresh refresh; a timeout never signs the user out or reloads the app.
+Returning to the app expires a refresh that started more than 12 seconds
+earlier, so requests after a resume start a fresh one instead of waiting.
 
 ### Google OAuth through a remote local stack
 

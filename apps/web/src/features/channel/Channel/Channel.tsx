@@ -5,6 +5,7 @@ import {
 import { AgentConversationsProvider } from '@app/features/agent-conversations/agent-conversations-provider';
 import { AgentDmComposer } from '@app/features/agent-dms/agent-dm-composer';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
+import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
 import { usePending } from '@app/observability/flow';
 import { startUiOperation } from '@app/observability/ui-operation';
 import { createActivityTracker } from '@channel/activity-tracker';
@@ -95,6 +96,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { ChannelAccessDenied } from '../ChannelAccessDenied';
 import {
   createInputAttachmentTracker,
   type InputHandle,
@@ -499,6 +501,11 @@ export function Channel(props: ChannelProps) {
         type: 'component',
         id: 'task-compose',
         params: {
+          composerContext: taskSourceComposerContext({
+            entity_type: 'CHANNEL',
+            entity_id: props.channelId,
+            specific_message_id: ctx.message.id,
+          }),
           initialTitle: title,
           initialContent: buildChannelMessageMention(ctx.message),
           initialAssigneeIds:
@@ -762,6 +769,14 @@ export function Channel(props: ChannelProps) {
         loadingFallback={<ChannelLoading />}
         loadErrorTitle="Unable to load this channel"
         onRetry={() => fireAndForget(messagesQuery.refetch(), 'channel')}
+        unauthorized={
+          <ChannelAccessDenied
+            channelId={props.channelId}
+            onRefreshChannel={() =>
+              fireAndForget(messagesQuery.refetch(), 'channel')
+            }
+          />
+        }
       >
         <DebugSuspense name="Channel.root" fallback={<ChannelLoading />}>
           <deleteConfirmation.ConfirmationDialog />
@@ -864,6 +879,7 @@ export function Channel(props: ChannelProps) {
                                           listMeta={listMetaByKey()[item.id]}
                                         >
                                           <SystemActivity
+                                            channelId={props.channelId}
                                             event={decodeSystemActivityRow(
                                               messageIndex.activityGroupByKey.get(
                                                 item.id

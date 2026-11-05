@@ -52,6 +52,9 @@ macro_env_var::maybe_env_vars!(
     pub struct PosthogApiKey;
     /// Regional PostHog ingestion origin; defaults to the US origin.
     pub struct PosthogHost;
+    /// Macro's customer key for the Macro Connect API. When unset, Connect
+    /// is off and every connection goes through Pipedream.
+    pub struct ConnectCustomerKey;
     /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
     pub struct CodexOauthKmsKeyId;
     /// Rollout gate for sessions owned by a bot.
@@ -97,9 +100,12 @@ pub struct Config {
     pub google_client_id: GoogleClientId,
     /// Secret name of the Google OAuth client credential.
     pub google_client_secret_key: GoogleClientSecretKey,
+    /// Token served at `/.well-known/openai-apps-challenge`.
+    pub openai_domain_verification_token: OpenaiDomainVerificationToken,
     /// Browser-reachable FusionAuth origin, when different from the API.
     pub fusionauth_public_url: FusionauthPublicUrl,
-    /// Additional trusted client callback hosts, overriding the built-in list.
+    /// MCP client callback hosts trusted without the consent screen, overriding
+    /// the built-in list.
     pub mcp_allowed_redirect_hosts: McpAllowedRedirectHosts,
 
     /// Hide agent DM contexts from standalone lists. Enable only after all
@@ -110,6 +116,9 @@ pub struct Config {
     pub posthog_api_key: PosthogApiKey,
     /// Same regional origin as the frontend's PostHog project.
     pub posthog_host: PosthogHost,
+    /// Customer key for Macro Connect; sandboxes reach Connect-held grants
+    /// through its MCP gateway.
+    pub connect_customer_key: ConnectCustomerKey,
     /// Pinned Deno executable. Unset hosts do not advertise code execution.
     pub deno_binary: Option<String>,
     /// Default-off quota admission and prospective usage counting.
@@ -369,6 +378,9 @@ macro_env_var::env_vars! {
     pub struct GoogleClientId;
     /// Public MCP OAuth configuration.
     pub struct GoogleClientSecretKey;
+    /// OpenAI domain verification token for the ChatGPT Apps Directory,
+    /// served at `/.well-known/openai-apps-challenge`.
+    pub struct OpenaiDomainVerificationToken;
 }
 macro_env_var::maybe_env_vars! {
     /// Optional public MCP OAuth configuration.

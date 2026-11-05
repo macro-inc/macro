@@ -13,6 +13,8 @@ DMs, and the shared message store other domains discuss things on.
 - `src/domain/dm.rs`, `src/domain/teammate_dms.rs`: direct-message channels.
 - `src/domain/reference_sharing.rs`: sharing an external item (PDF, doc, CRM
   record) into a channel.
+- `src/domain/access_requests.rs`, `src/domain/service/access_requests.rs`:
+  requests to join a private or team channel, answered by any participant.
 - `src/inbound/attachment.rs`: the `AttachmentService` impl for channel messages.
 - `src/inbound/toolset.rs`: AI tools over channels (feature `ai_tools`).
 - `src/outbound/pg_channels_repo.rs`, `src/outbound/connection_gateway_realtime.rs`:
@@ -56,7 +58,22 @@ DMs, and the shared message store other domains discuss things on.
 
 ## Gotchas
 
+- Deletion is authorized in `ChannelServiceImpl::delete_channel`: the channel
+  participant owner may delete it; a team owner/admin may delete only a `team`
+  channel whose `team_id` matches their membership. Membership in a channel or
+  the channel creator's team never grants deletion authority on its own. Both
+  REST deletion and permanent entity deletion call this policy.
+
 - Human DM messages to nonusers use immediate email, including mentions and replies; empty DM creation, bot messages, and silent/mentions-only policies do not trigger this path. Keep registered recipients on their normal notification routes.
+- Channel access requests are separate from `crates/access_requests`: access is
+  membership, and every participant reviews. Each attempt is its own row so a
+  timeline entry keeps its outcome. Approval adds the member in the request's
+  transaction, then dispatches `ParticipantsAdded`; the announcement reaches the
+  timeline through `macro.channels` and the activity consumer.
+  Withdrawal starts the one-minute retry cooldown at `resolved_at`, even when
+  the request has been pending longer than a minute.
+  Completing a resolved request's notification attempts every recipient before
+  returning a recipient update error.
 
 - A person's message shares every item it links; a bot message posted for a
   person (`triggered_by`) shares, as that person, only the linked items the
@@ -77,10 +94,16 @@ DMs, and the shared message store other domains discuss things on.
   records, calls) are authorized in `ChannelServiceImpl::get_attachment_references`
   through the `CommentParentAccess` port; the repo returns every parent. A
   service built without `with_comment_parent_access` withholds them.
-- The channel list's unseen/seen filter matches a set built once from the
-  user's notifications (`= ANY(ARRAY(...))`). A per-channel `EXISTS` or plain
-  `IN` walks every candidate channel's notification history; that was ~24% of
-  the prod read replica's buffer hits.
+- Notification filters read `user_notification`'s copied entity columns, never a
+  `notification` join: through `notification`, a per-channel check walks every
+  user's history on the channel (once ~24% of the prod read replica's buffer
+  hits). The channel list seeks `idx_user_notification_viewer_entity` once per
+  candidate channel; an array of the user's notified channels reads every
+  notification the user has in that state, PR ones included.
+- The thread feed's notified roots skip `channel_message_send` rows, which never
+  name a thread, so `idx_user_notification_channel_threads` holds only rows
+  that can. Web Home sends `(unseen OR seen) AND unseen`;
+  `drop_implied_notification_conjuncts` folds that to one notification read.
 
 ## Related
 

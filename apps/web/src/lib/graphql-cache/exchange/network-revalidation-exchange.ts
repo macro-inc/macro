@@ -38,10 +38,19 @@ export function networkRevalidationExchange(
         finish(operation.key);
       }
       if (operation.kind !== 'query') return operation;
+      const authorization = operation.context.queryAuthorization;
       const id = ++requestId;
       const tagged = makeOperation('query', operation, {
         ...operation.context,
         [REQUEST_CONTEXT_KEY]: id,
+        ...(authorization
+          ? {
+              queryAuthorization: {
+                ...authorization,
+                version: authorization.currentVersion(),
+              },
+            }
+          : {}),
       });
       queries.set(operation.key, { operation: tagged, requestId: id });
       return tagged;

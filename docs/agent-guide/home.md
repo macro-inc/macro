@@ -127,6 +127,17 @@ them back. The DM remains in Channels/DMs; authorized direct session links and
 explicitly saved favorites still open their context. Verify this alongside an
 ordinary standalone session, which remains listed.
 
+A session started from a thread (a mention in a channel, document or call, or a
+task assignment) stays out of Home, Recent and the Agents sidebar for everyone,
+owner included, whichever agent runs it; the thread is where it is reached.
+Follow-up mentions in that thread list it for nobody either. A person who
+prompts the session from the session view itself (after **Open session**)
+follows it: from then on it lists for them in Home, Recent and Agents while they
+can still open it, and nobody else's lists change. Prompting never changes
+anyone's access. Verify with two accounts: mention an agent in a document
+thread and check neither lists it, then have the second account open the
+session, send a prompt, and check the row appears for that account only.
+
 The Agents workspace uses a single left dot for activity and unread state in
 place of the sparkle. Clicking a session row in Home or the Agents sidebar
 clears the row's loaded unread dot immediately; a failed read write restores
@@ -169,6 +180,14 @@ arrow-key browsing keeps it open. Preview headers start with **Home >**. Clickin
 **Home** clears the preview and returns to the starting pane without changing
 sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
 show the activity list alone.
+
+Project rows, including unread discussion notifications, open the project Overview
+inside Home on desktop. The preview keeps the Home return breadcrumb, project
+properties, description, and discussion; a discussion notification targets its
+message. Overview/Tasks tabs stay inside the Home preview, and reloading its URL
+restores the section and discussion target. Shift-click still opens the project
+in a split; touch opens the full-screen project page. Verify clicking an unread
+project row, switching tabs, returning Home, and reopening the same comment.
 
 Desktop previews use the same header controls as their standalone views, with
 the **Home >** return breadcrumb added. Calendar shares its date, search,
@@ -231,6 +250,8 @@ On mobile, the dock uses the bell icon and **Notifications**
 label; Home is desktop-only. Notifications has no merged own-activity feed or
 chat starting pane. Opening a row navigates to its entity. On iOS, rows fade
 underneath the filters and status bar using the shared top edge gradient.
+With `enable-unified-notifications` on, the bell opens the unified
+Notifications view instead (see [notifications.md](notifications.md)).
 
 Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
 unseen or seen. Viewing must not reopen a done notification; undoing done (`Ctrl+Z`

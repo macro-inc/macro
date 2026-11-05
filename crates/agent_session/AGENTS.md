@@ -39,7 +39,8 @@ consumer talks to.
   `macro_authorization`.
 - Used by: `agent_harness`, `agent_inmem`, `agent_egress`, `agent_trigger`,
   `agent_changes`, `agent_session_realtime`, `ai_tools` (coding-agent
-  toolset), `complete_graph`, `webhook`, `search_service`, `soup_realtime`,
+  toolset), `complete_graph`, `graphql_registered_work`, `webhook`,
+  `search_service`, `soup_realtime`,
   and the cloud-agent crates (`cursor_cloud_agents`, `codex_cloud_agents`).
 
 ## Recipes
@@ -95,6 +96,27 @@ restore, so a session auto-archives at most once. A session archives for pull
 requests once every linked pull request is closed and at least one merged;
 links with no `github_pull_request` row count as open.
 
+Registered work (`domain/work_registration.rs`, `outbound/postgres/work_registration.rs`,
+`inbound/axum_router/work_registration.rs`, `inbound/work_registration_sweep.rs`): any account
+registers a session it can edit as its work; registering shares nothing, and readers see only
+sessions they can view. Rows in `work_registration` end, never delete, and a later turn does
+not bring one back. Finished pull requests end them from the pull request consumer regardless
+of auto-archive preferences; every archive path ends them in its own transaction, so a new
+archive path must call `end_work_registrations_on_archive`; the sweep ends idle and blocked
+sessions and catches up on the rest, in one guarded statement that is safe across replicas.
+`WorkRegistrationRealtime` wraps a session service's realtime so turn, rename, and archive
+changes reach viewers of registered sessions as Soup patches
+(`soup_realtime::outbound::agent_sessions::SoupWorkRegistrationSignal`); wrap any new
+publisher of list-field changes. GraphQL is `graphql_registered_work`.
+
+Followers: a session started from a thread (`SessionPurpose::visibility`, any
+agent) is `hidden`. The harness calls `add_follower` beside `set_turn_prompter`
+for a prompt typed into the session itself (`QueuedEntry::direct_prompter`: a
+human prompt with no `announce` origin and no trigger `context`), recording an
+`agent_session_follower` row; Soup lists hidden sessions for their followers.
+Thread mentions, runtime-forwarded triggers, system and bot turns record
+nothing. Following never grants access.
+
 Session names: the first prompt names a session (`set_name_if_default`), and
 after each turn that ends with a reply, `domain/retitle.rs` hands the
 conversation digest to the namer. `name_generation::ClassifiedRetitle` asks Jev
@@ -109,7 +131,9 @@ through `set_name` clears it, so a name a person chose is never replaced.
 ## Gotchas
 
 - Where a session is shown is `agent_session.visibility` (`listed`,
-  `unlisted`, `hidden`); `hidden` replaces `list_hidden`. Never read or write
+  `unlisted`, `hidden`), set at creation and changed later only by warm
+  claims and the DM-context backfill (`list_visibility.rs`).
+  `hidden` replaces `list_hidden`. Never read or write
   `list_hidden`: until a later migration drops it, the
   `agent_session_hidden_sync` trigger keeps it in step for replicas on older
   code, and it must keep sorting before `agent_session_legacy_warm_write`

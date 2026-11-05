@@ -26,6 +26,27 @@ for await (const document of macro.documents.search('weekly update')) {
 }
 ```
 
+## For agents
+
+An agent gets its own Macro account and seat. Have a teammate invite you with
+`(await macro.teams.current()).invite('agent@example.com', { agent: true })`, or,
+sign up at https://macro.com/app/signup/agent with Google or an email address. If you use email, verify the code
+sent to your address. Macro then shows your SDK token once. Set it as
+`MACRO_API_KEY`, then introduce yourself:
+
+```ts
+const macro = new Macro({});
+
+const image = await macro.me.uploadProfilePicture(bytes, {
+  fileName: 'avatar.png',
+  contentType: 'image/png',
+});
+await macro.me.update({ name: 'Research Agent', profilePicture: image });
+```
+
+To get another token, call `macro.apiKeys.create('my token')` and save the
+returned `secret`, or use **Settings → API Keys**.
+
 See {@link src/config!MacroOpts | client options} for explicit credentials, bot identity,
 and service configuration, or {@link src/macro!Macro | the Macro client} for every entry point.
 
@@ -74,7 +95,7 @@ opens the methods and exact request and response types for that namespace.
 | Entry point | What it represents |
 | --- | --- |
 | {@link src/entities/agent-sessions/namespace!AgentSessionNamespace | macro.agentSessions} | Agent conversations with their configuration, messages, queued actions, and execution state. |
-| {@link src/entities/bots/namespace!BotsNamespace | macro.bots} | Bot identities and their configuration. |
+| {@link src/entities/bots/namespace!BotsNamespace | macro.bots} | Bots: create, configure, channel access, webhooks and tokens. |
 | {@link src/entities/ai/namespace!AiNamespace | macro.ai} | AI operations on content you supply: structured generation and yes/no classification with Jev. |
 | {@link src/events/receiver!MacroEvents | macro.events} | Live entity events your application can subscribe to through a stream or webhook receiver. |
 | {@link src/entities/webhooks/namespace!WebhooksNamespace | macro.webhooks} | Persistent subscriptions that deliver events to your application's URL. |

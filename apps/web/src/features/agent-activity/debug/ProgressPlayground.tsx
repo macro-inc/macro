@@ -207,14 +207,10 @@ const LIST_FAILED = macro(
 const WEB_SEARCH_FAILED = macro(
   'web-search',
   'WebSearch',
-  { input: 'macro launch status' },
-  {
-    tool_use_id: 'web-search',
-    content: {
-      type: 'web_search_tool_result_error',
-      error_code: 'unavailable',
-    },
-  }
+  { query: 'macro launch status' },
+  'web_search_throttled: Web search is busy; try again shortly',
+  'failed',
+  'web_search_throttled: Web search is busy; try again shortly'
 );
 const READ_FILE = tool('read-file', 'Read', {
   kind: 'read',
@@ -634,6 +630,7 @@ function phaseOf(parts: readonly MessagePart[]): TurnPhase {
 function foldedReply(scenario: Scenario): FoldedMessage {
   return {
     agentSessionId: SESSION,
+    key: '1:agent',
     turn: 1,
     author: { kind: 'agent' },
     requestId: null,

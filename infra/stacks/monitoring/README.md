@@ -6,7 +6,7 @@ Datadog monitors and synthetic tests as code.
 Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. Everything else is declared here first and is created
 on deploy: the prod threshold and anomaly monitors (`monitors/macrodb.ts`,
-`redis.ts`, `queues.ts`, `regressions.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, one log-based metric, and one downtime.
+`redis.ts`, `queues.ts`, `regressions.ts`, `outlook-sync.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync metrics and retention filter, one other log-based metric, and one downtime.
 
 ## Routing
 
@@ -48,8 +48,8 @@ its thresholds many times a day.
 
 ## Prod threshold monitors
 
-`monitors/macrodb.ts`, `redis.ts`, `queues.ts` and `regressions.ts` declare
-the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
+`monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts` and
+`outlook-sync.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics have hand-written copies in Grafana
 (`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
@@ -57,8 +57,8 @@ Notify service), so one incident pages once. Keep thresholds and windows in sync
 anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
 `regressions.ts`, because log monitors have no anomaly function.
 
-Each of those files also declares a dashboard (MacroDB, Redis, Queue and
-Regression alerts) with one graph per monitor, titled like the monitor, its
+Each of those files also declares a dashboard (MacroDB, Redis, Queue,
+Regression alerts and Outlook sync) with one graph per monitor, titled like the monitor, its
 critical and warning thresholds drawn as markers; anomaly graphs show the band
 instead. Every prod monitor's message links to its dashboard. Change a query or
 threshold in the graph too; `routing.test.ts` checks that each monitor has a
@@ -108,14 +108,19 @@ The gate is that preview:
   `renotifyInterval` only** — the routing move to GoAlert. The two AI-editing
   monitors, already deployed from this stack, update their `message` the same
   way. `dss-errors-prod` also changes its query and critical threshold
-  (150 → 800).
+  (150 → 800), and `rds-low-freeable-memory` its query and thresholds
+  (critical 2 GB → 250 MB, warning 3 GB → 500 MB) so 2 GiB instances stop
+  alerting at their normal level.
 - **Already-deployed monitors update their `message`** (GoAlert handles instead
-  of the channel), and the GraphQL soup volume, gateway connections and task
-  count monitors their `query` and thresholds.
-- **73 resources to create**: 64 monitors (25 prod threshold and anomaly, 19 GraphQL soup, 9
-  notification retention, 10 WhatsApp session, 1 native call push), 2 webhooks,
-  1 log-based metric, the GoAlert synthetic test, the four prod alert
-  dashboards, and the notification retention dashboard. If the paging
+  of the channel), and the GraphQL soup volume, websocket upgrade, gateway
+  connections and task count monitors their `query` and thresholds (volume
+  and websocket upgrades also gain recovery thresholds).
+- **92 resources to create**: 72 monitors (31 prod threshold and anomaly, 19 GraphQL soup, 9
+  notification retention, 10 WhatsApp session, 1 native call push, 2 harness
+  presence), 2 webhooks,
+  7 log-based metrics, 3 span-based metrics and 1 APM retention filter (6, 3
+  and 1 of them for Outlook sync), the GoAlert synthetic test, the five prod
+  alert dashboards, and the notification retention dashboard. If the paging
   webhooks and GoAlert synthetic are already deployed, expect only the 2
   Notify webhooks among the webhooks.
 - **1 downtime to create**, muting `[PROD] Notification consumer: no
@@ -239,7 +244,7 @@ otherwise the missing-telemetry alerts intentionally fire. Until it ships, a
 downtime in `notification-retention.ts` mutes the prod one; delete the downtime
 once the instrumentation is deployed. This monitoring stack
 still requires a separate, explicitly approved manual deployment. Adopted
-monitors may change only in `message` and `renotifyInterval` (see the gate above).
+monitors may change only as the gate above lists.
 
 Consumers are intentionally ungrouped and do not commit offsets, so native MSK
 consumer-group lag is not meaningful. The new logs expose broker high watermark
@@ -253,3 +258,24 @@ minutes) need review against live baselines before production cleanup.
 These signals do not acknowledge delivery through PostgreSQL NOTIFY or WebSockets.
 See [the rollout runbook](../../../docs/runbooks/notification-retention.md) for
 limitations and the post-deploy verification gates.
+
+## Outlook sync coverage
+
+`monitors/outlook-sync.ts` adds **six monitors, one dashboard, six log-based
+metrics, three span-based metrics and one APM retention filter** for Outlook
+mailbox sync in the email-service pubsub workers. Its header lists every field
+it reads; [the runbook](../../../docs/runbooks/outlook-sync.md) covers each
+alert.
+
+Deploy the email-service release that emits the `outlook mailbox health` log,
+the `outlook.sync.*` spans and the Graph and token span fields before these.
+Until then every Outlook metric is empty and the monitors have no data; they
+do not alert. Span-based metrics count spans from deploy onward, not before.
+
+The mailbox metrics are tagged by `link_id`, so each Outlook mailbox adds about
+30 custom metrics (six distributions of five aggregations each). Revisit the
+per-mailbox tags before Outlook leaves its rollout flag.
+
+Thresholds come from the first production import (2026-11-03, two mailboxes,
+about 2,100 messages in 15 minutes); retune them against a few weeks of data.
+The reauthorization thresholds have no baseline yet.

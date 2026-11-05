@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{
-    PipelineToolContext, ToolFieldValue, ToolRecord, json, pairs, record_name, workflow_error,
+    PipelineToolContext, ToolFieldValue, ToolRecord, entry_name, json, pairs, workflow_error,
 };
 use crate::domain::pipeline_workflows::{EntryTarget, EntryUpdate, PipelineWorkflowService};
 
@@ -41,7 +41,7 @@ pub struct ToolEntryUpdate {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "UpdatePipelineEntries",
-    description = "Move deals to another stage or change their fields in a CRM pipeline: \"move Acme to Negotiation\", \"set the revenue on the Globex deal\", \"assign these deals to Sam\". Address each entry by entryId (from FindPipelineEntries) or by the company or contact id it tracks, and set fields by name with text values: stages and other options by label, people as \"me\", an email or a macro| user id, numbers, true/false, or dates. Several entries change in one call, all or nothing. Returns each field before and after. This changes the entry in the pipeline, not the company's own properties."
+    description = "Move deals to another stage or change their fields in a CRM pipeline: \"move Acme to Negotiation\", \"set the revenue on the Globex deal\", \"assign these deals to Sam\". Address each entry by entryId (from FindPipelineEntries) or by the company or contact id it tracks, and set fields by name with text values: stages and other options by label, people as \"me\", an email or a macro| user id, numbers, true/false, or dates. Several entries change in one call, all or nothing. If a stage the user names does not exist, say so and offer to add it with EditPipeline; never pick a similar one. Returns each field before and after: check them before saying a change is saved. This changes the entry in the pipeline, not the company's own properties."
 )]
 pub struct UpdatePipelineEntries {
     /// The pipeline.
@@ -76,8 +76,9 @@ pub struct ToolFieldChange {
 pub struct ToolUpdatedEntry {
     /// The entry.
     pub entry_id: Uuid,
-    /// The company or contact it tracks.
-    pub record: ToolRecord,
+    /// The company or contact it tracks; missing in a generic pipeline.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record: Option<ToolRecord>,
     /// The fields set.
     pub changes: Vec<ToolFieldChange>,
 }
@@ -150,7 +151,7 @@ impl<Workflows: PipelineWorkflowService> AsyncTool<PipelineToolContext<Workflows
             .iter()
             .map(|entry| ToolUpdatedEntry {
                 entry_id: entry.entry_id.into_uuid(),
-                record: (&entry.record).into(),
+                record: entry.record.as_ref().map(Into::into),
                 changes: entry
                     .changes
                     .iter()
@@ -174,7 +175,8 @@ impl<Workflows: PipelineWorkflowService> AsyncTool<PipelineToolContext<Workflows
                             format!("{} {} → {}", change.field, change.before, change.after)
                         })
                         .collect();
-                    format!("{} ({})", record_name(&entry.record), fields.join("; "))
+                    let name = entry_name(entry.record.as_ref(), entry.entry_id);
+                    format!("{name} ({})", fields.join("; "))
                 })
                 .collect::<Vec<_>>()
                 .join(", ")

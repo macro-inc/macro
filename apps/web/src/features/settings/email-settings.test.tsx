@@ -32,7 +32,16 @@ vi.mock('@queries/email/settings', () => ({
   useUpdateEmailSettingsMutation: () => ({ isPending: false, mutate: vi.fn() }),
 }));
 vi.mock('./Email', () => ({ EmailCard: () => null }));
-vi.mock('./SignatureSection', () => ({ SignatureSection: () => null }));
+vi.mock('./SignatureSection', () => ({
+  SignatureSection: (props: {
+    link: { email_address: string };
+    shared?: boolean;
+  }) => {
+    const row = document.createElement('p');
+    row.textContent = `Signature for ${props.link.email_address}${props.shared ? ', shared' : ''}`;
+    return row;
+  },
+}));
 
 const link = {
   id: 'link-1',
@@ -76,5 +85,33 @@ describe('EmailSettings read receipts', () => {
 
     expect(screen.getByText("Couldn't load accounts")).toBeTruthy();
     expect(screen.queryByRole('switch')).toBeNull();
+  });
+});
+
+describe('EmailSignatures', () => {
+  it('lists shared inboxes beside owned ones and marks them shared', () => {
+    mocks.query = {
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      data: {
+        links: [
+          link,
+          {
+            id: 'link-2',
+            macro_id: 'macro|helpdesk@example.com',
+            email_address: 'helpdesk@example.com',
+            settings: { read_receipts_enabled: true },
+          },
+        ],
+      },
+      refetch: vi.fn(),
+    };
+    render(() => <EmailSettings />);
+
+    expect(screen.getByText('Signature for owner@example.com')).toBeTruthy();
+    expect(
+      screen.getByText('Signature for helpdesk@example.com, shared')
+    ).toBeTruthy();
   });
 });

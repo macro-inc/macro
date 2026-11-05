@@ -27,7 +27,7 @@ through the same service.
   `SignedUnsubscribeLinks` signs `domain/models/signing.rs` unsubscribe
   placeholders per recipient), `repository.rs`
   (owned Postgres queries), `withdrawal.rs` (durable suppression),
-  `item_preferences.rs` (snooze/mute).
+  `item_preferences.rs` (owner-scoped single and atomic bulk snooze/mute).
 - `outbound/notification_consumer/health.rs`: periodic per-instance Kafka
   backlog and telemetry-health logs; offsets stay uncommitted.
 - `domain/retention.rs` + `outbound/retention.rs`: bounded 30-day cleanup.
@@ -84,6 +84,8 @@ through the same service.
   notification. Retries preserve original IDs, recipients, and lifecycle state.
 - Access-request withdrawals suppress delayed ingress and queued push/realtime
   delivery; keep tombstone checks when changing either delivery boundary.
+- Channel join requests count in both top-level and channel-feed notification
+  filters; keep these filters aligned with the web notification classifier.
 - A `calendar_event_join_request` insert is skipped by a `notification` trigger
   when its event has gone or been cancelled or its request is no longer pending,
   since queued ingress can run after that cleanup. `create_notification` reads

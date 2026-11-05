@@ -14,11 +14,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { firstPartyBotMark } from './firstPartyBotMark';
 import { UserIcon } from './UserIcon';
 
-vi.mock('@components/app/split-layout/layout', () => ({
-  useSplitLayout: () => ({ openWithSplit: vi.fn() }),
-}));
-vi.mock('@queries/channel/get-or-create-dm', () => ({
-  getOrCreateDirectMessage: vi.fn(),
+vi.mock('@core/util/open-direct-message', () => ({
+  useOpenDirectMessage: () => vi.fn(),
 }));
 vi.mock('@core/user', () => ({
   getDisplayName: () => undefined,

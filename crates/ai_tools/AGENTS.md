@@ -52,7 +52,8 @@ execution, display) that don't belong to a single domain.
 ## Boundaries
 
 - Depends on: nearly every domain crate with tools (`forms`, `activity`,
-  `agent_session`, `anthropic`, `initiative`, `collab_surface`, `favorites`,
+  `agent_session`, `anthropic` (code execution), `web_search` (`WebSearch`,
+  `WebFetch` via Tavily), `initiative`, `collab_surface`, `favorites`,
   `messages`, `routines`, `ai_billing`, `ai_usage`, `ai_toolset`, `agent`),
   plus `bot_id`, `attachment`, `static_file`.
 - Used by: `document_storage_service`, `agent_harness_service` (session
@@ -83,7 +84,7 @@ edit capability but calls no nested model and emits no additional model charge; 
 - `cargo test -p ai_tools` (`SQLX_OFFLINE` unset).
 - After adding/changing a tool: `cargo run -p ai_tools --bin gen_tool_schemas`
   and `--bin gen_ai_request_schemas` to refresh generated frontend schemas.
-- Regenerate DisplayResults entity-reference enums from `apps/web` with `bun run gen-dynamic-ui-schema` after canonical entity changes.
+- `DisplayResults` decodes its view with `dynamic_ui` and returns it; readers render the result, never the arguments. Its schema comes from `dynamic_ui::View`.
 
 ## Related
 

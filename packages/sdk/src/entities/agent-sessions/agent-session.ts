@@ -13,6 +13,7 @@ import type {
   PullRequestLinkSource,
   SandboxSize,
   SessionBot,
+  WorkRegistrationResponse,
 } from '../../../generated/agent-harness/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -68,6 +69,16 @@ export type FoldedAgentSessionLog = {
 };
 
 /** A GitHub pull request linked to a session. */
+/** An agent session an account registered as its work. */
+export type RegisteredWork = {
+  /** The session registered. */
+  session: AgentSession;
+  /** The account whose work this is. */
+  account: User;
+  /** When the account registered it. */
+  registeredAt: string;
+};
+
 export type SessionPullRequest = {
   /** The pull request's `owner/repo/pull/number` key. */
   githubKey: string;
@@ -155,6 +166,16 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
         body: sharePermissionBody(options),
       }),
     );
+  }
+
+  /** The session's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/agent/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** A handle to an agent session by id. Details load on first access. */
@@ -394,6 +415,63 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
         body: { name },
       }),
     );
+  }
+
+  /**
+   * Register this session as the caller's work, so it shows as what the caller
+   * is working on. Requires edit access. Registering again changes nothing.
+   *
+   * Registering does not share the session: a viewer who cannot open it does
+   * not see it, so share it too with {@link AgentSession.updateSharePermissions}.
+   *
+   * The registration ends on its own when the session's pull requests finish,
+   * when it is archived, after a day without work, or after a week blocked on
+   * input. A later turn does not register it again.
+   */
+  async registerAsWork(): Promise<RegisteredWork> {
+    return AgentSession.registeredWork(
+      this.client,
+      unwrap(
+        await this.client.agentHarness.registerAgentSessionWork({
+          path: { session_id: this.id },
+        }),
+      ),
+    );
+  }
+
+  /**
+   * End the caller's registration of this session as its work. Doing it again
+   * changes nothing. The session itself is untouched.
+   */
+  async unregisterAsWork(): Promise<void> {
+    unwrap(
+      await this.client.agentHarness.unregisterAgentSessionWork({
+        path: { session_id: this.id },
+      }),
+    );
+  }
+
+  /** The caller's active registrations, newest first. */
+  static async listRegisteredWork(
+    client: MacroClient,
+  ): Promise<RegisteredWork[]> {
+    const registrations = unwrap(
+      await client.agentHarness.listAgentWorkRegistrations(),
+    );
+    return registrations.map((registration) =>
+      AgentSession.registeredWork(client, registration),
+    );
+  }
+
+  private static registeredWork(
+    client: MacroClient,
+    registration: WorkRegistrationResponse,
+  ): RegisteredWork {
+    return {
+      session: AgentSession.byId(client, registration.agentSessionId),
+      account: User.byId(client, registration.accountId),
+      registeredAt: registration.registeredAt,
+    };
   }
 
   /** Archive this session, making it read-only until unarchived. */

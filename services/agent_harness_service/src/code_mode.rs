@@ -41,6 +41,7 @@ impl ExecutionCredentials for RunCredentials {
             hosts: self.hosts.clone(),
             session_id: Some(identity.session.as_uuid()),
             execution_id: Some(identity.execution.as_uuid()),
+            unattended: None,
         })
     }
 }
@@ -89,12 +90,13 @@ impl UserExecutionCredentials for UserRunCredentials {
             hosts: self.hosts.clone(),
             session_id: None,
             execution_id: None,
+            unattended: None,
         })
     }
 }
 
 /// The current trace context, for the SDK to forward on authenticated requests.
-fn trace_headers() -> BTreeMap<String, String> {
+pub(crate) fn trace_headers() -> BTreeMap<String, String> {
     let mut headers = axum::http::HeaderMap::new();
     macro_tower_layers::inject_trace_headers(&mut headers);
     headers
@@ -119,6 +121,7 @@ pub fn sdk_hosts() -> anyhow::Result<BTreeMap<String, String>> {
             DocumentStorageServiceCloudfrontDistributionUrl::new()?.to_string(),
         ),
         ("static-content", StaticFilePublicUrl::new()?.to_string()),
+        ("editing-worker", AiEditingWorkerUrl::new()?.to_string()),
         ("storage", storage.clone()),
         ("search", storage.clone()),
         ("properties", storage),
@@ -142,6 +145,7 @@ pub fn sdk_hosts() -> anyhow::Result<BTreeMap<String, String>> {
     .collect())
 }
 
+pub mod connected_apps;
 pub mod reviews;
 
 async fn approve_run(

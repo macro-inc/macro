@@ -63,18 +63,19 @@ export function useCurrentTeamQuery(enabled?: Accessor<boolean>) {
 
 /**
  * Reactive boolean: true iff the current user has admin or owner team
- * role. Drives admin-gated UI (e.g. the companies → hidden tab and the
- * detail-page Hide button).
+ * role. When a team id is supplied, it must match that team. Drives
+ * admin-gated UI (e.g. the companies → hidden tab and detail-page Hide button).
  */
-export function useIsTeamAdmin(): Accessor<boolean> {
+export function useIsTeamAdmin(): (teamId?: string) => boolean {
   const userId = useUserId();
   const teamQuery = useCurrentTeamQuery();
-  return () => {
+  return (teamId) => {
     const uid = userId();
     if (!uid) return false;
     if (!queryReadyGate(teamQuery)) return false;
     const team = teamQuery.data;
     if (!team) return false;
+    if (teamId !== undefined && team.team.id !== teamId) return false;
     const member = team.members.find((m) => m.user_id === uid);
     return member?.role === TeamRole.admin || member?.role === TeamRole.owner;
   };

@@ -19,10 +19,10 @@ import { CompanyPropertiesSection } from './company-properties-section';
 import { CompanySharingSection } from './company-sharing-section';
 import {
   RecordCallsSection,
-  RecordDatabasesSection,
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
+import { RecordDetailsSection } from './record-details-section';
 import { useCompanyQuery } from './use-crm';
 
 /**
@@ -36,7 +36,6 @@ type CompanyProps = {
   companyId: string;
   section?: CompanySection;
   headerToggle?: boolean;
-  onHidden?: () => void;
   onOpenContact?: (contact: CompanyContact) => void;
   onOpenPipeline?: (pipelineId: string) => void;
 };
@@ -127,9 +126,6 @@ function CompanyContent(props: CompanyProps) {
                 </Show>
               </Suspense>
             </Match>
-            <Match when={section() === 'databases'}>
-              <RecordDatabasesSection scope={scope()} />
-            </Match>
             <Match when={section() === 'calls'}>
               <RecordCallsSection scope={scope()} />
             </Match>
@@ -137,10 +133,11 @@ function CompanyContent(props: CompanyProps) {
         </div>
       </div>
 
+      <RecordDetailsSection company={company()} />
       <SidePanel.Section
         id="company-properties"
         title="Properties"
-        order={15}
+        order={30}
         defaultOpen
         render={(renderSection) => (
           <CompanyPropertiesSection
@@ -154,10 +151,10 @@ function CompanyContent(props: CompanyProps) {
           <CompanyListsSection companyId={props.companyId} />
         </Suspense>
       </Show>
-      <SidePanel.Section id="company-sharing" title="Sharing" order={25}>
-        <CompanySharingSection company={company()} onHidden={props.onHidden} />
+      <SidePanel.Section id="company-sharing" title="Email sharing" order={50}>
+        <CompanySharingSection company={company()} />
       </SidePanel.Section>
-      <SidePanel.Section id="company-references" title="References" order={30}>
+      <SidePanel.Section id="company-references" title="References" order={20}>
         <RecordReferencesSection scope={scope()} />
       </SidePanel.Section>
     </SidePanel.Layout>
