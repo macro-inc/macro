@@ -332,8 +332,10 @@ jobs:
     - path-check
     if: needs.path-check.outputs.codegen_changed == 'true'
     name: Generated Code Check
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=gen-persist-exp
     env:
+      RUSTC_BOOTSTRAP: '1'
+      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: 'true'
       CARGO_PROFILE_DEV_DEBUG: '0'
       RUSTFLAGS: '-C link-arg=-fuse-ld=mold'
     steps:
@@ -347,6 +349,7 @@ jobs:
           /home/runner/.bun/install/cache
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
+          /home/runner/work/macro/macro/target
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -387,8 +390,10 @@ jobs:
     - name: Build schema binaries
       run: |
         set -euo pipefail
+        df -h target || true
+        du -sh target || true
         read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
-        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas
+        SQLX_OFFLINE=true cargo build --timings "${openapi_bins[@]}" --bin gen_tool_schemas
     - name: Generate API Types
       run: bun run gen-api -- --check
       working-directory: apps/web
@@ -428,6 +433,13 @@ jobs:
           exit 1
         fi
       working-directory: apps/web
+    - name: Upload timings
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: cargo-timings
+        path: target/cargo-timings/cargo-timing.html
+        retention-days: 7
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true

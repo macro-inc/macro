@@ -92,3 +92,4 @@ where
         }
     }
 }
+// ci-speed gen-persist 1
