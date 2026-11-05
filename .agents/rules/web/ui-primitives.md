@@ -52,6 +52,7 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
   and custom spacing work. Only loading actions need the reserved-content layer.
   Preserve native disabled behavior and activation guards for polymorphic controls.
 - Pass only styling fields to Button style helpers; spreading props with `children` evaluates Solid getters and can detach memoized content.
+- Paint the ButtonGroup border inside its controls' box so the group and standalone controls share a height.
 - Compose groups explicitly with `ButtonGroup.Button`; standalone Buttons do not
   inherit group styling. Segments inherit size and variant unless overridden,
   remain flat, and own their hover/pressed/disabled states. The frame owns its
