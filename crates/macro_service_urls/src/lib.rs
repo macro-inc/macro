@@ -652,6 +652,15 @@ service_url! {
             dev: "https://sync-service-dev3.macroverse.workers.dev",
             prod: "https://sync-service-prod2.macroverse.workers.dev",
         },
+        /// Host artifact pages are served under, one subdomain per artifact:
+        /// `<document_id>.` goes before the host. It sits on the preview
+        /// gateway's registrable domain, outside macro.com, because pages run
+        /// agent-written scripts. Served by document storage service.
+        pub ArtifactContentUrl {
+            local: "http://artifacts.localhost:8086",
+            dev: "https://artifacts.dev.macro-agent-gateway.com",
+            prod: "https://artifacts.macro-agent-gateway.com",
+        },
         /// AI editing worker API URL.
         pub AiEditingWorkerUrl {
             local: "http://localhost:8933",
