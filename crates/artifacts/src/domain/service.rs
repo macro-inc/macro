@@ -21,24 +21,25 @@ use super::models::{
     ViewUrlRequest, Viewer,
 };
 use super::ports::{
-    ArtifactDocuments, ArtifactObjectStore, ArtifactRepository, ArtifactService, NewVersion,
-    ViewTokens,
+    ArtifactDocuments, ArtifactNotifier, ArtifactObjectStore, ArtifactRepository, ArtifactService,
+    NewVersion, ViewTokens,
 };
 
 /// The file type documents of artifacts carry.
 const ARTIFACT_FILE_TYPE: &str = "artifact";
 
 /// The artifact service over its ports.
-pub struct ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens> {
+pub struct ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens, Notifier> {
     repository: Repository,
     object_store: ObjectStore,
     documents: Documents,
     tokens: Tokens,
+    notifier: Notifier,
     origin: ContentOrigin,
 }
 
-impl<Repository, ObjectStore, Documents, Tokens>
-    ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens>
+impl<Repository, ObjectStore, Documents, Tokens, Notifier>
+    ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens, Notifier>
 {
     /// Assemble the service.
     pub fn new(
@@ -46,6 +47,7 @@ impl<Repository, ObjectStore, Documents, Tokens>
         object_store: ObjectStore,
         documents: Documents,
         tokens: Tokens,
+        notifier: Notifier,
         origin: ContentOrigin,
     ) -> Self {
         Self {
@@ -53,6 +55,7 @@ impl<Repository, ObjectStore, Documents, Tokens>
             object_store,
             documents,
             tokens,
+            notifier,
             origin,
         }
     }
@@ -70,13 +73,14 @@ fn clean_message(message: Option<String>) -> Option<String> {
         .filter(|message| !message.is_empty())
 }
 
-impl<Repository, ObjectStore, Documents, Tokens>
-    ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens>
+impl<Repository, ObjectStore, Documents, Tokens, Notifier>
+    ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens, Notifier>
 where
     Repository: ArtifactRepository,
     ObjectStore: ArtifactObjectStore,
     Documents: ArtifactDocuments,
     Tokens: ViewTokens,
+    Notifier: ArtifactNotifier,
 {
     /// Sizes of digests stored for the artifact: recorded by a version, or
     /// uploaded to the object store.
@@ -130,7 +134,10 @@ where
             .await?;
 
         match inserted {
-            Some(version) => Ok(version),
+            Some(version) => {
+                self.notifier.published(document_id, version.number).await;
+                Ok(version)
+            }
             None => {
                 let current = self
                     .repository
@@ -207,13 +214,14 @@ where
     }
 }
 
-impl<Repository, ObjectStore, Documents, Tokens> ArtifactService
-    for ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens>
+impl<Repository, ObjectStore, Documents, Tokens, Notifier> ArtifactService
+    for ArtifactServiceImpl<Repository, ObjectStore, Documents, Tokens, Notifier>
 where
     Repository: ArtifactRepository,
     ObjectStore: ArtifactObjectStore,
     Documents: ArtifactDocuments,
     Tokens: ViewTokens,
+    Notifier: ArtifactNotifier,
 {
     async fn load_document(&self, document_id: &str) -> Result<DocumentBasic, ArtifactError> {
         let not_found = || ArtifactError::NotFound(format!("artifact {document_id:?} not found"));
@@ -233,10 +241,9 @@ where
     async fn create(
         &self,
         principal: &CreationPrincipal,
+        publisher: &Publisher,
         request: CreateArtifact,
     ) -> Result<Artifact, ArtifactError> {
-        let publisher = Publisher::from_principal(principal)?;
-
         let name = request.name.trim().to_string();
         if name.is_empty() {
             return Err(ArtifactError::BadRequest(
@@ -248,7 +255,16 @@ where
                 "every file of a new artifact must carry its content".to_string(),
             ));
         }
-        let draft = ManifestDraft::parse(request.files, request.scenes)?;
+        let draft = if request.files.is_empty() {
+            if !request.scenes.is_empty() {
+                return Err(ArtifactError::BadRequest(
+                    "scenes need files to point at".to_string(),
+                ));
+            }
+            None
+        } else {
+            Some(ManifestDraft::parse(request.files, request.scenes)?)
+        };
 
         let document = self
             .documents
@@ -256,12 +272,21 @@ where
             .await?;
         tracing::Span::current().record("document_id", document.document_id.as_str());
 
+        let Some(draft) = draft else {
+            return Ok(Artifact {
+                document_id: document.document_id,
+                name: document.name,
+                owner: document.owner,
+                current: None,
+            });
+        };
+
         let published = self
             .publish_draft(
                 &document.document_id,
                 1,
                 draft,
-                &publisher,
+                publisher,
                 clean_message(request.message),
             )
             .await;
@@ -271,7 +296,7 @@ where
                 document_id: document.document_id,
                 name: document.name,
                 owner: document.owner,
-                current,
+                current: Some(current),
             }),
             Err(error) => {
                 self.documents.discard(&document.document_id).await;
@@ -342,13 +367,15 @@ where
     async fn publish(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        principal: &CreationPrincipal,
+        publisher: &Publisher,
         request: PublishVersion,
     ) -> Result<ArtifactVersion, ArtifactError> {
         let document_id = document_id_of(&receipt);
-        let publisher = Publisher::from_principal(principal)?;
+
         let draft = ManifestDraft::parse(request.files, request.scenes)?;
 
+        // A current number of 0 means nothing is published yet, so a base of 0
+        // publishes version 1.
         let current = self.current_number(&document_id).await?;
         if let Some(base) = request.base_version
             && base != current
@@ -360,7 +387,7 @@ where
             &document_id,
             current + 1,
             draft,
-            &publisher,
+            publisher,
             clean_message(request.message),
         )
         .await
@@ -372,11 +399,7 @@ where
         document: &DocumentBasic,
     ) -> Result<Artifact, ArtifactError> {
         let document_id = document_id_of(&receipt);
-        let current = self
-            .repository
-            .current_version(&document_id)
-            .await?
-            .ok_or_else(|| ArtifactError::NotFound("artifact has no versions".to_string()))?;
+        let current = self.repository.current_version(&document_id).await?;
 
         Ok(Artifact {
             document_id,
@@ -408,12 +431,11 @@ where
     async fn restore(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        principal: &CreationPrincipal,
+        publisher: &Publisher,
         number: i32,
     ) -> Result<ArtifactVersion, ArtifactError> {
         let document_id = document_id_of(&receipt);
         tracing::Span::current().record("document_id", document_id.as_str());
-        let publisher = Publisher::from_principal(principal)?;
 
         let restored = self
             .repository
@@ -426,7 +448,7 @@ where
             &document_id,
             current + 1,
             restored.manifest,
-            &publisher,
+            publisher,
             Some(format!("Restored version {number}")),
         )
         .await
@@ -447,7 +469,12 @@ where
             Some(number) => self.repository.version(&document_id, number).await?,
             None => self.repository.current_version(&document_id).await?,
         }
-        .ok_or_else(|| ArtifactError::NotFound("version not found".to_string()))?;
+        .ok_or_else(|| match request.version {
+            Some(number) => ArtifactError::NotFound(format!("version {number} not found")),
+            None => {
+                ArtifactError::NotFound("the artifact has no published version yet".to_string())
+            }
+        })?;
         span.record("version", version.number);
 
         let path = match &request.scene {

@@ -3,7 +3,6 @@
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
-use model_owner::CreationPrincipal;
 
 /// Most files one version may hold.
 pub const MAX_FILES: usize = 255;
@@ -158,8 +157,8 @@ pub struct Artifact {
     pub name: String,
     /// Document owner, as a principal string.
     pub owner: String,
-    /// The highest-numbered version.
-    pub current: ArtifactVersion,
+    /// The highest-numbered version; `None` until the first publish.
+    pub current: Option<ArtifactVersion>,
 }
 
 /// A file as a publisher sends it.
@@ -194,8 +193,9 @@ pub struct CreateArtifact {
     pub name: String,
     /// Folder to create it in; the caller holds edit access to it.
     pub project_id: Option<uuid::Uuid>,
-    /// Files of version 1. Every file carries its bytes: nothing can be
-    /// stored for an artifact that does not exist yet.
+    /// Files of version 1, each carrying its bytes: nothing is stored for an
+    /// artifact that does not exist yet. Empty to create the artifact without
+    /// a version, so large files can be uploaded before publishing version 1.
     pub files: Vec<FileInput>,
     /// Scenes of version 1.
     pub scenes: Vec<SceneInput>,
@@ -239,27 +239,14 @@ pub struct UploadTarget {
     pub headers: BTreeMap<String, String>,
 }
 
-/// Who publishes: a Macro user, optionally through a bot.
+/// Who publishes: a Macro user, optionally through a bot or an agent their
+/// signed token names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Publisher {
     /// The user the version is attributed to.
     pub user_id: String,
     /// The bot acting for them.
     pub agent: Option<String>,
-}
-
-impl Publisher {
-    /// The publisher behind a creation principal. A team bot acts for no
-    /// user, and every version names the user who published it.
-    pub fn from_principal(principal: &CreationPrincipal) -> Result<Self, ArtifactError> {
-        let user = principal.user().ok_or_else(|| {
-            ArtifactError::Forbidden("publishing an artifact needs an acting user".to_string())
-        })?;
-        Ok(Self {
-            user_id: user.as_ref().to_string(),
-            agent: principal.bot().map(|bot| bot.into_storage_id().to_string()),
-        })
-    }
 }
 
 /// Who views: the identity a view token is minted for.

@@ -24,8 +24,8 @@ use entity_access::inbound::axum_extractors::{
 };
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
 use macro_authorization::{
-    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
-    OptionalMacroAuthorizationExtractor,
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
 };
 use model::document::DocumentBasic;
 use model_error_response::ErrorResponse;
@@ -34,7 +34,8 @@ use utoipa::{OpenApi, ToSchema};
 
 use crate::domain::models::{
     Artifact, ArtifactError, ArtifactVersion, ArtifactVersionSummary, CreateArtifact, FileInput,
-    PublishVersion, SceneInput, Theme, UploadInput, UploadTarget, ViewUrl, ViewUrlRequest, Viewer,
+    PublishVersion, Publisher, SceneInput, Theme, UploadInput, UploadTarget, ViewUrl,
+    ViewUrlRequest, Viewer,
 };
 use crate::domain::ports::ArtifactService;
 
@@ -277,7 +278,9 @@ pub struct CreateArtifactRequest {
     /// Folder to create it in; needs edit access to it.
     #[serde(default)]
     pub project_id: Option<uuid::Uuid>,
-    /// Files, each with its content.
+    /// Files of version 1, each with its content. Omit to create the
+    /// artifact without a version, upload through `/uploads`, then publish.
+    #[serde(default)]
     pub files: Vec<FileInputBody>,
     /// Scenes.
     #[serde(default)]
@@ -298,8 +301,8 @@ pub struct PublishVersionRequest {
     /// What changed.
     #[serde(default)]
     pub message: Option<String>,
-    /// The version this one builds on; publishing fails with 409 when the
-    /// artifact has moved past it.
+    /// The version this one builds on, 0 when none is published yet;
+    /// publishing fails with 409 when the artifact has moved past it.
     #[serde(default)]
     pub base_version: Option<i32>,
 }
@@ -380,8 +383,9 @@ pub struct ArtifactResponse {
     pub name: String,
     /// Owner.
     pub owner: String,
-    /// The current version.
-    pub current: ArtifactVersionResponse,
+    /// The current version; null until the first publish.
+    #[schema(required = true)]
+    pub current: Option<ArtifactVersionResponse>,
 }
 
 impl From<Artifact> for ArtifactResponse {
@@ -390,7 +394,7 @@ impl From<Artifact> for ArtifactResponse {
             document_id: artifact.document_id,
             name: artifact.name,
             owner: artifact.owner,
-            current: artifact.current.into(),
+            current: artifact.current.map(Into::into),
         }
     }
 }
@@ -582,7 +586,33 @@ where
     }
 }
 
-/// Create an artifact: a document of file type `artifact` and its version 1.
+/// The publisher a caller is: its user, and the bot or the signed agent
+/// attribution acting for them. Every version names a user.
+fn publisher_of(authorization: &MacroAuthorization) -> Result<Publisher, ArtifactError> {
+    let no_user =
+        || ArtifactError::Forbidden("publishing an artifact needs an acting user".to_string());
+    match authorization {
+        MacroAuthorization::User(user) | MacroAuthorization::Internal(Some(user)) => {
+            Ok(Publisher {
+                user_id: user.macro_user_id.to_string(),
+                agent: user
+                    .agent_id
+                    .map(|agent| agent.into_storage_id().to_string()),
+            })
+        }
+        MacroAuthorization::Bot(bot) => {
+            let user = bot.acting_user.as_ref().ok_or_else(no_user)?;
+            Ok(Publisher {
+                user_id: user.macro_user_id.to_string(),
+                agent: Some(bot.bot_id.into_storage_id().to_string()),
+            })
+        }
+        MacroAuthorization::Internal(None) | MacroAuthorization::Harness(_) => Err(no_user()),
+    }
+}
+
+/// Create an artifact: a document of file type `artifact`, and its version 1
+/// when files are given.
 #[utoipa::path(
     tag = "artifacts",
     post,
@@ -600,6 +630,7 @@ where
 #[tracing::instrument(skip_all)]
 pub async fn create_handler<Service, EntityAccess, Authorization>(
     State(state): State<ArtifactsRouterState<Service, EntityAccess, Authorization>>,
+    caller: MacroAuthorizationExtractor<Authorization, AnyPrincipal>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Authorization>,
     CreateArtifactBody(request, _): CreateArtifactBody<EntityAccess, Authorization>,
 ) -> Result<(StatusCode, Json<ArtifactResponse>), ArtifactError>
@@ -608,10 +639,12 @@ where
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
 {
+    let publisher = publisher_of(&caller.authorization)?;
     let artifact = state
         .service
         .create(
             &principal,
+            &publisher,
             CreateArtifact {
                 name: request.name,
                 project_id: request.project_id,
@@ -693,7 +726,7 @@ where
 pub async fn publish_handler<Service, EntityAccess, Authorization>(
     State(state): State<ArtifactsRouterState<Service, EntityAccess, Authorization>>,
     access: DocumentAccessExtractor<EditAccessLevel, EntityAccess, Authorization>,
-    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Authorization>,
+    caller: MacroAuthorizationExtractor<Authorization, AnyPrincipal>,
     Json(request): Json<PublishVersionRequest>,
 ) -> Result<(StatusCode, Json<ArtifactVersionResponse>), ArtifactError>
 where
@@ -701,11 +734,12 @@ where
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
 {
+    let publisher = publisher_of(&caller.authorization)?;
     let version = state
         .service
         .publish(
             access.entity_access_receipt,
-            &principal,
+            &publisher,
             PublishVersion {
                 files: file_inputs(request.files)?,
                 scenes: scene_inputs(request.scenes),
@@ -837,7 +871,7 @@ where
 pub async fn restore_handler<Service, EntityAccess, Authorization>(
     State(state): State<ArtifactsRouterState<Service, EntityAccess, Authorization>>,
     access: DocumentAccessExtractor<EditAccessLevel, EntityAccess, Authorization>,
-    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Authorization>,
+    caller: MacroAuthorizationExtractor<Authorization, AnyPrincipal>,
     Path((_document_id, number)): Path<(String, i32)>,
 ) -> Result<(StatusCode, Json<ArtifactVersionResponse>), ArtifactError>
 where
@@ -845,9 +879,10 @@ where
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
 {
+    let publisher = publisher_of(&caller.authorization)?;
     let version = state
         .service
-        .restore(access.entity_access_receipt, &principal, number)
+        .restore(access.entity_access_receipt, &publisher, number)
         .await?;
     Ok((StatusCode::CREATED, Json(version.into())))
 }

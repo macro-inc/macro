@@ -3,15 +3,22 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
 use crate::domain::models::{FileInput, SceneInput, Theme};
-use crate::testing::{FakeTokens, MemoryDocuments, MemoryObjectStore, MemoryRepository};
+use crate::testing::{
+    FakeTokens, MemoryDocuments, MemoryObjectStore, MemoryRepository, RecordingNotifier,
+};
 
 const DOCUMENT_ID: &str = "0193f3a4-7d1e-7c2a-9f00-5a1b2c3d4e5f";
 const ALICE: &str = "macro|alice@artifacts.test";
 const PAGE_SHA: &str = "0f8ca7467b0a55599c03aad0aed980d35f15acafcfa344cfdcd152af3044f7e8";
 const CSS_SHA: &str = "7c98040a541657584690ae2a1cc3b42a8b53b159cc60c5d3abbfecbaeac6c94a";
 
-type TestService =
-    ArtifactServiceImpl<MemoryRepository, MemoryObjectStore, MemoryDocuments, FakeTokens>;
+type TestService = ArtifactServiceImpl<
+    MemoryRepository,
+    MemoryObjectStore,
+    MemoryDocuments,
+    FakeTokens,
+    RecordingNotifier,
+>;
 
 fn service() -> TestService {
     ArtifactServiceImpl::new(
@@ -19,6 +26,7 @@ fn service() -> TestService {
         MemoryObjectStore::default(),
         MemoryDocuments::new(DOCUMENT_ID),
         FakeTokens::default(),
+        RecordingNotifier::default(),
         ContentOrigin {
             scheme: "https".to_string(),
             host: "artifacts.test".to_string(),
@@ -29,6 +37,13 @@ fn service() -> TestService {
 
 fn alice() -> CreationPrincipal {
     CreationPrincipal::User(MacroUserIdStr::parse_from_str(ALICE).unwrap())
+}
+
+fn alice_publishing() -> Publisher {
+    Publisher {
+        user_id: ALICE.to_string(),
+        agent: None,
+    }
 }
 
 fn edit_receipt() -> EntityAccessReceipt<EditAccessLevel> {
@@ -54,6 +69,7 @@ async fn create_stores_the_document_version_one_and_its_bytes() {
     let artifact = service
         .create(
             &alice(),
+            &alice_publishing(),
             CreateArtifact {
                 name: " Onboarding ".to_string(),
                 project_id: None,
@@ -73,10 +89,11 @@ async fn create_stores_the_document_version_one_and_its_bytes() {
     assert_eq!(artifact.document_id, DOCUMENT_ID);
     assert_eq!(artifact.name, "Onboarding");
     assert_eq!(artifact.owner, ALICE);
-    assert_eq!(artifact.current.number, 1);
-    assert_eq!(artifact.current.message, None);
-    assert_eq!(artifact.current.created_by, ALICE);
-    assert_eq!(artifact.current.created_by_agent, None);
+    let current = artifact.current.unwrap();
+    assert_eq!(current.number, 1);
+    assert_eq!(current.message, None);
+    assert_eq!(current.created_by, ALICE);
+    assert_eq!(current.created_by_agent, None);
     assert_eq!(
         service
             .object_store
@@ -95,6 +112,7 @@ async fn create_rejects_an_invalid_bundle_before_creating_the_document() {
     let result = service
         .create(
             &alice(),
+            &alice_publishing(),
             CreateArtifact {
                 name: "Onboarding".to_string(),
                 project_id: None,
@@ -120,6 +138,7 @@ async fn publish_reuses_stored_files_and_records_the_agent() {
     service
         .create(
             &alice(),
+            &alice_publishing(),
             CreateArtifact {
                 name: "Onboarding".to_string(),
                 project_id: None,
@@ -144,9 +163,9 @@ async fn publish_reuses_stored_files_and_records_the_agent() {
         .await
         .unwrap();
 
-    let agent = CreationPrincipal::BotForUser {
-        bot: bot_id::MACRO_AI_BOT_ID,
-        user: MacroUserIdStr::parse_from_str(ALICE).unwrap(),
+    let agent = Publisher {
+        user_id: ALICE.to_string(),
+        agent: Some("bot|00000000-0000-0000-0000-00000000a1a1".to_string()),
     };
     let version = service
         .publish(
@@ -195,6 +214,7 @@ async fn publish_on_a_stale_base_version_conflicts() {
     service
         .create(
             &alice(),
+            &alice_publishing(),
             CreateArtifact {
                 name: "Onboarding".to_string(),
                 project_id: None,
@@ -210,12 +230,15 @@ async fn publish_on_a_stale_base_version_conflicts() {
         )
         .await
         .unwrap();
-    service.restore(edit_receipt(), &alice(), 1).await.unwrap();
+    service
+        .restore(edit_receipt(), &alice_publishing(), 1)
+        .await
+        .unwrap();
 
     let result = service
         .publish(
             edit_receipt(),
-            &alice(),
+            &alice_publishing(),
             PublishVersion {
                 files: vec![FileInput {
                     path: "index.html".to_string(),
@@ -240,33 +263,64 @@ async fn publish_on_a_stale_base_version_conflicts() {
 }
 
 #[tokio::test]
-async fn a_team_bot_without_a_user_cannot_publish() {
+async fn an_artifact_created_without_files_publishes_version_one_later() {
     let service = service();
-    let team_bot = CreationPrincipal::TeamBot {
-        bot: bot_id::NonSystemBotId::new(bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(7)))
-            .unwrap(),
-        team: uuid::Uuid::from_u128(8),
-    };
 
-    let result = service
+    let artifact = service
         .create(
-            &team_bot,
+            &alice(),
+            &alice_publishing(),
             CreateArtifact {
-                name: "Onboarding".to_string(),
+                name: "Large".to_string(),
                 project_id: None,
-                files: vec![FileInput {
-                    path: "index.html".to_string(),
-                    content_type: "text/html".to_string(),
-                    sha256: PAGE_SHA.to_string(),
-                    content: Some(b"<h1>Hi</h1>".to_vec()),
-                }],
+                files: vec![],
                 scenes: vec![],
                 message: None,
             },
         )
-        .await;
+        .await
+        .unwrap();
+    assert_eq!(artifact.current, None);
 
-    assert!(matches!(result, Err(ArtifactError::Forbidden(_))));
+    let before = service
+        .view_url(
+            view_receipt(),
+            &Viewer::default(),
+            ViewUrlRequest::default(),
+        )
+        .await;
+    assert!(
+        matches!(before, Err(ArtifactError::NotFound(message)) if message.contains("no published version"))
+    );
+
+    service.object_store.objects.lock().unwrap().insert(
+        (DOCUMENT_ID.to_string(), PAGE_SHA.to_string()),
+        b"<h1>Hi</h1>".to_vec(),
+    );
+    let version = service
+        .publish(
+            edit_receipt(),
+            &alice_publishing(),
+            PublishVersion {
+                files: vec![FileInput {
+                    path: "index.html".to_string(),
+                    content_type: "text/html".to_string(),
+                    sha256: PAGE_SHA.to_string(),
+                    content: None,
+                }],
+                scenes: vec![],
+                message: None,
+                base_version: Some(0),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(version.number, 1);
+    assert_eq!(
+        *service.notifier.published.lock().unwrap(),
+        vec![(DOCUMENT_ID.to_string(), 1)]
+    );
 }
 
 #[tokio::test]
@@ -312,6 +366,7 @@ async fn view_url_points_at_the_scene_on_the_artifact_origin() {
     service
         .create(
             &alice(),
+            &alice_publishing(),
             CreateArtifact {
                 name: "Onboarding".to_string(),
                 project_id: None,

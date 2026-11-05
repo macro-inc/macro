@@ -12,8 +12,8 @@ use crate::domain::models::{
     ArtifactError, ArtifactVersion, ArtifactVersionSummary, MintedToken, ObjectBody, Sha256, Viewer,
 };
 use crate::domain::ports::{
-    ArtifactDocuments, ArtifactObjectStore, ArtifactRepository, CreatedArtifactDocument,
-    NewVersion, PresignedUpload, VerifiedToken, ViewTokens,
+    ArtifactDocuments, ArtifactNotifier, ArtifactObjectStore, ArtifactRepository,
+    CreatedArtifactDocument, NewVersion, PresignedUpload, VerifiedToken, ViewTokens,
 };
 
 pub(crate) const CREATED_AT: &str = "2026-11-04T12:00:00Z";
@@ -246,5 +246,20 @@ impl ViewTokens for FakeTokens {
             .map(|document_id| VerifiedToken {
                 document_id: document_id.to_string(),
             })
+    }
+}
+
+/// Records published notices.
+#[derive(Default)]
+pub(crate) struct RecordingNotifier {
+    pub(crate) published: Mutex<Vec<(String, i32)>>,
+}
+
+impl ArtifactNotifier for RecordingNotifier {
+    async fn published(&self, document_id: &str, version: i32) {
+        self.published
+            .lock()
+            .unwrap()
+            .push((document_id.to_string(), version));
     }
 }

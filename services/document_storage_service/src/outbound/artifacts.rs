@@ -8,8 +8,9 @@ use std::sync::Arc;
 
 use artifacts::domain::models::{ArtifactError, MintedToken, Viewer};
 use artifacts::domain::ports::{
-    ArtifactDocuments, CreatedArtifactDocument, VerifiedToken, ViewTokens,
+    ArtifactDocuments, ArtifactNotifier, CreatedArtifactDocument, VerifiedToken, ViewTokens,
 };
+use connection_gateway_client::client::ConnectionGatewayClient;
 use documents_hex::domain::create::NewDocumentMetadata;
 use documents_hex::domain::models::DocumentError;
 use documents_hex::domain::permission_token::{decode_permission_token, encode_permission_token};
@@ -18,6 +19,7 @@ use documents_hex::inbound::axum_router::DefaultDocumentCreator;
 use entity_access::domain::models::AccessLevel;
 use macro_sync_service_jwt::{DocumentPermissionToken, TOKEN_TTL_SECS};
 use model::document::DocumentBasic;
+use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 
 use crate::api::context::DocumentService;
@@ -146,5 +148,39 @@ impl ViewTokens for PermissionTokenViewTokens {
             .map(|claims| VerifiedToken {
                 document_id: claims.document_id().to_string(),
             })
+    }
+}
+
+/// Sends `artifact_published` to everyone subscribed to the artifact
+/// document, through the connection gateway like other document updates.
+pub struct ConnectionGatewayArtifactNotifier {
+    client: Arc<ConnectionGatewayClient>,
+}
+
+impl ConnectionGatewayArtifactNotifier {
+    /// Notifier over the host's connection gateway client.
+    pub fn new(client: Arc<ConnectionGatewayClient>) -> Self {
+        Self { client }
+    }
+}
+
+impl ArtifactNotifier for ConnectionGatewayArtifactNotifier {
+    #[tracing::instrument(name = "artifact.notify_published", skip(self))]
+    async fn published(&self, document_id: &str, version: i32) {
+        if cfg!(not(feature = "connection_gateway")) {
+            return;
+        }
+
+        let sent = self
+            .client
+            .batch_send_message(
+                "artifact_published".to_string(),
+                serde_json::json!({ "documentId": document_id, "version": version }),
+                vec![EntityType::Document.with_entity_str(document_id)],
+            )
+            .await;
+        if let Err(error) = sent {
+            tracing::warn!(error = ?error, "failed to send artifact_published");
+        }
     }
 }

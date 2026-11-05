@@ -11,14 +11,14 @@ use macro_service_urls::{AppServiceUrl, ArtifactContentUrl};
 use sqlx::PgPool;
 
 use crate::domain::models::ContentOrigin;
-use crate::domain::ports::{ArtifactDocuments, ViewTokens};
+use crate::domain::ports::{ArtifactDocuments, ArtifactNotifier, ViewTokens};
 use crate::domain::service::ArtifactServiceImpl;
 use crate::outbound::pg_artifact_repository::PgArtifactRepository;
 use crate::outbound::s3_object_store::S3ArtifactObjectStore;
 
 /// The service as every host builds it.
-pub type ArtifactServiceFor<Documents, Tokens> =
-    ArtifactServiceImpl<PgArtifactRepository, S3ArtifactObjectStore, Documents, Tokens>;
+pub type ArtifactServiceFor<Documents, Tokens, Notifier> =
+    ArtifactServiceImpl<PgArtifactRepository, S3ArtifactObjectStore, Documents, Tokens, Notifier>;
 
 /// Origins of the desktop and mobile shells, which embed artifacts like the
 /// web app does.
@@ -75,23 +75,30 @@ pub fn frame_ancestors(
 }
 
 /// Build the artifact service.
-pub fn build_service<Documents, Tokens>(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the service's adapters and its origin, assembled in one place"
+)]
+pub fn build_service<Documents, Tokens, Notifier>(
     pool: PgPool,
     s3_client: aws_sdk_s3::Client,
     document_storage_bucket: impl Into<String>,
     documents: Documents,
     tokens: Tokens,
+    notifier: Notifier,
     origin: ContentOrigin,
-) -> ArtifactServiceFor<Documents, Tokens>
+) -> ArtifactServiceFor<Documents, Tokens, Notifier>
 where
     Documents: ArtifactDocuments,
     Tokens: ViewTokens,
+    Notifier: ArtifactNotifier,
 {
     ArtifactServiceImpl::new(
         PgArtifactRepository::new(pool),
         S3ArtifactObjectStore::new(s3_client, document_storage_bucket),
         documents,
         tokens,
+        notifier,
         origin,
     )
 }

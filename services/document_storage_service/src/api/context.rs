@@ -466,6 +466,7 @@ pub(crate) type DocumentsState =
 pub(crate) type DssArtifactService = artifacts::wiring::ArtifactServiceFor<
     crate::outbound::artifacts::DocumentsForArtifacts,
     crate::outbound::artifacts::PermissionTokenViewTokens,
+    crate::outbound::artifacts::ConnectionGatewayArtifactNotifier,
 >;
 
 /// The artifacts API router state.

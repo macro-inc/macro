@@ -11,8 +11,8 @@ use model_owner::CreationPrincipal;
 
 use super::models::{
     Artifact, ArtifactError, ArtifactVersion, ArtifactVersionSummary, ContentRequest,
-    ContentResponse, CreateArtifact, Manifest, MintedToken, ObjectBody, PublishVersion, Sha256,
-    UploadInput, UploadTarget, ViewUrl, ViewUrlRequest, Viewer,
+    ContentResponse, CreateArtifact, Manifest, MintedToken, ObjectBody, PublishVersion, Publisher,
+    Sha256, UploadInput, UploadTarget, ViewUrl, ViewUrlRequest, Viewer,
 };
 
 /// A version to insert.
@@ -164,6 +164,12 @@ pub trait ViewTokens: Send + Sync + 'static {
     fn verify(&self, token: &str) -> Option<VerifiedToken>;
 }
 
+/// Tells people who have an artifact open that a version was published.
+pub trait ArtifactNotifier: Send + Sync + 'static {
+    /// Best effort: a failed notice never fails the publish.
+    fn published(&self, document_id: &str, version: i32) -> impl Future<Output = ()> + Send;
+}
+
 /// Artifact use cases.
 pub trait ArtifactService: Send + Sync + 'static {
     /// An artifact document's metadata for the access extractors. Documents
@@ -173,10 +179,11 @@ pub trait ArtifactService: Send + Sync + 'static {
         document_id: &str,
     ) -> impl Future<Output = Result<DocumentBasic, ArtifactError>> + Send;
 
-    /// Create an artifact and its first version.
+    /// Create an artifact, with its first version when files are given.
     fn create(
         &self,
         principal: &CreationPrincipal,
+        publisher: &Publisher,
         request: CreateArtifact,
     ) -> impl Future<Output = Result<Artifact, ArtifactError>> + Send;
 
@@ -191,7 +198,7 @@ pub trait ArtifactService: Send + Sync + 'static {
     fn publish(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        principal: &CreationPrincipal,
+        publisher: &Publisher,
         request: PublishVersion,
     ) -> impl Future<Output = Result<ArtifactVersion, ArtifactError>> + Send;
 
@@ -219,7 +226,7 @@ pub trait ArtifactService: Send + Sync + 'static {
     fn restore(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        principal: &CreationPrincipal,
+        publisher: &Publisher,
         number: i32,
     ) -> impl Future<Output = Result<ArtifactVersion, ArtifactError>> + Send;
 

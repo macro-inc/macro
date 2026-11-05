@@ -2194,6 +2194,9 @@ pub async fn run() -> anyhow::Result<()> {
         crate::outbound::artifacts::PermissionTokenViewTokens::new(
             config.document_permission_jwt.as_ref(),
         ),
+        crate::outbound::artifacts::ConnectionGatewayArtifactNotifier::new(
+            conn_gateway_client.clone(),
+        ),
         artifact_origin.clone(),
     ));
     let artifact_content = crate::api::context::DssArtifactContent {

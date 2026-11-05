@@ -41,9 +41,16 @@ artifact_versions
 - A publish names `base_version`; a different current version is a 409, and so
   is losing the race for the next number, so two agents can't overwrite each
   other silently.
-- `created_by` is the acting user; `created_by_agent` is the bot when a bot
-  published for them, as on the document permission token. A team bot with no
-  acting user can't publish.
+- `created_by` is the acting user. `created_by_agent` is the agent acting for
+  them: the bot of a bot credential, or the signed agent attribution
+  (`agent_id`) of a Macro API token, such as the one the agent egress mints for
+  a session. A caller with no acting user (a team bot, internal) can't publish.
+- An artifact can exist with no version: `POST /artifacts` without files
+  creates only the document, so large files can be uploaded before publishing
+  version 1 with `base_version` 0. Until then `current` is null and `view_url`
+  is a 404.
+- Every publish and restore sends `artifact_published` (`{documentId,
+  version}`) to the document's subscribers through the connection gateway.
 
 Validation lives in the domain (`domain/manifest.rs`): paths are relative,
 `/`-separated, without empty, `.` or `..` segments, at most 512 characters;
@@ -58,7 +65,7 @@ Mounted at `/artifacts` on DSS (utoipa tag `artifacts`, snake_case JSON).
 
 | Route | Access | Does |
 | --- | --- | --- |
-| `POST /artifacts` | edit on `project_id` if given | Create the document and version 1; every file carries `content_base64`. 201. |
+| `POST /artifacts` | edit on `project_id` if given | Create the document, and version 1 when files are given (each with `content_base64`). 201. |
 | `POST /artifacts/{id}/uploads` | edit | Presigned S3 `PUT`s for the digests not yet stored for this artifact. |
 | `POST /artifacts/{id}/versions` | edit | Publish; files without content must already be stored. 201, 409 on a stale `base_version`. |
 | `GET /artifacts/{id}` | view | The artifact and its current version. |
@@ -138,7 +145,7 @@ The web app frames it as
 
 ## Traces
 
-`artifact.create`, `artifact.publish` (document_id, version, file_count,
+`artifact.create`, `artifact.publish`, `artifact.notify_published` (document_id, version, file_count,
 bytes_inline, bytes_reused), `artifact.uploads`, `artifact.restore`,
 `artifact.view_url` (document_id, version, scene) and `artifact.content`
 (document_id, version, path, cache = `served` or `not_modified`). Tokens are
