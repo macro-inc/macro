@@ -50,8 +50,8 @@ A host can run a program with nobody watching (a routine step) by setting
   fails with a message naming its size, instead of being summarized;
 - it runs with the token's permissions, the owner's. A dry run (`dry_run`)
   answers each SDK write with an empty result and reports it as `skipped`;
-  writes are the catalog's non-read operations (`src/domain/operations.json`,
-  generated with each operation's method, path and `write`), and an operation
+  writes are the catalog's non-read operations (`operations.json` from
+  `crates/code_mode_assets`, with each operation's method, path and `write`), and an operation
   missing from it counts as one. A dry run also refuses authenticated non-GET
   requests at `fetch` unless a read matches; raw sockets (`Deno.connect`,
   `connectTls`, `startTls`), workers and Node's networking and process modules
@@ -61,7 +61,7 @@ A dry run is held back inside the process, not by the APIs: code written to
 get around it can still write with the owner's permissions.
 
 `DenoChecker` (`src/outbound/deno/check.rs`) type-checks a TypeScript program
-against the SDK's generated declarations (`src/outbound/deno/sdk-types.json`)
+against the SDK's generated declarations (`sdk-types.json` from `crates/code_mode_assets`)
 without running it, plus an ambient declaration module the host supplies (the
 type of `main`'s argument). `check_files` checks several modules together (up
 to 40), so one can import another's types, and attributes each diagnostic to

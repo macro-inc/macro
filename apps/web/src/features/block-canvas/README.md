@@ -56,6 +56,44 @@ text, connectors, media, and document cards. Selection/camera/tools stay local.
 Incoming scene changes cancel active canvas gestures; intent rebasing is deferred. See [Graphics and Canvas parity](../../../../../docs/design/graphics-parity.md)
 for the remaining editor and collaboration work.
 
+## Artifacts
+
+Behind `enable-canvas-artifacts`, an `artifact` node runs a self-contained HTML
+document in `views/artifact-frame.tsx`. The frame's sandbox is `allow-scripts`
+only, so the document has an opaque origin with no access to Macro's cookies,
+storage or DOM. Never add `allow-same-origin`. `core/artifact-document.ts` writes
+a content security policy ahead of the artifact's own markup, which blocks network
+requests, nested frames and form posts. Images and fonts must be inline.
+
+A policy cannot follow a navigation, and a sandbox does not stop a frame navigating
+itself. Each composed document therefore announces its load to the host with a token, from
+a script that removes itself before artifact code runs. A load without the token puts
+the artifact's own document back, and an artifact that keeps leaving is stopped, but the first request of each navigation has already been
+sent. Browsers also do not apply the policy to WebRTC.
+So an artifact cannot reach Macro's data, but it can send out what it already holds:
+treat artifact source, and anything typed into an
+artifact, as readable by whoever wrote it. Artifacts mount only while on screen, so
+off-screen scripts stop and restart with fresh state. With the flag off, a node
+shows its title and no script runs. The headless render bundle has no flag reader,
+so its caller says whether to run artifacts, in the same sandbox.
+
+Each canvas has a library of named styles and components, in root Loro maps beside
+the scene, edited from the inspector. An artifact uses them with
+`<macro-style name="brand"></macro-style>` and
+`<macro-component name="card">children</macro-component>`, whose children replace
+the component's `<slot>`. They expand when the document is composed, so a library
+edit updates every artifact using it. JSON export carries only the scene, so a
+downloaded canvas loses its library.
+
+**Present** on a node opens `views/artifact-presentation.tsx`, full screen where the
+browser allows and otherwise covering the window. It steps through artifacts only,
+in `presentOrder`, stopping at each end; new artifacts go last, and the inspector
+reorders them. Arrow keys, Space and Page Up/Down step, and Esc exits. Focus inside
+a frame keeps keys from the host, so `composeArtifactDocument` adds a small script
+that forwards these keys unless the artifact handled them or the user is typing.
+The host treats those messages only as navigation. Touch devices use the on-screen
+buttons.
+
 ## Controls
 
 The floating top toolbar uses the shared `Toolbar` and Phosphor icons for drawing

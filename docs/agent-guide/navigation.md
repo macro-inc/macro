@@ -31,6 +31,11 @@ a background tab; adding Shift also switches to it. Tabs are not draggable.
 Tabs persist per user and restore on launch. In the browser and on other
 platforms the strip does not render.
 
+An inline preview in a background tab stays open there, so selecting its entity
+from another tab switches to that tab with the entity showing. A tab that opens
+onto an entity another tab already holds shows its list instead, without moving
+you or showing a toast.
+
 Reference captures (browser fixture with the desktop gates forced):
 [a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)
 and [tabs restored after a reload](media/desktop-tabs/restored-tabs.png).
@@ -218,6 +223,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
+| `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/calendar` | Redirects to `/app/calendar/<month-or-week-or-day>` at the remembered period (Day on phones and Week on desktop by default), keeping an `eventId` |
 | `/app/scheduling` | Scheduling workspace: booking links, availability, bookings, insights, and booking page |
@@ -239,6 +245,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 
 Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
 pages outside the app (`/app/login`, `/app/welcome`, `/app/signup`,
+`/app/signup/agent`, `/app/agent-setup`,
 `/app/onboarding`, `/app/setup`, the invite pages, `/app/meet/...` and
 `/app/task-slug/...`) render without the split layout and take one part only.
 `/app/login/~/home` and URLs nothing matches, such as `/app/garbage`, are
@@ -503,6 +510,11 @@ Showing Scheduling removes its duplicate from More; the choice survives reload.
 Activity appears in Customize sidebar only when the `enable-activity-feed` flag
 is on and, like Scheduling, starts hidden in More (also for existing preferences)
 until enabled on the rail.
+Notifications (bell, `g i`) appears directly below Home only when the
+`enable-unified-notifications` flag is on, and is shown on the rail by default.
+`g i` reaches Home while it is off; with it on, Home answers only `g h`. Its
+unread dot follows Home's unread dot.
+
 External (plug icon, `g x`) appears on the rail only with the
 `enable-whatsapp-linked` flag; it starts shown and can be hidden like other apps.
 
@@ -512,8 +524,8 @@ External (plug icon, `g x`) appears on the rail only with the
   global search. Hold Shift while selecting `Search everything` to open it in a
   new split, including when Search is already active. This left-click menu shares
   its surface and item styling with the sidebar right-click menus.
-- Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
-  `Agents`, `Customers`. Calendar and Customers appear only when
+- Nav: `Home`, `Notifications`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
+  `Agents`, `Customers`. Notifications, Calendar and Customers appear only when
   their features are enabled. Calendar shows a next-meeting badge (`Now`, or
   minutes under an hour away) unless **Next meeting countdown** is off in
   **Settings → Calendar**.
@@ -1014,7 +1026,13 @@ hides during search, when a page supplies its own reply or compose controls
 (including the full-screen new-email composer, whose send actions sit in its
 header), or when an editable field outside Ask AI is focused on a touch device. The AI draft
 is preserved when the row returns.
-The New button also hides while the software keyboard is open.
+The New button also hides while the software keyboard is open or a live call
+view is in the foreground. Leaving the call view restores the current page's
+action, even if the call continues in the background.
+Active phone calls hide the bottom dock but retain the channel header island.
+Their Back button returns to the app while the call continues; tablets keep app
+chrome. Phone media controls sit below the video and hide when idle without
+resizing it; the header islands remain visible.
 After closing mobile search with the keyboard open or leaving a focused editor,
 verify that the current view’s New action returns once the keyboard closes.
 Removing the focused editor must not leave the action hidden on subsequent views.
@@ -1122,6 +1140,8 @@ Agents like the owner's own sessions. The setting applies to runs
 that start after it changes. A run that finishes normally sends no
 notification; a failed or cut-short run, a question the agent asks, a held tool
 approval, and people the routine's prompt mentions still notify.
+The prompt's `@` menu also lists agents. Mentioning one only names it for the
+routine: it doesn't start the agent or notify anyone.
 
 **Create → Routine** (U), **New** in the list and **Create Routine** open **New
 routine** in the same popover host as task and project creation. It never edits
@@ -1186,7 +1206,10 @@ Monthly, Cron), **On** (day buttons S M T W T F S), **At** and **Time zone**.
 **Once** offers Macro's natural date search (**tomorrow 9am**, **in 2 hours**)
 and **Custom date and time…**. Click **Add trigger** in the panel to confirm.
 Recurring schedules retain their time zones; one-off times use the browser's
-local time.
+local time. A one-off saves a `once` trigger (`{type: 'once', at}`, the same one
+agents create through the SDK to check back later), runs within about a second
+of its time, runs as soon as it is saved when the time has passed, and then
+shows **Completed**.
 
 On a routine's page each trigger reads as a sentence of tokens: the event
 (**New email received**) or schedule (**Weekdays at 9:00 AM**), then **in** and

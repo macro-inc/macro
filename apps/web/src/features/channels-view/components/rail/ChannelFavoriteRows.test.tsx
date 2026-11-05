@@ -735,6 +735,95 @@ describe('resizable chat sections', () => {
     });
   });
 
+  it.each(['pointerup', 'pointercancel'])(
+    'scrolls while resizing near the sidebar edge and stops on %s',
+    (endEvent) => {
+      const frames = new Map<number, FrameRequestCallback>();
+      let frameId = 0;
+      const request = vi
+        .spyOn(window, 'requestAnimationFrame')
+        .mockImplementation((callback) => {
+          frames.set(++frameId, callback);
+          return frameId;
+        });
+      const cancel = vi
+        .spyOn(window, 'cancelAnimationFrame')
+        .mockImplementation((id) => {
+          frames.delete(id);
+        });
+      const outer = document.createElement('div');
+      Object.defineProperties(outer, {
+        clientHeight: { value: 280 },
+        scrollHeight: { value: 800 },
+      });
+      vi.spyOn(outer, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(0, 0, 200, 280)
+      );
+      let viewport!: HTMLDivElement;
+      const view = render(() => (
+        <ResizableRailSection
+          section="favorites"
+          label="Favorites"
+          open
+          maxHeight={400}
+          itemCount={12}
+          outerScrollRoot={outer}
+          header={<span>Section</span>}
+          rootRef={() => {}}
+          scrollRef={(element) => {
+            viewport = element;
+            Object.defineProperty(element, 'offsetHeight', { value: 136 });
+            vi.spyOn(element, 'getBoundingClientRect').mockImplementation(
+              () => new DOMRect(0, 132 - outer.scrollTop, 200, 136)
+            );
+          }}
+        >
+          Conversations
+        </ResizableRailSection>
+      ));
+      const handle = screen.getByRole('separator');
+      Object.defineProperty(handle, 'setPointerCapture', { value: vi.fn() });
+      const start = new MouseEvent('pointerdown', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 268,
+      });
+      Object.defineProperty(start, 'pointerId', { value: 1 });
+      handle.dispatchEvent(start);
+
+      for (const time of [0, 16, 32]) {
+        const pending = [...frames.values()];
+        frames.clear();
+        for (const callback of pending) callback(time);
+      }
+
+      expect(outer.scrollTop).toBeGreaterThan(0);
+      expect(Number.parseFloat(viewport.style.height)).toBe(
+        Math.round(136 + outer.scrollTop)
+      );
+      const end = new MouseEvent(endEvent, {
+        bubbles: true,
+        clientX: 100,
+        clientY: 268,
+      });
+      Object.defineProperty(end, 'pointerId', { value: 1 });
+      handle.dispatchEvent(end);
+      expect(frames.size).toBe(0);
+      if (endEvent === 'pointerup') {
+        expect(rail.setSectionPreferences).toHaveBeenCalledExactlyOnceWith(
+          'favorites',
+          { height: Math.round(136 + outer.scrollTop) }
+        );
+      } else {
+        expect(rail.setSectionPreferences).not.toHaveBeenCalled();
+      }
+
+      view.unmount();
+      request.mockRestore();
+      cancel.mockRestore();
+    }
+  );
+
   it.each(['pointercancel', 'lostpointercapture'])(
     'does not save after %s and accepts a later resize',
     (cancelEvent) => {

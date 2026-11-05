@@ -201,6 +201,16 @@ fn may_be_chatgpt(caller: &ToolCaller) -> bool {
 #[cfg(test)]
 mod test;
 
+/// The server instructions' shared rules, and how the areas MCP clients write
+/// into work, from the SDK's `@agent` guidance.
+fn mcp_instructions(base_url: &str) -> String {
+    format!(
+        "{}{}",
+        prompt::mcp_instructions(base_url),
+        agent_code_mode::domain::mcp_guides()
+    )
+}
+
 impl<Context> ServerHandler for AuthenticatedToolService<Context>
 where
     Context: Clone + Send + Sync + MarkdownImageResolver + CalledBy + 'static,
@@ -233,7 +243,7 @@ where
              Use ListSkills to discover available skills, SearchSkills to find a skill by name, \
              and ReadSkill to read its full instructions before following them for the current request. \
              Use ListEntities to browse recent items.\n\n{}",
-            prompt::mcp_instructions(base_url),
+            mcp_instructions(base_url),
         ));
         info
     }
@@ -264,7 +274,7 @@ where
             info.instructions = Some(format!(
                 "{}\n\n{}",
                 include_str!("code_mode_instructions.md").trim(),
-                prompt::mcp_instructions(base_url),
+                mcp_instructions(base_url),
             ));
         }
         Ok(info)

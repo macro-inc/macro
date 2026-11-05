@@ -116,11 +116,6 @@ export function ChatComposer(props: {
   const drawerOpen = () => props.drawerOpen && !collapsed();
   useTouchOutsideToDismissKeyboard(() => container);
   const disabled = () => !!props.blockedReason || props.session?.disabled;
-  const canSendNext = () =>
-    !hasContent() &&
-    props.session?.hasQueuedMessages &&
-    props.session.onStop &&
-    !disabled();
   const editor = buildConfig('chat')
     .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agents-chat-composer')
@@ -146,7 +141,6 @@ export function ChatComposer(props: {
       // button is the only way to submit.
       if (isTouchDevice()) return false;
       if (markdown.trim() || attachments().length > 0) send(markdown);
-      else if (canSendNext()) sendNext();
       return true;
     })
     .onFocusLeave({
@@ -242,10 +236,6 @@ export function ChatComposer(props: {
     editor.controls.clear();
     hapticImpact('light');
     props.onSend(prompt, attached);
-  };
-
-  const sendNext = () => {
-    if (canSendNext()) (props.session?.onSendNext ?? props.session?.onStop)?.();
   };
 
   const focusEditor = (event: Event) => {
@@ -486,8 +476,8 @@ export function ChatComposer(props: {
                     </div>
                     <Show
                       when={
-                        (props.session?.busy || canSendNext()) &&
-                        props.session?.onStop &&
+                        props.session?.busy &&
+                        props.session.onStop &&
                         !hasContent()
                       }
                       fallback={
@@ -506,34 +496,17 @@ export function ChatComposer(props: {
                         />
                       }
                     >
-                      <Show
-                        when={canSendNext()}
-                        fallback={
-                          <Button
-                            aria-label="Stop"
-                            tooltip="Stop"
-                            variant="secondary"
-                            class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
-                            size="icon-md"
-                            disabled={disabled()}
-                            onClick={() => props.session?.onStop?.()}
-                          >
-                            <div class="size-3.5 rounded-sm bg-current" />
-                          </Button>
-                        }
+                      <Button
+                        aria-label="Stop"
+                        tooltip="Stop"
+                        variant="secondary"
+                        class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
+                        size="icon-md"
+                        disabled={disabled()}
+                        onClick={() => props.session?.onStop?.()}
                       >
-                        <SendButton
-                          appearance="composer"
-                          class="touch:bg-transparent touch:text-ink touch:data-disabled:bg-transparent"
-                          intent="flush"
-                          aria-label="Flush queued messages"
-                          tooltip={{
-                            content: 'Flush queued messages',
-                            shortcut: 'Enter',
-                          }}
-                          onClick={sendNext}
-                        />
-                      </Show>
+                        <div class="size-3.5 rounded-sm bg-current" />
+                      </Button>
                     </Show>
                   </div>
                 </div>

@@ -17,8 +17,10 @@ axum = { workspace = true }
 bot_id = { path = "../bot_id" }
 calendar_events = { path = "../calendar_events", features = ["ai_tools"] }
 code_execution = { path = "../code_execution" }
+code_mode_assets = { path = "../code_mode_assets" }
 email = { path = "../email", features = ["ai_tools", "inbound"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports", "inbound"] }
+futures = { workspace = true }
 import = { path = "../import" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
@@ -42,6 +44,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+jev = { path = "../jev", features = ["outbound"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 macro_db_migrator = { path = "../macro_db_migrator" }

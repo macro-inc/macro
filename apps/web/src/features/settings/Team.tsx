@@ -19,7 +19,7 @@ import {
 } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
-import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
+import { Button, Checkbox, cn, Dialog, Panel, Tooltip } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -461,6 +461,7 @@ export function InviteToTeamDialog(props: {
 }) {
   const inviteToTeamMutation = useInviteToTeamMutation();
   const [invites, setInvites] = createSignal<InviteEntry[]>([EMPTY_INVITE]);
+  const [inviteAsAgent, setInviteAsAgent] = createSignal(false);
   const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>(
     []
   );
@@ -480,6 +481,7 @@ export function InviteToTeamDialog(props: {
 
   const close = () => {
     setInvites([EMPTY_INVITE]);
+    setInviteAsAgent(false);
     setInviteErrors([]);
     props.onClose();
   };
@@ -493,7 +495,10 @@ export function InviteToTeamDialog(props: {
     if (inviteEntries.length === 0) return;
 
     inviteToTeamMutation.mutate(
-      { teamId: props.teamId, request: { invites: inviteEntries } },
+      {
+        teamId: props.teamId,
+        request: { invites: inviteEntries, is_agent: inviteAsAgent() },
+      },
       { onSuccess: close }
     );
   };
@@ -523,6 +528,12 @@ export function InviteToTeamDialog(props: {
             errors={inviteErrors()}
             onErrorsChange={setInviteErrors}
           />
+          <Checkbox checked={inviteAsAgent()} onChange={setInviteAsAgent}>
+            <Checkbox.Control />
+            <Checkbox.Label class="text-sm text-ink">
+              Invite as agent
+            </Checkbox.Label>
+          </Checkbox>
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"

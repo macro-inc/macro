@@ -4,7 +4,11 @@ use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
 use crate::upsert::properties::IndexedProperty;
-use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
+use crate::{
+    Result,
+    date_format::EpochMillis,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 #[cfg(test)]
 mod test;
@@ -149,7 +153,7 @@ async fn bulk_upsert_call_record_segments_inner(
         client,
         index,
         bulk_body,
-        "bulk_upsert_call_record_segments_inner",
+        OpensearchOperation::BulkUpsertCallRecordSegments,
     )
     .await
 }
@@ -168,7 +172,7 @@ pub(crate) async fn update_call_record_properties(
     let properties_value =
         serde_json::to_value(properties).map_err(|err| OpensearchClientError::Unknown {
             details: err.to_string(),
-            method: Some("update_call_record_properties".to_string()),
+            operation: OpensearchOperation::UpdateCallRecordProperties,
         })?;
     let body = json!({ "doc": { "properties": properties_value } });
 
@@ -181,9 +185,11 @@ pub(crate) async fn update_call_record_properties(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("update_call_record_properties".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(
+                OpensearchOperation::UpdateCallRecordProperties,
+                &err,
+            )
         })?;
 
     let status_code = response.status_code();
@@ -191,14 +197,12 @@ pub(crate) async fn update_call_record_properties(
         tracing::trace!(call_id=%call_id, "call record properties updated");
         return Ok(());
     }
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("update_call_record_properties".to_string()),
-            })?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::UpdateCallRecordProperties,
+            &err,
+        )
+    })?;
 
     // A *missing document* 404 is a no-op: the call isn't indexed yet, so the
     // next segment upsert will include its properties. A *missing index* 404
@@ -225,6 +229,6 @@ pub(crate) async fn update_call_record_properties(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("update_call_record_properties".to_string()),
+        operation: OpensearchOperation::UpdateCallRecordProperties,
     })
 }

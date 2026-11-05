@@ -1,4 +1,3 @@
-import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { toast } from '@core/component/Toast/Toast';
 import FloppyDiskIcon from '@icon/system/regular/floppy-disk.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
@@ -20,7 +19,6 @@ import { useApplyCrmView } from './apply-view';
 import {
   useCrmDisplayOptions,
   useCrmPermissions,
-  useIsTeamAdmin,
   usePersonalCrmViews,
   useTeamCrmViews,
   useCrmUserId as useUserId,
@@ -328,16 +326,10 @@ export function CompanyViewsMenu(
 /**
  * Personal display options for the Customers view: which property columns
  * show in the list. Device-level (preference-backed) — deliberately not
- * captured by saved views. Admins/owners additionally get a toggle to view
- * the hidden-companies set (backed by the active/hidden tab presets).
+ * captured by saved views. Archive visibility is a separate scoped filter.
  */
 export function CompanyDisplayMenu(props: { grouped?: boolean } = {}) {
   const { options, toggleListColumn } = useCrmDisplayOptions();
-  const { activeTab } = useCrmWorkspace();
-  const { applyTabPreset } = useApplyPreset();
-  const isTeamAdmin = useIsTeamAdmin();
-
-  const showingHidden = () => activeTab() === 'hidden';
 
   return (
     <Dropdown>
@@ -370,24 +362,6 @@ export function CompanyDisplayMenu(props: { grouped?: boolean } = {}) {
             )}
           </For>
         </Dropdown.Group>
-        {/* Admin/owner only — the BE rejects hidden-set requests from
-            non-admins, matching the old Hidden tab's gating. */}
-        <Show when={isTeamAdmin()}>
-          <Dropdown.Group>
-            <Dropdown.CheckboxItem
-              checked={showingHidden()}
-              onChange={() =>
-                applyTabPreset(
-                  'companies',
-                  showingHidden() ? 'active' : 'hidden'
-                )
-              }
-              closeOnSelect={false}
-            >
-              <span class="flex-1 truncate">Show hidden companies</span>
-            </Dropdown.CheckboxItem>
-          </Dropdown.Group>
-        </Show>
       </Dropdown.Content>
     </Dropdown>
   );

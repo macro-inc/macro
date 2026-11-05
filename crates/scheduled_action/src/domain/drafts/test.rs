@@ -167,7 +167,7 @@ async fn drafts_an_event_routine_with_named_code_and_tells_the_model_the_workspa
 }
 
 #[tokio::test]
-async fn turns_one_off_times_into_dated_schedules_beside_repeating_ones() {
+async fn keeps_one_off_times_beside_repeating_schedules() {
     let model = Model::answering([answer(
         json!([
             { "type": "once", "at": "2026-12-01T14:30:00-05:00" },
@@ -183,7 +183,7 @@ async fn turns_one_off_times_into_dated_schedules_beside_repeating_ones() {
     assert_eq!(
         serde_json::to_value(&routine.trigger).unwrap(),
         json!({ "type": "multiple", "triggers": [
-            { "type": "cron", "schedule": "0 30 19 1 12 * 2026", "timezone": "UTC" },
+            { "type": "once", "at": "2026-12-01T19:30:00Z" },
             { "type": "cron", "schedule": "0 0 9 * * MON", "timezone": "America/New_York" },
         ] })
     );

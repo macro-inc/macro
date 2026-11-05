@@ -58,8 +58,7 @@
       # `crates/pptx_engine` embeds with `include_bytes!`; `.graphql` for the
       # `static_assets/schema.graphql` that `cache-core`'s build script reads;
       # `.jsonl` for the recorded sessions `agent_fold` tests embed; `.mjs`
-      # for the Deno bootstrap and bundled public SDK/Handlebars runtime (its
-      # operation catalog and type declarations are `.json`);
+      # for the Deno bootstrap and timer shims;
       # `.proto` for the protobuf files the `whatsmeow_proto` and
       # `whatsmeow_signal` build scripts compile.
       assetFilter =
@@ -173,6 +172,66 @@
           ${overlays}
         '';
 
+      # ── Code-mode assets ──────────────────────────────────────────
+      # crates/code_mode_assets embeds the Deno SDK bundle and agent SDK docs.
+      # Its build script runs the generator itself unless CODE_MODE_ASSETS_DIR
+      # names prebuilt assets, as every Nix build of it does: the sandbox has
+      # no network for a bun install. Keep this filter in step with the build
+      # script's GENERATOR_INPUTS.
+      jsNodeModules = pkgs.callPackage ../nix-support/node_modules.nix { src = ../.; };
+
+      codeModeAssetsSrc = pkgs.lib.cleanSourceWith {
+        src = ../.;
+        name = "code-mode-assets-src";
+        filter =
+          path: type:
+          let
+            rel = pkgs.lib.removePrefix ((toString ../.) + "/") (toString path);
+            segments = pkgs.lib.splitString "/" rel;
+            isUnder = directory: rel == directory || pkgs.lib.hasPrefix "${directory}/" rel;
+          in
+          !(builtins.elem "node_modules" segments)
+          && !(builtins.elem "dist" segments)
+          && (
+            builtins.elem rel [
+              "bun.lock"
+              "package.json"
+              "packages"
+            ]
+            || builtins.any isUnder [
+              "packages/code-mode-sdk"
+              "packages/sdk"
+              "packages/sdk-docs"
+            ]
+          );
+      };
+
+      codeModeAssets = pkgs.stdenvNoCC.mkDerivation {
+        pname = "code-mode-assets";
+        version = "0.1.0";
+        src = codeModeAssetsSrc;
+        nativeBuildInputs = [ pkgs.bun ];
+        dontConfigure = true;
+        buildPhase = ''
+          runHook preBuild
+          export HOME="$TMPDIR/home"
+          mkdir -p "$HOME"
+          for project in . packages/sdk packages/sdk-docs packages/code-mode-sdk; do
+            if [ -d "${jsNodeModules}/$project/node_modules" ]; then
+              cp -a "${jsNodeModules}/$project/node_modules" "$project/"
+            fi
+          done
+          bun packages/code-mode-sdk/scripts/generate.ts "$out"
+          runHook postBuild
+        '';
+        dontInstall = true;
+        dontFixup = true;
+      };
+
+      codeModeAssetsEnv = {
+        CODE_MODE_ASSETS_DIR = "${codeModeAssets}";
+      };
+
       commonArgs = {
         inherit src;
         pname = "cloud-storage";
@@ -232,6 +291,7 @@
       # set because its KV and R2 storage features are mutually exclusive.
       workspaceArtifacts = craneLib.cargoBuild (
         commonArgs
+        // codeModeAssetsEnv
         // {
           inherit cargoArtifacts;
           pname = "cloud-storage-workspace";
@@ -286,6 +346,7 @@
           pkgs.lib.nameValuePair "doppler-config-bin-${binName}" (
             craneLib.buildPackage (
               commonArgs
+              // codeModeAssetsEnv
               // {
                 # Reuse the dependency-only layer, then compile only this
                 # Doppler config binary and the local crates it actually uses.
@@ -310,6 +371,7 @@
 
       openApiBins = craneLib.buildPackage (
         commonArgs
+        // codeModeAssetsEnv
         // {
           cargoArtifacts = workspaceArtifacts;
           pname = "cloud-storage-openapi";
@@ -341,6 +403,7 @@
       # postgres/redis services. Built in Nix and cached by Namespace.
       nextestArchive = craneLib.mkCargoDerivation (
         commonArgs
+        // codeModeAssetsEnv
         // {
           cargoArtifacts = workspaceArtifacts;
           pname = "cloud-storage-nextest-archive";
@@ -507,6 +570,11 @@
         }:
         craneLib.buildPackage (
           commonArgs
+          # Only services that embed the assets depend on them, so an SDK
+          # change leaves the other deploy derivations cached.
+          // pkgs.lib.optionalAttrs (builtins.elem "crates/code_mode_assets" (
+            workspaceDepClosures.${packageName} or [ ]
+          )) codeModeAssetsEnv
           // {
             # Pruned source: this derivation only rebuilds when a crate in
             # the service's own workspace closure changes.
@@ -1021,14 +1089,7 @@
     in
     {
       checks = {
-        code-execution-assets = pkgs.runCommand "cloud-storage-code-execution-assets" { } ''
-          for source in ${src} ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}; do
-            for asset in outbound/deno/bootstrap.mjs outbound/deno/sdk.mjs outbound/deno/handlebars.mjs outbound/deno/sdk-types.json domain/operations.json; do
-              test -s "$source/crates/code_execution/src/$asset"
-            done
-          done
-          touch $out
-        '';
+        code-mode-assets = codeModeAssets;
         # Deploy builds compile [patch.crates-io] crates from the pruned
         # source, so their real code (not mkDummySrc's stubs) must be there.
         pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
@@ -1043,6 +1104,7 @@
         };
         clippy = craneLib.cargoClippy (
           commonArgs
+          // codeModeAssetsEnv
           // {
             cargoArtifacts = workspaceArtifacts;
             cargoClippyExtraArgs = "--workspace --all-features --exclude sync_service -- -D warnings";
@@ -1051,6 +1113,7 @@
         );
         clippy-sync-service = craneLib.cargoClippy (
           commonArgs
+          // codeModeAssetsEnv
           // {
             cargoArtifacts = workspaceArtifacts;
             cargoClippyExtraArgs = "-p sync_service -- -D warnings -A clippy::unnecessary_map_or -A clippy::collapsible_if";
@@ -1112,6 +1175,7 @@
           goalert-mcp-macro
           ;
         default = cargoArtifacts;
+        code-mode-assets = codeModeAssets;
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages

@@ -109,6 +109,27 @@ fn embedded_assets_select_their_consumers() {
     assert!(mixed_set.contains("collab_surface"));
 }
 
+/// The code-mode assets are generated from the SDK by a build script, so an
+/// SDK-only change must still test everything that embeds them.
+#[test]
+fn sdk_sources_select_code_mode_asset_consumers() {
+    let graph = build_graph(false).expect("cargo metadata");
+
+    let selection = select_in_repo(&graph, &["packages/sdk/src/macro.ts"]);
+    let set = selected_packages(&selection);
+    for expected in [
+        "code_mode_assets",
+        "code_execution",
+        "agent_code_mode",
+        "agent_harness_service",
+    ] {
+        assert!(
+            set.contains(expected),
+            "SDK changes must select {expected}: {selection:?}"
+        );
+    }
+}
+
 /// Drift check: every workspace package whose Rust sources mention the shared
 /// asset path must be listed in the determinator rule (and vice versa). The
 /// scan is textual, so a doc-comment mention merely over-selects safely.

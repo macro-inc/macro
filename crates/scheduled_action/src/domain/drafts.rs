@@ -9,7 +9,7 @@ use std::sync::Arc;
 use ai_billing::AiAdmissionService;
 use ai_usage::AiFeature;
 use anyhow::Result;
-use chrono::{DateTime, Datelike, SecondsFormat, Timelike, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use routine_program::{CodeStep, RoutineProgram, Step};
@@ -1139,19 +1139,9 @@ fn drafted_trigger(triggers: &[DraftTrigger]) -> Option<ActionTrigger> {
                 let Ok(at) = DateTime::parse_from_rfc3339(at.trim()) else {
                     continue;
                 };
-                let at = at.with_timezone(&Utc);
                 schedules.push(json!({
-                    "type": "cron",
-                    "timezone": "UTC",
-                    "schedule": format!(
-                        "{} {} {} {} {} * {}",
-                        at.second(),
-                        at.minute(),
-                        at.hour(),
-                        at.day(),
-                        at.month(),
-                        at.year()
-                    ),
+                    "type": "once",
+                    "at": at.with_timezone(&Utc).to_rfc3339_opts(SecondsFormat::Secs, true),
                 }));
             }
             DraftTrigger::Cron {
@@ -1211,6 +1201,7 @@ fn drafted_trigger(triggers: &[DraftTrigger]) -> Option<ActionTrigger> {
             RoutineTrigger::Cron { schedule, timezone } => {
                 ActionTrigger::Cron { schedule, timezone }
             }
+            RoutineTrigger::Once { at } => ActionTrigger::Once { at },
             RoutineTrigger::Events { filters } => ActionTrigger::Events { filters },
         }),
         _ => RoutineTriggers::try_from(valid)

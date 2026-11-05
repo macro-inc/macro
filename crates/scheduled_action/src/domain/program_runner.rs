@@ -7,6 +7,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow, bail};
+use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use macro_user_id::user_id::MacroUserIdStr;
 use routine_program::{
@@ -409,10 +410,10 @@ fn first_schedule(trigger: &ActionTrigger) -> Option<(String, String)> {
                 .iter()
                 .find_map(|trigger| match trigger {
                     RoutineTrigger::Cron { schedule, timezone } => Some(cron(schedule, timezone)),
-                    RoutineTrigger::Events { .. } => None,
+                    RoutineTrigger::Once { .. } | RoutineTrigger::Events { .. } => None,
                 })
         }
-        ActionTrigger::Events { .. } => None,
+        ActionTrigger::Once { .. } | ActionTrigger::Events { .. } => None,
     }
 }
 
@@ -456,13 +457,16 @@ fn legacy_task(action: &ScheduledAction) -> Option<AgentTask> {
 fn schedule(trigger: &ActionTrigger) -> String {
     let cron =
         |schedule: &Schedule, timezone: &Tz| format!("cron `{}` in {timezone}", schedule.as_str());
+    let once = |at: &DateTime<Utc>| format!("once at {}", at.to_rfc3339());
     match trigger {
         ActionTrigger::Cron { schedule, timezone } => cron(schedule, timezone),
+        ActionTrigger::Once { at } => once(at),
         ActionTrigger::Multiple { triggers } => triggers
             .as_slice()
             .iter()
             .filter_map(|trigger| match trigger {
                 RoutineTrigger::Cron { schedule, timezone } => Some(cron(schedule, timezone)),
+                RoutineTrigger::Once { at } => Some(once(at)),
                 RoutineTrigger::Events { .. } => None,
             })
             .collect::<Vec<_>>()
@@ -471,8 +475,8 @@ fn schedule(trigger: &ActionTrigger) -> String {
     }
 }
 
-/// The routine's triggers as the agent reads them: one entry per schedule and
-/// per event filter.
+/// The routine's triggers as the agent reads them: one entry per schedule,
+/// once time and event filter.
 fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
     let schedule = |schedule: &Schedule, timezone: &Tz| ContextTrigger::Schedule {
         cron: schedule.as_str().to_owned(),
@@ -483,6 +487,7 @@ fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
             schedule: cron,
             timezone,
         } => vec![schedule(cron, timezone)],
+        ActionTrigger::Once { at } => vec![ContextTrigger::Once { at: *at }],
         ActionTrigger::Multiple { triggers } => triggers
             .as_slice()
             .iter()
@@ -491,6 +496,7 @@ fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
                     schedule: cron,
                     timezone,
                 } => Some(schedule(cron, timezone)),
+                RoutineTrigger::Once { at } => Some(ContextTrigger::Once { at: *at }),
                 RoutineTrigger::Events { .. } => None,
             })
             .collect(),

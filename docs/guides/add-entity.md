@@ -259,7 +259,7 @@ on the other.
   view with a bind-placeholder collision.
 - **Feeds** (if it belongs in Recent, inbox, or the Home work feed):
   `candidate_gates.rs`, `touched.rs` (Recent, which reads activity, so section 7
-  is a prerequisite), `notified.rs` with `notified/query.sql`, `work_feed/`, and
+  is a prerequisite), `notified.rs` with `notified/query.sql`, `attention/`, and
   the routing arms in `crates/soup/src/domain/service.rs` and
   `domain/service/favorites.rs`. Keep new gates index-only; these queries have
   been cancelled on the replica in production for scanning too much.
@@ -385,14 +385,17 @@ the skill doesn't cover:
   `with_actor` in `crates/ai_tools/src/tool_context.rs`, or agent writes are
   attributed to the default bot. Add a test in `crates/ai_tools/src/test.rs` that
   the tools resolve on every host; hosts have shipped with tools unwired.
-- Prompt guidance: a section in `crates/prompt/src/` (see `databases`,
-  `crm_pipelines`).
+- Agent guidance: a `@routing` sentence ("Use when …; not …") and, when agents
+  need rules beyond the API, an `@agent` block in the SDK namespace's TSDoc
+  (see `DatabaseNamespace`, `CrmNamespace`); generation fails without the
+  routing sentence.
 - Web: a renderer in `apps/web/src/lib/core/component/AI/component/tool/` with
   `handler.tsx`, and wording in `apps/web/src/features/block-agent/state/tool-approval-wording.ts`.
 - Regenerate: `cd apps/web && bun run gen-tools` and
   `cd apps/docs && bun run generate:tools` (never hand-edit the MCP tool pages).
-- Gemini rejects recursive schemas and drops records (`additionalProperties`).
-  Use key/value pair lists, and keep recursive input types out of tool schemas.
+- Gemini drops records (`additionalProperties`): use key/value pair lists. It
+  rejects a `$ref` loop of required fields, and so does schema generation:
+  recurse through an optional field or a list that may be empty.
 
 ## 14. SDK
 

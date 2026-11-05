@@ -479,6 +479,8 @@ horizontally to reach more lanes; each lane scrolls vertically on its own. A car
 or lane being dragged stays mounted while scrolling. After a card move, its
 destination is revealed. Starting a new card reveals the lane's draft at the
 bottom and focuses its title, including after the lane was offscreen.
+If a move is refused, the card returns to its saved lane and order; other pending
+moves stay visible until their own responses arrive.
 
 Lane headers show a color or type icon, a name, and an adjacent record count.
 Cards use the Tasks board's header, with wrapping titles and each configured field's
@@ -720,6 +722,15 @@ Double-click that title (or focus it and press F2) to rename it inline; Enter sa
 Escape cancels. Renaming keeps the question and its saved query unchanged. A saved
 query names databases, tables, and columns by their display names, so renaming one
 it reads makes the answer fail until the question is updated.
+
+AI document editing (the selection toolbar's **AI edit**, `EditDocument`) works with
+database blocks.
+It inserts a saved answer or chart from the `<m-db-query>` block that
+`SaveDatabaseQuery` returns, can change an existing answer's chart type, title,
+or height without changing its question, and can switch an embedded database
+to another table or view. To check, have chat save a chart and add it to a
+document, then select nearby text, choose **AI edit**, and ask for a pie chart; the same question
+should redraw as a pie.
 
 An existing document keeps its answer label when Databases is off and does not
 fetch its database results; see [Feature flag](#feature-flag).

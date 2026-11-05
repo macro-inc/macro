@@ -1,5 +1,6 @@
 //! The generated catalog of SDK operations and the declarations stored code is
-//! type-checked against, both from `packages/code-mode-sdk`.
+//! type-checked against, both built from `packages/code-mode-sdk` by
+//! `code_mode_assets`.
 
 use serde::Deserialize;
 use std::{collections::BTreeMap, sync::LazyLock};
@@ -20,7 +21,7 @@ pub struct Operation {
 }
 
 static OPERATIONS: LazyLock<BTreeMap<String, Operation>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("operations.json")).expect("generated operation catalog")
+    serde_json::from_str(code_mode_assets::OPERATIONS).expect("generated operation catalog")
 });
 
 /// Every SDK operation, keyed `service.operation`.
@@ -38,7 +39,7 @@ static SDK: LazyLock<SdkTypes> =
     LazyLock::new(|| serde_json::from_str(SDK_TYPES).expect("generated SDK declarations"));
 
 /// The SDK declarations as generated: `{"fingerprint": …, "files": {path: text}}`.
-pub(crate) const SDK_TYPES: &str = include_str!("../outbound/deno/sdk-types.json");
+pub(crate) const SDK_TYPES: &str = code_mode_assets::SDK_TYPES;
 
 /// Identifies the SDK's API shape: its version plus a hash of its
 /// declarations. Code type-checked against one fingerprint stays valid until

@@ -20,8 +20,6 @@ use tokio_util::{
 };
 
 const BOOTSTRAP: &str = include_str!("deno/bootstrap.mjs");
-const SDK: &str = include_str!("deno/sdk.mjs");
-const HANDLEBARS: &str = include_str!("deno/handlebars.mjs");
 const TIMERS: &str = include_str!("deno/timers.mjs");
 /// Node timer and worker modules resolve to timers.mjs, which refuses to
 /// sleep; see bootstrap.mjs.
@@ -112,10 +110,10 @@ impl DenoRunner {
         tokio::fs::write(&bootstrap, BOOTSTRAP)
             .await
             .map_err(internal)?;
-        tokio::fs::write(root.join("sdk.mjs"), SDK)
+        tokio::fs::write(root.join("sdk.mjs"), code_mode_assets::SDK)
             .await
             .map_err(internal)?;
-        tokio::fs::write(root.join("handlebars.mjs"), HANDLEBARS)
+        tokio::fs::write(root.join("handlebars.mjs"), code_mode_assets::HANDLEBARS)
             .await
             .map_err(internal)?;
         tokio::fs::write(root.join("timers.mjs"), TIMERS)
