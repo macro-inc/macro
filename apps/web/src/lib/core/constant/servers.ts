@@ -85,9 +85,10 @@ const proxyOrigin: string | undefined =
 const wsProxyOrigin = proxyOrigin?.replace(/^http/, 'ws');
 
 // Follow the page's hostname (keeping the proxy's port) so the app works from
-// any `*.localhost` alias. Hostnames get separate cookie jars while ports
-// share them, so opening tabs like alice.localhost:3000 / carol.localhost:3000
-// gives each seeded persona an isolated login session against the one backend.
+// any `*.localhost` alias. Hostnames get separate cookie jars, so opening tabs
+// like alice.localhost:8090 / carol.localhost:8090 gives each seeded persona an
+// isolated login session against the one backend. Separate stacks don't need
+// this: their proxies keep each stack's cookies apart on any hostname.
 function resolveProxyOrigin(configured: string | undefined) {
   if (!configured || typeof window === 'undefined') return configured;
   try {
@@ -103,6 +104,11 @@ export const SERVER_HOSTS: Servers =
   import.meta.env.MODE === 'development'
     ? selectLocalServers()
     : serverHostRemote;
+
+/** The app talks to a local stack through its single-origin proxy. */
+export function usesLocalStackProxy(): boolean {
+  return SERVER_HOSTS['auth-service'] === proxyServers()?.['auth-service'];
+}
 
 function proxyServers(): Servers | undefined {
   if (!proxyOrigin || !wsProxyOrigin) return undefined;

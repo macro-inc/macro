@@ -6,7 +6,7 @@ import {
   openDesktopAuthSession,
 } from '@core/auth/native-auth';
 import { toast } from '@core/component/Toast/Toast';
-import { SERVER_HOSTS } from '@core/constant/servers';
+import { SERVER_HOSTS, usesLocalStackProxy } from '@core/constant/servers';
 import { useEmailLinks } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { RedirectLocation } from '@core/util/authRedirect';
@@ -50,6 +50,21 @@ async function startDesktopSso(
   }
 }
 
+/**
+ * The hosted OAuth callback sets cookies on macro.com. A proxied browser, and
+ * every native shell, needs the session-code handoff to establish cookies
+ * locally instead. A local stack's callback runs on the auth service's own
+ * port, where its cookies would reach every stack on the machine, so its proxy
+ * ignores them and needs the handoff too.
+ */
+function needsSessionCodeHandoff(authUrl: URL): boolean {
+  return (
+    isNativeMobilePlatform() ||
+    usesLocalStackProxy() ||
+    authUrl.pathname.startsWith(`${DEVELOPMENT_PROXY_PREFIX}/`)
+  );
+}
+
 export function useSsoLogin(opts?: {
   signupMode?: boolean;
   /** Started on the agent signup page: a new account becomes an agent. */
@@ -80,14 +95,7 @@ export function useSsoLogin(opts?: {
 
     const desktop = isPlatform('desktop');
 
-    // The hosted OAuth callback sets cookies on macro.com. A proxied browser,
-    // and every native shell, needs the session-code handoff to establish
-    // cookies locally instead.
-    if (
-      isNativeMobilePlatform() ||
-      desktop ||
-      authUrl.pathname.startsWith(`${DEVELOPMENT_PROXY_PREFIX}/`)
-    ) {
+    if (desktop || needsSessionCodeHandoff(authUrl)) {
       authUrl.searchParams.set('is_mobile', 'true');
     }
 
