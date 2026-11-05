@@ -67,6 +67,11 @@ pub struct SubagentResponse {
 )]
 pub struct Subagent {
     #[schemars(
+        description = "A short (3-6 word) summary of the task, shown to the user while the subagent works, e.g. \"List open pull requests\". Always set it."
+    )]
+    // Optional only so calls saved before it existed still parse for display.
+    pub description: Option<String>,
+    #[schemars(
         description = "A detailed description of the task for the subagent to complete. Be specific about what information to find or what action to take."
     )]
     pub task: String,

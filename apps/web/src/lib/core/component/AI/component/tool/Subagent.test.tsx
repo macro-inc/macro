@@ -1,3 +1,4 @@
+import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { Component, JSX, ParentProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -73,4 +74,15 @@ it("titles a call without a description by its instructions' first line", () => 
       'Use the GitHub search tool (mcp__github__github-search-issues-and-pull-requests; load it via SearchTools "github search") to list every open pull request the user authored.'
     )
   ).toBeTruthy();
+});
+
+it('parses calls with and without a description, so saved calls still render', () => {
+  for (const json of [
+    { task },
+    { description: 'List open pull requests', task },
+  ]) {
+    const parsed = deserializeToolCall({ id: 'call', name: 'Subagent', json });
+    expect(parsed.isOk()).toBe(true);
+    expect(parsed._unsafeUnwrap().data).toEqual(json);
+  }
 });
