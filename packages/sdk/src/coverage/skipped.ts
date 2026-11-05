@@ -24,18 +24,24 @@ import type { Sdk as StaticFilesSdk } from '../../generated/static-files/sdk.gen
 import type { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 
+// /harnesses/{harness_id}/screen and /harnesses/me/screen are app-only
+// WebSocket transports, absent from OpenAPI and generated SDK methods.
 export const agentHarnessExcluded = [
-  'classify', // Command K inference is app-internal.
-  'extract', // Command K inference is app-internal.
-  'loadAgentModelsHandler',
-  'discoverAgentCapabilitiesHandler',
-  'previewAgentSessions',
   // Batch form of agentSessionsForPullRequest that feeds the web Reviews list.
   'agentSessionsForPullRequests',
-  // Speculative page warm-up requires a signed-in user and is app-internal.
-  'warmAgentSessionHandler',
+  'classify', // Command K inference is app-internal.
+  'claudeSignOut', // Computer account credentials are managed in the app.
+  'completeClaudeSignIn', // Computer account credentials are managed in the app.
+  'discoverAgentCapabilitiesHandler',
+  'extract', // Command K inference is app-internal.
+  'getClaudeMode', // Computer account selection belongs to the app.
+  'loadAgentModelsHandler',
+  'previewAgentSessions',
   // The connect chip's continuation after an app connects is app-internal.
   'reportAgentSessionAppConnected',
+  'startClaudeSignIn', // Computer account credentials are managed in the app.
+  // Speculative page warm-up requires a signed-in user and is app-internal.
+  'warmAgentSessionHandler',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =
