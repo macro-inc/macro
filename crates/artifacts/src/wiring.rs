@@ -75,10 +75,6 @@ pub fn frame_ancestors(
 }
 
 /// Build the artifact service.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the service's adapters and its origin, assembled in one place"
-)]
 pub fn build_service<Documents, Tokens, Notifier>(
     pool: PgPool,
     s3_client: aws_sdk_s3::Client,

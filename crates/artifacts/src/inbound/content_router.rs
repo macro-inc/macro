@@ -113,9 +113,21 @@ where
         .fallback(any(serve::<Service>))
         .with_state(state)
         .layer(
-            macro_tower_layers::MacroRequestIdAndTracingLayer::new(Duration::from_secs(2))
-                .into_inner(),
+            macro_tower_layers::MacroRequestIdAndTracingLayer::with_redacted_path(
+                Duration::from_secs(2),
+                redact_path,
+            )
+            .into_inner(),
         )
+}
+
+/// The request path with its view token replaced, for spans and logs.
+fn redact_path(path: &str) -> String {
+    match split_path(path) {
+        Some((_, number, file)) => format!("/t/<redacted>/v/{number}/{file}"),
+        None if path.starts_with("/t/") => "/t/<redacted>".to_string(),
+        None => path.to_string(),
+    }
 }
 
 /// Send requests for the artifact content host (and every artifact under it)

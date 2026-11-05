@@ -28,16 +28,34 @@ use tower_http::{
 use tracing::Span;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
+/// Rewrites a request path before it is recorded, for paths that carry a
+/// credential.
+pub type RedactPath = fn(&str) -> String;
+
 /// Creates a safe HTTP request span and adopts an incoming W3C trace context.
 ///
 /// A valid `traceparent` makes the request span a child of that remote span.
 /// The global text-map propagator is registered by `macro_entrypoint`.
 #[derive(Debug, Clone, Default)]
-pub struct MakeSpanWithRemoteParent;
+pub struct MakeSpanWithRemoteParent {
+    redact_path: Option<RedactPath>,
+}
+
+impl MakeSpanWithRemoteParent {
+    /// Record `url.path` as `redact_path` rewrites it.
+    pub fn with_redacted_path(redact_path: RedactPath) -> Self {
+        Self {
+            redact_path: Some(redact_path),
+        }
+    }
+}
 
 impl<B> MakeSpan<B> for MakeSpanWithRemoteParent {
     fn make_span(&mut self, request: &Request<B>) -> Span {
-        let span = MakeHttpRequestSpan.make_span(request);
+        let span = match self.redact_path {
+            Some(redact_path) => http_request_span(request, &redact_path(request.uri().path())),
+            None => MakeHttpRequestSpan.make_span(request),
+        };
         let parent = opentelemetry::global::get_text_map_propagator(|propagator| {
             propagator.extract(&opentelemetry_http::HeaderExtractor(request.headers()))
         });
@@ -103,29 +121,33 @@ pub struct MakeHttpRequestSpan;
 
 impl<B> MakeSpan<B> for MakeHttpRequestSpan {
     fn make_span(&mut self, request: &Request<B>) -> Span {
-        let request_id = request
-            .headers()
-            .get("x-request-id")
-            .and_then(|value| value.to_str().ok())
-            .unwrap_or_default();
-        let span = tracing::info_span!(
-            target: HTTP_REQUEST_SPAN_TARGET,
-            "http.request",
-            otel.kind = "server",
-            "http.request.method" = %request.method(),
-            "http.route" = tracing::field::Empty,
-            "url.path" = request.uri().path(),
-            "request.id" = request_id,
-            "http.response.status_code" = tracing::field::Empty,
-            latency_ms = tracing::field::Empty,
-            otel.status_code = tracing::field::Empty,
-            otel.status_description = tracing::field::Empty,
-        );
-        if let Some(route) = request.extensions().get::<MatchedPath>() {
-            span.record("http.route", route.as_str());
-        }
-        span
+        http_request_span(request, request.uri().path())
     }
+}
+
+fn http_request_span<B>(request: &Request<B>, path: &str) -> Span {
+    let request_id = request
+        .headers()
+        .get("x-request-id")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+    let span = tracing::info_span!(
+        target: HTTP_REQUEST_SPAN_TARGET,
+        "http.request",
+        otel.kind = "server",
+        "http.request.method" = %request.method(),
+        "http.route" = tracing::field::Empty,
+        "url.path" = path,
+        "request.id" = request_id,
+        "http.response.status_code" = tracing::field::Empty,
+        latency_ms = tracing::field::Empty,
+        otel.status_code = tracing::field::Empty,
+        otel.status_description = tracing::field::Empty,
+    );
+    if let Some(route) = request.extensions().get::<MatchedPath>() {
+        span.record("http.route", route.as_str());
+    }
+    span
 }
 
 fn latency_millis(latency: Duration) -> u64 {
@@ -234,13 +256,26 @@ impl MacroRequestIdAndTracingLayer {
     /// Also spawns a background [starvation detector](spawn_starvation_detector) that
     /// warns when the tokio runtime is not polling tasks promptly.
     pub fn new(warning_threshold: Duration) -> Self {
+        Self::with_span_maker(warning_threshold, MakeSpanWithRemoteParent::default())
+    }
+
+    /// Like [`Self::new`], recording `url.path` as `redact_path` rewrites it,
+    /// for routes whose paths carry a credential.
+    pub fn with_redacted_path(warning_threshold: Duration, redact_path: RedactPath) -> Self {
+        Self::with_span_maker(
+            warning_threshold,
+            MakeSpanWithRemoteParent::with_redacted_path(redact_path),
+        )
+    }
+
+    fn with_span_maker(warning_threshold: Duration, make_span: MakeSpanWithRemoteParent) -> Self {
         spawn_starvation_detector(Duration::from_millis(250));
 
         let svc_builder = ServiceBuilder::new()
             .set_x_request_id(RequestIdBuilder::default())
             .layer(
                 TraceLayer::new_for_http()
-                    .make_span_with(MakeSpanWithRemoteParent)
+                    .make_span_with(make_span)
                     .on_request(())
                     .on_response(CustomOnResponse::new_with_threshold(warning_threshold))
                     .on_failure(CustomOnFailure),

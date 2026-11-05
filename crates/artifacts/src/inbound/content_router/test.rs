@@ -311,3 +311,20 @@ async fn dispatch_sends_only_artifact_hosts_to_the_content_router() {
         assert_eq!(body.as_ref(), expected.as_bytes(), "{host}");
     }
 }
+
+#[test]
+fn recorded_paths_never_carry_the_view_token() {
+    assert_eq!(
+        redact_path("/t/eyJhbGciOiJIUzI1NiJ9.e30.signature/v/1/scenes/empty%20state.html"),
+        "/t/<redacted>/v/1/scenes/empty%20state.html"
+    );
+    assert_eq!(
+        redact_path("/t/eyJhbGciOiJIUzI1NiJ9.e30.signature/v/1/"),
+        "/t/<redacted>/v/1/"
+    );
+    assert_eq!(
+        redact_path("/t/eyJhbGciOiJIUzI1NiJ9.e30.signature"),
+        "/t/<redacted>"
+    );
+    assert_eq!(redact_path("/favicon.ico"), "/favicon.ico");
+}

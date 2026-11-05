@@ -149,7 +149,8 @@ The web app frames it as
 bytes_inline, bytes_reused), `artifact.uploads`, `artifact.restore`,
 `artifact.view_url` (document_id, version, scene) and `artifact.content`
 (document_id, version, path, cache = `served` or `not_modified`). Tokens are
-never recorded.
+never recorded: the content router's request span records `url.path` as
+`/t/<redacted>/v/<n>/<path>` (`MacroRequestIdAndTracingLayer::with_redacted_path`).
 
 ## Not yet
 
