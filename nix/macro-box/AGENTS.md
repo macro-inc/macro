@@ -45,7 +45,7 @@ and a Docker image (the dev-only DockerFleet).
 - Persona users get `/etc/skel`: the default skills and the chrome-devtools
   MCP entry in `~/.claude.json`. `/etc/macro/personas/` is root-only (0700).
 - User services for `macro` (lingering): `macro-display` (Xtigervnc `:0`,
-  VNC 127.0.0.1:5900, no auth), `macro-openbox`, `macro-chromium` (profile
+  VNC 127.0.0.1:5900, no auth, no readiness-probe blacklist), `macro-openbox`, `macro-chromium` (profile
   `~/.config/chromium`, CDP 127.0.0.1:9222).
 
 ## Running the Docker image
@@ -77,6 +77,8 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
 - Inside a running guest as root, run `bash tests/enrollment-agent-detection.sh`
   (copy it from this directory); it discovers Claude using the enrollment unit's
   environment in a fresh system service.
+- Inside a running guest, run `python3 tests/display-probes.py`; repeated TCP
+  readiness probes must leave the local VNC handshake usable.
 - After `packages.txt` changes: `nix/macro-box/lock.sh`, then rebuild both outputs.
 - `nix build .#macro-box-incus .#macro-box-docker`, then the Docker smoke
   test above without the enrollment mount: `macrod-enroll` must fail with the
