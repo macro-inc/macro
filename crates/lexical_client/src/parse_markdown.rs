@@ -317,6 +317,10 @@ pub struct AgentChatReply {
     /// conversation's messages are the session and repeat no link.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub link: Option<bool>,
+    /// What the link reads as where the message is shown as text, such as a
+    /// notification: the session's name. Absent reads as "Agent session".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 }
 
 #[derive(serde::Serialize)]
