@@ -43,7 +43,9 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     name: ast-grep Conventions
-    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    runs-on:
+    - namespace-profile-linux-small;overrides.cache-tag=web-ci
+    - nscloud-cache-exp-do-not-commit
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
