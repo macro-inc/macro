@@ -828,10 +828,30 @@
       # ci-speed experiment: the same handler with a nonce, against either the
       # existing layer or one whose zigbuild wrapper path is stable.
       expNonce = builtins.readFile ../.github/ci-speed/nonce;
+      # cargo hashes the linker path into every fingerprint, and zigbuild writes
+      # its linker wrapper under its cache dir. Pre-generating the wrappers into
+      # the store gives every build the same path; zigbuild only rewrites them
+      # when their content differs.
+      zigbuildWrappers =
+        pkgs.runCommand "cargo-zigbuild-wrappers"
+          {
+            nativeBuildInputs = [
+              rustToolchain
+              pkgs.cargo-zigbuild
+              pkgs.zig
+            ];
+          }
+          ''
+            export HOME="$TMPDIR/home" ZIG_GLOBAL_CACHE_DIR="$TMPDIR/zig" ZIG_LOCAL_CACHE_DIR="$TMPDIR/zig" XDG_CACHE_HOME="$TMPDIR/xdg"
+            export CARGO_ZIGBUILD_CACHE_DIR="$out"
+            mkdir -p "$HOME" src
+            printf '[package]\nname = "probe"\nversion = "0.0.0"\nedition = "2021"\n' > Cargo.toml
+            echo 'fn main() {}' > src/main.rs
+            cargo zigbuild --release --offline --target ${lambdaZigTarget}
+          '';
       stableZigArgs = lambdaCommonArgs // {
         preBuild = lambdaCommonArgs.preBuild + ''
-          export CARGO_ZIGBUILD_CACHE_DIR=/tmp/cargo-zigbuild-cache
-          mkdir -p "$CARGO_ZIGBUILD_CACHE_DIR"
+          export CARGO_ZIGBUILD_CACHE_DIR=${zigbuildWrappers}
         '';
       };
       lambdaDepsStable = craneLib.buildDepsOnly (
