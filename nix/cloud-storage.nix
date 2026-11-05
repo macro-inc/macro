@@ -1203,6 +1203,7 @@
           ;
         default = cargoArtifacts;
         code-mode-assets = codeModeAssets;
+        macro-js-node-modules = jsNodeModules;
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages

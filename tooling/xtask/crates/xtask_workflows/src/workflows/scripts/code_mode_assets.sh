@@ -30,7 +30,26 @@ if cache_request "$cache_url" | gunzip | nix-store --import; then
   exit 0
 fi
 
+# Installing node_modules is most of a build and changes far less often than the SDK,
+# so it has its own entry.
+modules="$(nix eval --raw .#macro-js-node-modules.outPath)"
+modules_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$modules").zst"
+save_modules=false
+
+if ! nix-store --check-validity "$modules" 2>/dev/null; then
+  if cache_request --max-time 60 "$modules_url" | zstd -d | nix-store --import; then
+    echo "node_modules restored from the remote cache"
+  else
+    save_modules=true
+  fi
+fi
+
 nix build --no-link --print-build-logs .#code-mode-assets
+
+if [ "$save_modules" = true ] \
+  && ! nix-store --export "$modules" | zstd -T0 -3 | cache_request --max-time 120 --upload-file - "$modules_url"; then
+  echo "::warning::Could not save node_modules to the remote cache"
+fi
 
 # Losing the upload costs the next job a rebuild, not a failure.
 if nix-store --export "$assets" | gzip | cache_request --upload-file - "$cache_url"; then
