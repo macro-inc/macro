@@ -1,9 +1,15 @@
-import { assertEquals } from '@std/assert';
+import assert from 'node:assert/strict';
+import * as nodeFs from 'node:fs/promises';
+import * as nodeOs from 'node:os';
+import * as nodePath from 'node:path';
+import { test } from 'node:test';
 import { type RoutineRecord, type Routines, Schedules } from './schedules.ts';
 import { GitWriter, gitCli, Workspace } from './workspace.ts';
 
-Deno.test('a schedule is a routine named for its note, and its run wakes the brain with that note', async () => {
-  const root = await Deno.makeTempDir({ prefix: 'brain-schedules-' });
+test('a schedule is a routine named for its note, and its run wakes the brain with that note', async () => {
+  const root = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-schedules-')
+  );
   const workspace = new Workspace(root);
   const created: object[] = [];
   const live: RoutineRecord[] = [];
@@ -23,13 +29,11 @@ Deno.test('a schedule is a routine named for its note, and its run wakes the bra
     routines,
     'anthropic/claude-haiku-4-5'
   );
-
   await schedules.create('check whether Bo paid the March invoice', {
     type: 'once',
     at: '2026-11-06T09:00:00Z',
   });
-
-  assertEquals(created, [
+  assert.deepEqual(created, [
     {
       name: 'wake: check whether Bo paid the March invoice',
       prompt:
@@ -38,7 +42,6 @@ Deno.test('a schedule is a routine named for its note, and its run wakes the bra
       trigger: { type: 'once', at: '2026-11-06T09:00:00Z' },
     },
   ]);
-
   const wake = await schedules.wakeFor(
     {
       identity: {
@@ -50,8 +53,10 @@ Deno.test('a schedule is a routine named for its note, and its run wakes the bra
     },
     'macro|ada@example.com'
   );
-  assertEquals(wake?.schedule?.note, 'check whether Bo paid the March invoice');
-
+  assert.deepEqual(
+    wake?.schedule?.note,
+    'check whether Bo paid the March invoice'
+  );
   const someoneElses = await schedules.wakeFor(
     {
       identity: {
@@ -63,9 +68,8 @@ Deno.test('a schedule is a routine named for its note, and its run wakes the bra
     },
     'macro|ada@example.com'
   );
-  assertEquals(someoneElses, null);
-
+  assert.deepEqual(someoneElses, null);
   live.length = 0;
-  assertEquals(await schedules.reconcile(), 1);
-  assertEquals(await schedules.list(), []);
+  assert.deepEqual(await schedules.reconcile(), 1);
+  assert.deepEqual(await schedules.list(), []);
 });

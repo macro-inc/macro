@@ -1,5 +1,4 @@
 // config/events.json: which events wake the brain and how often it beats.
-
 export type EventsConfig = {
   /** Event names streamed besides the ones the brain always needs. */
   events: string[];
@@ -19,9 +18,7 @@ export type EventsConfig = {
     work: number;
   };
 };
-
 export class EventsConfigError extends Error {}
-
 const count = (value: unknown, name: string): number => {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
     throw new EventsConfigError(
@@ -30,7 +27,6 @@ const count = (value: unknown, name: string): number => {
   }
   return value;
 };
-
 export function parseEventsConfig(raw: unknown): EventsConfig {
   if (typeof raw !== 'object' || raw === null) {
     throw new EventsConfigError('config/events.json must be an object');

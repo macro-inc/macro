@@ -4,16 +4,22 @@ import { gatewayHosts } from './config.ts';
 import { MacroHttp } from './macro.ts';
 import type { Composition } from './mod.ts';
 import { gitCli } from './workspace.ts';
-
 export async function dryRun(
   compose: Composition,
   workspace: string,
-  before: { event_id: string; event_type: string; metadata: unknown }[] = []
+  before: {
+    event_id: string;
+    event_type: string;
+    metadata: unknown;
+  }[] = []
 ): Promise<void> {
   const stop = new AbortController();
   let received = false;
   let turns = 0;
-  const routines: { id: string; name: string }[] = [];
+  const routines: {
+    id: string;
+    name: string;
+  }[] = [];
   const http = new MacroHttp(
     gatewayHosts('https://gateway.invalid'),
     'fake',

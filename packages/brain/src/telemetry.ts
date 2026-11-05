@@ -1,4 +1,4 @@
-// Deno has async-local context, so concurrent turns retain independent parents.
+// Node has async-local context, so concurrent turns retain independent parents.
 // Export only categories, counts and opaque identifiers; never exception text.
 import {
   type Attributes,
@@ -22,7 +22,6 @@ import {
   type SpanExporter,
 } from '@opentelemetry/sdk-trace-base';
 import { ConfigError } from './config.ts';
-
 export function telemetryConfig(env: (name: string) => string | undefined) {
   const endpoint = env('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT');
   if (endpoint !== undefined) {
@@ -57,10 +56,8 @@ export function telemetryConfig(env: (name: string) => string | undefined) {
     );
   return { endpoint, traceparent };
 }
-
 let provisionParent = ROOT_CONTEXT;
 let provider: BasicTracerProvider | undefined;
-
 export async function initTelemetry(
   env: (name: string) => string | undefined,
   exporter?: SpanExporter
@@ -124,7 +121,6 @@ export async function initTelemetry(
   if (traceparent)
     provisionParent = propagation.extract(ROOT_CONTEXT, { traceparent });
 }
-
 export async function opaqueId(value: string): Promise<string> {
   const digest = await crypto.subtle.digest(
     'SHA-256',
@@ -134,7 +130,6 @@ export async function opaqueId(value: string): Promise<string> {
     byte.toString(16).padStart(2, '0')
   ).join('');
 }
-
 export function startSpan(name: string, attributes: Attributes = {}): Span {
   const origin = trace.getSpanContext(provisionParent);
   return trace
@@ -145,7 +140,6 @@ export function startSpan(name: string, attributes: Attributes = {}): Span {
       name === 'brain.health' && origin ? provisionParent : context.active()
     );
 }
-
 export async function withSpan<T>(
   name: string,
   attributes: Attributes,
@@ -163,13 +157,11 @@ export async function withSpan<T>(
     }
   });
 }
-
 export function traceHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
   propagation.inject(context.active(), headers);
   return headers;
 }
-
 /** No URL, body, header values or provider error text is captured. */
 export function tracedFetch(send: typeof fetch): typeof fetch {
   return (input, init) => {
@@ -200,11 +192,9 @@ export function tracedFetch(send: typeof fetch): typeof fetch {
     });
   };
 }
-
 export async function shutdownTelemetry(): Promise<void> {
   await provider?.shutdown();
 }
-
 export async function withRemoteSpan<T>(
   parent: string | null,
   run: () => Promise<T>

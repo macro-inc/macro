@@ -1,4 +1,8 @@
-import { assertEquals, assertRejects } from '@std/assert';
+import assert from 'node:assert/strict';
+import * as nodeFs from 'node:fs/promises';
+import * as nodeOs from 'node:os';
+import * as nodePath from 'node:path';
+import { test } from 'node:test';
 import { SpendLedger } from './budget.ts';
 import { AsyncQueue } from './channel.ts';
 import type { Conversation } from './control.ts';
@@ -7,16 +11,17 @@ import type { Outcome, RunEvent, RunHandle, Runner, Turn } from './runner.ts';
 import { Work } from './work.ts';
 import { gitCli } from './workspace.ts';
 
-Deno.test('a hand-off becomes a task and a run in its own worktree; follow-ups are injected; the result is reported where it came from', async () => {
-  const root = await Deno.makeTempDir({ prefix: 'brain-work-' });
+test('a hand-off becomes a task and a run in its own worktree; follow-ups are injected; the result is reported where it came from', async () => {
+  const root = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-work-')
+  );
   const git = gitCli(root);
   await git(['init', '-q', '-b', 'main']);
   await git(['config', 'user.email', 'ada@example.com']);
   await git(['config', 'user.name', 'Ada']);
-  await Deno.writeTextFile(`${root}/OPERATING.md`, '# Ada\n');
+  await nodeFs.writeFile(`${root}/OPERATING.md`, '# Ada\n');
   await git(['add', '-A']);
   await git(['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'seed']);
-
   const started: Turn[] = [];
   const injected: string[] = [];
   const finish = Promise.withResolvers<Outcome>();
@@ -43,7 +48,6 @@ Deno.test('a hand-off becomes a task and a run in its own worktree; follow-ups a
   });
   const reports: [Conversation, string][] = [];
   const commits: string[] = [];
-
   const work = new Work({
     pool,
     limit: 1,
@@ -69,26 +73,24 @@ Deno.test('a hand-off becomes a task and a run in its own worktree; follow-ups a
     },
     log: () => {},
   });
-
   const conversation = { channel: 'channel-1', root: 'root-1' };
   const task = await work.start(
     conversation,
     'fix invoice',
     'fix the March invoice'
   );
-
-  assertEquals(task.id, 'task-1');
-  assertEquals(started[0]?.cwd, `${root}/work/task-1`);
-  assertEquals(
-    (await Deno.stat(`${root}/work/task-1/OPERATING.md`)).isFile,
+  assert.deepEqual(task.id, 'task-1');
+  assert.deepEqual(started[0]?.cwd, `${root}/work/task-1`);
+  assert.deepEqual(
+    (await nodeFs.stat(`${root}/work/task-1/OPERATING.md`)).isFile(),
     true
   );
-  await assertRejects(
+  await assert.rejects(
     () => work.start(conversation, 'again', 'fix it again'),
-    Error,
-    'already running for this conversation'
+    (error: unknown) =>
+      error instanceof Error &&
+      error.message.includes('already running for this conversation')
   );
-
   const delivered = work.inject('channel-1.root-1', [
     {
       id: 'message-3',
@@ -103,9 +105,8 @@ Deno.test('a hand-off becomes a task and a run in its own worktree; follow-ups a
       mentionsMe: false,
     },
   ]);
-  assertEquals(delivered, true);
-  assertEquals(injected.length, 1);
-
+  assert.deepEqual(delivered, true);
+  assert.deepEqual(injected.length, 1);
   finish.resolve({
     status: 'success',
     result: 'Fixed the March invoice with the new rate.',
@@ -113,12 +114,11 @@ Deno.test('a hand-off becomes a task and a run in its own worktree; follow-ups a
     sessionId: 'session-1',
   });
   await work.settled();
-
-  assertEquals(reports, [
+  assert.deepEqual(reports, [
     [conversation, 'Fixed the March invoice with the new rate.'],
   ]);
-  assertEquals(commits, ['work-task-1: work fix invoice: success']);
-  assertEquals(work.inject('channel-1.root-1', []), false);
+  assert.deepEqual(commits, ['work-task-1: work fix invoice: success']);
+  assert.deepEqual(work.inject('channel-1.root-1', []), false);
   const worktrees = await git(['worktree', 'list', '--porcelain']);
-  assertEquals(worktrees.stdout.includes('work/task-1'), false);
+  assert.deepEqual(worktrees.stdout.includes('work/task-1'), false);
 });

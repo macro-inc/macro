@@ -1,15 +1,21 @@
-import { assertEquals } from '@std/assert';
+import assert from 'node:assert/strict';
+import * as nodeFs from 'node:fs/promises';
+import * as nodeOs from 'node:os';
+import * as nodePath from 'node:path';
+import { test } from 'node:test';
 import { Brain } from './brain.ts';
 import { AsyncQueue } from './channel.ts';
 import { gatewayHosts } from './config.ts';
 import { MacroHttp } from './macro.ts';
 import type { Outcome, RunEvent, RunHandle, Turn } from './runner.ts';
+import { runCommand } from './subprocess.ts';
 import { gitCli } from './workspace.ts';
 
 const TEMPLATE = new URL('../template/', import.meta.url).pathname;
-
-Deno.test('a direct message wakes a respond turn that replies, shows typing, and commits the turn', async () => {
-  const root = await Deno.makeTempDir({ prefix: 'brain-run-' });
+test('a direct message wakes a respond turn that replies, shows typing, and commits the turn', async () => {
+  const root = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-run-')
+  );
   const remote = `${root}/remote.git`;
   const workspace = `${root}/workspace`;
   await gitCli(root)(['init', '-q', '--bare', '-b', 'main', remote]);
@@ -17,17 +23,20 @@ Deno.test('a direct message wakes a respond turn that replies, shows typing, and
   const git = gitCli(workspace);
   await git(['config', 'user.email', 'ada@example.com']);
   await git(['config', 'user.name', 'Ada']);
-  await new Deno.Command('cp', {
+  await runCommand('cp', {
     args: ['-r', `${TEMPLATE}.`, workspace],
     clearEnv: true,
-    env: { PATH: Deno.env.get('PATH') ?? '' },
-  }).output();
+    env: { PATH: process.env['PATH'] ?? '' },
+  });
   await git(['add', '-A']);
   await git(['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'seed']);
   await git(['push', '-q', '-u', 'origin', 'main']);
-
   const stop = new AbortController();
-  const requests: { method: string; path: string; body: unknown }[] = [];
+  const requests: {
+    method: string;
+    path: string;
+    body: unknown;
+  }[] = [];
   const event = JSON.stringify({
     event_id: 'event-1',
     event_type: 'message.posted',
@@ -40,7 +49,6 @@ Deno.test('a direct message wakes a respond turn that replies, shows typing, and
       sender: 'macro|bo@example.com',
     },
   });
-
   const http = new MacroHttp(
     gatewayHosts('https://gateway.example'),
     'mak_agent',
@@ -82,7 +90,6 @@ Deno.test('a direct message wakes a respond turn that replies, shows typing, and
       return new Response(`unexpected ${method} ${path}`, { status: 500 });
     }
   );
-
   const turns: Turn[] = [];
   const brain: Brain = new Brain({
     config: {
@@ -130,33 +137,35 @@ Deno.test('a direct message wakes a respond turn that replies, shows typing, and
     baseEnv: { PATH: '/usr/bin' },
     log: () => {},
   });
-
   await brain.run(stop.signal);
-
-  assertEquals(
+  assert.deepEqual(
     Number.isFinite(Date.parse((await brain.health()).lastTurnAt ?? '')),
     true
   );
-  assertEquals(turns.length, 1);
-  assertEquals(turns[0]?.tier, 'respond');
-  assertEquals(turns[0]?.cwd, workspace);
-  assertEquals(turns[0]?.maxBudgetUsd, 3);
-  assertEquals(
+  assert.deepEqual(turns.length, 1);
+  assert.deepEqual(turns[0]?.tier, 'respond');
+  assert.deepEqual(turns[0]?.cwd, workspace);
+  assert.deepEqual(turns[0]?.maxBudgetUsd, 3);
+  assert.deepEqual(
     turns[0]?.prompt.includes('can you send me the March invoice?'),
     true
   );
-  assertEquals(turns[0]?.env.MACRO_API_KEY, undefined);
-
+  assert.deepEqual(turns[0]?.env.MACRO_API_KEY, undefined);
   const talk = requests.filter((request) =>
     request.path.startsWith('/dss/messages/channel/dm-1')
   );
-  assertEquals(talk[0]?.body, { active: true, thread_id: null });
-  assertEquals(
-    (talk[1]?.body as { content: string } | undefined)?.content,
+  assert.deepEqual(talk[0]?.body, { active: true, thread_id: null });
+  assert.deepEqual(
+    (
+      talk[1]?.body as
+        | {
+            content: string;
+          }
+        | undefined
+    )?.content,
     'sent, check your inbox'
   );
-  assertEquals(talk.at(-1)?.body, { active: false, thread_id: null });
-
+  assert.deepEqual(talk.at(-1)?.body, { active: false, thread_id: null });
   const log = await gitCli(root)([
     '--git-dir',
     remote,
@@ -165,14 +174,14 @@ Deno.test('a direct message wakes a respond turn that replies, shows typing, and
     '--format=%s',
     'main',
   ]);
-  assertEquals(
+  assert.deepEqual(
     /^turn respond-\d{8}T\d{6}-dm-1: respond in Bo Lee: success$/.test(
       log.stdout.trim()
     ),
     true
   );
   const self = JSON.parse(
-    await Deno.readTextFile(`${workspace}/memory/self.json`)
+    await nodeFs.readFile(`${workspace}/memory/self.json`, 'utf8')
   );
-  assertEquals(self.lastSaid['dm-1'].text, 'sent, check your inbox');
+  assert.deepEqual(self.lastSaid['dm-1'].text, 'sent, check your inbox');
 });

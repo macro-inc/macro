@@ -1,4 +1,5 @@
-import { assertEquals } from '@std/assert';
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { type Control, controlHandler, TOKEN_HEADER } from './control.ts';
 
 const HEALTH = {
@@ -12,12 +13,10 @@ const HEALTH = {
   spentTodayUsd: 0,
   problems: [],
 };
-
 /** Every route a test does not exercise fails loudly. */
 const unused = () => {
   throw new Error('not used in this test');
 };
-
 const CONTROL: Control = {
   health: async () => HEALTH,
   post: unused,
@@ -35,23 +34,19 @@ const CONTROL: Control = {
   unschedule: unused,
   secret: unused,
 };
-
-Deno.test('health needs no token; everything else does', async () => {
+test('health needs no token; everything else does', async () => {
   const handler = controlHandler(CONTROL, 'token-1', () => {});
-
   const health = await handler(new Request('http://127.0.0.1:7801/health'));
   const forbidden = await handler(
     new Request('http://127.0.0.1:7801/secrets/github', {
       headers: { [TOKEN_HEADER]: 'guess' },
     })
   );
-
-  assertEquals(health.status, 200);
-  assertEquals(await health.json(), HEALTH);
-  assertEquals(forbidden.status, 403);
+  assert.deepEqual(health.status, 200);
+  assert.deepEqual(await health.json(), HEALTH);
+  assert.deepEqual(forbidden.status, 403);
 });
-
-Deno.test('a reply goes to the brain with the turn that sent it', async () => {
+test('a reply goes to the brain with the turn that sent it', async () => {
   const replies: unknown[][] = [];
   const handler = controlHandler(
     {
@@ -64,7 +59,6 @@ Deno.test('a reply goes to the brain with the turn that sent it', async () => {
     'token-1',
     () => {}
   );
-
   const response = await handler(
     new Request('http://127.0.0.1:7801/talk/reply', {
       method: 'POST',
@@ -77,14 +71,11 @@ Deno.test('a reply goes to the brain with the turn that sent it', async () => {
       }),
     })
   );
-
-  assertEquals(await response.json(), { id: 'message-9' });
-  assertEquals(replies, [['respond-1', 'channel-1', 'root-1', 'on it']]);
+  assert.deepEqual(await response.json(), { id: 'message-9' });
+  assert.deepEqual(replies, [['respond-1', 'channel-1', 'root-1', 'on it']]);
 });
-
-Deno.test('a malformed schedule is a 400 that says what is expected', async () => {
+test('a malformed schedule is a 400 that says what is expected', async () => {
   const handler = controlHandler(CONTROL, 'token-1', () => {});
-
   const response = await handler(
     new Request('http://127.0.0.1:7801/schedules', {
       method: 'POST',
@@ -92,9 +83,8 @@ Deno.test('a malformed schedule is a 400 that says what is expected', async () =
       body: JSON.stringify({ note: 'check in', trigger: { type: 'daily' } }),
     })
   );
-
-  assertEquals(response.status, 400);
-  assertEquals(await response.json(), {
+  assert.deepEqual(response.status, 400);
+  assert.deepEqual(await response.json(), {
     error:
       'trigger must be {type:"cron",schedule,timezone} or {type:"once",at}',
   });

@@ -1,22 +1,18 @@
 // The prompts each tier's turn starts with. Pure: persona text and facts in,
 // prompt text out. OPERATING.md is the system prompt for every tier.
 import type { Entry } from './history.ts';
-
 export type InFlight = {
   conversation: string;
   taskId: string;
   label: string;
   startedAt: string;
 };
-
 const section = (title: string, body: string) =>
   `## ${title}\n\n${body.trim()}\n`;
-
 const jsonLines = (items: unknown[]) =>
   items.length === 0
     ? '(none)'
     : items.map((item) => JSON.stringify(item)).join('\n');
-
 /** How a turn talks in Macro and reaches the brain: through the `brain` binary. */
 export function talkCommands(
   exe: string,
@@ -38,7 +34,6 @@ export function talkCommands(
   }
   return lines.join('\n');
 }
-
 export function respondPrompt(input: {
   instructions: string;
   talk: string;
@@ -54,7 +49,6 @@ export function respondPrompt(input: {
     section('Your work in flight', jsonLines(input.inFlight)),
   ].join('\n');
 }
-
 export function heartbeatPrompt(input: {
   instructions: string;
   talk: string;
@@ -70,13 +64,15 @@ export function heartbeatPrompt(input: {
     section('Snapshot', input.snapshot),
   ].join('\n');
 }
-
 export function workPrompt(input: {
   instructions: string;
   talk: string;
   task: string;
   taskUrl: string;
-  conversation: { channel: string; root: string | null };
+  conversation: {
+    channel: string;
+    root: string | null;
+  };
 }): string {
   const where = input.conversation.root
     ? `channel ${input.conversation.channel}, thread ${input.conversation.root}`
@@ -91,7 +87,6 @@ export function workPrompt(input: {
     ),
   ].join('\n');
 }
-
 /** A follow-up injected into a running work run. */
 export function followUp(entries: Entry[]): string {
   return section('New messages in your conversation', jsonLines(entries));

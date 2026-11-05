@@ -1,21 +1,26 @@
+import * as nodeFs from 'node:fs/promises';
 // Agent-owned communication guides, re-read for every turn. No name manifest:
 // adding a Markdown file to the library makes it available on the next turn.
 import { join } from 'node:path';
-
 export async function readStyle(directory: string): Promise<string> {
-  const guides: { path: string; text: string }[] = [];
+  const guides: {
+    path: string;
+    text: string;
+  }[] = [];
   const read = async (relative: string): Promise<void> => {
-    for await (const entry of Deno.readDir(join(directory, relative))) {
+    for await (const entry of await nodeFs.readdir(join(directory, relative), {
+      withFileTypes: true,
+    })) {
       const path = join(relative, entry.name);
-      if (entry.isDirectory) await read(path);
+      if (entry.isDirectory()) await read(path);
       else if (
-        entry.isFile &&
+        entry.isFile() &&
         entry.name.endsWith('.md') &&
         entry.name !== 'README.md'
       ) {
         guides.push({
           path,
-          text: (await Deno.readTextFile(join(directory, path))).trim(),
+          text: (await nodeFs.readFile(join(directory, path), 'utf8')).trim(),
         });
       }
     }

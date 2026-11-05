@@ -1,16 +1,14 @@
+import * as nodeFs from 'node:fs/promises';
 // Spend caps from config/budget.json, and the day's ledger under cache/.
 // The ledger is local: a moved computer starts the day fresh, which errs
 // toward spending at most one extra day's cap.
 import { join } from 'node:path';
 import type { Tier } from './runner.ts';
-
 export type Budget = {
   perRunUsd: Record<Tier, number>;
   perDayUsd: number;
 };
-
 export class BudgetError extends Error {}
-
 const positive = (value: unknown, name: string): number => {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     throw new BudgetError(
@@ -19,7 +17,6 @@ const positive = (value: unknown, name: string): number => {
   }
   return value;
 };
-
 export function parseBudget(raw: unknown): Budget {
   if (typeof raw !== 'object' || raw === null) {
     throw new BudgetError('config/budget.json must be an object');
@@ -46,38 +43,41 @@ export function parseBudget(raw: unknown): Budget {
     perDayUsd: positive(perDayUsd, 'perDayUsd'),
   };
 }
-
-type LedgerFile = { day: string; spentUsd: number };
-
+type LedgerFile = {
+  day: string;
+  spentUsd: number;
+};
 /** Today's spend, persisted in `<dir>/spend.json` so a restart keeps the count. */
 export class SpendLedger {
+  private readonly dir: string;
+  private readonly today: () => string;
   constructor(
-    private readonly dir: string,
-    private readonly today: () => string = () =>
-      new Date().toISOString().slice(0, 10)
-  ) {}
-
+    dir: string,
+    today: () => string = () => new Date().toISOString().slice(0, 10)
+  ) {
+    this.dir = dir;
+    this.today = today;
+  }
   private get file() {
     return join(this.dir, 'spend.json');
   }
-
   async spentToday(): Promise<number> {
     try {
       const ledger = JSON.parse(
-        await Deno.readTextFile(this.file)
+        await nodeFs.readFile(this.file, 'utf8')
       ) as LedgerFile;
       return ledger.day === this.today() ? ledger.spentUsd : 0;
     } catch (error) {
-      if (error instanceof Deno.errors.NotFound) return 0;
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+        return 0;
       throw error;
     }
   }
-
   async record(usd: number): Promise<number> {
     const spentUsd = (await this.spentToday()) + usd;
-    await Deno.mkdir(this.dir, { recursive: true });
+    await nodeFs.mkdir(this.dir, { recursive: true });
     const ledger: LedgerFile = { day: this.today(), spentUsd };
-    await Deno.writeTextFile(this.file, JSON.stringify(ledger));
+    await nodeFs.writeFile(this.file, JSON.stringify(ledger));
     return spentUsd;
   }
 }

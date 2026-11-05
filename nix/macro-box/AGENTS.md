@@ -17,7 +17,7 @@ and a Docker image (the dev-only DockerFleet).
   --mount`: unpack the base debs, chroot, then Ubuntu's own dpkg installs
   every deb under Ubuntu's `fakeroot`, which records the ownership one mapped
   uid cannot hold. The Nix closure of `tools` (macrod, claude-code, chromium,
-  node 22, herdr, chrome-devtools-mcp, brain) is copied into the guest's `/nix/store`
+  Node 24, herdr, chrome-devtools-mcp, brain) is copied into the guest's `/nix/store`
   and linked from `/usr/local/bin`. `files/` is copied over `/`.
 - `_build.nix` packs `rootfs.tar` into `disk.qcow2` (GPT: ESP with shim →
   signed GRUB → `/boot/vmlinuz`, ext4 root via `mkfs.ext4 -d tar`) plus
@@ -43,7 +43,7 @@ and a Docker image (the dev-only DockerFleet).
 - `macrod.service` runs `macrod service` as `macro` (Claude Code refuses
   permission bypass as root), workspace `/home/macro/work`.
 - Its `--ignore-stdin-eof` keeps systemd's closed stdin from stopping the daemon.
-- `/opt/macro/brain` links to the Nix-built brain binary. `brain@.service`
+- `/opt/macro/brain` links to the thin Nix-built brain runner. `brain@.service`
   runs as `%i` with `/etc/macro/personas/%i.env`, always restarts, and uses
   `NoNewPrivileges`, `ProtectSystem=strict`, `ReadWritePaths=/home/%i /tmp`
   and `PrivateTmp`. Its `image.conf` drop-in also applies to the concrete
@@ -127,34 +127,16 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
   would block the Macro servers macrod forwards; chrome-devtools is
   registered in user scope instead.
 
-## Brain build hashes
+## Brain dependencies
 
-`_brain.nix` fetches the frozen `packages/brain/deno.lock` graph into a
-fixed-output dependency cache, then compiles offline with nixpkgs' matching
-`DENORT_BIN`. Deno 2.9.2 produces different binaries on repeated sandboxed
-builds, including with `--no-code-cache`; the compiled binary therefore also
-uses a fixed-output hash, rather than claiming reproducible compilation.
-The FOD name includes the source store-path digest so source changes cannot
-silently reuse the old binary. The final package restores the denort runtime
-closure references, which FODs discard. Both image formats copy that closure.
-SDK endpoint coverage tooling is excluded from the build inputs because the
-brain does not import it.
-
-After any included source, lockfile, compile-wrapper or Deno version change:
-
-1. Set `compiled.outputHash` to `lib.fakeHash`. If the dependency graph changed,
-   also set `dependencies.outputHash` to `lib.fakeHash`.
-2. Set `TMPDIR` to a filesystem with enough space, run
-   `nix build .#macro-brain`, and set each hash to its
-   reported `got:` value (dependencies first), then build again. Keep the
-   resulting compiled output in the Nix cache alongside the images.
-3. Run the persona check and build both image outputs. The final package can
-   be checked with `nix build --rebuild .#macro-brain`; dependency fetching with
-   `nix build --rebuild .#macro-brain.dependencies`.
-
-Recompiling the binary FOD from scratch can require a new hash even with
-unchanged source. Regenerate it using step 2; never disable hash verification,
-the sandbox or the frozen lock. The source includes the SDK's generated clients.
+`_brain.nix` ships Node 24, versioned library/SDK source and hash-pinned vendored npm dependencies.
+The thin `brain` wrapper runs the trusted supervisor; only workspace composition
+runs in the Node child. Library bumps must update the package version,
+template lock and installed version directory together. There is no compiled
+binary FOD. After a dependency npm lockfile change, update `npmDepsHash`
+from the hash-verified fetch derivation's reported `got:` value and rebuild.
+Never disable lockfile or hash verification. Build the SDK bundle once in the image;
+workspace brain.ts executes directly with Node type stripping.
 
 The first clone forwards `BRAIN_PROVISION_TRACEPARENT` as an ephemeral git HTTP
 header; later brain git calls inject their active turn context through process

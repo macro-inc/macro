@@ -34,11 +34,12 @@ surface as status diagnostics without offering a computer provisioning retry.
 Macro computer (PR A image)
   macrod.service              (runtime for the team's coding bots; persona mode supervises the brain)
   brain@<persona>.service     (OS user <persona>, /home/<persona>/workspace)
-    @macro-inc/brain binary  (deno compile; hash pinned in the Nix image build)
+    brain supervisor → Node 24 → workspace brain.ts → @macro-inc/brain (brain.lock)
 ```
 
-The shared Incus/Docker rootfs installs the Nix-built binary at
-`/opt/macro/brain`. Enrollment creates the persona OS user and its concrete
+The shared Incus/Docker rootfs installs the thin runner at `/opt/macro/brain`,
+Node 24, and versioned library source plus vendored npm dependencies. No library
+fetch or compilation happens on the computer. Enrollment creates the persona OS user and its concrete
 unit; the image's `brain@.service.d/image.conf` applies the same startup wrapper
 and hardening to those units as to the template. Only the persona home and
 private `/tmp` are writable. First start clones the repo to
@@ -77,8 +78,12 @@ a docker volume in run_local).
 ```
 workspace/
   OPERATING.md        charter, voice, who may change what
-  brain.lock          pinned brain version
+  brain.ts            agent-owned composition
+  brain/              agent-owned handlers, modules and tests
+  brain.lock          exact installed library version
+  docs/brain-api.md    typed library reference
   prompts/            respond.md heartbeat.md work.md
+  prompts/style/      21 craft guides appended to system text each turn (README excluded)
   config/             jev.json events.json budget.json
   memory/             self.json people/<id>.md commitments.md notes/
   work/<task>/        worktrees for running work jobs (not committed)
@@ -91,8 +96,31 @@ computer recovers by cloning the repo.
 
 ## @macro-inc/brain
 
-TypeScript on Deno, one `deno compile` binary, never written by agents.
-Uses `@macro-inc/sdk` and the Claude Agent SDK. Reference: `macro-inc/tod`.
+A versioned Node 24 TypeScript library with a stable `src/mod.ts` public API, using
+`@macro-inc/sdk` and the Claude Agent SDK. The agent owns its composition in
+`brain.ts`, imports `@macro-inc/brain` at the exact version in `brain.lock`, and
+can add handlers, subscriptions, relevance, tiers, schedules and tools in
+`brain/*.ts`. The template composes the existing default wiring unchanged.
+
+The trusted supervisor runs the committed wiring snapshot from `main` in a
+separate Node process, using native TypeScript stripping. The image vendors npm
+dependencies and the fixed SDK; no runtime npm install, library fetch or agent
+build step is needed. Checks have fake adapters and no credentials. A cleared
+child environment and library adapters keep service credentials out of turns.
+Persona OS identity and systemd hardening provide the outer process boundary.
+
+`brain check` runs trusted `tsc --noEmit`, workspace `node:test` files and dry-boots a fake direct message
+through a completed turn. Agents edit on a work-tier branch/worktree, run checks,
+and merge to main. The supervisor repeats checks before activation, stops intake,
+drains in-flight turns with their control server still available, and replaces
+the process. Ordinary memory/prompt commits do not reload wiring. A candidate must
+remain healthy for `BRAIN_HEALTH_MINUTES` (default five) before last-known-good is
+persisted. Check, boot or health failure restores the last-known-good composition,
+restores only wiring paths in git when safe, records the reason in memory, and
+adds it to subsequent turn instructions. Uncommitted wiring is never overwritten.
+Initial startup without any healthy revision fails closed. Library version bumps
+follow exactly the same check, activation and recovery path; versions must already
+be shipped in the image. macrod's `/health` contract is unchanged.
 
 | Primitive | Does |
 | --- | --- |

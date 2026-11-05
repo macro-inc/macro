@@ -1,4 +1,6 @@
-// Trusted supervisor. Agent modules run only in a separate permissioned Deno.
+// Trusted Node supervisor. Persona OS identity and systemd provide isolation.
+import { spawn } from 'node:child_process';
+import * as nodeFs from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { abortableSleep } from './events.ts';
@@ -13,250 +15,185 @@ const ENV = [
   'HOME',
   'LANG',
   'TZ',
-
   'MACRO_GATEWAY',
   'BRAIN_WORKSPACE',
   'BRAIN_HEALTH_PORT',
   'ANTHROPIC_BASE_URL',
-
   'MACRO_REPO_URL',
-
   'BRAIN_EXECUTABLE',
+  'BRAIN_PROVISION_TRACEPARENT',
   'BRAIN_TELEMETRY',
   'MACRO_AGENT_USER_ID',
   'MACRO_TEAM_ID',
   'MACRO_COMPUTER_ID',
-  'BRAIN_PROVISION_TRACEPARENT',
 ];
-
 export type Installation = { root: string; config: string; version: string };
 
-/** Resolve an exact installed version; never resolve ranges or download code. */
+/** Resolve an exact installed version; never download library code or npm dependencies. */
 export async function installation(workspace: string): Promise<Installation> {
   const version = (
-    await Deno.readTextFile(join(workspace, 'brain.lock'))
+    await nodeFs.readFile(join(workspace, 'brain.lock'), 'utf8')
   ).trim();
   if (!/^\d+\.\d+\.\d+$/.test(version))
     throw new Error('brain.lock must contain an exact library version');
-  const root = Deno.env.get('BRAIN_LIBRARY_ROOT')
-    ? join(Deno.env.get('BRAIN_LIBRARY_ROOT') ?? '', version)
+  const root = process.env.BRAIN_LIBRARY_ROOT
+    ? join(process.env.BRAIN_LIBRARY_ROOT, version)
     : PACKAGE;
-  const config = join(root, 'deno.json');
-  const manifest = JSON.parse(await Deno.readTextFile(config));
-  if (manifest.version !== version)
+  const config = join(root, 'package.json');
+  const manifest = JSON.parse(await nodeFs.readFile(config, 'utf8'));
+  if (manifest.version !== version || manifest.name !== '@macro-inc/brain')
     throw new Error(`library ${version} is not installed`);
   return { root, config, version };
-}
-
-/** Direct Deno capabilities. Permitted executables also need OS isolation. */
-export function permissions(
-  workspace: string,
-  gateway: string,
-  anthropic: string,
-  port: number,
-  check = false
-): string[] {
-  const net = check
-    ? ['127.0.0.1:0']
-    : [new URL(gateway).host, new URL(anthropic).host, `127.0.0.1:${port}`];
-  return [
-    '--no-prompt',
-    `--allow-read=${workspace},/tmp`,
-    `--allow-write=${workspace},/tmp`,
-    '--allow-run=git,claude',
-    `--allow-net=${[...new Set(net)].join(',')}`,
-    '--allow-env',
-    '--allow-sys=homedir,osRelease,hostname,uid,gid',
-  ];
 }
 
 async function configuration(
   workspace: string,
   installed: Installation
 ): Promise<string> {
-  const manifest = JSON.parse(await Deno.readTextFile(installed.config));
-  const imports: Record<string, string> = {};
-  for (const [name, target] of Object.entries(manifest.imports)) {
-    if (typeof target !== 'string')
-      throw new Error('library import must be a string');
-    imports[name] = target.startsWith('.')
-      ? new URL(target, `file://${installed.config}`).href
-      : target;
+  const directory = join(workspace, 'node_modules', '@macro-inc');
+  await nodeFs.mkdir(directory, { recursive: true });
+  const link = join(directory, 'brain');
+  try {
+    if ((await nodeFs.readlink(link)) !== installed.root) {
+      await nodeFs.unlink(link);
+      await nodeFs.symlink(installed.root, link, 'dir');
+    }
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT'))
+      throw error;
+    await nodeFs.symlink(installed.root, link, 'dir');
   }
-  imports['@macro-inc/brain'] = new URL(
-    './src/mod.ts',
-    `file://${installed.config}`
-  ).href;
-  const path = join(workspace, 'cache', 'brain-imports.json');
-  await Deno.mkdir(dirname(path), { recursive: true });
-  await Deno.mkdir(join(workspace, 'brain'), { recursive: true });
-  const lock = JSON.parse(
-    await Deno.readTextFile(join(installed.root, 'deno.lock'))
-  );
-  lock.workspace.links = {
-    [`jsr:@macro-inc/brain@${installed.version}`]: {
-      dependencies: lock.workspace.dependencies,
-    },
-  };
-  const lockPath = join(workspace, 'cache', 'brain-deno.lock');
-  await Deno.writeTextFile(lockPath, JSON.stringify(lock));
-  await Deno.writeTextFile(
+  const path = join(workspace, 'cache', 'brain-tsconfig.json');
+  await nodeFs.mkdir(dirname(path), { recursive: true });
+  await nodeFs.mkdir(join(workspace, 'brain'), { recursive: true });
+  await nodeFs.writeFile(
     path,
     JSON.stringify({
-      ...manifest,
-      name: undefined,
-      version: undefined,
-      exports: undefined,
-      workspace: undefined,
-      imports,
-      nodeModulesDir: 'auto',
-      lock: lockPath,
+      extends: join(installed.root, 'tsconfig.json'),
+      include: ['../brain.ts', '../brain/**/*.ts'],
+      exclude: ['../node_modules'],
+      compilerOptions: {
+        noEmit: true,
+        typeRoots: [join(installed.root, 'node_modules', '@types')],
+      },
     })
   );
   return path;
 }
 
-function environment(
+/** A cleared environment: credentials enter library adapters through bootstrap stdin. */
+export function childEnvironment(
   workspace: string,
   check: boolean
 ): Record<string, string> {
-  const env: Record<string, string> = {
-    BRAIN_WORKSPACE: workspace,
-    DENO_NO_UPDATE_CHECK: '1',
-  };
+  const env: Record<string, string> = { BRAIN_WORKSPACE: workspace };
   for (const name of ENV) {
     if (
       name === 'BRAIN_WORKSPACE' ||
       (check && !['PATH', 'HOME', 'LANG', 'TZ'].includes(name))
     )
       continue;
-    const value = Deno.env.get(name);
+    const value = process.env[name];
     if (value) env[name] = value;
   }
-  // The supervisor's dependency cache is image-owned; no inherited user config.
-  if (!check && Deno.env.get('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT'))
+  if (!check && process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)
     env.BRAIN_TELEMETRY = '1';
-  const cache = Deno.env.get('DENO_DIR');
-  if (cache) env.DENO_DIR = cache;
   return env;
 }
 
-async function command(
-  workspace: string,
-  args: string[],
-  check: boolean
-): Promise<Deno.Command> {
-  const installed = await installation(workspace);
-  const config = await configuration(workspace, installed);
-  return new Deno.Command(Deno.execPath(), {
-    args: [
-      args[0] ?? 'run',
-      '--cached-only',
-      '--frozen',
-      '--config',
-      config,
-      ...args.slice(1),
-    ],
+async function runCheck(workspace: string, args: string[]): Promise<void> {
+  const child = spawn(process.execPath, args, {
     cwd: workspace,
-    clearEnv: true,
-    env: environment(workspace, check),
-    stdout: 'inherit',
-    stderr: 'inherit',
+    env: childEnvironment(workspace, true),
+    stdio: 'inherit',
+    timeout: 60_000,
+    killSignal: 'SIGKILL',
+  });
+  await new Promise<void>((resolve, reject) => {
+    child.on('error', reject);
+    child.on('close', (code) =>
+      code === 0
+        ? resolve()
+        : reject(new Error(`brain check failed: ${args[0]}`))
+    );
   });
 }
 
-/** Every check runs in the workspace, with no credentials and no remote imports. */
+/** Trusted typecheck and fake boot run independently of the workspace's own tests. */
 export async function checkWorkspace(workspace: string): Promise<void> {
   await withSpan('brain.wiring.check', {}, async () => {
     const installed = await installation(workspace);
-    const sandbox = permissions(
+    const config = await configuration(workspace, installed);
+    await runCheck(workspace, [
+      join(installed.root, 'node_modules', 'typescript', 'bin', 'tsc'),
+      '--noEmit',
+      '--project',
+      config,
+    ]);
+    const tests: string[] = [];
+    for await (const file of nodeFs.glob(
+      ['brain/**/*.test.ts', 'brain/**/*_test.ts'],
+      { cwd: workspace }
+    ))
+      tests.push(file);
+    if (tests.length)
+      await runCheck(workspace, ['--test', '--test-timeout=60000', ...tests]);
+    await runCheck(workspace, [
+      join(installed.root, 'src/host.ts'),
+      'check',
+      join(workspace, 'brain.ts'),
       workspace,
-      'https://gateway.invalid',
-      'https://gateway.invalid',
-      0,
-      true
-    );
-    for (const args of [
-      ['check', join(workspace, 'brain.ts')],
-      ['test', ...sandbox, '--permit-no-files', 'brain/'],
-      [
-        'run',
-        ...sandbox,
-        join(installed.root, 'src/host.ts'),
-        'check',
-        join(workspace, 'brain.ts'),
-        workspace,
-      ],
-    ]) {
-      const child = (await command(workspace, args, true)).spawn();
-      const timeout = setTimeout(() => child.kill('SIGKILL'), 60_000);
-      try {
-        if (!(await child.status).success)
-          throw new Error(`brain check failed at ${args[0]}`);
-      } finally {
-        clearTimeout(timeout);
-      }
-    }
+    ]);
   });
 }
 
-export type Running = {
-  stop(): Promise<void>;
-  healthy(): Promise<boolean>;
-  exited(): boolean;
-};
-
 async function launch(snapshot: string, workspace: string): Promise<Running> {
   const installed = await installation(snapshot);
-  const port = Number(Deno.env.get('BRAIN_HEALTH_PORT'));
-  const sandbox = permissions(
-    workspace,
-    Deno.env.get('MACRO_GATEWAY') ?? '',
-    Deno.env.get('ANTHROPIC_BASE_URL') ?? '',
-    port
-  );
-  // Snapshot is under workspace/cache, and only its committed code is imported.
-  const process = new Deno.Command(Deno.execPath(), {
-    args: [
-      'run',
-      '--cached-only',
-      '--frozen',
-      '--config',
-      await configuration(snapshot, installed),
-      ...sandbox,
+  await configuration(snapshot, installed);
+  const child = spawn(
+    process.execPath,
+    [
       join(installed.root, 'src/host.ts'),
       'run',
       join(snapshot, 'brain.ts'),
       workspace,
     ],
-    cwd: workspace,
-    clearEnv: true,
-    env: environment(workspace, false),
-    stdout: 'piped',
-    stderr: 'inherit',
-    stdin: 'piped',
-  }).spawn();
-  const credentials = Object.fromEntries(
-    ['MACRO_API_KEY', 'MACRO_REPO_TOKEN', 'ANTHROPIC_AUTH_TOKEN'].map(
-      (name) => [name, Deno.env.get(name)]
+    {
+      cwd: workspace,
+      env: childEnvironment(workspace, false),
+      stdio: ['pipe', 'pipe', 'inherit'],
+    }
+  );
+  let exited = false;
+  const status = new Promise<void>((resolve) => {
+    child.on('error', () => {
+      exited = true;
+      resolve();
+    });
+    child.on('close', () => {
+      exited = true;
+      resolve();
+    });
+  });
+  child.stdin.on('error', () => {});
+  child.stdin.end(
+    JSON.stringify(
+      Object.fromEntries(
+        ['MACRO_API_KEY', 'MACRO_REPO_TOKEN', 'ANTHROPIC_AUTH_TOKEN'].map(
+          (name) => [name, process.env[name]]
+        )
+      )
     )
   );
-  const input = process.stdin.getWriter();
-  await input.write(new TextEncoder().encode(JSON.stringify(credentials)));
-  await input.close();
   const relayed = relayTelemetry(
-    process.stdout,
-    Deno.env.get('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT')
+    child.stdout,
+    process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
   ).catch(() => console.error(JSON.stringify({ telemetry: 'relay_failed' })));
-  let exited = false;
-  const status = process.status.then((value) => {
-    exited = true;
-    return value;
-  });
+  const port = Number(process.env.BRAIN_HEALTH_PORT);
   return {
     exited: () => exited,
     async stop() {
-      if (!exited) process.kill('SIGTERM');
+      if (!exited) child.kill('SIGTERM');
       await status;
       await relayed;
     },
@@ -273,7 +210,11 @@ async function launch(snapshot: string, workspace: string): Promise<Running> {
     },
   };
 }
-
+export type Running = {
+  stop(): Promise<void>;
+  healthy(): Promise<boolean>;
+  exited(): boolean;
+};
 export type SupervisorDeps = {
   head(): Promise<string>;
   snapshot(commit: string): Promise<string>;
@@ -284,19 +225,19 @@ export type SupervisorDeps = {
   now(): number;
   probationMs: number;
 };
-
 /** Serialized state machine: check first, drain, activate, observe, then promote. */
 export class Supervisor {
+  private readonly deps: SupervisorDeps;
+  private good;
   private running?: Running;
   private active = '';
   private since = 0;
   private healthySince: number | undefined;
   private readonly rejected = new Set<string>();
-  constructor(
-    private readonly deps: SupervisorDeps,
-    private good = ''
-  ) {}
-
+  constructor(deps: SupervisorDeps, good = '') {
+    this.deps = deps;
+    this.good = good;
+  }
   async tick(): Promise<void> {
     const commit = await this.deps.head();
     if (
@@ -344,7 +285,6 @@ export class Supervisor {
       }
     }
   }
-
   private async rollback(commit: string, reason: string): Promise<void> {
     this.rejected.add(commit);
     if (!this.good)
@@ -357,34 +297,32 @@ export class Supervisor {
     this.running = await this.deps.launch(await this.deps.snapshot(this.good));
     this.since = this.deps.now();
   }
-
   async stop(): Promise<void> {
     await this.running?.stop();
   }
 }
-
 async function must(git: Git, args: string[]): Promise<string> {
   const result = await git(args);
   if (result.code !== 0)
     throw new Error(`supervisor git ${args[0]} failed: ${result.stderr}`);
   return result.stdout.trim();
 }
-
 export async function workspaceSupervisor(
   workspace: string,
   start: (snapshot: string, workspace: string) => Promise<Running> = launch
 ): Promise<Supervisor> {
   const git = gitCli(workspace);
   const cache = join(workspace, 'cache', 'wiring');
-  await Deno.mkdir(cache, { recursive: true });
+  await nodeFs.mkdir(cache, { recursive: true });
   const state = join(cache, 'last-good');
   let good = '';
   try {
-    good = (await Deno.readTextFile(state)).trim();
+    good = (await nodeFs.readFile(state, 'utf8')).trim();
   } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) throw error;
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT'))
+      throw error;
   }
-  const minutes = Number(Deno.env.get('BRAIN_HEALTH_MINUTES') ?? '5');
+  const minutes = Number(process.env['BRAIN_HEALTH_MINUTES'] ?? '5');
   if (!Number.isFinite(minutes) || minutes <= 0)
     throw new Error('BRAIN_HEALTH_MINUTES must be positive');
   const supervisor = new Supervisor(
@@ -404,9 +342,16 @@ export async function workspaceSupervisor(
       snapshot: async (commit) => {
         const path = join(cache, commit);
         try {
-          await Deno.stat(join(path, '.git'));
+          await nodeFs.stat(join(path, '.git'));
         } catch (error) {
-          if (!(error instanceof Deno.errors.NotFound)) throw error;
+          if (
+            !(
+              error instanceof Error &&
+              'code' in error &&
+              error.code === 'ENOENT'
+            )
+          )
+            throw error;
           await must(git, ['worktree', 'add', '--detach', path, commit]);
         }
         return path;
@@ -425,9 +370,9 @@ export async function workspaceSupervisor(
               'notes',
               'brain-rewiring.md'
             );
-            await Deno.mkdir(dirname(path), { recursive: true });
-            await Deno.writeTextFile(path, `${note}\n`, { append: true });
-            await Deno.writeTextFile(
+            await nodeFs.mkdir(dirname(path), { recursive: true });
+            await nodeFs.writeFile(path, `${note}\n`, { flag: 'a' });
+            await nodeFs.writeFile(
               join(workspace, 'cache', 'rewiring-notice'),
               note
             );
@@ -482,25 +427,24 @@ export async function workspaceSupervisor(
         );
       },
       save: async (commit) => {
-        await Deno.writeTextFile(`${state}.tmp`, commit);
-        await Deno.rename(`${state}.tmp`, state);
+        await nodeFs.writeFile(`${state}.tmp`, commit);
+        await nodeFs.rename(`${state}.tmp`, state);
       },
       now: Date.now,
-      probationMs: minutes * 60_000,
+      probationMs: minutes * 60000,
     },
     good
   );
   return supervisor;
 }
-
 export async function supervise(): Promise<void> {
-  await initTelemetry((name) => Deno.env.get(name));
+  await initTelemetry((name) => process.env[name]);
   const supervisor = await workspaceSupervisor(
-    resolve(Deno.env.get('BRAIN_WORKSPACE') ?? '')
+    resolve(process.env['BRAIN_WORKSPACE'] ?? '')
   );
   const stop = new AbortController();
   for (const signal of ['SIGINT', 'SIGTERM'] as const)
-    Deno.addSignalListener(signal, () => stop.abort());
+    process.on(signal, () => stop.abort());
   try {
     while (!stop.signal.aborted) {
       await supervisor.tick();

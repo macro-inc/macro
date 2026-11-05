@@ -1,12 +1,11 @@
 // The calls the brain makes through @macro-inc/sdk: tasks and routines.
 // A thin adapter behind the `Tasks` and `Routines` ports so the logic that
 // uses them is tested without the network.
-import { Macro } from '@macro-inc/sdk';
+import { Macro } from '#macro-sdk';
 import type { Hosts } from './config.ts';
 import type { RoutineRecord, Routines, Trigger } from './schedules.ts';
 import { tracedFetch } from './telemetry.ts';
 import type { CreatedTask, Tasks } from './work.ts';
-
 export function macroSdk(hosts: Hosts, apiKey: string): Macro {
   return new Macro({
     fetch: tracedFetch(fetch),
@@ -22,7 +21,6 @@ export function macroSdk(hosts: Hosts, apiKey: string): Macro {
     },
   });
 }
-
 /** Tasks the agent creates for itself: the SDK assigns a new task to its creator. */
 export function sdkTasks(macro: Macro): Tasks {
   return {
@@ -32,7 +30,6 @@ export function sdkTasks(macro: Macro): Tasks {
     },
   };
 }
-
 export function sdkRoutines(macro: Macro): Routines {
   return {
     async create({

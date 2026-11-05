@@ -1,3 +1,5 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import {
   context,
   propagation,
@@ -11,7 +13,6 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
-import { assertEquals, assertRejects, assertThrows } from '@std/assert';
 import { ConfigError } from './config.ts';
 import { judge } from './jev.ts';
 import { AgentSdkRunner } from './runner.ts';
@@ -30,15 +31,14 @@ const provider = new BasicTracerProvider({
 context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
 propagation.setGlobalPropagator(new W3CTraceContextPropagator());
 trace.setGlobalTracerProvider(provider);
-
-Deno.test('telemetry rejects malformed endpoint and parent instead of disabling export', () => {
+test('telemetry rejects malformed endpoint and parent instead of disabling export', () => {
   for (const value of [
     '',
     'grpc://localhost',
     'http://user:secret@localhost/v1/traces',
     'http://localhost/v1/traces?secret=x',
   ]) {
-    assertThrows(
+    assert.throws(
       () =>
         telemetryConfig((name) =>
           name === 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT' ? value : undefined
@@ -46,7 +46,7 @@ Deno.test('telemetry rejects malformed endpoint and parent instead of disabling 
       ConfigError
     );
   }
-  assertThrows(
+  assert.throws(
     () =>
       telemetryConfig((name) =>
         name === 'BRAIN_PROVISION_TRACEPARENT'
@@ -55,13 +55,12 @@ Deno.test('telemetry rejects malformed endpoint and parent instead of disabling 
       ),
     ConfigError
   );
-  assertEquals(
+  assert.deepEqual(
     telemetryConfig(() => undefined),
     { endpoint: undefined, traceparent: undefined }
   );
 });
-
-Deno.test('concurrent async work injects its own parent and marks failed HTTP responses', async () => {
+test('concurrent async work injects its own parent and marks failed HTTP responses', async () => {
   exporter.reset();
   const entered = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
@@ -85,25 +84,24 @@ Deno.test('concurrent async work injects its own parent and marks failed HTTP re
   const spans = exporter.getFinishedSpans();
   const firstSpan = spans.find((s) => s.name === 'first')!;
   const secondSpan = spans.find((s) => s.name === 'second')!;
-  assertEquals(headers[0].split('-')[1], secondSpan.spanContext().traceId);
-  assertEquals(headers[1].split('-')[1], firstSpan.spanContext().traceId);
+  assert.deepEqual(headers[0].split('-')[1], secondSpan.spanContext().traceId);
+  assert.deepEqual(headers[1].split('-')[1], firstSpan.spanContext().traceId);
   for (const span of spans.filter((s) => s.name === 'brain.macro.request')) {
-    assertEquals(span.status.code, SpanStatusCode.ERROR);
-    assertEquals(span.attributes['http.response.status_code'], 503);
-    assertEquals(Object.keys(span.attributes).sort(), [
+    assert.deepEqual(span.status.code, SpanStatusCode.ERROR);
+    assert.deepEqual(span.attributes['http.response.status_code'], 503);
+    assert.deepEqual(Object.keys(span.attributes).sort(), [
       'http.request.method',
       'http.response.status_code',
     ]);
   }
-  await assertRejects(() =>
+  await assert.rejects(() =>
     withSpan('failed', {}, () => Promise.reject(new Error('private text')))
   );
-  assertEquals(exporter.getFinishedSpans().at(-1)?.status, {
+  assert.deepEqual(exporter.getFinishedSpans().at(-1)?.status, {
     code: SpanStatusCode.ERROR,
   });
 });
-
-Deno.test('Jev exports decision metadata without message content', async () => {
+test('Jev exports decision metadata without message content', async () => {
   exporter.reset();
   await judge(
     {
@@ -128,13 +126,12 @@ Deno.test('Jev exports decision metadata without message content', async () => {
     }
   );
   const span = exporter.getFinishedSpans().at(-1)!;
-  assertEquals(span.attributes, {
+  assert.deepEqual(span.attributes, {
     'jev.relevant': true,
     'jev.reason': 'mentioned',
   });
 });
-
-Deno.test('a synchronous SDK startup failure closes its span without error text', () => {
+test('a synchronous SDK startup failure closes its span without error text', () => {
   exporter.reset();
   const runner = new AgentSdkRunner({
     query: () => {
@@ -146,7 +143,7 @@ Deno.test('a synchronous SDK startup failure closes its span without error text'
     claudeConfigDir: '/tmp/brain-test',
     baseEnv: {},
   });
-  assertThrows(() =>
+  assert.throws(() =>
     runner.start({
       id: 'test-turn',
       tier: 'respond',
@@ -160,18 +157,17 @@ Deno.test('a synchronous SDK startup failure closes its span without error text'
     })
   );
   const span = exporter.getFinishedSpans().at(-1)!;
-  assertEquals(span.name, 'brain.turn');
-  assertEquals(span.status, { code: SpanStatusCode.ERROR });
-  assertEquals(span.attributes, {
+  assert.deepEqual(span.name, 'brain.turn');
+  assert.deepEqual(span.status, { code: SpanStatusCode.ERROR });
+  assert.deepEqual(span.attributes, {
     'brain.tier': 'respond',
     'gen_ai.request.model': 'test-model',
     'turn.id': 'test-turn',
     'brain.lane': 'opaque-lane',
   });
-  assertEquals(span.events, []);
+  assert.deepEqual(span.events, []);
 });
-
-Deno.test('git subprocess config carries its active trace without persisting it', async () => {
+test('git subprocess config carries its active trace without persisting it', async () => {
   await withSpan('git.parent', {}, async () => {
     const expected = `traceparent: ${traceHeaders().traceparent}`;
     const result = await gitCli('/tmp')([
@@ -179,7 +175,7 @@ Deno.test('git subprocess config carries its active trace without persisting it'
       '--get-all',
       'http.extraHeader',
     ]);
-    assertEquals(result.code, 0);
-    assertEquals(result.stdout.trim().split('\n').includes(expected), true);
+    assert.deepEqual(result.code, 0);
+    assert.deepEqual(result.stdout.trim().split('\n').includes(expected), true);
   });
 });

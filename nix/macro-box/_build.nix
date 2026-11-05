@@ -48,9 +48,9 @@ let
     paths = [
       macrod
       brain
+      pkgs.nodejs_24
       claudeCode
       pkgs.chromium
-      pkgs.nodejs_22
       pkgs.herdr
       chromeDevtoolsMcp
     ];

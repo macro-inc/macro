@@ -1,7 +1,7 @@
 # My brain library (0.2.0)
 
 `brain.ts` is my composition. `brain.lock` contains exactly `0.2.0`. The runner
-maps `@macro-inc/brain` to that version installed in the image, offline. Import
+links `@macro-inc/brain` to that exact image-installed version, offline. Import
 only the public module; put my own modules and `*_test.ts` files under `brain/`.
 No package downloads, npm installs or compilation are needed on the computer.
 
@@ -53,17 +53,16 @@ work, spentTodayUsd, problems), drain on abort and pass a fake direct-message bo
 that completes a turn. `brain check` supplies fake HTTP, git, runner and schedules;
 no real API credentials or model calls reach checks.
 
-Direct Deno permissions allow filesystem access only in my workspace and `/tmp`,
-network access only to the configured gateway, Anthropic proxy and local control
-port, and subprocesses only `git` and `claude`. Environment is explicitly selected;
-no ambient service secrets are inherited. Deno permissions do not restrict what
-an allowed executable itself can do: the persona's systemd unit and OS identity
-remain the outer boundary. Do not treat this as isolation from malicious code.
+Node 24 runs my TypeScript directly with type stripping. All npm dependencies
+are vendored in the image; there is no runtime npm install or library download.
+`brain check` runs trusted `tsc --noEmit`, my `node:test` files, and a fake boot.
+The persona OS user and systemd unit provide the boundary. Child environments
+are cleared and credentials stay in library adapters; they do not enter prompts.
 
 ## Composition hooks
 
-All hooks are optional. Their return values may be promises. Hooks run inside
-my sandbox and errors fail the affected operation. Turn hooks apply to respond,
+All hooks are optional. Their return values may be promises. Hooks run under
+my persona OS user and errors fail the affected operation. Turn hooks apply to respond,
 heartbeat and work. Budgets remain bounded by the tier's cap and the daily cap.
 
 ```ts
@@ -129,3 +128,6 @@ and work has task/conversation/description. `TurnRequest` has optional
 `maxBudgetUsd` and in-process `tools`; `afterTurn` receives the admitted `Turn`.
 Suppressed posts return `{ suppressed: true, reason }` and do not update last-said
 memory. Middleware that calls `next` records the actual transformed text.
+
+See [the complete release-manager composition](examples/release-manager.ts) for
+a checked example combining subscriptions, relevance, tools, tiers and schedules.

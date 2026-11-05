@@ -1,22 +1,30 @@
-import { assertEquals, assertStringIncludes } from '@std/assert';
+import assert from 'node:assert/strict';
+import * as nodeFs from 'node:fs/promises';
+import * as nodeOs from 'node:os';
+import * as nodePath from 'node:path';
+import { test } from 'node:test';
+import { closeHttp, httpPort, serveHttp } from './http.ts';
+import { runCommand } from './subprocess.ts';
 import { workspaceSupervisor } from './supervisor.ts';
 import { gitCli, Workspace } from './workspace.ts';
 
-Deno.test('a broken main composition is restored in real git and remembered for the next turn', async () => {
-  const root = await Deno.makeTempDir({ prefix: 'brain-revert-' });
+test('a broken main composition is restored in real git and remembered for the next turn', async () => {
+  const root = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-revert-')
+  );
   const git = gitCli(root);
   const started: string[] = [];
   try {
-    const copy = await new Deno.Command('cp', {
+    const copy = await runCommand('cp', {
       args: [
         '-r',
         `${new URL('../template/', import.meta.url).pathname}.`,
         root,
       ],
       clearEnv: true,
-      env: { PATH: Deno.env.get('PATH') ?? '' },
-    }).output();
-    assertEquals(copy.code, 0);
+      env: { PATH: process.env['PATH'] ?? '' },
+    });
+    assert.deepEqual(copy.code, 0);
     await new Workspace(root).enforceGitignore();
     await git(['init', '-q', '-b', 'main']);
     await git(['config', 'user.name', 'Agent']);
@@ -24,10 +32,10 @@ Deno.test('a broken main composition is restored in real git and remembered for 
     await git(['add', '-A']);
     await git(['-c', 'commit.gpgsign=false', 'commit', '-qm', 'seed']);
     const good = (await git(['rev-parse', 'HEAD'])).stdout.trim();
-    const original = await Deno.readTextFile(`${root}/brain.ts`);
-    await Deno.mkdir(`${root}/cache/wiring`, { recursive: true });
-    await Deno.writeTextFile(`${root}/cache/wiring/last-good`, good);
-    await Deno.writeTextFile(
+    const original = await nodeFs.readFile(`${root}/brain.ts`, 'utf8');
+    await nodeFs.mkdir(`${root}/cache/wiring`, { recursive: true });
+    await nodeFs.writeFile(`${root}/cache/wiring/last-good`, good);
+    await nodeFs.writeFile(
       `${root}/brain.ts`,
       'export default () => { throw new Error("broken"); };\n'
     );
@@ -43,25 +51,30 @@ Deno.test('a broken main composition is restored in real git and remembered for 
       };
     });
     await supervisor.tick();
-    assertEquals(await Deno.readTextFile(`${root}/brain.ts`), original);
-    assertEquals(started, [`${root}/cache/wiring/${good}`]);
-    assertStringIncludes(
-      await Deno.readTextFile(`${root}/memory/notes/brain-rewiring.md`),
-      broken
+    assert.deepEqual(
+      await nodeFs.readFile(`${root}/brain.ts`, 'utf8'),
+      original
     );
-    assertStringIncludes(
-      await Deno.readTextFile(`${root}/cache/rewiring-notice`),
-      'check failed'
+    assert.deepEqual(started, [`${root}/cache/wiring/${good}`]);
+    assert.ok(
+      (
+        await nodeFs.readFile(`${root}/memory/notes/brain-rewiring.md`, 'utf8')
+      ).includes(broken)
     );
-    assertEquals(
+    assert.ok(
+      (await nodeFs.readFile(`${root}/cache/rewiring-notice`, 'utf8')).includes(
+        'check failed'
+      )
+    );
+    assert.deepEqual(
       (await git(['status', '--porcelain', '--', 'brain.ts'])).stdout,
       ''
     );
-    assertEquals(
+    assert.deepEqual(
       (await git(['log', '-1', '--format=%s'])).stdout.trim(),
       'fix(brain): restore healthy wiring'
     );
-    await Deno.writeTextFile(`${root}/brain.lock`, '99.0.0\n');
+    await nodeFs.writeFile(`${root}/brain.lock`, '99.0.0\n');
     await git(['add', 'brain.lock']);
     await git([
       '-c',
@@ -71,15 +84,19 @@ Deno.test('a broken main composition is restored in real git and remembered for 
       'propose unavailable library',
     ]);
     await supervisor.tick();
-    assertEquals(await Deno.readTextFile(`${root}/brain.lock`), '0.2.0\n');
+    assert.deepEqual(
+      await nodeFs.readFile(`${root}/brain.lock`, 'utf8'),
+      '0.2.0\n'
+    );
     await supervisor.stop();
   } finally {
-    await Deno.remove(root, { recursive: true });
+    await nodeFs.rm(root, { recursive: true });
   }
 });
-
-Deno.test('real Deno reload drains an in-flight turn while its control server stays available', async () => {
-  const root = await Deno.makeTempDir({ prefix: 'brain-drain-' });
+test('real Node reload drains an in-flight turn while its control server stays available', async () => {
+  const root = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-drain-')
+  );
   const git = gitCli(root);
   let beginTurn: () => void = () => {};
   const begun = new Promise<void>((resolve) => {
@@ -93,14 +110,16 @@ Deno.test('real Deno reload drains an in-flight turn while its control server st
   const finished = new Promise<void>((resolve) => {
     finishTurn = resolve;
   });
+  const restarted = Promise.withResolvers<void>();
   let generations = 0;
   const streams = new Set<ReadableStreamDefaultController<Uint8Array>>();
-  const server = Deno.serve(
-    { hostname: '127.0.0.1', port: 0, onListen() {} },
+  const server = await serveHttp(
+    { hostname: '127.0.0.1', port: 0 },
     async (request) => {
       const path = new URL(request.url).pathname;
       if (path === '/auth/user/me') {
         generations++;
+        if (generations === 2) restarted.resolve();
         return Response.json({ user_id: 'brain-test' });
       }
       if (path === '/hold') {
@@ -137,34 +156,37 @@ Deno.test('real Deno reload drains an in-flight turn while its control server st
       return new Response('unexpected', { status: 500 });
     }
   );
-  const portReservation = Deno.listen({ hostname: '127.0.0.1', port: 0 });
-  const healthPort = portReservation.addr.port;
-  portReservation.close();
+  const portReservation = await serveHttp(
+    { port: 0 },
+    () => new Response('reserved')
+  );
+  const healthPort = httpPort(portReservation);
+  await closeHttp(portReservation);
   const env = {
     BRAIN_WORKSPACE: root,
     BRAIN_HEALTH_PORT: String(healthPort),
-    MACRO_GATEWAY: `http://127.0.0.1:${server.addr.port}`,
+    MACRO_GATEWAY: `http://127.0.0.1:${httpPort(server)}`,
     MACRO_API_KEY: 'fake',
-    ANTHROPIC_BASE_URL: `http://127.0.0.1:${server.addr.port}/anthropic`,
+    ANTHROPIC_BASE_URL: `http://127.0.0.1:${httpPort(server)}/anthropic`,
     ANTHROPIC_AUTH_TOKEN: 'fake',
   };
   const previous = new Map(
-    Object.keys(env).map((name) => [name, Deno.env.get(name)])
+    Object.keys(env).map((name) => [name, process.env[name]])
   );
   let supervisor: Awaited<ReturnType<typeof workspaceSupervisor>> | undefined;
   try {
-    for (const [name, value] of Object.entries(env)) Deno.env.set(name, value);
-    const copy = await new Deno.Command('cp', {
+    for (const [name, value] of Object.entries(env)) process.env[name] = value;
+    const copy = await runCommand('cp', {
       args: [
         '-r',
         `${new URL('../template/', import.meta.url).pathname}.`,
         root,
       ],
       clearEnv: true,
-      env: { PATH: Deno.env.get('PATH') ?? '' },
-    }).output();
-    assertEquals(copy.code, 0);
-    await Deno.writeTextFile(
+      env: { PATH: process.env['PATH'] ?? '' },
+    });
+    assert.deepEqual(copy.code, 0);
+    await nodeFs.writeFile(
       `${root}/brain.ts`,
       `import { Brain, type Composition } from '@macro-inc/brain';
 const compose: Composition = (deps) => {
@@ -188,30 +210,37 @@ export default compose;
     await git(['add', '-A']);
     await git(['-c', 'commit.gpgsign=false', 'commit', '-qm', 'seed']);
     const good = (await git(['rev-parse', 'HEAD'])).stdout.trim();
-    await Deno.mkdir(`${root}/cache/wiring`, { recursive: true });
-    await Deno.writeTextFile(`${root}/cache/wiring/last-good`, good);
+    await nodeFs.mkdir(`${root}/cache/wiring`, { recursive: true });
+    await nodeFs.writeFile(`${root}/cache/wiring/last-good`, good);
     supervisor = await workspaceSupervisor(root);
     await supervisor.tick();
     await begun;
-    await Deno.writeTextFile(
+    await nodeFs.writeFile(
       `${root}/brain.ts`,
-      `${await Deno.readTextFile(`${root}/brain.ts`)}\n// A new composition revision.\n`
+      `${await nodeFs.readFile(`${root}/brain.ts`, 'utf8')}\n// A new composition revision.\n`
     );
     await git(['add', 'brain.ts']);
     await git(['-c', 'commit.gpgsign=false', 'commit', '-qm', 'rewire']);
     const reload = supervisor.tick();
     await draining;
-    assertEquals(generations, 1);
+    assert.deepEqual(generations, 1);
     const health = await fetch(`http://127.0.0.1:${healthPort}/health`);
-    assertEquals(health.ok, true);
-    assertEquals((await health.json()).turns.length, 1);
+    assert.deepEqual(health.ok, true);
+    assert.deepEqual((await health.json()).turns.length, 1);
     finishTurn();
     await reload;
+    await restarted.promise;
+    assert.ok(
+      (await nodeFs.readFile(`${root}/brain.ts`, 'utf8')).includes(
+        'A new composition revision'
+      )
+    );
     await supervisor.stop();
     supervisor = undefined;
-    assertStringIncludes(
-      await Deno.readTextFile(`${root}/log/handled.jsonl`),
-      '"status":"success"'
+    assert.ok(
+      (await nodeFs.readFile(`${root}/log/handled.jsonl`, 'utf8')).includes(
+        '"status":"success"'
+      )
     );
   } finally {
     finishTurn();
@@ -223,11 +252,11 @@ export default compose;
         /* disconnected */
       }
     }
-    await server.shutdown();
+    await closeHttp(server);
     for (const [name, value] of previous) {
-      if (value === undefined) Deno.env.delete(name);
-      else Deno.env.set(name, value);
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
     }
-    await Deno.remove(root, { recursive: true });
+    await nodeFs.rm(root, { recursive: true });
   }
 });

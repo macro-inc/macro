@@ -1,3 +1,4 @@
+import * as nodeFs from 'node:fs/promises';
 // The heartbeat wakes the agent only when something it tracks changed, or a
 // sweep is due (Tod's collect + wakeReason). The snapshot is cheap: the
 // self-state, schedules and work in flight; its hash lives in cache/.
@@ -5,7 +6,6 @@ import { join } from 'node:path';
 import type { SelfState } from './memory.ts';
 import type { InFlight } from './prompts.ts';
 import type { Schedule } from './schedules.ts';
-
 export function snapshotText(input: {
   self: SelfState;
   schedules: Schedule[];
@@ -31,7 +31,6 @@ export function snapshotText(input: {
     ...(work.length > 0 ? work : ['(none)']),
   ].join('\n');
 }
-
 export async function snapshotHash(snapshot: string): Promise<string> {
   const digest = await crypto.subtle.digest(
     'SHA-256',
@@ -43,7 +42,6 @@ export async function snapshotHash(snapshot: string): Promise<string> {
     .join('')
     .slice(0, 16);
 }
-
 export type WakeInput = {
   hash: string;
   lastHash: string;
@@ -51,7 +49,6 @@ export type WakeInput = {
   lastRunSeconds: number;
   sweepHours: number;
 };
-
 /** Why to wake, or null to stay asleep. */
 export function wakeReason(input: WakeInput): string | null {
   const reasons: string[] = [];
@@ -60,28 +57,30 @@ export function wakeReason(input: WakeInput): string | null {
     reasons.push('sweep due');
   return reasons.length > 0 ? reasons.join('; ') : null;
 }
-
-export type HeartbeatRecord = { hash: string; lastRunSeconds: number };
-
+export type HeartbeatRecord = {
+  hash: string;
+  lastRunSeconds: number;
+};
 /** The last woken snapshot hash and time, in `<dir>/heartbeat.json`. */
 export class HeartbeatStore {
-  constructor(private readonly dir: string) {}
-
+  private readonly dir: string;
+  constructor(dir: string) {
+    this.dir = dir;
+  }
   async read(): Promise<HeartbeatRecord> {
     try {
       return JSON.parse(
-        await Deno.readTextFile(join(this.dir, 'heartbeat.json'))
+        await nodeFs.readFile(join(this.dir, 'heartbeat.json'), 'utf8')
       ) as HeartbeatRecord;
     } catch (error) {
-      if (error instanceof Deno.errors.NotFound)
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
         return { hash: '', lastRunSeconds: 0 };
       throw error;
     }
   }
-
   async write(state: HeartbeatRecord): Promise<void> {
-    await Deno.mkdir(this.dir, { recursive: true });
-    await Deno.writeTextFile(
+    await nodeFs.mkdir(this.dir, { recursive: true });
+    await nodeFs.writeFile(
       join(this.dir, 'heartbeat.json'),
       JSON.stringify(state)
     );

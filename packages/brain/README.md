@@ -1,6 +1,6 @@
 # @macro-inc/brain
 
-The brain of an agent teammate: a long-running TypeScript program on Deno,
+The brain of an agent teammate: a long-running TypeScript program on Node 24,
 shipped as a versioned composition library and a thin supervisor, that listens to Macro as the agent,
 decides what is for it, and runs Claude turns in the agent's workspace repo.
 Design: [`docs/design/agent-brains.md`](../../docs/design/agent-brains.md).
@@ -9,7 +9,7 @@ Reference implementation: `macro-inc/tod`.
 ## Run it
 
 ```sh
-# The image ships the brain CLI, Deno and an offline library cache.
+# The image ships the brain CLI, Node and vendored npm dependencies.
 MACRO_API_KEY=mak_... MACRO_GATEWAY=https://dev-gateway.macro.com \
 BRAIN_WORKSPACE=/home/ada/workspace BRAIN_HEALTH_PORT=7801 \
 ANTHROPIC_BASE_URL=... ANTHROPIC_AUTH_TOKEN=... \
@@ -52,7 +52,7 @@ every turn ─▶ commit `turn <id>: <summary>` ─▶ pull --rebase ─▶ push
 | `presence.ts` | Online (pinged connection-gateway websocket) and typing. |
 | `mod.ts` | Stable public library API, documented for agents in `template/docs/brain-api.md`. |
 | `brain.ts`, `main.ts` | Default composition and the `brain` CLI. |
-| `supervisor.ts`, `host.ts` | Checked main-only activation, permissioned child, draining and last-known-good recovery. |
+| `supervisor.ts`, `host.ts` | Checked main-only activation, Node child, draining and last-known-good recovery. |
 | `runtime.ts`, `dry-run.ts` | Scoped live adapters and fake-event boot adapters. |
 
 Turns never get the Macro key. They call the `brain` binary (`post`, `reply`,
@@ -88,14 +88,16 @@ the charter; only the creator changes the rules or persona.
 ## Develop
 
 ```sh
-deno task test      # no network: fetch, the runner and Routines/Tasks are injected
-deno task check
+npm ci --ignore-scripts --omit=optional
+npm run vendor:sdk # fixed SDK bundle, built once for library development
+npm test          # injected adapters; integration servers are loopback only
+npm run check
 ```
 
 ## Computer image
 
-`nix build .#macro-brain` ships the thin runner, Deno, versioned library/SDK
-source and hash-pinned frozen dependencies. Both image formats include the CLI
+`nix build .#macro-brain` ships the thin runner, Node 24, versioned library/SDK
+source and hash-pinned npm dependencies. Both image formats include the CLI
 at `/opt/macro/brain`. No compilation or library downloads happen at runtime.
 See [`nix/macro-box/AGENTS.md`](../../nix/macro-box/AGENTS.md) for dependency hashes
 and the service contract.
@@ -109,11 +111,12 @@ continuous healthy probation (`BRAIN_HEALTH_MINUTES`, default five) before savin
 `cache/rewiring-notice` added to subsequent turn instructions. Remove that notice
 after reading it. Ordinary memory/prompt commits do not reload wiring.
 
-Direct Deno capabilities restrict read/write to workspace and `/tmp`, net to the
-gateway, Anthropic proxy and local control port, and run to git/claude. The child
-receives a cleared environment; scoped credentials enter the library bootstrap
-through stdin and stay in adapter closures. Permitted subprocesses retain their
-OS capabilities; persona identity and systemd hardening are the outer boundary.
+Workspace `brain.ts` runs directly with Node type stripping. The image vendors
+all npm dependencies; neither runtime npm install nor an agent build step is
+needed. `brain check` runs trusted `tsc --noEmit`, workspace `node:test` files and
+a fake-event boot. The child receives a cleared environment; scoped credentials
+enter library bootstrap through stdin and stay in adapter closures. Persona OS
+identity and systemd hardening provide the process boundary.
 
 Enrollment creates the persona's OS user and writes
 `/etc/macro/personas/<os_user>.env`. The image's `brain@` template drop-in also
@@ -150,11 +153,11 @@ Provisioning supplies `BRAIN_PROVISION_TRACEPARENT`, `MACRO_TEAM_ID` and
 `MACRO_COMPUTER_ID` through the persona environment. Health joins that trace;
 later turns link to it. User IDs use lowercase SHA-256 hex (matching backend
 `macro_user_id::telemetry_id`), because the source ID can contain an email.
-The Deno async-local context manager isolates concurrent turns. Macro HTTP and
+The Node async-local context manager isolates concurrent turns. Macro HTTP and
 SDK calls inject W3C context; Claude receives `ANTHROPIC_CUSTOM_HEADERS` so its
 gateway calls join the turn. Tool subprocesses forward `BRAIN_TURN_TRACEPARENT`
 back to the authenticated control server. Shutdown flushes the exporter.
 
 Supervised children relay spans through stdout to the trusted supervisor, which
 exports to the configured collector. This preserves trace IDs without giving
-workspace code collector network permissions or collector credentials.
+workspace code collector configuration or collector credentials.

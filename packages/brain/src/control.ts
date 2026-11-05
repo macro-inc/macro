@@ -7,14 +7,17 @@ import { match, P } from 'ts-pattern';
 import type { Trigger } from './schedules.ts';
 import { withRemoteSpan } from './telemetry.ts';
 import type { PostResult } from './wiring.ts';
-
 export type Health = {
   status: 'ok' | 'degraded';
   startedAt: string;
   connected: boolean;
   lastEventAt: string | null;
   lastTurnAt: string | null;
-  turns: { id: string; tier: string; startedAt: string }[];
+  turns: {
+    id: string;
+    tier: string;
+    startedAt: string;
+  }[];
   work: {
     conversation: string;
     taskId: string;
@@ -24,9 +27,10 @@ export type Health = {
   spentTodayUsd: number;
   problems: string[];
 };
-
-export type Conversation = { channel: string; root: string | null };
-
+export type Conversation = {
+  channel: string;
+  root: string | null;
+};
 /** What the control routes do; the brain implements it. */
 export interface Control {
   health(): Promise<Health>;
@@ -42,38 +46,36 @@ export interface Control {
     conversation: Conversation,
     label: string,
     task: string
-  ): Promise<{ taskId: string }>;
+  ): Promise<{
+    taskId: string;
+  }>;
   remember(topic: string, text: string): Promise<void>;
   recall(query: string): Promise<unknown>;
   forget(topic: string): Promise<void>;
   focus(focus: string): Promise<void>;
   promise(what: string, to: string, conversation: string | null): Promise<void>;
-  release(match: string): Promise<{ released: number }>;
+  release(match: string): Promise<{
+    released: number;
+  }>;
   schedule(note: string, trigger: Trigger): Promise<unknown>;
   schedules(): Promise<unknown>;
   unschedule(routineId: string): Promise<void>;
   secret(name: string): Promise<string>;
 }
-
 export const TOKEN_HEADER = 'x-brain-control-token';
-
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { 'content-type': 'application/json' },
   });
-
 const text = (value: unknown, name: string): string => {
   if (typeof value !== 'string' || value.trim() === '')
     throw new RequestError(`${name} is required`);
   return value;
 };
-
 const optionalText = (value: unknown): string | null =>
   typeof value === 'string' && value !== '' ? value : null;
-
 class RequestError extends Error {}
-
 const trigger = (value: unknown): Trigger =>
   match(value)
     .with(
@@ -93,8 +95,7 @@ const trigger = (value: unknown): Trigger =>
         'trigger must be {type:"cron",schedule,timezone} or {type:"once",at}'
       );
     });
-
-/** The request handler, separate from `Deno.serve` so tests call it directly. */
+/** The request handler, separate from the Node HTTP adapter so tests call it directly. */
 export function controlHandler(
   control: Control,
   token: string,
@@ -103,14 +104,12 @@ export function controlHandler(
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
     const route = `${request.method} ${url.pathname}`;
-
     if (route === 'GET /health') {
       const health = await control.health();
       return json(health, health.status === 'ok' ? 200 : 503);
     }
     if (request.headers.get(TOKEN_HEADER) !== token)
       return json({ error: 'forbidden' }, 403);
-
     return withRemoteSpan(request.headers.get('traceparent'), async () => {
       try {
         const body =
@@ -119,7 +118,6 @@ export function controlHandler(
             : {};
         const turn = optionalText(body.turn);
         const query = (name: string) => url.searchParams.get(name);
-
         const unscheduled = /^DELETE \/schedules\/([^/]+)$/.exec(route);
         if (unscheduled?.[1]) {
           await control.unschedule(decodeURIComponent(unscheduled[1]));
@@ -131,7 +129,6 @@ export function controlHandler(
             value: await control.secret(decodeURIComponent(secret[1])),
           });
         }
-
         return await match(route)
           .with('POST /talk/post', async () =>
             json(
@@ -221,7 +218,6 @@ export function controlHandler(
     });
   };
 }
-
 /** Call the running brain from a turn's `brain` command. */
 export async function callBrain(
   env: (name: string) => string | undefined,

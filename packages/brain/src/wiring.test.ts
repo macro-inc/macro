@@ -1,26 +1,37 @@
-import { assertEquals } from '@std/assert';
+import assert from 'node:assert/strict';
+import * as nodeFs from 'node:fs/promises';
+import * as nodeOs from 'node:os';
+import * as nodePath from 'node:path';
+import { test } from 'node:test';
 import { Brain } from './brain.ts';
 import { dryRun } from './dry-run.ts';
 import { tool, type Wiring, z } from './mod.ts';
 import type { Turn } from './runner.ts';
+import { runCommand } from './subprocess.ts';
 
 async function boot(
   wiring: Wiring,
-  before: { event_id: string; event_type: string; metadata: unknown }[] = []
+  before: {
+    event_id: string;
+    event_type: string;
+    metadata: unknown;
+  }[] = []
 ): Promise<Turn[]> {
-  const root = await Deno.makeTempDir({ prefix: 'brain-hooks-' });
+  const root = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-hooks-')
+  );
   const turns: Turn[] = [];
   try {
-    const copied = await new Deno.Command('cp', {
+    const copied = await runCommand('cp', {
       args: [
         '-r',
         `${new URL('../template/', import.meta.url).pathname}.`,
         root,
       ],
       clearEnv: true,
-      env: { PATH: Deno.env.get('PATH') ?? '' },
-    }).output();
-    assertEquals(copied.code, 0);
+      env: { PATH: process.env['PATH'] ?? '' },
+    });
+    assert.deepEqual(copied.code, 0);
     await dryRun(
       (deps) =>
         new Brain(
@@ -40,11 +51,10 @@ async function boot(
     );
     return turns;
   } finally {
-    await Deno.remove(root, { recursive: true });
+    await nodeFs.rm(root, { recursive: true });
   }
 }
-
-Deno.test('onEvent observes typed subscriptions before the default message handler', async () => {
+test('onEvent observes typed subscriptions before the default message handler', async () => {
   const observed: string[] = [];
   await boot(
     {
@@ -61,10 +71,9 @@ Deno.test('onEvent observes typed subscriptions before the default message handl
       },
     ]
   );
-  assertEquals(observed, ['document.updated', 'message.posted']);
+  assert.deepEqual(observed, ['document.updated', 'message.posted']);
 });
-
-Deno.test('custom relevance receives message context and controls lane admission', async () => {
+test('custom relevance receives message context and controls lane admission', async () => {
   const judged: string[] = [];
   const turns = await boot({
     relevance: async (item) => {
@@ -72,23 +81,21 @@ Deno.test('custom relevance receives message context and controls lane admission
       return { relevant: true, reason: 'decided', probabilities: {} };
     },
   });
-  assertEquals(judged, ['brain check']);
-  assertEquals(turns.length, 1);
+  assert.deepEqual(judged, ['brain check']);
+  assert.deepEqual(turns.length, 1);
 });
-
-Deno.test('route sends a conversation batch to a custom tier with its own cap', async () => {
+test('route sends a conversation batch to a custom tier with its own cap', async () => {
   const turns = await boot({
     tiers: { review: { concurrency: 1, perRunUsd: 0.4, speaking: true } },
     route(item) {
-      assertEquals(item.kind, 'respond');
+      assert.deepEqual(item.kind, 'respond');
       return 'review';
     },
   });
-  assertEquals(turns[0]?.tier, 'review');
-  assertEquals(turns[0]?.maxBudgetUsd, 0.4);
+  assert.deepEqual(turns[0]?.tier, 'review');
+  assert.deepEqual(turns[0]?.maxBudgetUsd, 0.4);
 });
-
-Deno.test('beforeTurn edits prompt model tier budget and the per-turn tool set before admission', async () => {
+test('beforeTurn edits prompt model tier budget and the per-turn tool set before admission', async () => {
   const echo = tool(
     'echo',
     'Echo a value',
@@ -108,32 +115,29 @@ Deno.test('beforeTurn edits prompt model tier budget and the per-turn tool set b
       };
     },
   });
-  assertEquals(turns[0]?.prompt, 'rewritten');
-  assertEquals(turns[0]?.model, 'custom-model');
-  assertEquals(turns[0]?.tier, 'review');
-  assertEquals(turns[0]?.maxBudgetUsd, 0.2);
-  assertEquals(turns[0]?.tools?.[0], echo);
+  assert.deepEqual(turns[0]?.prompt, 'rewritten');
+  assert.deepEqual(turns[0]?.model, 'custom-model');
+  assert.deepEqual(turns[0]?.tier, 'review');
+  assert.deepEqual(turns[0]?.maxBudgetUsd, 0.2);
+  assert.deepEqual(turns[0]?.tools?.[0], echo);
 });
-
-Deno.test('afterTurn receives the admitted turn and recorded outcome before draining finishes', async () => {
+test('afterTurn receives the admitted turn and recorded outcome before draining finishes', async () => {
   const completed: string[] = [];
   await boot({
     async afterTurn(turn, outcome) {
       completed.push(`${turn.tier}:${turn.maxBudgetUsd}:${outcome.status}`);
     },
   });
-  assertEquals(completed, ['respond:3:success']);
+  assert.deepEqual(completed, ['respond:3:success']);
 });
-
-Deno.test('tools declared by the composition reach every turn by default', async () => {
+test('tools declared by the composition reach every turn by default', async () => {
   const status = tool('status', 'Status', {}, async () => ({
     content: [{ type: 'text', text: 'ready' }],
   }));
   const turns = await boot({ tools: [status] });
-  assertEquals(turns[0]?.tools?.[0], status);
+  assert.deepEqual(turns[0]?.tools?.[0], status);
 });
-
-Deno.test('onSchedule handles a declared routine in code without starting an extra Claude turn', async () => {
+test('onSchedule handles a declared routine in code without starting an extra Claude turn', async () => {
   const handled: string[] = [];
   const turns = await boot(
     {
@@ -163,12 +167,11 @@ Deno.test('onSchedule handles a declared routine in code without starting an ext
       },
     ]
   );
-  assertEquals(handled, ['sweep']);
-  assertEquals(turns.length, 1);
-  assertEquals(turns[0]?.tier, 'respond');
+  assert.deepEqual(handled, ['sweep']);
+  assert.deepEqual(turns.length, 1);
+  assert.deepEqual(turns[0]?.tier, 'respond');
 });
-
-Deno.test('outbound middleware wraps both posts and replies and records transformed text', async () => {
+test('outbound middleware wraps both posts and replies and records transformed text', async () => {
   const sent: string[] = [];
   await boot({
     outbound: [
@@ -181,27 +184,25 @@ Deno.test('outbound middleware wraps both posts and replies and records transfor
       await brain.post(null, 'check', 'post');
       await brain.reply(null, 'check', 'root', 'reply');
       const state = JSON.parse(
-        await Deno.readTextFile(brain.workspace.path('memory/self.json'))
+        await nodeFs.readFile(brain.workspace.path('memory/self.json'), 'utf8')
       );
-      assertEquals(state.lastSaid['check.root'].text, 'edited reply');
+      assert.deepEqual(state.lastSaid['check.root'].text, 'edited reply');
     },
   });
-  assertEquals(sent, ['top:post', 'root:reply']);
+  assert.deepEqual(sent, ['top:post', 'root:reply']);
 });
-
-Deno.test('quiet-hours middleware can suppress delivery with a typed reason', async () => {
+test('quiet-hours middleware can suppress delivery with a typed reason', async () => {
   await boot({
     outbound: [async () => ({ suppressed: true, reason: 'quiet hours' })],
     onEvent: async (_event, brain) => {
-      assertEquals(await brain.post(null, 'check', 'quiet'), {
+      assert.deepEqual(await brain.post(null, 'check', 'quiet'), {
         suppressed: true,
         reason: 'quiet hours',
       });
     },
   });
 });
-
-Deno.test('onCall receives lifecycle data and can use the default brain capabilities', async () => {
+test('onCall receives lifecycle data and can use the default brain capabilities', async () => {
   const calls: string[] = [];
   await boot({
     onCall: async (call, brain) => {
@@ -216,5 +217,5 @@ Deno.test('onCall receives lifecycle data and can use the default brain capabili
       });
     },
   });
-  assertEquals(calls, ['call']);
+  assert.deepEqual(calls, ['call']);
 });

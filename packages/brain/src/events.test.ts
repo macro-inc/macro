@@ -1,4 +1,5 @@
-import { assertEquals } from '@std/assert';
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import {
   eventStream,
   missedMessages,
@@ -14,11 +15,9 @@ const bytes = (...chunks: string[]) =>
       controller.close();
     },
   });
-
 const POSTED =
   '{"event_id":"event-1","event_type":"message.posted","metadata":{"message_id":"message-1","content":"hi","created_at":"2026-11-04T10:00:00Z","parent":{"type":"channel","id":"channel-1"},"root_id":"message-1","sender":"macro|bo@example.com"}}';
-
-Deno.test('sseData joins events split across chunks and skips keep-alives', async () => {
+test('sseData joins events split across chunks and skips keep-alives', async () => {
   const data = await Array.fromAsync(
     sseData(
       bytes(
@@ -29,11 +28,9 @@ Deno.test('sseData joins events split across chunks and skips keep-alives', asyn
       )
     )
   );
-
-  assertEquals(data, ['{"a":1}', 'line one\nline two']);
+  assert.deepEqual(data, ['{"a":1}', 'line one\nline two']);
 });
-
-Deno.test('a dropped stream reconnects and says when it dropped', async () => {
+test('a dropped stream reconnects and says when it dropped', async () => {
   const stop = new AbortController();
   const opened: number[] = [];
   const sleeps: number[] = [];
@@ -41,7 +38,6 @@ Deno.test('a dropped stream reconnects and says when it dropped', async () => {
     bytes(`data: ${POSTED}\n\n`),
     bytes(`data: ${POSTED.replace('event-1', 'event-2')}\n\n`),
   ];
-
   const items: StreamItem[] = [];
   for await (const item of eventStream(
     {
@@ -64,8 +60,7 @@ Deno.test('a dropped stream reconnects and says when it dropped', async () => {
   )) {
     items.push(item);
   }
-
-  assertEquals(
+  assert.deepEqual(
     items.map((item) =>
       item.kind === 'event'
         ? item.event.eventId
@@ -73,10 +68,9 @@ Deno.test('a dropped stream reconnects and says when it dropped', async () => {
     ),
     ['event-1', '2026-11-04T10:05:00.000Z', 'event-2']
   );
-  assertEquals(sleeps, [1_000, 1_000]);
+  assert.deepEqual(sleeps, [1000, 1000]);
 });
-
-Deno.test('catch-up finds roots and thread replies posted since the drop that were not seen', () => {
+test('catch-up finds roots and thread replies posted since the drop that were not seen', () => {
   const missed = missedMessages(
     'channel-1',
     [
@@ -112,8 +106,7 @@ Deno.test('catch-up finds roots and thread replies posted since the drop that we
     new Date('2026-11-04T10:00:00Z'),
     (id) => id === 'root-2'
   );
-
-  assertEquals(missed, [
+  assert.deepEqual(missed, [
     {
       message_id: 'root-3',
       content: 'new root',

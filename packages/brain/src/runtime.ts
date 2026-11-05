@@ -1,5 +1,4 @@
 // Runtime adapters supplied by the supervisor, separate from agent composition.
-
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { SpanExporter } from '@opentelemetry/sdk-trace-base';
 import type { BrainDeps } from './brain.ts';
@@ -10,7 +9,6 @@ import { AgentSdkRunner } from './runner.ts';
 import { macroSdk, sdkRoutines, sdkTasks } from './sdk.ts';
 import { initTelemetry, tracedFetch } from './telemetry.ts';
 import { gitCli } from './workspace.ts';
-
 export async function runtimeDeps(
   env: (name: string) => string | undefined,
   exporter?: SpanExporter
@@ -28,7 +26,6 @@ export async function runtimeDeps(
     const value = env(name);
     if (value) baseEnv[name] = value;
   }
-
   return {
     config: {
       workspace: config.workspace,

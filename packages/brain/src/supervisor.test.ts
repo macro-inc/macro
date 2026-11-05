@@ -1,35 +1,41 @@
-import { assertEquals, assertRejects } from '@std/assert';
+import assert from 'node:assert/strict';
+import * as nodeFs from 'node:fs/promises';
+import * as nodeOs from 'node:os';
+import * as nodePath from 'node:path';
+import { test } from 'node:test';
 import { Brain } from './brain.ts';
 import { dryRun } from './dry-run.ts';
+import { runCommand } from './subprocess.ts';
 import {
   checkWorkspace,
-  permissions,
+  childEnvironment,
   type Running,
   Supervisor,
 } from './supervisor.ts';
 
-Deno.test('template composition typechecks, tests and boots a fake event offline', async () => {
-  const root = await Deno.makeTempDir({ prefix: 'brain-composition-' });
+test('template composition typechecks, tests and boots a fake event offline', async () => {
+  const root = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-composition-')
+  );
   try {
     const template = new URL('../template/', import.meta.url).pathname;
-    const copy = await new Deno.Command('cp', {
+    const copy = await runCommand('cp', {
       args: ['-r', `${template}.`, root],
       clearEnv: true,
-      env: { PATH: Deno.env.get('PATH') ?? '' },
-    }).output();
-    assertEquals(copy.code, 0);
+      env: { PATH: process.env['PATH'] ?? '' },
+    });
+    assert.deepEqual(copy.code, 0);
     await checkWorkspace(root);
-    await Deno.writeTextFile(
+    await nodeFs.writeFile(
       `${root}/brain.ts`,
       'export default () => { throw new Error("broken composition"); };\n'
     );
-    await assertRejects(() => checkWorkspace(root));
+    await assert.rejects(() => checkWorkspace(root));
   } finally {
-    await Deno.remove(root, { recursive: true });
+    await nodeFs.rm(root, { recursive: true });
   }
 });
-
-Deno.test('reload waits for in-flight turns before replacing a healthy composition', async () => {
+test('reload waits for in-flight turns before replacing a healthy composition', async () => {
   let head = 'first';
   let now = 0;
   let finish: () => void = () => {};
@@ -69,14 +75,13 @@ Deno.test('reload waits for in-flight turns before replacing a healthy compositi
   head = 'second';
   const reload = supervisor.tick();
   await draining;
-  assertEquals(started, ['first']);
+  assert.deepEqual(started, ['first']);
   finish();
   await reload;
-  assertEquals(started, ['first', 'second']);
+  assert.deepEqual(started, ['first', 'second']);
   await supervisor.stop();
 });
-
-Deno.test('broken checks and unhealthy boots revert to persisted last-known-good', async () => {
+test('broken checks and unhealthy boots revert to persisted last-known-good', async () => {
   let head = 'broken';
   let now = 0;
   const started: string[] = [];
@@ -106,77 +111,57 @@ Deno.test('broken checks and unhealthy boots revert to persisted last-known-good
     'good'
   );
   await supervisor.tick();
-  assertEquals(started, ['good']);
-  assertEquals(rejected, ['broken:good:check failed']);
+  assert.deepEqual(started, ['good']);
+  assert.deepEqual(rejected, ['broken:good:check failed']);
   head = 'unhealthy';
   await supervisor.tick();
   now = 10;
   await supervisor.tick();
-  assertEquals(started, ['good', 'unhealthy', 'good']);
-  assertEquals(rejected.at(-1), 'unhealthy:good:health failed');
+  assert.deepEqual(started, ['good', 'unhealthy', 'good']);
+  assert.deepEqual(rejected.at(-1), 'unhealthy:good:health failed');
   await supervisor.stop();
 });
-
-Deno.test('sandbox denies out-of-scope filesystem, network and environment', async () => {
-  const root = await Deno.makeTempDir();
+test('Node children receive a cleared environment without service credentials', async () => {
+  const previous = process.env.UNRELATED_SERVICE_SECRET;
+  process.env.UNRELATED_SERVICE_SECRET = 'private';
   try {
-    const result = await new Deno.Command(Deno.execPath(), {
+    const output = await runCommand(process.execPath, {
       args: [
-        'run',
-        ...permissions(
-          root,
-          'https://gateway.invalid',
-          'https://proxy.invalid',
-          32123
-        ),
-        '--no-config',
-        '-',
+        '--input-type=module',
+        '-e',
+        'console.log(JSON.stringify(process.env))',
       ],
-      stdin: 'piped',
-      stdout: 'piped',
-      stderr: 'piped',
       clearEnv: true,
-      env: { PATH: Deno.env.get('PATH') ?? '' },
-    }).spawn();
-    const writer = result.stdin.getWriter();
-    await writer.write(
-      new TextEncoder().encode(`
-      let denied = 0;
-      for (const action of [
-        () => Deno.readTextFile('/etc/passwd'),
-        () => Deno.writeTextFile('/var/brain-forbidden', 'bad'),
-        () => fetch('https://example.com'),
-        () => new Deno.Command(Deno.execPath(), { args: ['--version'] }).output(),
-      ]) {
-        try { await action(); } catch (error) {
-          if (error instanceof Deno.errors.NotCapable) denied++; else throw error;
-        }
-      }
-      if (Deno.env.get('UNRELATED_SERVICE_SECRET') !== undefined) throw new Error('ambient secret leaked');
-      if (denied !== 4) throw new Error('sandbox allowed an out-of-scope operation');
-    `)
-    );
-    await writer.close();
-    const output = await result.output();
-    assertEquals(output.code, 0, new TextDecoder().decode(output.stderr));
+      env: childEnvironment('/tmp/workspace', false),
+    });
+    assert.equal(output.code, 0);
+    const env = JSON.parse(new TextDecoder().decode(output.stdout));
+    assert.equal(env.UNRELATED_SERVICE_SECRET, undefined);
+    assert.equal(env.MACRO_API_KEY, undefined);
+    assert.equal(env.MACRO_REPO_TOKEN, undefined);
+    assert.equal(env.ANTHROPIC_AUTH_TOKEN, undefined);
+    assert.equal(env.BRAIN_WORKSPACE, '/tmp/workspace');
   } finally {
-    await Deno.remove(root, { recursive: true });
+    if (previous === undefined) delete process.env.UNRELATED_SERVICE_SECRET;
+    else process.env.UNRELATED_SERVICE_SECRET = previous;
   }
 });
 
-Deno.test('call adapters dispatch typed lifecycle events to the composition hook', async () => {
-  const root = await Deno.makeTempDir({ prefix: 'brain-call-hook-' });
+test('call adapters dispatch typed lifecycle events to the composition hook', async () => {
+  const root = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-call-hook-')
+  );
   try {
-    const copied = await new Deno.Command('cp', {
+    const copied = await runCommand('cp', {
       args: [
         '-r',
         `${new URL('../template/', import.meta.url).pathname}.`,
         root,
       ],
       clearEnv: true,
-      env: { PATH: Deno.env.get('PATH') ?? '' },
-    }).output();
-    assertEquals(copied.code, 0);
+      env: { PATH: process.env['PATH'] ?? '' },
+    });
+    assert.deepEqual(copied.code, 0);
     const phases: string[] = [];
     await dryRun(async (deps) => {
       const brain = new Brain(deps, {
@@ -188,8 +173,8 @@ Deno.test('call adapters dispatch typed lifecycle events to the composition hook
       await brain.onCall({ id: 'call-test', phase: 'incoming', metadata: {} });
       return brain;
     }, root);
-    assertEquals(phases, ['incoming']);
+    assert.deepEqual(phases, ['incoming']);
   } finally {
-    await Deno.remove(root, { recursive: true });
+    await nodeFs.rm(root, { recursive: true });
   }
 });
