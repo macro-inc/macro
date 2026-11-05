@@ -605,7 +605,8 @@ export function TeamMembers(props: { team: TeamSummary }) {
                           !canManageAgents() ||
                           retryAgent.isPending ||
                           !agent.retryable ||
-                          agent.payment !== 'paid'
+                          (agent.payment !== 'paid' &&
+                            agent.payment !== 'comped')
                         )
                           return;
                         retryAgent.mutate({
