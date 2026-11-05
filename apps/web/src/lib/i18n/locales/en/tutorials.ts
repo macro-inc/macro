@@ -11,4 +11,8 @@ export default {
   crmSnippet:
     'Auto-enriched records and comment threads, built into your workspace',
   crmLength: '1:49',
+  githubTitle: 'Learn how to use Macro with GitHub',
+  githubSnippet:
+    'Pull request previews, coding agents that merge from channels, and PRs in splits',
+  githubLength: '1:02',
 };
