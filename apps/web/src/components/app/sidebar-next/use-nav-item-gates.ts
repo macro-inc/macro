@@ -4,14 +4,19 @@ import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/u
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_CALLS,
+  enableActivityFeed,
   enableCalendarScheduling,
+  enableCalendarUi,
   enableCrm,
+  enableGraphqlSoup,
   enableTasksReviews,
+  enableUnifiedNotifications,
   enableWhatsappLinked,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { type Accessor, createMemo } from 'solid-js';
 import type { NavItemGates } from './nav-items';
-import { useSidebarPrefs } from './use-sidebar-prefs';
+import { readSidebarPrefs, useSidebarPrefs } from './use-sidebar-prefs';
 
 /**
  * Subscribes to feature flags so flags that resolve after mount reach the
@@ -39,4 +44,25 @@ export function useNavItemGates(): Accessor<NavItemGates> {
     showExternal: external().enabled,
     prefs: prefs(),
   }));
+}
+
+/**
+ * The same gates, read once for a decision made outside a component, such as
+ * which view opens by default. Keep in step with `useNavItemGates`. Flags that
+ * have not loaded read as off, so a gated item is skipped until they do.
+ */
+export function readNavItemGates(): NavItemGates {
+  return {
+    showNotifications:
+      isFeatureEnabled(enableUnifiedNotifications) &&
+      isFeatureEnabled(enableGraphqlSoup),
+    showCalendar: isFeatureEnabled(enableCalendarUi),
+    showScheduling: isFeatureEnabled(enableCalendarScheduling),
+    showCustomers: isFeatureEnabled(enableCrm),
+    showCalls: ENABLE_CALLS,
+    showReviews: isFeatureEnabled(enableTasksReviews),
+    showActivity: isFeatureEnabled(enableActivityFeed),
+    showExternal: isFeatureEnabled(enableWhatsappLinked),
+    prefs: readSidebarPrefs(),
+  };
 }

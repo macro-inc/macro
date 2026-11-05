@@ -1,11 +1,11 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { ViewSkeleton } from '@app/components/view-shell/ViewSkeleton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useNavigate } from '@app/lib/split-router';
-import { homeSplitRoute } from '@app/routes/routes';
 import { ChannelLoading } from '@channel/Channel/ChannelLoading';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
+import { RedirectSplit } from '@components/app/split-layout/split-router/app-route-shell';
 import { enableWhatsappLinked } from '@core/constant/featureFlags';
-import { type JSX, lazy, onMount, Show, Suspense } from 'solid-js';
+import { type JSX, lazy, Show, Suspense } from 'solid-js';
 
 const Chat = lazy(async () => ({
   default: (await import('./external-chat')).ExternalChat,
@@ -32,13 +32,6 @@ export function ExternalChatSkeleton() {
     </div>
   );
 }
-function DisabledChat() {
-  const navigate = useNavigate();
-  onMount(() =>
-    navigate({ route: homeSplitRoute, params: {} }, { replace: true })
-  );
-  return null;
-}
 /** Gate before mounting any queries, including panes restored from session state. */
 export function ExternalChatEntry(props: {
   chatId: string;
@@ -50,7 +43,7 @@ export function ExternalChatEntry(props: {
       when={flag().enabled}
       fallback={
         <Show when={!flag().loading} fallback={<ExternalChatSkeleton />}>
-          <DisabledChat />
+          <RedirectSplit to={defaultViewContent()} />
         </Show>
       }
     >

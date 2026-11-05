@@ -92,8 +92,10 @@ afterEach(() => {
 });
 
 describe('upgradeLegacyPath', () => {
-  it('sends the retired Getting Started path to Home', () => {
-    expect(upgradeLegacyPath(routes, '/getting-started')).toBe('/home');
+  it('sends the retired Getting Started path to its redirecting component', () => {
+    expect(upgradeLegacyPath(routes, '/getting-started')).toBe(
+      '/component/getting-started'
+    );
   });
 });
 

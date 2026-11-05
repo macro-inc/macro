@@ -34,6 +34,9 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/split-router')>()),
   useSplitRouter: () => ({ entry: () => undefined }),
 }));
+vi.mock('@components/app/sidebar-next/default-view', () => ({
+  defaultViewContent: () => ({ type: 'component', id: 'home' }),
+}));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { replace: state.replace } }),
 }));

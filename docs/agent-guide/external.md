@@ -4,7 +4,8 @@
 the chats added from them (entity type `external_chat`, one provider per
 chat). WhatsApp is the only provider today. The view, its rail button, its More-views entry on
 mobile and the `g x` shortcut exist only with the `enable-whatsapp-linked`
-flag; a deep link with the flag off goes to Home once the flag resolves. Turn
+flag; a deep link with the flag off goes to the default view (Home unless
+hidden) once the flag resolves. Turn
 it on locally with `VITE_ENABLE_WHATSAPP_LINKED=true`.
 
 ## Where it is

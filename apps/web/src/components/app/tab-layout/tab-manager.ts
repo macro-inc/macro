@@ -1,4 +1,3 @@
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import type {
   Entry,
   LayoutSnapshot,
@@ -6,6 +5,7 @@ import type {
   ShowLayoutOptions,
   SplitRouter,
 } from '@app/lib/split-router';
+import { defaultView } from '@components/app/sidebar-next/default-view';
 import {
   INITIAL_LAYER_ID,
   type SplitLayers,
@@ -116,7 +116,7 @@ export function createTabManager(options: TabManagerOptions) {
         paneCount: tab.paneCount,
         stored: { kind: 'url', url: tab.url },
       }))
-    : [newUrlTab(DEFAULT_ROUTE, INITIAL_LAYER_ID as DesktopTabId)];
+    : [newUrlTab(defaultView().href, INITIAL_LAYER_ID as DesktopTabId)];
   const initialActive = initialTabs[initialActiveIndex]!;
 
   const [tabs, setTabs] = createSignal<readonly DesktopTab[]>(initialTabs);
@@ -477,7 +477,7 @@ export function createTabManager(options: TabManagerOptions) {
 
     /** The + button and cmd+T: a fresh tab on the default view. */
     newTab(options: { activate?: boolean } = {}): void {
-      const tab = newUrlTab(DEFAULT_ROUTE);
+      const tab = newUrlTab(defaultView().href);
       insertTab(tab, untrack(tabs).length);
       if (options.activate !== false) {
         fireAndForget(activateTab(tab.id), SURFACE);

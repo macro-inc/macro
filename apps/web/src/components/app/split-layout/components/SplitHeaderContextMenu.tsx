@@ -1,6 +1,6 @@
-import { LIST_VIEW_ID } from '@app/constants/list-views';
 import { t } from '@app/lib/i18n';
 import { type PaneId, useSplitRouter } from '@app/lib/split-router';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import {
   ContextMenuContent,
   MenuItem,
@@ -54,11 +54,6 @@ export function SplitHeaderContextMenu(props: ParentProps) {
     layout.manager.canSwapSplit(panel.handle.id, direction);
   const canSplitToward = (side: SplitPlacement['side']) =>
     layout.manager.canSplit(panel.handle.id, side);
-
-  const newSplitContent = () => ({
-    type: 'component' as const,
-    id: LIST_VIEW_ID.home,
-  });
 
   const duplicateContent = (): SplitContent => ({ ...panel.handle.content() });
 
@@ -118,26 +113,26 @@ export function SplitHeaderContextMenu(props: ParentProps) {
             iconClass="rotate-180"
             text={t('splitMenu.newSplitLeft')}
             disabled={!canSplitToward('left')}
-            onClick={() => insertSplitBeside('left', newSplitContent())}
+            onClick={() => insertSplitBeside('left', defaultViewContent())}
           />
           <MenuItem
             icon={SplitIcon}
             text={t('splitMenu.newSplitRight')}
             disabled={!canSplitToward('right')}
-            onClick={() => insertSplitBeside('right', newSplitContent())}
+            onClick={() => insertSplitBeside('right', defaultViewContent())}
           />
           <MenuItem
             icon={StackIcon}
             text={t('splitMenu.newSplitAbove')}
             disabled={!canSplitToward('above')}
-            onClick={() => insertSplitBeside('above', newSplitContent())}
+            onClick={() => insertSplitBeside('above', defaultViewContent())}
           />
           <MenuItem
             icon={StackIcon}
             hotkeyToken={TOKENS.global.createNewSplitBelow}
             text={t('splitMenu.newSplitBelow')}
             disabled={!canSplitToward('below')}
-            onClick={() => insertSplitBeside('below', newSplitContent())}
+            onClick={() => insertSplitBeside('below', defaultViewContent())}
           />
           <MenuItem
             icon={CopyIcon}

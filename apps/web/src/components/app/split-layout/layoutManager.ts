@@ -316,7 +316,8 @@ export type SplitLayoutOptions = {
   toLocation: (content: SplitContent) => SplitLocation;
   /** The content a router location shows. */
   toContent: (location: SplitLocation) => SplitContent;
-  defaultSplitContent?: SplitContent;
+  /** What a split shows when nothing was asked for; Home unless given. */
+  defaultSplitContent?: () => SplitContent;
   /**
    * Panes stack and only the front one shows, as on native mobile. Opens
    * add a pane in front unless they merge history, and activating a pane
@@ -765,10 +766,9 @@ export function createSplitLayout(
     }));
   }
 
-  const DEFAULT_SPLIT_CONTENT = defaultSplitContent ?? {
-    type: 'component',
-    id: LIST_VIEW_ID.home,
-  };
+  const defaultContent =
+    defaultSplitContent ??
+    ((): SplitContent => ({ type: 'component', id: LIST_VIEW_ID.home }));
 
   function dispatchEvent(
     type: SplitEvent,
@@ -1099,7 +1099,7 @@ export function createSplitLayout(
     if (!findSplitById(id))
       return console.error(`Split with id ${id} not found`);
 
-    fireAndForget(navigateSplit(id, DEFAULT_SPLIT_CONTENT), 'split-layout');
+    fireAndForget(navigateSplit(id, defaultContent()), 'split-layout');
   }
 
   /** Mirrors a pane's new current entry onto its split, creating the split when the pane is new. */
@@ -1402,7 +1402,7 @@ export function createSplitLayout(
     options: CreateNewSplitOptions
   ): SplitHandle | undefined {
     const { content, activate, referredFrom, beside, allowDuplicate } = options;
-    const initialContent = attachAliasContext(content ?? DEFAULT_SPLIT_CONTENT);
+    const initialContent = attachAliasContext(content ?? defaultContent());
 
     // Direct split creation permits duplicate shells, but never duplicate entities.
     const existing = findOpenView(initialContent);
@@ -1430,7 +1430,7 @@ export function createSplitLayout(
     const isLast = state.splits.length <= 1;
     if (isLast) {
       if (createNewOnEmpty)
-        fireAndForget(navigateSplit(id, DEFAULT_SPLIT_CONTENT), 'split-layout');
+        fireAndForget(navigateSplit(id, defaultContent()), 'split-layout');
       return;
     }
 

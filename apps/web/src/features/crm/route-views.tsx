@@ -1,3 +1,4 @@
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import {
   RedirectSplit,
@@ -22,7 +23,7 @@ const Crm = lazy(async () => ({
 
 export const CompaniesRouteView = withAuth(() => {
   if (!isFeatureEnabled(enableCrm))
-    return <RedirectSplit to={{ type: 'component', id: 'home' }} />;
+    return <RedirectSplit to={defaultViewContent()} />;
   useViewRestoration();
   usePageViewTracking('companies');
   const panel = useSplitPanel();

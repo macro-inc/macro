@@ -1,8 +1,8 @@
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { useMobileSettings } from '@app/features/settings/context/mobile-settings';
 import { routeParams, type SplitLocation } from '@app/lib/split-router';
 import { paneRootMatch, paneRoute } from '@app/routes/app-route';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { defaultView } from '@components/app/sidebar-next/default-view';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -213,7 +213,7 @@ export const useSettingsState = () => {
       return;
     }
 
-    navigate(DEFAULT_ROUTE, { replace: true });
+    navigate(defaultView().href, { replace: true });
   };
 
   // Focus-aware toggle: bring settings to the user rather than destroying it,
@@ -245,7 +245,7 @@ export const useSettingsState = () => {
     const manager = globalSplitManager();
     const split = getSettingsSplit();
     if (!manager || !split || manager.splits().length === 1) {
-      navigate(DEFAULT_ROUTE, { replace: true });
+      navigate(defaultView().href, { replace: true });
       return;
     }
     manager.removeSplit(split.id);

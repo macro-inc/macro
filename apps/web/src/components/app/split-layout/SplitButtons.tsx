@@ -1,5 +1,5 @@
-import { LIST_VIEW_ID } from '@app/constants/list-views';
 import { t } from '@app/lib/i18n';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import SplitIcon from '@icon/system/regular/square-half.svg';
@@ -53,10 +53,7 @@ export function SplitCreateButton() {
       size="icon-md"
       onClick={() => {
         context.manager.createNewSplit({
-          content: {
-            type: 'component',
-            id: LIST_VIEW_ID.home,
-          },
+          content: defaultViewContent(),
           referredFrom: 'dock',
         });
       }}

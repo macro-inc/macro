@@ -1,10 +1,10 @@
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
 import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
 import {
   getCurrentQueryString,
   SessionExpiredRedirect,
 } from '@components/app/SessionExpiredRedirect';
+import { defaultView } from '@components/app/sidebar-next/default-view';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -120,7 +120,7 @@ export function BasePathComponent() {
 
   // Preserve existing query parameters when redirecting
   const queryString = () => getCurrentQueryString(location.search);
-  const redirectPath = () => `${DEFAULT_ROUTE}${queryString()}`;
+  const redirectPath = () => `${defaultView().href}${queryString()}`;
 
   return (
     <Switch>

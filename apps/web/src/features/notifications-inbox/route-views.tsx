@@ -1,4 +1,5 @@
 import { usePosthog } from '@app/lib/analytics/posthog';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import {
   RedirectSplit,
   usePageViewTracking,
@@ -39,7 +40,7 @@ export const NotificationsRouteView = withAuth(() => {
       when={enabled()}
       fallback={
         <Show when={posthog.flagsLoaded()}>
-          <RedirectSplit to={{ type: 'component', id: 'home' }} />
+          <RedirectSplit to={defaultViewContent()} />
         </Show>
       }
     >

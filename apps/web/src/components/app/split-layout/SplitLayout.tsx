@@ -3,6 +3,7 @@ import { useSplitRouter } from '@app/lib/split-router';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import { globalTabManager } from '@app/signal/tabLayout';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import { DesktopTabsController } from '@components/app/tab-layout/DesktopTabsController';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -55,6 +56,7 @@ export function SplitLayoutProvider(props: ParentProps) {
     router,
     toLocation: (content) => resolveContentLocation(router.routes, content),
     toContent: splitContentFromLocation,
+    defaultSplitContent: defaultViewContent,
     stacked: isNativeMobilePlatform,
     sessionKey: () => (authenticated() === false ? undefined : userId()),
     consumeSplitBelowIntent,

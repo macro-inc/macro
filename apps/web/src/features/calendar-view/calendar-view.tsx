@@ -11,6 +11,7 @@ import {
 } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -38,7 +39,7 @@ import { CALENDAR_VIEW_ID, type CalendarViewTarget } from './types';
 function CalendarDisabledRedirect() {
   const panel = useSplitPanelOrThrow();
   onMount(() => {
-    panel.handle.replace({ next: { type: 'component', id: 'home' } });
+    panel.handle.replace({ next: defaultViewContent() });
   });
   return null;
 }

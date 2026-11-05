@@ -20,13 +20,16 @@ import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteA
 import {
   createMemoryPaneStore,
   SplitRouter,
+  type SplitRoutesManifest,
   useSolidRouterHistory,
 } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ChannelLoading } from '@channel/Channel/ChannelLoading';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import { createAppSplitRouterMiddleware } from '@components/app/split-layout/split-router/app-middleware';
 import { createAppPanePolicy } from '@components/app/split-layout/split-router/app-pane-policy';
 import {
+  resolveContentLocation,
   splitContentFromLocation,
   upgradeLegacyPath,
 } from '@components/app/split-layout/split-router/legacy-route';
@@ -36,7 +39,6 @@ import { lazyNamed } from '@core/util/lazyNamed';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { lazy } from 'solid-js';
-import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
 import {
   ActivityRouteView,
@@ -227,23 +229,29 @@ export function AppRouterView() {
     <Route definition={route} component={debugView(componentId)} />
   ));
 
+  // The router hands its routes to `history` as it is created, before any
+  // pane can close onto the default view.
+  let appRoutes: SplitRoutesManifest | undefined;
+
   return (
     <Router
-      history={(routes) =>
-        useSolidRouterHistory({
+      history={(routes) => {
+        appRoutes = routes;
+        return useSolidRouterHistory({
           base: ROUTER_BASE,
           mode: isTauri() ? 'hash' : 'path',
           transformPath: (path) =>
             upgradeLegacyPath(routes, transformShortIdInUrlPathname(path)),
-        })
-      }
+        });
+      }}
       paneStore={createMemoryPaneStore()}
       policy={createAppPanePolicy({
         manager: globalSplitManager,
         toContent: splitContentFromLocation,
-        defaultLocation: () => ({
-          route: paneRoute({ id: 'view-home', params: {} }),
-        }),
+        defaultLocation: () => {
+          if (!appRoutes) throw new Error('Router routes are not ready');
+          return resolveContentLocation(appRoutes, defaultViewContent());
+        },
         stacked: isNativeMobilePlatform,
       })}
       middleware={createAppSplitRouterMiddleware({ isTouchDevice })}

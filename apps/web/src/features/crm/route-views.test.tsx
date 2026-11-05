@@ -15,6 +15,9 @@ vi.mock('@components/app/split-layout/split-router/app-route-shell', () => ({
   usePageViewTracking: () => {},
   RedirectSplit: () => null,
 }));
+vi.mock('@components/app/sidebar-next/default-view', () => ({
+  defaultViewContent: () => ({ type: 'component', id: 'home' }),
+}));
 vi.mock('@components/app/split-layout/view-restoration', () => ({
   useViewRestoration: () => {},
 }));

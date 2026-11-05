@@ -137,9 +137,17 @@ export function handleLegacySplitPath(
     return [{ route: paneRoute({ id: 'drive', params: {} }) }];
   }
 
-  // The retired Getting Started checklist's own path.
+  // The retired Getting Started checklist's own path. Its component sends the
+  // split on to the default view, which depends on the user's rail.
   if (segments.length === 1 && segments[0] === 'getting-started') {
-    return [{ route: paneRoute({ id: 'view-home', params: {} }) }];
+    return [
+      {
+        route: paneRoute({
+          id: 'legacy-content',
+          params: { type: 'component', id: 'getting-started' },
+        }),
+      },
+    ];
   }
 
   if (segments.length === 1 && segments[0] === 'calendar') {

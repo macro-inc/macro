@@ -8,6 +8,7 @@ import { type PaneId, SplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
 import { splitContainerAttribute } from '@core/dom-selectors';
 import { EVENT_MODIFIER_KEYS } from '@core/hotkey/constants';
@@ -79,14 +80,14 @@ export function SplitPanel(props: SplitPanelProps) {
   registerSplitHotkeys({
     // Leaving a piece of content should return you to the list you reached it
     // from, so walk this split's history back to the most recent list view.
-    // Only a split that never passed through one falls back to the inbox.
+    // Only a split that never passed through one falls back to the default view.
     goToList: () => {
       const wentBack = props.handle.goBackTo(
         (content) => content.type === 'component' && isListViewID(content.id)
       );
       if (wentBack) return;
       props.handle.replace({
-        next: { type: 'component', id: LIST_VIEW_ID.home },
+        next: defaultViewContent(),
         referredFrom: 'hotkey',
       });
     },

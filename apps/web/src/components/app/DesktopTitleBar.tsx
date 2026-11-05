@@ -1,6 +1,6 @@
-import { LIST_VIEW_ID } from '@app/constants/list-views';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import { splitBackInterceptor } from '@components/app/split-layout/back-interceptor';
 import { DesktopTabStrip } from '@components/app/tab-layout/DesktopTabStrip';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -66,19 +66,16 @@ export function DesktopTitleBar() {
 
             return manager().canSplit(active, side);
           };
-          /** Opens Home splitting the active split toward `side`. */
-          const openHome = (side: 'right' | 'below') => {
+          /** Opens the default view splitting the active split toward `side`. */
+          const openDefaultView = (side: 'right' | 'below') => {
             const active = activeId();
-            manager().openWithSplit(
-              { type: 'component', id: LIST_VIEW_ID.home },
-              {
-                preferNewSplit: true,
-                allowDuplicate: true,
-                replaceWhenFull: false,
-                activate: true,
-                beside: active && { split: active, side },
-              }
-            );
+            manager().openWithSplit(defaultViewContent(), {
+              preferNewSplit: true,
+              allowDuplicate: true,
+              replaceWhenFull: false,
+              activate: true,
+              beside: active && { split: active, side },
+            });
           };
 
           return (
@@ -92,7 +89,7 @@ export function DesktopTitleBar() {
                 variant="ghost"
                 size="icon-sm"
                 disabled={!canSplit('below')}
-                onClick={() => openHome('below')}
+                onClick={() => openDefaultView('below')}
               >
                 <RowsPlusIcon class="size-4" />
               </Button>
@@ -105,7 +102,7 @@ export function DesktopTitleBar() {
                 variant="ghost"
                 size="icon-sm"
                 disabled={!canSplit('right')}
-                onClick={() => openHome('right')}
+                onClick={() => openDefaultView('right')}
               >
                 <ColumnsPlusIcon class="size-4" />
               </Button>

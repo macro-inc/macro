@@ -8,11 +8,12 @@ Windows, Linux, and mobile layouts do not add this space.
 On macOS, Back and Forward arrows beside the traffic lights navigate the active
 split's history. Each arrow is
 disabled when its direction has no entry. Sidebar controls remain inside each
-workspace. The top-right split icon opens another Home split to the right of
-the active split, even when Home is already open, and is disabled when that
+workspace. The top-right split icon opens another split on the default view
+(see [Sidebar](#sidebar-a11y-names-are-load-bearing)) to the right of the
+active split, even when that view is already open, and is disabled when that
 split has no room to divide. Its tooltip is “New split” and displays the
 registered new-split shortcut (`\`). The icon before it, “New split below”
-(`|`), opens Home stacked below the active split.
+(`|`), opens the default view stacked below the active split.
 
 ## Desktop tabs (macOS, `enable-desktop-tabs` flag)
 
@@ -24,7 +25,7 @@ they had. Background tabs are hidden, inert, and skip
 rendering; past five, the least recently used unmount and reload when next
 opened. Closing the active tab runs its unsaved-changes guards. A tab holding more than one split shows a
 split icon with the count. The strip's `+` button (and `Cmd+T`) opens a tab on
-Home; the `X` or a middle click closes one (the last tab cannot close;
+the default view; the `X` or a middle click closes one (the last tab cannot close;
 `Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, as do
 `Shift+Cmd+→` / `Shift+Cmd+←` outside text fields (where they select text).
 Labels truncate at about 288px.
@@ -191,7 +192,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 
 | Route | Surface |
 | --- | --- |
-| `/app` | Redirects to Home |
+| `/app` | Redirects to the default view: Home, or the first rail app when Home is hidden |
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
@@ -225,7 +226,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
-| `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
+| `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to the default view when the flag is off |
 | `/app/notifications/calendar/<month-or-week-or-day>` | Notifications with a calendar notification's event open in the Calendar beside the list; the event uses `sN.calendar.*` |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/calendar` | Redirects to `/app/calendar/<month-or-week-or-day>` at the remembered period (Day on phones and Week on desktop by default), keeping an `eventId` |
@@ -252,7 +253,7 @@ pages outside the app (`/app/login`, `/app/welcome`, `/app/signup`,
 `/app/onboarding`, `/app/setup`, the invite pages, `/app/meet/...` and
 `/app/task-slug/...`) render without the split layout and take one part only.
 `/app/login/~/home` and URLs nothing matches, such as `/app/garbage`, are
-replaced with `/app`, which goes to Home or to login. An unknown split among app
+replaced with `/app`, which goes to the default view or to login. An unknown split among app
 splits (`/app/mail/~/garbage`) shows the in-split 404 instead. A split that
 navigates to a page outside the app replaces every split; Back restores them.
 
@@ -311,9 +312,9 @@ while retaining the theme hue. Any split can be divided beside or stacked:
 the split menu (right-click a split's header) offers **New split left**,
 **right**, **above**, and **below**, each splitting that split and disabled
 when it lacks room (400px wide, 240px tall per split). `\` (or Cmd+\ while
-typing) opens Home to the right of the active split, so in a stack only the
-active split divides; `|` (Shift+\, or Shift+Cmd+\ while typing) stacks Home
-below it. A new split beside others along the same axis takes an equal share.
+typing) opens the default view to the right of the active split, so in a
+stack only the active split divides; `|` (Shift+\, or Shift+Cmd+\ while
+typing) stacks it below. A new split beside others along the same axis takes an equal share.
 Option+Shift-click (Alt+Shift elsewhere) on anything that
 Shift-clicks into a new split opens it below the split it came from. Closing a
 stacked split gives its space to its neighbours; **Swap split left/right**
@@ -502,7 +503,13 @@ The outer sidebar is an icon rail; labels appear in tooltips.
 Open **More → Customize sidebar** to show, hide, or reorder available apps.
 On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
 handle also moves it. Touch devices offer move buttons. Home stays first and
-cannot be hidden. Verify that hovering within a destination row keeps the drag
+can't be reordered, but it can be hidden like any other app: from its checkbox
+here or **Hide from sidebar** in its right-click menu. A hidden Home moves to
+More, and `g h` still opens it. The first app left on the rail is the default
+view: what `/app`, a new split or tab, `Cmd+Esc` with no earlier list, closing
+the last split, and an unavailable view's redirect open. It is Home unless Home
+is hidden, and Home again if every app is hidden. Preferences are per browser
+(local storage). Touch devices have no rail and always default to Home. Verify that hovering within a destination row keeps the drag
 preview stable, dropping saves the order, and reopening retains it. In short
 desktop windows, the app list scrolls while More and the footer remain reachable.
 Touch devices retain the flag-gated Reviews tab in Tasks.
@@ -670,7 +677,7 @@ sidebar close button; mobile chrome is unchanged.
 A lone desktop split shows no X, in its header or its frame corner. On a
 non-list content split, `Cmd+Esc` (or `Opt+Esc`) returns it to the most recent
 list in its history, preserving that list’s state; if there is no prior list, it
-opens Home. Excluded background panels do not count toward close eligibility.
+opens the default view. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner

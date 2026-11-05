@@ -27,6 +27,9 @@ vi.mock('@app/lib/split-router', () => ({
     Outlet: (props: { fallback: ParentProps['children'] }) => props.fallback,
   },
 }));
+vi.mock('@components/app/sidebar-next/default-view', () => ({
+  defaultViewContent: () => ({ type: 'component', id: 'home' }),
+}));
 const [visibleSplits, setVisibleSplits] = createSignal(1);
 vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () => ({ getVisibleSplitCount: visibleSplits }),

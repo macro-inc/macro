@@ -1,5 +1,6 @@
 import { usePosthog } from '@app/lib/analytics/posthog';
 import { createSearchParams } from '@app/lib/split-router';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import {
   RedirectSplit,
   usePageViewTracking,
@@ -34,7 +35,7 @@ export const ActivityRouteView = withAuth(() => {
       when={enabled()}
       fallback={
         <Show when={posthog.flagsLoaded()}>
-          <RedirectSplit to={{ type: 'component', id: 'home' }} />
+          <RedirectSplit to={defaultViewContent()} />
         </Show>
       }
     >

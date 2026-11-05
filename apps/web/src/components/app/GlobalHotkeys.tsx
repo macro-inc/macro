@@ -17,6 +17,7 @@ import { beginInteraction } from '@app/observability/flow';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import { useLogout } from '@core/auth/logout';
 import { toast } from '@core/component/Toast/Toast';
 import { enableSnippets, LOCAL_ONLY } from '@core/constant/featureFlags';
@@ -372,19 +373,16 @@ export default function GlobalShortcuts() {
 
   const { openWithSplit } = useSplitLayout();
 
-  /** Opens Home splitting the active split toward `side`. */
+  /** Opens the default view splitting the active split toward `side`. */
   const splitActive = (side: 'right' | 'below') => {
     const active = globalSplitManager()?.activeSplitId();
     analytics.track('split_created', { from: 'global_hotkey', side });
-    openWithSplit(
-      { type: 'component', id: 'home' },
-      {
-        referredFrom: 'hotkey',
-        allowDuplicate: true,
-        preferNewSplit: true,
-        beside: active && { split: active, side },
-      }
-    );
+    openWithSplit(defaultViewContent(), {
+      referredFrom: 'hotkey',
+      allowDuplicate: true,
+      preferNewSplit: true,
+      beside: active && { split: active, side },
+    });
     return true;
   };
   const createNewSplit = () => splitActive('right');

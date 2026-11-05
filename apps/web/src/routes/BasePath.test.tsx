@@ -44,6 +44,10 @@ vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => mocks.nativeMobile,
 }));
 
+vi.mock('@components/app/sidebar-next/default-view', () => ({
+  defaultView: () => ({ href: '/home' }),
+}));
+
 vi.mock('@core/util/cookies', () => ({
   hasLoginCookie: () => mocks.hasLoginCookie,
 }));

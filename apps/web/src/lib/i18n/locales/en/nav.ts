@@ -49,7 +49,7 @@ export default {
   // Customize sidebar
   customizeSidebar: 'Customize sidebar',
   customizeSidebarDescription:
-    'Choose which apps appear in the sidebar and drag to reorder them. Home always stays first.',
+    'Choose which apps appear in the sidebar and drag to reorder them. Home always stays first, and Macro opens to the first app shown.',
   moveItemUp: 'Move {{label}} up',
   moveItemDown: 'Move {{label}} down',
   dragToReorder: 'Drag to reorder',

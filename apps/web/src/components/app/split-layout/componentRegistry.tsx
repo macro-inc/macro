@@ -11,6 +11,7 @@ import { HomeRouteView } from '@app/features/home/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
@@ -244,9 +245,9 @@ registerComponent('unified-list', () => (
 ));
 
 // Retired Getting Started checklist: restored layouts and old
-// `/component/getting-started` links land on Home.
+// `/component/getting-started` links land on the default view.
 registerComponent('getting-started', () => (
-  <RedirectSplit to={{ type: 'component', id: 'home' }} />
+  <RedirectSplit to={defaultViewContent()} />
 ));
 
 function DisabledProjectsRoute() {
@@ -625,7 +626,7 @@ if (import.meta.env.DEV) {
       return (
         <Show
           when={enabled()}
-          fallback={<RedirectSplit to={{ type: 'component', id: 'home' }} />}
+          fallback={<RedirectSplit to={defaultViewContent()} />}
         >
           <Demo />
         </Show>

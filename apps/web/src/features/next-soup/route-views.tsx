@@ -1,5 +1,6 @@
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { usePosthog } from '@app/lib/analytics/posthog';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   RedirectSplit,
@@ -53,7 +54,7 @@ export const RecentRouteView = withAuth(() => {
       when={enabled()}
       fallback={
         <Show when={posthog.flagsLoaded()}>
-          <RedirectSplit to={{ type: 'component', id: 'home' }} />
+          <RedirectSplit to={defaultViewContent()} />
         </Show>
       }
     >

@@ -8,6 +8,7 @@ import { Workspace } from '@app/features/calendar-view/components/Workspace';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePosthog } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { defaultViewContent } from '@components/app/sidebar-next/default-view';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { useUserId } from '@core/context/user';
@@ -21,7 +22,7 @@ import type { CalendarBlockProps } from './types';
 function CalendarBlockDisabledRedirect() {
   const panel = useSplitPanelOrThrow();
   onMount(() => {
-    panel.handle.replace({ next: { type: 'component', id: 'home' } });
+    panel.handle.replace({ next: defaultViewContent() });
   });
   return null;
 }
