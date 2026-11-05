@@ -81,6 +81,11 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
 ## Gotchas
 
 - import-tree imports every `.nix` file under `nix/`; helpers start with `_`.
+- The `macro-box` profile turns Secure Boot off, so the shim path is built
+  but untested; the ESP grub.cfg boots `/boot/vmlinuz` + `/boot/initrd.img`
+  (the kernel's symlinks), so apt kernel upgrades need no update-grub.
+- To iterate without the Rust build, call `_build.nix` with a stub `macrod`
+  (`pkgs.writeShellScriptBin "macrod" ...`) via `nix build --impure --expr`.
 - Do not add Ubuntu `chromium` (a snap stub) or `nodejs` (too old for
   chrome-devtools-mcp); both come from Nix.
 - The sysctl drop-in turns off Ubuntu's AppArmor userns restriction, which

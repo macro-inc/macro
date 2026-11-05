@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Builds the macro-box rootfs inside `unshare --user --map-root-user
 # --mount` in the Nix sandbox: unpack the Essential debs (debootstrap's first
 # stage), then chroot and let Ubuntu's own dpkg install everything under
@@ -5,6 +6,7 @@
 # hold (FAKEROOTDONTTRYCHOWN: a real chown to an unmapped id is EINVAL,
 # which fakeroot does not swallow). Writes $out/rootfs.tar (VM) and $out/container.tar (Docker).
 # Inputs: DEBS BASE FILES SKILLS CLOSURE TOOLS ROOT_UUID ESP_UUID out.
+# shellcheck disable=SC2154
 set -euo pipefail
 
 root="$PWD/root"

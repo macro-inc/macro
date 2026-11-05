@@ -155,15 +155,13 @@ let
 
   # Docker only: enrollment comes from a bind-mounted file, Docker owns
   # /etc/resolv.conf, and there are no disks to mount.
-  dockerLayer =
-    pkgs.runCommand "macro-box-docker-layer" { nativeBuildInputs = [ pkgs.gnutar ]; }
-      ''
-        mkdir -p root/etc/macro
-        printf 'MACRO_ENROLL_FROM=file:/run/macro/enrollment.json\n' > root/etc/macro/enroll.env
-        : > root/etc/resolv.conf
-        : > root/etc/fstab
-        tar --owner=0 --group=0 --numeric-owner --mtime=@1 --sort=name -C root -cf $out etc
-      '';
+  dockerLayer = pkgs.runCommand "macro-box-docker-layer" { nativeBuildInputs = [ pkgs.gnutar ]; } ''
+    mkdir -p root/etc/macro
+    printf 'MACRO_ENROLL_FROM=file:/run/macro/enrollment.json\n' > root/etc/macro/enroll.env
+    : > root/etc/resolv.conf
+    : > root/etc/fstab
+    tar --owner=0 --group=0 --numeric-owner --mtime=@1 --sort=name -C root -cf $out etc
+  '';
 
   dockerConfig = {
     architecture = "amd64";
