@@ -8,4 +8,4 @@ pub(crate) mod telemetry_capture;
 
 /// CI proof salt.
 #[allow(dead_code)]
-pub const CI_PROOF_SALT: &str = "medium-7";
+pub const CI_PROOF_SALT: &str = "medium-8";
