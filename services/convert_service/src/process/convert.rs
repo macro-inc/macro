@@ -22,7 +22,11 @@ pub(super) fn is_docx_key(key: &str) -> bool {
 
 /// Processes a message from the convert queue
 /// Returns the job id and the convert queue message
-#[tracing::instrument(skip(worker, s3_client, lambda_client, message), fields(message_id = message.message_id))]
+///
+/// The span is errored by the returned error, not by cleanup: a job that
+/// failed before creating its folder has nothing to clean up, and that
+/// failure must still show.
+#[tracing::instrument(err(Debug), skip(worker, s3_client, lambda_client, message), fields(message_id = message.message_id))]
 pub async fn process_message(
     worker: &sqs_worker::SQSWorker,
     s3_client: &s3_client::S3,

@@ -45,6 +45,10 @@ synchronously via HTTP or asynchronously via SQS.
   (`loadComponentFromURL returned an empty reference`, `Failed to save
   document`) next to `No space left on device`; check
   `ecs.fargate.ephemeral_storage.utilized` before debugging LibreOffice.
+- Any `tracing::error!` inside `process_message` errors its span and counts
+  toward the internal span error monitor; log expected outcomes (such as a
+  job folder that is already gone) below `error`, and let the returned error
+  mark real failures.
 - The convert queue's visibility timeout (`infra/stacks/convert-service`)
   must stay above `conversion_timeout`; failed messages go to the DLQ after
   their second receive.
