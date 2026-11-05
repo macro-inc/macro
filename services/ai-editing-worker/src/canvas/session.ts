@@ -448,39 +448,41 @@ export function describeCanvas(
   });
   // Source is large, so it comes only from a read of specific items.
   const withSource = !!artifactLibrary && !!itemIds;
-  const text = JSON.stringify(
-    {
-      rootId: document.rootId,
-      totalItems: all.length,
-      matchedItems: selected.length,
-      truncated:
-        selected.length > 300 ||
-        items.some(
-          (item) =>
-            item.textTruncated ||
-            item.pointsTruncated ||
-            item.userMentionsTruncated
-        ),
-      items,
-      ...(artifactLibrary
-        ? {
-            artifactGuide: ARTIFACT_GUIDE,
-            artifactLibrary: withSource
-              ? artifactLibrary
-              : {
-                  styles: Object.keys(artifactLibrary.styles),
-                  components: Object.keys(artifactLibrary.components),
-                },
-          }
-        : {}),
-    },
-    (key, value: unknown) =>
+  // The replacer is for scene items only: library entries can use any of these names.
+  const sceneItems: unknown = JSON.parse(
+    JSON.stringify(items, (key, value: unknown) =>
       key === 'content' || (key === 'html' && !withSource)
         ? undefined
         : key === 'points' && Array.isArray(value)
           ? value.slice(0, 64)
           : value
+    )
   );
+  const text = JSON.stringify({
+    rootId: document.rootId,
+    totalItems: all.length,
+    matchedItems: selected.length,
+    truncated:
+      selected.length > 300 ||
+      items.some(
+        (item) =>
+          item.textTruncated ||
+          item.pointsTruncated ||
+          item.userMentionsTruncated
+      ),
+    items: sceneItems,
+    ...(artifactLibrary
+      ? {
+          artifactGuide: ARTIFACT_GUIDE,
+          artifactLibrary: withSource
+            ? artifactLibrary
+            : {
+                styles: Object.keys(artifactLibrary.styles),
+                components: Object.keys(artifactLibrary.components),
+              },
+        }
+      : {}),
+  });
   if (text.length > 500_000)
     throw new Error(
       'Canvas too large for AI inspection. Reduce its content before editing.'

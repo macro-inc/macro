@@ -130,6 +130,21 @@ describe('reading artifacts', () => {
     expect(scene.artifactLibrary.styles).toEqual({ brand: 'CSS' });
   });
 
+  it('keeps library entries named like scene fields it filters', () => {
+    const scene = JSON.parse(
+      describeCanvas(document, ['a'], {
+        styles: { content: 'A', html: 'B', points: 'C' },
+        components: {},
+      })
+    );
+
+    expect(scene.artifactLibrary.styles).toEqual({
+      content: 'A',
+      html: 'B',
+      points: 'C',
+    });
+  });
+
   it('shows no source or guide to a user without artifacts', () => {
     const text = describeCanvas(document, ['a']);
 
