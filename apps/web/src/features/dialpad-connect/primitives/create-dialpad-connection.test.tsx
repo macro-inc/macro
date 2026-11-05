@@ -58,5 +58,4 @@ describe('Dialpad connection requests', () => {
     expect(mocks.get).not.toHaveBeenCalled();
     expect(mocks.complete).not.toHaveBeenCalled();
   });
-
 });
