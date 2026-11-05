@@ -1523,6 +1523,8 @@ export type GraphqlEntityType =
   | 'FOREIGN_ENTITY'
   /** Macro Form entity (a questionnaire answered into a database table). */
   | 'FORM'
+  /** A registered runtime. */
+  | 'HARNESS'
   /** Initiative entity. */
   | 'INITIATIVE'
   /** Project entity. */

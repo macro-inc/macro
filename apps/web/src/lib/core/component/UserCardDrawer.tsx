@@ -1,4 +1,7 @@
+import { AgentRuntime } from '@app/features/runtime-sharing/views/AgentRuntime';
+import { UserRuntimes } from '@app/features/runtime-sharing/views/UserRuntimes';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { isAgentAccount, tryMacroId } from '@core/user';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -112,6 +115,20 @@ function UserCardBody(props: {
           </Show>
         </div>
       </div>
+
+      <Show when={props.user.id}>
+        {(id) => (
+          <Show
+            when={isBotPrincipalId(id())}
+            fallback={<UserRuntimes userId={id()} class="px-6 pb-4" />}
+          >
+            <AgentRuntime
+              botId={id().replace(/^bot\|/, '')}
+              class="px-6 pb-4"
+            />
+          </Show>
+        )}
+      </Show>
 
       <Show when={actions().length > 0}>
         <MobileDrawer.ScrollBody>

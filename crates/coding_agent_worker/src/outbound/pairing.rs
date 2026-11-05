@@ -5,7 +5,7 @@
 //! control panel drives it frame by frame.
 
 use harnesses::domain::models::{
-    ClaimPairingRequest, ClaimedPairing, CreatePairingRequest, CreatedPairing, HarnessOwner,
+    ClaimPairingRequest, ClaimedPairing, CreatePairingRequest, CreatedPairing,
     RequestedHarnessScope,
 };
 use reqwest::StatusCode;
@@ -116,9 +116,10 @@ impl PairingClient {
 }
 
 fn credentials_from(claimed: ClaimedPairing) -> HarnessCredentials {
-    let scope = match claimed.harness.owner {
-        HarnessOwner::User { .. } => HarnessScope::User,
-        HarnessOwner::Team { .. } => HarnessScope::Team,
+    let scope = if claimed.harness.shared_team_ids.is_empty() {
+        HarnessScope::User
+    } else {
+        HarnessScope::Team
     };
     HarnessCredentials {
         harness_id: claimed.harness.id,

@@ -1,4 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -6,6 +7,7 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import XIcon from '@icon/system/regular/x.svg';
+import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -460,6 +462,12 @@ export function InviteToTeamDialog(props: {
   onClose: () => void;
 }) {
   const inviteToTeamMutation = useInviteToTeamMutation();
+  const harnesses = useHarnessesQuery();
+  const ownRuntimes = () =>
+    harnesses.isSuccess
+      ? harnesses.data.filter((harness) => harness.access === 'owner')
+      : [];
+  const [offeredRuntimes, setOfferedRuntimes] = createSignal<string[]>([]);
   const [invites, setInvites] = createSignal<InviteEntry[]>([EMPTY_INVITE]);
   const [inviteAsAgent, setInviteAsAgent] = createSignal(false);
   const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>(
@@ -483,6 +491,7 @@ export function InviteToTeamDialog(props: {
     setInvites([EMPTY_INVITE]);
     setInviteAsAgent(false);
     setInviteErrors([]);
+    setOfferedRuntimes([]);
     props.onClose();
   };
 
@@ -497,7 +506,11 @@ export function InviteToTeamDialog(props: {
     inviteToTeamMutation.mutate(
       {
         teamId: props.teamId,
-        request: { invites: inviteEntries, is_agent: inviteAsAgent() },
+        request: {
+          invites: inviteEntries,
+          is_agent: inviteAsAgent(),
+          harness_ids: offeredRuntimes(),
+        },
       },
       { onSuccess: close }
     );
@@ -534,6 +547,37 @@ export function InviteToTeamDialog(props: {
               Invite as agent
             </Checkbox.Label>
           </Checkbox>
+          <Show when={ownRuntimes().length > 0}>
+            <section
+              class="flex flex-col gap-2"
+              aria-label={t('runtimeSharing.inviteRuntimes')}
+            >
+              <div class="text-sm text-ink">
+                {t('runtimeSharing.inviteRuntimes')}
+              </div>
+              <p class="text-xs text-ink-muted">
+                {t('runtimeSharing.inviteRuntimesHint')}
+              </p>
+              <For each={ownRuntimes()}>
+                {(runtime) => (
+                  <Checkbox
+                    class="flex items-center gap-3 text-sm touch:min-h-[44px]"
+                    checked={offeredRuntimes().includes(runtime.id)}
+                    onChange={(checked) =>
+                      setOfferedRuntimes((current) =>
+                        checked
+                          ? [...current, runtime.id]
+                          : current.filter((id) => id !== runtime.id)
+                      )
+                    }
+                  >
+                    <Checkbox.Control />
+                    <Checkbox.Label>{runtime.name}</Checkbox.Label>
+                  </Checkbox>
+                )}
+              </For>
+            </section>
+          </Show>
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"

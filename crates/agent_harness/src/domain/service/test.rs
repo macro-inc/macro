@@ -306,6 +306,14 @@ impl crate::domain::ports::HarnessBindings for MirrorBindings {
         Ok(Some(harness_for_bot(bot)))
     }
 
+    async fn access_facts(
+        &self,
+        _bot: BotId,
+        _actor: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+    ) -> anyhow::Result<Option<crate::domain::model::RuntimeAccessFacts>> {
+        Ok(None)
+    }
+
     /// Mirrored too: an ACP session id that is a session's own id names it.
     async fn sessions_on_harness(
         &self,

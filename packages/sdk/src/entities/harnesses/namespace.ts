@@ -15,9 +15,19 @@ export class HarnessNamespace {
     return Harness.byId(this.client, id);
   }
 
-  /** All hosts visible to the caller. */
+  /** The hosts the caller may run agents on. */
   async list(): Promise<Harness[]> {
     return unwrap(await this.client.storage.listHarnesses()).map((h) =>
+      Harness.from(this.client, h),
+    );
+  }
+
+  /**
+   * Every host of the caller's teammates, including ones the caller cannot use
+   * yet. `Harness.callerAccess()` says which, and `Harness.requestAccess()` asks.
+   */
+  async directory(): Promise<Harness[]> {
+    return unwrap(await this.client.storage.listHarnessDirectory()).map((h) =>
       Harness.from(this.client, h),
     );
   }

@@ -408,6 +408,15 @@ impl TeamRepository for MockTeamRepository {
         }
     }
 
+    async fn offer_harnesses_with_invites(
+        &self,
+        _invite_ids: &[uuid::Uuid],
+        _invited_by: &MacroUserIdStr<'_>,
+        _harness_ids: &[uuid::Uuid],
+    ) -> Result<(), InviteUsersToTeamError> {
+        Ok(())
+    }
+
     fn invite_users_to_team(
         &self,
         _: &uuid::Uuid,

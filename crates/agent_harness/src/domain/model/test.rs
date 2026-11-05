@@ -208,3 +208,30 @@ fn a_silent_turn_is_told_by_how_it_stopped() {
         );
     }
 }
+
+#[test]
+fn a_resident_answers_anyone_while_its_owner_keeps_access() {
+    let resident = |agent_owner_may_use, actor_may_use| RuntimeAccessFacts {
+        resident: true,
+        agent_owner_may_use,
+        actor_may_use,
+    };
+    assert!(resident(true, Some(false)).may_run());
+    assert!(resident(true, None).may_run());
+    assert!(!resident(false, Some(true)).may_run());
+    assert!(!resident(false, None).may_run());
+}
+
+#[test]
+fn a_coding_agent_runs_for_people_who_may_use_the_runtime_themselves() {
+    let coding = |agent_owner_may_use, actor_may_use| RuntimeAccessFacts {
+        resident: false,
+        agent_owner_may_use,
+        actor_may_use,
+    };
+    assert!(coding(false, Some(true)).may_run());
+    assert!(!coding(true, Some(false)).may_run());
+    // A turn nobody prompted runs on its agent owner's authority.
+    assert!(coding(true, None).may_run());
+    assert!(!coding(false, None).may_run());
+}

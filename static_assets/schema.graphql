@@ -5198,6 +5198,10 @@ enum GraphqlEntityType {
 	chats replaced WhatsApp groups. Never returned; rejected as input.
 	"""
 	WHATSAPP_GROUP @deprecated(reason: "Use EXTERNAL_CHAT. Never returned; rejected as input. Remove after 2026-11-30.")
+	"""
+	A registered runtime.
+	"""
+	HARNESS
 }
 
 """

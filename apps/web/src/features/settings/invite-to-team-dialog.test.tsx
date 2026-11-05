@@ -9,6 +9,15 @@ vi.mock('@queries/team/invites', () => ({
     mutate: mocks.mutate,
   }),
 }));
+vi.mock('@queries/harnesses/harnesses', () => ({
+  useHarnessesQuery: () => ({
+    isSuccess: true,
+    data: [
+      { id: 'mine', name: 'Mac mini', access: 'owner' },
+      { id: 'shared', name: 'Build box', access: 'use' },
+    ],
+  }),
+}));
 vi.mock('./TeamInviteLinkSection', () => ({
   TeamInviteLinkSection: () => null,
 }));
@@ -20,7 +29,7 @@ afterEach(() => {
   mocks.mutate.mockReset();
 });
 
-function sendInvite(asAgent: boolean) {
+function sendInvite(asAgent: boolean, runtime?: string) {
   render(() => (
     <InviteToTeamDialog
       teamId="team-1"
@@ -33,6 +42,7 @@ function sendInvite(asAgent: boolean) {
   const email = screen.getByRole('textbox');
   fireEvent.input(email, { target: { value: 'invitee@signup.test' } });
   if (asAgent) fireEvent.click(screen.getByLabelText('Invite as agent'));
+  if (runtime) fireEvent.click(screen.getByLabelText(runtime));
   fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
 }
 
@@ -42,7 +52,11 @@ describe('InviteToTeamDialog', () => {
 
     expect(mocks.mutate.mock.calls[0]?.[0]).toEqual({
       teamId: 'team-1',
-      request: { invites: [{ email: 'invitee@signup.test' }], is_agent: false },
+      request: {
+        invites: [{ email: 'invitee@signup.test' }],
+        is_agent: false,
+        harness_ids: [],
+      },
     });
   });
 
@@ -51,7 +65,20 @@ describe('InviteToTeamDialog', () => {
 
     expect(mocks.mutate.mock.calls[0]?.[0]).toEqual({
       teamId: 'team-1',
-      request: { invites: [{ email: 'invitee@signup.test' }], is_agent: true },
+      request: {
+        invites: [{ email: 'invitee@signup.test' }],
+        is_agent: true,
+        harness_ids: [],
+      },
     });
+  });
+
+  it('offers only runtimes the inviter owns', () => {
+    sendInvite(false, 'Mac mini');
+
+    expect(screen.queryByLabelText('Build box')).toBeNull();
+    expect(mocks.mutate.mock.calls[0]?.[0].request.harness_ids).toEqual([
+      'mine',
+    ]);
   });
 });

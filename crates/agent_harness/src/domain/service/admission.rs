@@ -53,6 +53,38 @@ where
         Ok(())
     }
 
+    /// A prompt reaches a registered runtime only while it may run there.
+    pub(super) async fn authorize_runtime(
+        &self,
+        session_id: AgentSessionId,
+        command: &DeliverAction,
+    ) -> Result<()> {
+        if !matches!(command.action, AgentAction::Prompt(_)) {
+            return Ok(());
+        }
+        let session = self.sessions.get_session(session_id).await?;
+        if AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External {
+            return Ok(());
+        }
+        let facts = self
+            .runtimes
+            .access_facts(session.bot_id, command.actor.as_ref())
+            .await
+            .map_err(|error| HarnessError::RuntimeDirectory(rootcause::report!(error).into()))?;
+        match facts {
+            Some(facts) if !facts.may_run() => {
+                tracing::warn!(
+                    agent.session.id = %session_id,
+                    bot_id = %session.bot_id,
+                    resident = facts.resident,
+                    "refused a turn: no access to the agent's runtime"
+                );
+                Err(AgentSessionError::Forbidden.into())
+            }
+            _ => Ok(()),
+        }
+    }
+
     pub(super) async fn admit_session(&self, session: &AgentSession) -> Result<()> {
         let kind = AgentKind::for_session(session.bot_id, &session.harness);
         if !macro_funded(kind) || self.runs_on_agent_key(kind, session).await {

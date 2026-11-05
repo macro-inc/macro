@@ -124,6 +124,13 @@ beside a scrolling editor whose selection runs past its visible bottom
 (`clipToVisible`), have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/directive/browser-test/playwright.config.ts`.
 
+The runtime Share menu (teammates, team access, access requests, and the warning
+before shutting down a resident) has a backend-free desktop/phone regression:
+`bunx playwright test --config src/features/runtime-sharing/browser-test/playwright.config.ts`.
+It runs the real queries and service client over a scripted network. The warning
+opens under an owner from inside the sheet; one captured outside it closes the
+menu on the first tap.
+
 Composer `/` menus list Connections between Skills and Pull requests. Keep native
 and hosted providers aligned with `mcp_select::select_connections`, prefer native
 credentials per provider, and preserve editor focus on pointer and touch selection.

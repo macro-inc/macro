@@ -10,6 +10,7 @@ import { agentSessionKeys } from '../agent-session/keys';
 import { callKeys } from '../call/keys';
 import { queryClient } from '../client';
 import { invalidateExternalChat } from '../external-chats';
+import { harnessKeys } from '../harnesses/keys';
 import { refreshActiveGraphqlPreviewQueries } from '../preview/active-queries';
 import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
 import { soupKeys } from '../soup/keys';
@@ -52,6 +53,12 @@ export function refreshSharedAccess(entity: ShareEntity) {
   fireAndForget(invalidateAccessRequests(entity), 'access-requests');
   if (entity.entityType === 'external_chat') {
     invalidateExternalChat(entity.entityId);
+    return;
+  }
+  // A runtime appears in no list but the runtime queries.
+  if (entity.entityType === 'harness') {
+    queryClient.invalidateQueries({ queryKey: harnessKeys.list.queryKey });
+    queryClient.invalidateQueries({ queryKey: harnessKeys.directory.queryKey });
     return;
   }
   // Permissions change list membership even when the item was never cached.

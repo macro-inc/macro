@@ -955,6 +955,7 @@ where
         command: DeliverAction,
     ) -> Result<CommandOutcome> {
         self.authorize_action(&command).await?;
+        self.authorize_runtime(session_id, &command).await?;
         let action_id = command.id;
         if let Some(store) = &self.external_replies
             && store

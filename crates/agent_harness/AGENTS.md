@@ -69,6 +69,12 @@ Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
 
+Prompts to an external runtime pass `authorize_runtime` per turn:
+`RuntimeAccessFacts::may_run` requires a coding agent's prompter to have access
+and a resident's (a bound non-coding agent's) owner to have access, so removing
+access shuts a resident down without touching its binding. A turn nobody
+prompted runs on the agent owner's access.
+
 External runtimes bind sessions lazily. On each dial `RuntimeRegistry` has the
 connection run `initialize` (shared with every session through its handshake)
 and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
