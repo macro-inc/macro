@@ -78,6 +78,14 @@ maybe_env_vars! {
     /// deploy before the price exists in Stripe; until it is set, Max checkout
     /// and plan changes answer 400 and every subscription maps to Premium.
     pub struct StripeMaxPriceId;
+    /// Stripe price ids for Macro computers, one per size and billing
+    /// interval. Optional: a size is not sold at an interval whose price is unset.
+    pub struct StripeComputerStandardMonthlyPriceId;
+    pub struct StripeComputerLargeMonthlyPriceId;
+    pub struct StripeComputerXlMonthlyPriceId;
+    pub struct StripeComputerStandardYearlyPriceId;
+    pub struct StripeComputerLargeYearlyPriceId;
+    pub struct StripeComputerXlYearlyPriceId;
 }
 
 /// The configuration parameters for the application.
@@ -204,6 +212,13 @@ pub struct Config {
     /// The stripe price id for the Max plan seat (optional, see
     /// [`StripeMaxPriceId`])
     pub stripe_max_price_id: StripeMaxPriceId,
+    /// Macro computer prices (optional, see [`StripeComputerStandardMonthlyPriceId`]).
+    pub stripe_computer_standard_monthly_price_id: StripeComputerStandardMonthlyPriceId,
+    pub stripe_computer_large_monthly_price_id: StripeComputerLargeMonthlyPriceId,
+    pub stripe_computer_xl_monthly_price_id: StripeComputerXlMonthlyPriceId,
+    pub stripe_computer_standard_yearly_price_id: StripeComputerStandardYearlyPriceId,
+    pub stripe_computer_large_yearly_price_id: StripeComputerLargeYearlyPriceId,
+    pub stripe_computer_xl_yearly_price_id: StripeComputerXlYearlyPriceId,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
@@ -235,6 +250,25 @@ impl Config {
             },
             self.ai_usage_overage_markup_percent,
         )
+    }
+
+    /// The Stripe price of each computer size per billing interval.
+    pub fn computer_prices(&self) -> crate::domain::computer_billing::ComputerPrices {
+        let price = |id: Option<&str>| nonblank_value(id).map(str::to_owned);
+        crate::domain::computer_billing::ComputerPrices {
+            standard: crate::domain::computer_billing::IntervalPrices {
+                monthly: price(self.stripe_computer_standard_monthly_price_id.value()),
+                yearly: price(self.stripe_computer_standard_yearly_price_id.value()),
+            },
+            large: crate::domain::computer_billing::IntervalPrices {
+                monthly: price(self.stripe_computer_large_monthly_price_id.value()),
+                yearly: price(self.stripe_computer_large_yearly_price_id.value()),
+            },
+            xl: crate::domain::computer_billing::IntervalPrices {
+                monthly: price(self.stripe_computer_xl_monthly_price_id.value()),
+                yearly: price(self.stripe_computer_xl_yearly_price_id.value()),
+            },
+        }
     }
 
     pub fn from_env() -> anyhow::Result<Self> {

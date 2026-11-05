@@ -685,6 +685,15 @@ pub async fn run() -> anyhow::Result<()> {
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup)
     .with_invite_rewarder(Arc::new(invite_rewards));
+    let computer_prices = config.computer_prices();
+    let computer_service = Arc::new(hosted_runtimes::domain::service::ComputerService::new(
+        hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone()),
+        crate::outbound::computer_billing::TeamComputerBilling::new(
+            teams_service_impl.clone(),
+            computer_prices.clone(),
+        ),
+        hosted_runtimes::domain::service::SystemClock,
+    ));
     let teams_service = Arc::new(teams_service_impl);
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
@@ -807,6 +816,8 @@ pub async fn run() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service,
+            computer_prices,
+            computer_billing_observer: computer_service,
             domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,

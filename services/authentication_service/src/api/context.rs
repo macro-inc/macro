@@ -265,6 +265,11 @@ pub(crate) struct ApiContext {
     pub rate_limit_service: RateLimiter,
     /// The stripe price ids for each paid plan's seat
     pub stripe_prices: crate::api::user::stripe::StripePrices,
+    /// The Stripe prices Macro computers bill at.
+    pub computer_prices: crate::domain::computer_billing::ComputerPrices,
+    /// Cancels computers whose subscription items went away outside Macro.
+    pub computer_billing_observer:
+        Arc<dyn crate::domain::computer_billing::ComputerBillingObserver>,
     /// AI allowances, credits, and overage
     pub ai_billing_service: Arc<AiBillingServiceType>,
     pub ai_payment_gateway: Arc<ai_billing::outbound::StripePaymentGateway>,

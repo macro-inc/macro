@@ -784,7 +784,7 @@ async fn handle_team_subscription_event<'a>(
         macro_db_client::user::patch::update_macro_user_has_trialed(&ctx.db, email, true).await?;
     }
 
-    billing::complete_subscription_webhook(
+    let result = billing::complete_subscription_webhook(
         billing::sync_team_usage_policy(ctx, &plan_sync),
         async {
             let subscription_id = stripe::SubscriptionId::from_str(subscription_id).unwrap();
@@ -852,7 +852,60 @@ async fn handle_team_subscription_event<'a>(
             }
         },
     )
-    .await
+    .await;
+    reconcile_team_computers(ctx, subscription_id, team_id).await;
+    result
+}
+
+/// Tells the computer service how many computers of each size the team
+/// subscription bills now, so computers whose items were removed outside
+/// Macro are cancelled. Reads the subscription fresh because webhook payloads
+/// arrive out of order. Never fails the webhook.
+#[tracing::instrument(skip(ctx))]
+async fn reconcile_team_computers(ctx: &ApiContext, subscription_id: &str, team_id: &uuid::Uuid) {
+    if ctx.computer_prices == crate::domain::computer_billing::ComputerPrices::default() {
+        return;
+    }
+    let subscription = match stripe::SubscriptionId::from_str(subscription_id) {
+        Ok(id) => stripe::Subscription::retrieve(&ctx.stripe_client, &id, &[]).await,
+        Err(error) => {
+            tracing::warn!(error = ?error, "invalid team subscription id; skipping computer reconcile");
+            return;
+        }
+    };
+    let subscription = match subscription {
+        Ok(subscription) => subscription,
+        Err(error) => {
+            tracing::warn!(error = ?error, "could not read the team subscription; skipping computer reconcile");
+            return;
+        }
+    };
+    let ended = matches!(
+        subscription.status,
+        stripe::SubscriptionStatus::Canceled | stripe::SubscriptionStatus::IncompleteExpired
+    );
+    if !ended && subscription.items.has_more {
+        // A partial item list would undercount and cancel paid computers.
+        tracing::warn!("team subscription items are paginated; skipping computer reconcile");
+        return;
+    }
+    let counts = if ended {
+        hosted_runtimes::domain::size::ComputerSize::ALL.map(|size| (size, 0))
+    } else {
+        ctx.computer_prices
+            .billed_counts(subscription.items.data.iter().filter_map(|item| {
+                Some((item.price.as_ref()?.id.as_str(), item.quantity.unwrap_or(1)))
+            }))
+    };
+    for (size, billed) in counts {
+        if let Err(error) = ctx
+            .computer_billing_observer
+            .billed_count(*team_id, size, billed)
+            .await
+        {
+            tracing::error!(error = ?error, size = size.as_ref(), billed, "computer billing reconcile failed");
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

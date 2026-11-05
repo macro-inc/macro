@@ -1,5 +1,6 @@
 //! Adapters for authentication service use cases.
 
+pub mod computer_billing;
 pub mod invite_rewards;
 pub mod microsoft;
 pub mod subscription_checkout;

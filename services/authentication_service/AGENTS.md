@@ -48,6 +48,19 @@ key issuance, and account merge/link flows.
   `env -u DATABASE_URL cargo test -p authentication_service --bin authentication_service config::test`
   and `cargo run -p authentication_service --bin authentication_service_doppler_config`.
 
+## Macro computers billing
+
+- `src/outbound/computer_billing.rs`: `TeamComputerBilling`, the
+  `hosted_runtimes` `Billing` port on the team subscription (one item per
+  `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID`, chosen by the
+  subscription's interval). Prices are `ComputerPrices`
+  (`src/domain/computer_billing.rs`), not seat plans.
+- Every team subscription webhook re-reads the subscription and reports each
+  size's billed count to `ComputerBillingObserver` (`ComputerService`), which
+  cancels computers whose items were removed outside Macro. Its failures are
+  logged, never fail the webhook. With no computer price configured it does
+  nothing; changing a configured price id strands items on the old price.
+
 ## Subscription checkout
 
 - `src/service/subscription_checkout.rs` owns introductory eligibility and
