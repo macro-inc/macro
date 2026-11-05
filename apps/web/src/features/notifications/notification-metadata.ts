@@ -90,7 +90,11 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('github_pr_review', () => 'reviewed')
       .with('inbox_reauth_required', () => 'needs reconnection')
       // The bot is the actor: "<bot> finished <session>".
-      .with('agent_session_settled', () => 'finished')
+      .with('agent_session_settled', () => {
+        const meta = n.notification_metadata;
+        if (meta.tag !== 'agent_session_settled') return 'finished';
+        return agentTurnEnding(meta.content.stopReason);
+      })
       .with('agent_session_waiting_for_input', () => 'needs your answer in')
       .with('agent_session_mentioned', () => 'mentioned you in')
       // The routine is the actor: "<routine> failed".
@@ -332,6 +336,20 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       )
       .exhaustive(() => true)
   );
+}
+
+/**
+ * How an agent's turn ended, read from its ACP stop reason, so a failed or
+ * stopped turn does not read as finished. A reason ACP adds later reads as
+ * finished, as the backend's alert title does.
+ */
+export function agentTurnEnding(stopReason: string): string {
+  return match(stopReason)
+    .with('cancelled', () => 'was stopped')
+    .with('max_tokens', 'max_turn_requests', () => 'hit its limit')
+    .with('refusal', () => 'declined')
+    .with('error', () => 'ran into an error')
+    .otherwise(() => 'finished');
 }
 
 function routineRunFailed(n: UnifiedNotification): boolean {
