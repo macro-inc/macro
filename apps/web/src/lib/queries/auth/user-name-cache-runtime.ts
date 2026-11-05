@@ -23,7 +23,7 @@ async function fetchNames(
 ) {
   signal.throwIfAborted();
   assertQueryAccount(account);
-  const span = Telemetry.span('contacts.names.read', { kind: 'client' });
+  const span = Telemetry.clientSpan('contacts.names.read');
   const headers: Record<string, string> = {};
   span.injectTraceHeaders(headers);
   span.setAttr('contacts.name_count', ids.length);

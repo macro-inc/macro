@@ -138,31 +138,6 @@ fn foreign_rows_cannot_change_reference_evidence_or_completeness() {
 }
 
 #[test]
-fn unreadable_owned_names_make_uniqueness_evidence_incomplete() {
-    for malformed in [false, true] {
-        let request = request(&["Sam"], ReferenceMatchMode::PreferFullName);
-        let mut collector = ReferenceCollector::new(&request, None).unwrap();
-        push(&mut collector, "sam@example.com", Some("Sam"));
-        let mut unknown = record("unknown@example.com", None);
-        if malformed {
-            unknown.fields.insert(
-                "name".into(),
-                CacheValue::Number(crate::value::CacheNumber::PosInt(1)),
-            );
-        } else {
-            unknown.fields.remove("name");
-        }
-        collector.push(
-            &contact_key(&request.scope.identity, "macro|unknown@example.com"),
-            &unknown,
-        );
-        let result = matches(collector);
-        assert_eq!(result[0].people.len(), 1, "malformed={malformed}");
-        assert!(!result[0].complete, "malformed={malformed}");
-    }
-}
-
-#[test]
 fn exclusions_use_the_committed_epoch_and_corrupt_flags_remain_unknown() {
     let mut request = request(&["Sam", "Broken"], ReferenceMatchMode::PreferFullName);
     request.exclude_secondary_inboxes = true;

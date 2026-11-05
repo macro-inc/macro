@@ -191,11 +191,7 @@ export function databaseReadMessage(failure: DatabaseReadFailure): string {
       { kind: 'scope-changed' },
       () => 'The account or access changed. Reopen the table to continue.'
     )
-    .with(
-      { kind: 'read-only' },
-      { kind: 'cancelled' },
-      () => 'Try refreshing the table.'
-    )
+    .with({ kind: 'read-only' }, { kind: 'cancelled' }, () => 'Try refreshing the table.')
     .with(
       { kind: 'table-unavailable' },
       () => 'This table is no longer available.'

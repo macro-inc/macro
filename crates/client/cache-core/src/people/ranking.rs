@@ -124,7 +124,7 @@ impl<'a> PeopleRanker<'a> {
         }
         let name = match record.fields.get("name") {
             Some(CacheValue::String(value)) => value.as_str(),
-            None | Some(CacheValue::Null) => email.split('@').next().unwrap_or(email),
+            Some(CacheValue::Null) => email.split('@').next().unwrap_or(email),
             _ => return,
         };
         let facts = match record.fields.get(CONTEXT_FIELD) {

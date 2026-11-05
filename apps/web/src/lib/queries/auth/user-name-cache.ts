@@ -100,12 +100,7 @@ function boundedName(name: UserName, id: string): UserName | undefined {
   if (name.is_agent !== undefined && typeof name.is_agent !== 'boolean') return;
   if (nameBytes(name, id) > USER_NAME_CACHE_LIMITS.entryBytes) return;
   // Copy scalar fields only; never retain a response envelope or query proxy.
-  return {
-    id,
-    first_name: name.first_name,
-    last_name: name.last_name,
-    is_agent: name.is_agent,
-  };
+  return { id, first_name: name.first_name, last_name: name.last_name, is_agent: name.is_agent };
 }
 /** Admit only scalar labels for this bounded request; one malformed row cannot
  * populate another identity or poison valid rows in the batch. */

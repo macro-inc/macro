@@ -347,7 +347,7 @@ and first-name ambiguity. The bound viewer and generation are checked without
 binding an unowned cache; foreign-viewer keys are ignored before private-name
 matching. Inbox exclusions additionally require ready context. Callers still
 check hydration completeness before assuming uniqueness; cached absence is not
-an authoritative server omission. Coordinator protocol 16 and a dedicated native
+an authoritative server omission. Coordinator protocol 17 and a dedicated native
 command carry the generated contract. Missing reference support is independently
 unsupported, and captured reads become unsupported after host retirement.
 

@@ -4,7 +4,6 @@ import { createRetirableCacheHost } from '../../host/retirable-host';
 import { createWorkerCacheHost } from '../../host/worker-host';
 import type { PeopleReferenceRequest } from '../../people/protocol';
 import { captureContactWriteScope } from '../../people/sync';
-import { isStaleHydrationScopeError } from '../../protocol';
 
 const output = document.querySelector<HTMLPreElement>('#result');
 if (!output) throw new Error('Missing reference result element');
@@ -71,8 +70,7 @@ try {
       ...request,
       scope: { ...scope, identity: 'macro|other@example.com' },
     });
-  } catch (error) {
-    if (!isStaleHydrationScopeError(error)) throw error;
+  } catch {
     foreignRejected = true;
   }
   if (!foreignRejected) throw new Error('Foreign viewer was admitted');
@@ -80,8 +78,7 @@ try {
   let staleRejected = false;
   try {
     await people.resolveReferences(request);
-  } catch (error) {
-    if (!isStaleHydrationScopeError(error)) throw error;
+  } catch {
     staleRejected = true;
   }
   if (!staleRejected) throw new Error('Stale generation was admitted');

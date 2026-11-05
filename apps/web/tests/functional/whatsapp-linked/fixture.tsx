@@ -78,7 +78,6 @@ const noQuickAccess: QuickAccessContextValue = {
   isLoading: () => false,
   refresh: () => {},
   getById: () => undefined,
-  interactionForUser: () => undefined,
 };
 
 function ChatHarness(props: { chatId: string }) {

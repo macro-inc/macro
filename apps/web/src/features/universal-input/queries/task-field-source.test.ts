@@ -140,11 +140,7 @@ it('creates with Companies and Contacts without offering them to extraction', as
           definition(SYSTEM_PROPERTY_IDS.CONTACTS, 'Contacts'),
         ],
       });
-      const source = createTaskFieldSource(
-        'me',
-        () => fieldsSchema.parse({}),
-        () => true
-      );
+      const source = createTaskFieldSource('me');
       expect(await source.definitions()).toEqual([]);
       const definitions = await source.createDefinitions();
       expect(

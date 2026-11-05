@@ -45,10 +45,7 @@ export function OnboardingFlowView(props: {
   // Read once for the completion rollup; only the tools step polls.
   const connectedTools = context.createConnectedTools({ poll: false });
   const record = context.createOnboardingRecord();
-  const teamDirectory = context.createTeamDirectory({
-    domain: () => undefined,
-    ownEmail: () => undefined,
-  });
+  const teamDirectory = context.createTeamDirectory();
 
   const finish = createFlowFinish(context, {
     next: () => props.next,

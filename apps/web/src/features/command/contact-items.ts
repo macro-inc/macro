@@ -106,10 +106,8 @@ export function contactCommandItems(options: {
     options.contacts.map(toCrmContactItem),
     options.users
   ).map(({ contact, user }) => {
-    const email = contact.data.email;
     const searchKey =
-      (email ? emailToMacroId(crmContactEmailKey(email)) : undefined) ??
-      contact.id;
+      emailToMacroId(crmContactEmailKey(contact.data.email)) ?? contact.id;
     if (!user) return { ...contact, searchKey };
     return {
       ...user,
