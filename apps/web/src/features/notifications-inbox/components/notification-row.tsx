@@ -43,7 +43,8 @@ export type NotificationRowProps = {
  * notifications show as a stack with paper edges, and its own button spreads them
  * into small cards below it, leaving this card as it was.
  * With a pointer, Mark done takes the time's
- * place on hover and nothing else moves; touch marks done by swiping the row. A
+ * place on hover and nothing else moves; the time ends the line, so the button
+ * sits in the same spot on every card. Touch marks done by swiping the row. A
  * phone shows larger text, and a read card gives up its fill and fades, so unread
  * ones stand out at a glance.
  */
@@ -108,35 +109,6 @@ export function NotificationRow(props: NotificationRowProps) {
                   theme={unifiedListMarkdownTheme}
                 />
               </span>
-              {/* On hover Mark done takes the time's place, so nothing moves. */}
-              <span class="relative shrink-0">
-                <span
-                  data-card-time=""
-                  class={cn(
-                    'block text-xs not-touch:group-hover/notification:invisible mobile:text-[13px] mobile:leading-[18px]',
-                    props.unseen
-                      ? 'text-ink-extra-muted mobile:text-ink-muted'
-                      : 'text-ink-extra-muted/80'
-                  )}
-                >
-                  {props.time}
-                </span>
-                {/* Touch marks done by swiping the row instead. */}
-                <span class="absolute top-1/2 -right-1.5 hidden -translate-y-1/2 not-touch:group-hover/notification:block">
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={t('notificationsInbox.markDone')}
-                    tooltip={t('notificationsInbox.markDone')}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      props.onDone();
-                    }}
-                  >
-                    <CheckIcon class="size-4" />
-                  </Button>
-                </span>
-              </span>
               <Show when={isStack()}>
                 <Button
                   size="icon-xs"
@@ -173,6 +145,37 @@ export function NotificationRow(props: NotificationRowProps) {
                   class="size-1.5 shrink-0 rounded-full bg-accent mobile:size-2"
                 />
               </Show>
+              {/* The time ends the line, after the caret and unread dot, so Mark done,
+                  which takes its place on hover, sits in the same spot on every
+                  card, stacked or not, read or not, and nothing moves. */}
+              <span class="relative shrink-0">
+                <span
+                  data-card-time=""
+                  class={cn(
+                    'block text-xs not-touch:group-hover/notification:invisible mobile:text-[13px] mobile:leading-[18px]',
+                    props.unseen
+                      ? 'text-ink-extra-muted mobile:text-ink-muted'
+                      : 'text-ink-extra-muted/80'
+                  )}
+                >
+                  {props.time}
+                </span>
+                {/* Touch marks done by swiping the row instead. */}
+                <span class="absolute top-1/2 -right-1.5 hidden -translate-y-1/2 not-touch:group-hover/notification:block">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={t('notificationsInbox.markDone')}
+                    tooltip={t('notificationsInbox.markDone')}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      props.onDone();
+                    }}
+                  >
+                    <CheckIcon class="size-4" />
+                  </Button>
+                </span>
+              </span>
             </div>
             <Show when={props.what}>
               {(what) => (
