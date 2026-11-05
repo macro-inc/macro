@@ -48,6 +48,7 @@ export type PoolDeps = {
 export class Pool {
   private readonly tiers: Record<Tier, Semaphore>;
   private readonly speaking = new Semaphore(1);
+  private lastCompletedAt: string | null = null;
   private readonly running = new Map<
     string,
     { tier: Tier; startedAt: string }
@@ -59,6 +60,11 @@ export class Pool {
       heartbeat: new Semaphore(deps.limits.heartbeat),
       work: new Semaphore(deps.limits.work),
     };
+  }
+
+  /** Latest completed turn across all tiers, for the computer health report. */
+  lastTurnAt(): string | null {
+    return this.lastCompletedAt;
   }
 
   /** Turns running now, for health and prompts. */
@@ -111,6 +117,7 @@ export class Pool {
     });
     const done = handle.done.then(
       async (outcome) => {
+        this.lastCompletedAt = new Date().toISOString();
         release();
         const spent = await this.deps.ledger.record(outcome.costUsd);
         this.deps.log({
@@ -123,6 +130,7 @@ export class Pool {
         return outcome;
       },
       (error) => {
+        this.lastCompletedAt = new Date().toISOString();
         release();
         throw error;
       }

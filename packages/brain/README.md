@@ -91,6 +91,9 @@ applies to enrollment's concrete units: it enforces hardening and runs
 `start-brain`, which clones `MACRO_REPO_URL` to `BRAIN_WORKSPACE` on first
 start. `BRAIN_WORKSPACE` must be `$HOME/workspace`. Git's name is the persona's
 OS username; its email is the email part of `MACRO_AGENT_USER_ID` (`macro|email`).
+`/health` exposes `lastTurnAt`, the most recent completed respond, heartbeat
+or work turn (null until this process completes one). macrod retains that
+observation while a brain is temporarily unavailable.
 The credential helper supplies `MACRO_REPO_TOKEN` from the git process's
 environment only for the exact repo URL. The brain passes these two repo
 variables to git; Claude turns receive neither. Git config stores the helper

@@ -11,6 +11,7 @@ export type Health = {
   startedAt: string;
   connected: boolean;
   lastEventAt: string | null;
+  lastTurnAt: string | null;
   turns: { id: string; tier: string; startedAt: string }[];
   work: {
     conversation: string;

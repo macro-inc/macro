@@ -38,6 +38,8 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
   needs; git alone also receives `MACRO_REPO_URL` and `MACRO_REPO_TOKEN`):
   Deno's `--allow-run=git,claude` refuses loader variables such as
   `LD_LIBRARY_PATH`, and turns must never see `MACRO_API_KEY`.
+- `Pool` records completed-turn time across every tier; `/health.lastTurnAt`
+  feeds the computer's per-persona capability report.
 - Every workspace write that the brain itself makes goes through
   `GitWriter`; never write persona files directly from new code.
 - Schedule wake-ups match an `agent_session.opened` (source `routine`, owner

@@ -143,6 +143,10 @@ Deno.test('a direct message wakes a respond turn that replies, shows typing, and
 
   await brain.run(stop.signal);
 
+  assertEquals(
+    Number.isFinite(Date.parse((await brain.health()).lastTurnAt ?? '')),
+    true
+  );
   assertEquals(turns.length, 1);
   assertEquals(turns[0]?.tier, 'respond');
   assertEquals(turns[0]?.cwd, workspace);

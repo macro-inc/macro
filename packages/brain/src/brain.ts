@@ -550,6 +550,7 @@ export class Brain implements Control {
       startedAt: this.startedAt,
       connected: this.connected,
       lastEventAt: this.lastEventAt,
+      lastTurnAt: this.pool?.lastTurnAt() ?? null,
       turns: this.pool?.active() ?? [],
       work: this.work?.inFlight() ?? [],
       spentTodayUsd: await this.ledger.spentToday(),

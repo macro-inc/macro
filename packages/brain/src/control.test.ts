@@ -6,6 +6,7 @@ const HEALTH = {
   startedAt: '2026-11-04T10:00:00Z',
   connected: true,
   lastEventAt: null,
+  lastTurnAt: null,
   turns: [],
   work: [],
   spentTodayUsd: 0,

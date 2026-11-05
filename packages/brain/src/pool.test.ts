@@ -51,6 +51,7 @@ Deno.test('one speaking turn at a time: a second reply waits, work does not', as
     log: () => {},
   });
 
+  assertEquals(pool.lastTurnAt(), null);
   const first = await pool.start(turn('respond-1', 'respond'));
   const second = pool.start(turn('respond-2', 'respond'));
   await pool.start(turn('work-1', 'work'));
@@ -60,6 +61,7 @@ Deno.test('one speaking turn at a time: a second reply waits, work does not', as
     ['respond-1', 'work-1']
   );
 
+  assertEquals(pool.lastTurnAt(), null);
   runner.finish.get('respond-1')?.({
     status: 'success',
     result: 'replied',
@@ -67,6 +69,7 @@ Deno.test('one speaking turn at a time: a second reply waits, work does not', as
     sessionId: 'session-1',
   });
   await first.done;
+  assertEquals(Number.isFinite(Date.parse(pool.lastTurnAt() ?? '')), true);
   await second;
 
   assertEquals(
@@ -121,4 +124,5 @@ Deno.test('a spent day refuses the turn and frees its slots', async () => {
     BudgetExceeded
   );
   assertEquals(runner.started, []);
+  assertEquals(pool.lastTurnAt(), null);
 });
