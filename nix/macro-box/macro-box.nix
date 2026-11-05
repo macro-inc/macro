@@ -60,6 +60,7 @@
       };
       packages = lib.optionalAttrs (system == "x86_64-linux") {
         macro-brain = import ./_brain.nix { inherit pkgs; };
+        macro-box-claude-code = box.claudeCode;
         macro-box-rootfs = box.rootfs;
         macro-box-incus = box.incus;
         macro-box-docker = box.docker;

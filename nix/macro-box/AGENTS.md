@@ -29,6 +29,7 @@ and a Docker image (the dev-only DockerFleet).
 - `nix build .#macro-box-incus` → `result/{metadata.tar.xz,disk.qcow2}`.
 - `nix build .#macro-box-docker` → `docker load < result` → `macro-box:latest`.
 - `nix build .#macro-box-rootfs` → the two tarballs.
+- `nix build .#macro-box-claude-code` → the pinned model-compatible Claude Code.
 
 ## Contract with macrod and hosted_runtimes
 
@@ -88,6 +89,11 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
 
 ## Checks
 
+- `nix build .#macro-box-claude-code`: keeps nixpkgs' binary patching, wrapper
+  and version check. `_claude-code.nix` pins the minimum version required by
+  the brain's configured model. Regenerate its hash from that version's
+  upstream `https://downloads.claude.ai/claude-code-releases/<version>/manifest.json`
+  (`platforms.linux-x64.checksum`) when upgrading.
 - Inside a running guest as root, run `bash tests/enrollment-agent-detection.sh`
   (copy it from this directory); it discovers Claude using the enrollment unit's
   environment in a fresh system service.

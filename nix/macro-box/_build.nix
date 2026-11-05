@@ -39,6 +39,7 @@ let
   };
 
   brain = import ./_brain.nix { inherit pkgs; };
+  claudeCode = import ./_claude-code.nix { inherit pkgs; };
 
   # Linked into /usr/local/bin; the closure is copied into the guest's
   # /nix/store.
@@ -47,7 +48,7 @@ let
     paths = [
       macrod
       brain
-      pkgs.claude-code
+      claudeCode
       pkgs.chromium
       pkgs.nodejs_22
       pkgs.herdr
@@ -220,5 +221,6 @@ in
     incus
     docker
     tools
+    claudeCode
     ;
 }
