@@ -21,9 +21,20 @@ set -euo pipefail
 # no credentials for that cache and always build, in a plain scratch directory.
 filter_bin=""
 
+# The token goes through a config descriptor so it stays out of curl's arguments.
 filter_cache_request() {
   curl --fail --silent --show-error --max-time 30 --retry 2 \
-    --header "Authorization: Bearer $SCCACHE_WEBDAV_TOKEN" "$@"
+    --config <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$@"
+}
+
+# With no arguments a working filter exits non-zero and prints its usage. A corrupt
+# binary in the cache would otherwise fail path-check for every PR on that key.
+filter_bin_runs() {
+  chmod +x "$filter_bin"
+  case "$("$filter_bin" 2>&1 || true)" in
+    *usage:*) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 ensure_filter_bin() {
@@ -34,13 +45,13 @@ ensure_filter_bin() {
     HEAD:tooling/xtask/crates/xtask_graph \
     HEAD:tooling/xtask/crates/xtask_paths \
     HEAD:Cargo.lock \
+    HEAD:Cargo.toml \
     HEAD:rust-toolchain.toml | sha256sum | cut -c1-16)"
   filter_bin="$RUNNER_TEMP/xtask_nextest_filter-$key"
 
   if [ -n "${SCCACHE_WEBDAV_ENDPOINT:-}" ]; then
     cache_url="$SCCACHE_WEBDAV_ENDPOINT/nextest-filter/$key"
-    if filter_cache_request --output "$filter_bin" "$cache_url"; then
-      chmod +x "$filter_bin"
+    if filter_cache_request --output "$filter_bin" "$cache_url" && filter_bin_runs; then
       echo "Using cached nextest-filter build $key"
       return 0
     fi
