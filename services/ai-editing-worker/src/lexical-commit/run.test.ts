@@ -94,6 +94,20 @@ function edited(
   };
 }
 
+/**
+ * `value` with its revision decoded into sorted version entries: one version
+ * encodes with its entries in varying order.
+ */
+function comparable<Value extends { revision: string }>(value: Value) {
+  const version = VersionVector.decode(
+    Uint8Array.from(atob(value.revision), (c) => c.charCodeAt(0))
+  ).toJSON();
+  return {
+    ...value,
+    revision: [...version].sort(([left], [right]) => left.localeCompare(right)),
+  };
+}
+
 /** A sync service that records what reached it and can deliver remote updates. */
 function syncService(snapshot: Uint8Array) {
   const server = new LoroDoc();
@@ -178,12 +192,10 @@ describe('applyLexicalCommit', () => {
       'Next',
       'const a = 1;',
     ]);
-    expect(outcome).toEqual({
-      kind: 'committed',
-      applied: true,
-      ...currentState(manager),
-    });
     if (outcome.kind !== 'committed') throw new Error(outcome.kind);
+    expect(comparable(outcome)).toEqual(
+      comparable({ kind: 'committed', applied: true, ...currentState(manager) })
+    );
     expect(
       VersionVector.decode(
         Uint8Array.from(atob(outcome.revision), (c) => c.charCodeAt(0))
@@ -336,7 +348,9 @@ describe('applyLexicalCommit', () => {
       commit
     );
 
-    expect(retry).toEqual({ ...first, applied: false });
+    if (first.kind !== 'committed' || retry.kind !== 'committed')
+      throw new Error('expected both to commit');
+    expect(comparable(retry)).toEqual(comparable({ ...first, applied: false }));
     expect(manager.doc.oplogVersion().compare(landed)).toBe(0);
     manager.dispose();
   });
@@ -359,7 +373,10 @@ describe('applyLexicalCommit', () => {
       }
     );
 
-    expect(outcome).toEqual({ kind: 'committed', applied: false, ...read });
+    if (outcome.kind !== 'committed') throw new Error(outcome.kind);
+    expect(comparable(outcome)).toEqual(
+      comparable({ kind: 'committed', applied: false, ...read })
+    );
     expect(manager.doc.oplogVersion().compare(before)).toBe(0);
     manager.dispose();
   });
@@ -578,9 +595,9 @@ describe('readLexicalState and commitLexical', () => {
 
     expect(outcome).toMatchObject({ kind: 'committed', applied: true });
     expect(blockTexts(sync.server)[0]).toBe('Ship in Q4.');
-    expect(await readLexicalState(connect(), DOC)).toEqual({
-      state: (outcome as LexicalState).state,
-      revision: (outcome as LexicalState).revision,
-    });
+    if (outcome.kind !== 'committed') throw new Error(outcome.kind);
+    expect(comparable(await readLexicalState(connect(), DOC))).toEqual(
+      comparable({ state: outcome.state, revision: outcome.revision })
+    );
   });
 });
