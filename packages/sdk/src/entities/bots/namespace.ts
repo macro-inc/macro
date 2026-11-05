@@ -1,6 +1,6 @@
 import type {
-  Bot as BotRecord,
   BotChannel,
+  Bot as BotRecord,
 } from '../../../generated/storage/types.gen';
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';

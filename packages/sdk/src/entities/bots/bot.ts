@@ -117,15 +117,12 @@ export class Bot extends MacroEntity<BotRecord> {
   readonly updatedAt = this.field('updated_at');
 
   /** The owning user or team. */
-  readonly owner = this.mappedField(
-    'owner',
-    (owner): BotOwner | undefined => {
-      if (!owner) return undefined;
-      return owner.type === 'user'
-        ? { type: 'user', user: User.byId(this.client, owner.user_id) }
-        : { type: 'team', team: Team.byId(this.client, owner.team_id) };
-    },
-  );
+  readonly owner = this.mappedField('owner', (owner): BotOwner | undefined => {
+    if (!owner) return undefined;
+    return owner.type === 'user'
+      ? { type: 'user', user: User.byId(this.client, owner.user_id) }
+      : { type: 'team', team: Team.byId(this.client, owner.team_id) };
+  });
 
   /** Change the bot's profile; pass only the fields that should change. */
   async update(changes: UpdateBotOptions): Promise<void> {

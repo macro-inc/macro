@@ -22,11 +22,7 @@ export class BotToken extends MacroEntity<BotTokenRecord> {
   }
 
   /** Seed from a listed or created token. */
-  static from(
-    client: MacroClient,
-    bot: Bot,
-    record: BotTokenRecord,
-  ): BotToken {
+  static from(client: MacroClient, bot: Bot, record: BotTokenRecord): BotToken {
     return new BotToken(client, bot, record.id, record);
   }
 
