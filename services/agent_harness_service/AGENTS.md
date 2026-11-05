@@ -23,7 +23,9 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose
-  linked pull requests finished (`agent_session::domain::auto_archive`).
+  linked pull requests finished (`agent_session::domain::auto_archive`), and
+  ends their work registrations first
+  (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Users with

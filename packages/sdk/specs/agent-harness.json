@@ -2986,6 +2986,161 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/work-registration": {
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Register a session as the caller's work. Requires edit access. Repeating returns the active\nregistration. Registering does not share the session: viewers who cannot open it do not see\nit, so share it too.",
+        "operationId": "register_agent_session_work",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkRegistrationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["agent-sessions"],
+        "summary": "End the caller's own registration of a session. Repeating does nothing. It touches only the\ncaller's own row, so it needs no access to the session: losing access must not strand it.",
+        "operationId": "unregister_agent_session_work",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The caller has no active registration of the session"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-work-registrations": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "List the caller's active registrations of sessions they can still view, newest first.",
+        "operationId": "list_agent_work_registrations",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkRegistrationResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/universal_input/classify": {
       "post": {
         "tags": ["universal_input::inbound::axum_router"],
@@ -6669,6 +6824,32 @@
             "type": "string",
             "format": "uuid",
             "description": "The session id."
+          }
+        }
+      },
+      "WorkRegistrationResponse": {
+        "type": "object",
+        "description": "One account's active registration of one session as its work.",
+        "required": ["id", "accountId", "agentSessionId", "registeredAt"],
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "description": "The account whose work this is."
+          },
+          "agentSessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session registered."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The registration."
+          },
+          "registeredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the account registered it."
           }
         }
       }
