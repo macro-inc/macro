@@ -7,6 +7,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useIsAuthenticated, useUserId } from '@core/context/user';
 import { readBackgroundImage } from '@core/media/read-background-image';
 import { isMobile } from '@core/mobile/isMobile';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { useCallRecordQuery } from '@queries/call/call';
 import {
@@ -24,6 +25,11 @@ import type { MeetingParticipantsState } from './components/meeting-participants
 import type { MeetingPageState } from './context/meeting-session';
 import { useMeetingSessionLifecycle } from './context/meeting-session-lifecycle';
 import { MeetingPage } from './views/meeting-page';
+
+const MeetingChannelHost = lazyNamed(
+  () => import('./views/meeting-channel-host'),
+  'MeetingChannelHost'
+);
 
 export function MeetingRouteContent(props: {
   shareToken: string;
@@ -175,6 +181,9 @@ export function MeetingRouteContent(props: {
                         )
                       }
                       onOutsideCountChange={setOutsideCount}
+                      channelHost={(channel) => (
+                        <MeetingChannelHost>{channel}</MeetingChannelHost>
+                      )}
                     />
                   ),
                 }

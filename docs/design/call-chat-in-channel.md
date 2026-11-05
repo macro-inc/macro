@@ -242,6 +242,8 @@ with user-visible text through `t()`.
   a signed-in call chooses between `ChannelCallPanel` and `CallChat`.
 - Guests have no discussion slot and keep `GuestCallChat`. A new meeting has no channel and keeps
   `CallChat`.
+- The meeting page renders without the app's providers, so it mounts `MeetingChannelHost` around the
+  channel panel, only when such a panel opens.
 - `CallDiscussionHistory` is the one place a call record chooses between `CallChatHistory` and the
   read-only channel thread section.
 

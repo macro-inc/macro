@@ -14,6 +14,7 @@ export default {
   replyingInCallThread: 'Replying in the call thread',
   callThreadEmpty:
     "No messages yet. Anything you send here is saved to this call's thread in {{channel}}.",
+  thisChannel: 'this channel',
   backToCallThread: 'Back to call thread',
   openInChannel: 'Open in channel',
   openPanel: 'Open chat and participants',

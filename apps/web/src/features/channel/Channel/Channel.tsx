@@ -1162,7 +1162,8 @@ export function Channel(props: ChannelProps) {
                                               <p class="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-ink-muted">
                                                 {t('calls.callThreadEmpty', {
                                                   channel:
-                                                    channel()?.name ?? '',
+                                                    channel()?.name ??
+                                                    t('calls.thisChannel'),
                                                 })}
                                               </p>
                                             </Show>

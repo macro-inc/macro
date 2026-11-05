@@ -92,6 +92,13 @@ meter only under its sort, with the direction in its label while importance move
 The fixture has its own sort buttons: the real touch layouts have no sort menu, so
 that coverage proves the meter's layout there, not that touch users can reach it.
 
+A channel call's row and its call panel (the real `Channel` over synthetic service
+responses) have a backend-free desktop and phone regression: the collapsed row, the
+blank slate, composer pinning, quote replies and the outside-message popup:
+`bunx playwright test --config src/features/channel/Call/discussion/browser-test/playwright.config.ts`.
+On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
+Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 

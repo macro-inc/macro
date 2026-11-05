@@ -1,5 +1,12 @@
 import { lazyNamed } from '@core/util/lazyNamed';
-import { type Accessor, lazy, Match, Suspense, Switch } from 'solid-js';
+import {
+  type Accessor,
+  type JSX,
+  lazy,
+  Match,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import type { CallDiscussion } from './call-discussion';
 
 const CallChat = lazy(() => import('../chat/CallChat'));
@@ -23,6 +30,8 @@ export function CallDiscussionContent(props: {
   panel: CallPanelState;
   onViewChannel: (channelId: string) => void;
   onOutsideCountChange?: (count: number) => void;
+  /** The state the channel needs, for a host that doesn't already provide it. */
+  channelHost?: (channel: JSX.Element) => JSX.Element;
 }) {
   const channelThread = () => {
     const discussion = props.discussion();
@@ -37,14 +46,17 @@ export function CallDiscussionContent(props: {
     <Suspense>
       <Switch>
         <Match when={channelThread()} keyed>
-          {(thread) => (
-            <ChannelCallPanel
-              channelId={thread.channel_id}
-              rootId={thread.root_id}
-              onViewChannel={() => props.onViewChannel(thread.channel_id)}
-              onOutsideCountChange={props.onOutsideCountChange}
-            />
-          )}
+          {(thread) => {
+            const panel = (
+              <ChannelCallPanel
+                channelId={thread.channel_id}
+                rootId={thread.root_id}
+                onViewChannel={() => props.onViewChannel(thread.channel_id)}
+                onOutsideCountChange={props.onOutsideCountChange}
+              />
+            );
+            return props.channelHost ? props.channelHost(panel) : panel;
+          }}
         </Match>
         <Match when={callChat()} keyed>
           {(chat) => (
