@@ -23,7 +23,6 @@ FLAGS = json.dumps(["-Dwarnings", "-Cdebuginfo=limited"])
 
 # Files a crate reads from outside its own package at compile or test time.
 MIGRATIONS = "//crates/macro_db_client:migrations"
-SQLX = "//:sqlx_offline_data"
 
 # Run-time reads the literal scan can't see, because the path is built up in code.
 RUNTIME_DATA = {
@@ -59,6 +58,33 @@ def itest_env(base, bins, path, root, directory):
     for b in bin_refs(bins, path):
         env[f"CARGO_BIN_EXE_{b}"] = f"{root}/bazel-bin/{directory}/" + b.replace("-", "_") + "_bin"
     return json.dumps(env, sort_keys=True)
+
+
+def load_sqlx_queries(root):
+    """(file name, SQL) for every offline query. Files are named after their query's hash."""
+    queries = []
+    directory = os.path.join(root, ".sqlx")
+    for name in sorted(os.listdir(directory)):
+        with open(os.path.join(directory, name)) as f:
+            queries.append((name, json.load(f)["query"]))
+    return queries
+
+
+def crate_source_text(package_dir):
+    text = []
+    for base, dirs, files in os.walk(package_dir):
+        dirs[:] = [d for d in dirs if d not in ("target", "node_modules")]
+        for name in files:
+            if name.endswith((".rs", ".sql")):
+                text.append(open(os.path.join(base, name), errors="replace").read())
+    return "\n".join(text)
+
+
+def queries_of(package_dir, queries):
+    """The .sqlx files whose SQL appears in this crate, so a query elsewhere can't rebuild it."""
+    text = crate_source_text(package_dir)
+    unescaped = text.replace('\\"', '"').replace("\\\\", "\\")
+    return [name for name, sql in queries if sql in text or sql in unescaped]
 
 
 def root_target(path):
@@ -179,6 +205,8 @@ def main():
         return deps, macros, aliases
 
     package_dirs = {pkg_dir(pid) for pid in members} | {"tooling/bazel-proto"}
+    queries = load_sqlx_queries(root)
+    matched_queries = set()
     manifests = []
     escape_count = 0
     stats = {"lib": 0, "bin": 0, "test": 0, "build_script": 0}
@@ -215,12 +243,21 @@ def main():
         for path_in_root in ROOT_RUNTIME_DATA.get(pkg["name"], []):
             ROOT_PATHS.add(path_in_root)
             escapes.append("//:" + root_target(path_in_root))
-        extra_labels = list(escapes)
+        crate_queries = queries_of(os.path.join(root, directory), queries) if uses_sqlx else []
+        matched_queries.update(crate_queries)
+        # Offline library builds read only their own queries; migrations are for #[sqlx::test]
+        # and the migrator, so a migration re-runs tests without rebuilding every library.
+        needs_migrations_to_build = pkg["name"] in ("macro_db_migrator", "macro_db_client")
+        library_labels = [
+            label
+            for label in escapes
+            if needs_migrations_to_build or label not in (MIGRATIONS, "//crates/macro_db_client:all_files")
+        ]
+        library_labels += [f"//:.sqlx/{name}" for name in crate_queries]
         if uses_sqlx:
-            extra_labels += [SQLX, "//tooling/bazel-proto:fake_cargo.sh"]
-        extra = " + " + json.dumps(extra_labels) if extra_labels else ""
-        # The real checkout path, as cargo gives: tests read it at run time, and macros at compile
-        # time. It's stable on CI runners, so it doesn't split the cache.
+            library_labels.append("//tooling/bazel-proto:fake_cargo.sh")
+        extra = " + " + json.dumps(library_labels) if library_labels else ""
+        test_only_labels = [label for label in escapes if label not in library_labels]
         rustc_env = {"CARGO_MANIFEST_DIR": f"{root}/{directory}", "CARGO_PKG_NAME": pkg["name"]}
         if uses_sqlx:
             rustc_env.update(
@@ -295,6 +332,7 @@ def main():
                     "rust_test(\n"
                     f'    name = "{crate_ident(lib)}_unit",\n'
                     f'    crate = ":{crate_ident(lib)}",\n'
+                    f"    compile_data = {json.dumps(test_only_labels)},\n"
                     f"    crate_features = {starlark_list(features)},\n"
                     f"    rustc_env = {test_env},\n"
                     f"    rustc_flags = {FLAGS},\n"
@@ -331,6 +369,7 @@ def main():
                         "rust_test(\n"
                         f'    name = "{name}_test",\n'
                         f'    crate = ":{name}",\n'
+                        f"    compile_data = {json.dumps(test_only_labels)},\n"
                         f"    crate_features = {starlark_list(features)},\n"
                         f"    rustc_env = {test_env},\n"
                         f"    rustc_flags = {FLAGS},\n"
@@ -351,6 +390,9 @@ def main():
                     f'    crate_name = "{crate_ident(t)}",\n'
                     f'    crate_root = "{path}",\n'
                     + common.replace(
+                        f'glob(["**"], exclude = ["BUILD.bazel", "target/**"]){extra},',
+                        'glob(["**"], exclude = ["BUILD.bazel", "target/**"]) + ' + json.dumps(test_only_labels + library_labels) + ",",
+                    ).replace(
                         f"    rustc_env = {env},\n",
                         "    rustc_env = " + itest_env(test_rustc, bins, os.path.join(root, directory, path), root, directory) + ",\n",
                     )
@@ -370,7 +412,7 @@ def main():
             f.write(
                 'package(default_visibility = ["//visibility:public"])\n\n'
                 'exports_files(["Cargo.toml", "Cargo.lock", "clippy.toml"])\n\n'
-                'filegroup(name = "sqlx_offline_data", srcs = glob([".sqlx/**"]))\n\n'
+                'exports_files(glob([".sqlx/**"]))\n'
                 + "".join(
                     f'\nfilegroup(name = "{root_target(p)}", srcs = glob(["{p}", "{p}/**"], allow_empty = True))\n'
                     for p in sorted(ROOT_PATHS)
@@ -381,6 +423,7 @@ def main():
     with open(os.path.join(root, "MODULE.bazel"), "w") as f:
         f.write(MODULE.replace("@MANIFESTS@", starlark_list(manifests, "        ")))
     print(stats, "manifests", len(manifests), "crates reading across packages", escape_count)
+    print("offline queries", len(queries), "matched to a crate", len(matched_queries))
 
 
 def write(root, directory, lines):
