@@ -52,17 +52,51 @@ it('preserves local-stack image references for the local attachment resolver', a
   );
 });
 
+// A hosted build must never take the local session-code handoff, even if a
+// local backend origin leaked into its environment.
 it.each([
-  { servers: 'ALL', backend: 'same-origin', expected: true },
-  { servers: 'ALL', backend: undefined, expected: false },
-  { servers: '', backend: 'same-origin', expected: false },
+  {
+    mode: 'development',
+    servers: 'ALL',
+    backend: 'same-origin',
+    page: 'https://localhost:28009/app/login',
+    expected: true,
+  },
+  {
+    mode: 'development',
+    servers: 'ALL',
+    backend: undefined,
+    page: 'https://localhost:28009/app/login',
+    expected: false,
+  },
+  {
+    mode: 'development',
+    servers: '',
+    backend: 'same-origin',
+    page: 'https://localhost:28009/app/login',
+    expected: false,
+  },
+  {
+    mode: 'production',
+    servers: undefined,
+    backend: undefined,
+    page: 'https://macro.com/app/login',
+    expected: false,
+  },
+  {
+    mode: 'production',
+    servers: 'ALL',
+    backend: 'same-origin',
+    page: 'https://macro.com/app/login',
+    expected: false,
+  },
 ])(
-  'reports a local stack proxy for servers=$servers backend=$backend',
-  async ({ servers, backend, expected }) => {
-    vi.stubEnv('MODE', 'development');
+  'reports a local stack proxy for mode=$mode servers=$servers backend=$backend',
+  async ({ mode, servers, backend, page, expected }) => {
+    vi.stubEnv('MODE', mode);
     vi.stubEnv('VITE_LOCAL_SERVERS', servers);
     vi.stubEnv('VITE_LOCAL_BACKEND_ORIGIN', backend);
-    vi.stubGlobal('location', new URL('https://localhost:28009/app/login'));
+    vi.stubGlobal('location', new URL(page));
     vi.resetModules();
     const { usesLocalStackProxy } = await import('./servers');
     expect(usesLocalStackProxy()).toBe(expected);
