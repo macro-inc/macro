@@ -262,7 +262,9 @@ is separate from notification lifecycle state.
 
 Agent sessions notify through the same inbox. `<bot> finished <session>` goes to the
 owner and everyone who has prompted or answered in that session when a turn ends with
-nothing queued; `<bot> needs your answer in <session>` goes to the same people when the
+nothing queued (`was stopped`, `hit its limit`, `declined` or `ran into an error` in place
+of `finished` when the turn did not end normally; the phone alert reads
+`<bot> <how it ended> · <session>` over the agent's last words); `<bot> needs your answer in <session>` goes to the same people when the
 agent stops to ask (anyone with edit access may answer); `<user> mentioned you in <session>`
 goes to users @-mentioned in a prompt - when the author can edit the session, the mention
 grants them edit access first, so the link leads somewhere they can act. All three are
@@ -271,7 +273,8 @@ name, the bot or mentioner as sender, the excerpt or question as the body) and c
 opens the session. They are
 not retracted automatically yet: answering the question or starting the next turn leaves
 the earlier notification until you mark it done. The chip announcement post itself no
-longer notifies the thread. Settings → notifications lists them under `AI`.
+longer notifies the thread. A chat agent's thread reply notifies the thread as a reply;
+its alert text reads the session's name, the steps the agent took, then its answer. Settings → notifications lists them under `AI`.
 
 ## Home — `/app/component/home`
 
