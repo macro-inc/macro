@@ -13,7 +13,9 @@ use std::time::Duration;
 
 use agent_harness::domain::error::Result as HarnessResult;
 use agent_harness::domain::model::{CommandOutcome, HarnessCommand};
-use agent_harness::domain::ports::{CommandForwarder, CommandTarget, HarnessPresence};
+use agent_harness::domain::ports::{
+    CommandForwarder, CommandTarget, HarnessPresence, RuntimeConnectionId,
+};
 use agent_session::domain::model::AgentSessionId;
 use anyhow::Context;
 use chrono::{DateTime, Utc};
@@ -31,11 +33,16 @@ use hosted_runtimes::outbound::pg::PgComputerRepo;
 use incus_client::{ImageReference, ImageSource, IncusEndpoint};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 
 use crate::config::{Config, Environment};
+
+mod presence;
+
+use presence::PresenceGuard;
 
 const EFFECT_TICK: Duration = Duration::from_secs(2);
 const TIMER_TICK: Duration = Duration::from_secs(5);
@@ -536,6 +543,7 @@ async fn flush<Inner: CommandForwarder>(
 /// parked for the harness once it is connected.
 pub struct ComputerPresence<Inner, Forwarder> {
     inner: Arc<Inner>,
+    presence_pool: PgPool,
     operator: Option<Arc<Operator>>,
     forwarder: Arc<Forwarder>,
     parked: Arc<ParkedCommands>,
@@ -547,9 +555,14 @@ impl<Inner, Forwarder> ComputerPresence<Inner, Forwarder> {
         operator: Option<Arc<Operator>>,
         forwarder: Arc<Forwarder>,
         parked: Arc<ParkedCommands>,
+        pool: PgPool,
     ) -> Self {
+        let presence_pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect_lazy_with(pool.connect_options().as_ref().clone());
         Self {
             inner,
+            presence_pool,
             operator,
             forwarder,
             parked,
@@ -562,9 +575,28 @@ where
     Inner: HarnessPresence,
     Forwarder: CommandForwarder,
 {
-    fn connected(self: Arc<Self>, harness: HarnessId) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    fn connected(
+        self: Arc<Self>,
+        harness: HarnessId,
+        connection: RuntimeConnectionId,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         Box::pin(async move {
-            Arc::clone(&self.inner).connected(harness).await;
+            let mut guard = match PresenceGuard::lock(&self.presence_pool, harness).await {
+                Ok(guard) => guard,
+                Err(error) => {
+                    tracing::error!(%harness, error = ?error, "failed to serialize computer connect");
+                    return;
+                }
+            };
+            Arc::clone(&self.inner).connected(harness, connection).await;
+            match guard.is_connected().await {
+                Ok(true) => {}
+                Ok(false) => return,
+                Err(error) => {
+                    tracing::error!(%harness, error = ?error, "failed to observe computer connection");
+                    return;
+                }
+            }
             if let Some(operator) = &self.operator {
                 operator
                     .macrod_connected(harness.as_uuid())
@@ -579,9 +611,27 @@ where
     fn disconnected(
         self: Arc<Self>,
         harness: HarnessId,
+        connection: RuntimeConnectionId,
     ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         Box::pin(async move {
-            Arc::clone(&self.inner).disconnected(harness).await;
+            let mut guard = match PresenceGuard::lock(&self.presence_pool, harness).await {
+                Ok(guard) => guard,
+                Err(error) => {
+                    tracing::error!(%harness, error = ?error, "failed to serialize computer disconnect");
+                    return;
+                }
+            };
+            Arc::clone(&self.inner)
+                .disconnected(harness, connection)
+                .await;
+            match guard.is_connected().await {
+                Ok(true) => return,
+                Ok(false) => {}
+                Err(error) => {
+                    tracing::error!(%harness, error = ?error, "failed to observe computer disconnection");
+                    return;
+                }
+            }
             if let Some(operator) = &self.operator {
                 operator
                     .macrod_disconnected(harness.as_uuid())
@@ -590,5 +640,11 @@ where
                     .ok();
             }
         })
+    }
+    fn renew(
+        self: Arc<Self>,
+        live: Vec<(HarnessId, RuntimeConnectionId)>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        Arc::clone(&self.inner).renew(live)
     }
 }

@@ -874,6 +874,14 @@ export const enableUnifiedNotifications = defineFlag({
 // Agents home: pending updates from coding agents shown as a stack under the
 // new-chat composer, and the Open PRs section in the Agents sidebar.
 // Override with VITE_ENABLE_AGENT_UPDATES.
+// Work: what an account registered as its work, in DMs with agent accounts and
+// in calls.
+export const enableAgentWork = defineFlag({
+  key: 'enable-agent-work',
+  env: 'ENABLE_AGENT_WORK',
+  default: onInDev,
+});
+
 export const enableAgentUpdates = defineFlag({
   key: 'enable-agent-updates',
   env: 'ENABLE_AGENT_UPDATES',

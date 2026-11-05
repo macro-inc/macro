@@ -1,3 +1,8 @@
+import {
+  CallWorkPrompt,
+  CallWorkTab,
+  createCallWork,
+} from '@app/features/agent-work/views/call-work';
 import { t } from '@app/lib/i18n';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { Resize } from '@core/component/Resize';
@@ -10,6 +15,8 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import CornersInIcon from '@icon/system/regular/corners-in.svg';
+import CornersOutIcon from '@icon/system/regular/corners-out.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { Button, cn } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
@@ -324,7 +331,6 @@ export function CallOverlay(props: {
   const [sidebarMount, setSidebarMount] = createSignal<HTMLDivElement>();
   const [overlayMount, setOverlayMount] = createSignal<HTMLDivElement>();
   const widePanel = () => !isMobile() && (resizeContext()?.size() ?? 0) >= 800;
-  const activeTab = () => (canChat() ? selectedTab() : 'participants');
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [sharingOpen, setSharingOpen] = createSignal(false);
   const [keyboardFocus, setKeyboardFocus] = createSignal(false);
@@ -360,6 +366,7 @@ export function CallOverlay(props: {
   const PanelToggle = () => (
     <Button
       ref={panelButton}
+      class="relative"
       variant="secondary"
       size={isMobile() ? 'icon-xl' : 'icon-lg'}
       aria-label={panelOpen() ? t('calls.closePanel') : t('calls.openPanel')}
@@ -377,11 +384,47 @@ export function CallOverlay(props: {
       >
         <ChatIcon class="size-4 mobile:size-6" />
       </Show>
+      <Show when={callWork.showButtonDot()}>
+        <span
+          aria-hidden="true"
+          class="absolute top-1 right-1 size-1.5 rounded-full bg-accent"
+        />
+      </Show>
     </Button>
   );
 
   const participants = () =>
     Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
+
+  const callWork = createCallWork({
+    accountIds: () =>
+      participants().map((participant) => tryMacroId(participant.identity)),
+    selectedTab,
+    panelOpen,
+    canChat,
+  });
+  const work = callWork.work;
+  const hasWork = callWork.hasWork;
+  const activeTab = callWork.activeTab;
+  const workArrivals = callWork.arrivals;
+  const workTab = () => {
+    if (!hasWork()) return undefined;
+
+    return (
+      <CallWorkTab
+        accounts={work.accountsWithWork()}
+        itemsFor={(id) => work.byAccount().get(id) ?? []}
+        isSpeaking={isAccountSpeaking}
+      />
+    );
+  };
+  const openWork = () => {
+    workArrivals.dismiss();
+    setFocusChatOnOpen(false);
+    setSelectedTab('work');
+    setPanelMounted(true);
+    setPanelOpen(true);
+  };
 
   const [selectedParticipant, setSelectedParticipant] = createSignal<
     RemoteParticipant | 'local'
@@ -437,8 +480,22 @@ export function CallOverlay(props: {
     });
   };
 
+  const isAccountSpeaking = (accountId: string) => {
+    const participant = participants().find(
+      (candidate) => tryMacroId(candidate.identity) === accountId
+    );
+    return participant ? callCtx.isParticipantSpeaking(participant) : false;
+  };
+
   const hasAnyScreenShare = () =>
     callCtx.isScreenSharing() || remoteScreenShares().length > 0;
+
+  const [screenShareMaximized, setScreenShareMaximized] = createSignal(false);
+  const showScreenShare = () => hasAnyScreenShare() && !focusedParticipant();
+  const maximizeLabel = () =>
+    screenShareMaximized()
+      ? t('calls.restoreScreenShare')
+      : t('calls.maximizeScreenShare');
 
   const gridCols = () => {
     if (focusedParticipant() && focusedParticipant() !== 'local')
@@ -508,7 +565,22 @@ export function CallOverlay(props: {
                   class="flex-1 min-h-0 pt-2"
                   classList={{ hidden: !!focusedParticipant() }}
                 >
-                  <div class="h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
+                  <div class="relative h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
+                    <Button
+                      class="absolute right-2 top-2 z-10"
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={maximizeLabel()}
+                      tooltip={{ content: maximizeLabel(), placement: 'left' }}
+                      onClick={() => setScreenShareMaximized((value) => !value)}
+                    >
+                      <Show
+                        when={screenShareMaximized()}
+                        fallback={<CornersOutIcon class="size-4" />}
+                      >
+                        <CornersInIcon class="size-4" />
+                      </Show>
+                    </Button>
                     <Show when={callCtx.isScreenSharing()}>
                       <div class="relative size-full">
                         <TrackView track={localScreenTrack()} fit="contain" />
@@ -525,9 +597,10 @@ export function CallOverlay(props: {
                 </div>
               </Show>
 
-              {/* Participants area */}
+              {/* Participants area; stays mounted while the screen share is maximized. */}
               <div
-                class={`${hasAnyScreenShare() && !focusedParticipant() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative pt-2 mobile:pt-0`}
+                hidden={showScreenShare() && screenShareMaximized()}
+                class={`${showScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative pt-2 mobile:pt-0`}
               >
                 <Show
                   when={participants().length > 0}
@@ -578,6 +651,14 @@ export function CallOverlay(props: {
                       )}
                     </For>
                   </div>
+
+                  <Show when={callWork.showPrompt()}>
+                    <CallWorkPrompt
+                      accounts={work.accountsWithWork()}
+                      onView={openWork}
+                      onDismiss={workArrivals.dismiss}
+                    />
+                  </Show>
 
                   {/* Local participant PIP (Google Meet style: small, bottom-right) */}
                   <div
@@ -671,6 +752,8 @@ export function CallOverlay(props: {
             chatAvailable={canChat()}
             participantCount={participants().length + 1}
             participants={<CallParticipantsList localName={props.localName} />}
+            work={workTab()}
+            workDot={callWork.showTabDot()}
             sidebarMount={widePanel() ? sidebarMount() : undefined}
             overlayMount={overlayMount()}
             returnFocus={panelButton}

@@ -5,7 +5,7 @@ import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn, Tabs } from '@ui';
 import { createEffect, createSignal, type JSX, on, onCleanup } from 'solid-js';
 
-export type CallPanelTab = 'chat' | 'participants';
+export type CallPanelTab = 'chat' | 'participants' | 'work';
 
 /** Share one mounted panel between the desktop sidebar and phone drawer. */
 export function CallChatPanel(props: {
@@ -17,6 +17,10 @@ export function CallChatPanel(props: {
   chatAvailable: boolean;
   participantCount: number;
   participants: JSX.Element;
+  /** Present while someone in the call has work the viewer can see. */
+  work?: JSX.Element;
+  /** Marks the Work tab while the viewer is elsewhere. */
+  workDot?: boolean;
   children: JSX.Element;
   sidebarMount?: HTMLElement;
   overlayMount?: HTMLElement;
@@ -119,6 +123,15 @@ export function CallChatPanel(props: {
                 label: t('calls.participants'),
                 count: props.participantCount.toLocaleString(formatLocale()),
               },
+              ...(props.work
+                ? [
+                    {
+                      value: 'work' as const,
+                      label: t('agentWork.title'),
+                      dot: props.workDot,
+                    },
+                  ]
+                : []),
             ]}
           />
           <Button
@@ -152,6 +165,17 @@ export function CallChatPanel(props: {
           )}
         >
           {props.participants}
+        </section>
+        <section
+          aria-label={t('agentWork.title')}
+          hidden={props.activeTab !== 'work'}
+          inert={props.activeTab !== 'work'}
+          class={cn(
+            'flex min-h-0 flex-1 flex-col',
+            props.activeTab !== 'work' && 'hidden'
+          )}
+        >
+          {props.work}
         </section>
       </div>
     </MobileDrawer>

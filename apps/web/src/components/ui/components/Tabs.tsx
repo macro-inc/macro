@@ -19,6 +19,8 @@ export type TabOption<T extends string> = {
   icon?: Component<{ class?: string }>;
   /** Shown after the label in muted figures; strings retain caller formatting. */
   count?: number | string;
+  /** A small attention dot after the label. */
+  dot?: boolean;
   disabled?: boolean;
 };
 
@@ -214,6 +216,12 @@ function OptionContent<T extends string>(props: {
         <span class="text-ink-extra-muted tabular-nums">
           {props.option.count}
         </span>
+      </Show>
+      <Show when={props.option.dot && !props.iconOnly}>
+        <span
+          aria-hidden="true"
+          class="size-1.5 shrink-0 rounded-full bg-accent"
+        />
       </Show>
     </>
   );

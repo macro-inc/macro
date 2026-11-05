@@ -1788,3 +1788,21 @@ For tab performance QA, switch Attachments → Calls → Participants → Messag
 in both the routed channel and a block split. Each actual selection should
 produce one `channel.tab` interaction with its `channel.*.view` child; repeat
 the current selection and confirm it does not create a new interaction.
+
+## Work in a DM with an agent account
+
+Behind `enable-agent-work`, a 1:1 DM shows the other account's registered work
+when that account is an agent (`isAgentAccount`) and has work you can open. The
+rule lives in `features/agent-work/core/work-visibility.ts`. DMs with people,
+group DMs, and channels show nothing.
+
+The side panel toggle appears in the top bar only while there's work, using the
+floating `SidePanel` the agent session uses. When the agent goes from no work to
+some, a "<name> started working" label appears beside the toggle for six
+seconds without opening the panel; clicking it opens the panel. Clicking a row
+opens the session in a new split. Rows keep their order as state changes.
+
+To exercise it, register a session as the agent account through the SDK
+(`session.registerAsWork()`), share it with the viewer, and watch the DM update
+live. `session.unregisterAsWork()` removes it. A registered session the viewer
+can't open stays hidden.
