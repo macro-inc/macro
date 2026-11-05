@@ -2194,6 +2194,7 @@ async fn copy_document_best_effort_bumps_inherited_project_and_publishes_event()
 struct RecordingUploadUrlPort {
     copies: Arc<Mutex<Vec<(String, String)>>>,
     deletions: Arc<Mutex<Vec<String>>>,
+    uploads: Arc<Mutex<Vec<(String, String)>>>,
     fail_delete: bool,
 }
 
@@ -2207,10 +2208,14 @@ impl PresignedUploadUrlPort for RecordingUploadUrlPort {
     }
     async fn put_document_storage_presigned_url(
         &self,
-        _key: &str,
-        _sha: &str,
+        key: &str,
+        sha: &str,
         _content_type: ContentType,
     ) -> anyhow::Result<String> {
+        self.uploads
+            .lock()
+            .unwrap()
+            .push((key.to_string(), sha.to_string()));
         Ok(String::new())
     }
 
@@ -3002,6 +3007,100 @@ async fn create_document_reuse_skips_content_url_and_created_event() {
         DocumentContent::ready(DocumentContentLocation::ObjectStorage),
     );
     assert!(event_broker.published().lock().unwrap().is_empty());
+}
+
+/// Imports an attachment that reuses `metadata`, whose content is `content`,
+/// and returns the response with the uploads it signed.
+async fn reimport_email_document(
+    metadata: DocumentMetadata,
+    content: DocumentContent,
+    file_type: FileType,
+) -> (CreateDocumentResponseData, Vec<(String, String)>) {
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_import_email_attachment_document()
+        .returning(move |_, _| {
+            Box::pin(std::future::ready(Ok(EmailImportRepoOutcome::Reused(
+                metadata.clone(),
+            ))))
+        });
+    repo.expect_set_document_content().times(0);
+    repo.expect_get_persisted_document_content()
+        .return_once(|_| Box::pin(std::future::ready(Ok(Some(content)))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    let uploads = RecordingUploadUrlPort::default();
+    let service = DocumentServiceImpl::new(
+        repo,
+        test_cloudfront_config(),
+        sync_service_client::SyncServiceClient::new(
+            "test-sync-key".to_string(),
+            "http://sync-service.test".to_string(),
+        ),
+        uploads.clone(),
+        TestTaskPropertiesPort,
+        TestConnectionService::default(),
+        TestEntityAccessManagementService::default(),
+        TestForeignEntityService::default(),
+        TestEventBroker::default(),
+    );
+    let args = ImportEmailAttachmentRepoArgs {
+        email_attachment_id: uuid::Uuid::from_u128(9),
+        owner: test_user(),
+        document: new_document(file_type),
+    };
+    let response = crate::domain::ports::DocumentService::import_email_attachment(&service, args)
+        .await
+        .unwrap();
+    let signed = uploads.uploads.lock().unwrap().clone();
+    (response, signed)
+}
+
+fn pending_email_document(file_type: &str, sha: &str) -> (DocumentMetadata, DocumentContent) {
+    let mut metadata = make_test_metadata();
+    metadata.file_type = Some(file_type.to_string());
+    metadata.sha = Some(sha.to_string());
+    (
+        metadata,
+        DocumentContent::pending_at(DocumentContentLocation::ObjectStorage),
+    )
+}
+
+#[tokio::test]
+async fn reusing_a_pending_email_document_signs_its_upload_again() {
+    let (metadata, content) = pending_email_document("pdf", "sha");
+    let key = build_cloud_storage_bucket_document_key(&metadata.owner, "doc-1", 1);
+    // The attachment's own declared type must not change the signed content type.
+    let (response, signed) = reimport_email_document(metadata, content, FileType::Txt).await;
+
+    assert!(response.document_response.presigned_url.is_some());
+    assert_eq!(response.content_type, "application/pdf");
+    assert_eq!(response.file_type.as_deref(), Some("pdf"));
+    assert_eq!(signed, [(key, "sha".to_string())]);
+}
+
+#[tokio::test]
+async fn different_bytes_cannot_replace_a_pending_email_document() {
+    let (metadata, content) = pending_email_document("pdf", "other-sha");
+    let (response, signed) = reimport_email_document(metadata, content, FileType::Pdf).await;
+
+    assert!(response.document_response.presigned_url.is_none());
+    assert!(signed.is_empty());
+}
+
+#[tokio::test]
+async fn reusing_a_converting_docx_does_not_sign_an_upload() {
+    let (metadata, _) = pending_email_document("docx", "sha");
+    let (response, signed) = reimport_email_document(
+        metadata,
+        DocumentContent::pending_at(DocumentContentLocation::ConvertedPdf),
+        FileType::Docx,
+    )
+    .await;
+
+    assert!(response.document_response.presigned_url.is_none());
+    assert!(signed.is_empty());
 }
 
 #[tokio::test]
