@@ -1,6 +1,7 @@
 import { ViewShell } from '@app/components/view-shell';
 import { ChangesSplit, ChangesToggle } from '@app/features/changes/changes';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
+import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
@@ -219,29 +220,40 @@ export function PrDetailActions(props: {
   return (
     <div class="ml-auto flex shrink-0 items-center gap-2">
       <Show when={props.detail}>
-        <HeaderActionGroup label="Sharing">
-          <Tooltip label="Share pull request">
-            <HeaderActionButton
-              grouped
-              label="Share"
-              icon={
-                <IconShared class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-              }
-              onClick={openShare}
+        {(detail) => (
+          <>
+            <AskMacroButton
+              entity={{
+                type: 'pr',
+                id: detail().id,
+                url: detail().pullRequest.url ?? prHtmlUrl(detail().prRef),
+              }}
             />
-          </Tooltip>
-          <CopyButton
-            as={ButtonGroup.Button}
-            variant="ghost"
-            aria-label="Copy Share Link"
-            tooltip="Copy Share Link"
-            size="icon-sm"
-            onClick={copyLink}
-          >
-            <IconLink class="size-3.5" />
-          </CopyButton>
-        </HeaderActionGroup>
-        <PullRequestActionsButton actions={props.actions} />
+            <HeaderActionGroup label="Sharing">
+              <Tooltip label="Share pull request">
+                <HeaderActionButton
+                  grouped
+                  label="Share"
+                  icon={
+                    <IconShared class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                  }
+                  onClick={openShare}
+                />
+              </Tooltip>
+              <CopyButton
+                as={ButtonGroup.Button}
+                variant="ghost"
+                aria-label="Copy Share Link"
+                tooltip="Copy Share Link"
+                size="icon-sm"
+                onClick={copyLink}
+              >
+                <IconLink class="size-3.5" />
+              </CopyButton>
+            </HeaderActionGroup>
+            <PullRequestActionsButton actions={props.actions} />
+          </>
+        )}
       </Show>
       <ChangesToggle />
       <SidePanel.Toggle />
