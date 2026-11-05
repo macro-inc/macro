@@ -6295,7 +6295,7 @@ export interface BotSummary {
    */
   avatarUrl?: string | null;
   /**
-   * Whether mentioning this bot opens a sandboxed coding-agent session.
+   * Whether this bot runs as an AI agent: mentions and DMs start an agent session.
    */
   hasAgent: boolean;
 }
@@ -6324,7 +6324,7 @@ export interface ConfigureBot {
    */
   avatarUrl?: string | null;
   /**
-   * Set true if mentioning this bot should open a sandboxed coding-agent session. Omit to leave unchanged.
+   * Set true to make this bot an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.
    */
   hasAgent?: boolean | null;
 }
@@ -7316,7 +7316,7 @@ export interface CreateBot {
    */
   credentialExpiresAt?: string | null;
   /**
-   * Set true if mentioning this bot should open a sandboxed coding-agent session. Defaults to false.
+   * Set true to make this bot an AI agent: mentions and DMs start an agent session. Defaults to false.
    */
   hasAgent?: boolean | null;
 }
