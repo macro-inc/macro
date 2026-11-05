@@ -2,6 +2,7 @@ import {
   useCalendarPromptAllowed,
   useCalendarUiFlag,
 } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { t } from '@app/lib/i18n';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
@@ -57,6 +58,7 @@ export function CalendarPermissionPrompt() {
       calendarUiEnabled() && linksQuery.isSuccess && userId() !== undefined,
     toast: (link, dismiss) => ({
       title: 'Enable calendar',
+      dismissLabel: t('common.notNow'),
       content(): string {
         return `Macro can now sync your calendar. Grant calendar access for ${link.email_address} to turn it on.`;
       },

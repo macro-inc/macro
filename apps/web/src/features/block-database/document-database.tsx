@@ -102,7 +102,11 @@ export function DocumentDatabase(props: {
         })
       ),
     offer: (label, revert) =>
-      toast.success(label, { actions: [{ label: 'Undo', onClick: revert }] }),
+      toast.success(label, {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
+        actions: [{ label: 'Undo', onClick: revert }],
+      }),
   });
 
   return (

@@ -259,6 +259,8 @@ export function NotificationsView(props: NotificationsViewProps) {
     pushUndo: (entry) => pushUndo(entry),
     announceDone: (count, undo) => {
       const id = toast.success(t('notificationsInbox.markedDone', { count }), {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
         actions: [
           {
             label: t('notificationsInbox.undo'),

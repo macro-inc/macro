@@ -234,7 +234,11 @@ const Block: Component = () => {
       onCleanup(stop);
     },
     offer: (label, undo) =>
-      toast.success(label, { actions: [{ label: 'Undo', onClick: undo }] }),
+      toast.success(label, {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
+        actions: [{ label: 'Undo', onClick: undo }],
+      }),
   });
   // Without input focus, so a cell editor keeps Ctrl+Z for its own text.
   registerHotkey({

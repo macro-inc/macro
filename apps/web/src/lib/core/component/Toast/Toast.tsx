@@ -48,6 +48,7 @@ interface ToastAction {
 }
 
 type ToastActionLayout = 'stacked' | 'inline';
+type ToastDismissStyle = 'button' | 'icon';
 
 /**
  * Common options for all toast calls.
@@ -60,6 +61,8 @@ interface ToastOptions {
   hideOnMobile?: boolean;
   /** Hide the visible dismissal control; Escape, swipe, and expiry stay unchanged. */
   showCloseButton?: boolean;
+  /** Replace an action toast's Dismiss button with a desktop close icon. */
+  dismissStyle?: ToastDismissStyle;
   /** Place actions beside the title; defaults to a stacked action row. */
   actionLayout?: ToastActionLayout;
 }
@@ -83,6 +86,8 @@ export interface CustomToastConfig {
   color?: string;
   actions?: ToastAction[];
   actionLayout?: ToastActionLayout;
+  /** Label for the secondary dismissal action; defaults to Dismiss. */
+  dismissLabel?: string;
 }
 
 interface ToastMessage {
@@ -213,6 +218,7 @@ function alert(
 function ActionButtons(props: {
   actions: ToastAction[];
   showDismiss: boolean;
+  dismissLabel: string;
   onDismiss?: () => void;
 }) {
   return (
@@ -222,10 +228,10 @@ function ActionButtons(props: {
           as={Button}
           size="sm"
           variant="secondary"
-          aria-label={t('common.dismiss')}
+          aria-label={props.dismissLabel}
           onClick={() => props.onDismiss?.()}
         >
-          {t('common.dismiss')}
+          {props.dismissLabel}
         </Toast.CloseButton>
       </Show>
       <For each={props.actions}>
@@ -264,6 +270,7 @@ export function ToastContent(props: {
   embed?: Component;
   custom?: CustomToastConfig;
   showCloseButton?: boolean;
+  dismissStyle?: ToastDismissStyle;
   onDismiss?: () => void;
   onUserDismiss?: () => void;
 }) {
@@ -279,8 +286,14 @@ export function ToastContent(props: {
     (props.custom?.actionLayout ?? props.actionLayout) === 'inline';
   const singleRow = () =>
     !props.embed && !hasBody() && (!hasActions() || inlineActions());
+  const dismissLabel = () => props.custom?.dismissLabel ?? t('common.dismiss');
   const showDismiss = () => props.showCloseButton !== false;
-  const showCloseButton = () => showDismiss() && !hasActions() && !isMobile();
+  const showDismissAction = () =>
+    showDismiss() && props.dismissStyle !== 'icon';
+  const showCloseButton = () =>
+    showDismiss() &&
+    (!hasActions() || props.dismissStyle === 'icon') &&
+    !isMobile();
   const [height, setHeight] = createSignal<number>();
   let surface!: HTMLDivElement;
 
@@ -356,7 +369,8 @@ export function ToastContent(props: {
                       <div class="flex max-w-full shrink-0 flex-wrap items-center gap-2">
                         <ActionButtons
                           actions={actions()}
-                          showDismiss={showDismiss()}
+                          showDismiss={showDismissAction()}
+                          dismissLabel={dismissLabel()}
                           onDismiss={props.onUserDismiss}
                         />
                       </div>
@@ -373,7 +387,8 @@ export function ToastContent(props: {
                     <div class="mt-3 flex flex-wrap items-center gap-2">
                       <ActionButtons
                         actions={actions()}
-                        showDismiss={showDismiss()}
+                        showDismiss={showDismissAction()}
+                        dismissLabel={dismissLabel()}
                         onDismiss={props.onUserDismiss}
                       />
                     </div>
@@ -389,7 +404,8 @@ export function ToastContent(props: {
                   <div class="mt-3 flex flex-wrap items-center gap-2">
                     <ActionButtons
                       actions={actions()}
-                      showDismiss={showDismiss()}
+                      showDismiss={showDismissAction()}
+                      dismissLabel={dismissLabel()}
                       onDismiss={props.onUserDismiss}
                     />
                   </div>
@@ -507,6 +523,7 @@ function createToast(
     stack,
     hideOnMobile,
     showCloseButton,
+    dismissStyle,
   } = options ?? {};
 
   if (isMobile() && hideOnMobile) return undefined;
@@ -534,6 +551,7 @@ function createToast(
         actionLayout={actionLayout}
         duration={duration}
         showCloseButton={showCloseButton}
+        dismissStyle={dismissStyle}
         onDismiss={() => {
           clearTrackedToast(region, props.toastId);
         }}
@@ -611,6 +629,7 @@ function custom(
     onDismiss?: () => void;
     onUserDismiss?: () => void;
     showCloseButton?: boolean;
+    dismissStyle?: ToastDismissStyle;
   }
 ): number {
   const useMobile = isMobile();
@@ -626,6 +645,7 @@ function custom(
         duration={options?.duration}
         onUserDismiss={options?.onUserDismiss}
         showCloseButton={options?.showCloseButton}
+        dismissStyle={options?.dismissStyle}
         onDismiss={() => {
           clearTrackedToast(region, props.toastId);
           options?.onDismiss?.();

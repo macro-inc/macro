@@ -1,4 +1,5 @@
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { useUserId } from '@core/context/user';
@@ -42,6 +43,7 @@ export function WhatsAppHistoryImportPrompt() {
     itemsLoaded: () => chats.isSuccess && userId() !== undefined,
     toast: (group) => ({
       title: 'Import WhatsApp history',
+      dismissLabel: t('common.notNow'),
       content(): string {
         return historyPromptText(group);
       },

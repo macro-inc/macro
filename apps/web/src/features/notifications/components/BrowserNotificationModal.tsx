@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { useTutorialCompleted } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
@@ -48,6 +49,7 @@ function NotificationToastTrigger(props: {
     const toastId = toast.custom(
       {
         title: promptTitle(),
+        dismissLabel: t('common.notNow'),
         icon: Bell,
         color: 'var(--color-accent)',
         content: () => (

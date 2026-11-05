@@ -112,6 +112,8 @@ function Fixture() {
 
     if (current.type === 'editing' && current.intent.type === 'immediate') {
       toast.success('Email sent', {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
         actions: [
           { label: 'Undo', onClick: () => toast.success('Send undone') },
         ],
@@ -146,6 +148,8 @@ function Fixture() {
       run();
     };
     toastId = toast.success('Email scheduled', {
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
       subtext: `Sends ${format(sendTime, "EEE, MMM d 'at' h:mm a")}`,
       actions: [
         {

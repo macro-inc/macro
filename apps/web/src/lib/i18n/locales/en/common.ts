@@ -22,6 +22,7 @@ export default {
   cancel: 'Cancel',
   close: 'Close',
   dismiss: 'Dismiss',
+  notNow: 'Not now',
   loading: 'Loading…',
   loadingConversation: 'Loading conversation',
   delete: 'Delete',

@@ -32,6 +32,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: 'Persistent · closing is remembered across reloads',
     create: (dismiss) => ({
       custom: {
+        dismissLabel: t('common.notNow'),
         title: 'Enable calendar',
         content: () =>
           'Macro can now sync your calendar. Grant calendar access for user@example.com to turn it on.',
@@ -47,6 +48,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: 'Persistent · desktop only · closing is remembered',
     create: (dismiss) => ({
       custom: {
+        dismissLabel: t('common.notNow'),
         title: t('localRuntime.promptTitle'),
         content: () => t('localRuntime.promptBody'),
         actions: [{ label: t('localRuntime.setUp'), onClick: dismiss }],
@@ -61,6 +63,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: 'Persistent · desktop only · closing is remembered',
     create: (dismiss) => ({
       custom: {
+        dismissLabel: t('common.notNow'),
         title: 'Import WhatsApp history',
         content: () =>
           'Open WhatsApp on your phone and keep it open, then import earlier messages of 3 chats.',
@@ -76,6 +79,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: 'Persistent · closing is remembered',
     create: (dismiss) => ({
       custom: {
+        dismissLabel: t('common.notNow'),
         title: 'Enable Browser Notifications',
         icon: Bell,
         color: 'var(--color-accent)',
@@ -96,6 +100,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: 'Persistent · desktop app · closing is remembered',
     create: (dismiss) => ({
       custom: {
+        dismissLabel: t('common.notNow'),
         title: 'Enable Desktop Notifications',
         icon: Bell,
         color: 'var(--color-accent)',
@@ -116,6 +121,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: 'Persistent · Android only · closing is remembered',
     create: (dismiss) => ({
       custom: {
+        dismissLabel: t('common.notNow'),
         title: 'Enable Notifications',
         icon: Bell,
         color: 'var(--color-accent)',
@@ -136,6 +142,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: 'Persistent · Android only · closing is remembered',
     create: (dismiss) => ({
       custom: {
+        dismissLabel: t('common.notNow'),
         title: 'Show Calls on Your Lock Screen',
         icon: PhoneIncoming,
         color: 'var(--color-accent)',
@@ -257,6 +264,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       toastType: ToastType.SUCCESS,
       message: 'Sending…',
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
       actions: [
         { label: 'Undo', icon: ArrowCounterClockwise, onClick: dismiss },
       ],
@@ -271,6 +280,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       toastType: ToastType.SUCCESS,
       message: 'Email queued to send',
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
       actions: [
         { label: 'Undo', icon: ArrowCounterClockwise, onClick: dismiss },
       ],
@@ -285,6 +296,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       toastType: ToastType.SUCCESS,
       message: t('entityActions.toastMarkedDone'),
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
       actions: [
         {
           label: t('entityActions.undo'),

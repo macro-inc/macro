@@ -297,6 +297,7 @@ function ActionsDemo(props: ToastDemoProps = {}) {
       message: 'Email sent',
       duration: 5000,
       actionLayout: 'inline',
+      dismissStyle: 'icon',
       actions: [
         {
           label: 'Undo',
@@ -642,7 +643,7 @@ export default defineDoc({
   wide: true,
   category: 'Feedback',
   description:
-    'Standalone status icons, title-aligned content, primary actions with secondary Dismiss buttons, and compact mobile notices. Preview them inline or at the device-specific app position without triggering real operations or publishing into the app notification regions.',
+    'Standalone status icons, title-aligned content, primary actions, desktop close icons for undo notices, and compact mobile notices. Preview them inline or at the device-specific app position without triggering real operations or publishing into the app notification regions.',
   import: "import { toast } from '@core/component/Toast/Toast';",
   demos: [
     {
@@ -693,7 +694,8 @@ export default defineDoc({
       'Use a short title and put supporting details in subtext.',
       'Reserve persistent prompts for notices that need a response.',
       'Keep action labels short and retain meaningful content on mobile.',
-      'Use primary actions with a secondary Dismiss button instead of a close icon.',
+      'Keep Undo beside the title with a desktop close icon instead of Dismiss.',
+      'Use Not now for optional setup prompts; keep Dismiss for recovery prompts.',
       'Omit the close icon on mobile; retain swipe dismissal in either direction.',
       'Set actionLayout to inline for brief notices; keep stacked actions for longer prompts.',
       'Use the existing toast service so queueing, timing, and dismissal stay consistent.',

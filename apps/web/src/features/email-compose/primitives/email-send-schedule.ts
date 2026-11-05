@@ -439,6 +439,7 @@ export function createEmailSendSchedule(options: {
             ? [
                 {
                   label: 'Undo',
+                  kind: 'undo' as const,
                   onClick: () => {
                     // A dismissing notice stays clickable; only the live one undoes.
                     if (

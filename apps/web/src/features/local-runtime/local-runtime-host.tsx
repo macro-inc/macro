@@ -48,6 +48,7 @@ export function LocalRuntimeHost() {
     itemsLoaded: () => probe() !== undefined,
     toast: (_key, dismiss) => ({
       title: t('localRuntime.promptTitle'),
+      dismissLabel: t('common.notNow'),
       content(): string {
         return t('localRuntime.promptBody');
       },

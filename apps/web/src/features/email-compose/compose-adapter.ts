@@ -179,13 +179,18 @@ export function createEmailComposeContext(
   const removeForwarded = useRemoveForwardedAttachmentMutation();
   const unschedule = useUnscheduleMessageMutation();
   const { users } = useCombinedRecipients();
-  const notice = (options?: ComposeNoticeOptions) => ({
-    ...options,
-    actions: options?.actions?.map(({ kind, ...action }) => ({
-      ...action,
-      icon: kind === 'open' ? ArrowSquareOut : ArrowCounterClockwise,
-    })),
-  });
+  const notice = (options?: ComposeNoticeOptions) => {
+    const hasUndo = options?.actions?.some(({ kind }) => kind === 'undo');
+    return {
+      ...options,
+      dismissStyle: hasUndo ? ('icon' as const) : undefined,
+      actionLayout: hasUndo ? ('inline' as const) : undefined,
+      actions: options?.actions?.map(({ kind, ...action }) => ({
+        ...action,
+        icon: kind === 'open' ? ArrowSquareOut : ArrowCounterClockwise,
+      })),
+    };
+  };
   const reportError = (error: unknown) =>
     Telemetry.error(error instanceof Error ? error : new Error(String(error)));
   const requireSavedDraftForDelivery = async (
