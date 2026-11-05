@@ -175,4 +175,4 @@ pub use toolset::{
 };
 
 #[doc(hidden)]
-pub const CI_SPEED_NONCE: u64 = 1793854121;
+pub const CI_SPEED_NONCE: u64 = 1793855776;
