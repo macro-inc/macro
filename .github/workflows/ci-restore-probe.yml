@@ -20,9 +20,9 @@ jobs:
   probe:
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 2
       matrix:
-        run: [1, 2, 3]
+        run: [1, 2, 3, 4, 5, 6]
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-restore-probe-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.run }}
     steps:
       - name: Mount empty volume
@@ -40,49 +40,22 @@ jobs:
           grep -E '^SCCACHE_WEBDAV_(ENDPOINT|TOKEN)=' "$RUNNER_TEMP/creds" >> "$GITHUB_ENV"
           rm -f "$RUNNER_TEMP/creds"
           df -h / /nix
-      - name: Snapshot, download only
-        run: |
-          set -uo pipefail
-          start=$(date +%s)
-          for i in $(seq 0 15); do
-            curl --fail --silent --show-error --max-time 200 --output /dev/null --write-out "shard $i %{size_download} bytes %{time_total}s %{speed_download} B/s\n" \
-              -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$SCCACHE_WEBDAV_ENDPOINT/$SNAP_BASE/shard$i" &
-          done
-          wait
-          echo "snapshot_download_seconds=$(( $(date +%s) - start ))"
-      - name: Snapshot, download and unpack
-        run: |
-          set -uo pipefail
-          mkdir -p "$RUNNER_TEMP/snap"
-          start=$(date +%s)
-          for i in $(seq 0 15); do
-            (curl --fail --silent --show-error --max-time 200 \
-              -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$SCCACHE_WEBDAV_ENDPOINT/$SNAP_BASE/shard$i" \
-              | zstd -d -T2 2>/dev/null | tar -xf - -C "$RUNNER_TEMP/snap") &
-          done
-          wait
-          echo "snapshot_restore_seconds=$(( $(date +%s) - start ))"
-          du -sh "$RUNNER_TEMP/snap"
-          rm -rf "$RUNNER_TEMP/snap"
-      - name: Nix seed, download only
-        run: |
-          set -uo pipefail
-          start=$(date +%s)
-          for i in $(seq 0 7); do
-            curl --fail --silent --show-error --max-time 200 --output /dev/null --write-out "shard $i %{size_download} bytes %{time_total}s %{speed_download} B/s\n" \
-              -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$SCCACHE_WEBDAV_ENDPOINT/$SEED_BASE/$i" &
-          done
-          wait
-          echo "seed_download_seconds=$(( $(date +%s) - start ))"
       - name: Nix seed, download and unpack onto the volume
         run: |
           set -uo pipefail
+          free -g | head -2
+          mount | grep -E ' /nix | / ' | cut -c1-120
+          (while true; do grep -E '^(Dirty|Writeback):' /proc/meminfo | tr -s ' ' | tr '\n' ' '; grep -E 'procs_blocked' /proc/stat; sleep 10; done) &
+          watcher=$!
           start=$(date +%s)
+          pids=()
           for i in $(seq 0 7); do
             (curl --fail --silent --show-error --max-time 200 \
               -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$SCCACHE_WEBDAV_ENDPOINT/$SEED_BASE/$i" \
               | zstd -d -T2 2>/dev/null | sudo tar -xf - -C /) &
+            pids+=($!)
           done
-          wait
+          wait "${pids[@]}"
           echo "seed_restore_seconds=$(( $(date +%s) - start ))"
+          kill "$watcher"
           sudo du -sh /nix
