@@ -4,6 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { ClaudeMode } from './claudeMode';
+import type { HarnessCapabilities } from './harnessCapabilities';
+import type { HarnessComputerId } from './harnessComputerId';
 import type { HarnessId } from './harnessId';
 import type { HarnessLastConnectedAt } from './harnessLastConnectedAt';
 import type { HarnessOwner } from './harnessOwner';
@@ -16,6 +20,14 @@ Clients deserialize this, so both derives are used.
 export interface Harness {
   /** Whether agents may bypass ACP permission requests on this harness. */
   allow_permission_bypass?: boolean;
+  /** What the harness's machine can do, as macrod last reported it. */
+  capabilities?: HarnessCapabilities;
+  /** How Claude Code on this machine is paid for. Only meaningful for
+Macro computers. */
+  claude_mode?: ClaudeMode;
+  /** The Macro computer (hosted VM) this harness runs on; absent for a
+machine the user paired themselves. */
+  computer_id?: HarnessComputerId;
   /** Whether the daemon currently holds a runtime connection. */
   connected: boolean;
   /** Creation timestamp. */

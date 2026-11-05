@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import {
@@ -10,13 +11,13 @@ import {
   useSetComputerPowerMutation,
   useUndoCancelComputerMutation,
 } from '@queries/computers/computers';
-import { useIsTeamAdmin } from '@queries/team/teams';
+import { useIsTeamAdmin, useIsTeamOwner } from '@queries/team/teams';
 import type {
   ComputerSize,
   ComputerStatus,
   SizeOffer,
 } from '@service-auth/computers';
-import type { Harness as RegisteredHarness } from '@service-storage/client';
+import type { Harness as RegisteredHarness } from '@service-storage/generated/schemas/harness';
 import { Button } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { SettingsCard } from '../../primitives';
@@ -26,6 +27,7 @@ import { ComputerSizePicker } from '../components/computer-size-picker';
 import { ReleaseComputerDialog } from '../components/release-computer-dialog';
 import { formatComputerDate } from '../core/computer-display';
 import { useTeamComputers } from '../primitives/team-computers';
+import { ComputerClaudeAccess } from './computer-claude-access';
 
 function failureMessage(error: unknown, fallback: string): string {
   return (error instanceof ThrownResultError && error.message) || fallback;
@@ -39,6 +41,8 @@ export function MacroComputers(props: {
   harnesses: readonly RegisteredHarness[];
 }) {
   const isAdmin = useIsTeamAdmin();
+  const isTeamOwner = useIsTeamOwner();
+  const userId = useUserId();
   const { enabled, computers, failed } = useTeamComputers();
   const offers = useComputerOffersQuery(() => enabled() && isAdmin());
   const purchase = usePurchaseComputerMutation();
@@ -67,8 +71,22 @@ export function MacroComputers(props: {
       (candidate) => candidate.id === computer.harnessId
     );
     return harness
-      ? { name: harness.name, connected: harness.connected }
+      ? {
+          name: harness.name,
+          connected: harness.connected,
+          claudeMode: harness.claude_mode,
+        }
       : undefined;
+  };
+
+  const canManageClaude = (computer: ComputerStatus) => {
+    const harness = props.harnesses.find(
+      (item) => item.id === computer.harnessId
+    );
+    const viewer = userId();
+    if (!harness || !viewer) return false;
+    if (harness.owner.type === 'user') return harness.owner.user_id === viewer;
+    return harness.created_by === viewer || isTeamOwner();
   };
 
   const openConfirm = () => {
@@ -178,6 +196,17 @@ export function MacroComputers(props: {
                 <ComputerRow
                   computer={computer}
                   runtime={runtimeFor(computer)}
+                  claudeAccess={
+                    <Show when={computer.harnessId}>
+                      {(harnessId) => (
+                        <ComputerClaudeAccess
+                          harnessId={harnessId()}
+                          canManage={canManageClaude(computer)}
+                          mode={runtimeFor(computer)?.claudeMode}
+                        />
+                      )}
+                    </Show>
+                  }
                   canManage={isAdmin()}
                   powerPending={
                     power.isPending &&

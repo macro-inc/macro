@@ -794,7 +794,7 @@ The new row reads **Setting up** with its step (confirming payment, creating,
 starting up, connecting; "step N of 5") and the list polls every 3 seconds
 while any computer is setting up, waking or stopping. Once ready a row shows
 its size, status (**Ready**, **Asleep**, **Waking**, **Stopping**,
-**Stopped**, **Failed**), "Claude: Macro credits", and the runtime it
+**Stopped**, **Failed**), its Claude access mode, and the runtime it
 registered as with a connection dot; that runtime's row under **Connected
 runtimes** carries a **Macro computer** badge and no Remove. Admin controls
 on each row:
@@ -808,8 +808,17 @@ on each row:
   exact name is typed.
 
 Team **Billing** lists the same computers under **Macro computers** with size,
-status, cancel date and price per interval. Signing in with a member's own
-Claude account is not built yet; the row only shows Macro credits.
+status, cancel date and price per interval.
+
+Each enrolled computer shows **Claude: Macro credits** or **Claude: your account**.
+Harness managers can press **Sign in with Claude**, which opens Claude in a new
+tab. Finish signing in there, then paste the code or callback URL into **Paste
+the code or the URL you were sent to** and press **Complete sign-in**. The input
+accepts surrounding whitespace. If the new tab was blocked, use **Open Claude
+sign-in** beside the field. Successful sign-in switches the label to your account;
+**Use Macro credits** signs the computer out and restores Macro credits. Request
+failures appear inline. Members without management rights see the mode without
+account controls. This account is used by Claude on the shared computer.
 
 ### GitHub reconnect recovery
 

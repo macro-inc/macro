@@ -1,7 +1,7 @@
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import type { ComputerStatus } from '@service-auth/computers';
 import { Button, cn, ToggleSwitch } from '@ui';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { HarnessIcon, StatusDot } from '../../integration-ui';
 import { IntegrationRow } from '../../primitives';
@@ -14,7 +14,11 @@ import {
 } from '../core/computer-display';
 
 /** The paired runtime a computer's macrod registered as. */
-export type ComputerRuntime = { name: string; connected: boolean };
+export type ComputerRuntime = {
+  name: string;
+  connected: boolean;
+  claudeMode?: string;
+};
 
 function toneClass(tone: StatusTone): string {
   return match(tone)
@@ -25,17 +29,10 @@ function toneClass(tone: StatusTone): string {
     .exhaustive();
 }
 
-/**
- * How the computer's agents reach Claude. Only Macro credits exists today;
- * the per-member "Sign in with Claude" flow (own Claude account) renders here.
- */
-function ComputerClaudeAccess() {
-  return <span>Claude: Macro credits</span>;
-}
-
 export function ComputerRow(props: {
   computer: ComputerStatus;
   runtime?: ComputerRuntime;
+  claudeAccess?: JSX.Element;
   /** Team admins and owners manage power and billing; members only read. */
   canManage: boolean;
   powerPending: boolean;
@@ -73,7 +70,7 @@ export function ComputerRow(props: {
       description={status().detail}
       facts={
         <span class="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <ComputerClaudeAccess />
+          {props.claudeAccess}
           <Show when={props.runtime}>
             {(runtime) => (
               <span class="inline-flex items-center gap-1.5">

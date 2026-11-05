@@ -47,8 +47,11 @@ vi.mock('../primitives/team-computers', () => ({
   }),
 }));
 
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
+
 vi.mock('@queries/team/teams', () => ({
   useIsTeamAdmin: () => () => true,
+  useIsTeamOwner: () => () => true,
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
