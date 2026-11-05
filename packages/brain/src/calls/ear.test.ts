@@ -144,7 +144,10 @@ test('when streaming hears the words, no rescue call is made', async () => {
   let segments = 0;
   const r = await replayWav(normalWav, {
     stt: hearing,
-    rescue: async () => { rescues++; return 'x'; },
+    rescue: async () => {
+      rescues++;
+      return 'x';
+    },
     emit: (t) => t === 'ear.segment' && segments++,
   });
   assert(segments > 0); // the ear did notice speech

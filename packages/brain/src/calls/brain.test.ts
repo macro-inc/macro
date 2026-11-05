@@ -42,7 +42,11 @@ test('SDK process failure rejects warm-up and every later queued turn', async ()
     session() {
       return {
         [Symbol.asyncIterator]() {
-          return { async next() { throw new Error('SDK process exited'); } };
+          return {
+            async next() {
+              throw new Error('SDK process exited');
+            },
+          };
         },
         async interrupt() {},
         close() {},

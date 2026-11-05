@@ -1,134 +1,86 @@
-import WebSocket from 'ws';
+import type { tts as sdkTts } from '@livekit/agents';
 import type { Emit } from './events.ts';
+import { GatewayTts } from './inference.ts';
 import type { SpeechGateway } from './speech.ts';
 export const TTS_RATE = 24000;
-export const VOICE = 'aura-2-arcas-en';
 export interface Tts {
   speak(text: string, turn: number): void;
   flush(turn: number): void;
   clear(): void;
-  close(): void;
+  close(): void | Promise<void>;
 }
 export type TtsHandlers = {
-  onAudio: (pcm: Int16Array, turn: number) => void;
-  onDone: (turn: number) => void;
+  onAudio(pcm: Int16Array, turn: number): void;
+  onDone(turn: number): void;
 };
-export function deepgramTts(
+
+/** Each turn owns its inference session, so cancellation cannot leak old audio into a new turn. */
+export function inferenceTts(
   gateway: SpeechGateway,
   emit: Emit,
-  h: TtsHandlers,
-  voice = VOICE
+  handlers: TtsHandlers,
+  voice: string
 ): Tts {
-  const url = gateway.socket('speak', {
-    model: voice,
-    encoding: 'linear16',
-    sample_rate: String(TTS_RATE),
-    container: 'none',
-  });
-  let ws: WebSocket;
-  let closing = false;
-  let outbox: string[] = [];
-  let flushes: number[] = [];
-  let current: number | null = null;
-  let firstAudio = new Set<number>();
-  let dropping = false;
-  let carry: Uint8Array | null = null;
-  const send = (m: object) => {
-    const s = JSON.stringify(m);
-    if (ws.readyState === WebSocket.OPEN) ws.send(s);
-    else outbox.push(s);
-  };
-  let reconnect: ReturnType<typeof setTimeout> | undefined;
-  const connect = () => {
-    if (closing) return;
-    ws = new WebSocket(url, { headers: gateway.headers() });
-    ws.binaryType = 'arraybuffer';
-    ws.onopen = () => {
-      emit('tts.open');
-      for (const m of outbox) ws.send(m);
-      outbox = [];
-    };
-    ws.onmessage = (m) => {
-      if (typeof m.data === 'string') {
-        const j = JSON.parse(m.data) as {
-          type: string;
-        };
-        if (j.type === 'Flushed') {
-          if (dropping) return;
-          const turn = flushes.shift();
-          if (turn !== undefined && !dropping) h.onDone(turn);
-          current = flushes[0] ?? null;
-        } else if (j.type === 'Cleared') dropping = false;
-        else if (j.type === 'Warning' || j.type === 'Error')
-          emit('tts.error', { message: m.data });
-        return;
+  let current:
+    | { model: GatewayTts; stream: sdkTts.SynthesizeStream; turn: number }
+    | undefined;
+  const pending = new Set<Promise<void>>();
+  let closed = false;
+  const start = (turn: number) => {
+    if (current?.turn === turn) return current;
+    clear();
+    const model = new GatewayTts(gateway, voice);
+    const stream = model.stream();
+    const state = { model, stream, turn };
+    current = state;
+    const consume = (async () => {
+      let first = true;
+      try {
+        for await (const packet of stream) {
+          if (closed || current !== state) continue;
+          if (typeof packet === 'symbol') continue;
+          if (first) emit('tts.first_audio', { turn });
+          first = false;
+          handlers.onAudio(packet.frame.data.slice(), turn);
+        }
+        if (!closed && current === state) handlers.onDone(turn);
+      } catch (error) {
+        emit('tts.error', { turn, error: String(error) });
+        if (!closed && current === state) handlers.onDone(turn);
+      } finally {
+        model.abortSockets();
+        await model.close();
       }
-      if (dropping || current === null) return;
-      let bytes = new Uint8Array(m.data as ArrayBuffer);
-      if (carry) {
-        const b = new Uint8Array(carry.length + bytes.length);
-        b.set(carry);
-        b.set(bytes, carry.length);
-        bytes = b;
-        carry = null;
-      }
-      if (bytes.length % 2) {
-        carry = bytes.slice(-1);
-        bytes = bytes.slice(0, -1);
-      }
-      if (!bytes.length) return;
-      if (!firstAudio.has(current)) {
-        firstAudio.add(current);
-        emit('tts.first_audio', { turn: current });
-      }
-      h.onAudio(
-        new Int16Array(bytes.buffer, bytes.byteOffset, bytes.length / 2),
-        current
+    })();
+    pending.add(consume);
+    void consume
+      .finally(() => pending.delete(consume))
+      .catch((error: unknown) =>
+        emit('tts.close_error', { error: String(error) })
       );
-    };
-    ws.onerror = (e) => emit('tts.error', { error: String(e.message) });
-    ws.onclose = (e) => {
-      emit('tts.close', { code: e.code, reason: e.reason });
-      for (const t of flushes) h.onDone(t);
-      flushes = [];
-      outbox = [];
-      firstAudio.clear();
-      dropping = false;
-      carry = null;
-      current = null;
-      if (!closing) reconnect = setTimeout(connect, 300);
-    };
+    return state;
   };
-  connect();
+  const clear = () => {
+    const previous = current;
+    current = undefined;
+    previous?.stream.close();
+    previous?.model.abortSockets();
+    emit('tts.clear');
+  };
   return {
     speak(text, turn) {
-      if (current === null) current = turn;
+      if (closed) return;
       emit('tts.speak', { turn, text });
-      send({ type: 'Speak', text });
+      start(turn).stream.pushText(`${text} `);
     },
     flush(turn) {
-      flushes.push(turn);
-      if (current === null) current = turn;
-      send({ type: 'Flush' });
+      if (!closed) start(turn).stream.endInput();
     },
-    clear() {
-      outbox = [];
-      dropping = ws.readyState === WebSocket.OPEN;
-      flushes = [];
-      current = null;
-      carry = null;
-      emit('tts.clear');
-      if (dropping) send({ type: 'Clear' });
-    },
-    close() {
-      closing = true;
-      clearTimeout(reconnect);
-      try {
-        ws.send(JSON.stringify({ type: 'Close' }));
-      } catch (error) {
-        emit('tts.close_error', { error: String(error) });
-      }
-      ws.close();
+    clear,
+    async close() {
+      closed = true;
+      clear();
+      await Promise.all(pending);
     },
   };
 }

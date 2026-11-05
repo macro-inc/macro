@@ -66,13 +66,13 @@ export class Call {
       tickMs
     );
   }
-  stop() {
+  async stop() {
     this.stopped = true;
     if (this.timer) clearInterval(this.timer);
     this.current = 0;
     this.brain.interrupt();
     this.speaker.clear();
-    this.tts.close();
+    await this.tts.close();
   }
   joined(who: string, name: string) {
     this.feed({ type: 'joined', who, name });

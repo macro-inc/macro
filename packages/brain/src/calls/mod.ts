@@ -7,7 +7,7 @@ export { formatReport, readEvents } from './report.ts';
 export { CallRoom, type RoomHandlers, SourceSpeaker } from './room.ts';
 export { SpeechGateway } from './speech.ts';
 export {
-  deepgramStt,
+  inferenceStt,
   type Stt,
   type SttEvent,
   type SttFactory,
@@ -19,7 +19,7 @@ export {
   callTransport,
   pruneCalls,
 } from './transport.ts';
-export { deepgramTts, type Tts, type TtsHandlers } from './tts.ts';
+export { inferenceTts, type Tts, type TtsHandlers } from './tts.ts';
 export { type Action, type TurnEvent, Turns } from './turns.ts';
 export {
   type CallsConfig,

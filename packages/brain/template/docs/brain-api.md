@@ -169,8 +169,13 @@ Call sessions read the same OPERATING.md and memory as message turns. The
 `hand_off` tool schedules the normal work tier, which continues after hang-up.
 A call summary is remembered and posted to its conversation; standalone meetings
 use a DM with their host. LiveKit uses `@livekit/rtc-node` directly on Node 24.
-STT and Aura-2 TTS use the Macro computer gateway and team credits; provider keys
-never enter the agent's process. `calls` exports the media, turn-taking, discovery,
+Nova-3 STT and Aura-2 TTS use pinned LiveKit Inference primitives through the
+Macro computer gateway and team credits; project secrets and upstream JWTs
+never enter the agent's process. Local turn-taking remains in `calls`; Inference
+does not own the conversation. Rescue finalizes a fresh unresolved-span stream
+instead of batch recognition. Barge-in clears playback and closes that turn's
+TTS sockets instead of sending a provider Clear command. The package README
+records the supported endpointing/keyterm options and capability differences. `calls` exports the media, turn-taking, discovery,
 replay and transport modules for custom compositions and injected tests.
 
 Private `log/calls/<opaque-call-id>/` diagnostics include events.jsonl and WAVs.

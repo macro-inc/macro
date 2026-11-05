@@ -182,10 +182,25 @@ See `template/docs/brain-api.md` for policies and shared memory/work behavior.
 Voice selection lives in server-committed `config/voice.json`; channel opt-ins
 and exclusions live in `config/calls.json`. LiveKit runs natively on Node 24.
 The offline Nix package includes its platform addon and required shared libraries.
-Speech passes through `/brain/deepgram/v1/listen` (WS or WAV POST) and
-`/brain/deepgram/v1/speak` (WS), authenticated with the existing agent key.
-The gateway checks team/computer eligibility and admission, meters STT seconds
-and Aura-2 characters to team credits, and retains the provider credential.
+Speech uses pinned `@livekit/agents` Inference STT (`deepgram/nova-3`) and
+TTS (`deepgram/aura-2`), through `/brain/inference/stt` and
+`/brain/inference/tts`. These are speech primitives; the call turn machine
+remains local. Agent-key authentication checks team/computer eligibility and
+credit admission. The gateway signs a 60-second `inference.perform` JWT for
+its upstream connection; project credentials and Cloud tokens never reach the VM.
+STT seconds and Aura-2 characters are metered to team credits.
+
+Inference preserves keyterms, interim transcripts, smart formatting and 300 ms
+endpointing. It exposes speech-start and finalized speech-end events rather
+than Deepgram's separate `utterance_end_ms` and `vad_events` options; the local
+segmenter still detects quiet speech and sustained barge-in. No batch recognition
+API is available in the pinned SDK: rescue sends only the unresolved PCM span
+through a fresh finalized Inference stream, with trailing silence. This costs an
+extra connection and loses Deepgram's distinct prerecorded recognition path.
+There is no provider Clear command: barge-in clears local playback and terminates
+the turn's TTS sockets, then starts a fresh stream for the next reply. The voice
+catalog filters provider metadata to Inference-supported Aura-2 selectors; fixed
+samples also synthesize through LiveKit Inference.
 
 `npm test` includes call regressions. `calls.replayWav` runs captured audio
 through the same injected ear and turn machine without a live room or model.

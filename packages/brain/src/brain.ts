@@ -9,6 +9,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { SpendLedger } from './budget.ts';
+import { parseVoiceConfig } from './calls/config.ts';
 import type { CallPolicy, CallTransport } from './calls/transport.ts';
 import type { Config } from './config.ts';
 import {
@@ -877,8 +878,9 @@ export class Brain implements Control {
             name,
             operating: persona.operating,
             model: persona.events.model,
-            voice: JSON.parse(await this.writer.readRemote('config/voice.json'))
-              .model,
+            voice: parseVoiceConfig(
+              JSON.parse(await this.writer.readRemote('config/voice.json'))
+            ).model,
             briefing: JSON.stringify({
               self: await this.memory.self(),
               notes: await this.memory.recall(''),

@@ -1,7 +1,8 @@
-import { setTimeout as delay } from 'node:timers/promises';
-import WebSocket from 'ws';
-import { Gain } from './audio.ts';
+import { stt } from '@livekit/agents';
+import { AudioFrame } from '@livekit/rtc-node';
+import { match } from 'ts-pattern';
 import type { Emit } from './events.ts';
+import { GatewayStt } from './inference.ts';
 import type { SpeechGateway } from './speech.ts';
 export type SttEvent =
   | {
@@ -29,17 +30,6 @@ export type SttEvent =
   | {
       kind: 'unheard';
     };
-export const LISTEN_PARAMS = {
-  model: 'nova-3',
-  encoding: 'linear16',
-  sample_rate: '16000',
-  channels: '1',
-  interim_results: 'true',
-  smart_format: 'true',
-  endpointing: '300',
-  utterance_end_ms: '1000',
-  vad_events: 'true',
-};
 export function parseDeepgram(msg: unknown): SttEvent | null {
   const m = msg as {
     type?: string;
@@ -75,102 +65,89 @@ export interface Stt {
   close(): Promise<void>;
 }
 export type SttFactory = (who: string, onEvent: (e: SttEvent) => void) => Stt;
-export function deepgramStt(
+
+export function inferenceEvent(event: stt.SpeechEvent): SttEvent | null {
+  const alternative = event.alternatives?.[0];
+  const text = alternative?.text.trim() ?? '';
+  const at =
+    alternative && alternative.endTime > alternative.startTime
+      ? {
+          startMs: Math.round(alternative.startTime * 1000),
+          endMs: Math.round(alternative.endTime * 1000),
+        }
+      : {};
+  return match(event.type)
+    .with(
+      stt.SpeechEventType.START_OF_SPEECH,
+      () => ({ kind: 'speech_started' }) as const
+    )
+    .with(
+      stt.SpeechEventType.END_OF_SPEECH,
+      () => ({ kind: 'utterance_end' }) as const
+    )
+    .with(stt.SpeechEventType.INTERIM_TRANSCRIPT, () =>
+      text ? { kind: 'interim' as const, text, ...at } : null
+    )
+    .with(stt.SpeechEventType.FINAL_TRANSCRIPT, () => ({
+      kind: 'final' as const,
+      text,
+      speechFinal: true,
+      ...at,
+    }))
+    .otherwise(() => null);
+}
+
+export function inferenceStt(
   gateway: SpeechGateway,
   emit: Emit,
-  opts: {
-    gain?: boolean;
-    params?: Record<string, string>;
-  } = {}
+  onError: (error: unknown) => void
 ): SttFactory {
   return (who, onEvent) => {
-    const gain = opts.gain ? new Gain() : null;
-    const url = gateway.socket('listen', {
-      ...LISTEN_PARAMS,
-      keyterm: gateway.name,
-      ...opts.params,
-    });
-    let ws: WebSocket;
-    let pending: Uint8Array[] = [];
-    let sent = 0;
-    let base = 0;
+    const model = new GatewayStt(gateway);
+    const stream = model.stream();
     let closing = false;
-    let lastSend = Date.now();
-    let opened!: () => void;
-    const open = new Promise<void>((r) => (opened = r));
-    let reconnect: ReturnType<typeof setTimeout> | undefined;
-    const connect = () => {
-      if (closing) return;
-      ws = new WebSocket(url, { headers: gateway.headers() });
-      ws.binaryType = 'arraybuffer';
-      ws.onopen = () => {
-        base = (sent - pending.length) * 20;
-        emit('stt.open', { who, baseMs: base });
-        for (const p of pending) ws.send(p);
-        pending = [];
-        opened();
-      };
-      ws.onmessage = (m) => {
-        if (typeof m.data !== 'string') return;
-        const e = parseDeepgram(JSON.parse(m.data));
-        if (!e) return;
-        if ('startMs' in e && e.startMs !== undefined) {
-          e.startMs += base;
-          if (e.endMs !== undefined) e.endMs += base;
-        }
-        const { kind, ...rest } = e;
-        emit(`stt.${kind}`, { who, ...rest });
-        onEvent(e);
-      };
-      ws.onerror = (e) => emit('stt.error', { who, error: String(e.message) });
-      ws.onclose = (e) => {
-        emit('stt.close', { who, code: e.code, reason: e.reason });
-        if (!closing) reconnect = setTimeout(connect, 500);
-      };
-    };
-    connect();
-    const keepAlive = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN && Date.now() - lastSend > 4000)
-        ws.send(JSON.stringify({ type: 'KeepAlive' }));
-    }, 2000);
+    const consume = (async () => {
+      for await (const event of stream) {
+        const converted = inferenceEvent(event);
+        if (!converted) continue;
+        const { kind, ...data } = converted;
+        emit(`stt.${kind}`, { who, ...data });
+        onEvent(converted);
+      }
+      if (!closing)
+        throw (
+          stream.terminalError ??
+          new Error('speech inference ended unexpectedly')
+        );
+    })();
+    void consume.catch((error: unknown) => {
+      emit('stt.error', { who, error: String(error) });
+      if (!closing) onError(error);
+    });
     return {
       send(frame) {
-        const out = gain ? gain.apply(frame) : frame;
-        const bytes = new Uint8Array(
-          out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength)
-        );
-        lastSend = Date.now();
-        sent++;
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(bytes);
-        } else {
-          pending.push(bytes);
-          if (pending.length > 500) pending.shift();
-        }
+        if (!closing)
+          stream.pushFrame(
+            new AudioFrame(frame.slice(), 16000, 1, frame.length)
+          );
       },
       async close() {
+        if (closing) return;
         closing = true;
-        clearInterval(keepAlive);
-        clearTimeout(reconnect);
-        if (ws.readyState === WebSocket.CONNECTING) {
-          await Promise.race([open, delay(3000)]);
+        stream.endInput();
+        const deadline = setTimeout(() => {
+          emit('stt.close_timeout', { who });
+          stream.close();
+          model.abortSockets();
+        }, 5000);
+        try {
+          await consume;
+        } finally {
+          clearTimeout(deadline);
+          stream.close();
+          model.abortSockets();
+          await model.close();
         }
-        if (ws.readyState !== WebSocket.OPEN) return ws.close();
-        ws.send(JSON.stringify({ type: 'CloseStream' }));
-        await new Promise<void>((r) => {
-          const timer = setTimeout(() => {
-            ws.close();
-            r();
-          }, 5000);
-          ws.addEventListener(
-            'close',
-            () => {
-              clearTimeout(timer);
-              r();
-            },
-            { once: true }
-          );
-        });
       },
     };
   };

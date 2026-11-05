@@ -9,8 +9,8 @@ import type { CallApi, Conn } from './macro.ts';
 import { retry, TOKEN_RETRY } from './retry.ts';
 import { CallRoom, IN_RATE } from './room.ts';
 import type { SpeechGateway } from './speech.ts';
-import { deepgramStt } from './stt.ts';
-import { deepgramTts, TTS_RATE } from './tts.ts';
+import { inferenceStt } from './stt.ts';
+import { inferenceTts, TTS_RATE } from './tts.ts';
 import type { Invitation } from './watch.ts';
 export type CallOptions = {
   invitation: Invitation;
@@ -93,14 +93,20 @@ export async function joinCall(options: CallOptions): Promise<void> {
     return value;
   };
   let call: Call;
-  const stt = deepgramStt(options.gateway, emit);
+  const stt = inferenceStt(options.gateway, emit, () =>
+    stop.abort('stt_error')
+  );
   const room = new CallRoom(emit, {
     joined: (who, name) => call.joined(who, name),
     left: (who) => {
       call.left(who);
       const ear = ears.get(who);
       ears.delete(who);
-      void ear?.close();
+      void ear
+        ?.close()
+        .catch((error: unknown) =>
+          emit('ear.close_error', { who, error: String(error) })
+        );
     },
     audio: (who, frame) => {
       recorder(who, IN_RATE).write(frame);
@@ -120,7 +126,11 @@ export async function joinCall(options: CallOptions): Promise<void> {
     trackEnded: (who) => {
       const ear = ears.get(who);
       ears.delete(who);
-      void ear?.close();
+      void ear
+        ?.close()
+        .catch((error: unknown) =>
+          emit('ear.close_error', { who, error: String(error) })
+        );
     },
     disconnected: () => stop.abort('disconnected'),
   });
@@ -129,7 +139,7 @@ export async function joinCall(options: CallOptions): Promise<void> {
   );
   call = new Call(
     brain,
-    (handlers) => deepgramTts(options.gateway, emit, handlers, options.voice),
+    (handlers) => inferenceTts(options.gateway, emit, handlers, options.voice),
     speaker,
     emit,
     log.now,
@@ -174,13 +184,15 @@ export async function joinCall(options: CallOptions): Promise<void> {
       );
   } finally {
     emit('call.leave', { why: String(signal.reason ?? 'error') });
-    call.stop();
     try {
-      try {
-        await room.leave();
-      } finally {
-        await Promise.all([...ears.values()].map((ear) => ear.close()));
-      }
+      const cleanup = await Promise.allSettled([
+        call.stop(),
+        room.leave(),
+        ...[...ears.values()].map((ear) => ear.close()),
+      ]);
+      for (const result of cleanup)
+        if (result.status === 'rejected')
+          emit('call.cleanup_error', { error: String(result.reason) });
       if (transcript.length) {
         let summary = '';
         const deadline = setTimeout(() => brain.interrupt(), 15000);
