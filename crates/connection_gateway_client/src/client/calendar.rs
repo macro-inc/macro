@@ -5,7 +5,7 @@ use model_entity::EntityType;
 impl ConnectionGatewayClient {
     /// Trigger refresh of the user's calendar views.
     #[tracing::instrument(skip(self, event))]
-    pub async fn refresh_calendar_renamed(
+    pub async fn refresh_calendar(
         &self,
         user_id: &str,
         event: serde_json::Value,
