@@ -71,6 +71,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
   unreadFilter.mockReturnValue(false);
   sidebarState.agentUpdates = false;
   sidebarState.touch = false;
