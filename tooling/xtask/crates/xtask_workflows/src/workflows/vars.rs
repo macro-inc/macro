@@ -52,8 +52,8 @@ pub const NIX_CACHE_PUBLIC_KEY: &str = "${{ vars.NIX_CACHE_PUBLIC_KEY }}";
 /// [`Runner::Large`]: crate::workflows::runners::Runner::Large
 pub const NEXTEST_TEST_THREADS: u32 = 32;
 
-/// Explicit Namespace cache-volume tag for the heavy compile jobs (check +
-/// test). A fixed tag (instead of the default per-branch scoping) makes the
+/// Explicit Namespace cache-volume tag for the Rust compile jobs on
+/// [`crate::workflows::runners::Runner::RustCi`]. A fixed tag (instead of the default per-branch scoping) makes the
 /// Cargo/Nix volume global across all branches — see
 /// [`crate::workflows::runners::Runner::with_cache_tag`]. The legacy tag name is
 /// retained so the existing warm volume is not invalidated.
