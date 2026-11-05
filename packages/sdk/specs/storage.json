@@ -16313,6 +16313,84 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `PATCH /harnesses/{harness_id}`.",
+        "operationId": "patch_harness",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HarnessId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchHarnessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Harness"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/health": {
@@ -27552,10 +27630,6 @@
         "description": "Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.",
         "required": ["name"],
         "properties": {
-          "allow_permission_bypass": {
-            "type": ["boolean", "null"],
-            "description": "Daemon operator consent ceiling. Omitted by older clients; web approval decides."
-          },
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine, e.g. `eric@macbook / darwin`."
@@ -27563,17 +27637,6 @@
           "name": {
             "type": "string",
             "description": "Requested harness display name (typically the machine's hostname)."
-          },
-          "scope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RequestedHarnessScope",
-                "description": "The scope the daemon's config asks for; the approval dialog arrives\npreselected to it."
-              }
-            ]
           }
         }
       },
@@ -38577,24 +38640,9 @@
             "type": ["string", "null"],
             "description": "Display-only description of the machine."
           },
-          "requested_allow_permission_bypass": {
-            "type": ["boolean", "null"],
-            "description": "Daemon operator consent ceiling; false forbids bypass at approval."
-          },
           "requested_name": {
             "type": "string",
             "description": "Harness display name the daemon asked for."
-          },
-          "requested_scope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RequestedHarnessScope",
-                "description": "The scope the daemon's config asked for, when it named one."
-              }
-            ]
           }
         }
       },
@@ -38687,6 +38735,20 @@
           "convert_to_team_channel": {
             "type": ["boolean", "null"],
             "description": "Sets whether the channel is a team channel.\n\n`true` converts a non-team channel to a team channel, while `false`\nconverts a team channel to a private channel."
+          }
+        }
+      },
+      "PatchHarnessRequest": {
+        "type": "object",
+        "description": "Request to change a registered harness. Omitted fields stay as they are.",
+        "properties": {
+          "allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Whether agents may bypass ACP permission requests on this harness.\nLive sessions pick the change up at their next turn."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "New display name."
           }
         }
       },
@@ -40432,11 +40494,6 @@
         "type": "string",
         "description": "Durable outcome; reading a notification never changes it.",
         "enum": ["pending", "granted", "denied", "cancelled"]
-      },
-      "RequestedHarnessScope": {
-        "type": "string",
-        "description": "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership.",
-        "enum": ["private", "team"]
       },
       "RequestedLayout": {
         "oneOf": [

@@ -39,6 +39,10 @@ enforced by the ordinary backend APIs.
 - `src/lexical.ts` (`@macro-inc/sdk/lexical`) re-exports `src/vendor/lexical-core/`,
   copied from `packages/lexical-core/sdk.ts` and its local imports by
   `bun run vendor`; edit the source and re-vendor, never the copy.
+- `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
+  `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
+  metered against the user's AI allowance; code mode hides the `WebSearch` /
+  `WebFetch` tools in their favour.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 
 ## Boundaries
