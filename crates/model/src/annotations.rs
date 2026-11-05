@@ -14,7 +14,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(FromRow, Serialize, Deserialize, PartialEq, Debug, Clone, ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct PdfPlaceableCommentAnchor {
     pub uuid: Uuid,
     pub document_id: String,
