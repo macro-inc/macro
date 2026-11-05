@@ -75,6 +75,9 @@ in_chroot -i /.fakeroot -s /.fakeroot -- /bin/bash -euo pipefail -c '
 
   for bin in "$TOOLS"/bin/*; do ln -s "$bin" "/usr/local/bin/$(basename "$bin")"; done
 
+  mkdir -p /opt/macro
+  ln -s "$TOOLS/bin/brain" /opt/macro/brain
+
   echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
   locale-gen
   update-locale LANG=en_US.UTF-8
@@ -124,6 +127,7 @@ EOF
 
   systemctl enable \
     macrod-enroll.service macrod.service incus-agent.service macro-box-growroot.service \
+    macro-brains.service macro-brains.path \
     systemd-networkd.service systemd-resolved.service docker.service
   ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
 

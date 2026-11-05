@@ -1,0 +1,10 @@
+[Unit]
+Description=Provision enrolled brain personas
+After=macrod-enroll.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/macro-box/provision-brains
+
+[Install]
+WantedBy=multi-user.target

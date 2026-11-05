@@ -38,12 +38,15 @@ let
     '';
   };
 
+  brain = import ./_brain.nix { inherit pkgs; };
+
   # Linked into /usr/local/bin; the closure is copied into the guest's
   # /nix/store.
   tools = pkgs.buildEnv {
     name = "macro-box-tools";
     paths = [
       macrod
+      brain
       pkgs.claude-code
       pkgs.chromium
       pkgs.nodejs_22

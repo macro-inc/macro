@@ -1,0 +1,32 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+: "${HOME:?}" "${BRAIN_WORKSPACE:?}" "${MACRO_REPO_URL:?}" "${MACRO_REPO_TOKEN:?}"
+: "${GIT_AUTHOR_NAME:?}" "${GIT_AUTHOR_EMAIL:?}"
+if [[ "$BRAIN_WORKSPACE" != "$HOME/workspace" ]]; then
+  echo 'BRAIN_WORKSPACE must be the persona home/workspace' >&2
+  exit 1
+fi
+# Reject credentials in the URL; the helper supplies them only to git.
+if [[ ! "$MACRO_REPO_URL" =~ ^https?://[^/@]+/ ]] || [[ "$MACRO_REPO_URL" == *$'\n'* ]]; then
+  echo 'MACRO_REPO_URL must be an HTTP(S) URL without credentials' >&2
+  exit 1
+fi
+export GIT_TERMINAL_PROMPT=0
+helper=/usr/lib/macro-box/git-credential-brain
+if [[ ! -e "$BRAIN_WORKSPACE" ]]; then
+  # Clone into a temporary sibling: a failed clone never poisons first start.
+  staging=$(mktemp -d "$HOME/.workspace-clone.XXXXXX")
+  trap 'rm -rf "$staging"' EXIT
+  git -c credential.useHttpPath=true -c credential.helper= -c credential.helper="$helper" clone -- "$MACRO_REPO_URL" "$staging"
+  mv -T "$staging" "$BRAIN_WORKSPACE"
+  trap - EXIT
+fi
+# Store only the helper path, never the token. Empty entry resets inherited helpers.
+git -C "$BRAIN_WORKSPACE" config --local --replace-all credential.helper ''
+git -C "$BRAIN_WORKSPACE" config --local --add credential.helper "$helper"
+git -C "$BRAIN_WORKSPACE" config --local credential.useHttpPath true
+git -C "$BRAIN_WORKSPACE" config --local user.name "$GIT_AUTHOR_NAME"
+git -C "$BRAIN_WORKSPACE" config --local user.email "$GIT_AUTHOR_EMAIL"
+cd "$BRAIN_WORKSPACE"
+exec /opt/macro/brain run
