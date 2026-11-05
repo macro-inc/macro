@@ -20,8 +20,11 @@ import {
   For,
   type JSXElement,
   lazy,
+  Match,
+  on,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
@@ -32,6 +35,7 @@ import {
   type CallPanelTab,
 } from './chat/components/CallChatPanel';
 import { createControlsVisibility } from './create-controls-visibility';
+import type { CallPanelState } from './discussion/CallDiscussionContent';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 import { ParticipantAvatarBackground } from './ParticipantAvatarBackground';
@@ -307,6 +311,16 @@ export function CallOverlay(props: {
   footerLeading?: JSXElement;
   /** Narrow RTC credential for a guest; never an account bearer. */
   guestChatSession?: { token: string; participantId: string };
+  /** The host's own discussion, in place of the call's chat. */
+  discussion?: {
+    /** Names the panel's discussion tab. */
+    label: () => string | undefined;
+    /** Open the panel as soon as this turns true. */
+    opensByDefault: () => boolean;
+    /** There's news for someone whose panel is closed. */
+    hasUpdates: () => boolean;
+    render: (panel: CallPanelState) => JSXElement;
+  };
 }) {
   const callCtx = useCallContext();
   const currentUserId = useUserId();
@@ -345,6 +359,17 @@ export function CallOverlay(props: {
     setPanelOpen(false);
     panelButton?.focus();
   };
+  createEffect(
+    on(
+      () => props.discussion?.opensByDefault() ?? false,
+      (opensByDefault) => {
+        if (!opensByDefault) return;
+        setFocusChatOnOpen(false);
+        setPanelMounted(true);
+        setPanelOpen(true);
+      }
+    )
+  );
   const togglePanel = () => {
     if (panelOpen()) return closePanel();
     setFocusChatOnOpen(true);
@@ -376,6 +401,12 @@ export function CallOverlay(props: {
         fallback={<UsersIcon class="size-4 mobile:size-6" />}
       >
         <ChatIcon class="size-4 mobile:size-6" />
+      </Show>
+      <Show when={!panelOpen() && props.discussion?.hasUpdates()}>
+        <span
+          aria-hidden="true"
+          class="absolute top-0 right-0 size-2 rounded-full bg-accent"
+        />
       </Show>
     </Button>
   );
@@ -674,13 +705,12 @@ export function CallOverlay(props: {
             sidebarMount={widePanel() ? sidebarMount() : undefined}
             overlayMount={overlayMount()}
             returnFocus={panelButton}
+            discussionLabel={props.discussion?.label()}
           >
             <Show when={canChat() && callCtx.activeCallId()} keyed>
               {(callId) => (
                 <Suspense>
-                  <Show
-                    when={props.guestChatSession}
-                    keyed
+                  <Switch
                     fallback={
                       <CallChat
                         callId={callId}
@@ -690,16 +720,31 @@ export function CallOverlay(props: {
                       />
                     }
                   >
-                    {(session) => (
-                      <GuestCallChat
-                        callId={callId}
-                        session={session}
-                        open={panelOpen() && activeTab() === 'chat'}
-                        focusOnOpen={focusChatOnOpen()}
-                        onClose={closePanel}
-                      />
-                    )}
-                  </Show>
+                    <Match when={props.discussion}>
+                      {(discussion) =>
+                        discussion().render({
+                          get open() {
+                            return panelOpen() && activeTab() === 'chat';
+                          },
+                          get focusOnOpen() {
+                            return focusChatOnOpen();
+                          },
+                          onClose: closePanel,
+                        })
+                      }
+                    </Match>
+                    <Match when={props.guestChatSession} keyed>
+                      {(session) => (
+                        <GuestCallChat
+                          callId={callId}
+                          session={session}
+                          open={panelOpen() && activeTab() === 'chat'}
+                          focusOnOpen={focusChatOnOpen()}
+                          onClose={closePanel}
+                        />
+                      )}
+                    </Match>
+                  </Switch>
                 </Suspense>
               )}
             </Show>

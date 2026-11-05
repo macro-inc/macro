@@ -23832,6 +23832,96 @@
           }
         }
       },
+      "CallDiscussion": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A thread in the call's channel, rooted at the message with the call's id.",
+            "required": ["channel_id", "root_id", "kind"],
+            "properties": {
+              "channel_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The channel holding the thread."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["channel_thread"]
+              },
+              "root_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The thread's root message."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The call's own thread on the call parent.",
+            "required": ["call_id", "kind"],
+            "properties": {
+              "call_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The call owning the thread."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["call_chat"]
+              }
+            }
+          }
+        ],
+        "description": "Where a call's discussion lives, decided once when the call is created.\n`channel_id` cannot decide this: past channel calls keep their own thread."
+      },
+      "CallEntryStatus": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The call has not ended.",
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["live"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The call ended.",
+            "required": ["ended_at", "duration_ms", "state"],
+            "properties": {
+              "duration_ms": {
+                "type": "integer",
+                "format": "int64",
+                "description": "How long it lasted."
+              },
+              "ended_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it ended."
+              },
+              "state": {
+                "type": "string",
+                "enum": ["ended"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The call's record was deleted; its discussion stays in the channel.",
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["record_deleted"]
+              }
+            }
+          }
+        ],
+        "description": "A channel call's life, as its timeline row shows it."
+      },
       "CallFilters": {
         "type": "object",
         "description": "Filters for call records.",
@@ -23884,6 +23974,7 @@
         "description": "Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.",
         "required": [
           "callId",
+          "discussion",
           "createdBy",
           "startedAt",
           "shareWithTeam",
@@ -23914,6 +24005,10 @@
           "customName": {
             "type": ["string", "null"],
             "description": "User-supplied or AI-generated display name for the call. Only set on\narchived `call_records`; active calls always return `None`."
+          },
+          "discussion": {
+            "$ref": "#/components/schemas/CallDiscussion",
+            "description": "Where this call's discussion lives."
           },
           "durationMs": {
             "type": ["integer", "null"],
@@ -36687,6 +36782,10 @@
               }
             ]
           },
+          "kind": {
+            "$ref": "#/components/schemas/MessageKind",
+            "description": "What this message is."
+          },
           "mentions": {
             "type": "array",
             "items": {
@@ -36945,6 +37044,21 @@
           },
           {
             "type": "object",
+            "description": "A channel call's thread root was created. It stands for the call, so it\nreaches viewers and moves the channel up without any of what a post\ncauses: no notifications, agents, routines, webhooks or search documents.",
+            "required": ["message", "type"],
+            "properties": {
+              "message": {
+                "$ref": "#/components/schemas/Message",
+                "description": "Persisted root."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["call_root_posted"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Thread resolution, placement, or deletion changed.",
             "required": ["state", "type"],
             "properties": {
@@ -37096,6 +37210,11 @@
             "description": "Referenced entity type."
           }
         }
+      },
+      "MessageKind": {
+        "type": "string",
+        "description": "What a persisted message is. Set by the server, never by a client.",
+        "enum": ["message", "call_root"]
       },
       "MessageListItem": {
         "allOf": [
@@ -37535,6 +37654,25 @@
               "type": {
                 "type": "string",
                 "enum": ["activity"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A channel call and its thread. The root message's id is the call id.",
+            "required": ["message", "status", "type"],
+            "properties": {
+              "message": {
+                "$ref": "#/components/schemas/MessageListItem",
+                "description": "The call's root message, its thread state and its reply preview."
+              },
+              "status": {
+                "$ref": "#/components/schemas/CallEntryStatus",
+                "description": "Where the call is in its life."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["call"]
               }
             }
           }

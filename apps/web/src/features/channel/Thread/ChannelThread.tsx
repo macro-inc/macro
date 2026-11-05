@@ -11,12 +11,15 @@ import type { Message as EntityMessage } from '@service-storage/messages';
 import {
   createEffect,
   createSignal,
+  Match,
   on,
   onCleanup,
   type ParentProps,
   Show,
+  Switch,
   untrack,
 } from 'solid-js';
+import { DetachedCallRootLine } from '../Call/discussion/PastCallLine';
 import { createMessageSelection } from '../Channel/create-message-selection';
 import { ChannelMessage } from '../Message';
 import { createTargetReplyNavigationController } from './create-target-reply-navigation-controller';
@@ -92,6 +95,7 @@ export function ChannelThread(props: ThreadProps) {
       preview: () => thread().preview,
       loaded: queryReplies,
       isExpanded: props.isExpanded,
+      hideCollapsedPreview: props.hideCollapsedPreview,
     });
 
   // Thread-local reply selection
@@ -196,17 +200,22 @@ export function ChannelThread(props: ThreadProps) {
   // Replying to this thread — inline input open, or the unified input bound.
   const isReplyingToThread = () =>
     props.isReplying() || unifiedReplyBinding() !== undefined;
+  const hasRootSlot = () => !!props.rootSlot;
   const hasInlineReplyInput = () =>
-    props.isReplying() && props.inputMode !== 'unified';
+    (props.isReplying() || !!props.replyInputAlwaysOpen) &&
+    props.inputMode !== 'unified';
   const rootRailVisible = () =>
     !props.hideRail && (hasReplies() || hasInlineReplyInput());
   const shouldShowCollapsedIndicator = () =>
-    !isReplyingToThread() && !props.isExpanded() && collapsedRepliesCount() > 0;
+    (!isReplyingToThread() || !!props.replyInputAlwaysOpen) &&
+    !props.isExpanded() &&
+    collapsedRepliesCount() > 0;
   const replyAction = () => props.getMessageActions?.(props.data())?.onReply;
   const shouldShowReplyButton = () =>
-    hasReplies() &&
+    (hasReplies() || hasRootSlot()) &&
     !!replyAction() &&
     !isReplyingToThread() &&
+    !hasInlineReplyInput() &&
     !shouldShowCollapsedIndicator();
   const [replyListHandle, setReplyListHandle] =
     createSignal<ThreadReplyListHandle>();
@@ -296,6 +305,47 @@ export function ChannelThread(props: ThreadProps) {
 
   onCleanup(targetReplyNavigation.dispose);
 
+  const actionsFooter = () => (
+    <Show when={shouldShowCollapsedIndicator() || shouldShowReplyButton()}>
+      <Thread.ActionsFooter>
+        <Show when={shouldShowCollapsedIndicator()}>
+          <Thread.CollapsedIndicator
+            ref={(element) =>
+              notifyElementOnMount(
+                props.onDisclosureMount,
+                props.data().id,
+                element
+              )
+            }
+            hasUnreadNotifications={collapsedRepliesHaveUnreadNotifications()}
+            collapsedRepliesCount={collapsedRepliesCount()}
+            participants={collapsedReplyUsers()}
+            latestReplyAt={collapsedLatestReplyAt()}
+            onClick={() => props.setIsExpanded(true)}
+            hasNewMessages={collapsedRepliesContainsNewMessages()}
+          />
+        </Show>
+        <Show when={shouldShowReplyButton()}>
+          <Thread.ReplyButton
+            getFocusTarget={() =>
+              props.inputMode !== 'unified'
+                ? (replyInputContainerRef?.querySelector<HTMLElement>(
+                    '[contenteditable]'
+                  ) ?? null)
+                : document.querySelector<HTMLElement>(
+                    `[data-input-id="thread-reply-input-${props.data().id}"] [contenteditable]`
+                  )
+            }
+            onClick={(event) =>
+              replyAction()?.({ message: props.data(), event })
+            }
+            aria-label="Reply"
+          />
+        </Show>
+      </Thread.ActionsFooter>
+    </Show>
+  );
+
   return (
     <ThreadReadBoundary available={!projectUnavailable()}>
       <Thread.Row
@@ -337,28 +387,38 @@ export function ChannelThread(props: ThreadProps) {
               parent={props.parent()}
             >
               <DebugSuspense name="ChannelThread.message">
-                <ChannelMessage
-                  renderContent={props.renderMessageContent}
-                  hideTriggeredBy={props.hideTriggeredBy}
-                  parent={props.parent()}
-                  message={props.data()}
-                  actions={props.getMessageActions?.(props.data())}
-                  listMeta={props.listMeta}
-                  inputMode={props.inputMode}
-                  messageEditor={props.messageEditor}
-                  onClick={selectThreadMessage}
-                  selected={isSelected() && !isThreadFocused()}
-                  targeted={
-                    // The unified input's reply is bound to this root, or
-                    // channel navigation landed on it.
-                    unifiedReplyBinding()?.boundToRoot || isRootNavTargeted()
+                <Switch
+                  fallback={
+                    <ChannelMessage
+                      renderContent={props.renderMessageContent}
+                      hideTriggeredBy={props.hideTriggeredBy}
+                      parent={props.parent()}
+                      message={props.data()}
+                      actions={props.getMessageActions?.(props.data())}
+                      listMeta={props.listMeta}
+                      inputMode={props.inputMode}
+                      messageEditor={props.messageEditor}
+                      onClick={selectThreadMessage}
+                      selected={isSelected() && !isThreadFocused()}
+                      targeted={
+                        // The unified input's reply is bound to this root, or
+                        // channel navigation landed on it.
+                        unifiedReplyBinding()?.boundToRoot ||
+                        isRootNavTargeted()
+                      }
+                    />
                   }
-                />
+                >
+                  <Match when={hasRootSlot()}>{props.rootSlot?.()}</Match>
+                  <Match when={props.data().kind === 'call_root'}>
+                    <DetachedCallRootLine message={props.data()} />
+                  </Match>
+                </Switch>
               </DebugSuspense>
             </MarkMessageNotifications>
           </div>
           {props.afterMessage}
-          <Show when={hasReplies() || hasInlineReplyInput()}>
+          <Show when={hasReplies() || hasInlineReplyInput() || hasRootSlot()}>
             <div class="relative w-full">
               <Show when={!props.hideRail}>
                 <Thread.RepliesBridgeRail />
@@ -405,6 +465,10 @@ export function ChannelThread(props: ThreadProps) {
                       }
                     />
                   </DebugSuspense>
+
+                  <Show when={props.replyInputAlwaysOpen}>
+                    {actionsFooter()}
+                  </Show>
 
                   <Show when={hasInlineReplyInput()}>
                     <div
@@ -456,47 +520,8 @@ export function ChannelThread(props: ThreadProps) {
                     </div>
                   </Show>
 
-                  <Show
-                    when={
-                      shouldShowCollapsedIndicator() || shouldShowReplyButton()
-                    }
-                  >
-                    <Thread.ActionsFooter>
-                      <Show when={shouldShowCollapsedIndicator()}>
-                        <Thread.CollapsedIndicator
-                          ref={(element) =>
-                            notifyElementOnMount(
-                              props.onDisclosureMount,
-                              props.data().id,
-                              element
-                            )
-                          }
-                          hasUnreadNotifications={collapsedRepliesHaveUnreadNotifications()}
-                          collapsedRepliesCount={collapsedRepliesCount()}
-                          participants={collapsedReplyUsers()}
-                          latestReplyAt={collapsedLatestReplyAt()}
-                          onClick={() => props.setIsExpanded(true)}
-                          hasNewMessages={collapsedRepliesContainsNewMessages()}
-                        />
-                      </Show>
-                      <Show when={shouldShowReplyButton()}>
-                        <Thread.ReplyButton
-                          getFocusTarget={() =>
-                            props.inputMode !== 'unified'
-                              ? (replyInputContainerRef?.querySelector<HTMLElement>(
-                                  '[contenteditable]'
-                                ) ?? null)
-                              : document.querySelector<HTMLElement>(
-                                  `[data-input-id="thread-reply-input-${props.data().id}"] [contenteditable]`
-                                )
-                          }
-                          onClick={(event) =>
-                            replyAction()?.({ message: props.data(), event })
-                          }
-                          aria-label="Reply"
-                        />
-                      </Show>
-                    </Thread.ActionsFooter>
+                  <Show when={!props.replyInputAlwaysOpen}>
+                    {actionsFooter()}
                   </Show>
                 </Thread.RepliesContainer>
               </DebugSuspense>
