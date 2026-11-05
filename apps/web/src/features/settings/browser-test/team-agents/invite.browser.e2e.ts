@@ -139,3 +139,98 @@ test('shows catalog specs and billing action without an active plan', async ({
   ).toBeDisabled();
   await expect(page.getByText('Purchases: 0')).toBeVisible();
 });
+
+test('typing keeps fields and the invitation surface mounted with bounded DOM work', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Invite agent', exact: true }).click();
+  const fields = page.getByRole('textbox');
+  const originalFields = await fields.elementHandles();
+  const work = await page.evaluateHandle(() => {
+    const dialog = document.querySelector('[role="dialog"]');
+    if (!dialog) throw new Error('Invitation surface missing');
+    let addedNodes = 0;
+    const observer = new MutationObserver((records) => {
+      for (const record of records) addedNodes += record.addedNodes.length;
+    });
+    observer.observe(dialog, { subtree: true, childList: true });
+    return {
+      finish: () => {
+        observer.disconnect();
+        return addedNodes;
+      },
+    };
+  });
+  for (const [index, text] of [
+    'Assistant',
+    'Maintain projects',
+    'Concise and helpful',
+    'https://example.com/avatar.png',
+  ].entries()) {
+    await fields.nth(index).pressSequentially(text);
+    expect(
+      await originalFields[index].evaluate((field) => field.isConnected)
+    ).toBe(true);
+    await expect(fields.nth(index)).toHaveValue(text);
+  }
+  const addedNodes = await work.evaluate((measurement) => measurement.finish());
+  await work.dispose();
+  expect(addedNodes).toBeLessThan(20);
+});
+
+test('reviews an included invitation and explains a pre-purchase repository failure', async ({
+  page,
+}) => {
+  await page.goto('/?included&repository-failure&no-subscription');
+  await page.getByRole('button', { name: 'Invite agent', exact: true }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Assistant');
+  await page.getByLabel('Role / job description').fill('Maintain projects');
+  await page.getByLabel('Personality').fill('Concise');
+  await page.getByRole('button', { name: 'Review price' }).click();
+  await expect(
+    page.getByText('Included for Macro', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText('Total per month')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Confirm and invite' }).click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'The workspace repository could not be created. Nothing was charged.'
+  );
+  await expect(
+    page.getByRole('button', { name: 'Confirm and invite' })
+  ).toBeDisabled();
+  await expect(page.getByText('Purchases: 0')).toBeVisible();
+});
+
+test('requires a fresh review before billing when included eligibility changes', async ({
+  page,
+}) => {
+  await page.goto('/?included&quote-changed');
+  await page.getByRole('button', { name: 'Invite agent', exact: true }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Assistant');
+  await page.getByLabel('Role / job description').fill('Maintain projects');
+  await page.getByLabel('Personality').fill('Concise');
+  await page.getByRole('button', { name: 'Review price' }).click();
+  await expect(
+    page.getByText('Included for Macro', { exact: true })
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Confirm and invite' }).click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'The quote changed. Review the price again. Nothing was charged.'
+  );
+  await expect(
+    page.getByText('Included for Macro', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText('Purchases: 0')).toBeVisible();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue(
+    'Assistant'
+  );
+  await page.getByRole('button', { name: 'Review price' }).click();
+  await expect(page.getByText('$50.00', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Included for Macro', { exact: true })
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Confirm and invite' }).click();
+  await expect(page.getByText('Purchases: 1')).toBeVisible();
+});
