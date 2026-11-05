@@ -685,6 +685,7 @@ pub async fn create_mention_handler<
     let mention = state
         .service
         .create_entity_mention(CreateEntityMentionOptions {
+            id: None,
             source_entity_type: req.source_entity_type,
             source_entity_id: req.source_entity_id,
             entity_type: req.entity_type,

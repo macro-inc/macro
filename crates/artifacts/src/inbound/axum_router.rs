@@ -964,6 +964,10 @@ where
 /// Place an artifact, or one of its scenes, on a canvas.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct PlaceArtifactRequest {
+    /// The node's canvas item id. Retry a placement with the same id to get
+    /// one node and one reference; a new id when omitted.
+    #[serde(default)]
+    pub item_id: Option<uuid::Uuid>,
     /// The canvas document; needs edit access to it.
     pub canvas_id: String,
     /// Scene to show instead of `index.html`; it must exist in the current
@@ -983,8 +987,8 @@ pub struct PlaceArtifactRequest {
 /// The node an artifact was placed as.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct PlaceArtifactResponse {
-    /// The canvas item id of the new node.
-    pub item_id: String,
+    /// The canvas item id of the node.
+    pub item_id: uuid::Uuid,
 }
 
 /// The place body with edit access to its canvas checked by the same
@@ -1082,6 +1086,7 @@ where
             canvas,
             &publisher,
             PlaceArtifact {
+                item_id: request.item_id,
                 scene: request.scene,
                 x: request.x,
                 y: request.y,

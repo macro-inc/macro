@@ -214,7 +214,7 @@ async fn canvas_embeds_carry_the_internal_key_and_return_the_item_id() {
                             .map(str::to_owned),
                         body,
                     ));
-                    Json(serde_json::json!({ "itemId": "item-1", "operationsApplied": 1 }))
+                    Json(serde_json::json!({ "operationsApplied": 1 }))
                 }
             },
         ),
@@ -223,6 +223,7 @@ async fn canvas_embeds_carry_the_internal_key_and_return_the_item_id() {
     let url = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     let embed = CanvasDocumentEmbed {
+        item_id: uuid::Uuid::nil(),
         document_id: "artifact".into(),
         name: "Onboarding".into(),
         file_type: "artifact".into(),
@@ -231,7 +232,7 @@ async fn canvas_embeds_carry_the_internal_key_and_return_the_item_id() {
         y: 20.0,
         width: 640.0,
         height: 480.0,
-        mention_id: "mention".into(),
+        mention_id: uuid::Uuid::max(),
     };
     let token = "test-token".to_owned().into();
 
@@ -251,12 +252,11 @@ async fn canvas_embeds_carry_the_internal_key_and_return_the_item_id() {
         Arc::new(Client::builder().no_proxy().build().unwrap()),
     )
     .with_internal_auth_key(Some("internal".into()));
-    let item_id = client
+    client
         .embed_canvas_document("canvas", &token, &embed)
         .await
         .unwrap();
 
-    assert_eq!(item_id, "item-1");
     let requests = requests.lock().unwrap();
     assert_eq!(
         *requests,
@@ -267,6 +267,7 @@ async fn canvas_embeds_carry_the_internal_key_and_return_the_item_id() {
                 "documentToken": "test-token",
                 "request": {
                     "action": "embed",
+                    "itemId": "00000000-0000-0000-0000-000000000000",
                     "documentId": "artifact",
                     "name": "Onboarding",
                     "fileType": "artifact",
@@ -275,7 +276,7 @@ async fn canvas_embeds_carry_the_internal_key_and_return_the_item_id() {
                     "y": 20.0,
                     "width": 640.0,
                     "height": 480.0,
-                    "mentionId": "mention",
+                    "mentionId": "ffffffff-ffff-ffff-ffff-ffffffffffff",
                 },
             }),
         )]

@@ -176,8 +176,15 @@ export function prepareCanvasEdit(
         // Library entries live beside the scene, not in it.
         .with({ kind: 'defineStyle' }, { kind: 'defineComponent' }, () => {})
         .with({ kind: 'embedDocument' }, (op) => {
-          if (current.items[op.id])
-            throw new Error(`Item ${op.id} already exists.`);
+          const existing = current.items[op.id];
+          // A retried embed: the node is already there, as it was left.
+          if (
+            existing?.type === 'document' &&
+            existing.geometry.documentId === op.documentId
+          )
+            return;
+          if (existing)
+            throw new Error(`Item ${op.id} is already another item.`);
           editor.execute(insertShapesCommand, [
             {
               point: { x: op.x, y: op.y },

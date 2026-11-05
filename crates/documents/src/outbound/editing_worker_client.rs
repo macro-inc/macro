@@ -139,7 +139,7 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
         document_id: &str,
         document_token: &DocumentPermissionToken,
         embed: &crate::domain::canvas::CanvasDocumentEmbed,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<()> {
         let Some(internal_auth_key) = self.internal_auth_key.as_deref() else {
             anyhow::bail!("editing worker client has no internal auth key configured");
         };
@@ -173,10 +173,7 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("Embedding a document on the canvas failed")
         );
-        body.get("itemId")
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_owned)
-            .context("editing worker returned no itemId for the embedded document")
+        Ok(())
     }
 
     #[cfg(feature = "ai_tools")]

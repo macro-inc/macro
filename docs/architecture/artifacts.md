@@ -152,7 +152,10 @@ On a canvas an artifact is the canvas's ordinary `document` node with
 `fileType: 'artifact'`, `display: 'embed'`, the artifact's name, and the scene
 id as `subpath`; it follows the current version. People insert it from the
 canvas UI. Agents and the SDK (`artifact.placeOn(canvas, …)`) call
-`POST /artifacts/{id}/place {canvas_id, scene?, x, y, width, height}`:
+`POST /artifacts/{id}/place {item_id?, canvas_id, scene?, x, y, width, height}`.
+The placement is idempotent on `item_id`, the new node's canvas id (DSS
+picks one when it is omitted; `placeOn` picks one per call and reuses it when
+it retries a lost response):
 
 1. The artifact document loads as for every route and `DocumentAccessExtractor`
    checks view access to it; the body's canvas loads through
@@ -162,18 +165,22 @@ canvas UI. Agents and the SDK (`artifact.placeOn(canvas, …)`) call
    current version lacks, and geometry outside the canvas editing bounds
    (±1,000,000 world units, sizes up to 100,000), before touching anything.
 3. It records the canvas's reference to the artifact through the
-   `ArtifactCanvases` port. DSS implements it with the channel service's
+   `ArtifactCanvases` port, as a mention whose id is derived from the item id
+   (uuid v5). DSS implements it with the channel service's
    `create_entity_mention`, the domain behind `POST /channels/mentions` that
-   the canvas UI calls when it inserts a document node.
+   the canvas UI calls when it inserts a document node, and keeps a mention
+   already recorded under that id.
 4. It commits the node through the documents domain's `CanvasEmbedder`,
    which mints an edit permission token for the publisher (actor: their agent)
    and calls the editing worker's internal `embed` request on `POST /canvas`
    (see `services/ai-editing-worker/AI_EDITING.md`). The worker writes the node
    and the mention id into the canvas's `canvasMentions` map in the same flush,
    so the canvas UI's reference reconciliation sees it as already recorded.
-5. When the embed fails, the mention is deleted again. A lost worker
-   acknowledgement can still have committed the node; the canvas then shows it
-   without a References entry.
+   A node already under the item id (same document) is left as it is, and a
+   mention already in the map is not written again.
+5. When the embed fails, the error is returned and the mention stays.
+   Retrying with the same `item_id` converges on one mention and one node,
+   whether or not the failed attempt committed.
 
 The span is `canvas.embed_artifact` (document_id, canvas_id, version, scene,
 item_id); the worker's `canvas.ai.session` span (action `embed`) joins it.

@@ -1617,6 +1617,7 @@ export * from './pipelineRecordType';
 export * from './pipelineSharing';
 export * from './pipelineTrashedAt';
 export * from './placeArtifactRequest';
+export * from './placeArtifactRequestItemId';
 export * from './placeArtifactRequestScene';
 export * from './placeArtifactResponse';
 export * from './postActivityRequest';

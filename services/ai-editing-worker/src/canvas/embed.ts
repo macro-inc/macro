@@ -2,12 +2,17 @@ import { z } from 'zod';
 import { embedDocumentOpSchema } from './schema';
 import type { CanvasSession } from './session';
 
-/** The internal embed request: one document node and the mention its caller recorded. */
+/**
+ * The internal embed request: one document node under a caller-chosen item
+ * id, and the mention its caller recorded. Repeating it is a no-op, so a
+ * caller that lost the response retries with the same ids.
+ */
 export const canvasEmbedRequest = embedDocumentOpSchema
   .omit({ kind: true, id: true })
   .extend({
     action: z.literal('embed'),
-    mentionId: z.string().min(1).max(200),
+    itemId: z.string().uuid(),
+    mentionId: z.string().uuid(),
   })
   .strict();
 export type CanvasEmbedRequest = z.infer<typeof canvasEmbedRequest>;
@@ -20,8 +25,7 @@ export async function embedCanvasDocument(
   session: CanvasSession,
   request: CanvasEmbedRequest
 ) {
-  const itemId = crypto.randomUUID();
-  const { action: _action, mentionId, ...node } = request;
+  const { action: _action, itemId, mentionId, ...node } = request;
   const outcome = await session.apply(
     [{ ...node, kind: 'embedDocument', id: itemId }],
     { references: { [mentionId]: request.documentId } }

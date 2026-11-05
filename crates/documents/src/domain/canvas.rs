@@ -197,6 +197,9 @@ pub struct CanvasResult {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CanvasDocumentEmbed {
+    /// The node's canvas item id. The worker leaves a node already committed
+    /// under it as it is, so a retried embed adds one node.
+    pub item_id: uuid::Uuid,
     /// The embedded document.
     pub document_id: String,
     /// Its name, shown on the node.
@@ -216,7 +219,7 @@ pub struct CanvasDocumentEmbed {
     pub height: f64,
     /// The canvas's entity mention of the document, tracked next to the node
     /// in the same commit so the canvas UI sees the reference as recorded.
-    pub mention_id: String,
+    pub mention_id: uuid::Uuid,
 }
 
 /// Metadata needed to select the Canvas workflow after access is checked.
@@ -517,7 +520,7 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasEmbedder<D, W> {
     }
 
     /// Commit `embed` to the canvas the receipt grants edit access to, as
-    /// `user` acting through `actor`. Returns the new item id.
+    /// `user` acting through `actor`. Repeating it is a no-op.
     #[tracing::instrument(
         skip_all,
         fields(document_id = %receipt.entity().entity_id, embedded_id = %embed.document_id),
@@ -529,7 +532,7 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasEmbedder<D, W> {
         user: &MacroUserIdStr<'static>,
         actor: Option<&str>,
         embed: CanvasDocumentEmbed,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<()> {
         let document_id = &receipt.entity().entity_id;
         let file_type = self.documents.file_type(document_id).await?;
         anyhow::ensure!(

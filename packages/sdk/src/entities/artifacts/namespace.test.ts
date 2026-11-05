@@ -256,7 +256,7 @@ describe('artifact.placeOn', () => {
         }) => {
           expect(path.document_id).toBe(ARTIFACT);
           places.push(body);
-          return { data: { item_id: 'item-1' } };
+          return { data: { item_id: body.item_id } };
         },
       },
     } as unknown as MacroClient;
@@ -270,8 +270,11 @@ describe('artifact.placeOn', () => {
 
     const placement = await artifact.placeOn(canvas, { scene, x: 10, y: 20 });
 
+    const itemId = places[0]?.item_id ?? '';
+    expect(itemId).toMatch(/^[0-9a-f-]{36}$/);
     expect(places).toEqual([
       {
+        item_id: itemId,
         canvas_id: 'canvas-1',
         scene: 'empty',
         x: 10,
@@ -280,9 +283,33 @@ describe('artifact.placeOn', () => {
         height: 600,
       },
     ]);
-    expect(placement.itemId).toBe('item-1');
+    expect(placement.itemId).toBe(itemId);
     expect(placement.canvas).toBe(canvas);
     expect(scene.webUrl()).toBe(`${WEB}/app/artifact/${ARTIFACT}?scene=empty`);
+  });
+  test('retries a lost response once with the same item id', async () => {
+    const itemIds: (string | null | undefined)[] = [];
+    let attempts = 0;
+    const client = {
+      webAppUrl: WEB,
+      storage: {
+        placeArtifact: async ({ body }: { body: PlaceArtifactRequest }) => {
+          itemIds.push(body.item_id);
+          attempts += 1;
+          if (attempts === 1) throw new TypeError('connection reset');
+          return { data: { item_id: body.item_id } };
+        },
+      },
+    } as unknown as MacroClient;
+
+    const placement = await Artifact.byId(client, ARTIFACT).placeOn(
+      Document.byId(client, 'canvas-1'),
+      { x: 0, y: 0 },
+    );
+
+    expect(itemIds).toHaveLength(2);
+    expect(itemIds[0]).toBe(itemIds[1]);
+    expect(placement.itemId).toBe(itemIds[0] ?? '');
   });
 });
 

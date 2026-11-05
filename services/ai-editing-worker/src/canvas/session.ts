@@ -363,12 +363,15 @@ export async function withCanvasSession<T>(
                 );
                 backend.commit(next, artifactLibraryEdits(ops));
                 const references = Object.entries(options.references ?? {});
+                // Already recorded mentions stay as they are, so retries add nothing.
                 if (references.length) {
                   const mentions = doc.getMap(
                     `canvasMentions:${source.documentId}`
                   );
+                  const tracked = mentions.toJSON();
                   for (const [mentionId, targetId] of references)
-                    mentions.set(mentionId, targetId);
+                    if (tracked[mentionId] !== targetId)
+                      mentions.set(mentionId, targetId);
                   doc.commit({ origin: GRAPHICS_METADATA_ORIGIN });
                 }
                 try {

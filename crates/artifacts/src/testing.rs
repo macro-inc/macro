@@ -261,37 +261,38 @@ impl ArtifactNotifier for RecordingNotifier {
     }
 }
 
-/// A reference the fake canvases recorded: `(canvas id, document id, user id)`.
-pub(crate) type RecordedReference = (String, String, String);
+/// A reference the fake canvases recorded:
+/// `(mention id, canvas id, document id, user id)`.
+pub(crate) type RecordedReference = (uuid::Uuid, String, String, String);
 
-/// Canvases that record references and nodes. `refuse_embed` makes every
-/// embed fail, as a canvas that refuses the write would.
+/// Canvases that keep references by mention id and nodes by item id, so a
+/// repeated write leaves one of each, as the real adapters do.
+/// `refuse_embed` makes every embed fail, as a canvas refusing the write would.
 #[derive(Default)]
 pub(crate) struct FakeCanvases {
     pub(crate) refuse_embed: bool,
     pub(crate) references: Mutex<Vec<RecordedReference>>,
-    pub(crate) forgotten: Mutex<Vec<String>>,
     pub(crate) embedded: Mutex<Vec<(String, Publisher, CanvasDocumentNode)>>,
 }
 
 impl ArtifactCanvases for FakeCanvases {
     async fn record_reference(
         &self,
+        mention_id: uuid::Uuid,
         canvas_id: &str,
         document_id: &str,
         user_id: &str,
-    ) -> Result<String, ArtifactError> {
+    ) -> Result<(), ArtifactError> {
         let mut references = self.references.lock().unwrap();
-        references.push((
-            canvas_id.to_string(),
-            document_id.to_string(),
-            user_id.to_string(),
-        ));
-        Ok(format!("mention-{}", references.len()))
-    }
-
-    async fn forget_reference(&self, mention_id: &str) {
-        self.forgotten.lock().unwrap().push(mention_id.to_string());
+        if !references.iter().any(|(id, ..)| *id == mention_id) {
+            references.push((
+                mention_id,
+                canvas_id.to_string(),
+                document_id.to_string(),
+                user_id.to_string(),
+            ));
+        }
+        Ok(())
     }
 
     async fn embed(
@@ -299,14 +300,19 @@ impl ArtifactCanvases for FakeCanvases {
         canvas: EntityAccessReceipt<EditAccessLevel>,
         publisher: &Publisher,
         node: CanvasDocumentNode,
-    ) -> Result<String, ArtifactError> {
+    ) -> Result<(), ArtifactError> {
         if self.refuse_embed {
             return Err(ArtifactError::BadRequest(
                 "the canvas refused the node".to_string(),
             ));
         }
         let mut embedded = self.embedded.lock().unwrap();
-        embedded.push((canvas.entity().entity_id.clone(), publisher.clone(), node));
-        Ok(format!("item-{}", embedded.len()))
+        if !embedded
+            .iter()
+            .any(|(_, _, existing)| existing.item_id == node.item_id)
+        {
+            embedded.push((canvas.entity().entity_id.clone(), publisher.clone(), node));
+        }
+        Ok(())
     }
 }

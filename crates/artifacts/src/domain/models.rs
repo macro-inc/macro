@@ -258,6 +258,9 @@ pub const MAX_CANVAS_SIZE: f64 = 100_000.0;
 /// Place an artifact, or one of its scenes, on a canvas.
 #[derive(Debug, Clone)]
 pub struct PlaceArtifact {
+    /// The new node's canvas item id. Retrying a placement with the same id
+    /// converges on one node and one reference; a new id when `None`.
+    pub item_id: Option<uuid::Uuid>,
     /// The scene to show instead of `index.html`; it must exist in the
     /// current version.
     pub scene: Option<String>,
@@ -274,8 +277,8 @@ pub struct PlaceArtifact {
 /// An artifact placed on a canvas.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Placement {
-    /// The canvas item id of the new node.
-    pub item_id: String,
+    /// The canvas item id of the node.
+    pub item_id: uuid::Uuid,
 }
 
 /// Who views: the identity a view token is minted for.

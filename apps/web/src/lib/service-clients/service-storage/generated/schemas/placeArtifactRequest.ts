@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PlaceArtifactRequestItemId } from './placeArtifactRequestItemId';
 import type { PlaceArtifactRequestScene } from './placeArtifactRequestScene';
 
 /**
@@ -14,6 +15,9 @@ export interface PlaceArtifactRequest {
   canvas_id: string;
   /** Node height. */
   height: number;
+  /** The node's canvas item id. Retry a placement with the same id to get
+one node and one reference; a new id when omitted. */
+  item_id?: PlaceArtifactRequestItemId;
   /** Scene to show instead of `index.html`; it must exist in the current
 version. */
   scene?: PlaceArtifactRequestScene;

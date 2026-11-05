@@ -889,6 +889,12 @@ export const placeArtifactBody = zod
       .string()
       .describe('The canvas document; needs edit access to it.'),
     height: zod.number().describe('Node height.'),
+    item_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The node's canvas item id. Retry a placement with the same id to get\none node and one reference; a new id when omitted."
+      ),
     scene: zod
       .string()
       .nullish()

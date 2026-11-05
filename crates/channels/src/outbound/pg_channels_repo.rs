@@ -2912,7 +2912,7 @@ impl ChannelRepo for PgChannelsRepo {
         &self,
         options: CreateEntityMentionOptions,
     ) -> Result<EntityMention, Self::Err> {
-        let id = macro_uuid::generate_uuid_v7();
+        let id = options.id.unwrap_or_else(macro_uuid::generate_uuid_v7);
         let mention = sqlx::query_as!(
             EntityMention,
             r#"

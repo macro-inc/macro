@@ -210,34 +210,44 @@ impl CanvasesForArtifacts {
     }
 }
 
+impl CanvasesForArtifacts {
+    async fn recorded(&self, mention_id: uuid::Uuid) -> Result<bool, ArtifactError> {
+        Ok(self
+            .channels
+            .get_entity_mention(mention_id)
+            .await
+            .map_err(|error| ArtifactError::Internal(anyhow::Error::new(error)))?
+            .is_some())
+    }
+}
+
 impl ArtifactCanvases for CanvasesForArtifacts {
     async fn record_reference(
         &self,
+        mention_id: uuid::Uuid,
         canvas_id: &str,
         document_id: &str,
         user_id: &str,
-    ) -> Result<String, ArtifactError> {
-        let mention = self
+    ) -> Result<(), ArtifactError> {
+        if self.recorded(mention_id).await? {
+            return Ok(());
+        }
+        let created = self
             .channels
             .create_entity_mention(CreateEntityMentionOptions {
+                id: Some(mention_id),
                 source_entity_type: "document".to_string(),
                 source_entity_id: canvas_id.to_string(),
                 entity_type: "document".to_string(),
                 entity_id: document_id.to_string(),
                 user_id: Some(user_id.to_string()),
             })
-            .await
-            .map_err(|error| ArtifactError::Internal(anyhow::Error::new(error)))?;
-        Ok(mention.id.to_string())
-    }
-
-    async fn forget_reference(&self, mention_id: &str) {
-        let Ok(id) = uuid::Uuid::parse_str(mention_id) else {
-            tracing::warn!(mention_id, "canvas reference id is not a uuid");
-            return;
-        };
-        if let Err(error) = self.channels.delete_entity_mention(id).await {
-            tracing::warn!(error = ?error, mention_id, "failed to forget a canvas reference");
+            .await;
+        match created {
+            Ok(_) => Ok(()),
+            // A concurrent retry recorded it first.
+            Err(_) if self.recorded(mention_id).await? => Ok(()),
+            Err(error) => Err(ArtifactError::Internal(anyhow::Error::new(error))),
         }
     }
 
@@ -246,7 +256,7 @@ impl ArtifactCanvases for CanvasesForArtifacts {
         canvas: EntityAccessReceipt<EditAccessLevel>,
         publisher: &Publisher,
         node: CanvasDocumentNode,
-    ) -> Result<String, ArtifactError> {
+    ) -> Result<(), ArtifactError> {
         let user = MacroUserIdStr::try_from(publisher.user_id.clone()).map_err(|error| {
             ArtifactError::Internal(anyhow::anyhow!("invalid user id: {error}"))
         })?;
@@ -256,6 +266,7 @@ impl ArtifactCanvases for CanvasesForArtifacts {
                 &user,
                 publisher.agent.as_deref(),
                 CanvasDocumentEmbed {
+                    item_id: node.item_id,
                     document_id: node.document_id,
                     name: node.name,
                     file_type: node.file_type,

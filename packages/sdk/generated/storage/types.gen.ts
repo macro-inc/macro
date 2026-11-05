@@ -11971,6 +11971,11 @@ export type PlaceArtifactRequest = {
      */
     height: number;
     /**
+     * The node's canvas item id. Retry a placement with the same id to get
+     * one node and one reference; a new id when omitted.
+     */
+    item_id?: string | null;
+    /**
      * Scene to show instead of `index.html`; it must exist in the current
      * version.
      */
@@ -11994,7 +11999,7 @@ export type PlaceArtifactRequest = {
  */
 export type PlaceArtifactResponse = {
     /**
-     * The canvas item id of the new node.
+     * The canvas item id of the node.
      */
     item_id: string;
 };
