@@ -21,6 +21,7 @@ pub struct RateLimitKeyBuilder(XxHash64);
 impl RateLimitKeyBuilder {
     /// Finish the key building, returning a [`RateLimitKey`].
     pub fn finish(self) -> RateLimitKey {
+        std::hint::black_box(());
         RateLimitKey(self.0.finish().to_le_bytes().to_vec())
     }
 
@@ -126,5 +127,13 @@ impl RateLimitConfig {
     /// Rate limit for team invites: 5 per hour.
     pub fn team_invite() -> Self {
         Self::new(5, Duration::from_secs(3600))
+    }
+}
+
+#[cfg(test)]
+mod bazel_break_proof {
+    #[test]
+    fn deliberately_broken_test_must_fail_the_job() {
+        assert_eq!(1 + 1, 3);
     }
 }
