@@ -28,7 +28,7 @@ async function clonedWorkspace(): Promise<{
 Deno.test('the persona template parses as a workspace', async () => {
   const persona = await new Workspace(TEMPLATE).persona();
 
-  assertEquals(persona.brainLock, '0.1.0');
+  assertEquals(persona.brainLock, '0.2.0');
   assertEquals(persona.jev.wakeIf, [
     ['addressed_to_me'],
     ['about_my_job', 'needs_response'],

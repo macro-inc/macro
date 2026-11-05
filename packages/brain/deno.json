@@ -1,13 +1,17 @@
 {
   "name": "@macro-inc/brain",
-  "version": "0.1.0",
-  "exports": "./src/main.ts",
-  "unstable": ["sloppy-imports"],
+  "version": "0.2.0",
+  "exports": "./src/mod.ts",
+  "unstable": [
+    "sloppy-imports"
+  ],
   "nodeModulesDir": "auto",
   "compilerOptions": {
     "strict": true,
     "noImplicitOverride": false,
-    "lib": ["deno.window"]
+    "lib": [
+      "deno.window"
+    ]
   },
   "imports": {
     "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk@0.3.318",
@@ -20,11 +24,11 @@
     "@opentelemetry/exporter-trace-otlp-http": "npm:@opentelemetry/exporter-trace-otlp-http@0.220.0",
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "ts-pattern": "npm:ts-pattern@^5.8.0",
-    "uuid": "npm:uuid@^11.1.1"
+    "uuid": "npm:uuid@^11.1.1",
+    "zod": "npm:zod@4.6.7"
   },
   "tasks": {
-    "test": "deno test --allow-read --allow-write --allow-run=git,cp --allow-env --allow-net=127.0.0.1 src/",
-    "check": "deno check src/",
-    "compile": "bash ./compile.sh"
+    "test": "deno test --allow-read --allow-write --allow-run --allow-env --allow-sys=homedir,osRelease,hostname,uid,gid --allow-net=127.0.0.1 src/",
+    "check": "deno check src/"
   }
 }

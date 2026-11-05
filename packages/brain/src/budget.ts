@@ -33,6 +33,12 @@ export function parseBudget(raw: unknown): Budget {
   }
   return {
     perRunUsd: {
+      ...Object.fromEntries(
+        Object.entries(perRunUsd).map(([tier, cap]) => [
+          tier,
+          positive(cap, `perRunUsd.${tier}`),
+        ])
+      ),
       respond: positive(perRunUsd.respond, 'perRunUsd.respond'),
       heartbeat: positive(perRunUsd.heartbeat, 'perRunUsd.heartbeat'),
       work: positive(perRunUsd.work, 'perRunUsd.work'),

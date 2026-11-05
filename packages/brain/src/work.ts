@@ -6,7 +6,7 @@ import type { Conversation } from './control.ts';
 import type { Entry } from './history.ts';
 import type { Pool } from './pool.ts';
 import { followUp, type InFlight } from './prompts.ts';
-import type { Outcome, RunHandle } from './runner.ts';
+import type { Outcome, RunHandle, Tier } from './runner.ts';
 import type { Git } from './workspace.ts';
 
 export type CreatedTask = { id: string; url: string };
@@ -38,6 +38,7 @@ export type WorkDeps = {
     conversation: Conversation,
     description: string
   ): Promise<{
+    tier?: Tier;
     prompt: string;
     system: string;
     model: string;
@@ -54,6 +55,8 @@ export class Work {
   private readonly running = new Map<string, Running>();
   /** Conversations whose hand-off is being set up, so a second one can't race it. */
   private readonly starting = new Set<string>();
+  private readonly launches = new Set<Promise<CreatedTask>>();
+  private draining = false;
   /** Runs reporting, committing and cleaning up after they end. */
   private readonly finishing = new Set<Promise<void>>();
 
@@ -90,6 +93,7 @@ export class Work {
     label: string,
     description: string
   ): Promise<CreatedTask> {
+    if (this.draining) throw new Error('work is draining');
     const key = conversationKey(conversation);
     const existing = this.running.get(key);
     if (existing || this.starting.has(key)) {
@@ -104,10 +108,13 @@ export class Work {
     }
 
     this.starting.add(key);
+    const launching = this.launch(key, conversation, label, description);
+    this.launches.add(launching);
     try {
-      return await this.launch(key, conversation, label, description);
+      return await launching;
     } finally {
       this.starting.delete(key);
+      this.launches.delete(launching);
     }
   }
 
@@ -135,7 +142,7 @@ export class Work {
       );
 
     const turnId = `work-${task.id}`;
-    const { prompt, system, model, env } = await this.deps.turn(
+    const { prompt, system, model, env, tier } = await this.deps.turn(
       task,
       conversation,
       description
@@ -144,7 +151,7 @@ export class Work {
     try {
       handle = await this.deps.pool.start({
         id: turnId,
-        tier: 'work',
+        tier: tier ?? 'work',
         prompt,
         system,
         model,
@@ -174,6 +181,13 @@ export class Work {
       .finally(() => this.finishing.delete(finished));
     this.finishing.add(finished);
     return task;
+  }
+
+  /** Stop admissions and finish starts already underway, then all active turns. */
+  async drain(): Promise<void> {
+    this.draining = true;
+    await Promise.allSettled(this.launches);
+    await this.settled();
   }
 
   /** Abort every running work run and wait for them to report and clean up (shutdown). */

@@ -3,7 +3,6 @@ import { Brain } from './brain.ts';
 import { AsyncQueue } from './channel.ts';
 import { gatewayHosts } from './config.ts';
 import { MacroHttp } from './macro.ts';
-import type { Socket } from './presence.ts';
 import type { Outcome, RunEvent, RunHandle, Turn } from './runner.ts';
 import { gitCli } from './workspace.ts';
 
@@ -87,13 +86,11 @@ Deno.test('a direct message wakes a respond turn that replies, shows typing, and
   const turns: Turn[] = [];
   const brain: Brain = new Brain({
     config: {
-      macroApiKey: 'mak_agent',
       gateway: 'https://gateway.example',
       hosts: gatewayHosts('https://gateway.example'),
       workspace,
       healthPort: 0,
       anthropicBaseUrl: 'https://gateway.example/anthropic',
-      anthropicAuthToken: 'gateway-token',
     },
     http,
     tasks: { create: () => Promise.reject(new Error('no hand-off here')) },
@@ -128,14 +125,7 @@ Deno.test('a direct message wakes a respond turn that replies, shows typing, and
       },
     },
     git,
-    openSocket: (): Socket => ({
-      readyState: 0,
-      send: () => {},
-      close: () => {},
-      onopen: null,
-      onclose: null,
-      onerror: null,
-    }),
+    presence: () => () => {},
     exe: '/usr/local/bin/brain',
     baseEnv: { PATH: '/usr/bin' },
     log: () => {},

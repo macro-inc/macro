@@ -34,7 +34,7 @@ import { Lanes } from './lanes.ts';
 import type { ChannelDetail, MacroHttp } from './macro.ts';
 import { Memory } from './memory.ts';
 import { Pool } from './pool.ts';
-import { type OpenSocket, startTyping, stayOnline } from './presence.ts';
+import { startTyping } from './presence.ts';
 import {
   heartbeatPrompt,
   respondPrompt,
@@ -44,17 +44,21 @@ import {
 import type { RunHandle, Runner, Tier } from './runner.ts';
 import { type Routines, Schedules, type Trigger } from './schedules.ts';
 import { startSpan } from './telemetry.ts';
+import type { BrainCall, OutboundNext, PostResult, Wiring } from './wiring.ts';
 import { conversationKey, type Tasks, Work } from './work.ts';
 import { type Git, GitWriter, Workspace } from './workspace.ts';
 
+export type { Wiring } from './wiring.ts';
+
 export type BrainDeps = {
-  config: Config;
+  config: Omit<Config, 'macroApiKey' | 'anthropicAuthToken'>;
   http: MacroHttp;
   tasks: Tasks;
   routines: Routines;
   runner: Runner;
   git: Git;
-  openSocket: OpenSocket;
+  /** Live presence adapter retains its credential in the library. */
+  presence: () => () => void;
   /** The `brain` executable turns call. */
   exe: string;
   /** PATH and HOME for turns. */
@@ -82,6 +86,7 @@ export class Brain implements Control {
   private readonly startedAt = new Date().toISOString();
   private readonly problems = new Set<string>();
 
+  private draining = false;
   private me = '';
   private connected = false;
   private lastEventAt: string | null = null;
@@ -91,7 +96,10 @@ export class Brain implements Control {
   private lanes!: Lanes<Entry>;
   private scheduleBook!: Schedules;
 
-  constructor(private readonly deps: BrainDeps) {
+  constructor(
+    private readonly deps: BrainDeps,
+    private readonly wiring: Wiring = {}
+  ) {
     this.workspace = new Workspace(deps.config.workspace);
     this.writer = new GitWriter(this.workspace, deps.git);
     this.memory = new Memory(this.workspace, this.writer);
@@ -125,8 +133,41 @@ export class Brain implements Control {
 
     this.pool = new Pool({
       runner: this.deps.runner,
-      limits: persona.events.concurrency,
-      budget: async () => (await this.workspace.persona()).budget,
+      limits: {
+        ...persona.events.concurrency,
+        ...Object.fromEntries(
+          Object.entries(this.wiring.tiers ?? {}).map(([name, tier]) => [
+            name,
+            tier.concurrency,
+          ])
+        ),
+      },
+      speaking: Object.fromEntries(
+        Object.entries(this.wiring.tiers ?? {}).map(([name, tier]) => [
+          name,
+          tier.speaking ?? false,
+        ])
+      ),
+      beforeTurn: (turn) => {
+        const prepared = { ...turn, tools: turn.tools ?? this.wiring.tools };
+        return this.wiring.beforeTurn?.(prepared) ?? prepared;
+      },
+      afterTurn: this.wiring.afterTurn,
+      budget: async () => {
+        const budget = (await this.workspace.persona()).budget;
+        return {
+          ...budget,
+          perRunUsd: {
+            ...budget.perRunUsd,
+            ...Object.fromEntries(
+              Object.entries(this.wiring.tiers ?? {}).map(([name, tier]) => [
+                name,
+                tier.perRunUsd,
+              ])
+            ),
+          },
+        };
+      },
       ledger: this.ledger,
       log: (line) => this.log(line),
     });
@@ -139,6 +180,13 @@ export class Brain implements Control {
       turn: async (task, conversation, description) => {
         const current = await this.workspace.persona();
         return {
+          tier:
+            (await this.wiring.route?.({
+              kind: 'work',
+              task,
+              conversation,
+              description,
+            })) ?? 'work',
           prompt: workPrompt({
             instructions: current.prompts.work,
             talk: talkCommands(this.deps.exe, 'work'),
@@ -164,6 +212,18 @@ export class Brain implements Control {
       this.deps.routines,
       persona.events.scheduleModel
     );
+    for (const configured of this.wiring.schedules ?? []) {
+      const existing = (await this.scheduleBook.list()).find(
+        (schedule) => schedule.note === configured.note
+      );
+      if (
+        existing &&
+        JSON.stringify(existing.trigger) === JSON.stringify(configured.trigger)
+      )
+        continue;
+      if (existing) await this.scheduleBook.delete(existing.routineId);
+      await this.scheduleBook.create(configured.note, configured.trigger);
+    }
     this.lanes = new Lanes<Entry>(
       this.workspace.path('cache', 'lanes'),
       (lane, batch) => this.respond(lane, batch),
@@ -177,22 +237,20 @@ export class Brain implements Control {
       {
         hostname: '127.0.0.1',
         port: this.deps.config.healthPort,
-        signal,
         onListen: () => {},
       },
       controlHandler(this, this.controlToken, (line) => this.log(line))
     );
-    const offline = stayOnline({
-      url: this.deps.config.hosts.connection,
-      apiKey: this.deps.config.macroApiKey,
-      open: this.deps.openSocket,
-      log: (line) => this.log(line),
-    });
+    const offline = this.deps.presence();
+    const heartbeats = new Set<Promise<void>>();
+    const queueHeartbeat = (reason: string | null) => {
+      const running = this.heartbeat(reason)
+        .catch((error) => this.log({ heartbeat_failed: String(error) }))
+        .finally(() => heartbeats.delete(running));
+      heartbeats.add(running);
+    };
     const heartbeat = setInterval(
-      () =>
-        this.heartbeat(null).catch((error) =>
-          this.log({ heartbeat_failed: String(error) })
-        ),
+      () => queueHeartbeat(null),
       persona.events.heartbeatMinutes * 60_000
     );
     this.scheduleBook
@@ -207,6 +265,7 @@ export class Brain implements Control {
           MESSAGE_POSTED,
           AGENT_SESSION_OPENED,
           ...persona.events.events,
+          ...(this.wiring.subscriptions ?? []),
         ],
       },
     ];
@@ -235,6 +294,7 @@ export class Brain implements Control {
         }
         this.lastEventAt = new Date().toISOString();
         const { event } = item;
+        await this.wiring.onEvent?.(event, this);
         if (event.type === MESSAGE_POSTED) {
           await this.onMessage(event.metadata).catch((error) =>
             this.log({
@@ -245,21 +305,26 @@ export class Brain implements Control {
         } else if (event.type === AGENT_SESSION_OPENED) {
           const wake = await this.scheduleBook.wakeFor(event.metadata, this.me);
           if (wake) {
+            if (
+              this.wiring.onSchedule &&
+              (await this.wiring.onSchedule(wake, this)) !== false
+            )
+              continue;
             const reason = wake.schedule
               ? `schedule: ${wake.schedule.note}`
               : `a routine run with no schedule record: ${wake.sessionName}`;
-            this.heartbeat(reason).catch((error) =>
-              this.log({ heartbeat_failed: String(error) })
-            );
+            queueHeartbeat(reason);
           }
         }
       }
     } finally {
       clearInterval(heartbeat);
       offline();
-      await this.work.stopAll();
+      this.draining = true;
       await this.lanes.shutdown();
-      await server.finished;
+      await this.work.drain();
+      await Promise.all(heartbeats);
+      await server.shutdown();
       this.log({ brain: 'stopped' });
     }
   }
@@ -345,7 +410,7 @@ export class Brain implements Control {
       text: message.text,
       thread: message.thread,
     });
-    const decision = await judge(
+    const decision = await (this.wiring.relevance ?? judge)(
       {
         messageId: entry.id,
         channel: entry.channel,
@@ -417,7 +482,8 @@ export class Brain implements Control {
     let handle: RunHandle;
     try {
       handle = await this.startTurn(
-        'respond',
+        (await this.wiring.route?.({ kind: 'respond', lane, batch })) ??
+          'respond',
         turnId,
         prompt,
         persona.operating,
@@ -514,7 +580,8 @@ export class Brain implements Control {
         now: new Date(),
       });
       const handle = await this.startTurn(
-        'heartbeat',
+        (await this.wiring.route?.({ kind: 'heartbeat', reason })) ??
+          'heartbeat',
         turnId,
         prompt,
         persona.operating,
@@ -536,15 +603,31 @@ export class Brain implements Control {
     turn: string | null,
     conversation: Conversation,
     text: string
-  ): Promise<{ id: string }> {
-    const message = await this.deps.http.post(
-      conversation.channel,
-      text,
-      conversation.root ?? undefined
+  ): Promise<PostResult> {
+    const send: OutboundNext = async (outbound) => {
+      const message = await this.deps.http.post(
+        outbound.channel,
+        outbound.text,
+        outbound.root ?? undefined
+      );
+      await this.memory.said(conversationKey(outbound), outbound.text);
+      return { id: message.id };
+    };
+    const pipeline = (this.wiring.outbound ?? []).reduceRight<OutboundNext>(
+      (next, middleware) => (message) => middleware(message, next),
+      send
     );
-    if (turn) await this.typing.get(turn)?.();
-    await this.memory.said(conversationKey(conversation), text);
-    return { id: message.id };
+    try {
+      return await pipeline({ ...conversation, turn, text });
+    } finally {
+      if (turn) await this.typing.get(turn)?.();
+    }
+  }
+
+  /** Call adapters dispatch lifecycle events here; transports are supplied separately. */
+  async onCall(call: BrainCall): Promise<void> {
+    if (this.draining) throw new Error('brain is draining for reload');
+    await this.wiring.onCall?.(call, this);
   }
 
   // Control: what turns and macrod call.
@@ -609,6 +692,7 @@ export class Brain implements Control {
   }
 
   async handoff(conversation: Conversation, label: string, task: string) {
+    if (this.draining) throw new Error('brain is draining for reload');
     const created = await this.work.start(conversation, label, task);
     return { taskId: created.id };
   }

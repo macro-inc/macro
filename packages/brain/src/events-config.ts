@@ -13,7 +13,11 @@ export type EventsConfig = {
   /** Kill a respond turn after this long. */
   respondTimeoutMinutes: number;
   /** Turns per tier allowed to run at once. */
-  concurrency: { respond: number; heartbeat: number; work: number };
+  concurrency: Record<string, number> & {
+    respond: number;
+    heartbeat: number;
+    work: number;
+  };
 };
 
 export class EventsConfigError extends Error {}
@@ -67,6 +71,12 @@ export function parseEventsConfig(raw: unknown): EventsConfig {
       'respondTimeoutMinutes'
     ),
     concurrency: {
+      ...Object.fromEntries(
+        Object.entries(concurrency).map(([tier, limit]) => [
+          tier,
+          count(limit, `concurrency.${tier}`),
+        ])
+      ),
       respond: count(concurrency.respond, 'concurrency.respond'),
       heartbeat: count(concurrency.heartbeat, 'concurrency.heartbeat'),
       work: count(concurrency.work, 'concurrency.work'),

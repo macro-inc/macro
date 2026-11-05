@@ -3,17 +3,25 @@
 // `AgentSdkRunner` runs the Claude Agent SDK in-process with streaming input:
 // each `inject` is another user message in the same session, and the input
 // closes once every message has its result.
+
 import type {
   Options,
   SDKMessage,
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
+import { createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { match } from 'ts-pattern';
 import { AsyncQueue } from './channel.ts';
 import { startSpan, traceHeaders } from './telemetry.ts';
 
-export type Tier = 'respond' | 'heartbeat' | 'work';
+export type Tier = string;
+export type BrainTool = NonNullable<
+  Parameters<typeof createSdkMcpServer>[0]['tools']
+>[number];
+export type TurnRequest = Omit<Turn, 'maxBudgetUsd'> & {
+  maxBudgetUsd?: number;
+};
 
 export type Turn = {
   id: string;
@@ -27,6 +35,8 @@ export type Turn = {
   cwd: string;
   model: string;
   maxBudgetUsd: number;
+  /** TypeScript handlers exposed as a per-turn in-process MCP server. */
+  tools?: BrainTool[];
   /** Environment for the agent's tools (talk commands reach the brain through it). */
   env: Record<string, string>;
 };
@@ -64,6 +74,7 @@ export type QueryFunction = (params: {
 
 export type AgentSdkRunnerOptions = {
   query: QueryFunction;
+  tools?: Options['tools'];
   /** The `claude` executable the SDK drives. */
   claudeExecutable: string;
   /** Claude access through Macro's gateway; never a personal login. */
@@ -116,6 +127,15 @@ export class AgentSdkRunner implements Runner {
         this.options.query({
           prompt: input,
           options: {
+            tools: this.options.tools,
+            mcpServers: turn.tools?.length
+              ? {
+                  brain: createSdkMcpServer({
+                    name: 'brain',
+                    tools: turn.tools,
+                  }),
+                }
+              : undefined,
             cwd: turn.cwd,
             model: turn.model,
             maxBudgetUsd: turn.maxBudgetUsd,

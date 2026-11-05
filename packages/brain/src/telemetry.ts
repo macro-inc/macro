@@ -19,6 +19,7 @@ import { resourceFromAttributes } from '@opentelemetry/resources';
 import {
   BasicTracerProvider,
   BatchSpanProcessor,
+  type SpanExporter,
 } from '@opentelemetry/sdk-trace-base';
 import { ConfigError } from './config.ts';
 
@@ -61,10 +62,11 @@ let provisionParent = ROOT_CONTEXT;
 let provider: BasicTracerProvider | undefined;
 
 export async function initTelemetry(
-  env: (name: string) => string | undefined
+  env: (name: string) => string | undefined,
+  exporter?: SpanExporter
 ): Promise<void> {
   const { endpoint, traceparent } = telemetryConfig(env);
-  if (!endpoint) {
+  if (!endpoint && !exporter) {
     console.error(
       JSON.stringify({
         telemetry: 'off',
@@ -109,7 +111,9 @@ export async function initTelemetry(
       ...attributes,
     }),
     spanProcessors: [
-      new BatchSpanProcessor(new OTLPTraceExporter({ url: endpoint })),
+      new BatchSpanProcessor(
+        exporter ?? new OTLPTraceExporter({ url: endpoint })
+      ),
     ],
   });
   context.setGlobalContextManager(
