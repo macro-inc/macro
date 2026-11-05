@@ -29,6 +29,10 @@ enforced by the ordinary backend APIs.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
+- `src/entities/crm/pipeline-entry.ts`: `PipelineEntry` handles from the
+  name-based pipeline methods (`find`, `addRecords`, `updateEntries`,
+  `removeRecords`, `edit`, `importCsv`/`exportCsv`), which call
+  `crm::inbound::pipeline_workflows`; field values are tagged by kind.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the
