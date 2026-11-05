@@ -4,7 +4,15 @@ use macro_db_client::user::update_profile_picture::update_profile_picture;
 use model::response::{EmptyResponse, ErrorResponse};
 use models_sfs::FileMetadata;
 
-use crate::api::context::{ApiContext, AuthorizationService};
+use rate_limit::domain::{
+    models::{RateLimitConfig, RateLimitKey},
+    ports::RateLimitService,
+};
+
+use crate::api::{
+    context::{ApiContext, AuthorizationService},
+    middleware::rate_limit::RATE_LIMIT_ENABLED,
+};
 
 #[cfg(test)]
 mod test;
@@ -12,6 +20,13 @@ mod test;
 /// Image types browsers render as a profile picture. SVG is excluded: it can
 /// carry scripts and external references.
 const PROFILE_PICTURE_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
+/// The largest profile picture, matching the web app's limit.
+const MAX_PROFILE_PICTURE_BYTES: u64 = 16 * 1000 * 1000;
+
+/// Uploads one user may start per hour. Pictures rarely change, so this only
+/// stops a key from filling storage.
+const PROFILE_PICTURE_UPLOADS_PER_HOUR: u64 = 20;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, utoipa::ToSchema)]
 pub struct PutProfilePictureFileRequest {
@@ -66,6 +81,33 @@ pub struct CreateProfilePictureUploadRequest {
     pub file_name: String,
     /// Mime type of the image.
     pub content_type: String,
+    /// Exact size of the image in bytes. Storage rejects a body of any other size.
+    pub size_bytes: u64,
+}
+
+/// Why an upload cannot be reserved.
+#[derive(Debug, PartialEq, Eq)]
+enum ProfilePictureUploadError {
+    UnsupportedType,
+    Empty,
+    TooLarge,
+}
+
+fn validate_profile_picture_upload(
+    content_type: &str,
+    size_bytes: u64,
+) -> Result<(), ProfilePictureUploadError> {
+    if !PROFILE_PICTURE_TYPES.contains(&content_type) {
+        return Err(ProfilePictureUploadError::UnsupportedType);
+    }
+    if size_bytes == 0 {
+        return Err(ProfilePictureUploadError::Empty);
+    }
+    if size_bytes > MAX_PROFILE_PICTURE_BYTES {
+        return Err(ProfilePictureUploadError::TooLarge);
+    }
+
+    Ok(())
 }
 
 /// Reserves storage for a new profile picture. Static file storage has no
@@ -77,36 +119,89 @@ pub struct CreateProfilePictureUploadRequest {
     request_body = CreateProfilePictureUploadRequest,
     responses(
         (status = 200, body = ProfilePictureUpload),
-        (status = 400, body = ErrorResponse, description = "Not a supported image type"),
+        (status = 400, body = ErrorResponse, description = "Not a supported image type, or empty"),
         (status = 401, body = String),
+        (status = 413, body = ErrorResponse, description = "The image is larger than 16 MB"),
+        (status = 429, body = ErrorResponse, description = "Too many uploads this hour"),
         (status = 500, body = ErrorResponse),
     ),
 )]
 #[tracing::instrument(
     skip_all,
-    fields(user_id = %authorization.authorization.user.macro_user_id),
+    fields(
+        user_id = %authorization.authorization.user.macro_user_id,
+        size_bytes = req.size_bytes,
+        rate_limited = tracing::field::Empty,
+    ),
 )]
 pub async fn create_upload_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(req): Json<CreateProfilePictureUploadRequest>,
 ) -> Result<Json<ProfilePictureUpload>, (StatusCode, Json<ErrorResponse<'static>>)> {
-    if !PROFILE_PICTURE_TYPES.contains(&req.content_type.as_str()) {
-        return Err(error(StatusCode::BAD_REQUEST, "not a supported image type"));
-    }
+    validate_profile_picture_upload(&req.content_type, req.size_bytes).map_err(|e| match e {
+        ProfilePictureUploadError::UnsupportedType => {
+            error(StatusCode::BAD_REQUEST, "not a supported image type")
+        }
+        ProfilePictureUploadError::Empty => error(StatusCode::BAD_REQUEST, "the image is empty"),
+        ProfilePictureUploadError::TooLarge => error(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "profile pictures can be at most 16 MB",
+        ),
+    })?;
+
+    let user_id = authorization.authorization.user.macro_user_id.as_ref();
+
+    let ticket = if RATE_LIMIT_ENABLED {
+        let key = RateLimitKey::builder(&"profile-picture-upload")
+            .append(&user_id)
+            .finish();
+        let config = RateLimitConfig::new(
+            PROFILE_PICTURE_UPLOADS_PER_HOUR,
+            std::time::Duration::from_secs(60 * 60),
+        );
+        let result = ctx
+            .rate_limit_service
+            .check_rate_limit(key, config)
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, "unable to check profile picture rate limit");
+                error(StatusCode::INTERNAL_SERVER_ERROR, "unable to start upload")
+            })?;
+        tracing::Span::current().record("rate_limited", result.is_err());
+        let ticket = result.map_err(|_| {
+            error(
+                StatusCode::TOO_MANY_REQUESTS,
+                "too many profile picture uploads, try again later",
+            )
+        })?;
+        Some(ticket)
+    } else {
+        None
+    };
 
     let reserved = ctx
         .static_file_service_client
-        .reserve_for_user(
-            authorization.authorization.user.macro_user_id.as_ref(),
-            &req.file_name,
-            &req.content_type,
-        )
-        .await
-        .map_err(|e| {
+        .reserve_sized_for_user(user_id, &req.file_name, &req.content_type, req.size_bytes)
+        .await;
+    let reserved = match reserved {
+        Ok(reserved) => reserved,
+        Err(e) => {
             tracing::error!(error=?e, "unable to reserve profile picture upload");
-            error(StatusCode::INTERNAL_SERVER_ERROR, "unable to start upload")
-        })?;
+            if let Some(ticket) = ticket {
+                // Our failure should not spend the caller's allowance.
+                let _ = ctx
+                    .rate_limit_service
+                    .rollback_ticket(ticket)
+                    .await
+                    .inspect_err(|e| tracing::warn!(error=?e, "unable to roll back rate limit"));
+            }
+            return Err(error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "unable to start upload",
+            ));
+        }
+    };
 
     Ok(Json(ProfilePictureUpload {
         file_id: reserved.id,

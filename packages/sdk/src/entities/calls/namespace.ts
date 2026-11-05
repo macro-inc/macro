@@ -1,5 +1,5 @@
 import type { MacroClient } from '../../utils/client';
-import type { SearchOpts } from '../search';
+import type { SearchOpts } from '../search/options';
 import { CallRecord } from './call-record';
 
 /**

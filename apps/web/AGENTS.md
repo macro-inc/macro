@@ -94,10 +94,9 @@ searches, and picks by keyboard:
 Focus rows have a backend-free browser regression over the real row and mapping
 at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
 extra height or lost subject, touch rows of at least 44px, and the importance
-meter only under its sort, with the direction in its label while importance moves:
+meter on every row except on phones, with the direction in its label while
+importance moves:
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
-The fixture has its own sort buttons: the real touch layouts have no sort menu, so
-that coverage proves the meter's layout there, not that touch users can reach it.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
@@ -537,6 +536,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   pending edits against the persisted server snapshot instead of replaying an older one.
 - Mobile dock customization shares the navigation island’s measured capacity; persist ordering per user with `mobile-dock-order.ts`, preserve gated destinations, and keep Search and More fixed. Reorder handles drag without a hold delay; the rest of each row scrolls.
 - Share sidebar and mobile dock unread presence through `components/app/use-navigation-unread.ts`; keep badges reactive to read/done changes, guard all query data with `queryReadyGate` so pending preferences or paused queries cannot suspend the shell, and avoid fetching extra pages for counts.
+- Show notification unread dots on favorite rows in Chat, Tasks, Drive, and Reviews; reuse Chat's channel activity and the existing Soup entity hydration plus `getEntityNotifications` elsewhere, without a separate notification query or refresh registry. Never paginate favorites or the global notification feed just for dots.
 - Name Home thread rows from their latest scoped notification, including document mentions and reactions; use the thread author only when no notification exists. Document rows whose newest outstanding notification is a comment, and calendar event rows whose newest is a join request, say who did it (`row-notification.ts`).
 - Use `ChannelTitleIcon` for conversation breadcrumbs so DMs retain participant or agent avatars and named channels retain their pictures; suppress avatar actions inside breadcrumb buttons.
 - Normalize thread-only conversation URLs in `channelsSearch` before Home, Chat, or touch views derive their message target.
@@ -659,7 +659,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
   bump its checkpoint version when changing the hydration input contract.
 - Refresh the channel list's bounded unread edge when opening a conversation,
-  including an empty unread result after a read on another device.
+  including an empty unread result after a read on another device. Include
+  off-page favorites in unread presence without adding them to section counts.
 - Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
 - Read folders for picking or moving through `createFolderList`
   (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a

@@ -25,7 +25,9 @@ rendering; past five, the least recently used unmount and reload when next
 opened. Closing the active tab runs its unsaved-changes guards. A tab holding more than one split shows a
 split icon with the count. The strip's `+` button (and `Cmd+T`) opens a tab on
 Home; the `X` or a middle click closes one (the last tab cannot close;
-`Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle.
+`Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, as do
+`Shift+Cmd+→` / `Shift+Cmd+←` outside text fields (where they select text).
+Labels truncate at about 288px.
 Cmd+click (Ctrl elsewhere) on anything that navigates opens the destination in
 a background tab; adding Shift also switches to it. Tabs are not draggable.
 Tabs persist per user and restore on launch. In the browser and on other
@@ -671,7 +673,9 @@ opens Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
-sidebar layout default to 256px; manually resized Chat widths remain saved.
+sidebar layout default to 256px. Each view type saves a manually resized width
+(`asidePreferenceKey`) and restores it after reloads, view switches, and in
+other splits.
 
 After dragging a view's inner sidebar divider (or using its arrow keys), resizing
 the containing split preserves the chosen sidebar width while space permits.
@@ -821,7 +825,9 @@ while inference is pending. Email and message modes show their outgoing body
 and resolved recipients. Email uses the Email Composer's inbox picker, recipient
 chips with address completion, separate Cc/Bcc controls, subject control, rich Markdown editor, and HTML
 preparation for delivery. Task creation uses the task composer's rich title,
-Markdown description, and editable property pills, including Due date.
+Markdown description, and editable property pills, including Due date, and the
+same **Customer / Contact** pill as the task composer when its flags are on (see
+[tasks](tasks.md)). Extraction never fills that pill.
 Calendar uses the event composer's date/time popovers and calendar, guest, and
 location and recurrence pills, including the shared custom recurrence builder.
 Manual recurrence choices, including Does not repeat, survive later predictions.
@@ -885,6 +891,11 @@ favorites use the participant's avatar when available and the entity icon
 otherwise. Cached pictures remain visible when a background picture query
 rejects with an error; an omitted or unavailable channel preview uses the
 fallback icon.
+
+Favorites in Chat, Tasks, Drive, and Reviews show an accent dot while their entity
+has unread notifications. Chat favorites use the same unread state as the regular
+channel rows in both sidebar designs. Reading or completing those notifications
+clears the dot; a failed read restores it.
 
 With the GraphQL local cache enabled, cached favorites remain visible when offline
 or when a background refresh fails. Toggle and reorder success while offline means
@@ -1065,7 +1076,12 @@ its page under Settings → Bots. An agent's avatar beside its channel messages
 opens the same card. Touch devices have no hover, so tapping the mention
 or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
-drops in favour of the card's DM action.
+drops in favour of the card's DM action. DM, the picture click, channel and call
+participants, and people in Cmd+K open the existing DM. Without one they open
+the DM anyway, as an empty DM under a temporary `pending-dm-` id that nothing on
+the server knows; the first message creates the DM and replaces it, so opening
+someone never adds an empty DM to either person's list. See
+[Empty direct messages](channels.md#empty-direct-messages).
 
 `Create` button (top-left) opens a menu of: Email E, Routine U, Agent A, Skill K,
 Document D, Task T, Project P, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.
@@ -1135,7 +1151,7 @@ Open the routine and use its **Runs** tab to see past runs. **Show runs in
 Home and Agents** (a switch under **Runs & notifications** on the routine's
 page; **Runs hidden** / **Runs shown** chip in New routine) decides where its
 runs appear. Off (the default) keeps them off Home and out of the Agents sidebar
-until **Show hidden routine runs** is pressed. On lists them on Home and in
+until **Show hidden routine runs** is checked in the Agents filter menu. On lists them on Home and in
 Agents like the owner's own sessions. The setting applies to runs
 that start after it changes. A run that finishes normally sends no
 notification; a failed or cut-short run, a question the agent asks, a held tool

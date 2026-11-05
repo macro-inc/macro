@@ -2583,6 +2583,46 @@ export type GetChatsForAttachmentHandlerResponses = {
 
 export type GetChatsForAttachmentHandlerResponse = GetChatsForAttachmentHandlerResponses[keyof GetChatsForAttachmentHandlerResponses];
 
+export type CreateConfirmedCalendarEventData = {
+    /**
+     * CreateConfirmedCalendarEvent arguments: CreateCalendarEvent's, plus userConfirmation
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/calendar/events/create-confirmed';
+};
+
+export type CreateConfirmedCalendarEventErrors = {
+    /**
+     * Malformed, or missing userConfirmation
+     */
+    400: GenericErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Not created: a blank confirmation, a calendar the user cannot write, or a provider failure
+     */
+    422: GenericErrorResponse;
+};
+
+export type CreateConfirmedCalendarEventError = CreateConfirmedCalendarEventErrors[keyof CreateConfirmedCalendarEventErrors];
+
+export type CreateConfirmedCalendarEventResponses = {
+    /**
+     * ToolCalendarEvent
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type CreateConfirmedCalendarEventResponse = CreateConfirmedCalendarEventResponses[keyof CreateConfirmedCalendarEventResponses];
+
 export type DeleteChatData = {
     body?: never;
     path: {
@@ -3064,6 +3104,46 @@ export type DecisionsResponses = {
 };
 
 export type DecisionsResponse = DecisionsResponses[keyof DecisionsResponses];
+
+export type SendConfirmedEmailData = {
+    /**
+     * SendConfirmedEmail arguments: SendEmail's, plus userConfirmation
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/email/send-confirmed';
+};
+
+export type SendConfirmedEmailErrors = {
+    /**
+     * Malformed, or missing userConfirmation
+     */
+    400: GenericErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Not sent: a blank confirmation, an inbox or attachment the user cannot use, or a delivery failure
+     */
+    422: GenericErrorResponse;
+};
+
+export type SendConfirmedEmailError = SendConfirmedEmailErrors[keyof SendConfirmedEmailErrors];
+
+export type SendConfirmedEmailResponses = {
+    /**
+     * SendEmailResponse
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type SendConfirmedEmailResponse = SendConfirmedEmailResponses[keyof SendConfirmedEmailResponses];
 
 export type HealthHandlerData = {
     body?: never;

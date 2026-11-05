@@ -678,7 +678,12 @@ export type FailureNoticeKind =
  *  The provider ended the run in failure; its own page for the run is
  *  where any detail it kept lives.
  */
-"provider_run_failed";
+"provider_run_failed" |
+/**
+ *  The runtime accepted the prompt but never handed it to the agent;
+ *  the fix is to send it again.
+ */
+"prompt_not_delivered";
 
 /**
  *  Every filter, each over one field of one kind of item. Id lists match any

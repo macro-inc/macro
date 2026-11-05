@@ -240,6 +240,59 @@
         }
       }
     },
+    "/calendar/events/create-confirmed": {
+      "post": {
+        "tags": ["confirmed_actions"],
+        "summary": "Create a calendar event the user approved in conversation, quoting their approval.",
+        "operationId": "create_confirmed_calendar_event",
+        "requestBody": {
+          "description": "CreateConfirmedCalendarEvent arguments: CreateCalendarEvent's, plus userConfirmation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ToolCalendarEvent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed, or missing userConfirmation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Not created: a blank confirmation, a calendar the user cannot write, or a provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/chat/{chat_id}": {
       "delete": {
         "tags": ["chats"],
@@ -1214,6 +1267,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DecisionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/send-confirmed": {
+      "post": {
+        "tags": ["confirmed_actions"],
+        "summary": "Send an email the user approved in conversation, quoting their approval.",
+        "operationId": "send_confirmed_email",
+        "requestBody": {
+          "description": "SendConfirmedEmail arguments: SendEmail's, plus userConfirmation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SendEmailResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed, or missing userConfirmation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Not sent: a blank confirmation, an inbox or attachment the user cannot use, or a delivery failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
                 }
               }
             }

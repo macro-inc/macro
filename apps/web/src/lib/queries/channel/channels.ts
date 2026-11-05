@@ -55,6 +55,11 @@ export function useListChannelsQuery(enabled: Accessor<boolean> = () => true) {
   return useQuery(() => ({ ...listChannelsQueryOptions, enabled: enabled() }));
 }
 
+/** The viewer's channel list: the cached copy when loaded, fetched otherwise. */
+export function loadChannelList(): Promise<ApiChannelWithLatest[]> {
+  return queryClient.ensureQueryData(listChannelsQueryOptions);
+}
+
 // The host is an app-level cache service, not component state; the key
 // already namespaces on its client id.
 function cachedGraphqlChannelsQueryOptions(cacheHost: CacheHost | undefined) {
