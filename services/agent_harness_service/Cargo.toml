@@ -164,6 +164,7 @@ prompt = { path = "../../crates/prompt" }
 properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
 rdkafka = { workspace = true }
 readonly_pool = { path = "../../crates/readonly_pool" }
+rate_limit = { path = "../../crates/rate_limit" }
 redis = { workspace = true, features = ["aio", "streams", "tokio-comp", "tokio-rustls-comp"] }
 regex = { workspace = true }
 reqwest = { workspace = true }
@@ -203,6 +204,7 @@ url = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
+web_search = { path = "../../crates/web_search", features = ["axum"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
