@@ -8,7 +8,7 @@ export function OrgSetupNote(props: { setup: ConnectorOrgSetupResponse }) {
     <div class="flex flex-col gap-1 text-xs text-ink-muted">
       <button
         type="button"
-        class="w-fit underline"
+        class="w-fit underline touch:min-h-11"
         aria-expanded={open()}
         onClick={() => setOpen(!open())}
       >
