@@ -63,6 +63,27 @@ impl RepoRepository for FakeRepos {
         Ok(true)
     }
 
+    async fn insert_repo_if_missing(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        token_hash: &RepoTokenHash,
+    ) -> Result<(), Infallible> {
+        self.rows
+            .lock()
+            .unwrap()
+            .entry(agent_user_id.as_ref().to_owned())
+            .or_insert_with(|| AgentRepo {
+                agent_user_id: MacroUserIdStr::try_from(agent_user_id.as_ref().to_owned()).unwrap(),
+                team_id,
+                token_hash: token_hash.clone(),
+                size_bytes: None,
+                created_at: Utc::now(),
+                last_push_at: None,
+            });
+        Ok(())
+    }
+
     async fn record_push(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
@@ -500,4 +521,156 @@ fn the_charter_carries_the_persona() {
         "\n## Who you are\n\nYou are Sam.\n\n### Your job\n\nBooks venues.\n\n### Your personality\n\nWarm and direct.\n"
     ));
     assert_eq!(files.len(), WORKSPACE_TEMPLATE.files.len());
+}
+
+#[tokio::test]
+async fn recovery_preserves_live_tokens_and_recreates_missing_resources() {
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: FakeRepos::default(),
+            store: FakeStore::default(),
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: EchoBackend::default(),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500_000_000,
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
+    let original = service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
+    let recovered = service
+        .ensure_repo(agent.clone(), TEAM, &seed(), original.token.clone())
+        .await
+        .unwrap();
+    assert_eq!(recovered.token, original.token);
+    assert!(matches!(
+        service
+            .ensure_repo(agent.clone(), TEAM, &seed(), RepoToken::generate())
+            .await,
+        Err(AgentGitError::InvalidToken)
+    ));
+    assert!(matches!(
+        service
+            .ensure_repo(
+                agent.clone(),
+                Uuid::now_v7(),
+                &seed(),
+                original.token.clone()
+            )
+            .await,
+        Err(AgentGitError::TeamMismatch)
+    ));
+    service.adapters.store.delete_repo(&agent).await.unwrap();
+    service
+        .ensure_repo(agent.clone(), TEAM, &seed(), original.token.clone())
+        .await
+        .unwrap();
+    assert!(
+        service
+            .adapters
+            .store
+            .repos
+            .lock()
+            .unwrap()
+            .contains(agent.as_ref())
+    );
+    service.adapters.repos.delete_repo(&agent).await.unwrap();
+    service
+        .ensure_repo(agent.clone(), TEAM, &seed(), original.token.clone())
+        .await
+        .unwrap();
+    let row = service
+        .adapters
+        .repos
+        .find_repo(&agent)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(row.token_hash.matches(&original.token.hash()));
+    assert!(matches!(
+        service
+            .ensure_repo(agent, TEAM, &seed(), RepoToken::presented("weak"))
+            .await,
+        Err(AgentGitError::InvalidToken)
+    ));
+}
+
+/// Pause recovery immediately before it publishes storage to overlap deletion.
+struct PausedStore {
+    store: FakeStore,
+    creating: Arc<tokio::sync::Notify>,
+    resume: Arc<tokio::sync::Notify>,
+}
+
+impl RepoStore for PausedStore {
+    type Err = Infallible;
+
+    async fn create_repo(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        files: &[RenderedFile],
+    ) -> Result<(), Self::Err> {
+        self.creating.notify_one();
+        self.resume.notified().await;
+        self.store.create_repo(agent, files).await
+    }
+
+    async fn delete_repo(&self, agent: &MacroUserIdStr<'_>) -> Result<(), Self::Err> {
+        self.store.delete_repo(agent).await
+    }
+
+    async fn repo_size_bytes(&self, agent: &MacroUserIdStr<'_>) -> Result<u64, Self::Err> {
+        self.store.repo_size_bytes(agent).await
+    }
+}
+
+#[tokio::test]
+async fn deletion_waits_for_recovery_and_removes_its_published_storage() {
+    let creating = Arc::new(tokio::sync::Notify::new());
+    let resume = Arc::new(tokio::sync::Notify::new());
+    let store = FakeStore::default();
+    let repos = FakeRepos::default();
+    let service = Arc::new(AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: repos.clone(),
+            store: PausedStore {
+                store: store.clone(),
+                creating: creating.clone(),
+                resume: resume.clone(),
+            },
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: EchoBackend::default(),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500_000_000,
+        },
+        WORKSPACE_TEMPLATE,
+    ));
+    let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
+    let recovery_service = service.clone();
+    let recovery_agent = agent.clone();
+    let recovery = tokio::spawn(async move {
+        recovery_service
+            .ensure_repo(recovery_agent, TEAM, &seed(), RepoToken::generate())
+            .await
+    });
+    creating.notified().await;
+    let mut deletion = Box::pin(service.delete_repo(&agent));
+    // Poll deletion while recovery is paused: it must wait for publication.
+    assert!(futures::poll!(deletion.as_mut()).is_pending());
+    resume.notify_one();
+    recovery.await.unwrap().unwrap();
+    deletion.await.unwrap();
+    assert!(repos.find_repo(&agent).await.unwrap().is_none());
+    assert!(!store.repos.lock().unwrap().contains(agent.as_ref()));
 }

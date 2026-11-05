@@ -184,6 +184,31 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
         "remembered\n"
     );
 
+    // Recovery neither rotates the live credential nor overwrites pushed files.
+    let recovered = client
+        .ensure_repo(agent_a.clone(), TEAM_ID, seed(), &repo_a.token)
+        .await
+        .unwrap();
+    assert_eq!(recovered.token, repo_a.token);
+    let wrong_recovery = client
+        .ensure_repo(agent_a.clone(), TEAM_ID, seed(), &repo_b.token)
+        .await;
+    assert!(wrong_recovery.is_err());
+    let preserved = git(
+        work.path(),
+        &[
+            "clone",
+            &with_password(&repo_a.clone_url, &repo_a.token),
+            "preserved",
+        ],
+    )
+    .await;
+    assert!(preserved.status.success(), "{preserved:?}");
+    assert_eq!(
+        std::fs::read_to_string(work.path().join("preserved/memory.md")).unwrap(),
+        "remembered\n"
+    );
+
     // A wrong token and another agent's token are both refused.
     let wrong_token = git(
         work.path(),
@@ -257,6 +282,22 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
     .await;
     assert!(!deleted.status.success());
     assert_eq!(std::fs::read_dir(storage.path()).unwrap().count(), 1);
+    let recovered = client
+        .ensure_repo(agent_a.clone(), TEAM_ID, seed(), &repo_a.token)
+        .await
+        .unwrap();
+    assert_eq!(recovered.token, repo_a.token);
+    let recreated = git(
+        work.path(),
+        &[
+            "clone",
+            &with_password(&repo_a.clone_url, &repo_a.token),
+            "recreated",
+        ],
+    )
+    .await;
+    assert!(recreated.status.success(), "{recreated:?}");
+    assert!(work.path().join("recreated/OPERATING.md").exists());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

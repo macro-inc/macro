@@ -18,6 +18,25 @@ pub struct CreateRepoRequest {
     pub seed: PersonaSeed,
 }
 
+/// Recover a missing repo with the credential saved in its computer persona.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnsureRepoRequest {
+    /// Original creation inputs.
+    #[serde(flatten)]
+    pub repo: CreateRepoRequest,
+    /// Original token; never replaces a live token.
+    pub token: String,
+}
+
+impl std::fmt::Debug for EnsureRepoRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("EnsureRepoRequest")
+            .finish_non_exhaustive()
+    }
+}
+
 /// The repo's credential, returned once.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

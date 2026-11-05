@@ -7,7 +7,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use reqwest::StatusCode;
 use uuid::Uuid;
 
-use crate::api::{CreateRepoRequest, CreatedRepoResponse};
+use crate::api::{CreateRepoRequest, CreatedRepoResponse, EnsureRepoRequest};
 use crate::domain::template::PersonaSeed;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -79,7 +79,7 @@ impl AgentGitClient {
 
     /// Create the agent's repo, or re-key it (same team). The token in the
     /// response is the only copy; earlier tokens stop working.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, seed), err)]
     pub async fn create_repo(
         &self,
         agent_user_id: MacroUserIdStr<'static>,
@@ -99,6 +99,33 @@ impl AgentGitClient {
             .send()
             .await?;
 
+        Ok(Self::checked(response).await?.json().await?)
+    }
+
+    /// Recover the repo without replacing its live token.
+    #[tracing::instrument(skip_all, fields(%agent_user_id, %team_id), err)]
+    pub async fn ensure_repo(
+        &self,
+        agent_user_id: MacroUserIdStr<'static>,
+        team_id: Uuid,
+        seed: PersonaSeed,
+        token: &str,
+    ) -> Result<CreatedRepoResponse, AgentGitClientError> {
+        let response = self
+            .http
+            .post(format!("{}/internal/repos/ensure", self.base_url))
+            .headers(self.headers())
+            .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
+            .json(&EnsureRepoRequest {
+                repo: CreateRepoRequest {
+                    agent_user_id,
+                    team_id,
+                    seed,
+                },
+                token: token.to_owned(),
+            })
+            .send()
+            .await?;
         Ok(Self::checked(response).await?.json().await?)
     }
 

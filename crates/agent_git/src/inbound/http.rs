@@ -20,8 +20,8 @@ use macro_authorization::{
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 
-use crate::api::{CreateRepoRequest, CreatedRepoResponse};
-use crate::domain::models::{AgentGitError, GitEndpoint, GitRequest, GitService};
+use crate::api::{CreateRepoRequest, CreatedRepoResponse, EnsureRepoRequest};
+use crate::domain::models::{AgentGitError, GitEndpoint, GitRequest, GitService, RepoToken};
 use crate::domain::ports::AgentGitService;
 use credential::{BASIC_CHALLENGE, GitCredentialExtractor};
 
@@ -89,6 +89,7 @@ where
 {
     Router::new()
         .route("/internal/repos", post(create_repo::<Service, Auth>))
+        .route("/internal/repos/ensure", post(ensure_repo::<Service, Auth>))
         .route(
             "/internal/repos/{agent_user_id}",
             delete(delete_repo::<Service, Auth>),
@@ -311,6 +312,34 @@ async fn create_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
         urlencoding::encode(created.agent_user_id.as_ref())
     );
 
+    Ok(Json(CreatedRepoResponse {
+        agent_user_id: created.agent_user_id,
+        token: created.token.expose().to_owned(),
+        clone_url,
+    }))
+}
+
+#[tracing::instrument(skip_all, err)]
+async fn ensure_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
+    State(state): State<AgentGitRouterState<Service, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Json(request): Json<EnsureRepoRequest>,
+) -> Result<Json<CreatedRepoResponse>, AgentGitHttpError> {
+    let token = RepoToken::recovery(request.token)?;
+    let created = state
+        .service
+        .ensure_repo(
+            request.repo.agent_user_id,
+            request.repo.team_id,
+            &request.repo.seed,
+            token,
+        )
+        .await?;
+    let clone_url = format!(
+        "{}/{}{REPO_SUFFIX}",
+        state.public_base_url,
+        urlencoding::encode(created.agent_user_id.as_ref())
+    );
     Ok(Json(CreatedRepoResponse {
         agent_user_id: created.agent_user_id,
         token: created.token.expose().to_owned(),

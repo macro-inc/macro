@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     AgentGitError, AgentRepo, AuthorizedRepo, CreatedRepo, GitCredential, GitRequest, GitResponse,
-    RepoTokenHash,
+    RepoToken, RepoTokenHash,
 };
 use crate::domain::template::{PersonaSeed, RenderedFile};
 
@@ -28,6 +28,14 @@ pub trait RepoRepository: Send + Sync + 'static {
         team_id: Uuid,
         token_hash: &RepoTokenHash,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Insert a missing row without replacing any existing team's token.
+    fn insert_repo_if_missing(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        token_hash: &RepoTokenHash,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Record an accepted push and the size measured before it.
     fn record_push(
@@ -111,6 +119,16 @@ pub trait AgentGitService: Send + Sync + 'static {
         agent_user_id: MacroUserIdStr<'static>,
         team_id: Uuid,
         seed: &PersonaSeed,
+    ) -> impl Future<Output = Result<CreatedRepo, AgentGitError>> + Send;
+
+    /// Recreate a missing repo using the original bootstrap token. An existing
+    /// row must belong to this team and match that token; never rotate it.
+    fn ensure_repo(
+        &self,
+        agent_user_id: MacroUserIdStr<'static>,
+        team_id: Uuid,
+        seed: &PersonaSeed,
+        token: RepoToken,
     ) -> impl Future<Output = Result<CreatedRepo, AgentGitError>> + Send;
 
     /// Delete the agent's repo and its row. Idempotent.

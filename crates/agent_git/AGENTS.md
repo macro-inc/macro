@@ -45,10 +45,20 @@ streamed).
   `x-macro-user-api-key`, e.g. via `git -c http.extraHeader=...`) of a team
   admin or owner reads only.
 - Creating again for the same team keeps the repo and replaces the token
-  (retry-safe); another team is 409.
+  (explicit re-key); another team is 409.
 - Directories are `<sha256(user id)>.git`. Delete removes the directory before
   the row; the `"User"` cascade alone leaves the directory behind.
 - Push limits: size is measured before each push (refused at the cap, and one
   push may not carry more than the remaining room); the rate limit is
   in-memory per process, so the service runs one task.
 - git runs with a cleared environment so `APP_SECRETS_JSON` never reaches it.
+
+- `POST /internal/repos/ensure` is internal-only recovery: supply the original
+  persona token and seed. It inserts a missing row, validates team and token,
+  and recreates missing storage without rotating a live credential or replacing
+  an existing repo. Missing storage is reseeded; deleted pushed history needs
+  a storage backup or recovery from the agent's working clone.
+
+- The single service task serializes create, ensure and delete across their full
+  database and filesystem mutations so recovery cannot publish storage after a
+  concurrent deletion completes.

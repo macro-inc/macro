@@ -37,6 +37,18 @@ impl RepoToken {
         Self(raw.into())
     }
 
+    /// Accept only the shape of a token minted by this service for recovery.
+    pub fn recovery(raw: String) -> Result<Self, AgentGitError> {
+        let valid = raw.strip_prefix(TOKEN_PREFIX).is_some_and(|secret| {
+            secret.len() == TOKEN_SECRET_BYTES * 2
+                && secret.bytes().all(|byte| byte.is_ascii_hexdigit())
+        });
+        if !valid {
+            return Err(AgentGitError::InvalidToken);
+        }
+        Ok(Self(raw))
+    }
+
     /// The only way to read the secret.
     pub fn expose(&self) -> &str {
         &self.0

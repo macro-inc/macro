@@ -3,7 +3,7 @@
 ## What it is
 
 Composition root for `crates/agent_git`: hosts each agent's workspace repo
-(smart HTTP) and the internal create/delete API. Gateway prefix `/agent-git`;
+(smart HTTP) and the internal create/ensure/delete API. Gateway prefix `/agent-git`;
 `AgentGitServiceUrl` in `macro_service_urls`.
 
 ## Scope
@@ -26,3 +26,6 @@ Composition root for `crates/agent_git`: hosts each agent's workspace repo
   (EFS in AWS, the `agent-git-repos` docker volume locally) or startup fails.
 - Run a single task: the push rate limiter is in memory.
 - No compression layer: pack bodies are already compressed and streamed.
+
+- Recovery uses `POST /internal/repos/ensure` with the saved bootstrap token;
+  repeating `POST /internal/repos` intentionally re-keys a repo.

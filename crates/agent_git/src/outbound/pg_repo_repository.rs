@@ -96,6 +96,25 @@ impl RepoRepository for PgRepoRepository {
         Ok(stored.is_some())
     }
 
+    #[tracing::instrument(skip(self, token_hash), err)]
+    async fn insert_repo_if_missing(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        token_hash: &RepoTokenHash,
+    ) -> Result<(), PgRepoRepositoryError> {
+        sqlx::query!(
+            r#"INSERT INTO agent_repos (agent_user_id, team_id, token_hash)
+               VALUES ($1, $2, $3) ON CONFLICT (agent_user_id) DO NOTHING"#,
+            agent_user_id.as_ref(),
+            team_id,
+            token_hash.as_str(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn record_push(
         &self,

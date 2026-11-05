@@ -32,6 +32,9 @@ pub struct AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend> {
     adapters: AgentGitAdapters<Repos, Store, Admins, Limiter, Backend>,
     limits: RepoLimits,
     template: WorkspaceTemplate,
+    // The service runs one task. Serialize management across the filesystem
+    // and database so recovery cannot publish a repo after deletion finishes.
+    mutations: tokio::sync::Mutex<()>,
 }
 
 impl<Repos, Store, Admins, Limiter, Backend>
@@ -47,6 +50,7 @@ impl<Repos, Store, Admins, Limiter, Backend>
             adapters,
             limits,
             template,
+            mutations: tokio::sync::Mutex::new(()),
         }
     }
 }
@@ -87,6 +91,7 @@ where
         team_id: Uuid,
         seed: &PersonaSeed,
     ) -> Result<CreatedRepo, AgentGitError> {
+        let _mutation = self.mutations.lock().await;
         let existing = self
             .adapters
             .repos
@@ -122,7 +127,49 @@ where
         })
     }
 
+    #[cfg_attr(any(feature = "inbound", feature = "outbound"), tracing::instrument(skip_all, fields(%agent_user_id, %team_id), err))]
+    async fn ensure_repo(
+        &self,
+        agent_user_id: MacroUserIdStr<'static>,
+        team_id: Uuid,
+        seed: &PersonaSeed,
+        token: RepoToken,
+    ) -> Result<CreatedRepo, AgentGitError> {
+        let _mutation = self.mutations.lock().await;
+        let token = RepoToken::recovery(token.expose().to_owned())?;
+        // The database uniqueness constraint arbitrates concurrent recovery.
+        // Never use upsert_repo here: it intentionally rotates live tokens.
+        self.adapters
+            .repos
+            .insert_repo_if_missing(&agent_user_id, team_id, &token.hash())
+            .await
+            .map_err(internal)?;
+        let repo = self
+            .adapters
+            .repos
+            .find_repo(&agent_user_id)
+            .await
+            .map_err(internal)?
+            .ok_or(AgentGitError::NotFound)?;
+        if repo.team_id != team_id {
+            return Err(AgentGitError::TeamMismatch);
+        }
+        if !repo.token_hash.matches(&token.hash()) {
+            return Err(AgentGitError::InvalidToken);
+        }
+        self.adapters
+            .store
+            .create_repo(&agent_user_id, &self.template.render(seed))
+            .await
+            .map_err(internal)?;
+        Ok(CreatedRepo {
+            agent_user_id,
+            token,
+        })
+    }
+
     async fn delete_repo(&self, agent_user_id: &MacroUserIdStr<'_>) -> Result<(), AgentGitError> {
+        let _mutation = self.mutations.lock().await;
         // Directory first: a failure leaves the row, so a retry finds the repo.
         self.adapters
             .store
