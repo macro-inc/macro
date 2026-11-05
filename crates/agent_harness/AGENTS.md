@@ -69,7 +69,9 @@ Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
 
-External runtimes bind sessions lazily. On each dial `RuntimeRegistry` has the
+External runtimes pass container preflight without a managed provider; only
+managed runtimes require provider account setup. External runtimes bind sessions
+lazily. On each dial `RuntimeRegistry` has the
 connection run `initialize` (shared with every session through its handshake)
 and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
 `HarnessCommand::Reattach` for the listed sessions bound to that harness,
