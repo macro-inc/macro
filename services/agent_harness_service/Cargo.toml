@@ -178,6 +178,7 @@ secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 share_permission_db_utils = { path = "../../crates/share_permission_db_utils" }
+skills = { path = "../../crates/skills", features = ["axum"] }
 soup = { path = "../../crates/soup", features = ["outbound"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = ["ai_projection", "chat", "document_text_extractor", "email", "gmail", "search"] }
