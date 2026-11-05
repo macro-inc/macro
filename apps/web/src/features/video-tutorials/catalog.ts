@@ -1,4 +1,6 @@
 import { t } from '@app/lib/i18n';
+import crmVideo from './assets/crm.mp4';
+import crmPoster from './assets/crm-poster.jpg';
 import mailVideo from './assets/mail.mp4';
 import mailPoster from './assets/mail-poster.jpg';
 import type { TutorialId } from './core/tutorial-id';
@@ -34,5 +36,19 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     },
     videoUrl: mailVideo,
     posterUrl: mailPoster,
+  },
+  crm: {
+    id: 'crm',
+    get title() {
+      return t('tutorials.crmTitle');
+    },
+    get snippet() {
+      return t('tutorials.crmSnippet');
+    },
+    get length() {
+      return t('tutorials.crmLength');
+    },
+    videoUrl: crmVideo,
+    posterUrl: crmPoster,
   },
 };
