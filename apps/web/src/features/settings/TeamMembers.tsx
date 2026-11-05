@@ -1,7 +1,7 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { SearchBar } from '@app/components/view-shell/SearchBar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { usePending } from '@app/observability/flow';
+import { beginInteraction, usePending } from '@app/observability/flow';
 import { AgentTag } from '@core/component/AgentTag';
 import { UserIcon } from '@core/component/UserIcon';
 import {
@@ -20,7 +20,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
-import PlusIcon from '@icon/system/regular/plus.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
@@ -61,6 +60,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { InviteAgentDialog } from './components/invite-agent-dialog';
+import { MemberInviteActions } from './components/member-invite-actions';
 import { TeamAgentRow } from './components/team-agent-row';
 import { TeamInviteRow } from './components/team-invite-row';
 import { TeamSeatPlanSelect } from './components/team-seat-plan-select';
@@ -74,6 +74,7 @@ import { InviteToTeamDialog, useTeamViewer } from './Team';
 import {
   canInviteToTeam,
   canRemoveTeamMember,
+  canRetryTeamAgent,
   isTeamAdminOrOwner,
 } from './teamMemberPermissions';
 
@@ -342,6 +343,14 @@ export function TeamMembers(props: { team: TeamSummary }) {
   });
 
   // Only worth showing the filter once the list is long enough to scan.
+  const filteredAgents = createMemo(() => {
+    const query = debouncedMemberQuery().trim().toLowerCase();
+    return agents().filter(
+      (agent) =>
+        !query || `${agent.name} ${agent.email}`.toLowerCase().includes(query)
+    );
+  });
+
   const showMemberSearch = () => members().length + agents().length > 5;
 
   const filteredMembers = createMemo(() => {
@@ -424,37 +433,53 @@ export function TeamMembers(props: { team: TeamSummary }) {
     <>
       <SettingsPage
         title="Members"
-        description={`Invite people to ${props.team.name} and manage their roles.`}
+        description={`Invite people and agents to ${props.team.name}.`}
         actions={
-          // Members can invite unless the team has restricted inviting
-          // to admins; removals stay admin-only.
-          <div class="flex flex-wrap gap-2">
-            <Show when={canManageAgents()}>
-              <Button
-                variant="secondary"
-                onClick={() => setInviteAgentOpen(true)}
-              >
-                Invite agent
-              </Button>
-            </Show>
-            <Show
-              when={canInviteToTeam(currentUserRole(), allowNonAdminInvites())}
-            >
-              {/* Inverted (black on light, white on dark) so inviting is the
-                page's primary action. */}
-              <Button
-                variant="primary"
-                class="text-[15px]"
-                onClick={() => setShowInviteModal(true)}
-              >
-                <PlusIcon class="size-4" />
-                Invite
-              </Button>
-            </Show>
-          </div>
+          <MemberInviteActions
+            canInviteAgents={canManageAgents()}
+            canInvitePeople={canInviteToTeam(
+              currentUserRole(),
+              allowNonAdminInvites()
+            )}
+            onInvitePerson={() => setShowInviteModal(true)}
+            onInviteAgent={() => {
+              const interaction = beginInteraction('team-agent.open', {
+                attributes: { 'team.id': props.team.id },
+              });
+              try {
+                setInviteAgentOpen(true);
+              } finally {
+                interaction.end();
+              }
+            }}
+          />
         }
       >
-        <SettingsSection>
+        <SettingsSection
+          title="Team members"
+          description={`${members().length} ${members().length === 1 ? 'person' : 'people'} · ${agents().length} ${agents().length === 1 ? 'agent' : 'agents'}`}
+        >
+          <Show
+            when={
+              canManageAgents() && agentsQuery.isPending && !agentsQuery.isError
+            }
+          >
+            <p role="status">Loading agents…</p>
+          </Show>
+          <Show when={canManageAgents() && agentsQuery.isError}>
+            <div role="alert" class="text-sm text-failure">
+              Couldn't refresh agents.{' '}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  fireAndForget(agentsQuery.refetch(), 'team-agents.retry')
+                }
+              >
+                Try again
+              </Button>
+            </div>
+          </Show>
           <Show when={showMemberSearch()}>
             <SearchBar
               size="sm"
@@ -500,7 +525,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
             }
           >
             <Show
-              when={filteredMembers().length > 0}
+              when={filteredMembers().length > 0 || filteredAgents().length > 0}
               fallback={
                 <SettingsCard>
                   <div class="px-6 py-8 text-center text-sm text-ink-muted">
@@ -558,77 +583,60 @@ export function TeamMembers(props: { team: TeamSummary }) {
                     />
                   )}
                 </For>
+                <Show when={canManageAgents()}>
+                  <Suspense
+                    fallback={
+                      <p class="p-4" role="status">
+                        Loading agents…
+                      </p>
+                    }
+                  >
+                    <For each={filteredAgents()}>
+                      {(agent) => (
+                        <TeamAgentRow
+                          avatar={
+                            <UserIcon
+                              id={agent.userId}
+                              isDeleted={false}
+                              size="lg"
+                            />
+                          }
+                          agent={agent}
+                          retrying={retryAgent.isPending}
+                          retryError={
+                            retryAgent.isError &&
+                            retryAgent.variables?.userId === agent.userId
+                          }
+                          onRetry={() => {
+                            if (
+                              !canManageAgents() ||
+                              retryAgent.isPending ||
+                              !canRetryTeamAgent(agent)
+                            )
+                              return;
+                            retryAgent.mutate({
+                              teamId: props.team.id,
+                              userId: agent.userId,
+                            });
+                          }}
+                          onRemove={() => {
+                            if (
+                              canManageAgents() &&
+                              agent.payment !== 'pending'
+                            )
+                              setRemoveAgent(agent);
+                          }}
+                        />
+                      )}
+                    </For>
+                  </Suspense>
+                </Show>
               </SettingsCard>
             </Show>
           </Show>
         </SettingsSection>
 
         <Show when={canManageAgents()}>
-          <SettingsSection title="Agent teammates">
-            <Suspense fallback={<p role="status">Loading agents…</p>}>
-              <Show when={agentsQuery.isPending && !agentsQuery.isError}>
-                <p role="status">Loading agents…</p>
-              </Show>
-              <Show when={agentsQuery.isError}>
-                <div role="alert" class="text-sm text-failure">
-                  Couldn't refresh agents.{' '}
-                  <Button
-                    variant="ghost"
-                    onClick={() =>
-                      fireAndForget(agentsQuery.refetch(), 'team-agents.retry')
-                    }
-                  >
-                    Try again
-                  </Button>
-                </div>
-              </Show>
-              <SettingsCard>
-                <For
-                  each={agents().filter(
-                    (agent) =>
-                      !memberQuery().trim() ||
-                      `${agent.name} ${agent.email}`
-                        .toLowerCase()
-                        .includes(memberQuery().trim().toLowerCase())
-                  )}
-                >
-                  {(agent) => (
-                    <TeamAgentRow
-                      agent={agent}
-                      retrying={retryAgent.isPending}
-                      retryError={
-                        retryAgent.isError &&
-                        retryAgent.variables?.userId === agent.userId
-                      }
-                      onRetry={() => {
-                        if (
-                          !canManageAgents() ||
-                          retryAgent.isPending ||
-                          !agent.retryable ||
-                          (agent.payment !== 'paid' &&
-                            agent.payment !== 'comped')
-                        )
-                          return;
-                        retryAgent.mutate({
-                          teamId: props.team.id,
-                          userId: agent.userId,
-                        });
-                      }}
-                      onRemove={() => {
-                        if (canManageAgents() && agent.payment !== 'pending')
-                          setRemoveAgent(agent);
-                      }}
-                    />
-                  )}
-                </For>
-                <Show when={!agentsQuery.isPending && agents().length === 0}>
-                  <p class="p-4 text-sm text-ink-muted">
-                    No agent teammates yet.
-                  </p>
-                </Show>
-              </SettingsCard>
-            </Suspense>
-          </SettingsSection>
           <InviteAgentDialog
             teamId={props.team.id}
             open={inviteAgentOpen()}

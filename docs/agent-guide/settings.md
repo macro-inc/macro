@@ -222,11 +222,33 @@ domain. Both should appear in the team's member list and configured auto-join
 channels without an upgrade prompt. Repeat with auto-join disabled to verify a
 same-domain signup is not added automatically.
 
+### Team subscription breakdown
+
+On the existing **Billing** page, billing admins with an active provider
+subscription see **Subscription breakdown** below their plan. It shows actual
+paid **Human seats** and **Agent seats**, each mapped computer's size, status,
+and current subscription price, and any other provider subscription items.
+Included computers say **Included for Macro**. Agent names and live health
+come from the team agents query when available.
+
+**Total per month/year** uses the current subscription interval and currency.
+Amounts use that currency's minor-unit precision, including zero-decimal currencies.
+**Next invoice** uses the provider's upcoming amount due and invoice date;
+proration or credits can make it differ from the subscription total. There
+are no estimated taxes or invented add-ons. Without an active subscription,
+or without billing access, the existing plan UI remains; no invoice or
+currency amount is fabricated. On a phone the rows wrap within the existing
+Settings card, and the page scrolls vertically.
+
 ### Invite an agent teammate
 
 With the `enable-team-agents` rollout enabled, team admins and owners see
-**Invite agent** in **Team → Members**. This creates an agent account and buys
-its computer together. The existing email invitation flow remains available.
+**Invite agent** in **Team → Members**. The split **Invite** control opens the
+existing person invitation with its main action; **Invite options** offers
+**Invite a person** and, for team managers, **Invite an agent**. All header
+actions use the same control height on desktop and touch. Inviting an agent
+creates its account and buys its computer together. The existing email
+invitation flow remains available.
 
 For billed teams without an active subscription, the dialog keeps specifications visible
 and explains that an active team plan is required. **Go to billing** opens
@@ -255,8 +277,13 @@ shows **Included for Macro**, with no currency charge.
    the response may have been lost after the purchase completed. A repository
    creation failure instead shows the server's actionable reason and
    **Nothing was charged**; no purchase has started in that case.
-4. Under **Agent teammates**, the row shows an **Agent** chip and setup or
-   health status. The roster polls every three seconds while any agent is
+4. The shared **Team members** roster shows people and agents together. Agent
+   rows show an **Agent** chip and setup or health status. On desktop, the
+   activity column uses the latest completed turn reported by the server, or
+   the current setup step; an agent without a completed turn says
+   **No activity yet**. **More** includes **Retry** when provisioning can be
+   retried and **Remove agent**. The same actions stay reachable on mobile.
+   The roster polls every three seconds while any agent is
    provisioning, then every thirty seconds while the page is visible and the
    roster is nonempty. Running and failed rows keep refreshing so transient
    health failures can recover without a manual refresh.

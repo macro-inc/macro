@@ -1,11 +1,12 @@
 import { t } from '@app/lib/i18n';
 import { AgentTag } from '@core/component/AgentTag';
-import { UserIcon } from '@core/component/UserIcon';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
 import type { TeamAgent } from '@service-auth/generated/schemas';
 import { Button, Dropdown } from '@ui';
-import { Show } from 'solid-js';
+import { formatDistanceToNowStrict } from 'date-fns';
+import { type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { canRetryTeamAgent } from '../teamMemberPermissions';
 
 export function AgentStatusPill(props: {
   agent: TeamAgent;
@@ -25,9 +26,7 @@ export function AgentStatusPill(props: {
       .with('unbilled', () => 'Payment failed / not billed')
       .with('paid', 'comped', null, undefined, () => computerStatus())
       .exhaustive(() => computerStatus());
-  const canRetry = () =>
-    props.agent.retryable &&
-    (props.agent.payment === 'paid' || props.agent.payment === 'comped');
+  const canRetry = () => canRetryTeamAgent(props.agent);
   const step = () =>
     match(props.agent.setup?.step)
       .with('paying', () => 'Confirming payment')
@@ -97,15 +96,25 @@ export function AgentStatusPill(props: {
 
 export function TeamAgentRow(props: {
   agent: TeamAgent;
+  avatar: JSX.Element;
   retrying: boolean;
   retryError?: boolean;
   onRetry(): void;
   onRemove(): void;
 }) {
+  const lastActive = () => {
+    if (props.agent.status === 'provisioning' && props.agent.setup) {
+      return `Step ${props.agent.setup.position} of ${props.agent.setup.total}`;
+    }
+    if (!props.agent.lastTurnAt) return 'No activity yet';
+    const at = new Date(props.agent.lastTurnAt);
+    if (Number.isNaN(at.getTime())) return 'Activity unavailable';
+    return `Last active ${formatDistanceToNowStrict(at, { addSuffix: true })}`;
+  };
   return (
-    <div class="flex items-start justify-between gap-2 px-4 py-4">
+    <div class="flex items-start justify-between gap-3 px-4 py-4">
       <div class="flex items-start gap-3 min-w-0 flex-1">
-        <UserIcon id={props.agent.userId} isDeleted={false} size="lg" />
+        {props.avatar}
         <div class="min-w-0 flex-1 space-y-1">
           <div class="flex flex-wrap items-center gap-1.5">
             <span class="text-sm font-medium break-words">
@@ -121,12 +130,25 @@ export function TeamAgentRow(props: {
           />
         </div>
       </div>
-      <TeamAgentMenu agent={props.agent} onRemove={props.onRemove} />
+      <span class="hidden sm:block w-28 shrink-0 pt-1 text-xs text-ink-muted">
+        {lastActive()}
+      </span>
+      <TeamAgentMenu
+        agent={props.agent}
+        onRemove={props.onRemove}
+        onRetry={props.onRetry}
+        retrying={props.retrying}
+      />
     </div>
   );
 }
 
-export function TeamAgentMenu(props: { agent: TeamAgent; onRemove(): void }) {
+export function TeamAgentMenu(props: {
+  agent: TeamAgent;
+  retrying?: boolean;
+  onRetry?(): void;
+  onRemove(): void;
+}) {
   return (
     <Dropdown>
       <Dropdown.Trigger
@@ -137,6 +159,17 @@ export function TeamAgentMenu(props: { agent: TeamAgent; onRemove(): void }) {
         <DotsIcon class="size-4" />
       </Dropdown.Trigger>
       <Dropdown.Content>
+        <Show when={props.onRetry && canRetryTeamAgent(props.agent)}>
+          <Dropdown.Item
+            disabled={props.retrying}
+            onSelect={() => {
+              if (!props.retrying && canRetryTeamAgent(props.agent))
+                props.onRetry?.();
+            }}
+          >
+            {t('common.retry')}
+          </Dropdown.Item>
+        </Show>
         <Dropdown.Item
           disabled={props.agent.payment === 'pending'}
           onSelect={() => props.agent.payment !== 'pending' && props.onRemove()}

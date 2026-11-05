@@ -96,6 +96,15 @@ account backends do not currently consume trace-context query parameters, so
 upgrade server spans are not yet joined to this browser trace. Verify browser
 phases separately rather than assuming end-to-end upgrade correlation.
 
+## Team billing
+
+The existing Billing view owns `team.billing.breakdown` when an authoritative
+subscription breakdown is present. Its optional agent roster is held as
+`team-agent.billing-roster`; billing amounts come from the existing subscription
+status request, which precedes this display flow. The roster request uses the
+shared query flow context and sends `traceparent`; no amounts, product names, or teammate names are recorded as
+attributes.
+
 ## Agent invitations
 
 Opening **Settings → Members → Invite agent** starts

@@ -1226,6 +1226,22 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   unrelated layout input. Profile with the
   [entity collection fixture](src/features/entity/browser-test/README.md).
 
+Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,
+computer, total and next-invoice amounts; never calculate a bill from catalog
+quotes. Format provider minor units using currency precision and Stripe's
+ISK/UGX wire-format exceptions.
+`TeamBillingBreakdown` renders provider lines, enriched by the team
+agents query. A null breakdown keeps the existing plan and computers UI. Its browser regression
+covers interval/currency, distinct upcoming invoice amounts, included computers
+and narrow layouts.
+
+Keep Members invitation actions in `MemberInviteActions`; the split Invite action
+opens the existing person dialog, with person/agent choices in its dropdown.
+People and managed agents share the filtered roster; agent activity comes from
+`lastTurnAt`, and Retry uses `canRetryTeamAgent` at each entry point. The Members
+browser fixture covers header heights and invitation/row menus on desktop, phone,
+and tablet.
+
 Fetch agent invitation specifications from `/team_agents/sizes` independently of
 pricing; keep draft edits out of query inputs and preserve mounted fields while
 typing. Exercise the adapter and form with

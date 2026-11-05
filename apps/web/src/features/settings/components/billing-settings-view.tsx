@@ -22,7 +22,7 @@ export function BillingSettingsView(props: {
   onManage: () => void;
   onSelectPlan: (plan: PaidPlanTier) => void;
   onTeamSettings?: JSX.EventHandler<HTMLAnchorElement, MouseEvent>;
-  /** The team's Macro computers, listed under the subscription. */
+  /** The subscription breakdown, or the computers list when billing is unavailable. */
   computers?: JSX.Element;
 }) {
   const formatDate = (value: string | undefined) => {
