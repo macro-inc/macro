@@ -107,13 +107,13 @@ export type GitResult = { code: number; stdout: string; stderr: string };
 export type Git = (args: string[]) => Promise<GitResult>;
 
 /**
- * Run git in `cwd` with the CLI, with only PATH and HOME from the brain's
- * environment (git config and credentials live under HOME; Deno refuses to
+ * Run git in `cwd` with the CLI, with PATH, HOME and the repo credentials from the brain's
+ * environment (only git receives the repo token; Deno refuses to
  * pass loader variables such as LD_LIBRARY_PATH to a permitted subprocess).
  */
 export function gitCli(cwd: string): Git {
   const env: Record<string, string> = { GIT_TERMINAL_PROMPT: '0' };
-  for (const name of ['PATH', 'HOME']) {
+  for (const name of ['PATH', 'HOME', 'MACRO_REPO_URL', 'MACRO_REPO_TOKEN']) {
     const value = Deno.env.get(name);
     if (value) env[name] = value;
   }

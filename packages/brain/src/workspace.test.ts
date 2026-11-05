@@ -135,3 +135,35 @@ Deno.test('a clean workspace commits nothing', async () => {
   const gitignore = await Deno.readTextFile(`${clone}/.gitignore`);
   assertStringIncludes(gitignore, 'history/\nlog/\ncache/\nwork/\nsecrets\n');
 });
+
+Deno.test('git receives only repo credentials, never the Macro API key', async () => {
+  const values = {
+    MACRO_REPO_URL: 'https://git.example.com/repo.git',
+    MACRO_REPO_TOKEN: 'test-repo-token',
+    MACRO_API_KEY: 'test-api-key',
+  };
+  const previous = new Map<string, string | undefined>();
+  const root = await Deno.makeTempDir();
+  try {
+    for (const [name, value] of Object.entries(values)) {
+      previous.set(name, Deno.env.get(name));
+      Deno.env.set(name, value);
+    }
+    const result = await gitCli(root)([
+      '-c',
+      'alias.credentials=!printf "%s|%s|%s" "$MACRO_REPO_URL" "$MACRO_REPO_TOKEN" "$MACRO_API_KEY"',
+      'credentials',
+    ]);
+    assertEquals(result.code, 0);
+    assertEquals(
+      result.stdout,
+      `${values.MACRO_REPO_URL}|${values.MACRO_REPO_TOKEN}|`
+    );
+  } finally {
+    for (const [name, value] of previous) {
+      if (value === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, value);
+    }
+    await Deno.remove(root, { recursive: true });
+  }
+});
