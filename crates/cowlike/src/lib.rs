@@ -92,3 +92,6 @@ where
         }
     }
 }
+
+/// Timing probe.
+pub const CI_SPEED_FILTER_1: u32 = 1;
