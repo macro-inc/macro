@@ -1876,26 +1876,35 @@ const TEAM_1: &str = "11111111-1111-1111-1111-111111111111";
 
 /// Sets the fixture invite to `invite@macro.com` as `days_old` days old, last
 /// emailed `last_sent_days_ago` days ago, with `reminders_sent` reminders.
+///
+/// `last_sent_at` is `TIMESTAMP(3)`, which rounds to the nearest millisecond,
+/// so it is truncated first. Rounded up, an invite aged to exactly its due
+/// time is still up to 0.5ms short of it if the claim's `NOW()` comes that soon.
 async fn age_invite(
     pool: &Pool<Postgres>,
     days_old: i32,
     last_sent_days_ago: i32,
     reminders_sent: i16,
 ) -> anyhow::Result<()> {
-    sqlx::query(
+    let aged_exactly: bool = sqlx::query_scalar(
         r#"
         UPDATE team_invite
         SET created_at = NOW() - make_interval(days => $1),
-            last_sent_at = NOW() - make_interval(days => $2),
+            last_sent_at = date_trunc('milliseconds', NOW() - make_interval(days => $2)),
             reminders_sent = $3
         WHERE email = 'invite@macro.com'
+        RETURNING last_sent_at <= NOW() - make_interval(days => $2)
         "#,
     )
     .bind(days_old)
     .bind(last_sent_days_ago)
     .bind(reminders_sent)
-    .execute(pool)
+    .fetch_one(pool)
     .await?;
+    assert!(
+        aged_exactly,
+        "last_sent_at must not round past its due time"
+    );
     Ok(())
 }
 

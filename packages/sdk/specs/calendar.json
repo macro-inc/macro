@@ -133,7 +133,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Calendar is read-only or needs reauthorization",
+            "description": "Calendar is read-only or needs reauthorization, or an agent's program asked to create without a review or confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1511,7 +1511,8 @@
           "retryable",
           "persist_failed",
           "macro_call_failed",
-          "copy_choice_required"
+          "copy_choice_required",
+          "confirmation_required"
         ]
       },
       "CalendarProvider": {

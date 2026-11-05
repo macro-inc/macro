@@ -9,7 +9,7 @@ import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
 import type { EntityReference } from '../reference';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
 import { ChatGeneration, ChatMessage } from './generation';
 

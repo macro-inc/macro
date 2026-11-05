@@ -106,7 +106,12 @@ use std::{sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 /// Build the service from the environment and serve until shutdown.
-pub async fn run() -> anyhow::Result<()> {
+// Not a `pub async fn`: see CS-73.
+pub fn run() -> impl Future<Output = anyhow::Result<()>> {
+    run_server()
+}
+
+async fn run_server() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
 
     // One SDK config is sufficient for every AWS client in this process.

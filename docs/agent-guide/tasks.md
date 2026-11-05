@@ -848,15 +848,22 @@ The app shell's creation-context provider snapshots the focused pane's preset
 before the composer opens. It reads the layout's existing focus accessor, not a
 global context registry; no detail fetch or navigation-state capture is needed.
 Without a preset, the standard property row and draft are used. The shared
-composer is not feature-flagged. Create-menu actions, shortcuts, and pane buttons
+composer's only flag gate is the Customer / Contact pill below. Create-menu actions, shortcuts, and pane buttons
 capture the provider during setup and read the preset when invoked.
 
-Customers supplies its preset when PostHog `enable-crm-activity` is enabled:
-**Companies** and **Contacts** replace Status in the initial row; Status still
-starts as Not Started on the saved task. Record-level task creation prefills the
-company or contact, including the contact's company when already loaded. With the
-CRM flag off or loading, record-level creation uses the standard property row
-while retaining its record-scoped draft and associations. **Add property** opens the same property
+With PostHog `enable-crm` and `enable-crm-activity` both on, every opening of the
+composer, and Universal Input's task mode, shows one **Customer / Contact** pill, a single-choice picker of companies
+and contacts that writes the Companies and Contacts properties. Picking a company
+leaves the contact unset; picking a contact also sets its company, and the pill
+shows the contact with both named on hover. A team with no CRM records sees the
+pill with "No customers or contacts found". Neither property is offered separately
+under **Add property** while the pill shows. With either flag off, there is no pill
+and both stay under **Add property**.
+
+Customers supplies its preset when `enable-crm-activity` is on. Record-level task
+creation prefills the company or contact, including the contact's company when
+already loaded. With the CRM flag off or loading, record-level creation uses the
+standard property row while retaining its record-scoped draft and associations. **Add property** opens the same property
 editor as the document/task side panel: search by name or type, select a property
 and enter its value, or create a property from an unmatched search. Assignments
 and values stay in the task draft until creation; opening or closing the editor
@@ -1183,6 +1190,21 @@ Each GitHub pull request linked to an open task shows a pill beside its property
 with the PR's status, title, `owner/repo#N`, and line changes. Clicking it opens the PR in
 Macro in a new split (in place on touch devices); a PR Macro has not synced yet opens on
 GitHub instead.
+
+Assignees lists and searches current team members and available agents, keeping
+each surface's existing search placeholder, styling, and selected-first ordering
+when opening the picker. Rows stay in place while selecting or deselecting.
+Existing selected outsiders remain visible and removable,
+including references absent from contacts. The picker has no contact discovery;
+a removed outsider cannot be added again unless they join the team.
+
+The same scope applies to task/project creation and editing, bulk Set assignee,
+and desktop/mobile Assignee filters. Existing **Me** and **Unassigned** choices
+keep their semantics; Created by and custom people fields keep their contact lists.
+Check that a teammate absent from contacts appears and can be selected, that
+searching by email cannot select an unassigned outsider, and that an existing
+outsider can be removed. Repeat with keyboard navigation and a touch picker
+sheet; Cancel still discards drafts and Done still applies them.
 
 The Assignees picker offers people and available agents together. Agent rows show
 their name and an `Agent` label; saved agents also show their `@handle`. Search by

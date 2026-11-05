@@ -54,7 +54,11 @@ async function awaitConfirmation(
   const actionId = result.value.actionId;
   span.setAttr('agent.action.id', actionId);
   let refreshes = 0;
-  let settledBy: 'feed' | 'refresh' = 'feed';
+  /**
+   * A settle while a reread is in flight is the reread's: the session tells
+   * its listeners about the refetched log before the refresh resolves.
+   */
+  let rereading = false;
   await new Promise<void>((resolve, reject) => {
     let finished = false;
     const finish = (error?: Error) => {
@@ -70,6 +74,7 @@ async function awaitConfirmation(
     const inspect = async () => {
       try {
         const snapshot = await session.snapshot();
+        if (finished) return;
         const message = snapshot.messages.find(
           (message) => message.requestId === actionId
         );
@@ -77,7 +82,10 @@ async function awaitConfirmation(
         const part = message.parts.find((part) => part.kind === 'control');
         if (part?.kind !== 'control' || part.outcome.kind === 'pending') return;
         span.setAttr('agent.control.outcome', part.outcome.kind);
-        span.setAttr('agent.control.settled_by', settledBy);
+        span.setAttr(
+          'agent.control.settled_by',
+          rereading ? 'refresh' : 'feed'
+        );
         finish(
           part.outcome.kind === 'rejected'
             ? new Error(part.outcome.message)
@@ -93,10 +101,13 @@ async function awaitConfirmation(
     };
     const reread = async () => {
       refreshes += 1;
-      await session.refresh();
-      settledBy = 'refresh';
-      await inspect();
-      settledBy = 'feed';
+      rereading = true;
+      try {
+        await session.refresh();
+        await inspect();
+      } finally {
+        rereading = false;
+      }
     };
     const giveUp = async () => {
       let bound: ReturnType<typeof setTimeout> | undefined;

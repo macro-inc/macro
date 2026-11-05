@@ -20,6 +20,15 @@ MCP app, a custom server, or a GitHub installation token) on each request.
 - `src/outbound/mcp_credentials.rs` / `macro_mcp.rs` / `custom_mcp.rs` /
   `github_tokens.rs`: the credential resolvers.
 - `src/inbound/axum_router.rs`: the HTTP entry point the sandbox calls.
+- `SessionMcpExchange` (`src/domain/service/actor.rs`): in-process
+  `tools/list`/`tools/call` on a connected app or custom server for a caller
+  that authorized against the session itself (code executions'
+  `macro.connectedApps`). It reads the grant by session id
+  (`SessionAuthority::authorize_session`), never reaches Macro's own server or
+  previews, and shares the actor path's credential resolution and
+  not-connected answers. A call as the owner in a turn someone else prompted
+  is held per call through `OwnerApprovals::hold_in_process`, the same
+  approval record as the native tool gate.
 
 ## Scope
 

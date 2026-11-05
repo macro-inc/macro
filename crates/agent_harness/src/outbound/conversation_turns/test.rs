@@ -426,6 +426,53 @@ async fn a_running_turn_blocks_reset_and_completed_context_is_retained(pool: PgP
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_released_context_lease_is_free_at_once(pool: PgPool) {
+    let (store, session, _, _) = setup(pool.clone()).await;
+    let other = PgConversationTurnStore::new(pool);
+    for _ in 0..100 {
+        let lease = store.claim_context(session).await.unwrap().unwrap();
+        assert!(other.claim_context(session).await.unwrap().is_none());
+        lease.release().await;
+        other
+            .claim_context(session)
+            .await
+            .unwrap()
+            .expect("a released lease is free")
+            .release()
+            .await;
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_refused_reset_leaves_the_context_free(pool: PgPool) {
+    let (store, session, channel, command) = setup(pool.clone()).await;
+    let owner = mention_origin(&command).sender.clone();
+    let record = store.admit(session, channel, command).await.unwrap();
+    let service = conversations(pool.clone(), store.clone(), true);
+    assert!(
+        store
+            .claim(record.action_id, &flight(&record))
+            .await
+            .unwrap()
+    );
+    for _ in 0..50 {
+        assert!(matches!(
+            service
+                .start_fresh(owner.clone(), conversation(channel), session)
+                .await,
+            Err(ConversationError::ContextBusy)
+        ));
+        store
+            .claim_context(session)
+            .await
+            .unwrap()
+            .expect("the refused reset released its lease")
+            .release()
+            .await;
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn reset_cancels_undispatched_work_and_serializes_with_claims(pool: PgPool) {
     let (store, session, channel, command) = setup(pool.clone()).await;
     let owner = mention_origin(&command).sender.clone();

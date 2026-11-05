@@ -104,7 +104,8 @@ pub struct Config {
     pub openai_domain_verification_token: OpenaiDomainVerificationToken,
     /// Browser-reachable FusionAuth origin, when different from the API.
     pub fusionauth_public_url: FusionauthPublicUrl,
-    /// Additional trusted client callback hosts, overriding the built-in list.
+    /// MCP client callback hosts trusted without the consent screen, overriding
+    /// the built-in list.
     pub mcp_allowed_redirect_hosts: McpAllowedRedirectHosts,
 
     /// Hide agent DM contexts from standalone lists. Enable only after all

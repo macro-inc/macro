@@ -1,6 +1,8 @@
 //! Drives the reported attack and the legitimate flow over the real router, so
 //! the checks are exercised through the same HTTP surface an attacker uses.
 
+use std::time::Duration;
+
 use axum::{
     body::Body,
     http::{Request, StatusCode, header},
@@ -8,10 +10,12 @@ use axum::{
 use tower::ServiceExt;
 
 use super::{health, mcp_router, mount_at_root_and_prefix, oauth_router};
+use crate::domain::browser_binding::BrowserBinding;
+use crate::domain::ports::UpstreamGrantError;
 use crate::test_support::{
-    ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, Harness, TRUSTED_REDIRECT_URI,
-    UPSTREAM_ACCESS_TOKEN, UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER, code_challenge_for,
-    query_param,
+    ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, FakeOAuthProvider, GATEWAY_REDIRECT_URI,
+    Harness, TRUSTED_REDIRECT_URI, UPSTREAM_ACCESS_TOKEN, UPSTREAM_REFRESH_TOKEN,
+    VICTIM_CODE_VERIFIER, code_challenge_for, query_param,
 };
 use axum::{Router, routing::get};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -22,6 +26,11 @@ struct Response {
     status: StatusCode,
     location: Option<String>,
     referrer_policy: Option<String>,
+    cache_control: Option<String>,
+    retry_after: Option<String>,
+    set_cookie: Option<String>,
+    csp: Option<String>,
+    x_frame_options: Option<String>,
     body: String,
 }
 
@@ -38,14 +47,19 @@ async fn send(harness: &Harness, request: Request<Body>) -> Response {
         .expect("router should respond");
 
     let status = response.status();
-    let location = response
-        .headers()
-        .get(header::LOCATION)
-        .map(|value| value.to_str().expect("Location is text").to_owned());
-    let referrer_policy = response
-        .headers()
-        .get(header::REFERRER_POLICY)
-        .map(|value| value.to_str().expect("Referrer-Policy is text").to_owned());
+    let header_text = |name: header::HeaderName| {
+        response
+            .headers()
+            .get(name)
+            .map(|value| value.to_str().expect("header is text").to_owned())
+    };
+    let location = header_text(header::LOCATION);
+    let referrer_policy = header_text(header::REFERRER_POLICY);
+    let set_cookie = header_text(header::SET_COOKIE);
+    let csp = header_text(header::CONTENT_SECURITY_POLICY);
+    let x_frame_options = header_text(header::X_FRAME_OPTIONS);
+    let cache_control = header_text(header::CACHE_CONTROL);
+    let retry_after = header_text(header::RETRY_AFTER);
     let bytes = axum::body::to_bytes(response.into_body(), BODY_LIMIT)
         .await
         .expect("body should be readable");
@@ -54,6 +68,11 @@ async fn send(harness: &Harness, request: Request<Body>) -> Response {
         status,
         location,
         referrer_policy,
+        cache_control,
+        retry_after,
+        set_cookie,
+        csp,
+        x_frame_options,
         body: String::from_utf8(bytes.to_vec()).expect("body should be UTF-8"),
     }
 }
@@ -91,53 +110,357 @@ fn token_request(form: &str) -> Request<Body> {
         .expect("request should build")
 }
 
-fn callback_request(session_id: &str) -> Request<Body> {
-    Request::builder()
-        .method("GET")
-        .uri(format!(
-            "/oauth/callback?code=upstream-code&state={session_id}"
-        ))
-        .body(Body::empty())
+fn callback_request(session_id: &str, cookie: Option<&str>) -> Request<Body> {
+    let mut request = Request::builder().method("GET").uri(format!(
+        "/oauth/callback?code=upstream-code&state={session_id}"
+    ));
+    if let Some(cookie) = cookie {
+        request = request.header(header::COOKIE, cookie);
+    }
+    request.body(Body::empty()).expect("request should build")
+}
+
+/// The `name=value` pair a browser sends back for a `Set-Cookie` header.
+fn cookie_pair(set_cookie: &str) -> String {
+    set_cookie
+        .split(';')
+        .next()
+        .expect("Set-Cookie has a name=value pair")
+        .to_owned()
+}
+
+/// Reads the anti-forgery token out of a rendered consent page.
+fn consent_token(page: &str) -> String {
+    let marker = r#"name="consent_token" value=""#;
+    let start = page.find(marker).expect("page carries a consent token") + marker.len();
+    let length = page[start..].find('"').expect("token value is quoted");
+    page[start..start + length].to_owned()
+}
+
+fn consent_submission(
+    client_id: &str,
+    redirect_uri: &str,
+    token: &str,
+    decision: &str,
+    cookie: Option<&str>,
+    fetch_site: &str,
+) -> Request<Body> {
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/authorize")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header("sec-fetch-site", fetch_site);
+    if let Some(cookie) = cookie {
+        request = request.header(header::COOKIE, cookie);
+    }
+    request
+        .body(Body::from(format!(
+            "response_type=code&client_id={client_id}&redirect_uri={}&state=client-state\
+             &code_challenge={}&code_challenge_method=S256&consent_token={token}\
+             &decision={decision}",
+            urlencoding::encode(redirect_uri),
+            code_challenge_for(VICTIM_CODE_VERIFIER),
+        )))
         .expect("request should build")
 }
 
-/// The attack from the report, over HTTP: the attacker cannot register their
-/// own callback, and cannot smuggle it onto an authorize request belonging to a
-/// client that is registered. No code reaches them, so there is nothing to
-/// exchange.
+async fn register_client(harness: &Harness, redirect_uri: &str) -> String {
+    let registration = send(harness, register_request(redirect_uri)).await;
+    assert_eq!(registration.status, StatusCode::OK, "{redirect_uri}");
+    registration.json()["client_id"]
+        .as_str()
+        .expect("registration returns a client_id")
+        .to_owned()
+}
+
+/// A client on a host outside the trusted list gets a consent screen, not a
+/// sign-in, and the screen cannot be framed or cached.
 #[tokio::test]
-async fn attacker_cannot_have_a_code_delivered_to_their_own_callback() {
+async fn authorize_for_an_unlisted_host_shows_the_consent_screen() {
     let harness = Harness::new();
+    let client_id = register_client(&harness, GATEWAY_REDIRECT_URI).await;
 
-    let registration = send(&harness, register_request(ATTACKER_REDIRECT_URI)).await;
-    assert_eq!(registration.status, StatusCode::BAD_REQUEST);
-    assert_eq!(
-        registration.body,
-        "redirect_uri must be a loopback address or a trusted MCP client host"
+    let page = send(
+        &harness,
+        authorize_request(&client_id, GATEWAY_REDIRECT_URI, VICTIM_CODE_VERIFIER),
+    )
+    .await;
+
+    assert_eq!(page.status, StatusCode::OK);
+    assert_eq!(page.location, None);
+    assert!(page.body.contains("gateway.example"));
+    assert_eq!(page.x_frame_options.as_deref(), Some("DENY"));
+    assert!(
+        page.csp
+            .as_deref()
+            .is_some_and(|csp| csp.contains("frame-ancestors 'none'")),
+        "unexpected CSP: {:?}",
+        page.csp
     );
+    let set_cookie = page.set_cookie.expect("authorize sets the binding cookie");
+    assert!(set_cookie.starts_with("__Host-macro_mcp_oauth="));
+    for attribute in ["Secure", "HttpOnly", "SameSite=Lax", "Path=/"] {
+        assert!(
+            set_cookie.contains(attribute),
+            "{set_cookie} lacks {attribute}"
+        );
+    }
+    assert!(!harness.inflight.has_pending());
+}
 
-    let victim_registration = send(&harness, register_request(TRUSTED_REDIRECT_URI)).await;
-    assert_eq!(victim_registration.status, StatusCode::OK);
-    let client_id = victim_registration.json()["client_id"]
+/// The client name is self-reported, so markup in it must render as text.
+#[tokio::test]
+async fn consent_screen_escapes_the_client_name() {
+    let harness = Harness::new();
+    let registration = send(
+        &harness,
+        Request::builder()
+            .method("POST")
+            .uri("/register")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(format!(
+                r#"{{"client_name":"<script>alert(1)</script>","redirect_uris":["{GATEWAY_REDIRECT_URI}"]}}"#
+            )))
+            .expect("request should build"),
+    )
+    .await;
+    let client_id = registration.json()["client_id"]
         .as_str()
         .expect("registration returns a client_id")
         .to_owned();
 
-    let crafted = send(
+    let page = send(
         &harness,
-        authorize_request(&client_id, ATTACKER_REDIRECT_URI, ATTACKER_CODE_VERIFIER),
+        authorize_request(&client_id, GATEWAY_REDIRECT_URI, VICTIM_CODE_VERIFIER),
     )
     .await;
 
-    assert_eq!(crafted.status, StatusCode::BAD_REQUEST);
-    assert_eq!(
-        crafted.location, None,
-        "a rejected authorize request must not redirect anywhere"
-    );
+    assert!(!page.body.contains("<script>"));
+    assert!(page.body.contains("&#60;script&#62;") || page.body.contains("&lt;script&gt;"));
+}
+
+/// Approving on the consent screen, in the browser that was shown it, signs
+/// the user in and delivers the code to the approved host.
+#[tokio::test]
+async fn approved_client_on_an_unlisted_host_completes_the_flow() {
+    let harness = Harness::new();
+    let client_id = register_client(&harness, GATEWAY_REDIRECT_URI).await;
+
+    let page = send(
+        &harness,
+        authorize_request(&client_id, GATEWAY_REDIRECT_URI, VICTIM_CODE_VERIFIER),
+    )
+    .await;
+    let cookie = cookie_pair(&page.set_cookie.expect("authorize sets the binding cookie"));
+    let token = consent_token(&page.body);
+
+    let approved = send(
+        &harness,
+        consent_submission(
+            &client_id,
+            GATEWAY_REDIRECT_URI,
+            &token,
+            "approve",
+            Some(&cookie),
+            "same-origin",
+        ),
+    )
+    .await;
+    assert_eq!(approved.status, StatusCode::SEE_OTHER);
+    assert_eq!(approved.referrer_policy.as_deref(), Some("no-referrer"));
     assert!(
-        !harness.inflight.has_pending(),
-        "a rejected authorize request must not create handshake state"
+        approved
+            .location
+            .as_deref()
+            .is_some_and(|location| location.starts_with("https://upstream.example/authorize")),
+        "unexpected redirect: {:?}",
+        approved.location
     );
+
+    let session_id = harness.inflight.only_pending_session_id();
+    let callback = send(&harness, callback_request(&session_id, Some(&cookie))).await;
+    assert_eq!(callback.status, StatusCode::TEMPORARY_REDIRECT);
+    let client_redirect = callback.location.expect("callback redirects to the client");
+    assert!(
+        client_redirect.starts_with(&format!("{GATEWAY_REDIRECT_URI}?code=")),
+        "unexpected redirect: {client_redirect}"
+    );
+}
+
+/// A sign-in method named on the authorize request survives the consent form.
+#[tokio::test]
+async fn approving_keeps_the_requested_sign_in_method() {
+    let harness = Harness::new();
+    let client_id = register_client(&harness, GATEWAY_REDIRECT_URI).await;
+
+    let mut authorize = authorize_request(&client_id, GATEWAY_REDIRECT_URI, VICTIM_CODE_VERIFIER);
+    *authorize.uri_mut() = format!("{}&sign_in=login", authorize.uri())
+        .parse()
+        .expect("uri should parse");
+    let page = send(&harness, authorize).await;
+    assert!(
+        page.body
+            .contains(r#"<input type="hidden" name="sign_in" value="login" />"#),
+        "{}",
+        page.body
+    );
+    let cookie = cookie_pair(&page.set_cookie.expect("authorize sets the binding cookie"));
+
+    let (parts, body) = consent_submission(
+        &client_id,
+        GATEWAY_REDIRECT_URI,
+        &consent_token(&page.body),
+        "approve",
+        Some(&cookie),
+        "same-origin",
+    )
+    .into_parts();
+    let form = axum::body::to_bytes(body, 64 * 1024)
+        .await
+        .expect("form should read");
+    let form = format!("{}&sign_in=login", String::from_utf8_lossy(&form));
+    let approved = send(&harness, Request::from_parts(parts, Body::from(form))).await;
+
+    assert_eq!(approved.status, StatusCode::SEE_OTHER);
+    assert!(
+        approved
+            .location
+            .as_deref()
+            .is_some_and(|location| location.starts_with("https://upstream.example/login")),
+        "unexpected redirect: {:?}",
+        approved.location
+    );
+}
+
+/// No other page can approve on the user's behalf: the post must carry the
+/// binding cookie, the token derived from it, and come from this origin.
+#[tokio::test]
+async fn a_forged_consent_submission_is_refused() {
+    let harness = Harness::new();
+    let client_id = register_client(&harness, GATEWAY_REDIRECT_URI).await;
+    let page = send(
+        &harness,
+        authorize_request(&client_id, GATEWAY_REDIRECT_URI, VICTIM_CODE_VERIFIER),
+    )
+    .await;
+    let cookie = cookie_pair(&page.set_cookie.expect("authorize sets the binding cookie"));
+    let token = consent_token(&page.body);
+    let other_browser = format!(
+        "__Host-macro_mcp_oauth={}",
+        BrowserBinding::generate().as_str()
+    );
+
+    let forgeries = [
+        ("no cookie", None, token.as_str(), "same-origin"),
+        (
+            "another browser's cookie",
+            Some(other_browser.as_str()),
+            token.as_str(),
+            "same-origin",
+        ),
+        (
+            "wrong token",
+            Some(cookie.as_str()),
+            "forged-token",
+            "same-origin",
+        ),
+        (
+            "cross-site post",
+            Some(cookie.as_str()),
+            token.as_str(),
+            "cross-site",
+        ),
+    ];
+    for (case, cookie, token, fetch_site) in forgeries {
+        let response = send(
+            &harness,
+            consent_submission(
+                &client_id,
+                GATEWAY_REDIRECT_URI,
+                token,
+                "approve",
+                cookie,
+                fetch_site,
+            ),
+        )
+        .await;
+
+        assert_eq!(response.status, StatusCode::FORBIDDEN, "{case}");
+        assert_eq!(response.location, None, "{case}");
+        assert!(!harness.inflight.has_pending(), "{case}");
+    }
+}
+
+/// Cancelling sends the browser nowhere, so the broker cannot be used to
+/// redirect to a host the user just refused.
+#[tokio::test]
+async fn declining_consent_redirects_nowhere() {
+    let harness = Harness::new();
+    let client_id = register_client(&harness, GATEWAY_REDIRECT_URI).await;
+    let page = send(
+        &harness,
+        authorize_request(&client_id, GATEWAY_REDIRECT_URI, VICTIM_CODE_VERIFIER),
+    )
+    .await;
+    let cookie = cookie_pair(&page.set_cookie.expect("authorize sets the binding cookie"));
+
+    let declined = send(
+        &harness,
+        consent_submission(
+            &client_id,
+            GATEWAY_REDIRECT_URI,
+            &consent_token(&page.body),
+            "deny",
+            Some(&cookie),
+            "same-origin",
+        ),
+    )
+    .await;
+
+    assert_eq!(declined.status, StatusCode::OK);
+    assert_eq!(declined.location, None);
+    assert!(!harness.inflight.has_pending());
+}
+
+/// An attacker who approves their own client cannot hand the resulting
+/// sign-in to a victim: the callback lands in the victim's browser, without
+/// the attacker's binding cookie, and no code is issued.
+#[tokio::test]
+async fn a_sign_in_started_in_another_browser_issues_no_code() {
+    let harness = Harness::new();
+    let client_id = register_client(&harness, ATTACKER_REDIRECT_URI).await;
+    let page = send(
+        &harness,
+        authorize_request(&client_id, ATTACKER_REDIRECT_URI, VICTIM_CODE_VERIFIER),
+    )
+    .await;
+    let attacker_cookie = cookie_pair(&page.set_cookie.expect("authorize sets the binding cookie"));
+    let approved = send(
+        &harness,
+        consent_submission(
+            &client_id,
+            ATTACKER_REDIRECT_URI,
+            &consent_token(&page.body),
+            "approve",
+            Some(&attacker_cookie),
+            "same-origin",
+        ),
+    )
+    .await;
+    assert_eq!(approved.status, StatusCode::SEE_OTHER);
+    let session_id = harness.inflight.only_pending_session_id();
+    let victim_cookie = format!(
+        "__Host-macro_mcp_oauth={}",
+        BrowserBinding::generate().as_str()
+    );
+
+    for cookie in [None, Some(victim_cookie.as_str())] {
+        let callback = send(&harness, callback_request(&session_id, cookie)).await;
+
+        assert_eq!(callback.status, StatusCode::BAD_REQUEST);
+        assert_eq!(callback.location, None);
+    }
+    assert!(!harness.inflight.holds_any_issued_code());
 }
 
 #[tokio::test]
@@ -240,6 +563,10 @@ async fn authorize_offers_chatgpt_a_sign_in_choice() {
     };
     let login = send(&harness, chosen("login")).await;
     assert_eq!(login.status, StatusCode::TEMPORARY_REDIRECT);
+    assert!(
+        login.set_cookie.is_some(),
+        "the flow needs its binding cookie"
+    );
     let location = login.location.expect("redirect has a location");
     assert!(
         location.starts_with("https://upstream.example/login"),
@@ -331,14 +658,22 @@ async fn registered_client_completes_the_whole_flow() {
     )
     .await;
     assert_eq!(authorize.status, StatusCode::TEMPORARY_REDIRECT);
-    let upstream = authorize.location.expect("authorize redirects upstream");
+    let upstream = authorize
+        .location
+        .clone()
+        .expect("authorize redirects upstream");
     assert!(
         upstream.starts_with("https://upstream.example/authorize"),
         "unexpected upstream redirect: {upstream}"
     );
 
+    let cookie = cookie_pair(
+        &authorize
+            .set_cookie
+            .expect("authorize sets the binding cookie"),
+    );
     let session_id = harness.inflight.only_pending_session_id();
-    let callback = send(&harness, callback_request(&session_id)).await;
+    let callback = send(&harness, callback_request(&session_id, Some(&cookie))).await;
     assert_eq!(callback.status, StatusCode::TEMPORARY_REDIRECT);
     let client_redirect = callback.location.expect("callback redirects to the client");
     assert!(
@@ -386,7 +721,11 @@ async fn token_endpoint_refuses_a_code_presented_by_another_client() {
     )
     .await;
     assert_eq!(stolen.status, StatusCode::BAD_REQUEST);
-    assert_eq!(stolen.body, "grant was not issued to this client");
+    assert_eq!(stolen.json()["error"], "invalid_grant");
+    assert_eq!(
+        stolen.json()["error_description"],
+        "grant was not issued to this client"
+    );
 
     let retried = send(
         &harness,
@@ -397,7 +736,11 @@ async fn token_endpoint_refuses_a_code_presented_by_another_client() {
     )
     .await;
     assert_eq!(retried.status, StatusCode::BAD_REQUEST);
-    assert_eq!(retried.body, "invalid or expired code");
+    assert_eq!(retried.json()["error"], "invalid_grant");
+    assert_eq!(
+        retried.json()["error_description"],
+        "invalid or expired code"
+    );
 }
 
 fn revoke_request(form: &str) -> Request<Body> {
@@ -472,7 +815,161 @@ async fn client_disconnects_by_revoking_its_refresh_token() {
     )
     .await;
     assert_eq!(refresh.status, StatusCode::BAD_REQUEST);
-    assert_eq!(refresh.body, "refresh token is not bound to a client");
+    assert_eq!(refresh.json()["error"], "invalid_grant");
+    assert_eq!(
+        refresh.json()["error_description"],
+        "refresh token is not bound to a client"
+    );
+}
+
+/// Takes a fresh client through the whole flow and presents its refresh token
+/// to `/token`, so the upstream refresh grant decides the answer.
+async fn refresh_over_http(harness: &Harness) -> Response {
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+    let exchange = send(
+        harness,
+        token_request(&format!(
+            "grant_type=authorization_code&code={code}&code_verifier={VICTIM_CODE_VERIFIER}\
+             &redirect_uri={}&client_id={client_id}",
+            urlencoding::encode(TRUSTED_REDIRECT_URI)
+        )),
+    )
+    .await;
+    assert_eq!(exchange.status, StatusCode::OK);
+
+    send(
+        harness,
+        token_request(&format!(
+            "grant_type=refresh_token&refresh_token={UPSTREAM_REFRESH_TOKEN}&client_id={client_id}"
+        )),
+    )
+    .await
+}
+
+/// A refresh token the upstream no longer holds is the client's problem, not
+/// an outage: it gets `invalid_grant`, which tells it to authorize again
+/// instead of retrying.
+#[tokio::test]
+async fn token_endpoint_answers_an_upstream_refused_refresh_with_invalid_grant() {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_refresh(|| {
+        UpstreamGrantError::InvalidGrant {
+            detail: "invalid_grant (refresh_token_not_found)".to_owned(),
+        }
+    }));
+
+    let refresh = refresh_over_http(&harness).await;
+
+    assert_eq!(refresh.status, StatusCode::BAD_REQUEST);
+    assert_eq!(refresh.json()["error"], "invalid_grant");
+    assert_eq!(
+        refresh.json()["error_description"],
+        "refresh token is no longer valid; authorize again"
+    );
+    assert_eq!(refresh.cache_control.as_deref(), Some("no-store"));
+    assert!(
+        !refresh.body.contains("refresh_token_not_found"),
+        "upstream detail is logged, not returned"
+    );
+}
+
+#[tokio::test]
+async fn token_endpoint_answers_an_upstream_outage_with_temporarily_unavailable() {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_refresh(|| {
+        UpstreamGrantError::Unavailable {
+            retry_after: Some(Duration::from_secs(30)),
+        }
+    }));
+
+    let refresh = refresh_over_http(&harness).await;
+
+    assert_eq!(refresh.status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(refresh.json()["error"], "temporarily_unavailable");
+    assert_eq!(refresh.retry_after.as_deref(), Some("30"));
+}
+
+#[tokio::test]
+async fn token_endpoint_answers_an_unknown_upstream_failure_with_server_error() {
+    let harness = Harness::with_provider(
+        FakeOAuthProvider::new()
+            .failing_refresh(|| UpstreamGrantError::Failed(anyhow::anyhow!("unexpected 500"))),
+    );
+
+    let refresh = refresh_over_http(&harness).await;
+
+    assert_eq!(refresh.status, StatusCode::BAD_GATEWAY);
+    assert_eq!(refresh.json()["error"], "server_error");
+    assert_eq!(refresh.retry_after, None);
+    assert!(
+        !refresh.body.contains("unexpected 500"),
+        "upstream detail is logged, not returned"
+    );
+}
+
+#[tokio::test]
+async fn token_endpoint_names_missing_parameters_as_invalid_request() {
+    let harness = Harness::new();
+
+    let missing_code = send(
+        &harness,
+        token_request("grant_type=authorization_code&client_id=some-client"),
+    )
+    .await;
+    assert_eq!(missing_code.status, StatusCode::BAD_REQUEST);
+    assert_eq!(missing_code.json()["error"], "invalid_request");
+
+    let unsupported = send(&harness, token_request("grant_type=password")).await;
+    assert_eq!(unsupported.status, StatusCode::BAD_REQUEST);
+    assert_eq!(unsupported.json()["error"], "unsupported_grant_type");
+
+    let no_grant_type = send(&harness, token_request("client_id=some-client")).await;
+    assert_eq!(no_grant_type.status, StatusCode::BAD_REQUEST);
+    assert_eq!(no_grant_type.json()["error"], "invalid_request");
+    assert_eq!(no_grant_type.cache_control.as_deref(), Some("no-store"));
+}
+
+async fn callback_with_failing_code_exchange(failure: fn() -> UpstreamGrantError) -> Response {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_code_exchange(failure));
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let authorize = send(
+        &harness,
+        authorize_request(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER),
+    )
+    .await;
+    assert_eq!(authorize.status, StatusCode::TEMPORARY_REDIRECT);
+    let cookie = cookie_pair(
+        authorize
+            .set_cookie
+            .as_deref()
+            .expect("authorize sets the binding cookie"),
+    );
+
+    let session_id = harness.inflight.only_pending_session_id();
+    send(&harness, callback_request(&session_id, Some(&cookie))).await
+}
+
+#[tokio::test]
+async fn callback_separates_a_refused_code_from_an_upstream_fault() {
+    let refused = callback_with_failing_code_exchange(|| UpstreamGrantError::InvalidGrant {
+        detail: "invalid_request (auth_code_not_found)".to_owned(),
+    })
+    .await;
+    assert_eq!(refused.status, StatusCode::BAD_REQUEST);
+    assert_eq!(refused.location, None);
+
+    let unavailable = callback_with_failing_code_exchange(|| UpstreamGrantError::Unavailable {
+        retry_after: None,
+    })
+    .await;
+    assert_eq!(unavailable.status, StatusCode::SERVICE_UNAVAILABLE);
+
+    let failed = callback_with_failing_code_exchange(|| {
+        UpstreamGrantError::Failed(anyhow::anyhow!("unexpected 500"))
+    })
+    .await;
+    assert_eq!(failed.status, StatusCode::BAD_GATEWAY);
 }
 
 async fn ok() -> &'static str {

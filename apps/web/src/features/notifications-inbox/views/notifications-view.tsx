@@ -6,12 +6,13 @@ import {
 import {
   useViewControlHotkeys,
   useViewTabHotkeys,
-  ViewBreadcrumbs,
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import type { CalendarPreviewSelection } from '@app/features/next-soup/utils';
 import { t } from '@app/lib/i18n';
+import { SplitRouter } from '@app/lib/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
@@ -44,6 +45,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, EmptyStatePanel } from '@ui';
 import {
+  type Accessor,
   createComputed,
   createEffect,
   createMemo,
@@ -70,7 +72,9 @@ import {
 } from '../components/inbox-status-tabs';
 import { NotificationRow } from '../components/notification-row';
 import { NotificationStackItem } from '../components/notification-stack-item';
+import { NotificationsBreadcrumb } from '../components/notifications-breadcrumb';
 import { RowActionButtons } from '../components/row-action-buttons';
+import { NotificationsCalendarPaneProvider } from '../context/notifications-calendar-context';
 import {
   type NotificationInboxRow,
   useNotificationsInboxContext,
@@ -110,6 +114,15 @@ export type NotificationsViewProps = {
   ) => void;
   /** Open the settings that decide which notifications are delivered. */
   onOpenSettings: () => void;
+  /** Calendar events show in the content area through the view's calendar route. */
+  calendarPreview: {
+    /** Show the event in the content area; false when it can't be shown there. */
+    open: (entity: CalendarPreviewSelection) => boolean;
+    /** Leave the calendar, when it is shown. */
+    close: () => void;
+    /** Bumped when the shown event is chosen again. */
+    refocus: Accessor<number>;
+  };
 };
 
 /** Distance from the end of the list, in pixels, that loads the next page. */
@@ -133,8 +146,8 @@ const decisionFailure = (decision: InboxDecision) =>
     .exhaustive();
 
 /**
- * What the preview pane can show inline; calendar events and projects open
- * in their own views instead.
+ * What the preview pane can show inline; calendar events show through the
+ * view's calendar route, and projects open in their own view.
  */
 const previewSelection = (
   entity: EntityData
@@ -142,6 +155,30 @@ const previewSelection = (
   entity.type === 'calendar_event' || entity.type === 'initiative'
     ? undefined
     : entity;
+
+/** The entity a row, or one of its notifications, is about. */
+const entityOf = (
+  row: NotificationInboxRow,
+  notification?: UnifiedNotification
+) => (notification ? row.content.entityAt(notification) : row.content.entity);
+
+/**
+ * A calendar event row as the Calendar reads it: its notifications, such as
+ * a reminder naming the occurrence, behind an accessor.
+ */
+const calendarSelection = (
+  entity: ReturnType<typeof entityOf>
+): CalendarPreviewSelection | undefined => {
+  if (entity.type !== 'calendar_event') return undefined;
+  const { notifications } = entity;
+  return {
+    ...entity,
+    notifications:
+      typeof notifications === 'function'
+        ? notifications
+        : () => notifications ?? [],
+  };
+};
 
 /**
  * What the preview shows for a row or one of its notifications; undefined when
@@ -152,9 +189,7 @@ const previewTargetFor = (
   row: NotificationInboxRow,
   notification?: UnifiedNotification
 ) => {
-  const entity = previewSelection(
-    notification ? row.content.entityAt(notification) : row.content.entity
-  );
+  const entity = previewSelection(entityOf(row, notification));
   if (!entity) return undefined;
   const target = previewBlockTarget(entity);
   const params =
@@ -162,23 +197,6 @@ const previewTargetFor = (
     crmCommentParams(notification ?? row.content.notifications[0]);
   return params ? { ...target, params } : target;
 };
-
-function NotificationsBreadcrumb(props: { onReturn: () => void }) {
-  return (
-    <nav
-      aria-label={t('notificationsInbox.location')}
-      class="flex items-center gap-0.5"
-    >
-      <ViewBreadcrumbs.ReturnButton
-        data-allow-focus-in-preview
-        onClick={props.onReturn}
-      >
-        {t('nav.notifications')}
-      </ViewBreadcrumbs.ReturnButton>
-      <ViewBreadcrumbs.Separator />
-    </nav>
-  );
-}
 
 function ListHeader(props: { actions: JSX.Element }) {
   return (
@@ -315,22 +333,41 @@ export function NotificationsView(props: NotificationsViewProps) {
   };
 
   /**
-   * Show a row in the preview, at one of its notifications when one is named,
-   * or open it when it has no inline preview.
+   * Show a row in the preview, at one of its notifications when one is named:
+   * a calendar event in the Calendar, anything else in its block. A row with
+   * no inline preview opens instead.
    */
   const preview = (
     row: NotificationInboxRow,
     notification?: UnifiedNotification
   ) => {
+    const calendarEvent = calendarSelection(entityOf(row, notification));
+    if (
+      calendarEvent &&
+      guard.canSelect(undefined) &&
+      props.calendarPreview.open(calendarEvent)
+    ) {
+      selection.select(row, notification?.id);
+      guard(undefined);
+      markSeen(row);
+      return;
+    }
     const target = previewTargetFor(row, notification);
     if (!target) {
       props.onOpen(row, { newSplit: false, notification });
       return;
     }
     if (!guard.canSelect(target)) return;
+    props.calendarPreview.close();
     selection.select(row, notification?.id);
     guard(target);
     markSeen(row);
+  };
+
+  /** Leave what the content area shows for the empty state. */
+  const closePreview = () => {
+    props.calendarPreview.close();
+    selection.clear();
   };
   const previewAfterMove = debounce(preview, 150);
   onCleanup(() => previewAfterMove.clear());
@@ -370,7 +407,7 @@ export function NotificationsView(props: NotificationsViewProps) {
     complete: (row) => {
       stacks.collapse(row.id);
       const next = selection.afterLeaving([row.id]);
-      if (next === 'none') selection.clear();
+      if (next === 'none') closePreview();
       else if (next !== 'stay') preview(next);
       return feed.markDone([row]);
     },
@@ -383,7 +420,7 @@ export function NotificationsView(props: NotificationsViewProps) {
   const markDone = (done: readonly NotificationInboxRow[]) => {
     for (const row of done) stacks.collapse(row.id);
     const next = selection.afterLeaving(done.map((row) => row.id));
-    if (next === 'none') selection.clear();
+    if (next === 'none') closePreview();
     else if (next !== 'stay') preview(next);
     fireAndForget(inbox.markDone(done), 'notifications-inbox');
   };
@@ -878,29 +915,47 @@ export function NotificationsView(props: NotificationsViewProps) {
                 </div>
               </ViewShell.Aside>
               <ViewShell.Main class="overflow-hidden">
-                <Show
-                  when={previewTarget()}
-                  fallback={
-                    <EmptyStatePanel
-                      centered
-                      graphic={EmptyStateInboxTrayGraphic}
-                      title={t('notificationsInbox.noneSelectedTitle')}
-                      description={t(
-                        'notificationsInbox.noneSelectedDescription'
+                <NotificationsCalendarPaneProvider
+                  value={{
+                    refocus: props.calendarPreview.refocus,
+                    onReturn: closePreview,
+                  }}
+                >
+                  {/* A calendar event shows under the view's calendar route,
+                      which loads lazily: suspend only this pane, so the list
+                      keeps its place. */}
+                  <Suspense>
+                    <SplitRouter.Outlet
+                      fallback={() => (
+                        <Show
+                          when={previewTarget()}
+                          fallback={
+                            <EmptyStatePanel
+                              centered
+                              graphic={EmptyStateInboxTrayGraphic}
+                              title={t('notificationsInbox.noneSelectedTitle')}
+                              description={t(
+                                'notificationsInbox.noneSelectedDescription'
+                              )}
+                            />
+                          }
+                        >
+                          <PreviewPanel
+                            target={previewTarget()}
+                            navigationRequest={selection.navigationRequest()}
+                            orchestrator={orchestrator}
+                            splitPanelContext={panel}
+                            headerLeading={
+                              <NotificationsBreadcrumb
+                                onReturn={closePreview}
+                              />
+                            }
+                          />
+                        </Show>
                       )}
                     />
-                  }
-                >
-                  <PreviewPanel
-                    target={previewTarget()}
-                    navigationRequest={selection.navigationRequest()}
-                    orchestrator={orchestrator}
-                    splitPanelContext={panel}
-                    headerLeading={
-                      <NotificationsBreadcrumb onReturn={selection.clear} />
-                    }
-                  />
-                </Show>
+                  </Suspense>
+                </NotificationsCalendarPaneProvider>
               </ViewShell.Main>
             </ViewShell.Root>
           </div>

@@ -92,7 +92,7 @@ document_sub_type = { path = "../../crates/document_sub_type" }
 documents = { path = "../../crates/documents", features = ["ai_tools", "attachment", "outbound", "ports"] }
 doppleganger = { workspace = true }
 doppler-config = { workspace = true }
-email = { path = "../../crates/email", features = ["attachment", "outbound"] }
+email = { path = "../../crates/email", features = ["attachment", "outbound", "sqs"] }
 email_service_client = { path = "../../crates/email_service_client" }
 entity_access = { path = "../../crates/entity_access", features = ["inbound", "outbound"] }
 entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
@@ -175,6 +175,7 @@ reqwest = { workspace = true }
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 rootcause = { workspace = true }
+routine_program = { path = "../../crates/routine_program" }
 scheduled_action = { path = "../../crates/scheduled_action" }
 schemars = { workspace = true }
 search_service_client = { path = "../../crates/search_service_client" }

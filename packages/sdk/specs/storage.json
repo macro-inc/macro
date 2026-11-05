@@ -433,6 +433,105 @@
         }
       }
     },
+    "/bots": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots`: the bots the caller can manage.",
+        "operationId": "list_bots",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Bot"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /bots`.",
+        "operationId": "create_bot",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/bots/me": {
       "get": {
         "tags": ["bots"],
@@ -561,6 +660,195 @@
         }
       }
     },
+    "/bots/{bot_id}": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/{bot_id}`.",
+        "operationId": "get_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["bots"],
+        "summary": "Handler for `DELETE /bots/{bot_id}`.",
+        "operationId": "delete_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["bots"],
+        "summary": "Handler for `PATCH /bots/{bot_id}`.",
+        "operationId": "patch_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/bots/{bot_id}/channels": {
       "get": {
         "tags": ["bots"],
@@ -643,6 +931,210 @@
             "name": "channel_id",
             "in": "path",
             "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bots/{bot_id}/tokens": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/{bot_id}/tokens`.",
+        "operationId": "list_bot_tokens",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BotToken"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /bots/{bot_id}/tokens`.",
+        "operationId": "create_bot_token",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBotTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateBotTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bots/{bot_id}/tokens/{token_id}": {
+      "delete": {
+        "tags": ["bots"],
+        "summary": "Handler for `DELETE /bots/{bot_id}/tokens/{token_id}`.",
+        "operationId": "revoke_bot_token",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Token ID",
             "required": true,
             "schema": {
               "type": "string",
@@ -4830,6 +5322,132 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiChannelAttachmentsPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/bots": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /channels/{channel_id}/bots`.",
+        "operationId": "list_channel_bots",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Bot"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /channels/{channel_id}/bots`.",
+        "operationId": "add_channel_bot",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddChannelBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -10979,6 +11597,105 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/upload": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Upload a file's bytes as a new document, up to 25 MiB.",
+        "description": "The body is the raw file content. Preview generation and indexing may\nfinish after the response.",
+        "operationId": "upload_file",
+        "parameters": [
+          {
+            "name": "fileName",
+            "in": "query",
+            "description": "Filename including its extension, such as `report.pdf`; the extension\nsets the file type. No directory components.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "description": "Destination project. Requires edit access; omit for top-level files.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The file's bytes, at most 25 MiB.",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadFileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filename or content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No edit access to the destination project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller cannot create documents"
+          },
+          "413": {
+            "description": "The file exceeds 25 MiB"
+          },
+          "422": {
+            "description": "Document name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
             "description": "",
             "content": {
               "application/json": {
@@ -21124,6 +21841,17 @@
         "description": "The kind of activity a user performs in a channel.",
         "enum": ["view", "interact"]
       },
+      "AddChannelBotRequest": {
+        "type": "object",
+        "description": "Request to add a bot to a channel.",
+        "required": ["bot_id"],
+        "properties": {
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Bot id."
+          }
+        }
+      },
       "AddFavoriteRequest": {
         "type": "object",
         "description": "Request body for favoriting an entity.",
@@ -22985,7 +23713,7 @@
           },
           "has_agent": {
             "type": "boolean",
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session."
           },
           "id": {
             "$ref": "#/components/schemas/BotId",
@@ -26905,7 +27633,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false."
           },
           "name": {
             "type": "string",
@@ -26915,6 +27643,36 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot."
+          }
+        }
+      },
+      "CreateBotTokenRequest": {
+        "type": "object",
+        "description": "Request to create a bot token.",
+        "properties": {
+          "expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Optional expiration timestamp."
+          },
+          "label": {
+            "type": ["string", "null"],
+            "description": "Token label."
+          }
+        }
+      },
+      "CreateBotTokenResponse": {
+        "type": "object",
+        "description": "Response containing a newly minted token.",
+        "required": ["token", "bearer_token"],
+        "properties": {
+          "bearer_token": {
+            "type": "string",
+            "description": "Raw bearer token."
+          },
+          "token": {
+            "$ref": "#/components/schemas/BotToken",
+            "description": "Token metadata."
           }
         }
       },
@@ -27095,7 +27853,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false."
           },
           "name": {
             "type": "string",
@@ -27544,16 +28302,23 @@
       },
       "CreatePipeline": {
         "type": "object",
-        "description": "Request to create an empty pipeline with the standard CRM columns.",
-        "required": ["name", "recordType"],
+        "description": "Request to create an empty pipeline: the standard CRM columns for a tracked\nrecord, or one Name column, like a new database, for a generic pipeline.",
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
             "description": "Pipeline name."
           },
           "recordType": {
-            "$ref": "#/components/schemas/PipelineRecordType",
-            "description": "Company or contact entries."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Company or contact entries; omitted, a generic pipeline of free-form rows."
+              }
+            ]
           },
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",
@@ -38480,7 +39245,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged."
           },
           "name": {
             "type": ["string", "null"],
@@ -39037,11 +39802,18 @@
           "primaryColumnId": {
             "type": "string",
             "format": "uuid",
-            "description": "Protected primary column."
+            "description": "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
           },
           "recordType": {
-            "$ref": "#/components/schemas/PipelineRecordType",
-            "description": "Kind of the primary reference."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Kind of the primary reference; `None` for a generic pipeline, whose\nprimary column is plain text."
+              }
+            ]
           },
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",
@@ -46429,6 +47201,22 @@
           },
           "sha": {
             "type": "string"
+          }
+        }
+      },
+      "UploadFileResponse": {
+        "type": "object",
+        "description": "The document created from the uploaded bytes.",
+        "required": ["documentId", "sizeBytes"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The new document."
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "description": "Number of bytes stored.",
+            "minimum": 0
           }
         }
       },

@@ -8815,6 +8815,16 @@ export type createProfilePictureUploadResponse401 = {
   status: 401;
 };
 
+export type createProfilePictureUploadResponse413 = {
+  data: ErrorResponse;
+  status: 413;
+};
+
+export type createProfilePictureUploadResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type createProfilePictureUploadResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -8827,6 +8837,8 @@ export type createProfilePictureUploadResponseSuccess =
 export type createProfilePictureUploadResponseError = (
   | createProfilePictureUploadResponse400
   | createProfilePictureUploadResponse401
+  | createProfilePictureUploadResponse413
+  | createProfilePictureUploadResponse429
   | createProfilePictureUploadResponse500
 ) & {
   headers: Headers;

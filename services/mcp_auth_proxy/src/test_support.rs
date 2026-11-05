@@ -11,14 +11,15 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use sha2::{Digest, Sha256};
 
 use crate::domain::{
+    browser_binding::BrowserBinding,
     models::{
         AccessToken, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
         IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RefreshTokenBinding,
-        RegisteredClient, SignInMethod, UpstreamTokens,
+        RegisteredClient, SignInMethod, UpstreamTokens, UserConsent,
     },
     ports::{
         ClientRegistrationStore, GrantRevokedFuture, OAuthProvider, RefreshTokenBindingFuture,
-        RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture,
+        RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture, UpstreamGrantError,
         UpstreamRevocationFuture, UpstreamTokensFuture,
     },
     redirect_uri::RedirectUriPolicy,
@@ -41,6 +42,9 @@ pub const LOOPBACK_REDIRECT_URI: &str = "http://127.0.0.1:51000/oauth/callback";
 pub const TRUSTED_REDIRECT_URI: &str = "https://claude.ai/api/mcp/auth_callback";
 /// Callback under an attacker's control.
 pub const ATTACKER_REDIRECT_URI: &str = "https://attacker.example/steal";
+/// An `https` callback on a host outside the trusted list, such as a
+/// self-hosted MCP gateway's.
+pub const GATEWAY_REDIRECT_URI: &str = "https://gateway.example/oauth/callback";
 /// Access token the fake upstream provider returns for a refresh.
 pub const REFRESHED_ACCESS_TOKEN: &str = "refreshed-access-token";
 /// Upstream access token lifetime the fake provider reports, matching the one
@@ -76,6 +80,11 @@ impl FakeInflightAuth {
     /// Returns whether a broker code is still redeemable.
     pub fn holds_issued_code(&self, code: &str) -> bool {
         self.issued.lock().expect("issued lock").contains_key(code)
+    }
+
+    /// Returns whether any broker code has been issued.
+    pub fn holds_any_issued_code(&self) -> bool {
+        !self.issued.lock().expect("issued lock").is_empty()
     }
 
     /// Returns the recorded upstream expiry of the only issued code, panicking
@@ -221,10 +230,15 @@ impl RefreshTokenBindingStore for FakeClientRegistry {
     }
 }
 
+/// Builds the failure a fake upstream grant answers with.
+type GrantFailure = Box<dyn Fn() -> UpstreamGrantError + Send + Sync>;
+
 /// Upstream provider that hands back fixed tokens, standing in for FusionAuth.
 pub struct FakeOAuthProvider {
     rotated_refresh_token: Option<String>,
     revoked_refresh_tokens: Mutex<HashSet<String>>,
+    refresh_failure: Option<GrantFailure>,
+    code_exchange_failure: Option<GrantFailure>,
 }
 
 impl FakeOAuthProvider {
@@ -234,7 +248,28 @@ impl FakeOAuthProvider {
         Self {
             rotated_refresh_token: None,
             revoked_refresh_tokens: Mutex::default(),
+            refresh_failure: None,
+            code_exchange_failure: None,
         }
+    }
+
+    /// This provider, with every refresh grant failing with `failure()`.
+    pub fn failing_refresh(
+        mut self,
+        failure: impl Fn() -> UpstreamGrantError + Send + Sync + 'static,
+    ) -> Self {
+        self.refresh_failure = Some(Box::new(failure));
+        self
+    }
+
+    /// This provider, with every authorization code grant failing with
+    /// `failure()`.
+    pub fn failing_code_exchange(
+        mut self,
+        failure: impl Fn() -> UpstreamGrantError + Send + Sync + 'static,
+    ) -> Self {
+        self.code_exchange_failure = Some(Box::new(failure));
+        self
     }
 
     /// Returns whether the provider was asked to revoke `refresh_token`.
@@ -249,7 +284,7 @@ impl FakeOAuthProvider {
     pub fn rotating(rotated_refresh_token: &str) -> Self {
         Self {
             rotated_refresh_token: Some(rotated_refresh_token.to_owned()),
-            revoked_refresh_tokens: Mutex::default(),
+            ..Self::new()
         }
     }
 }
@@ -269,6 +304,9 @@ impl OAuthProvider for FakeOAuthProvider {
 
     fn exchange_authorization_code<'a>(&'a self, _code: &'a str) -> UpstreamTokensFuture<'a> {
         Box::pin(async move {
+            if let Some(failure) = &self.code_exchange_failure {
+                return Err(failure());
+            }
             Ok(UpstreamTokens {
                 access_token: AccessToken::from(UPSTREAM_ACCESS_TOKEN),
                 refresh_token: RefreshToken::from(UPSTREAM_REFRESH_TOKEN),
@@ -282,13 +320,18 @@ impl OAuthProvider for FakeOAuthProvider {
         refresh_token: &'a RefreshToken,
     ) -> UpstreamTokensFuture<'a> {
         Box::pin(async move {
+            if let Some(failure) = &self.refresh_failure {
+                return Err(failure());
+            }
             if self
                 .revoked_refresh_tokens
                 .lock()
                 .expect("revoked refresh tokens lock")
                 .contains(refresh_token.as_str())
             {
-                anyhow::bail!("refresh token was revoked upstream");
+                return Err(UpstreamGrantError::InvalidGrant {
+                    detail: "invalid_grant (refresh_token_not_found)".to_owned(),
+                });
             }
             let next = self
                 .rotated_refresh_token
@@ -327,6 +370,8 @@ pub struct Harness {
     pub registry: Arc<FakeClientRegistry>,
     /// The upstream provider the service was built with.
     pub provider: Arc<FakeOAuthProvider>,
+    /// The secret cookie of the browser the tests drive flows from.
+    pub browser: BrowserBinding,
 }
 
 impl Harness {
@@ -354,6 +399,7 @@ impl Harness {
             inflight,
             registry,
             provider,
+            browser: BrowserBinding::generate(),
         }
     }
 
@@ -397,23 +443,26 @@ impl Harness {
         code_verifier: &str,
     ) -> String {
         self.service
-            .start_authorization(self.authorize_request(
-                client_id,
-                redirect_uri,
-                &code_challenge_for(code_verifier),
-            ))
+            .start_authorization(
+                self.authorize_request(client_id, redirect_uri, &code_challenge_for(code_verifier)),
+                self.browser.clone(),
+                UserConsent::NotAsked,
+            )
             .await
             .expect("authorize should succeed");
 
         let session_id = self.inflight.only_pending_session_id();
         let redirect = self
             .service
-            .complete_callback(CallbackRequest {
-                code: Some("upstream-code".to_owned()),
-                state: Some(session_id),
-                error: None,
-                error_description: None,
-            })
+            .complete_callback(
+                CallbackRequest {
+                    code: Some("upstream-code".to_owned()),
+                    state: Some(session_id),
+                    error: None,
+                    error_description: None,
+                },
+                Some(self.browser.clone()),
+            )
             .await
             .expect("callback should succeed");
 

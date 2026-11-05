@@ -315,6 +315,9 @@ export const propertiesBacklog =
   [] as const satisfies readonly (keyof PropertiesSdk)[];
 
 export const scheduledActionExcluded = [
+  'draftRoutine', // The routine editor's AI drafting; agents use CreateRoutine.
+  'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
+  'routineCodeStarters', // The new-routine flow's starter code steps.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
@@ -383,6 +386,8 @@ export const storageExcluded = [
   'getBatchProjectPreview',
   'getBotOwnerProfiles',
   'getCollabSurface',
+  // Daemon capability reports are internal runtime registration plumbing.
+  'putSelfHarnessCapabilities',
   // Storage for the web app's saved questions, not a user-facing surface.
   'getDatabaseQuery',
   // The web grid's incremental refresh after a version ping, not a user-facing surface.
@@ -425,9 +430,6 @@ export const storageExcluded = [
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',
-  // Daemon capability reports are internal runtime registration plumbing.
-  'putSelfHarnessCapabilities',
-  'removeBotFromChannelByBot',
   // Storage for the web app's saved questions, not a user-facing surface.
   'saveDatabaseQuery',
   // Live presence between viewers of a database, internal to the web app.
