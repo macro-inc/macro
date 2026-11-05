@@ -656,6 +656,8 @@ jobs:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
       NEXTEST_TEST_THREADS: '32'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
       SCCACHE_IDLE_TIMEOUT: '0'
     services:
       postgres:
