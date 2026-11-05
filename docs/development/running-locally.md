@@ -567,7 +567,7 @@ The `run_local` start flags also apply to `stack up`. This includes `--instance`
 
 A static frontend (`stack up`, or `run_local --static-frontend`) is built once and served by the proxy at `<proxy>/app/`. The bundle counts as local, as the dev server does: flags, routes and tools gated on `LOCAL_ONLY` are on. It resolves its backend from the origin it is served on, so the same stack works on localhost or behind any hostname without a rebuild.
 
-Both frontends prepare the browser WebAssembly packages through `bun run dev:prepare`. A fresh worktree builds them before serving the app; later starts reuse the generated packages when they are current. See [Integration Secrets](#integration-secrets) for credential-free startup limitations.
+Both frontends prepare the browser WebAssembly packages through `bun run dev:prepare`. A fresh worktree builds them before serving the app; later starts reuse the generated packages when they are current. Instances started from one worktree share those packages and `apps/web/dist`, so their frontend builds take turns: a start that has to wait says so. See [Integration Secrets](#integration-secrets) for credential-free startup limitations.
 
 For Pipedream Connect on a machine hostname, include that HTTPS origin in
 `PIPEDREAM_ALLOWED_ORIGINS` through `--env-file`; the static-frontend default names
