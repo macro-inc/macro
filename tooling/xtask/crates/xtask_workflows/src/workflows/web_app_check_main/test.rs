@@ -658,3 +658,11 @@ fn ios_gate_status_and_comment_scenarios() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// A job that hits its timeout reports `cancelled`, so the required check must
+/// not pass on a generated code job that never finished.
+#[test]
+fn status_check_rejects_a_cancelled_generated_code_job() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    assert!(yaml.contains(r#"[[ "${{ needs.generated-code.result }}" == "cancelled" ]]"#));
+}
