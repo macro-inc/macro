@@ -1,0 +1,102 @@
+# Experiment only. Builds Lambda handlers and discards them: no cache push, no artifact upload, no Pulumi.
+# AWS credentials only let the nix daemon read the existing substituter, as in deploy jobs.
+name: ci-speed lambda deps
+on:
+  pull_request:
+    paths: ['.github/ci-speed/**', '.github/workflows/ci_speed_lambda_deps.yml', 'nix/cloud-storage.nix']
+permissions: { contents: read }
+jobs:
+  warm:
+    name: warm both layers
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-deploy-lambda
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { persist-credentials: false }
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with: { cache: nix }
+        continue-on-error: true
+      - uses: ./.github/actions/setup-nix
+        with:
+          nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+          nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - run: nix build --max-jobs auto --print-build-logs --no-link .#lambdaDeployCargoArtifacts .#lambdaDepsStable 2>&1 | grep -E "^(building|these)|Finished|error" | tail -20
+      - if: always()
+        uses: ./.github/actions/teardown-nix
+  arm:
+    needs: warm
+    name: ${{ matrix.shape.name }} ${{ matrix.arm }} ${{ matrix.attempt }}
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-deploy-lambda
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        arm: [ctl, fix]
+        attempt: [1, 2, 3, 4, 5]
+        shape:
+          - { name: dss, handlers: "delete_chat_handler docx_unzip_handler document_upload_finalizer_handler" }
+    env: { ATTEMPT: "${{ matrix.attempt }}" }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { persist-credentials: false }
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with: { cache: nix }
+        continue-on-error: true
+      - uses: ./.github/actions/setup-nix
+        with:
+          nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+          nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - run: bash .github/ci-speed/lambda-arm.sh ${{ matrix.arm }} ${{ matrix.shape.handlers }}
+      - if: always()
+        uses: ./.github/actions/teardown-nix
+  explain:
+    needs: warm
+    name: fingerprint reason
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-deploy-lambda
+    timeout-minutes: 45
+    env: { ATTEMPT: explain }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { persist-credentials: false }
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with: { cache: nix }
+        continue-on-error: true
+      - uses: ./.github/actions/setup-nix
+        with:
+          nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+          nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - run: bash .github/ci-speed/lambda-arm.sh explain delete_chat_handler
+      - if: always()
+        uses: ./.github/actions/teardown-nix
+  broken:
+    needs: warm
+    name: compile error still fails
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-deploy-lambda
+    timeout-minutes: 45
+    env: { ATTEMPT: broken }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { persist-credentials: false }
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with: { cache: nix }
+        continue-on-error: true
+      - uses: ./.github/actions/setup-nix
+        with:
+          nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+          nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - run: |
+          echo 'compile_error!("deliberate break");' >> services/delete_chat_handler/src/main.rs
+          git add services/delete_chat_handler/src/main.rs
+          if bash .github/ci-speed/lambda-arm.sh fix delete_chat_handler; then echo "RESULT broken build passed: BAD"; exit 1; fi
+          grep -q "deliberate break" build.log && echo "RESULT broken build failed on the compile error: GOOD" | tee -a "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: ./.github/actions/teardown-nix

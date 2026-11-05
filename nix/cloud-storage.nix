@@ -825,16 +825,58 @@
         }
       );
 
+      # ci-speed experiment: the same handler with a nonce, against either the
+      # existing layer or one whose zigbuild wrapper path is stable.
+      expNonce = builtins.readFile ../.github/ci-speed/nonce;
+      stableZigArgs = lambdaCommonArgs // {
+        preBuild = lambdaCommonArgs.preBuild + ''
+          export CARGO_ZIGBUILD_CACHE_DIR=/tmp/cargo-zigbuild-cache
+          mkdir -p "$CARGO_ZIGBUILD_CACHE_DIR"
+        '';
+      };
+      lambdaDepsStable = craneLib.buildDepsOnly (
+        stableZigArgs
+        // {
+          pname = "cloud-storage-lambda-deps-stable";
+          doCheck = false;
+          cargoCheckCommand = "true";
+          cargoBuildCommand = "cargo zigbuild --release";
+          cargoExtraArgs =
+            "--locked --target ${lambdaZigTarget} "
+            + pkgs.lib.concatMapStringsSep " " (n: "--package ${n}") lambdaNames;
+        }
+      );
+      expLambda =
+        arm: lambdaName:
+        (deployLambdaPackageWith (if arm == "fix" then stableZigArgs else lambdaCommonArgs)
+          (if arm == "fix" then lambdaDepsStable else lambdaDeployCargoArtifacts)
+          lambdaName
+        ).overrideAttrs
+          (_: {
+            EXP_NONCE = expNonce;
+            CARGO_LOG = if arm == "explain" then "cargo::core::compiler::fingerprint=info" else "";
+          });
+      expLambdaPackages = pkgs.lib.listToAttrs (
+        pkgs.lib.concatMap (
+          arm:
+          map (n: {
+            name = "exp-lam-${arm}-${n}";
+            value = expLambda arm n;
+          }) lambdaNames
+        ) [ "ctl" "fix" "explain" ]
+      );
+
       # bin name == crate name == handler dir name (see per-lambda justfiles).
-      deployLambdaPackage =
-        lambdaName:
+      deployLambdaPackage = deployLambdaPackageWith lambdaCommonArgs lambdaDeployCargoArtifacts;
+      deployLambdaPackageWith =
+        commonLambdaArgs: lambdaArtifacts: lambdaName:
         craneLib.buildPackage (
-          lambdaCommonArgs
+          commonLambdaArgs
           // {
             # Pruned source: this derivation only rebuilds when a crate in
             # the handler's own workspace closure changes.
             src = prunedDeploySrc "lambda-${lambdaName}" lambdaName;
-            cargoArtifacts = lambdaDeployCargoArtifacts;
+            cargoArtifacts = lambdaArtifacts;
             pname = "cloud-storage-lambda-${lambdaName}";
             doCheck = false;
             # cargo-zigbuild links the final binary against the pinned Lambda
@@ -1178,6 +1220,8 @@
         code-mode-assets = codeModeAssets;
       }
       // dopplerConfigBinPackages
+      // expLambdaPackages
+      // { inherit lambdaDepsStable; }
       // deployServiceBinaryPackages
       // {
         deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
