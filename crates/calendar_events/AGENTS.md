@@ -306,6 +306,11 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   (`agent_code_mode::covered_by_code_sdk`), so the routes and the SDK docs are
   what reach them; the web, which opens one copy, sends no `inbox` and is not
   checked.
+- The create route refuses an agent run (403 `confirmation_required`): a
+  program creates through a session review (`CreateCalendarEvent`) or the
+  harness's `POST /cognition/calendar/events/create-confirmed`
+  (`CreateConfirmedCalendarEvent`, the SDK's `calendar.createConfirmed`),
+  never an event the user has not seen.
 - No provider field says whose calendar it is. An inbox syncs every calendar
   its account can see under its own address, and Google gives `accessRole`
   `owner` to anyone with manage rights, on a colleague's primary calendar too;
