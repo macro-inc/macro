@@ -1,0 +1,11 @@
+[Unit]
+Description=Macro computer display (Xvnc :0 on 127.0.0.1:5900)
+
+[Service]
+# Local-only, no VNC password: macrod relays the screen to Macro.
+ExecStart=/usr/bin/Xtigervnc :0 -geometry 1920x1080 -depth 24 -rfbport 5900 -interface 127.0.0.1 -localhost -SecurityTypes None -AlwaysShared -nolisten tcp
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

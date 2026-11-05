@@ -1,0 +1,22 @@
+#!/bin/sh
+# Fails macrod-enroll with a readable reason before macrod runs.
+set -eu
+case "${MACRO_ENROLL_FROM:-}" in
+  incus)
+    if [ ! -S /dev/incus/sock ]; then
+      echo "macrod-enroll: /dev/incus/sock is missing; is incus-agent running and security.guestapi on?" >&2
+      exit 1
+    fi
+    ;;
+  file:*)
+    path="${MACRO_ENROLL_FROM#file:}"
+    if [ ! -s "$path" ]; then
+      echo "macrod-enroll: enrollment file $path is missing or empty; bind-mount the Enrollment JSON there (docker run -v <file>:$path:ro)" >&2
+      exit 1
+    fi
+    ;;
+  *)
+    echo "macrod-enroll: MACRO_ENROLL_FROM='${MACRO_ENROLL_FROM:-}' in /etc/macro/enroll.env is not 'incus' or 'file:<path>'" >&2
+    exit 1
+    ;;
+esac

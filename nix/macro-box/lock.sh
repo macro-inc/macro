@@ -41,13 +41,17 @@ apt-get "${apt_opts[@]}" -qq update
 mapfile -t wanted < <(grep -vE '^\s*(#|$)' "$here/packages.txt")
 apt-get "${apt_opts[@]}" install --print-uris -qq -y \
   '?essential' '?priority(required)' "${wanted[@]}" > "$work/uris"
+# The Essential/required set with its dependencies: what the rootfs build
+# unpacks first and installs before everything else.
+apt-get "${apt_opts[@]}" install --print-uris -qq -y \
+  '?essential' '?priority(required)' > "$work/base-uris"
 # Signed shim + GRUB are unpacked for the ESP, never installed.
 apt-get "${apt_opts[@]}" download --print-uris -qq shim-signed grub-efi-amd64-signed > "$work/efi-uris"
 
-python3 - "$work/uris" "$work/efi-uris" "$snapshot" "$mirror" "$work/state/lists" > "$here/debs.lock.json" <<'PY'
+python3 - "$work/uris" "$work/base-uris" "$work/efi-uris" "$snapshot" "$mirror" "$work/state/lists" > "$here/debs.lock.json" <<'PY'
 import base64, json, os, sys
 from urllib.parse import unquote
-uris, efi_uris, snapshot, mirror, lists = sys.argv[1:]
+uris, base_uris, efi_uris, snapshot, mirror, lists = sys.argv[1:]
 # apt --print-uris shows only MD5; take SHA512 from the signed indexes.
 sha512 = {}
 for name in os.listdir(lists):
@@ -72,7 +76,9 @@ def locked(path):
             "hash": "sha512-" + base64.b64encode(bytes.fromhex(sha512[pool])).decode(),
         })
     return sorted(debs, key=lambda deb: deb["file"])
-json.dump({"snapshot": snapshot, "debs": locked(uris), "efi": locked(efi_uris)}, sys.stdout, indent=1)
+base = {deb["file"] for deb in locked(base_uris)}
+debs = [dict(deb, base=deb["file"] in base) for deb in locked(uris)]
+json.dump({"snapshot": snapshot, "debs": debs, "efi": locked(efi_uris)}, sys.stdout, indent=1)
 print()
 PY
 echo "locked $(jq '.debs | length' "$here/debs.lock.json") debs at $snapshot" >&2

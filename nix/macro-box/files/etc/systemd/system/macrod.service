@@ -1,0 +1,18 @@
+[Unit]
+Description=Macro agent daemon
+After=network-online.target macrod-enroll.service
+Wants=network-online.target
+Requires=macrod-enroll.service
+ConditionPathExists=/var/lib/macrod/enrolled
+
+[Service]
+User=macro
+Group=macro
+Environment=HOME=/home/macro
+WorkingDirectory=/home/macro/work
+ExecStart=/usr/local/bin/macrod service --config /home/macro/.macrod/macrod.toml --workspace /home/macro/work
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

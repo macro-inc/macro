@@ -1,0 +1,21 @@
+[Unit]
+Description=Chromium on the Macro display, DevTools on 127.0.0.1:9222
+BindsTo=macro-display.service
+After=macro-display.service macro-openbox.service
+
+[Service]
+Environment=DISPLAY=:0
+ExecStartPre=/bin/sh -c 'until [ -S /tmp/.X11-unix/X0 ]; do sleep 0.2; done'
+ExecStart=/usr/local/bin/chromium \
+  --user-data-dir=%h/.config/chromium \
+  --remote-debugging-port=9222 \
+  --no-first-run \
+  --no-default-browser-check \
+  --disable-dev-shm-usage \
+  --password-store=basic \
+  --start-maximized
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
