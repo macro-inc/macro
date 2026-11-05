@@ -59,3 +59,6 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
 Use `src/telemetry.ts` for brain spans and traced transports. Keep attributes to
 categories, counts and opaque IDs; hash email-bearing user IDs. Telemetry is
 opt-in through the persona env file; README documents its endpoint and parent.
+
+Voice calls live in `src/calls/`; its guide covers the media interfaces and
+quiet-mic regression fixtures. Speech uses agent-key gateway auth.

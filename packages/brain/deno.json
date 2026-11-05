@@ -20,10 +20,14 @@
     "@opentelemetry/exporter-trace-otlp-http": "npm:@opentelemetry/exporter-trace-otlp-http@0.220.0",
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "ts-pattern": "npm:ts-pattern@^5.8.0",
-    "uuid": "npm:uuid@^11.1.1"
+    "uuid": "npm:uuid@^11.1.1",
+    "ws": "npm:ws@8.18.3",
+    "@types/ws": "npm:@types/ws@8.18.1",
+    "@livekit/rtc-node": "npm:@livekit/rtc-node@1.2.1",
+    "zod": "npm:zod@4.1.12"
   },
   "tasks": {
-    "test": "deno test --allow-read --allow-write --allow-run=git,cp --allow-env --allow-net=127.0.0.1 src/",
+    "test": "deno test --allow-sys=homedir --allow-read --allow-write --allow-run=git,cp --allow-env --allow-net=127.0.0.1 src/",
     "check": "deno check src/",
     "compile": "bash ./compile.sh"
   }
