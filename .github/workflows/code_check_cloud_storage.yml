@@ -554,12 +554,12 @@ jobs:
           POSTGRES_DB: macrodb
         ports:
         - '5432:5432'
-        options: '--health-cmd pg_isready --health-interval 1s --health-timeout 5s --health-retries 30 --shm-size 1g'
+        options: '--health-cmd pg_isready --health-interval 1s --health-start-period 30s --health-timeout 5s --health-retries 5 --shm-size 1g'
       redis:
         image: redis:7
         ports:
         - '6379:6379'
-        options: '--health-cmd "redis-cli ping" --health-interval 1s --health-timeout 5s --health-retries 30'
+        options: '--health-cmd "redis-cli ping" --health-interval 1s --health-start-period 30s --health-timeout 5s --health-retries 5'
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
