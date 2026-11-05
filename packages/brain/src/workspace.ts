@@ -6,6 +6,7 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import { type Budget, parseBudget } from './budget.ts';
 import { type EventsConfig, parseEventsConfig } from './events-config.ts';
 import { type JevConfig, parseJevConfig } from './jev.ts';
+import { readStyle } from './style.ts';
 import { traceHeaders, withSpan } from './telemetry.ts';
 
 /** Paths the repo must never commit: raw history, logs, caches, secrets. */
@@ -63,7 +64,7 @@ export class Workspace {
       if (!(error instanceof Deno.errors.NotFound)) throw error;
     }
     return {
-      operating: `${await this.read('OPERATING.md')}\n${notice}`,
+      operating: `${await this.read('OPERATING.md')}\n${await readStyle(this.path('prompts/style'))}\n${notice}`,
       prompts: {
         respond: await this.read('prompts/respond.md'),
         heartbeat: await this.read('prompts/heartbeat.md'),

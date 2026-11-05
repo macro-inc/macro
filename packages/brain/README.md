@@ -38,6 +38,7 @@ every turn ─▶ commit `turn <id>: <summary>` ─▶ pull --rebase ─▶ push
 
 | Module | Does |
 | --- | --- |
+| `style.ts` | Re-read every Markdown communication guide under `prompts/style/`, except README.md, for all tiers. |
 | `workspace.ts` | Persona files, `.gitignore` enforcement, the single-writer commit + push queue. |
 | `events.ts` | SSE on `{dss}/webhook/events/stream`, idle watchdog, doubling reconnect, catch-up since the drop. |
 | `jev.ts` | `config/jev.json` (Tod's format plus `wakeIf`), the decide call with fallbacks, `log/decisions.jsonl`. |
@@ -73,6 +74,16 @@ the server's `template/gitignore`. `{{creator}}` is the creating admin's Macro
 user ID, so rule changes can be checked against message sender IDs.
 `history/`, `log/`, `cache/` (lanes, spend ledger, heartbeat
 state, Claude's config) and `work/` stay on the computer.
+
+The template is embedded recursively by `agent_git/build.rs`, without a file
+manifest. `prompts/style/README.md` indexes the communication craft library.
+Every respond, heartbeat and work turn receives all its Markdown guides in the
+system text after the charter, in stable path order. The initial 21 guides are
+about 2,500 words (roughly 4,000 tokens); loading all avoids a selector missing
+sensitive context such as frustration or discretion. The index is excluded.
+Guides are re-read from the main workspace each turn, so edits and new nested
+guides need no restart or loader change. Agents may improve their copies within
+the charter; only the creator changes the rules or persona.
 
 ## Develop
 

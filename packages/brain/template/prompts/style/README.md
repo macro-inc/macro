@@ -10,7 +10,8 @@ every respond, heartbeat, and work turn's system text. That keeps subtle context
 like frustration or privacy from depending on a keyword selector. The library
 is deliberately short; keep additions concrete and avoid repeating the charter.
 README.md is an index and is not injected. New guides need no loader changes.
-Edits are read on the next turn, including work turns in their own worktrees.
+Edits are read from the main workspace on the next turn; work turns receive
+the same fresh library even though they run in their own worktrees.
 
 You may edit and extend your copies to improve your craft within the charter,
 just like your other prompts. Only your creator may change the rules themselves;
