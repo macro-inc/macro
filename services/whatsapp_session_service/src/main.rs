@@ -6,9 +6,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use macro_entrypoint::PgPoolOptionsExt as _;
-use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
+use macro_entrypoint::{MacroEntrypoint, pg_connect_options, shutdown_signal};
 use macro_env::Environment;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
 use whatsapp_session_service::config::{Config, SessionKmsKey};
 use whatsapp_session_service::inbound::health;
@@ -44,7 +44,7 @@ async fn run() -> Result<(), rootcause::Report> {
         .acquire_timeout(Duration::from_secs(10))
         .connect_as(config.database_url.as_ref(), "primary")
         .await?;
-    let lock_options: PgConnectOptions = config.database_url.as_ref().parse()?;
+    let lock_options = pg_connect_options(config.database_url.as_ref(), "session-lock")?;
     let dialer: Arc<dyn Dialer> =
         match macro_service_urls::read_override_env(WEBSOCKET_URL_OVERRIDE)? {
             Some(url) => Arc::new(WebSocketDialer { url }),

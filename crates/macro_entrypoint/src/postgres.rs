@@ -16,9 +16,14 @@ pub fn pg_connect_options(url: &str, pool: &str) -> Result<PgConnectOptions, sql
     Ok(options.application_name(&application_name(&crate::service_name(), pool)))
 }
 
-/// Postgres keeps the first 63 bytes of `application_name`.
+/// Postgres keeps the first 63 bytes of `application_name`. The service is
+/// shortened first so the pool stays distinguishable.
 fn application_name(service: &str, pool: &str) -> String {
-    let mut name = format!("{service}:{pool}");
+    let mut end = service.len().min(63usize.saturating_sub(pool.len() + 1));
+    while !service.is_char_boundary(end) {
+        end -= 1;
+    }
+    let mut name = format!("{}:{pool}", &service[..end]);
     let mut end = name.len().min(63);
     while !name.is_char_boundary(end) {
         end -= 1;

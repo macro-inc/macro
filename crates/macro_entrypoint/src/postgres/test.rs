@@ -13,6 +13,7 @@ fn keeps_the_name_within_postgres_limit() {
     let name = application_name(&"é".repeat(40), "primary");
     assert!(name.len() <= 63);
     assert!(name.starts_with('é'));
+    assert!(name.ends_with(":primary"));
 }
 
 #[test]
