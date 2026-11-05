@@ -23,4 +23,8 @@ export default {
   tasksSnippet:
     'Create tasks from anywhere, from email, docs and channels, linked back both ways',
   tasksLength: '1:22',
+  chatTitle: 'Learn how to use Macro Chat',
+  chatSnippet:
+    'Mention anything, turn messages into tasks, inline replies and a real inbox',
+  chatLength: '1:33',
 };
