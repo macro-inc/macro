@@ -267,6 +267,25 @@ test('a thread with messages opens at the newest, and a reply quotes in place', 
   expect(JSON.stringify(posted[0])).toContain('m-reply-target');
 });
 
+test('scrolling up through the channel stays put', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name === 'phone');
+  await open(page, 'panel', { status: { state: 'live' } });
+  await expect(page.getByText(/No messages yet/)).toBeVisible({
+    timeout: 30_000,
+  });
+
+  await page.getByTestId('call-panel').hover({ force: true });
+  await page.mouse.wheel(0, -300);
+  const earlierInChannel = page.getByText('Earlier in the channel');
+  await expect(earlierInChannel).toBeInViewport();
+
+  // Long enough for anything that pulls the list back down to have done so.
+  await page.waitForTimeout(1_500);
+  await expect(earlierInChannel).toBeInViewport();
+});
+
 test('the popup counts outside messages and swaps to the channel at the latest', async ({
   page,
 }) => {

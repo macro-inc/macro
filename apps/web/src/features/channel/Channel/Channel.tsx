@@ -86,6 +86,7 @@ import { timelineEntryKey } from '@queries/messages/timeline-entries';
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { tourTarget } from '@ui/components/Tour';
+import { cn } from '@ui/utils/classname';
 import {
   createEffect,
   createMemo,
@@ -903,7 +904,10 @@ export function Channel(props: ChannelProps) {
                       }
                     >
                       <div
-                        class="relative flex-1 min-h-0"
+                        class={cn(
+                          'relative flex-1 min-h-0',
+                          callPanel && '[container-type:size]'
+                        )}
                         ref={setThreadListContainerEl}
                       >
                         <MessageNotificationIndexContext.Provider
@@ -951,8 +955,6 @@ export function Channel(props: ChannelProps) {
                                 const callStatus = () =>
                                   messageIndex.callStatusByKey.get(item.id);
                                 const isCallRow = () => !!callStatus();
-                                const isLiveCallRow = () =>
-                                  callStatus()?.state === 'live';
                                 const isPanelRoot = () =>
                                   item.id === callPanel?.rootId;
                                 const activity = () =>
@@ -1001,15 +1003,8 @@ export function Channel(props: ChannelProps) {
                                           <div
                                             class={
                                               isPanelRoot()
-                                                ? 'relative'
+                                                ? 'relative min-h-[100cqh]'
                                                 : 'contents'
-                                            }
-                                            style={
-                                              isPanelRoot()
-                                                ? {
-                                                    'min-height': `${threadListScrollState()?.viewportSize ?? 0}px`,
-                                                  }
-                                                : undefined
                                             }
                                           >
                                             <ChannelThread
@@ -1035,7 +1030,6 @@ export function Channel(props: ChannelProps) {
                                                   : undefined
                                               }
                                               hideCollapsedPreview={isCallRow()}
-                                              replyInputAlwaysOpen={isLiveCallRow()}
                                               beforeMessage={
                                                 <AgentConversationContextBoundary
                                                   messageId={item.id}

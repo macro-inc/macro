@@ -53,13 +53,13 @@ today's system line: icon, bold name, time, no avatar or message hover.
 
 | State | Row | Under it |
 | --- | --- | --- |
-| Live, not in the call | `<name> started a call`, call time, live avatars, **Join** | Thread indicator with updates (if any messages), reply input |
+| Live, not in the call | `<name> started a call`, call time, live avatars, **Join** | Thread indicator with updates (if any messages), or `+` with none |
 | Live, in the call | Same, with **Return to call** | Same |
-| Live, expanded | Same | Messages on the thread rail, reply input |
-| Ended | `<name> started a call that lasted <duration>` | Thread indicator (if any messages), `+` button; no input until `+` is pressed |
+| Live, expanded | Same | Messages on the thread rail, `+` |
+| Ended | `<name> started a call that lasted <duration>` | Thread indicator (if any messages), or `+` with none |
 | Record deleted | `<name> started a call`, no link to the record | Thread unchanged |
 
-The thread is collapsed by default in every state.
+The thread is collapsed by default in every state, and replies like any other thread: no input is open until someone asks for one.
 
 While the row is scrolled out of view during a live call, the `ActiveCallMessage`
 banner shows, with a live message count. Clicking it scrolls to the row.
@@ -254,8 +254,7 @@ with user-visible text through `t()`.
 - `Channel.tsx` passes `ChannelThread` a `rootSlot` for those rows, rendering `CallRootLine`, which
   picks a live or past line from `status`. Everything else about the row is the ordinary thread:
   `ThreadCollapsedIndicator`, `ThreadReplyButton`, the rail, `threadManager` and quote replies.
-- `hideCollapsedPreview` and `replyInputAlwaysOpen` on `ChannelThread` give the collapsed row its
-  indicator and input.
+- `hideCollapsedPreview` on `ChannelThread` collapses the row to its indicator.
 - `call_root_posted` and `call_ended` invalidate the channel's timeline, because the row carries
   facts only the server has.
 - `ActiveCallMessage` hides while the live row is on screen, and adds the count for `ChannelThread`
