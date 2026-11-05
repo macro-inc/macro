@@ -262,6 +262,8 @@ const INTERNAL_CREDENTIAL_KEYS: &[&str] = &[
     "SERVICE_INTERNAL_AUTH_KEY",
     "SYNC_SERVICE_AUTH_KEY",
 ];
+/// The header FusionAuth's webhooks and lambdas authenticate to our services with.
+const INTERNAL_KEY_HEADER: &str = "x-internal-auth-key";
 /// The password in the code-defined environment's database URLs.
 const DEVELOPMENT_DB_URL_PASSWORD: &str = ":password@";
 /// FusionAuth's administrator in the kickstart's fixed development values.
@@ -337,13 +339,37 @@ impl Credentials {
         }
     }
 
-    /// Replaces the fixed development values in FusionAuth's kickstart.
-    fn apply_to_kickstart(&self, kickstart: &str) -> String {
-        kickstart
+    /// Replaces the fixed development values in FusionAuth's kickstart. The internal
+    /// key is a value as common as `local`, so it is matched by where it appears.
+    fn apply_to_kickstart(&self, kickstart: &str) -> Result<String> {
+        let replaced = kickstart
             .replace(identity::FUSIONAUTH_API_KEY, &self.fusionauth_api_key)
             .replace(identity::CLIENT_SECRET, &self.fusionauth_client_secret)
             .replace(identity::JWT_SECRET, &self.jwt)
-            .replace(DEVELOPMENT_FUSIONAUTH_ADMIN, &self.fusionauth_admin)
+            .replace(DEVELOPMENT_FUSIONAUTH_ADMIN, &self.fusionauth_admin);
+        let mut parsed: Value = serde_json::from_str(&replaced).context("parsing the kickstart")?;
+        self.apply_internal_key(&mut parsed);
+        Ok(serde_json::to_string_pretty(&parsed)?)
+    }
+
+    fn apply_internal_key(&self, value: &mut Value) {
+        match value {
+            Value::Object(fields) => {
+                for (key, field) in fields.iter_mut() {
+                    if key == INTERNAL_KEY_HEADER {
+                        *field = Value::String(self.internal.clone());
+                    } else {
+                        self.apply_internal_key(field);
+                    }
+                }
+            }
+            Value::Array(items) => {
+                for item in items {
+                    self.apply_internal_key(item);
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -478,7 +504,7 @@ fn up(args: &UpArgs) -> Result<()> {
         None => Credentials::generate()?,
     };
     state.credentials = Some(credentials.clone());
-    let kickstart_json = credentials.apply_to_kickstart(&kickstart_json);
+    let kickstart_json = credentials.apply_to_kickstart(&kickstart_json)?;
     let mut shared_env = queue_urls(shared_env);
     credentials.apply_to_env(&mut shared_env);
     shared_env.insert(

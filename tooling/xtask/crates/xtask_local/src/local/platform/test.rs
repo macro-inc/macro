@@ -89,23 +89,34 @@ fn generated_credentials_replace_every_development_value() {
     assert_eq!(env["APOLLO_API_KEY"], "local");
     assert_eq!(env["SOME_URL"], "http://a:password@b");
 
-    let kickstart = credentials.apply_to_kickstart(&format!(
-        "{} {} {} {}",
-        identity::FUSIONAUTH_API_KEY,
-        identity::CLIENT_SECRET,
-        identity::JWT_SECRET,
-        DEVELOPMENT_FUSIONAUTH_ADMIN
-    ));
+    let kickstart: serde_json::Value = serde_json::from_str(
+        &credentials
+            .apply_to_kickstart(
+                &json!({
+                    "apiKey": identity::FUSIONAUTH_API_KEY,
+                    "clientSecret": identity::CLIENT_SECRET,
+                    "jwt": identity::JWT_SECRET,
+                    "admin": DEVELOPMENT_FUSIONAUTH_ADMIN,
+                    "requests": [{ "headers": { "x-internal-auth-key": "local" } }],
+                    "unrelated": "local",
+                })
+                .to_string(),
+            )
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(kickstart["apiKey"], credentials.fusionauth_api_key.as_str());
     assert_eq!(
-        kickstart,
-        format!(
-            "{} {} {} {}",
-            credentials.fusionauth_api_key,
-            credentials.fusionauth_client_secret,
-            credentials.jwt,
-            credentials.fusionauth_admin
-        )
+        kickstart["clientSecret"],
+        credentials.fusionauth_client_secret.as_str()
     );
+    assert_eq!(kickstart["jwt"], credentials.jwt.as_str());
+    assert_eq!(kickstart["admin"], credentials.fusionauth_admin.as_str());
+    assert_eq!(
+        kickstart["requests"][0]["headers"]["x-internal-auth-key"],
+        credentials.internal.as_str()
+    );
+    assert_eq!(kickstart["unrelated"], "local");
 }
 
 #[test]

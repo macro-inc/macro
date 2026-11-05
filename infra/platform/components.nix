@@ -204,6 +204,9 @@ let
           AWS_REGION = "us-east-1";
           HOME = "/tmp";
           CELLD_WATCH = "/var/lib/celld/state";
+          # A node halts if it cannot renew its lease in time. The default of 10s trips
+          # on a busy node, and a fleet of one has nothing to fail over to anyway.
+          CELLD_TTL_MS = "60000";
         };
       };
       env = {
