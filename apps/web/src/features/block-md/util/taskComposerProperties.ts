@@ -454,6 +454,7 @@ export function createTaskComposerProperties(args: {
     visiblePropertyIds,
     setVisiblePropertyIds,
     availableProperties,
+    definitionsReady: () => systemPropertiesQuery.isSuccess,
     addProperty,
     saveHandler,
     composerTags,

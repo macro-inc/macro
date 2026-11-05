@@ -260,9 +260,7 @@ export function TaskTemplateControls(props: {
           {...pickerProps()}
           open={dropdownOpen()}
           onOpenChange={changeDropdownOpen}
-          disabled={
-            !canUse() || props.composer.availableProperties().length === 0
-          }
+          disabled={!canUse() || !props.composer.definitionsReady()}
         />
       }
     >
@@ -271,9 +269,7 @@ export function TaskTemplateControls(props: {
         size={props.compact ? 'icon-sm' : 'sm'}
         aria-label={t('create.taskTemplateSelected', { name: selectedLabel() })}
         tooltip={props.compact ? selectedLabel() : undefined}
-        disabled={
-          !canUse() || props.composer.availableProperties().length === 0
-        }
+        disabled={!canUse() || !props.composer.definitionsReady()}
         onClick={openPicker}
       >
         <CopyIcon class="size-4 shrink-0" />

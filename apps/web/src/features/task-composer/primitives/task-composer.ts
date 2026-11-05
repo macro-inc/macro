@@ -232,7 +232,7 @@ export function createTaskComposer(
     return (
       !isCreating() &&
       ((selection.kind !== 'new' && selection.kind !== 'editing') ||
-        (availableProperties().length > 0 &&
+        (definitionsReady() &&
           Boolean(selection.name.trim()) &&
           (selection.kind !== 'new' ||
             !selection.teamId ||
@@ -290,6 +290,7 @@ export function createTaskComposer(
     visiblePropertyIds,
     setVisiblePropertyIds,
     availableProperties,
+    definitionsReady,
     addProperty,
     saveHandler,
     composerTags,
@@ -475,7 +476,7 @@ export function createTaskComposer(
     const kind = templateSubmitKind(selection, taskTitle);
     if (
       (selection.kind === 'new' || selection.kind === 'editing') &&
-      availableProperties().length === 0
+      !definitionsReady()
     )
       return;
     if (
@@ -856,7 +857,7 @@ export function createTaskComposer(
     }
   };
   const selectTemplate = (template: SavedTaskTemplate) => {
-    if (!canChangeTemplate() || availableProperties().length === 0) return;
+    if (!canChangeTemplate() || !definitionsReady()) return;
     applyTemplate(template.contents);
     setTemplateSelection({
       kind: 'saved',
@@ -865,7 +866,7 @@ export function createTaskComposer(
   };
 
   const editTemplate = (template: SavedTaskTemplate) => {
-    if (!canChangeTemplate() || availableProperties().length === 0) return;
+    if (!canChangeTemplate() || !definitionsReady()) return;
     const next = structuredClone(template.contents);
     setTitle('');
     setVisiblePropertyIds(next.propertyIds);
@@ -970,6 +971,7 @@ export function createTaskComposer(
     canSubmit,
     isSavingTemplate,
     availableProperties,
+    definitionsReady,
     addProperty,
     saveHandler,
     composerTags,
