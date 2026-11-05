@@ -37,6 +37,11 @@ enforced by the ordinary backend APIs.
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /
   `WebFetch` tools in their favour.
+- `src/entities/bots/`: `macro.bots` manages bots (`Bot`: profile, channel
+  grants, webhook URLs, `BotToken`s) with user auth, and reads the
+  authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
+  bot-management tools in its favour; `IssueBotCredential` stays, because its
+  chat card mints a token the model never reads.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 
 ## Boundaries

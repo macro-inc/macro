@@ -389,7 +389,6 @@ export const storageExcluded = [
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',
-  'removeBotFromChannelByBot',
   // Storage for the web app's saved questions, not a user-facing surface.
   'saveDatabaseQuery',
   // Live presence between viewers of a database, internal to the web app.
