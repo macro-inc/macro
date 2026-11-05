@@ -395,6 +395,76 @@ The stack launches Vite directly with Node (available in the Nix shell), because
 Bun's Node HTTP compatibility currently hangs on Vite's proxied WebSocket
 upgrades. Bun is still used for dependency installation and builds.
 
+## Macro Computers
+
+`agent_harness_service` runs the Macro computer control plane when
+`COMPUTERS_FLEET` is set. The stack sets every `COMPUTERS_*` value from the
+fleet you pick:
+
+| Flag | Fleet | Computers run on |
+| --- | --- | --- |
+| none (`run_local`), `--computers docker` | `docker` | this machine's Docker daemon |
+| `--computers-incus`, `--computers incus` | `incus` | VMs on `runtime-dev-1` |
+| `--no-computers`, `--computers off`, none (`stack up`) | off | nowhere; no control plane |
+
+`stack up` defaults to off so agents and CI do not build the computer image;
+`stack update` keeps the fleet `up` recorded. `run_dev` never runs computers.
+
+### Docker (default)
+
+`run_local` builds the image with `nix build .#macro-box-docker` and loads it
+as `macro-box:latest`. Nix caches the build, and the load only runs again when
+the store path or the daemon's image changes
+(`infra/local/generated/.macro-box-image`). The first build is slow; pass
+`--no-computers` to skip it.
+
+Computers are privileged `macro-box` containers named `macro-computer-<id>`
+on the instance's `<project>_services` network, so macrod dials the agent
+harness, document storage, and auth in-network. The harness drives the daemon
+through the Docker socket it already mounts for sandboxes. Enrollments are
+written to `infra/local/generated/<instance>/computers/enrollments`, which is
+mounted into the harness at the same absolute path, because the daemon resolves
+bind sources on the host. The harness writes them as root. Starting the stack
+again removes the instance's computer containers along with its data.
+
+### Incus on runtime-dev-1
+
+```bash
+just run_local --instance computers --computers-incus
+```
+
+This needs the control-plane identity
+`~/.config/macro-computers/dev-client.{crt,key}` (see
+[`nix/hosts/README.md`](../../nix/hosts/README.md)) and the Incus tunnel
+(`nix/hosts/computers-tunnels.sh incus`, `localhost:18443`). On first use the
+stack reads the host's certificate through the tunnel into
+`~/.config/macro-computers/dev-server.crt`, checks its pinned SHA-256
+fingerprint on every start, and stops if the fingerprint does not match.
+
+The host firewall drops traffic from containers to the host, so two `socat`
+sidecars relay the tunnel into Compose over a unix socket:
+`computers_incus_uplink` (host network) and `computers_incus_relay`
+(`computers-incus:8443`), which is the harness's `COMPUTERS_INCUS_URL`.
+
+Boxes reach the stack at `10.210.0.1:<host port>` through the reverse tunnel.
+Startup prints the command with this instance's ports (agent harness, document
+storage, and auth), for example:
+
+```bash
+nix/hosts/computers-tunnels.sh reverse <harness> <storage> <auth>   # Incus tunnel already running
+nix/hosts/computers-tunnels.sh all <harness> <storage> <auth>       # neither tunnel running
+```
+
+Run it under `systemd-run --user -p Restart=always` to keep it up. Starting
+the stack again wipes the database but not the VMs: delete leftover instances
+on the host with `incus delete --force <name>`.
+
+Check the generated wiring without starting anything:
+
+```bash
+cargo x validate-local-compose --instance computers --computers-incus
+```
+
 ## Port Conflicts (macOS)
 
 The default instance binds a fixed set of host ports. macOS reserves some of them
