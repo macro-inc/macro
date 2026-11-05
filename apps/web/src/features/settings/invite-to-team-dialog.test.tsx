@@ -82,4 +82,12 @@ describe('InviteToTeamDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("Let them know it's coming")).toBeNull();
   });
+
+  it('stays on the invite form when a send finishes after the dialog closed', () => {
+    sendInvite(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    mocks.mutate.mock.calls[0]?.[1]?.onSuccess?.();
+
+    expect(screen.queryByText("Let them know it's coming")).toBeNull();
+  });
 });

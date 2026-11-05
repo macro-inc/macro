@@ -470,6 +470,9 @@ export function InviteToTeamDialog(props: {
   // The addresses just invited; set once sending succeeds to show the
   // heads-up step.
   const [sent, setSent] = createSignal<string[]>();
+  // Bumped when the dialog closes, so a send that finishes after the inviter
+  // dismissed it cannot reopen on the heads-up step.
+  let submission = 0;
   const [invites, setInvites] = createSignal<InviteEntry[]>([EMPTY_INVITE]);
   const [inviteAsAgent, setInviteAsAgent] = createSignal(false);
   const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>(
@@ -494,6 +497,7 @@ export function InviteToTeamDialog(props: {
     setInviteAsAgent(false);
     setInviteErrors([]);
     setSent(undefined);
+    submission += 1;
     props.onClose();
   };
 
@@ -508,6 +512,7 @@ export function InviteToTeamDialog(props: {
     // Agent invites are redeemed by the agent's own signup, so a heads-up
     // to a person doesn't apply.
     const asAgent = inviteAsAgent();
+    const current = submission;
     inviteToTeamMutation.mutate(
       {
         teamId: props.teamId,
@@ -515,6 +520,7 @@ export function InviteToTeamDialog(props: {
       },
       {
         onSuccess: () => {
+          if (current !== submission) return;
           if (asAgent) {
             close();
             return;
@@ -627,7 +633,7 @@ function InviteHeadsUpStep(props: {
         </div>
       </div>
       <Show when={props.emails.length > 1}>
-        <ul class="flex flex-col gap-0.5 text-xs text-ink-muted">
+        <ul class="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-xs text-ink-muted">
           <For each={props.emails}>
             {(email) => <li class="truncate">{email}</li>}
           </For>

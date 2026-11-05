@@ -98,10 +98,21 @@ function ActionItem(props: {
   );
 }
 
-/** Saturated mid-tones that stay legible on both the light and dark sidebar. */
+/**
+ * Rainbow stops pulled toward the ink color: darker on the light sidebar and
+ * lighter on the dark one, so every part of the small label stays legible.
+ */
 const RAINBOW_TEXT_STYLE: JSX.CSSProperties = {
-  'background-image':
-    'linear-gradient(90deg, #e5484d, #f5a524, #30a46c, #0091ff, #8e4ec6, #d6409f)',
+  'background-image': `linear-gradient(90deg, ${[
+    '#e5484d',
+    '#f5a524',
+    '#30a46c',
+    '#0091ff',
+    '#8e4ec6',
+    '#d6409f',
+  ]
+    .map((hue) => `color-mix(in oklch, ${hue} 70%, var(--color-ink))`)
+    .join(', ')})`,
   'background-clip': 'text',
   '-webkit-background-clip': 'text',
   color: 'transparent',
