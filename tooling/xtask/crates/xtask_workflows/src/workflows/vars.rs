@@ -82,7 +82,7 @@ pub const WEB_SCCACHE_NAME: &str = "web-ci";
 /// `xtask_nextest_filter` binary on the volume. Without a fixed tag the small
 /// profile's volume is scoped per branch and PR runs never persisted, so every
 /// run rebuilt the filter.
-pub const NEXTEST_FILTER_CACHE_TAG: &str = "nextest-filter";
+pub const NEXTEST_FILTER_CACHE_TAG: &str = "sccache-ci";
 
 /// Namespace cache tag for the sync-service worker deploy. Its own pool: this
 /// job compiles for `wasm32-unknown-unknown`, so nothing in the host-target
