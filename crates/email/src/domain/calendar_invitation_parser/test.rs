@@ -218,7 +218,10 @@ fn cldr_49_windows_zones_use_the_zones_2026_rules() {
             "2026-11-02T07:16:00+00:00",
         ),
     ] {
-        let parsed = parse(&format!("DTSTART;TZID={windows}:20261102T021600"), "REQUEST");
+        let parsed = parse(
+            &format!("DTSTART;TZID={windows}:20261102T021600"),
+            "REQUEST",
+        );
         assert!(
             matches!(&parsed[0].start, Some(InvitationDateTime::Zoned { value, time_zone }) if value == utc && time_zone == zone),
             "{windows}: {:?}",
