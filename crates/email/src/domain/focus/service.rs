@@ -5,18 +5,23 @@ use std::{
     sync::{Mutex, MutexGuard, PoisonError},
 };
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
+use chrono_tz::Tz;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
+use tracing::{Instrument as _, field::Empty};
 use uuid::Uuid;
 
 use super::{
-    input::jev_input,
+    input::{due_date_input, jev_input},
     models::{
         FocusAnswers, FocusMessage, FocusRecord, FocusThread, FocusVerdict, StaleThread,
         StoredClassification, ThreadFocus,
     },
-    ports::{FocusClassifier, FocusClassifierError, FocusNotifier, FocusStore, ProfileSource},
+    ports::{
+        DueDateExtractor, FocusClassifier, FocusClassifierError, FocusNotifier, FocusStore,
+        ProfileSource,
+    },
     questions::FOCUS_QUESTIONS,
     rule::{FOCUS_RULE_VERSION, decide},
     signals::signals,
@@ -31,6 +36,8 @@ const FOLLOW_UP_AFTER_DAYS: i64 = 3;
 /// Rejections in a row that end a sweep: the classifier is refusing every
 /// request (a revoked key, say), not one thread.
 const MAX_REJECTIONS_IN_A_ROW: usize = 5;
+/// Longest a due date holds up storing a classification.
+const DUE_DATE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// What happened to one thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,11 +83,12 @@ pub struct SweepReport {
 }
 
 /// Classifies threads for inboxes on the allowlist.
-pub struct FocusService<S, P, C, N> {
+pub struct FocusService<S, P, C, N, D> {
     store: S,
     profiles: P,
     classifier: C,
     notifier: N,
+    due_dates: D,
     enabled_domains: Vec<String>,
     /// Threads a sweep checked at their latest mail without storing a result
     /// (rejected, nothing to classify, or a result already stored), so later
@@ -89,12 +97,13 @@ pub struct FocusService<S, P, C, N> {
     settled: Mutex<HashMap<Uuid, DateTime<Utc>>>,
 }
 
-impl<S, P, C, N> FocusService<S, P, C, N>
+impl<S, P, C, N, D> FocusService<S, P, C, N, D>
 where
     S: FocusStore,
     P: ProfileSource,
     C: FocusClassifier,
     N: FocusNotifier,
+    D: DueDateExtractor,
 {
     /// Classify only inboxes whose address is at one of `enabled_domains`;
     /// with none, nothing is classified.
@@ -103,6 +112,7 @@ where
         profiles: P,
         classifier: C,
         notifier: N,
+        due_dates: D,
         enabled_domains: Vec<String>,
     ) -> Self {
         let enabled_domains = enabled_domains
@@ -115,6 +125,7 @@ where
             profiles,
             classifier,
             notifier,
+            due_dates,
             enabled_domains,
             settled: Mutex::default(),
         }
@@ -175,16 +186,18 @@ where
             return Ok(ClassifyOutcome::UpToDate);
         }
         let signals = signals(&thread);
-        // Same mail, older rule: nothing new for the classifier to read.
+        // Same mail, older rule: nothing new for the classifier or the due date
+        // extractor to read, so the stored date stands.
         if let Some(StoredClassification {
             answers: Some(answers),
             model,
+            due_on,
             ..
         }) = stored
         {
             let verdict = decide(answers, &signals);
             let saved = self
-                .save_verdict(&thread, latest, verdict, *answers, model.clone())
+                .save_verdict(&thread, latest, verdict, *answers, model.clone(), *due_on)
                 .await?;
             if !saved {
                 return Ok(ClassifyOutcome::UpToDate);
@@ -223,8 +236,9 @@ where
         };
         let verdict = decide(&answers, &signals);
         let model = self.classifier.model().to_owned();
+        let due_on = self.due_on(&thread, &verdict).await;
         let saved = self
-            .save_verdict(&thread, latest, verdict, answers, model)
+            .save_verdict(&thread, latest, verdict, answers, model, due_on)
             .await?;
         if !saved {
             // A concurrent classification of a later message won.
@@ -234,6 +248,64 @@ where
         Ok(ClassifyOutcome::Classified(verdict))
     }
 
+    /// The day newly classified mail says the thread is due, for a thread that can
+    /// be in Focus for a reason other than a calendar hold. A failure costs the date,
+    /// never the classification, and the wait for one is bounded.
+    async fn due_on(&self, thread: &FocusThread, verdict: &FocusVerdict) -> Option<NaiveDate> {
+        if !verdict.is_focus && !verdict.awaiting_reply {
+            return None;
+        }
+        let span = tracing::info_span!(
+            "email_focus.due_date",
+            thread_id = %thread.thread_id,
+            messages = Empty,
+            outcome = Empty,
+            otel.status_code = Empty,
+        );
+        let extraction = async {
+            // Only sharpens which day a message counts from; carry on without it.
+            let time_zone = self
+                .profiles
+                .time_zone(&thread.owner)
+                .await
+                .inspect_err(|error| tracing::warn!(error = ?error, "owner time zone unavailable"))
+                .ok()
+                .flatten()
+                .and_then(|name| name.parse::<Tz>().ok());
+            let input = due_date_input(thread, time_zone);
+            tracing::Span::current().record("messages", input.messages.len());
+            if input.messages.is_empty() {
+                return Ok(None);
+            }
+            self.due_dates
+                .due_on(&thread.owner, thread.thread_id, &input)
+                .await
+        };
+        async {
+            let current = tracing::Span::current();
+            match tokio::time::timeout(DUE_DATE_TIMEOUT, extraction).await {
+                Ok(Ok(due_on)) => {
+                    current.record("outcome", if due_on.is_some() { "due" } else { "no_date" });
+                    due_on
+                }
+                Ok(Err(error)) => {
+                    current.record("outcome", "failed");
+                    current.record("otel.status_code", "error");
+                    tracing::warn!(error = ?error, "focus due date unavailable");
+                    None
+                }
+                Err(_) => {
+                    current.record("outcome", "timeout");
+                    current.record("otel.status_code", "error");
+                    tracing::warn!("focus due date timed out");
+                    None
+                }
+            }
+        }
+        .instrument(span)
+        .await
+    }
+
     async fn save_verdict(
         &self,
         thread: &FocusThread,
@@ -241,6 +313,7 @@ where
         verdict: FocusVerdict,
         answers: FocusAnswers,
         model: String,
+        due_on: Option<NaiveDate>,
     ) -> Result<bool, Report> {
         let stored = self
             .store
@@ -253,6 +326,7 @@ where
                 answers,
                 model,
                 classified_at: Utc::now(),
+                due_on,
             })
             .await?;
         if stored {

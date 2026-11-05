@@ -76,10 +76,13 @@ impl Respond for GraphEvent {
     }
 }
 
-pub(super) async fn connected_mailbox(
+/// A connected Outlook inbox with calendar access whose Graph mailbox
+/// answers with `settings` and `calendars`, before its calendars are
+/// discovered.
+pub(super) async fn linked_mailbox(
     pool: &PgPool,
     server: &MockServer,
-    api: &OutlookApiClientRepository,
+    settings: Value,
     calendars: Value,
 ) -> PgCalendarRepository {
     let macro_user_id = Uuid::now_v7();
@@ -120,9 +123,7 @@ pub(super) async fn connected_mailbox(
     .unwrap();
     Mock::given(method("GET"))
         .and(path("/v1.0/me/mailboxSettings"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(json!({"timeZone":"Pacific Standard Time"})),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_json(settings))
         .mount(server)
         .await;
     Mock::given(method("GET"))
@@ -130,7 +131,22 @@ pub(super) async fn connected_mailbox(
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":calendars})))
         .mount(server)
         .await;
-    let repo = PgCalendarRepository::new(pool.clone());
+    PgCalendarRepository::new(pool.clone())
+}
+
+pub(super) async fn connected_mailbox(
+    pool: &PgPool,
+    server: &MockServer,
+    api: &OutlookApiClientRepository,
+    calendars: Value,
+) -> PgCalendarRepository {
+    let repo = linked_mailbox(
+        pool,
+        server,
+        mailbox_settings(Some("Pacific Standard Time")),
+        calendars,
+    )
+    .await;
     let discovery = repo
         .claim_outlook_calendar(
             Uuid::now_v7(),
@@ -140,7 +156,7 @@ pub(super) async fn connected_mailbox(
         .unwrap()
         .unwrap();
     let discovered = api.calendars(TOKEN, discovery.binding).await.unwrap();
-    repo.commit_outlook_calendars(&discovery, discovered)
+    repo.commit_outlook_calendars(&discovery, discovered.calendars)
         .await
         .unwrap();
     repo

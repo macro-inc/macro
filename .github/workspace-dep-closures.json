@@ -6439,6 +6439,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/universal_input",
       "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack",
