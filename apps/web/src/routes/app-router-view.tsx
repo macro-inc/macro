@@ -59,6 +59,7 @@ import {
   MailRouteView,
   MeetingRouter,
   NotFound,
+  NotificationsCalendarRouteView,
   NotificationsRouteView,
   PrDetailRouteView,
   ProjectDetailRouteView,
@@ -150,6 +151,7 @@ import {
   meetRoute,
   mobileEmailSignupRoute,
   notFoundRoute,
+  notificationsCalendarRoute,
   notificationsRoute,
   onboardingRoute,
   prDetailRoute,
@@ -390,7 +392,12 @@ export function AppRouterView() {
         <Route
           definition={notificationsRoute}
           component={NotificationsRouteView}
-        />
+        >
+          <Route
+            definition={notificationsCalendarRoute}
+            component={NotificationsCalendarRouteView}
+          />
+        </Route>
         <Route
           definition={agentsViewRoute}
           component={AgentsRouteView}

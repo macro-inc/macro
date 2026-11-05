@@ -507,6 +507,15 @@ export const notificationsRoute = defineRoute({
   claim: () => ({ namespace: 'component', id: 'notifications' }),
 });
 
+/** The Calendar view inline in Notifications, at the Calendar route's own period path and search. */
+export const notificationsCalendarRoute = defineRoute({
+  id: 'notifications-calendar',
+  path: 'calendar/:period',
+  params: calendarPeriodParams,
+  serializeParams: ({ period }) => ({ period: calendarPeriodPath(period) }),
+  search: [CALENDAR_SEARCH_NAMESPACE],
+});
+
 export const routinesRoute = defineRoute({
   id: ROUTINES_ROUTE_ID,
   path: 'routines',
