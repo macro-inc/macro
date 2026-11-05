@@ -3,14 +3,14 @@ import type { DocumentLexicalCommitRequest } from '../../../generated/storage/ty
 import type { MacroClient } from '../../utils/client';
 import type { Document } from './document';
 
-/** `GET /documents/{id}/lexical`: the normalized state and its revision. */
+/** @internal `GET /documents/{id}/lexical`: the normalized state and its revision. */
 export function requestLexicalState(client: MacroClient, document: Document) {
   return client.storage.getDocumentLexical({
     path: { document_id: document.id },
   });
 }
 
-/** `POST /documents/{id}/lexical`: commit top-level blocks against a revision. */
+/** @internal `POST /documents/{id}/lexical`: commit top-level blocks against a revision. */
 export function requestLexicalCommit(
   client: MacroClient,
   document: Document,
