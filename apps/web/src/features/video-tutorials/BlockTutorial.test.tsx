@@ -6,6 +6,7 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TUTORIALS } from './catalog';
 import { TutorialPill, TutorialRow } from './views/BlockTutorial';
 
 const track = vi.hoisted(() => vi.fn());
@@ -110,7 +111,14 @@ describe('block tutorial pill', () => {
   });
 
   it('renders nothing for a block whose video is not in the catalog yet', () => {
-    render(() => <TutorialPill tutorial="scheduling" />);
-    expect(screen.queryByRole('button')).toBeNull();
+    // Every block gets a video eventually, so take one out for this test.
+    const scheduling = TUTORIALS.scheduling;
+    delete TUTORIALS.scheduling;
+    try {
+      render(() => <TutorialPill tutorial="scheduling" />);
+      expect(screen.queryByRole('button')).toBeNull();
+    } finally {
+      TUTORIALS.scheduling = scheduling;
+    }
   });
 });
