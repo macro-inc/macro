@@ -123,7 +123,8 @@ jobs:
             ( cd apps/web && just gen-agent-fold-types && just gen-database-sql-types && just gen-dynamic-ui-types && just gen-agent-review-types ) >/dev/null 2>&1 || echo "specta seed step failed"
             echo "age_seed_total_s=$(( $(date +%s)-s0 ))"
           )
-          LD_LIBRARY_PATH= git checkout HEAD -- .
+          # A plain checkout leaves files that only the old commit has in the index.
+          LD_LIBRARY_PATH= git reset -q --hard HEAD
           LD_LIBRARY_PATH= git clean -fdq -e target -e node_modules -e .ci-gen-exp-mode
           find target/debug -maxdepth 1 -type f -delete
           find target/debug/deps -maxdepth 1 -type f -executable ! -name '*.so' -delete
@@ -171,22 +172,28 @@ jobs:
                 head -c 1048576 /dev/urandom | zstd -q -c | cache_request --upload-file - "$purl"
               fi
             fi
-            rm -f "$RUNNER_TEMP"/got.*
-            for i in 0 1 2 3 4 5 6 7; do (
-              src="$url.shard$i"
-              [ "$mode" = poison ] && [ "$i" = 3 ] && src="$SCCACHE_WEBDAV_ENDPOINT/gen-incremental/poison.shard3"
-              cache_request "$src" | tee >(sha256sum | cut -d' ' -f1 > "$RUNNER_TEMP/got.$i") | zstd -d -T2 | tar -xf - -C target
-              echo "shard$i rc=${PIPESTATUS[*]} s=$(( $(date +%s)-s ))"
-            ) & done; wait
-            sleep 1
-            if [ "$mode" != restore-shards ]; then
-              bad=0
-              for i in 0 1 2 3 4 5 6 7; do
-                want=$(sed -n "s/^shard$i //p" "$RUNNER_TEMP/manifest/manifest.txt"); have=$(cat "$RUNNER_TEMP/got.$i" 2>/dev/null)
-                [ -n "$want" ] && [ "$want" = "$have" ] || { echo "shard$i hash mismatch"; bad=1; }
-              done
-              echo "verified bad=$bad"
-              if [ "$bad" != 0 ]; then rm -rf target; mkdir -p target; echo "snapshot rejected, building cold"; fi
+            if [ "$mode" = restore-shards ]; then
+              for i in 0 1 2 3 4 5 6 7; do ( cache_request "$url.shard$i" | zstd -d -T2 | tar -xf - -C target; echo "shard$i rc=${PIPESTATUS[*]} s=$(( $(date +%s)-s ))" ) & done; wait
+            else
+              # Nothing reaches tar until every shard matches the manifest from the main-only store.
+              dir="$RUNNER_TEMP/shards"; mkdir -p "$dir"; rm -f "$dir"/bad
+              for i in 0 1 2 3 4 5 6 7; do (
+                src="$url.shard$i"
+                [ "$mode" = poison ] && [ "$i" = 3 ] && src="$SCCACHE_WEBDAV_ENDPOINT/gen-incremental/poison.shard3"
+                cache_request "$src" -o "$dir/$i" || : > "$dir/bad"
+                want=$(sed -n "s/^shard$i //p" "$RUNNER_TEMP/manifest/manifest.txt"); have=$(sha256sum "$dir/$i" 2>/dev/null | cut -d' ' -f1)
+                [ -n "$want" ] && [ "$want" = "$have" ] || { echo "shard$i hash mismatch"; : > "$dir/bad"; }
+              ) & done; wait
+              v=$(date +%s); echo "download_and_verify_s=$((v-s))"
+              if [ -e "$dir/bad" ]; then
+                echo "verified bad=1"; echo "snapshot rejected before extraction, building cold"
+                echo "target files after rejection: $(find target -type f | wc -l)"
+              else
+                echo "verified bad=0"
+                for i in 0 1 2 3 4 5 6 7; do ( zstd -d -T2 -c "$dir/$i" | tar -xf - -C target; echo "shard$i rc=${PIPESTATUS[*]}"; rm -f "$dir/$i" ) & done; wait
+                echo "extract_s=$(( $(date +%s)-v ))"
+              fi
+              rm -rf "$dir"
             fi
             echo "shards_restore_s=$(( $(date +%s)-s ))"
             ;;
