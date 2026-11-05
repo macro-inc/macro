@@ -53,6 +53,10 @@ both full and per-service filtered Nix sources, including `brain.lock`.
 
 ## Gotchas
 
+- Repo tokens and stored SHA-256 digests use `agent_credentials` newtypes.
+  Parse at HTTP/client/database boundaries; Debug redacts both, and ordinary
+  equality compares fixed-length secrets and digests in constant time. Wire
+  tokens remain strings.
 - Credentials: HTTP Basic password = repo token (read and push, own repo
   only); otherwise a Macro user credential (cookie, bearer, or
   `x-macro-user-api-key`, e.g. via `git -c http.extraHeader=...`) of a team

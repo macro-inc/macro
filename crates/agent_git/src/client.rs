@@ -8,6 +8,7 @@ use reqwest::StatusCode;
 use uuid::Uuid;
 
 use crate::api::{CreateRepoRequest, CreatedRepoResponse, EnsureRepoRequest};
+use crate::domain::models::RepoToken;
 use crate::domain::template::PersonaSeed;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -18,6 +19,9 @@ pub enum AgentGitClientError {
     /// The request did not complete.
     #[error("agent git request failed: {0}")]
     Request(#[from] reqwest::Error),
+    /// Internal credentials must be nonempty HTTP header values.
+    #[error("the internal agent git credential is invalid")]
+    InvalidInternalCredential,
     /// The agent already has a repo for another team.
     #[error("the agent's repo belongs to another team")]
     TeamMismatch,
@@ -36,12 +40,18 @@ pub enum AgentGitClientError {
 pub struct AgentGitClient {
     http: reqwest::Client,
     base_url: String,
-    internal_api_key: String,
+    internal_api_key: reqwest::header::HeaderValue,
 }
 
 impl AgentGitClient {
     /// `base_url` is `AgentGitServiceUrl` (no trailing slash).
     pub fn new(base_url: String, internal_api_key: String) -> Result<Self, AgentGitClientError> {
+        if internal_api_key.is_empty() {
+            return Err(AgentGitClientError::InvalidInternalCredential);
+        }
+        let mut internal_api_key = reqwest::header::HeaderValue::from_str(&internal_api_key)
+            .map_err(|_| AgentGitClientError::InvalidInternalCredential)?;
+        internal_api_key.set_sensitive(true);
         let http = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .build()?;
@@ -109,7 +119,7 @@ impl AgentGitClient {
         agent_user_id: MacroUserIdStr<'static>,
         team_id: Uuid,
         seed: PersonaSeed,
-        token: &str,
+        token: &RepoToken,
     ) -> Result<CreatedRepoResponse, AgentGitClientError> {
         let response = self
             .http
@@ -122,7 +132,7 @@ impl AgentGitClient {
                     team_id,
                     seed,
                 },
-                token: token.to_owned(),
+                token: token.clone(),
             })
             .send()
             .await?;

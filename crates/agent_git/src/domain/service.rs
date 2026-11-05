@@ -139,7 +139,6 @@ where
         token: RepoToken,
     ) -> Result<CreatedRepo, AgentGitError> {
         let _mutation = self.mutations.lock().await;
-        let token = RepoToken::recovery(token.expose().to_owned())?;
         // The database uniqueness constraint arbitrates concurrent recovery.
         // Never use upsert_repo here: it intentionally rotates live tokens.
         self.adapters

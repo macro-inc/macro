@@ -29,6 +29,9 @@ Composition root for `crates/agent_git`: hosts each agent's workspace repo
 - Run a single task: the push rate limiter is in memory.
 - No compression layer: pack bodies are already compressed and streamed.
 
+- Internal create/ensure exchanges validated `RepoToken` strings; malformed
+  bootstrap credentials are rejected before repository mutations. Credential
+  and hash Debug output stays redacted in the shared `agent_credentials` crate.
 - Recovery uses `POST /internal/repos/ensure` with the saved bootstrap token;
   repeating `POST /internal/repos` intentionally re-keys a repo.
 

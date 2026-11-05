@@ -21,7 +21,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 
 use crate::api::{CreateRepoRequest, CreatedRepoResponse, EnsureRepoRequest};
-use crate::domain::models::{AgentGitError, GitEndpoint, GitRequest, GitService, RepoToken};
+use crate::domain::models::{AgentGitError, GitEndpoint, GitRequest, GitService};
 use crate::domain::ports::AgentGitService;
 use credential::{BASIC_CHALLENGE, GitCredentialExtractor};
 
@@ -341,7 +341,7 @@ async fn create_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
 
     Ok(Json(CreatedRepoResponse {
         agent_user_id: created.agent_user_id,
-        token: created.token.expose().to_owned(),
+        token: created.token,
         clone_url,
     }))
 }
@@ -352,7 +352,7 @@ async fn ensure_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
     _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
     Json(request): Json<EnsureRepoRequest>,
 ) -> Result<Json<CreatedRepoResponse>, AgentGitHttpError> {
-    let token = RepoToken::recovery(request.token)?;
+    let token = request.token;
     let created = state
         .service
         .ensure_repo(
@@ -369,7 +369,7 @@ async fn ensure_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
     );
     Ok(Json(CreatedRepoResponse {
         agent_user_id: created.agent_user_id,
-        token: created.token.expose().to_owned(),
+        token: created.token,
         clone_url,
     }))
 }

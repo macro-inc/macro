@@ -1,3 +1,5 @@
+use macro_user_id::cowlike::CowLike;
+
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
@@ -258,7 +260,9 @@ async fn the_agent_token_pushes_and_an_admin_session_only_reads() {
 
     service
         .serve_git(
-            GitCredential::RepoToken(RepoToken::presented(created.token.expose())),
+            GitCredential::RepoToken(
+                RepoToken::parse(created.token.expose().to_owned()).expect("minted token"),
+            ),
             &agent,
             request(GitEndpoint::Rpc(GitService::ReceivePack), b"pack"),
         )
@@ -515,7 +519,11 @@ fn seed() -> PersonaSeed {
         name: "Sam".to_owned(),
         job_description: "Books venues.".to_owned(),
         personality: "Warm and direct.".to_owned(),
-        creator_id: Some("macro|admin@example.com".to_owned()),
+        creator_id: Some(
+            MacroUserIdStr::parse_from_str("macro|admin@example.com")
+                .expect("creator id")
+                .into_owned(),
+        ),
     }
 }
 
@@ -616,7 +624,7 @@ async fn recovery_preserves_live_tokens_and_recreates_missing_resources() {
         .ensure_repo(agent.clone(), TEAM, &seed(), original.token.clone())
         .await
         .unwrap();
-    assert_eq!(recovered.token, original.token);
+    assert_eq!(recovered.token.hash(), original.token.hash());
     assert!(matches!(
         service
             .ensure_repo(agent.clone(), TEAM, &seed(), RepoToken::generate())
@@ -661,12 +669,6 @@ async fn recovery_preserves_live_tokens_and_recreates_missing_resources() {
         .unwrap()
         .unwrap();
     assert!(row.token_hash.matches(&original.token.hash()));
-    assert!(matches!(
-        service
-            .ensure_repo(agent, TEAM, &seed(), RepoToken::presented("weak"))
-            .await,
-        Err(AgentGitError::InvalidToken)
-    ));
 }
 
 /// Pause recovery immediately before it publishes storage to overlap deletion.

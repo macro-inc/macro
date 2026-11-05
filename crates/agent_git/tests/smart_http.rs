@@ -21,6 +21,7 @@ use macro_authorization::{
     NoopMacroAuthJwtValidator, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
@@ -148,7 +149,7 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
         work.path(),
         &[
             "clone",
-            &with_password(&repo_a.clone_url, &repo_a.token),
+            &with_password(&repo_a.clone_url, repo_a.token.expose()),
             "first",
         ],
     )
@@ -185,7 +186,7 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
         work.path(),
         &[
             "clone",
-            &with_password(&repo_a.clone_url, &repo_a.token),
+            &with_password(&repo_a.clone_url, repo_a.token.expose()),
             "second",
         ],
     )
@@ -201,7 +202,7 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
         .ensure_repo(agent_a.clone(), TEAM_ID, seed(), &repo_a.token)
         .await
         .unwrap();
-    assert_eq!(recovered.token, repo_a.token);
+    assert_eq!(recovered.token.hash(), repo_a.token.hash());
     let wrong_recovery = client
         .ensure_repo(agent_a.clone(), TEAM_ID, seed(), &repo_b.token)
         .await;
@@ -210,7 +211,7 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
         work.path(),
         &[
             "clone",
-            &with_password(&repo_a.clone_url, &repo_a.token),
+            &with_password(&repo_a.clone_url, repo_a.token.expose()),
             "preserved",
         ],
     )
@@ -241,7 +242,7 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
         work.path(),
         &[
             "clone",
-            &with_password(&repo_a.clone_url, &repo_b.token),
+            &with_password(&repo_a.clone_url, repo_b.token.expose()),
             "other",
         ],
     )
@@ -287,7 +288,7 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
         work.path(),
         &[
             "clone",
-            &with_password(&repo_a.clone_url, &repo_a.token),
+            &with_password(&repo_a.clone_url, repo_a.token.expose()),
             "deleted",
         ],
     )
@@ -298,12 +299,12 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
         .ensure_repo(agent_a.clone(), TEAM_ID, seed(), &repo_a.token)
         .await
         .unwrap();
-    assert_eq!(recovered.token, repo_a.token);
+    assert_eq!(recovered.token.hash(), repo_a.token.hash());
     let recreated = git(
         work.path(),
         &[
             "clone",
-            &with_password(&repo_a.clone_url, &repo_a.token),
+            &with_password(&repo_a.clone_url, repo_a.token.expose()),
             "recreated",
         ],
     )
@@ -327,7 +328,7 @@ async fn a_repo_at_its_size_limit_refuses_pushes_with_a_message(pool: PgPool) {
         work.path(),
         &[
             "clone",
-            &with_password(&repo.clone_url, &repo.token),
+            &with_password(&repo.clone_url, repo.token.expose()),
             "full",
         ],
     )
@@ -349,7 +350,11 @@ fn seed() -> agent_git::domain::template::PersonaSeed {
         name: "Sam".to_owned(),
         job_description: "Books venues.".to_owned(),
         personality: "Warm and direct.".to_owned(),
-        creator_id: Some("macro|admin@example.com".to_owned()),
+        creator_id: Some(
+            MacroUserIdStr::parse_from_str("macro|admin@example.com")
+                .expect("creator id")
+                .into_owned(),
+        ),
     }
 }
 
@@ -386,7 +391,7 @@ async fn compressed_push_is_rejected_without_writing_the_repository(pool: PgPool
     for encoding in ["gzip", "identity", ""] {
         let response = reqwest::Client::new()
             .post(format!("{}/git-receive-pack", repo.clone_url))
-            .basic_auth("agent", Some(&repo.token))
+            .basic_auth("agent", Some(repo.token.expose()))
             .header("Content-Encoding", encoding)
             .header("Content-Type", "application/x-git-receive-pack-request")
             .body(compressed.clone())
