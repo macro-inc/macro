@@ -43,12 +43,12 @@ export default {
   callsBlock: 'Macro Calls',
   callsSnippet:
     'Calls with transcripts and summaries, shared with your team and its agents',
-  callsLength: '1:11',
+  callsLength: '1:10',
   schedulingTitle: 'Learn how to use Macro Scheduling',
   schedulingBlock: 'Macro Scheduling',
   schedulingSnippet:
     'Booking links built into your calendar, created by an agent',
-  schedulingLength: '0:45',
+  schedulingLength: '0:44',
   calendarTitle: 'Learn how to use Macro Calendar',
   calendarBlock: 'Macro Calendar',
   calendarSnippet:
