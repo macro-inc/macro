@@ -42,7 +42,8 @@ runs:
       if: inputs.playwright == 'force' || (inputs.playwright == 'true' && steps.pw-browsers.outputs.cache-hit != 'true')
       shell: bash
       working-directory: apps/web
-      run: bunx playwright install --with-deps chromium
+      # Its apt-get is the image's, and must not load the dev shell's libraries.
+      run: env -u LD_LIBRARY_PATH bunx playwright install --with-deps chromium
     - name: Save Playwright browsers to cache
       if: inputs.playwright == 'force' || (inputs.playwright == 'true' && steps.pw-browsers.outputs.cache-hit != 'true')
       uses: runs-on/cache/save@v4

@@ -65,6 +65,9 @@ let
       };
       cache.enabled = true;
       container = {
+        # Like a hosted VM: a job reaches its services on localhost. Each runner has
+        # its own Docker daemon and runs one job, so ports cannot collide.
+        network = "host";
         options = "-v nix:/nix";
         valid_volumes = [ "nix" ];
         force_pull = false;
