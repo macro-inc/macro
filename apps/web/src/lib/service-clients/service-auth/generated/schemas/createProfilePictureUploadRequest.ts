@@ -10,9 +10,4 @@ export interface CreateProfilePictureUploadRequest {
   content_type: string;
   /** File name, such as `avatar.png`. */
   file_name: string;
-  /**
-   * Exact size of the image in bytes. Storage rejects a body of any other size.
-   * @minimum 0
-   */
-  size_bytes: number;
 }

@@ -98,9 +98,7 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 - `POST /user/agent_setup` joins the inviting team and replaces the
   `Agent signup` API key. It is repeatable until `tutorialComplete` is true.
 - `POST /user/profile_picture/file` reserves an SFS upload for API-key callers,
-  since `static_file_service` cannot check keys. It caps a picture at 16 MB and a
-  user at 20 uploads an hour, and signs the declared size into the upload URL so
-  storage rejects any other size. `PUT` on that path takes the SFS
+  since `static_file_service` cannot check keys. `PUT` on that path takes the SFS
   id and accepts only the caller's PNG, JPEG, WebP, or GIF; it does not wait for
   the asynchronous upload event.
 

@@ -18,11 +18,6 @@ export type putPresignedUrlResponse200 = {
   status: 200;
 };
 
-export type putPresignedUrlResponse400 = {
-  data: string;
-  status: 400;
-};
-
 export type putPresignedUrlResponse401 = {
   data: string;
   status: 401;
@@ -37,7 +32,6 @@ export type putPresignedUrlResponseSuccess = putPresignedUrlResponse200 & {
   headers: Headers;
 };
 export type putPresignedUrlResponseError = (
-  | putPresignedUrlResponse400
   | putPresignedUrlResponse401
   | putPresignedUrlResponse500
 ) & {

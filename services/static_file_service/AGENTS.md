@@ -25,11 +25,6 @@ handle upload.
 - Not here: what entity a file is attached to (document, chat, etc.) — callers
   pass `models_sfs` references; this service doesn't know its callers' domains.
 
-## Upload size
-
-- A presigned URL only limits size when the caller sets `content_length`, which
-  signs that exact size into the URL. Without it, an upload can be any size.
-
 ## Checks
 
 - `cargo test -p static_file_service` (`SQLX_OFFLINE` unset).

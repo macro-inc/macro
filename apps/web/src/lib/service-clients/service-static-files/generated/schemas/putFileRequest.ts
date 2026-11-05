@@ -4,16 +4,9 @@
  * static_file_service
  * OpenAPI spec version: 0.1.0
  */
-import type { PutFileRequestContentLength } from './putFileRequestContentLength';
 import type { PutFileRequestContentType } from './putFileRequestContentType';
 
 export interface PutFileRequest {
-  /**
-   * Exact size of the upload in bytes. When set, it is signed into the upload
-URL, so storage rejects a body of any other size.
-   * @minimum 0
-   */
-  content_length?: PutFileRequestContentLength;
   /** optional mime type if type cannot be infered from file_name */
   content_type?: PutFileRequestContentType;
   /** extra metadata to store with file

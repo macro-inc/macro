@@ -354,10 +354,6 @@ export type CreateProfilePictureUploadRequest = {
      * File name, such as `avatar.png`.
      */
     file_name: string;
-    /**
-     * Exact size of the image in bytes. Storage rejects a body of any other size.
-     */
-    size_bytes: number;
 };
 
 /**
@@ -4782,18 +4778,10 @@ export type CreateProfilePictureUploadData = {
 
 export type CreateProfilePictureUploadErrors = {
     /**
-     * Not a supported image type, or empty
+     * Not a supported image type
      */
     400: ErrorResponse;
     401: string;
-    /**
-     * The image is larger than 16 MB
-     */
-    413: ErrorResponse;
-    /**
-     * Too many uploads this hour
-     */
-    429: ErrorResponse;
     500: ErrorResponse;
 };
 
