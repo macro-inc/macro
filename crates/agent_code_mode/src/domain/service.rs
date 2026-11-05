@@ -220,6 +220,11 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "GetEntityProperties"
                 | "SetEntityProperty"
                 | "BulkSetEntityPropertyOptions"
+                // macro.properties.tags() and createTag(); PropertyOption edits.
+                | "ListTags"
+                | "CreateTag"
+                | "EditTag"
+                | "DeleteTag"
                 | "ListInboxes"
                 | "ListLabels"
                 | "GetThread"
