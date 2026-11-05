@@ -406,20 +406,19 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
-  test-lt4:
-    name: test-lt4
+  test-d0j2:
+    name: test-d0j2
     timeout-minutes: 60
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
-    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-rt-lt4
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-rt-d0j8
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
       NEXTEST_TEST_THREADS: '32'
-      CARGO_BUILD_JOBS: '4'
-      MOLD_JOBS: '1'
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      CARGO_PROFILE_TEST_DEBUG: line-tables-only
+      CARGO_BUILD_JOBS: '2'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
       SCCACHE_IDLE_TIMEOUT: '0'
     services:
@@ -463,7 +462,174 @@ jobs:
         set -euo pipefail
         env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
         trap 'rm -f "$env_file"' EXIT
-        if nsc cache sccache setup --cache_name ci-speed-rt-lt4 > "$env_file"; then
+        if nsc cache sccache setup --cache_name ci-speed-rt-d0j8 > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Start sccache server
+      run: sccache --start-server
+    - name: Build code-mode assets
+      run: |
+        assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+    - name: configure postgres for concurrent tests
+      run: |
+        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
+        if [ -z "$postgres_container" ]; then
+          echo "pgvector/pgvector:pg14 service container not found" >&2
+          docker ps
+          exit 1
+        fi
+
+        docker exec -i "$postgres_container" psql -U user -d macrodb <<'SQL'
+        ALTER SYSTEM SET fsync = off;
+        ALTER SYSTEM SET synchronous_commit = off;
+        ALTER SYSTEM SET full_page_writes = off;
+        ALTER SYSTEM SET max_wal_size = '4GB';
+        ALTER SYSTEM SET checkpoint_timeout = '30min';
+        ALTER SYSTEM SET max_locks_per_transaction = 8192;
+        SQL
+        docker restart "$postgres_container"
+        until docker exec "$postgres_container" pg_isready -U user -d macrodb; do
+          sleep 1
+        done
+        docker exec "$postgres_container" psql -U user -d macrodb -c "SHOW max_locks_per_transaction;"
+    - name: prepare tests
+      run: just setup_test_envs && just initialize_dbs && just setup_test_template
+    - name: run tests
+      run: |
+        set -euo pipefail
+
+        # --no-tests=pass: a package filter can legitimately select a crate with no
+        # tests; treat that as success, not nextest's default error.
+        # sync-service is not part of this suite, and its storage backends are mutually
+        # exclusive under --all-features.
+        #
+        # Package selection uses `cargo nextest run -p`, not `--workspace -E rdeps(...)`.
+        # The filterset only decides which tests *run* after a workspace build; `-p`
+        # is what keeps an unrelated crate's test binary from being compiled.
+        #
+        # `--lib --bins --tests` is safe with `--workspace` (cargo skips packages that
+        # lack a given target type) but fails with `-p` when any selected package has
+        # no lib — xtask binaries such as xtask_nextest_filter / xtask_workflows.
+        # Unconstrained `-p` still runs that package's tests.
+
+        : "${RUST_PACKAGES:?RUST_PACKAGES is required}"
+        # Dependencies build without debug info, which cuts compile, link and disk cost.
+        # Workspace crates keep CARGO_PROFILE_*_DEBUG=limited, so backtraces still carry
+        # line numbers in our own code.
+        common=(
+          --config 'profile.dev.package."*".debug=false'
+          --all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS"
+        )
+
+        if [ "$RUST_PACKAGES" = "all" ]; then
+          cargo nextest run --workspace --exclude sync_service --lib --bins --tests "${common[@]}"
+          exit 0
+        fi
+
+        pkg_args=()
+        for package in $RUST_PACKAGES; do
+          [ "$package" = "sync_service" ] || pkg_args+=(-p "$package")
+        done
+
+        if [ "${#pkg_args[@]}" -eq 0 ]; then
+          echo "No packages in the test suite were affected"
+          exit 0
+        fi
+
+        cargo nextest run "${common[@]}" "${pkg_args[@]}"
+    - name: Set up code execution runtime
+      if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')
+      uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+      with:
+        deno-version: '2.9.6'
+    - name: Test Deno sandbox and authenticated SDK execution
+      if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')
+      run: |-
+        cargo test --locked -p code_execution -- --ignored --test-threads=2
+        cargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  test-d0j8:
+    name: test-d0j8
+    timeout-minutes: 60
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-rt-d0j8b
+    env:
+      RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
+      NEXTEST_TEST_THREADS: '32'
+      CARGO_BUILD_JOBS: '8'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
+      SCCACHE_IDLE_TIMEOUT: '0'
+    services:
+      postgres:
+        image: pgvector/pgvector:pg14
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: macrodb
+        ports:
+        - '5432:5432'
+        options: '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5 --shm-size 1g'
+      redis:
+        image: redis:7
+        ports:
+        - '6379:6379'
+        options: '--health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: change one crate, as a PR does
+      run: printf '\n// ci speed %s.%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$CI_SPEED_SALT_FILE"
+      env:
+        CI_SPEED_SALT_FILE: crates/email/src/lib.rs
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name ci-speed-rt-d0j8b > "$env_file"; then
           # Register credential values as masked BEFORE exporting: GitHub only
           # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
           # ~24h Namespace workspace token (registry + cache write) — printed
@@ -597,7 +763,8 @@ jobs:
     needs:
     - path-check
     - test-base
-    - test-lt4
+    - test-d0j2
+    - test-d0j8
     - graphql-schema-compat
     if: always()
     name: Cloud Storage Status Check
@@ -607,13 +774,15 @@ jobs:
       run: |
         echo "path-check: ${{ needs.path-check.result }}"
         echo "test-base: ${{ needs.test-base.result }}"
-        echo "test-lt4: ${{ needs.test-lt4.result }}"
+        echo "test-d0j2: ${{ needs.test-d0j2.result }}"
+        echo "test-d0j8: ${{ needs.test-d0j8.result }}"
         echo "graphql-schema-compat: ${{ needs.graphql-schema-compat.result }}"
 
         # Fail if any job failed (skipped and success are both OK)
         if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.test-base.result }}" == "failure" ]] || \
-           [[ "${{ needs.test-lt4.result }}" == "failure" ]] || \
+           [[ "${{ needs.test-d0j2.result }}" == "failure" ]] || \
+           [[ "${{ needs.test-d0j8.result }}" == "failure" ]] || \
            [[ "${{ needs.graphql-schema-compat.result }}" == "failure" ]]; then
           echo "❌ One or more jobs failed"
           exit 1
