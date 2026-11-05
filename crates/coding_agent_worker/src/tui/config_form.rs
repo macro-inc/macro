@@ -313,11 +313,6 @@ impl ConfigForm {
             &credentials.harness_id.to_string(),
         );
         self.set_string("credentials", "token", &credentials.token);
-        let scope = match credentials.scope {
-            crate::config::HarnessScope::User => "user",
-            crate::config::HarnessScope::Team => "team",
-        };
-        self.set_string("credentials", "scope", scope);
         self.save()
     }
 

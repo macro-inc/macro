@@ -121,7 +121,7 @@ fn runtime_lines(app: &App, width: u16) -> Vec<Line<'static>> {
                 },
             ));
             lines.push(row(
-                "Full Access",
+                "Permission bypass",
                 if harness.allow_permission_bypass {
                     Span::styled(
                         "On · agents run commands and edit files without approval",

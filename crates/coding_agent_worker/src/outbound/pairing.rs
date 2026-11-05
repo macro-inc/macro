@@ -5,13 +5,13 @@
 //! control panel drives it frame by frame.
 
 use harnesses::domain::models::{
-    ClaimPairingRequest, ClaimedPairing, CreatePairingRequest, CreatedPairing, HarnessOwner,
+    ClaimPairingRequest, ClaimedPairing, CreatePairingRequest, CreatedPairing,
 };
 use reqwest::StatusCode;
 use rootcause::prelude::ResultExt as _;
 use uuid::Uuid;
 
-use crate::config::{Config, HarnessCredentials, HarnessScope};
+use crate::config::{Config, HarnessCredentials};
 
 /// One claim poll's answer.
 #[derive(Debug)]
@@ -50,10 +50,8 @@ impl PairingClient {
             .http
             .post(format!("{}/harness-pairings", self.base))
             .json(&CreatePairingRequest {
-                allow_permission_bypass: None,
                 name: machine_name(),
                 host: Some(host_info()),
-                scope: None,
             })
             .send()
             .await
@@ -105,14 +103,9 @@ impl PairingClient {
 }
 
 fn credentials_from(claimed: ClaimedPairing) -> HarnessCredentials {
-    let scope = match claimed.harness.owner {
-        HarnessOwner::User { .. } => HarnessScope::User,
-        HarnessOwner::Team { .. } => HarnessScope::Team,
-    };
     HarnessCredentials {
         harness_id: claimed.harness.id,
         token: claimed.token,
-        scope,
     }
 }
 

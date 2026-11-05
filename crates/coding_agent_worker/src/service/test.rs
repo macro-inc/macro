@@ -1,5 +1,4 @@
 use super::*;
-use crate::config::HarnessScope;
 use harness_id::HarnessId;
 
 #[test]
@@ -50,7 +49,6 @@ fn reconfigures_without_dropping_credentials() {
     let credentials = HarnessCredentials {
         harness_id: HarnessId::TEST_A,
         token: "mhns_test_secret".to_owned(),
-        scope: HarnessScope::User,
     };
     ConfigForm::load(&path)
         .expect("load form")

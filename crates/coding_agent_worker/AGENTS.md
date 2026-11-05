@@ -13,10 +13,11 @@ the local ACP process (Claude Code, Codex, ...), and drives native
 - `src/config.rs`: `macrod.toml` — the daemon's one input, machine-local only
   (see `config.example.toml`, `default.macrod.toml`). The TUI and
   `macrod service` share `~/.macrod/macrod.toml` (`--config` overrides it),
-  locked by `<config>.lock` while running. A TUI started without `--config`
-  moves a legacy `./macrod.toml` there. Name, ownership, and permission bypass
-  live on the web (Settings → Agents → Runtimes); `[macro]` is a dev override
-  that defaults to production.
+  locked by `<config>.lock` while running. Name, ownership, and permission
+  bypass live only on the web (Settings → Agents → Runtimes); a file that still
+  has `[identity]` or a `scope` in `[credentials]` fails to load with an error
+  naming that page. The event stream reads the owner from `GET /harnesses/me`
+  on each connect. `[macro]` is a dev override that defaults to production.
 - `src/daemon.rs` + `src/runtime.rs`: the serving core — persistent harness
   service connection, ACP process bridge, start/stop/restart on re-pair.
 - `src/self_knowledge.rs`: the `<macrod-runtime>` section the bridge

@@ -38,15 +38,6 @@ pub struct Config {
     /// The approved harness credential, absent until pairing completes.
     #[serde(default)]
     pub credentials: Option<HarnessCredentials>,
-    /// Ignored: runtime settings that moved to the web. Accepted so older
-    /// configs still parse; [`Config::load`] warns about it.
-    #[serde(default)]
-    identity: Option<toml::Table>,
-    /// Ignored: the webhook listener the daemon no longer runs. Accepted so
-    /// older configs still parse. The daemon listens over SSE.
-    #[serde(default)]
-    #[expect(dead_code, reason = "accepted only so existing configs still parse")]
-    server: Option<toml::Table>,
     /// The harness process shared by every session.
     pub harness: Harness,
     /// The workspace every session runs against.
@@ -99,17 +90,6 @@ impl Default for HerdrSettings {
     }
 }
 
-/// Whether the approved harness is private to its owner or shared with a team,
-/// as recorded when pairing completed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum HarnessScope {
-    /// Owned by one user.
-    User,
-    /// Owned by a team.
-    Team,
-}
-
 /// The credential pairing minted for this daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -118,8 +98,6 @@ pub struct HarnessCredentials {
     pub harness_id: HarnessId,
     /// The bearer token (`mhns_...`).
     pub token: String,
-    /// The approved harness ownership scope.
-    pub scope: HarnessScope,
 }
 
 impl HarnessCredentials {
@@ -229,6 +207,18 @@ pub enum ConfigError {
         #[source]
         source: std::io::Error,
     },
+    /// The file sets something that is configured on the web now.
+    #[error(
+        "{path} sets {key}, which macrod no longer reads: a runtime's name, access, and \
+         permission bypass are set in Macro at Settings → Agents → Runtimes. Delete {key} \
+         from the file."
+    )]
+    WebSetting {
+        /// The path that failed.
+        path: PathBuf,
+        /// The key to delete, e.g. `[identity]`.
+        key: &'static str,
+    },
     /// The file is not a valid daemon config.
     #[error("invalid config at {path}")]
     Parse {
@@ -247,25 +237,32 @@ impl Config {
             path: path.to_owned(),
             source,
         })?;
-        let config: Self = toml::from_str(&raw).map_err(|source| ConfigError::Parse {
+        let parse = |source| ConfigError::Parse {
             path: path.to_owned(),
             source,
-        })?;
-        if let Some(identity) = &config.identity {
-            let keys = identity
-                .keys()
-                .map(String::as_str)
-                .collect::<Vec<_>>()
-                .join(", ");
-            tracing::warn!(
-                path = %path.display(),
-                ignored_keys = %keys,
-                "ignoring the [identity] table in macrod.toml: a runtime's name, ownership, and \
-                 permission bypass are now set on the web at Settings → Agents → Runtimes"
-            );
+        };
+        let table: toml::Table = toml::from_str(&raw).map_err(parse)?;
+        if let Some(key) = web_setting_in(&table) {
+            return Err(ConfigError::WebSetting {
+                path: path.to_owned(),
+                key,
+            });
         }
-        Ok(config)
+        table.try_into().map_err(parse)
     }
+}
+
+/// A key older releases wrote for what is now set on the web, if the file has
+/// one. Named in the error so the operator knows exactly what to delete.
+fn web_setting_in(table: &toml::Table) -> Option<&'static str> {
+    if table.contains_key("identity") {
+        return Some("[identity]");
+    }
+    table
+        .get("credentials")
+        .and_then(toml::Value::as_table)
+        .is_some_and(|credentials| credentials.contains_key("scope"))
+        .then_some("`scope` in [credentials]")
 }
 
 /// The one config location shared by the TUI and `macrod service`:
@@ -287,48 +284,6 @@ fn config_path_in_home(home: Option<&str>, user_profile: Option<&str>) -> Option
         .flatten()
         .find(|directory| !directory.is_empty())
         .map(|home| PathBuf::from(home).join(".macrod").join("macrod.toml"))
-}
-
-/// Move a config left in the working directory by an older release
-/// (`./macrod.toml`, plus its sibling `macrod.webhook-state.json`) to
-/// `target`, the default location.
-///
-/// When both exist, `target` wins and the working-directory copy is left alone.
-pub fn adopt_working_directory_config(target: &Path, legacy: &Path) -> std::io::Result<()> {
-    if !legacy.exists() {
-        return Ok(());
-    }
-    if target.exists() {
-        tracing::warn!(
-            ignored = %legacy.display(),
-            config = %target.display(),
-            "ignoring the macrod.toml in the working directory; using the default config"
-        );
-        return Ok(());
-    }
-    if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    move_file(legacy, target)?;
-    let legacy_state = legacy.with_extension("webhook-state.json");
-    if legacy_state.exists() {
-        move_file(&legacy_state, &target.with_extension("webhook-state.json"))?;
-    }
-    tracing::info!(
-        from = %legacy.display(),
-        to = %target.display(),
-        "moved macrod.toml from the working directory to the default config location"
-    );
-    Ok(())
-}
-
-/// Rename, or copy and remove when the two paths are on different filesystems.
-fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
-    if std::fs::rename(from, to).is_ok() {
-        return Ok(());
-    }
-    std::fs::copy(from, to)?;
-    std::fs::remove_file(from)
 }
 
 /// An exclusive hold on one config: one macrod serves one harness.

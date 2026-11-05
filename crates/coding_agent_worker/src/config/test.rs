@@ -40,16 +40,15 @@ fn a_partial_macro_table_overrides_only_its_keys() {
 }
 
 #[test]
-fn embedded_credentials_parse_with_their_approved_scope() {
+fn embedded_credentials_parse() {
     let with_credentials = format!(
-        "{EXAMPLE}\n[credentials]\nharness_id = \"{}\"\ntoken = \"mhns_secret\"\nscope = \"team\"\n",
+        "{EXAMPLE}\n[credentials]\nharness_id = \"{}\"\ntoken = \"mhns_secret\"\n",
         harness_id::HarnessId::TEST_A
     );
     let config: Config = toml::from_str(&with_credentials).expect("embedded credentials parse");
     let credentials = config.credentials.expect("credentials");
 
     assert_eq!(credentials.harness_id, harness_id::HarnessId::TEST_A);
-    assert_eq!(credentials.scope, HarnessScope::Team);
     assert!(credentials.is_valid());
 }
 
@@ -58,26 +57,57 @@ fn malformed_bearer_token_is_not_valid() {
     let credentials = HarnessCredentials {
         harness_id: harness_id::HarnessId::TEST_A,
         token: "not-a-harness-token".to_owned(),
-        scope: HarnessScope::User,
     };
 
     assert!(!credentials.is_valid());
 }
 
-#[test]
-fn leftover_identity_and_server_tables_are_ignored() {
+/// Load `contents` from a real file, as macrod does.
+fn load(contents: &str) -> Result<Config, ConfigError> {
     let directory = tempfile::tempdir().expect("temp dir");
     let path = directory.path().join("macrod.toml");
-    std::fs::write(
-        &path,
-        format!(
-            "{EXAMPLE}\n[identity]\nname = \"erics-macbook\"\nscope = \"team\"\nallow_permission_bypass = true\nunknown = 1\n\n[server]\nport = 8790\npublic_url = \"http://example/macro-events\"\n"
-        ),
-    )
-    .expect("write config");
+    std::fs::write(&path, contents).expect("write config");
+    Config::load(&path)
+}
 
-    let config = Config::load(&path).expect("legacy tables still parse");
-    assert_eq!(config.harness.command, "hermes");
+#[test]
+fn web_settings_in_the_file_fail_naming_where_they_live_now() {
+    let identity = load(&format!(
+        "{EXAMPLE}\n[identity]\nname = \"erics-macbook\"\nscope = \"team\"\nallow_permission_bypass = true\n"
+    ))
+    .expect_err("[identity] is refused");
+    assert!(matches!(
+        identity,
+        ConfigError::WebSetting {
+            key: "[identity]",
+            ..
+        }
+    ));
+    assert!(
+        identity
+            .to_string()
+            .contains("Settings → Agents → Runtimes")
+    );
+
+    let scope = load(&format!(
+        "{EXAMPLE}\n[credentials]\nharness_id = \"{}\"\ntoken = \"mhns_secret\"\nscope = \"team\"\n",
+        harness_id::HarnessId::TEST_A
+    ))
+    .expect_err("a cached scope is refused");
+    assert!(matches!(
+        scope,
+        ConfigError::WebSetting {
+            key: "`scope` in [credentials]",
+            ..
+        }
+    ));
+}
+
+#[test]
+fn the_retired_server_table_is_an_unknown_field() {
+    let error =
+        load(&format!("{EXAMPLE}\n[server]\nport = 8790\n")).expect_err("[server] is refused");
+    assert!(matches!(error, ConfigError::Parse { .. }));
 }
 
 #[test]
@@ -181,80 +211,6 @@ fn the_default_config_lives_in_home_or_the_windows_user_profile() {
         )
     );
     assert_eq!(config_path_in_home(None, None), None);
-}
-
-#[test]
-fn a_working_directory_config_moves_to_the_default_location() {
-    let directory = tempfile::tempdir().expect("temp dir");
-    let legacy = directory.path().join("cwd").join("macrod.toml");
-    let target = directory
-        .path()
-        .join("home")
-        .join(".macrod")
-        .join("macrod.toml");
-    std::fs::create_dir_all(legacy.parent().expect("parent")).expect("create cwd");
-    std::fs::write(&legacy, "# legacy\n").expect("write legacy config");
-    std::fs::write(
-        directory
-            .path()
-            .join("cwd")
-            .join("macrod.webhook-state.json"),
-        "{}",
-    )
-    .expect("write legacy state");
-
-    adopt_working_directory_config(&target, &legacy).expect("adopt");
-
-    assert_eq!(
-        std::fs::read_to_string(&target).expect("read moved config"),
-        "# legacy\n"
-    );
-    assert!(!legacy.exists());
-    assert_eq!(
-        std::fs::read_to_string(target.with_extension("webhook-state.json"))
-            .expect("read moved state"),
-        "{}"
-    );
-    assert!(
-        !directory
-            .path()
-            .join("cwd")
-            .join("macrod.webhook-state.json")
-            .exists()
-    );
-}
-
-#[test]
-fn an_existing_default_config_wins_over_the_working_directory() {
-    let directory = tempfile::tempdir().expect("temp dir");
-    let legacy = directory.path().join("macrod.toml");
-    let target = directory.path().join(".macrod").join("macrod.toml");
-    std::fs::create_dir_all(target.parent().expect("parent")).expect("create .macrod");
-    std::fs::write(&legacy, "# legacy\n").expect("write legacy config");
-    std::fs::write(&target, "# current\n").expect("write default config");
-
-    adopt_working_directory_config(&target, &legacy).expect("adopt");
-
-    assert_eq!(
-        std::fs::read_to_string(&target).expect("read default config"),
-        "# current\n"
-    );
-    assert_eq!(
-        std::fs::read_to_string(&legacy).expect("read legacy config"),
-        "# legacy\n"
-    );
-}
-
-#[test]
-fn nothing_moves_without_a_working_directory_config() {
-    let directory = tempfile::tempdir().expect("temp dir");
-    let legacy = directory.path().join("macrod.toml");
-    let target = directory.path().join(".macrod").join("macrod.toml");
-
-    adopt_working_directory_config(&target, &legacy).expect("adopt");
-
-    assert!(!target.exists());
-    assert!(!directory.path().join(".macrod").exists());
 }
 
 #[test]

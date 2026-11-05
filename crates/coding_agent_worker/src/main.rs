@@ -121,20 +121,11 @@ enum Command {
     },
 }
 
-/// The default config, after moving one an older release left in the working
-/// directory to it.
+/// The one config location, `~/.macrod/macrod.toml`.
 fn default_tui_config() -> rootcause::Result<std::path::PathBuf> {
-    let path = config::default_config_path().ok_or_else(|| {
+    config::default_config_path().ok_or_else(|| {
         rootcause::report!("no config path: pass --config or set HOME (USERPROFILE on Windows)")
-    })?;
-    let legacy = std::path::Path::new("macrod.toml");
-    config::adopt_working_directory_config(&path, legacy).map_err(|error| {
-        rootcause::report!(
-            "could not move ./macrod.toml to {}: {error}",
-            path.display()
-        )
-    })?;
-    Ok(path)
+    })
 }
 
 #[tokio::main]

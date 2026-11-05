@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 
 use super::*;
-use crate::config::{HarnessCredentials, HarnessScope};
+use crate::config::HarnessCredentials;
 use crate::tui::agent_catalog::{CommandLookup, discover, name_for};
 use harness_id::HarnessId;
 
@@ -118,7 +118,6 @@ fn persists_and_clears_embedded_credentials_without_losing_comments() {
     let credentials = HarnessCredentials {
         harness_id: HarnessId::TEST_A,
         token: "mhns_abc_secret".to_owned(),
-        scope: HarnessScope::Team,
     };
 
     let mut form = ConfigForm::load(&path).expect("load form");
