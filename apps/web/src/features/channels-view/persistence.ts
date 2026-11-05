@@ -10,10 +10,8 @@ import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
 import {
-  CHANNELS_DEFAULT_RAIL_WIDTH,
   CHANNELS_DEFAULT_SORT_BY,
   clampChannelSectionHeight,
-  clampChannelsRailWidth,
 } from './constants';
 import type { ChannelsViewState } from './types';
 
@@ -75,11 +73,6 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
 
 const channelsPreferencesSchema = z.object({
   version: z.literal(1).default(1),
-  asideWidth: z
-    .number()
-    .finite()
-    .default(CHANNELS_DEFAULT_RAIL_WIDTH)
-    .transform(clampChannelsRailWidth),
   sortBy: z
     .object({
       team_channels: z
@@ -130,7 +123,6 @@ type ChannelsPreferences = z.infer<typeof channelsPreferencesSchema>;
 
 const DEFAULT_CHANNELS_PREFERENCES = {
   version: 1,
-  asideWidth: CHANNELS_DEFAULT_RAIL_WIDTH,
   sortBy: CHANNELS_DEFAULT_SORT_BY,
   sectionPreferences: {},
   sectionOrder: [],
@@ -227,7 +219,6 @@ function createChannelsPreferencesStorage(options: {
   const serialize = (state: ChannelsViewState) =>
     JSON.stringify({
       version: 1,
-      asideWidth: clampChannelsRailWidth(state.asideWidth),
       sortBy: state.sortBy,
       sectionPreferences: state.sectionPreferences,
       sectionOrder: state.sectionOrder,
@@ -251,7 +242,6 @@ function createChannelsPreferencesStorage(options: {
 
         return {
           ...current,
-          asideWidth: restored.asideWidth,
           sortBy: restored.sortBy,
           sectionPreferences: restored.sectionPreferences,
           sectionOrder: options.restoreSectionOrder
@@ -261,7 +251,6 @@ function createChannelsPreferencesStorage(options: {
       } catch {
         return {
           ...current,
-          asideWidth: DEFAULT_CHANNELS_PREFERENCES.asideWidth,
           sortBy: DEFAULT_CHANNELS_PREFERENCES.sortBy,
           sectionPreferences: DEFAULT_CHANNELS_PREFERENCES.sectionPreferences,
           sectionOrder: options.restoreSectionOrder
