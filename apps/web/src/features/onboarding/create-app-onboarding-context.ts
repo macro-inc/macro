@@ -22,6 +22,7 @@ import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { useContactsQuery } from '@queries/contacts/contacts';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
+import { useSenderDomainCountsQuery } from '@queries/email/sender-domain-counts';
 import { queryReadyGate } from '@queries/gate';
 import { useGithubStarsQuery } from '@queries/github-stars';
 import { useGtmInviteOfferQuery } from '@queries/gtm-invite/links';
@@ -221,6 +222,10 @@ export function createAppOnboardingContext(): OnboardingContext {
     connectInbox: () => startAddInbox(),
 
     createToolCatalog: createOnboardingToolCatalog,
+    createSenderDomainCounts: (domains) => {
+      const query = useSenderDomainCountsQuery(domains);
+      return () => loadableQuery(query, (counts) => counts);
+    },
     createConnectedTools: ({ poll }) => {
       const connected = usePipedreamConnectionsQuery({
         neverSuspend: true,
