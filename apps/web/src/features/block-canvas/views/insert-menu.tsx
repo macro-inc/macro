@@ -1,3 +1,4 @@
+import { lazyNamed } from '@core/util/lazyNamed';
 import CodeIcon from '@icon/system/regular/code.svg';
 import ImageIcon from '@icon/system/regular/image.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
@@ -11,6 +12,11 @@ import type { CanvasInsertMode } from '../core/insert';
 import type { CanvasInsertLocation } from '../primitives/create-insert-state';
 import { CanvasAssetPicker } from './asset-picker';
 
+const ArtifactScenePicker = lazyNamed(
+  () => import('@app/features/block-artifact/views/artifact-canvas'),
+  'ArtifactScenePicker'
+);
+
 export function CanvasInsertMenu(props: {
   location: CanvasInsertLocation;
   onSelect: (asset: CanvasAsset, mode: CanvasInsertMode) => void;
@@ -22,6 +28,7 @@ export function CanvasInsertMenu(props: {
 }) {
   let uploadInput: HTMLInputElement | undefined;
   const [mode, setMode] = createSignal<CanvasInsertMode>();
+  const [artifact, setArtifact] = createSignal<CanvasAsset>();
   const anchor = () => ({ ...props.location.screen, width: 0, height: 0 });
   return (
     <>
@@ -172,12 +179,32 @@ export function CanvasInsertMenu(props: {
                       </p>
                     }
                   >
-                    <CanvasAssetPicker
-                      mode={type}
-                      onSelect={(asset) => props.onSelect(asset, type)}
-                      onFiles={props.onFiles}
-                      onClose={props.onClose}
-                    />
+                    <Show
+                      when={artifact()}
+                      keyed
+                      fallback={
+                        <CanvasAssetPicker
+                          mode={type}
+                          onSelect={(asset) => {
+                            // An artifact's scene is the last step.
+                            if (asset.fileType === 'artifact')
+                              setArtifact(asset);
+                            else props.onSelect(asset, type);
+                          }}
+                          onFiles={props.onFiles}
+                          onClose={props.onClose}
+                        />
+                      }
+                    >
+                      {(picked) => (
+                        <ArtifactScenePicker
+                          documentId={picked.id}
+                          onPick={(subpath) =>
+                            props.onSelect({ ...picked, subpath }, type)
+                          }
+                        />
+                      )}
+                    </Show>
                   </Suspense>
                 </ErrorBoundary>
               </Popover.Content>

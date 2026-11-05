@@ -2,8 +2,8 @@ import { t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
 import { toast } from '@core/component/Toast/Toast';
 import { Show } from 'solid-js';
-import { VersionBanner } from '../components/version-banner';
 import { SceneSwitcher } from '../components/scene-switcher';
+import { VersionBanner } from '../components/version-banner';
 import { selectScene } from '../core/scenes';
 import {
   useArtifactQuery,

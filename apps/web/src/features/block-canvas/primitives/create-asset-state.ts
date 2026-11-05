@@ -10,7 +10,10 @@ import type {
   LocalMediaPreview,
   PreparedMedia,
 } from '../core/assets';
-import { canEmbedDocument } from '../core/document-display';
+import {
+  canEmbedDocument,
+  insertedDocumentBox,
+} from '../core/document-display';
 import type { CanvasState } from './create-canvas-state';
 
 const STARTER_ARTIFACT_HTML = `<style>
@@ -20,7 +23,10 @@ const STARTER_ARTIFACT_HTML = `<style>
 
 export function createAssetState(
   state: CanvasState,
-  source: CanvasAssetSource
+  source: CanvasAssetSource,
+  options: { artifactsEnabled: () => boolean } = {
+    artifactsEnabled: () => false,
+  }
 ) {
   const [busy, setBusy] = createSignal(0);
   const [playing, setPlaying] = createSignal<string>();
@@ -161,11 +167,13 @@ export function createAssetState(
     document: (
       asset: CanvasAsset,
       point: Point,
-      display: 'preview' | 'embed' = 'preview'
+      display: 'preview' | 'embed' = asset.fileType === 'artifact' &&
+      options.artifactsEnabled()
+        ? 'embed'
+        : 'preview'
     ) => {
       if (display === 'embed' && !canEmbedDocument(asset.fileType)) return;
-      const width = display === 'embed' ? 640 : 340;
-      const height = display === 'embed' ? 480 : 136;
+      const { width, height } = insertedDocumentBox(asset.fileType, display);
       state.chooseTool('select');
       state.editor.execute(insertShapesCommand, [
         {
@@ -177,6 +185,9 @@ export function createAssetState(
               documentId: asset.id,
               name: asset.name,
               fileType: asset.fileType,
+              ...(asset.subpath === undefined
+                ? {}
+                : { subpath: asset.subpath }),
               width,
               height,
               display,

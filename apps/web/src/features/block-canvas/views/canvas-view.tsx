@@ -3,6 +3,7 @@ import { useSidePanel } from '@components/app/side-panel';
 import { createImageActions } from '@core/component/ImageActions';
 import { enableCanvasArtifacts } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazyNamed } from '@core/util/lazyNamed';
 import Copy from '@icon/system/regular/copy.svg';
 import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -39,6 +40,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  Suspense,
 } from 'solid-js';
 import type { CanvasClipboard } from '../clipboard';
 import { ArtifactInspector } from '../components/artifact-inspector';
@@ -51,7 +53,10 @@ import { SelectionLayoutInspector } from '../components/selection-layout-inspect
 import { StyleInspector } from '../components/style-inspector';
 import { TextInspector } from '../components/text-inspector';
 import { useArtifactLibrary } from '../context/artifact-library';
-import { setDocumentDisplayCommand } from '../core/document-display';
+import {
+  setDocumentDisplayCommand,
+  setDocumentSubpathCommand,
+} from '../core/document-display';
 import {
   selectionLayoutCommand,
   selectionLayoutInfo,
@@ -79,6 +84,11 @@ import { CanvasDocumentView, CanvasMediaView } from './embedded-items';
 import { CanvasInsertMenu } from './insert-menu';
 import { CanvasTextContent } from './text-content';
 import { TextEditingView } from './text-editing-view';
+
+const ArtifactSceneSelect = lazyNamed(
+  () => import('@app/features/block-artifact/views/artifact-canvas'),
+  'ArtifactSceneSelect'
+);
 
 export function CanvasView(props: {
   state: CanvasState;
@@ -571,6 +581,31 @@ export function CanvasView(props: {
                           : 'Open document';
                       })()}
                     </button>
+                    <Show
+                      when={(() => {
+                        const item = selectedItem();
+                        return item?.type === 'document' &&
+                          item.geometry.fileType === 'artifact'
+                          ? item
+                          : undefined;
+                      })()}
+                      keyed
+                    >
+                      {(item) => (
+                        <Suspense>
+                          <ArtifactSceneSelect
+                            documentId={item.geometry.documentId}
+                            value={item.geometry.subpath}
+                            onChange={(subpath) =>
+                              editor.execute(setDocumentSubpathCommand, {
+                                id: item.id,
+                                subpath,
+                              })
+                            }
+                          />
+                        </Suspense>
+                      )}
+                    </Show>
                     <Show
                       when={(() => {
                         const item = selectedItem();

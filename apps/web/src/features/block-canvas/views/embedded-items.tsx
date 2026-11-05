@@ -1,6 +1,7 @@
 import { DocumentPreviewContent } from '@core/component/DocumentPreview';
 import { DocumentPreviewSkeleton } from '@core/component/DocumentPreviewSkeleton';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { lazyNamed } from '@core/util/lazyNamed';
 import type { ShapeViewProps } from '@macro-inc/graphics/solid';
 import { Card } from '@ui';
 import { type Component, ErrorBoundary, Show, Suspense } from 'solid-js';
@@ -12,6 +13,11 @@ import {
 } from '../components/media-content';
 import { canEmbedDocument } from '../core/document-display';
 import { useCanvasMediaSource } from '../queries/media';
+
+const ArtifactSceneLabel = lazyNamed(
+  () => import('@app/features/block-artifact/views/artifact-canvas'),
+  'ArtifactSceneLabel'
+);
 
 export function CanvasMediaView(
   props: ShapeViewProps<'image' | 'video'> & {
@@ -95,6 +101,19 @@ export function CanvasDocumentView(
                     isOpenable: true,
                   }}
                 />
+                <Show
+                  when={
+                    props.item.geometry.fileType === 'artifact' &&
+                    props.item.geometry.subpath
+                  }
+                >
+                  {(scene) => (
+                    <ArtifactSceneLabel
+                      documentId={props.item.geometry.documentId}
+                      scene={scene()}
+                    />
+                  )}
+                </Show>
               </div>
             }
           >

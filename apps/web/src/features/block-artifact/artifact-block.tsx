@@ -5,12 +5,12 @@
 
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { t } from '@app/lib/i18n';
-import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@components/app/ResponsiveBlockToolbar';
+import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
