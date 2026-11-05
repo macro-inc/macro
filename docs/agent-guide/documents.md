@@ -2867,9 +2867,13 @@ Discussion's timeline or expanding it. Existing highlights locate threads by
 their stable mark IDs. Replies, attachments, reactions, and editing use the same
 message controls as channels. In every floating comment card (the Markdown,
 PDF, and Word margins and expanded minimized threads), a long comment folds to
-a faded preview with **Show more**; **Show less** folds it again. Short
-comments, the phone drawer, the bottom Discussion, and channels always show the
-full text. Markdown and Word margin cards stack without overlapping: a tall or expanded card
+a faded preview with **Show more**; **Show less** folds it again. A press
+outside the card does the same, including the press that closes an expanded
+minimized card. Presses on the card, its margin badge, and menus or dialogs
+the card opened leave the body expanded. In that card, Open session is the
+icon-only button from a narrow agent card, so the label does not take a line
+of its own. Channels keep the labeled chip. Short comments, the phone drawer,
+the bottom Discussion, and channels always show the full text. Markdown and Word margin cards stack without overlapping: a tall or expanded card
 pushes the cards below it down (past the end of a short document if needed),
 and no card starts above the top of the document. Check this with a long
 thread active near the bottom of a short document that has another thread
