@@ -288,6 +288,10 @@ let
               args = [
                 "--host=unix:///var/run/docker.sock"
                 "--group=0"
+                # Inside the overlay, whose MTU is below Docker's default of 1500.
+                # With the default, small requests work and large downloads hang.
+                "--mtu=1400"
+                "--default-network-opt=bridge=com.docker.network.driver.mtu=1400"
               ];
               env = [
                 {
