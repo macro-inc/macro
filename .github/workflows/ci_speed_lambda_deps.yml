@@ -1,4 +1,4 @@
-# Experiment only. Builds Lambda handlers and discards them: no cache push, no artifact upload, no Pulumi.
+# Experiment only. Builds the real PR branch's handlers and discards them: no cache push, upload, Pulumi or migration.
 # AWS credentials only let the nix daemon read the existing substituter, as in deploy jobs.
 name: ci-speed lambda deps
 on:
@@ -6,24 +6,21 @@ on:
     paths: ['.github/ci-speed/**', '.github/workflows/ci_speed_lambda_deps.yml', 'nix/cloud-storage.nix']
 permissions: { contents: read }
 jobs:
-  arm:
-    name: ${{ matrix.shape.name }} ${{ matrix.arm }} ${{ matrix.attempt }}
+  clean-branch:
+    name: ${{ matrix.shape.name }}
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-deploy-lambda
-    timeout-minutes: 60
+    timeout-minutes: 45
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 3
       matrix:
-        arm: [ctl, fix]
-        attempt: [1, 2, 3, 4, 5]
         shape:
           - { name: bulk-upload, handlers: "upload_extractor_lambda_handler upload_extractor_lambda_trigger" }
           - { name: org-retention, handlers: "organization_retention_handler organization_retention_trigger" }
           - { name: email, handlers: "email_refresh_handler email_scheduled_handler" }
-    env: { ATTEMPT: "${{ matrix.attempt }}" }
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with: { persist-credentials: false }
+        with: { persist-credentials: false, ref: 'synoet/ci-lambda-reuse-deps' }
       - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
         with: { cache: nix }
         continue-on-error: true
@@ -33,9 +30,18 @@ jobs:
           nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      # The fix's layer isn't in the shared cache, so build it first and time only the handlers.
-      - if: matrix.arm == 'fix'
-        run: nix build --max-jobs auto --no-link .#lambdaDepsStable
-      - run: bash .github/ci-speed/lambda-arm.sh ${{ matrix.arm }} ${{ matrix.shape.handlers }}
+      # Plain nix build of the deploy attributes. The signing key isn't in this job, so it can't push.
+      - run: |
+          set -uo pipefail
+          nix build --max-jobs auto --no-link .#lambdaDeployCargoArtifacts
+          attrs=(); for h in ${{ matrix.shape.handlers }}; do attrs+=(".#deploy-lambda-$h"); done
+          start=$(date +%s)
+          nix build --max-jobs auto --no-link --print-build-logs --print-out-paths "${attrs[@]}" >outs.txt 2>build.log; status=$?
+          end=$(date +%s)
+          hashes=""; while read -r o; do [ -n "$o" ] || continue; for z in "$o"/*/bootstrap.zip; do hashes+="$(basename "$(dirname "$z")")=$(unzip -p "$z" bootstrap | sha256sum | cut -c1-16) "; done; done <outs.txt
+          third=$(grep -E 'Compiling ' build.log | grep -vc '(/nix/var' || true)
+          echo "RESULT shape=${{ matrix.shape.name }} handler_build_s=$((end-start)) status=$status third_party=$third bootstrap=[$hashes]"
+          [ "$status" = 0 ] || tail -40 build.log
+          exit "$status"
       - if: always()
         uses: ./.github/actions/teardown-nix
