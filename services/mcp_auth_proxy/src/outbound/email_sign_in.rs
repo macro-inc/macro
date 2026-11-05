@@ -109,7 +109,7 @@ fn seconds_until_expiry(access_token: &str) -> anyhow::Result<u64> {
 
 impl EmailCodeProvider for AuthServiceEmailCodes {
     fn request_code<'a>(&'a self, email: &'a str) -> EmailCodeRequestFuture<'a> {
-        let span = tracing::debug_span!("AuthServiceEmailCodes::request_code");
+        let span = tracing::debug_span!("mcp_oauth.email_code.request");
         Box::pin(
             async move {
                 let response = self
@@ -148,7 +148,7 @@ impl EmailCodeProvider for AuthServiceEmailCodes {
     }
 
     fn redeem_code<'a>(&'a self, email: &'a str, code: &'a str) -> EmailCodeTokensFuture<'a> {
-        let span = tracing::debug_span!("AuthServiceEmailCodes::redeem_code");
+        let span = tracing::debug_span!("mcp_oauth.email_code.redeem");
         Box::pin(
             async move {
                 let response = self
