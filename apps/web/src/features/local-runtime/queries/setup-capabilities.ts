@@ -12,6 +12,7 @@ import {
 } from '@queries/agents/agents';
 import { agentModelsQueryOptions } from '@queries/agents/models';
 import { queryClient } from '@queries/client';
+import { patchHarness } from '@queries/harnesses/harnesses';
 import type { SetupCapabilities } from '../core/setup';
 
 /**
@@ -64,6 +65,9 @@ export function useSetupCapabilities(): SetupCapabilities {
     detectAgents: macrodDetectAgents,
     startDaemon: macrodStart,
     waitForRunning,
+    allowPermissionBypass: async (harnessId) => {
+      await patchHarness({ harnessId, allowPermissionBypass: true });
+    },
     listAgents: async () =>
       (await fetchAgentsList()).map((agent) => ({
         botId: agent.bot.id,

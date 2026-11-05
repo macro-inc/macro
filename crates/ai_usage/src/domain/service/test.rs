@@ -499,8 +499,15 @@ async fn admin_policy_protects_usage_and_price_changes() {
 async fn rejects_invalid_prices_before_writing() {
     let repo = FakeRepo::default();
     let service = UsageServiceImpl::new(repo.clone());
-    for price in [-0.001, f32::NAN, f32::INFINITY] {
-        let pricing = ModelPricing::Audio { per_minute: price };
+    for pricing in [-0.001, f32::NAN, f32::INFINITY]
+        .into_iter()
+        .flat_map(|price| {
+            [
+                ModelPricing::Audio { per_minute: price },
+                ModelPricing::ProviderCredits { per_credit: price },
+            ]
+        })
+    {
         assert!(matches!(
             service
                 .set_pricing(user(), "whisper-1".into(), pricing)
@@ -586,4 +593,68 @@ async fn cache_tokens_without_a_cache_rate_record_an_unpriced_row() {
         }
     );
     assert!(rows[0].cost.price.is_none());
+}
+
+#[tokio::test]
+async fn records_provider_credits_at_the_model_credit_rate() {
+    let repo = FakeRepo::default();
+    *repo.pricing.lock().unwrap() = Some(ModelPricing::ProviderCredits { per_credit: 0.008 });
+    let event = UsageContext::new(AiFeature::WebSearch, user())
+        .into_provider_credits_event("tavily".into(), 2);
+    UsageServiceImpl::new(repo.clone())
+        .record_now(event)
+        .await
+        .unwrap();
+    let rows = repo.rows.lock().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].user, user());
+    assert_eq!(rows[0].feature, AiFeature::WebSearch);
+    assert_eq!(rows[0].cost.model, "tavily");
+    assert_eq!(
+        rows[0].cost.amount,
+        UsageAmount::ProviderCredits { credits: 2 }
+    );
+    let price = rows[0].cost.price.unwrap();
+    assert_eq!(
+        price.pricing,
+        ModelPricing::ProviderCredits { per_credit: 0.008 }
+    );
+    assert!((price.total - 0.016).abs() < 1e-7);
+}
+
+#[tokio::test]
+async fn credits_and_other_units_never_price_each_other() {
+    let token_rates = ModelPricing::Tokens {
+        input: 1.0,
+        output: 1.0,
+        cache_read: None,
+        cache_write: None,
+    };
+    let credit_rate = ModelPricing::ProviderCredits { per_credit: 0.008 };
+    let credits = UsageAmount::ProviderCredits { credits: 2 };
+    for (pricing, amount) in [
+        (token_rates, credits),
+        (ModelPricing::Audio { per_minute: 0.006 }, credits),
+        (
+            credit_rate,
+            UsageAmount::Tokens {
+                input: 1_000,
+                output: 1_000,
+                cache_read: 0,
+                cache_write: 0,
+            },
+        ),
+        (
+            credit_rate,
+            UsageAmount::Audio {
+                duration: std::time::Duration::from_secs(60),
+            },
+        ),
+    ] {
+        assert_eq!(
+            Price::compute(pricing, amount),
+            None,
+            "{pricing:?} {amount:?}"
+        );
+    }
 }
