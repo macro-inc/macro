@@ -4229,6 +4229,40 @@ export const setChannelPictureBody = zod
   );
 
 /**
+ * Grants the channel's current members access to one item, the way posting
+it in a message does. Calendar events can be shared only from the caller's
+own calendar, and private or confidential events are refused. Sharing again
+is a no-op.
+ * @summary Handler for `POST /channels/{channel_id}/shares`.
+ */
+export const shareWithChannelParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const shareWithChannelBody = zod
+  .object({
+    entityId: zod
+      .uuid()
+      .describe('Id of the item to share. For a calendar event, the event id.'),
+    entityType: zod
+      .enum([
+        'calendar_event',
+        'document',
+        'project',
+        'database',
+        'form',
+        'call',
+        'thread',
+        'agent_session',
+        'external_chat',
+      ])
+      .describe(
+        'Entity types a channel grant can cover.\n\nValues are the stored entity types. `calendar` is accepted for a calendar\nchip, whose stored type is `calendar_event`.'
+      ),
+  })
+  .describe("Request to share one item with a channel's current members.");
+
+/**
  * @summary Handler for `POST /channels/{channel_id}/webhook`.
  */
 export const postChannelBotWebhookParams = zod.object({
