@@ -87,6 +87,7 @@ import { match } from 'ts-pattern';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
+import { createCacheErrorThrottle } from './cache-error-throttle';
 import { createCacheRecovery } from './cache-recovery';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
 import { emailThreadSortTs } from './email-thread-sort';
@@ -723,6 +724,7 @@ export function getGraphqlSoupClient(): Client {
   if (cachedClient) return cachedClient;
   disposeUncachedRealtimeClient();
   cachedClient = (() => {
+    const cacheErrorThrottle = createCacheErrorThrottle();
     const reportCacheError = (
       error: unknown,
       phase: 'initialization' | 'operation',
@@ -740,6 +742,12 @@ export function getGraphqlSoupClient(): Client {
           isOwnerLockUnavailableError(error)
         )
           return;
+        // One owner loss rejects every queued operation at once.
+        const throttled =
+          phase === 'operation'
+            ? cacheErrorThrottle.admit(error, operationKind)
+            : { report: true, suppressed: 0 };
+        if (!throttled.report) return;
         // Caught cache failures never reach window.unhandledrejection. Report
         // them through the Datadog-bound exporter without query/variable data.
         Telemetry.error(error, {
@@ -747,6 +755,9 @@ export function getGraphqlSoupClient(): Client {
           'cache.backend': native ? 'native' : 'turso-wasm-opfs',
           'cache.phase': phase,
           ...(operationKind ? { 'cache.operation_kind': operationKind } : {}),
+          ...(throttled.suppressed > 0
+            ? { 'cache.suppressed_count': throttled.suppressed }
+            : {}),
         });
       } catch {
         // Observability must not prevent network fallback or cache cleanup.
