@@ -154,7 +154,7 @@ export function TutorialVideoDialog(props: {
               tabIndex={-1}
               aria-hidden="true"
               onClick={play}
-              class="absolute inset-0 bg-[black]/30 bg-radial from-[black]/40 to-[black]/0 to-75%"
+              class="absolute inset-0 bg-[black]/45"
             />
             <div class="pointer-events-none absolute inset-0 grid place-items-center">
               <button
