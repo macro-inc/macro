@@ -78,11 +78,17 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
         </h1>
         <p class="mt-7 max-w-[440px] font-[Inter_Variable] text-sm font-normal leading-6 text-ink-muted max-[359px]:text-[13px] sm:text-[15px] [text-wrap:balance]">
           {withMicrosoft() ? (
-            // Fixed breaks: each line is shorter than the one above, the last
-            // 60–80% of it, and the first no wider than the heading's last line.
+            // Fixed breaks: line 2 is 60–80% of line 1, and line 1 is no wider
+            // than the heading's last line. Phones only fit the short version.
             <>
-              Sync your inbox and calendar.
-              <br /> Disconnect anytime.
+              <span class="sm:hidden">
+                Sync your inbox and calendar.
+                <br /> Disconnect anytime.
+              </span>
+              <span class="hidden sm:inline">
+                Sync your inbox and calendar securely.
+                <br /> You can disconnect anytime.
+              </span>
             </>
           ) : personal() ? (
             'Add a personal account for email and calendar in Macro. This is optional; your Macro sign-in stays the same. Agents ask for approval before sending email, and you can disconnect anytime.'
