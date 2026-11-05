@@ -94,4 +94,4 @@ where
 }
 
 /// Timing probe.
-pub const CI_SPEED_GEN_LARGE: u32 = 3;
+pub const CI_SPEED_GEN_LARGE: u32 = 4;
