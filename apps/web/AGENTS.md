@@ -272,7 +272,7 @@ nix develop --command just run_local --instance <name>
 - First bring-up is slow (a build of every service plus the agent-harness sandbox image); later runs reuse the caches. It needs no terminal: without one it runs in the background and returns once ready, and survives your shell dying. `just run_local rebuild --instance <name>` rebuilds changed Rust services in place (`r` while attached), and `just run_local status --json --instance <name>` reports its state. See [Run without a terminal](../../docs/development/running-locally.md#run-without-a-terminal).
 - No accounts are pre-created: passwordless login registers any email on demand, and the one-time code lands in the instance's Mailpit (endpoint in `just status_local`). `just seed-scenario apply --file seed/scenarios/team-perms.json` seeds multi-user team fixtures with printed login links.
 - Full details, Doppler vs no-Doppler modes, and port-conflict debugging: `docs/development/running-locally.md`.
-- First run in a fresh worktree spends a few minutes on `just ensure-cache-wasm` / `just ensure-agent-fold-wasm` before Vite serves.
+- `just run_local` prepares the wasm packages (`bun run dev:prepare`) while the services build, from a machine-wide cache keyed by each package's sources (`~/.cache/macro-local/wasm-pkgs`); only a package no worktree has built yet compiles, which takes a few minutes. A bare `bun run dev` doesn't use that cache.
 - That tab is pointed at **real dev data**. Treat creates, edits, and deletes as real, and discard drafts you open.
 
 ### Instrumenting a flash, blank, or remount
