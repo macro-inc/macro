@@ -161,6 +161,12 @@ tools — hexagonal, heavily feature-gated.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
   through `set_thread_inbox`, and read Outlook inbox, trash, and junk state from
   `email_message_mailbox_facts`, never from labels.
+- Sender domain counts (`domain/sender_domain_counts.rs`, behind email-service's
+  `POST /email/senders/domain-counts`) ask Gmail and Graph live, because they
+  serve onboarding before any mail has synced. Only the caller's own active
+  inboxes count; delegated inboxes are left out. Queries run in a spawned task
+  and the request stops waiting after 5 s: never cancel one mid-flight, since a
+  cancelled Graph request keeps its mailbox gate slot until the 90 s lease ends.
 - Read receipts (`domain/read_receipts.rs`) own pixel policy for every send
   path: strip existing Macro pixels, track only HTML bodies, never block
   delivery on a tracking failure, and count opens only for sent messages.

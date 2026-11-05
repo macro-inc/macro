@@ -51,6 +51,10 @@ pub mod attachment_access;
 #[cfg(feature = "mailbox")]
 pub mod message_source;
 
+/// Recent mail per sender domain across the caller's inboxes, read live.
+#[cfg(feature = "mailbox")]
+pub mod sender_domain_counts;
+
 /// Provider-neutral mailbox connection entitlements.
 pub mod inbox_entitlement;
 
