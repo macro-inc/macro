@@ -108,11 +108,15 @@ fn main() -> Result<()> {
                 .context("max depth is not valid UTF-8")?
                 .parse()
                 .context("max depth is not a number")?;
-            run(Path::new(changed_files_path), base_revision, Some(max_depth))
+            run(
+                Path::new(changed_files_path),
+                base_revision,
+                Some(max_depth),
+            )
         }
-        _ => bail!(
-            "usage: cargo x nextest-filter <changed-files-path> <base-revision> [max-depth]"
-        ),
+        _ => {
+            bail!("usage: cargo x nextest-filter <changed-files-path> <base-revision> [max-depth]")
+        }
     }
 }
 
