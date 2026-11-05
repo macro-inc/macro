@@ -13,8 +13,11 @@ jobs:
     steps:
     - name: Put Cargo on PATH
       run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      with: {}
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        fetch-depth: '0'
     - id: filter
       name: Filter changed paths
       uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
@@ -27,6 +30,7 @@ jobs:
             - '.github/actions/setup-nix-dev-shell/**'
             - '.github/actions/teardown-nix/**'
             - '.github/workflows/code_check_infra.yml'
+        token: ''
   biome-check:
     needs:
     - path-check

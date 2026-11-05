@@ -70,7 +70,9 @@ pub const PORTED: &[Ported] = &[
 /// `types` filter on pull requests. Gitea does not match `synchronize` there, so
 /// a filtered workflow would never re-run on a push; the default activity types
 /// are what these workflows want. Each job first puts Cargo's bin directory on
-/// PATH, which hosted runners do and the job image does not.
+/// PATH, which hosted runners do and the job image does not. `dorny/paths-filter`
+/// gets no token, so it diffs with git instead of asking GitHub's API, and its job
+/// checks out full history for that.
 pub fn port(yaml: &str, dropped: &[&str]) -> Result<String> {
     let mut root: Value = serde_yaml::from_str(yaml).context("parsing workflow")?;
     if let Some(pull_request) = root
@@ -115,6 +117,33 @@ pub fn port(yaml: &str, dropped: &[&str]) -> Result<String> {
                     .and_then(Value::as_str)
                     .is_some_and(|uses| uses.starts_with("namespacelabs/nscloud-cache-action"))
             });
+            let uses = |step: &Value, action: &str| {
+                step.get("uses")
+                    .and_then(Value::as_str)
+                    .is_some_and(|uses| uses.starts_with(action))
+            };
+            if steps.iter().any(|step| uses(step, "dorny/paths-filter")) {
+                for step in steps.iter_mut() {
+                    let input = if uses(step, "dorny/paths-filter") {
+                        Some(("token", Value::from("")))
+                    } else if uses(step, "actions/checkout") {
+                        Some(("fetch-depth", Value::from("0")))
+                    } else {
+                        None
+                    };
+                    if let (Some((key, value)), Some(with)) = (
+                        input,
+                        step.as_mapping_mut().map(|step| {
+                            step.entry(Value::from("with"))
+                                .or_insert_with(|| Value::Mapping(Default::default()))
+                        }),
+                    ) {
+                        if let Some(with) = with.as_mapping_mut() {
+                            with.insert(Value::from(key), value);
+                        }
+                    }
+                }
+            }
         }
     }
     serde_yaml::to_string(&root).context("serializing ported workflow")
@@ -138,6 +167,9 @@ jobs:
     - uses: actions/checkout@abc
   paths:
     runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@abc
+    - uses: dorny/paths-filter@abc
   ios:
     runs-on: nscloud-macos-sequoia-arm64-6x14
 "#;
@@ -151,6 +183,9 @@ jobs:
         assert_eq!(build["steps"].as_sequence().unwrap().len(), 2);
         assert_eq!(build["steps"][0]["name"], "Put Cargo on PATH");
         assert!(ported["jobs"].get("ios").is_none());
+        let paths = &ported["jobs"]["paths"]["steps"];
+        assert_eq!(paths[1]["with"]["fetch-depth"], "0");
+        assert_eq!(paths[2]["with"]["token"], "");
         assert!(ported["on"]["pull_request"].get("types").is_none());
         assert!(ported["on"]["pull_request"].get("branches").is_some());
     }
