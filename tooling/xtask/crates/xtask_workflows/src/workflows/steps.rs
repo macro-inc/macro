@@ -246,15 +246,18 @@ pub fn setup_dev_shell_named(name: &str) -> Step<Use> {
     setup_dev_shell().add_with(("shell", name))
 }
 
-/// Mount the Namespace profile's persisted cache volume: `cache: rust` persists
-/// the cargo registry/git, and `path:` persists the Nix store. Compiled objects
-/// deliberately use Namespace's official remote sccache instead of this volume.
+/// Mount the Namespace profile's persisted cache volume: cargo's registry, git
+/// checkouts and `target/`, and the Nix store. Listing the paths mounts in under a
+/// second, where the action's `cache: rust` mode took about 12 s to find the same
+/// ones. Compiled objects deliberately use Namespace's official remote sccache
+/// instead of this volume.
 /// `continue-on-error` because the volume is a pure optimization — a failure
 /// just means cold Cargo/Nix state, never a wrong build.
 pub fn mount_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume")
-        .add_with(("cache", "rust"))
-        .add_with(("path", xtask_paths::runtime_path!("/nix").as_str()))
+    nscloud_cache_action("Mount Namespace cache volume").add_with((
+        "path",
+        "/nix\n./target\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n/home/runner/.cargo/.global-cache",
+    ))
 }
 
 /// Mount the nextest filter's build plus cargo's registry and git checkouts.
