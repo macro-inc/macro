@@ -16,7 +16,6 @@ secret!(ANDROID_RELEASE_DOPPLER_TOKEN);
 secret!(AWS_ACCESS_KEY);
 secret!(AWS_SECRET_ACCESS_KEY);
 secret!(CLOUDFLARE_API_TOKEN);
-secret!(DAYTONA_API_KEY);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
 secret!(DOPPLER_TOKEN);
@@ -100,10 +99,6 @@ pub const VITEST_MODULE_CACHE_VOLUME_DIR: &str = "/home/runner/.cache/vitest-mod
 /// Browser wasm packages keyed by their inputs, so the PR build reuses a package
 /// whose crates did not change (`apps/web/scripts/cached-wasm-build.sh`).
 pub const WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs";
-
-/// GHCR repository for the agent-harness sandbox image (the same Dockerfile
-/// Daytona snapshots). Pushed as `:$SHA` on PRs and `:$SHA` + `:latest` on main.
-pub const AGENT_HARNESS_GHCR_IMAGE: &str = "ghcr.io/macro-inc/macro-agent-harness";
 
 /// The repo-wide env block (mirrors the original top-level `env:`). Defaults the
 /// linker to `lld`; the heavy jobs override `RUSTFLAGS` to use `mold`.
