@@ -1,0 +1,123 @@
+# Experiment only, never merged. Same setup as the `test` job in
+# code_check_cloud_storage.yml, compile only, with cargo timings.
+name: ci speed compile experiment
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_TERM_COLOR: never
+  CARGO_PROFILE_DEV_DEBUG: limited
+  CARGO_PROFILE_TEST_DEBUG: limited
+  RUST_BACKTRACE: '1'
+  RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+jobs:
+  compile:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: baseline-j2, jobs: '2' }
+          - { variant: baseline-j8, jobs: '8' }
+    name: compile (${{ matrix.variant }})
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    env:
+      CARGO_BUILD_JOBS: ${{ matrix.jobs }}
+      SCCACHE_IDLE_TIMEOUT: '0'
+      SCCACHE_LOG: debug
+      SCCACHE_ERROR_LOG: /tmp/sccache-server.log
+      RUST_PACKAGES: agent_code_mode agent_egress agent_harness agent_harness_service agent_inmem ai_projections ai_tools authentication_service calendar_events calendar_scheduling calendar_service channel_bots collab_surface complete_graph convert_service deleted_item_poller document_storage_service documents docx_unzip_handler email email_api_client email_focus_worker email_service email_suppression_handler graphql_calendar graphql_scheduled_action macro_db_client macro_middleware memory reminders scheduled_action search_processing_service search_service seed_cli soup user_link_cleanup_handler
+    services:
+      postgres:
+        image: pgvector/pgvector:pg14
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: macrodb
+        ports: ['5432:5432']
+        options: '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5 --shm-size 1g'
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: '--health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          clean: 'false'
+          persist-credentials: 'false'
+      - name: Mount Namespace cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: rust
+          path: /nix
+        continue-on-error: true
+      - name: what is mounted
+        run: |
+          df -h | grep -v tmpfs || true
+          mount | grep -E 'cache|target|cargo|rustup|/nix' | cut -c1-160 || true
+          ls -la . | head -40
+          ls -la target 2>/dev/null | head || echo no target
+          du -sh target ~/.cargo/registry ~/.cargo/git 2>/dev/null || true
+      - uses: './.github/actions/setup-nix'
+      - uses: './.github/actions/setup-nix-dev-shell'
+      - name: Configure Namespace remote sccache
+        run: |-
+          set -euo pipefail
+          env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+          trap 'rm -f "$env_file"' EXIT
+          nsc cache sccache setup --cache_name sccache-ci > "$env_file"
+          while IFS= read -r line; do
+            k="${line%%=*}"; v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;; esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          sccache --stop-server >/dev/null 2>&1 || true
+      - name: Start sccache server
+        run: sccache --start-server
+      - name: Build code-mode assets
+        run: |
+          assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+          echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+      - name: configure postgres
+        run: |
+          postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
+          docker exec -i "$postgres_container" psql -U user -d macrodb <<'SQL'
+          ALTER SYSTEM SET fsync = off;
+          ALTER SYSTEM SET synchronous_commit = off;
+          ALTER SYSTEM SET full_page_writes = off;
+          ALTER SYSTEM SET max_locks_per_transaction = 8192;
+          SQL
+          docker restart "$postgres_container"
+          until docker exec "$postgres_container" pg_isready -U user -d macrodb; do sleep 1; done
+      - name: prepare tests
+        run: just setup_test_envs && just initialize_dbs && just setup_test_template
+      - name: compile tests
+        run: |
+          set -euo pipefail
+          pkg_args=()
+          for p in $RUST_PACKAGES; do pkg_args+=(-p "$p"); done
+          # What `cargo nextest run` runs for its build phase.
+          time cargo test --no-run --timings --config 'profile.dev.package."*".debug=false' --all-features "${pkg_args[@]}"
+      - name: summarize
+        if: always()
+        run: |
+          sccache --show-stats || true
+          du -sh target target/debug/deps 2>/dev/null || true
+          ls -S target/debug/deps | head -5 || true
+          find target/debug/deps -maxdepth 1 -type f -executable -printf '%s\n' | awk '{s+=$1;n++} END {print n" executables, "s/1e9" GB"}'
+          mkdir -p /tmp/exp
+          grep -E 'Cache (hit|miss)|Compiled in|parse_arguments: CannotCache' /tmp/sccache-server.log | sed -E 's/^\[[^]]*\] *//' > /tmp/exp/sccache-outcomes.log || true
+          cp target/cargo-timings/cargo-timing.html /tmp/exp/ || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: timings-${{ matrix.variant }}
+          path: /tmp/exp
+          retention-days: 3
+      - uses: './.github/actions/teardown-nix'
+        if: always()
+concurrency:
+  group: ci-speed-compile-${{ github.ref }}
+  cancel-in-progress: false
