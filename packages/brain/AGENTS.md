@@ -12,6 +12,8 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
 - `src/brain.ts`: the wiring from events to turns and commits.
 - `src/control.ts`: every route a turn's `brain` command can call.
 - `template/`: the persona files new agent repos are seeded from.
+  `crates/agent_git/src/domain/template.rs` embeds these files and renders
+  persona fields plus the creating admin's Macro user ID into the charter.
 
 ## Scope
 

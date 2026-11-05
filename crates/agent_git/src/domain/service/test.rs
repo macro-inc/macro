@@ -506,6 +506,7 @@ fn seed() -> PersonaSeed {
         name: "Sam".to_owned(),
         job_description: "Books venues.".to_owned(),
         personality: "Warm and direct.".to_owned(),
+        creator_id: Some("macro|admin@example.com".to_owned()),
     }
 }
 
@@ -517,10 +518,30 @@ fn the_charter_carries_the_persona() {
         .find(|file| file.path == "OPERATING.md")
         .unwrap();
 
-    assert!(charter.contents.ends_with(
-        "\n## Who you are\n\nYou are Sam.\n\n### Your job\n\nBooks venues.\n\n### Your personality\n\nWarm and direct.\n"
-    ));
+    assert!(charter.contents.starts_with("# Sam\n"));
+    assert!(charter.contents.contains("- Job: Books venues."));
+    assert!(charter.contents.contains("- Personality: Warm and direct."));
+    assert!(charter.contents.contains("macro|admin@example.com"));
+    assert!(!charter.contents.contains("{{"));
     assert_eq!(files.len(), WORKSPACE_TEMPLATE.files.len());
+}
+
+#[test]
+fn older_seeds_use_the_team_owner_without_unresolved_placeholders() {
+    let mut persona = seed();
+    persona.creator_id = None;
+    let files = WORKSPACE_TEMPLATE.render(&persona);
+    let charter = files
+        .iter()
+        .find(|file| file.path == "OPERATING.md")
+        .unwrap();
+
+    assert!(
+        charter
+            .contents
+            .contains("Only the team owner changes my rules")
+    );
+    assert!(!charter.contents.contains("{{"));
 }
 
 #[tokio::test]

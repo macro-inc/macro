@@ -154,7 +154,27 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
     )
     .await;
     assert!(first.status.success(), "{first:?}");
-    assert!(work.path().join("first/OPERATING.md").exists());
+    // A fresh HTTP clone must contain every file required before the brain
+    // can start; the first turn cannot repair an incomplete seed.
+    for required in [
+        "OPERATING.md",
+        "brain.lock",
+        "config/budget.json",
+        "config/events.json",
+        "config/jev.json",
+        "memory/self.json",
+        "prompts/respond.md",
+        "prompts/heartbeat.md",
+        "prompts/work.md",
+    ] {
+        assert!(
+            work.path().join("first").join(required).is_file(),
+            "{required}"
+        );
+    }
+    let charter = std::fs::read_to_string(work.path().join("first/OPERATING.md")).unwrap();
+    assert!(charter.contains("macro|admin@example.com"));
+    assert!(!charter.contains("{{"));
 
     std::fs::write(work.path().join("first/memory.md"), "remembered\n").unwrap();
     let added = git(&work.path().join("first"), &["add", "memory.md"]).await;
@@ -337,5 +357,6 @@ fn seed() -> agent_git::domain::template::PersonaSeed {
         name: "Sam".to_owned(),
         job_description: "Books venues.".to_owned(),
         personality: "Warm and direct.".to_owned(),
+        creator_id: Some("macro|admin@example.com".to_owned()),
     }
 }
