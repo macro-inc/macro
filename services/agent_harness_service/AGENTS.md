@@ -170,6 +170,11 @@ access. Lifecycle, runtime provider connections, billing, and memory stay owner-
 
 ## Configuration and lifecycle
 
+Computer fleets require `COMPUTERS_CONTROL_PLANE_ID` whenever `COMPUTERS_FLEET`
+is set. Read the stable identity from Doppler in deployed environments; local
+stacks explicitly set `local-<instance>`. Distinct control planes sharing a host
+must use distinct identities; replicas of one control plane share an identity.
+
 All feature configs read the same harness `APP_SECRETS_JSON`; the harness
 Doppler validation binary validates each config. Stable public origins resolve
 once at startup through `macro_service_urls`: `McpPublicUrl` preserves the

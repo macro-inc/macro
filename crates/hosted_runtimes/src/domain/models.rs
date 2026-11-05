@@ -10,6 +10,34 @@ use crate::domain::enrollment::Persona;
 use crate::domain::lifecycle::{Billing, ComputerState, HostId, PaymentOutcome, Phase, Power};
 use crate::domain::size::ComputerSize;
 
+/// Stable identity shared by replicas of one computer control plane.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ControlPlaneId(String);
+
+/// An identity that cannot safely be used in fleet ownership metadata.
+#[derive(Debug, thiserror::Error)]
+#[error("COMPUTERS_CONTROL_PLANE_ID must be nonempty ASCII alphanumerics, hyphens or underscores")]
+pub struct InvalidControlPlaneId;
+
+impl ControlPlaneId {
+    /// Reject empty identities and characters outside ASCII letters, digits, `_` and `-`.
+    pub fn parse(value: String) -> Result<Self, InvalidControlPlaneId> {
+        if value.is_empty()
+            || !value
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        {
+            return Err(InvalidControlPlaneId);
+        }
+        Ok(Self(value))
+    }
+
+    /// The exact identity written into fleet ownership metadata.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// One computer allocated to a team.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Computer {

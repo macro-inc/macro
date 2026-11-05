@@ -31,6 +31,13 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 
 ## Contracts (PR B, agent brains, builds on these — keep them stable)
 
+- **Fleet ownership**: Require explicit `COMPUTERS_CONTROL_PLANE_ID` whenever
+  `COMPUTERS_FLEET` is set, shared across replicas but distinct per control plane.
+  Stamp Incus `user.macro.control_plane` / Docker `macro.control_plane` at create;
+  `Fleet::instances` lists only that owner's instances. Reconcile independently
+  checks ownership and deletes orphans only after ten minutes. Creation timestamps
+  are stamped once as `user.macro.created_at` / `macro.created_at`; missing or
+  invalid timestamps prohibit orphan deletion. Never adopt unlabelled instances.
 - **Purchase**: `ComputerService::purchase(PurchaseRequest { team_id, created_by, size, name, persona, extra_items, billing })`
   → `computer_id`. A Stripe purchase adds the computer's item plus
   every `extra_items` entry in one subscription update (`SubscriptionItem { price_id, quantity }`, quantity
@@ -128,8 +135,10 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 
 - Lifecycle state stores the phase tag at `state.phase.phase`; SQL selectors must read that nested tag.
 - V1 runs one fleet (one host) per control plane; an effect for another host fails.
-- Scope Docker fleet listing to its configured network so reconciliation never
-  treats another local stack's computers as orphans.
+- Shared hosts require distinct `COMPUTERS_CONTROL_PLANE_ID` per control plane;
+  only owned instances are reconciled. Local stacks use `local-<instance>`.
+- Scope Docker fleet listing to both its configured network and control-plane
+  label; never reconcile foreign or unlabelled guests on shared hosts.
 - `PageOperator` is the log event `computer needs an operator` (error level);
   alerts key on it.
 - Each computer's effects run strictly in outbox order (`lease_effects` leases

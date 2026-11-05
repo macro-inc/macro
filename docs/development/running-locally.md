@@ -450,18 +450,21 @@ and Compose config after changing fleets or updating these URL mappings.
 just run_local --instance computers --computers-incus
 ```
 
+Both the devbox and runtime must be logged into the same Tailscale tailnet.
+`tailscale ip -4 runtime-dev-1` must return an IPv4 address before startup;
+xtask fails loudly if it cannot resolve one. Set `COMPUTERS_INCUS_ADDRESS=<IPv4>`
+to override discovery. Compose receives the numeric
+`COMPUTERS_INCUS_URL=https://<runtime-tailnet-ip>:8443`, so it needs no MagicDNS
+and no socat/IAP sidecars.
+
 This needs the control-plane identity
 `~/.config/macro-computers/dev-client.{crt,key}` (see
-[`nix/hosts/README.md`](../../nix/hosts/README.md)) and the Incus tunnel
-(`nix/hosts/computers-tunnels.sh incus`, `localhost:18443`). On first use the
-stack reads the host's certificate through the tunnel into
-`~/.config/macro-computers/dev-server.crt`, checks its pinned SHA-256
-fingerprint on every start, and stops if the fingerprint does not match.
-
-The host firewall drops traffic from containers to the host, so two `socat`
-sidecars relay the tunnel into Compose over a unix socket:
-`computers_incus_uplink` (host network) and `computers_incus_relay`
-(`computers-incus:8443`), which is the harness's `COMPUTERS_INCUS_URL`.
+[`nix/hosts/README.md`](../../nix/hosts/README.md) for enrollment, rebuild,
+firewall rules and IAP recovery). On first use xtask fetches the server
+certificate over Tailscale into `~/.config/macro-computers/dev-server.crt`,
+verifying the pinned SHA-256 fingerprint before saving it and on every start.
+The Incus client pins the certificate bytes, so SAN/name mismatch is expected
+and does not weaken verification.
 
 Enrollment stores the fleet-reachable egress URL in macrod’s config. Computer
 sessions use it for first-party MCP servers and the Anthropic gateway, while
@@ -481,8 +484,10 @@ SSH key comes from an agent, add
 `--setenv=SSH_AUTH_SOCK="$SSH_AUTH_SOCK"` to `systemd-run`; user services do not
 inherit the launching shell's agent socket.
 
-Starting the stack again wipes the database but not the VMs: delete leftover instances
-on the host with `incus delete --force <name>`.
+The Incus control API uses the runtime tailnet address. Persona bootstrap
+continues to use the bridge and all six reverse listeners above, including
+the computer gateway and repository service. Preserve these listeners when
+updating a named preview. Existing guests survive stack updates.
 
 Check the generated wiring without starting anything:
 

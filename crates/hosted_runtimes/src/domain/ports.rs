@@ -6,7 +6,8 @@ use uuid::Uuid;
 use crate::domain::enrollment::Enrollment;
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, TimerKind};
 use crate::domain::models::{
-    BillingInterval, Computer, Host, HostRegistration, NewComputer, Quote, SubscriptionItem,
+    BillingInterval, Computer, ControlPlaneId, Host, HostRegistration, NewComputer, Quote,
+    SubscriptionItem,
 };
 use crate::domain::size::ComputerSize;
 
@@ -233,6 +234,9 @@ pub trait Billing: Send + Sync + 'static {
 pub trait Fleet: Send + Sync + 'static {
     type Err: FleetError;
 
+    /// Stable owner of every instance this fleet creates and lists.
+    fn control_plane_id(&self) -> &ControlPlaneId;
+
     /// Create the instance from the base image, carrying `enrollment`, and
     /// start it when `start`. An instance that already exists is reused.
     fn create(
@@ -262,14 +266,21 @@ pub trait Fleet: Send + Sync + 'static {
         computer_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Instances that exist on this fleet's host, by computer id, with
-    /// whether each is running.
-    fn instances(
-        &self,
-    ) -> impl Future<Output = Result<Vec<(Uuid, InstanceStatus)>, Self::Err>> + Send;
+    /// Only instances stamped with this fleet's control-plane identity.
+    fn instances(&self) -> impl Future<Output = Result<Vec<FleetInstance>, Self::Err>> + Send;
 
     /// The host this fleet drives, for registration.
     fn host(&self) -> impl Future<Output = Result<HostRegistration, Self::Err>> + Send;
+}
+
+/// Ownership and age observed on the guest, independent of the computer row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FleetInstance {
+    pub computer_id: Uuid,
+    pub status: InstanceStatus,
+    pub control_plane_id: ControlPlaneId,
+    /// Missing or malformed timestamps never permit orphan deletion.
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 /// What the fleet observes about an instance.

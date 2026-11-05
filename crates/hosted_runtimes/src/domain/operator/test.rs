@@ -8,7 +8,7 @@ use super::*;
 use crate::domain::enrollment::{Persona, PersonaService};
 use crate::domain::fakes::{FakeError, FakeRepo, FixedClock, HOST, TEAM, now};
 use crate::domain::lifecycle::ComputerState;
-use crate::domain::models::{HostRegistration, NewComputer};
+use crate::domain::models::{ControlPlaneId, HostRegistration, NewComputer};
 use crate::domain::ports::HostedPairing;
 use crate::domain::size::ComputerSize;
 
@@ -37,11 +37,17 @@ struct FakeFleet {
     missing: bool,
     calls: Mutex<Vec<String>>,
     enrollments: Mutex<Vec<(Enrollment, bool)>>,
-    instances: Mutex<Vec<(Uuid, InstanceStatus)>>,
+    instances: Mutex<Vec<FleetInstance>>,
 }
 
 impl Fleet for FakeFleet {
     type Err = FakeFleetError;
+
+    fn control_plane_id(&self) -> &ControlPlaneId {
+        static ID: std::sync::LazyLock<ControlPlaneId> =
+            std::sync::LazyLock::new(|| ControlPlaneId::parse("test-a".to_owned()).unwrap());
+        &ID
+    }
 
     async fn create(
         &self,
@@ -112,7 +118,7 @@ impl Fleet for FakeFleet {
         Ok(())
     }
 
-    async fn instances(&self) -> Result<Vec<(Uuid, InstanceStatus)>, FakeFleetError> {
+    async fn instances(&self) -> Result<Vec<FleetInstance>, FakeFleetError> {
         Ok(self.instances.lock().unwrap().clone())
     }
 
@@ -407,7 +413,12 @@ async fn an_effect_that_keeps_failing_fails_the_computer() {
 async fn reconcile_turns_a_missing_instance_into_a_crash_and_removes_orphans() {
     let orphan = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_dead);
     let operator = operator(FakeFleet {
-        instances: Mutex::new(vec![(orphan, InstanceStatus::Running)]),
+        instances: Mutex::new(vec![FleetInstance {
+            computer_id: orphan,
+            status: InstanceStatus::Running,
+            control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+            created_at: Some(now() - Duration::minutes(11)),
+        }]),
         ..FakeFleet::default()
     })
     .await;
@@ -521,7 +532,12 @@ async fn reconcile_recreates_missing_cold_or_failed_guests_but_keeps_existing_gu
                     .instances
                     .lock()
                     .unwrap()
-                    .push((id, InstanceStatus::Stopped));
+                    .push(FleetInstance {
+                        computer_id: id,
+                        status: InstanceStatus::Stopped,
+                        control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                        created_at: Some(now() - Duration::minutes(11)),
+                    });
             }
             operator.reconcile().await.unwrap();
             let computer = operator.repo.get(id).await.unwrap().unwrap();
@@ -624,5 +640,60 @@ async fn a_lost_guest_is_recreated_with_the_saved_persona_and_fresh_pairing() {
     assert_eq!(
         *operator.harnesses.enrollments.lock().unwrap(),
         vec![None, Some(HARNESS)]
+    );
+}
+
+#[tokio::test]
+async fn reconcile_never_destroys_foreign_recent_or_unknown_age_instances() {
+    let operator = operator(FakeFleet {
+        instances: Mutex::new(vec![
+            FleetInstance {
+                computer_id: Uuid::from_u128(1),
+                status: InstanceStatus::Running,
+                control_plane_id: ControlPlaneId::parse("test-b".to_owned()).unwrap(),
+                created_at: Some(now() - Duration::hours(1)),
+            },
+            FleetInstance {
+                computer_id: Uuid::from_u128(2),
+                status: InstanceStatus::Running,
+                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                created_at: Some(now() - Duration::minutes(9)),
+            },
+            FleetInstance {
+                computer_id: Uuid::from_u128(3),
+                status: InstanceStatus::Running,
+                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                created_at: None,
+            },
+            FleetInstance {
+                computer_id: Uuid::from_u128(4),
+                status: InstanceStatus::Running,
+                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                created_at: Some(now() - Duration::minutes(10)),
+            },
+            FleetInstance {
+                computer_id: Uuid::from_u128(5),
+                status: InstanceStatus::Running,
+                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                created_at: Some(now() + Duration::minutes(1)),
+            },
+        ]),
+        ..FakeFleet::default()
+    })
+    .await;
+    operator.reconcile().await.unwrap();
+    assert!(operator.fleet.calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn control_plane_identity_rejects_missing_or_invalid_values() {
+    assert!(ControlPlaneId::parse(String::new()).is_err());
+    assert!(ControlPlaneId::parse(" ".to_owned()).is_err());
+    assert!(ControlPlaneId::parse("test a".to_owned()).is_err());
+    assert_eq!(
+        ControlPlaneId::parse("local-test_a".to_owned())
+            .unwrap()
+            .as_str(),
+        "local-test_a"
     );
 }

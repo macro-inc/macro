@@ -1,186 +1,235 @@
 # Incus host for Macro computers: ZFS-backed VMs on an isolated bridge.
 # Boxes get outbound internet only; the host and internal ranges are closed
-# to them except DNS/DHCP and the reverse-tunnel ports in @tunnel_ports.
-{ config, pkgs, ... }:
+# to them except DNS/DHCP, the control plane, and fallback tunnel ports.
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
+  computers = config.macro.computers;
+  tailnetEnabled = computers.controlPlaneAddress != null;
+  ports = lib.concatMapStringsSep ", " toString computers.controlPlanePorts;
   bridge = "boxbr0";
   bridgeAddress = "10.210.0.1";
   controlPlaneCertificate = ./certs/control-plane-dev.crt;
 in
 {
-  boot.supportedFilesystems = [ "zfs" ];
-  boot.zfs.extraPools = [ "tank" ];
-  boot.zfs.forceImportRoot = false;
-  boot.kernelParams = [ "zfs.zfs_arc_max=8589934592" ];
-  boot.kernelModules = [
-    "kvm-intel"
-    "vhost_vsock"
-  ];
-  services.zfs.autoScrub.enable = true;
-
-  networking.nftables.enable = true;
-  networking.firewall.enable = false;
-
-  virtualisation.incus = {
-    enable = true;
-    ui.enable = false;
-    preseed = {
-      # Loopback only: the control plane reaches it through an SSH tunnel over IAP.
-      config."core.https_address" = "127.0.0.1:8443";
-      networks = [
-        {
-          name = bridge;
-          type = "bridge";
-          config = {
-            "ipv4.address" = "${bridgeAddress}/24";
-            "ipv4.nat" = "true";
-            "ipv6.address" = "none";
-          };
-        }
-      ];
-      storage_pools = [
-        {
-          name = "default";
-          driver = "zfs";
-          config.source = "tank/incus";
-        }
-      ];
-      profiles = [
-        {
-          name = "default";
-          devices = {
-            root = {
-              path = "/";
-              pool = "default";
-              type = "disk";
-            };
-            eth0 = {
-              name = "eth0";
-              network = bridge;
-              type = "nic";
-            };
-          };
-        }
-        {
-          name = "macro-box";
-          description = "Macro computer VM";
-          config = {
-            "migration.stateful" = "true";
-            "security.secureboot" = "false";
-            # /dev/incus inside the guest, so macrod can read user.* keys.
-            "security.guestapi" = "true";
-          };
-          devices = {
-            root = {
-              path = "/";
-              pool = "default";
-              type = "disk";
-            };
-            eth0 = {
-              name = "eth0";
-              network = bridge;
-              type = "nic";
-            };
-          };
-        }
-      ];
+  options.macro.computers = {
+    controlPlaneAddress = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Control-plane devbox Tailscale IPv4 address; null disables box tailnet access.";
+    };
+    controlPlanePorts = lib.mkOption {
+      type = lib.types.listOf lib.types.port;
+      default = [ ];
+      description = "TCP host ports boxes may reach on the control-plane devbox.";
     };
   };
 
-  systemd.services.incus-trust-control-plane = {
-    description = "Trust the Macro control-plane client certificate";
-    after = [ "incus-preseed.service" ];
-    requires = [ "incus.service" ];
-    wantedBy = [ "multi-user.target" ];
-    path = [
-      config.virtualisation.incus.clientPackage
-      pkgs.openssl
+  config = {
+    boot.supportedFilesystems = [ "zfs" ];
+    boot.zfs.extraPools = [ "tank" ];
+    boot.zfs.forceImportRoot = false;
+    boot.kernelParams = [ "zfs.zfs_arc_max=8589934592" ];
+    boot.kernelModules = [
+      "kvm-intel"
+      "vhost_vsock"
     ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
+    services.zfs.autoScrub.enable = true;
+
+    networking.nftables.enable = true;
+    networking.firewall.enable = false;
+
+    virtualisation.incus = {
+      enable = true;
+      ui.enable = false;
+      preseed = {
+        # The input chain admits 8443 only on loopback and tailscale0.
+        config."core.https_address" = if tailnetEnabled then "0.0.0.0:8443" else "127.0.0.1:8443";
+        networks = [
+          {
+            name = bridge;
+            type = "bridge";
+            config = {
+              "ipv4.address" = "${bridgeAddress}/24";
+              "ipv4.nat" = "true";
+              "ipv6.address" = "none";
+            };
+          }
+        ];
+        storage_pools = [
+          {
+            name = "default";
+            driver = "zfs";
+            config.source = "tank/incus";
+          }
+        ];
+        profiles = [
+          {
+            name = "default";
+            devices = {
+              root = {
+                path = "/";
+                pool = "default";
+                type = "disk";
+              };
+              eth0 = {
+                name = "eth0";
+                network = bridge;
+                type = "nic";
+              };
+            };
+          }
+          {
+            name = "macro-box";
+            description = "Macro computer VM";
+            config = {
+              "migration.stateful" = "true";
+              "security.secureboot" = "false";
+              # /dev/incus inside the guest, so macrod can read user.* keys.
+              "security.guestapi" = "true";
+            };
+            devices = {
+              root = {
+                path = "/";
+                pool = "default";
+                type = "disk";
+              };
+              eth0 = {
+                name = "eth0";
+                network = bridge;
+                type = "nic";
+              };
+            };
+          }
+        ];
+      };
     };
-    script = ''
-      fingerprint=$(openssl x509 -in ${controlPlaneCertificate} -noout -fingerprint -sha256 \
-        | cut -d= -f2 | tr -d : | tr '[:upper:]' '[:lower:]')
-      if ! incus query "/1.0/certificates/$fingerprint" >/dev/null 2>&1; then
-        incus config trust add-certificate ${controlPlaneCertificate} --name macro-control-plane-dev
-      fi
-    '';
-  };
 
-  # Box -> local stack reverse tunnels bind on the bridge address.
-  services.openssh.settings = {
-    GatewayPorts = "clientspecified";
-    AllowTcpForwarding = "yes";
-    ClientAliveInterval = 15;
-    ClientAliveCountMax = 4;
-  };
+    systemd.services.incus-trust-control-plane = {
+      description = "Trust the Macro control-plane client certificate";
+      after = [ "incus-preseed.service" ];
+      requires = [ "incus.service" ];
+      wantedBy = [ "multi-user.target" ];
+      path = [
+        config.virtualisation.incus.clientPackage
+        pkgs.openssl
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      script = ''
+        fingerprint=$(openssl x509 -in ${controlPlaneCertificate} -noout -fingerprint -sha256 \
+          | cut -d= -f2 | tr -d : | tr '[:upper:]' '[:lower:]')
+        if ! incus query "/1.0/certificates/$fingerprint" >/dev/null 2>&1; then
+          incus config trust add-certificate ${controlPlaneCertificate} --name macro-control-plane-dev
+        fi
+      '';
+    };
 
-  networking.nftables.tables.macro-boxes = {
-    family = "inet";
-    content = ''
-      # Filled by the tunnel supervisor; elements expire if it stops refreshing them.
-      set tunnel_ports {
-        type inet_service
-        flags timeout
-      }
+    # Box -> local stack reverse tunnels bind on the bridge address.
+    services.openssh.settings = {
+      GatewayPorts = "clientspecified";
+      AllowTcpForwarding = "yes";
+      ClientAliveInterval = 15;
+      ClientAliveCountMax = 4;
+    };
 
-      set blocked_ipv4 {
-        type ipv4_addr
-        flags interval
-        elements = {
-          169.254.0.0/16,
-          10.0.0.0/8,
-          172.16.0.0/12,
-          192.168.0.0/16,
-          100.64.0.0/10
+    networking.nftables.tables.macro-boxes = {
+      family = "inet";
+      content = ''
+        # Filled by the tunnel supervisor; elements expire if it stops refreshing them.
+        set tunnel_ports {
+          type inet_service
+          flags timeout
         }
-      }
 
-      chain input {
-        type filter hook input priority filter; policy accept;
-        iifname "${bridge}" jump box_to_host
-        iifname "eth0" jump wan_to_host
-      }
+        set blocked_ipv4 {
+          type ipv4_addr
+          flags interval
+          elements = {
+            169.254.0.0/16,
+            10.0.0.0/8,
+            172.16.0.0/12,
+            192.168.0.0/16,
+            100.64.0.0/10
+          }
+        }
 
-      chain box_to_host {
-        ct state established,related accept
-        ip protocol icmp accept
-        udp dport { 53, 67 } accept
-        tcp dport 53 accept
-        ip daddr ${bridgeAddress} tcp dport @tunnel_ports accept
-        counter drop
-      }
+        chain input {
+          type filter hook input priority filter; policy accept;
+          tcp dport 8443 iifname != "lo" iifname != "tailscale0" counter drop
+          iifname "tailscale0" jump tailnet_to_host
+          iifname "${bridge}" jump box_to_host
+          iifname "eth0" jump wan_to_host
+        }
 
-      # GCP's firewall already only admits IAP on tcp/22; this is the second wall.
-      chain wan_to_host {
-        ct state established,related accept
-        ip protocol icmp accept
-        tcp dport 22 accept
-        udp dport 68 accept
-        counter drop
-      }
+        chain tailnet_to_host {
+          ct state established,related accept
+          ip protocol icmp accept
+          tcp dport 8443 accept
+          counter drop
+        }
 
-      chain forward {
-        type filter hook forward priority filter; policy accept;
-        iifname "${bridge}" jump box_out
-        oifname "${bridge}" ct state established,related accept
-        oifname "${bridge}" counter drop
-      }
+        chain box_to_host {
+          meta nfproto ipv6 counter drop
+          ip daddr 100.64.0.0/10 counter drop
+          ct state established,related accept
+          ip protocol icmp accept
+          udp dport { 53, 67 } accept
+          tcp dport 53 accept
+          ip daddr ${bridgeAddress} tcp dport @tunnel_ports accept
+          counter drop
+        }
 
-      chain box_out {
-        ct state established,related accept
-        meta nfproto ipv6 counter drop
-        ip daddr @blocked_ipv4 counter drop
-        tcp dport 25 counter drop
-        accept
-      }
-    '';
+        # GCP's firewall already only admits IAP on tcp/22; this is the second wall.
+        chain wan_to_host {
+          ct state established,related accept
+          ip protocol icmp accept
+          tcp dport 22 accept
+          udp dport 68 accept
+          counter drop
+        }
+
+        chain forward {
+          type filter hook forward priority filter; policy accept;
+          iifname "${bridge}" jump box_out
+          oifname "${bridge}" ct state established,related accept
+          oifname "${bridge}" counter drop
+        }
+
+        chain box_out {
+          ${lib.optionalString (tailnetEnabled && computers.controlPlanePorts != [ ]) ''
+            oifname "tailscale0" ip daddr ${computers.controlPlaneAddress} tcp dport { ${ports} } accept
+          ''}
+          oifname "tailscale0" counter drop
+          meta nfproto ipv6 counter drop
+          ip daddr @blocked_ipv4 counter drop
+          tcp dport 25 counter drop
+          accept
+        }
+      '';
+    };
+
+    networking.nftables.tables.macro-boxes-nat =
+      lib.mkIf (tailnetEnabled && computers.controlPlanePorts != [ ])
+        {
+          family = "ip";
+          content = ''
+            chain postrouting {
+              type nat hook postrouting priority srcnat; policy accept;
+              iifname "${bridge}" oifname "tailscale0" ip saddr 10.210.0.0/24 ip daddr ${computers.controlPlaneAddress} tcp dport { ${ports} } masquerade
+            }
+          '';
+        };
+
+    environment.systemPackages = [
+      pkgs.nftables
+      pkgs.jq
+    ];
   };
-
-  environment.systemPackages = [
-    pkgs.nftables
-    pkgs.jq
-  ];
 }

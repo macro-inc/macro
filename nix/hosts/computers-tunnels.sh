@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Manual recovery fallback; normal xtask Incus traffic uses Tailscale.
 # Supervised SSH-over-IAP tunnels between this machine and a Macro computers host.
 #
 #   computers-tunnels.sh incus             localhost:18443 -> host Incus API (127.0.0.1:8443)

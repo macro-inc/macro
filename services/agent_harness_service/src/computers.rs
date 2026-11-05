@@ -20,7 +20,7 @@ use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
 use harnesses::domain::models::CreateHostedPairing;
 use harnesses::domain::ports::{HarnessError, HarnessService};
-use hosted_runtimes::domain::models::{Computer, EnrollmentDefaults};
+use hosted_runtimes::domain::models::{Computer, ControlPlaneId, EnrollmentDefaults};
 use hosted_runtimes::domain::operator::{ComputerOperator, SessionActivity};
 use hosted_runtimes::domain::ports::{Fleet, Harnesses, HostedPairing, InstanceStatus};
 use hosted_runtimes::domain::service::SystemClock;
@@ -97,7 +97,7 @@ impl Operator {
             .instances()
             .await?
             .into_iter()
-            .find_map(|(id, status)| (id == computer_id).then_some(status)))
+            .find_map(|instance| (instance.computer_id == computer_id).then_some(instance.status)))
     }
 
     /// Notify gateway waiters after the existing worker finishes its pass.
@@ -120,6 +120,10 @@ pub async fn operator(
     let Some(kind) = config.computers_fleet.as_deref() else {
         return Ok(None);
     };
+    let control_plane_id = ControlPlaneId::parse(required(
+        &config.computers_control_plane_id,
+        "COMPUTERS_CONTROL_PLANE_ID",
+    )?)?;
     let host_name = required(&config.computers_host_name, "COMPUTERS_HOST_NAME")?;
 
     let fleet = match kind {
@@ -146,6 +150,7 @@ pub async fn operator(
                         )?,
                     },
                     host_name,
+                    control_plane_id,
                     config.computers_host_reserve_gb,
                     config.computers_oversell_factor,
                 )
@@ -155,6 +160,7 @@ pub async fn operator(
         "docker" => ConfiguredFleet::Docker(
             DockerFleet::new(
                 DockerFleetConfig {
+                    control_plane_id,
                     image: config.computers_image.clone(),
                     network: required(
                         &config.computers_docker_network,
