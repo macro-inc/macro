@@ -33,6 +33,11 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
                     .map(|profile| profile.name.clone())
             })
             .or_else(|| n.message.sender_id.as_bot().map(|_| "Agent".to_owned()));
+        let sender_client_kind = n
+            .message
+            .sender_id
+            .as_bot()
+            .and(n.message.triggered_via_kind);
         let recipient_ids =
             std::collections::HashSet::from([MacroUserIdStr::try_from(n.recipient)?]);
         let kind = match n.event.parent {
@@ -86,6 +91,7 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
                 thread_id: n.message.root_id(),
                 text: n.message.content.clone(),
                 sender_display_name,
+                sender_client_kind,
                 sender_profile_picture_url: n
                     .message
                     .bot_profile
@@ -116,6 +122,7 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
                 thread_id: n.message.root_id(),
                 text: n.message.content.clone(),
                 sender_display_name,
+                sender_client_kind,
                 sender_profile_picture_url: n
                     .message
                     .bot_profile
@@ -133,6 +140,7 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
             CommentNotificationReason::Mention => {
                 send!(MentionedInDocumentCommentMetadata {
                     sender_display_name: sender_display_name.clone(),
+                    sender_client_kind,
                     document_name: n.context.name.clone(),
                     owner,
                     file_type: n.context.file_type.clone(),
@@ -152,6 +160,7 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
             CommentNotificationReason::Reply => {
                 send!(RepliedToDocumentCommentThreadMetadata {
                     sender_display_name: sender_display_name.clone(),
+                    sender_client_kind,
                     document_name: n.context.name.clone(),
                     owner,
                     file_type: n.context.file_type.clone(),
@@ -170,6 +179,7 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
             _ => {
                 send!(CommentedOnDocumentMetadata {
                     sender_display_name: sender_display_name.clone(),
+                    sender_client_kind,
                     document_name: n.context.name.clone(),
                     owner,
                     file_type: n.context.file_type.clone(),

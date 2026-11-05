@@ -13,6 +13,7 @@ async-trait = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 bot_id = { path = "../bot_id" }
+mcp_client_label = { path = "../mcp_client_label" }
 macro_user_id = { path = "../macro_user_id" }
 genai_telemetry = { path = "../genai_telemetry" }
 axum = { workspace = true }

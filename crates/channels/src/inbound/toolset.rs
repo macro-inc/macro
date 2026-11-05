@@ -75,7 +75,7 @@ where
     /// to Macro AI; hosts running a specific agent set it with [`Self::with_actor`].
     pub actor: BotId,
     /// The client the requesting user works through, labelled on posts.
-    pub via: Option<String>,
+    pub via: Option<messages::domain::models::McpClientLabel>,
 }
 
 impl<Svc, AccessSvc> Clone for ChannelToolContext<Svc, AccessSvc>
@@ -139,7 +139,7 @@ where
 
     /// Label the posts these tools make with the client the requesting user
     /// works through, such as an MCP client.
-    pub fn with_via(mut self, client: String) -> Self {
+    pub fn with_via(mut self, client: messages::domain::models::McpClientLabel) -> Self {
         self.via = Some(client);
         self
     }

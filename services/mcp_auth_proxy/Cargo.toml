@@ -39,6 +39,7 @@ cursor_api_key = { path = "../../crates/cursor_api_key", optional = true }
 fusionauth = { path = "../../crates/fusionauth", optional = true }
 macro_auth = { path = "../../crates/macro_auth", optional = true }
 macro_user_id = { path = "../../crates/macro_user_id", optional = true }
+mcp_client_label = { path = "../../crates/mcp_client_label" }
 rand = { workspace = true }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
 serde = { workspace = true }

@@ -46,6 +46,7 @@ fn message(id: Uuid, deleted: bool) -> Message {
         thread_id: (id != root()).then_some(root()),
         sender_id: channel_sender::ChannelSender::new_from_user(user()),
         triggered_via: None,
+        triggered_via_kind: None,
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],

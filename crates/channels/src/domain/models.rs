@@ -12,6 +12,7 @@ use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 #[cfg(feature = "list")]
 use models_pagination::{Query, SimpleSortMethod};
 use serde::{Deserialize, Serialize};
+use messages::domain::models::McpClientKind;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -835,6 +836,8 @@ pub struct MutatedMessage {
     pub triggered_by: Option<String>,
     /// The client the user triggered it through, such as "Claude Code".
     pub triggered_via: Option<String>,
+    /// The product `triggered_via` was verified as, if any.
+    pub triggered_via_kind: Option<McpClientKind>,
     /// Message body.
     pub content: String,
     /// Created timestamp.

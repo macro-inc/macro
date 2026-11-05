@@ -61,7 +61,8 @@ bound agent (`agent_session.bot_id`, read off the row as `SessionGrant.agent`) a
 their signed `agent_id` claim, so Macro's tools write as that agent. The bot
 never comes from the request. `MacroApiTokenSigner::mint_for_agent` callers
 (code mode) choose the claim themselves, plus an optional signed `agent_via`
-client label (public MCP code mode signs the MCP client's name); `mint_for`
+client label (public MCP code mode signs the MCP client's name and verified
+kind); `mint_for`
 signs neither.
 
 ## Gotchas

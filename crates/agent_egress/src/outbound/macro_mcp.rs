@@ -276,7 +276,7 @@ impl MacroApiTokenSigner {
         owner: &MacroUserIdStr<'static>,
         lifetime_seconds: usize,
         agent_id: Option<macro_uuid::Uuid>,
-        agent_via: Option<String>,
+        agent_via: Option<mcp_client_label::McpClientLabel>,
     ) -> Result<String, EgressError> {
         if !(1..=MINTED_TOKEN_LIFETIME_SECONDS).contains(&lifetime_seconds) {
             return Err(EgressError::Internal(rootcause::report!(

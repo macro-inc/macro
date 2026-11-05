@@ -130,6 +130,7 @@ fn posted(
             MacroUserIdStr::try_from_email(email).unwrap(),
         ),
         triggered_via: None,
+        triggered_via_kind: None,
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],

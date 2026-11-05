@@ -22,6 +22,7 @@ pub use calendar_join_request::GraphqlCalendarEventJoinRequestMetadata;
 mod channel_access_request;
 pub use channel_access_request::GraphqlChannelAccessRequestedMetadata;
 
+use mcp_client_label::McpClientKind;
 use async_graphql::{Enum, ID, Object, Union};
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionSettledMetadata,
@@ -57,6 +58,39 @@ impl From<ChannelType> for GraphqlNotificationChannelType {
             ChannelType::Private => Self::Private,
             ChannelType::DirectMessage => Self::DirectMessage,
             ChannelType::Team => Self::Team,
+        }
+    }
+}
+
+/// A known MCP client product a bot sender posted through, verified by the
+/// public MCP's OAuth broker.
+#[derive(Clone, Copy, Debug, Eq, Enum, PartialEq)]
+pub enum GraphqlMcpClientKind {
+    /// Claude on claude.ai, the desktop and mobile apps.
+    Claude,
+    /// Anthropic's Claude Code CLI.
+    ClaudeCode,
+    /// OpenAI's ChatGPT.
+    #[graphql(name = "CHATGPT")]
+    ChatGpt,
+    /// The Cursor editor.
+    Cursor,
+    /// OpenAI's Codex CLI.
+    Codex,
+    /// The OpenCode CLI.
+    #[graphql(name = "OPENCODE")]
+    OpenCode,
+}
+
+impl From<McpClientKind> for GraphqlMcpClientKind {
+    fn from(value: McpClientKind) -> Self {
+        match value {
+            McpClientKind::Claude => Self::Claude,
+            McpClientKind::ClaudeCode => Self::ClaudeCode,
+            McpClientKind::ChatGpt => Self::ChatGpt,
+            McpClientKind::Cursor => Self::Cursor,
+            McpClientKind::Codex => Self::Codex,
+            McpClientKind::OpenCode => Self::OpenCode,
         }
     }
 }
@@ -318,6 +352,12 @@ impl GraphqlChannelMentionMetadata {
         self.0.sender_display_name.as_deref()
     }
 
+    /// The verified product of the MCP client a bot sender posted through,
+    /// whose mark clients show.
+    async fn sender_client_kind(&self) -> Option<GraphqlMcpClientKind> {
+        self.0.sender_client_kind.map(GraphqlMcpClientKind::from)
+    }
+
     /// Channel metadata.
     #[graphql(flatten)]
     async fn channel(&self) -> GraphqlChannelNotificationCommon {
@@ -419,6 +459,12 @@ impl GraphqlMentionedInDocumentCommentMetadata {
     async fn sender_display_name(&self) -> Option<&str> {
         self.0.sender_display_name.as_deref()
     }
+
+    /// The verified product of the MCP client a bot sender posted through,
+    /// whose mark clients show.
+    async fn sender_client_kind(&self) -> Option<GraphqlMcpClientKind> {
+        self.0.sender_client_kind.map(GraphqlMcpClientKind::from)
+    }
 }
 
 /// GraphQL wrapper for document comment thread reply metadata.
@@ -471,6 +517,12 @@ impl GraphqlRepliedToDocumentCommentThreadMetadata {
     /// Display name for a non-user sender.
     async fn sender_display_name(&self) -> Option<&str> {
         self.0.sender_display_name.as_deref()
+    }
+
+    /// The verified product of the MCP client a bot sender posted through,
+    /// whose mark clients show.
+    async fn sender_client_kind(&self) -> Option<GraphqlMcpClientKind> {
+        self.0.sender_client_kind.map(GraphqlMcpClientKind::from)
     }
 }
 
@@ -525,6 +577,12 @@ impl GraphqlCommentedOnDocumentMetadata {
     async fn sender_display_name(&self) -> Option<&str> {
         self.0.sender_display_name.as_deref()
     }
+
+    /// The verified product of the MCP client a bot sender posted through,
+    /// whose mark clients show.
+    async fn sender_client_kind(&self) -> Option<GraphqlMcpClientKind> {
+        self.0.sender_client_kind.map(GraphqlMcpClientKind::from)
+    }
 }
 
 /// GraphQL wrapper for channel invitation metadata.
@@ -568,6 +626,12 @@ impl GraphqlChannelMessageSendMetadata {
     /// Display name for a non-user sender.
     async fn sender_display_name(&self) -> Option<&str> {
         self.0.sender_display_name.as_deref()
+    }
+
+    /// The verified product of the MCP client a bot sender posted through,
+    /// whose mark clients show.
+    async fn sender_client_kind(&self) -> Option<GraphqlMcpClientKind> {
+        self.0.sender_client_kind.map(GraphqlMcpClientKind::from)
     }
 
     /// Message content.
@@ -659,6 +723,12 @@ impl GraphqlChannelReplyMetadata {
     /// Display name for a non-user sender.
     async fn sender_display_name(&self) -> Option<&str> {
         self.0.sender_display_name.as_deref()
+    }
+
+    /// The verified product of the MCP client a bot sender posted through,
+    /// whose mark clients show.
+    async fn sender_client_kind(&self) -> Option<GraphqlMcpClientKind> {
+        self.0.sender_client_kind.map(GraphqlMcpClientKind::from)
     }
 
     /// Reply content.

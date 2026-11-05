@@ -1,4 +1,5 @@
 use super::*;
+use mcp_client_label::{McpClientKind, McpClientLabel};
 use crate::macro_api_token::{EncodeMacroApiTokenArgs, encode_macro_api_token};
 
 #[test]
@@ -12,7 +13,10 @@ fn signed_execution_token_preserves_owner_agent_and_lifetime() {
         private_key: tests::PRIVATE_KEY.into(),
         expiry_seconds: 60,
         agent_id: Some(agent),
-        agent_via: Some("Claude Code".into()),
+        agent_via: Some(McpClientLabel {
+            name: "Claude Code".into(),
+            kind: Some(McpClientKind::ClaudeCode),
+        }),
     })
     .unwrap();
     let args = JwtValidationArgs {
@@ -29,6 +33,7 @@ fn signed_execution_token_preserves_owner_agent_and_lifetime() {
     };
     assert_eq!(claims.agent_id, Some(agent));
     assert_eq!(claims.agent_via.as_deref(), Some("Claude Code"));
+    assert_eq!(claims.agent_via_kind, Some(McpClientKind::ClaudeCode));
     assert_eq!(claims.macro_user_id, "macro|owner@example.com");
     assert_eq!(claims.macro_organization_id, Some(42));
     let now = std::time::SystemTime::now()

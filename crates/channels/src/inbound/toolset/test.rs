@@ -92,6 +92,7 @@ impl RecordingMessages {
             bot_profile: None,
             mentions: vec![],
             triggered_via: None,
+            triggered_via_kind: None,
             triggered_by: None,
             content: "stored".to_string(),
             created_at: chrono::Utc::now(),
@@ -158,6 +159,7 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
             bot_profile: None,
             mentions: vec![],
             triggered_via: None,
+            triggered_via_kind: None,
             triggered_by: access
                 .acting_user_id()
                 .map(|user| user.as_ref().to_string()),

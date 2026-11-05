@@ -281,6 +281,7 @@ mod code_mode {
     };
     use agent_inmem::domain::tool_mode::ToolModeSelector;
     use ai_toolset::{ToolAnnotated, ToolAnnotations};
+    use mcp_client_label::{McpClientKind, McpClientLabel};
     use axum::{
         body::{Body, to_bytes},
         http::Request,
@@ -545,7 +546,10 @@ mod code_mode {
 
     fn mcp_client(name: &str) -> Option<ToolCaller> {
         Some(ToolCaller::McpClient {
-            name: Some(name.to_owned()),
+            client: Some(McpClientLabel {
+                name: name.to_owned(),
+                kind: None,
+            }),
         })
     }
 
@@ -565,7 +569,7 @@ mod code_mode {
         let nameless = rpc_as(
             app.clone(),
             FLAGGED,
-            Some(ToolCaller::McpClient { name: None }),
+            Some(ToolCaller::McpClient { client: None }),
             "tools/list",
             serde_json::json!({}),
         )
@@ -733,7 +737,10 @@ mod code_mode {
         let callers = [
             ToolCaller::Agent(BotId::TEST_A),
             ToolCaller::McpClient {
-                name: Some("Claude Code".to_owned()),
+                client: Some(McpClientLabel {
+                    name: "Claude Code".to_owned(),
+                    kind: Some(McpClientKind::ClaudeCode),
+                }),
             },
             ToolCaller::ApiKey,
         ];

@@ -155,6 +155,7 @@ fn discussion(assignment: &TaskAssignment) -> messages::domain::models::Message 
         thread_id: None,
         sender_id: channel_sender::ChannelSender::new_from_bot(BotId::TEST_A),
         triggered_via: None,
+        triggered_via_kind: None,
         triggered_by: None,
         bot_profile: None,
         guest_name: None,

@@ -142,6 +142,7 @@ macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 mcp_auth_proxy = { path = "../mcp_auth_proxy" }
+mcp_client_label = { path = "../../crates/mcp_client_label" }
 mcp_client = { path = "../../crates/mcp_client" }
 mcp_select = { path = "../../crates/mcp_select" }
 memory = { path = "../../crates/memory" }

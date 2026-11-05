@@ -23,6 +23,7 @@ members = [
   "crates/ai_usage",
   "crates/attention_feed",
   "crates/bot_id",
+  "crates/mcp_client_label",
   "crates/bot_token",
   "crates/bots",
   "crates/broadcast",

@@ -39,6 +39,7 @@ lru = { workspace = true }
 # Signing Macro API tokens, with the same shared vocabulary
 # `authentication_service` mints through.
 macro_auth = { path = "../macro_auth" }
+mcp_client_label = { path = "../mcp_client_label" }
 # The owner's `User` row, which carries the FusionAuth id the exchange needs.
 macro_db_client = { path = "../macro_db_client" }
 macro_tower_layers = { path = "../macro_tower_layers" }

@@ -1,6 +1,7 @@
 //! CRM company and contact discussion notification projection.
 
 use async_graphql::{Enum, ID, SimpleObject};
+use super::GraphqlMcpClientKind;
 use model_notifications::{CrmDiscussionMetadata, CrmDiscussionReason};
 
 /// Why a CRM discussion notification was sent.
@@ -29,6 +30,8 @@ pub struct GraphqlCrmDiscussionMetadata {
     text: String,
     /// Public bot display name, if applicable.
     sender_display_name: Option<String>,
+    /// Verified product of the MCP client a bot sender posted through.
+    sender_client_kind: Option<GraphqlMcpClientKind>,
     /// Sender avatar URL.
     sender_profile_picture_url: Option<String>,
 }
@@ -46,6 +49,7 @@ impl From<CrmDiscussionMetadata> for GraphqlCrmDiscussionMetadata {
             thread_id: ID(value.thread_id.to_string()),
             text: value.text,
             sender_display_name: value.sender_display_name,
+            sender_client_kind: value.sender_client_kind.map(GraphqlMcpClientKind::from),
             sender_profile_picture_url: value.sender_profile_picture_url,
         }
     }

@@ -1,6 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
+use mcp_client_label::{McpClientKind, McpClientLabel};
 use uuid::Uuid;
 
 /// A Macro-signed API token with optional agent attribution for SDK messages.
@@ -25,6 +26,9 @@ pub struct MacroApiToken {
     /// such as "Claude Code"; a display label signed with `agent_id`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_via: Option<String>,
+    /// The product `agent_via` was verified as, signed with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_via_kind: Option<McpClientKind>,
 }
 
 pub struct EncodeMacroApiTokenArgs {
@@ -43,7 +47,7 @@ pub struct EncodeMacroApiTokenArgs {
     /// Optional agent attribution; never supplied by an API caller.
     pub agent_id: Option<Uuid>,
     /// Optional client label for `agent_id`; never supplied by an API caller.
-    pub agent_via: Option<String>,
+    pub agent_via: Option<McpClientLabel>,
 }
 
 #[tracing::instrument(skip(args))]
@@ -56,7 +60,8 @@ pub fn encode_macro_api_token(args: EncodeMacroApiTokenArgs) -> anyhow::Result<S
     let claims = MacroApiToken {
         exp: now + args.expiry_seconds,
         agent_id: args.agent_id,
-        agent_via: args.agent_via,
+        agent_via_kind: args.agent_via.as_ref().and_then(|client| client.kind),
+        agent_via: args.agent_via.map(|client| client.name),
         iss: args.issuer.clone(),
         fusion_user_id: args.fusionauth_id.clone(),
         macro_user_id: args.macro_user_id.clone(),

@@ -183,6 +183,7 @@ fn message() -> Message {
         thread_id: None,
         sender_id: SENDER.to_owned().try_into().unwrap(),
         triggered_via: None,
+        triggered_via_kind: None,
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],

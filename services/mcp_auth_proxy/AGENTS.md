@@ -17,6 +17,9 @@ in front of FusionAuth, which doesn't support DCR itself.
   logic (registration, authorize, token/refresh).
 - `src/domain/redirect_uri.rs`: the redirect URI policy from the README: trusted,
   needs consent, or refused.
+- `src/domain/client_kind.rs`: which known product (Claude, ChatGPT, ...) a
+  registration is, for the mark its posts wear; README "Which product a client
+  is".
 - `src/domain/browser_binding.rs`: the cookie secret tying a flow to the browser
   that started it, and the consent form's anti-forgery token.
 - `templates/`: the consent screen and its cancellation page.
@@ -49,6 +52,9 @@ in front of FusionAuth, which doesn't support DCR itself.
 - Support a new HTTPS MCP client: nothing; users approve it on the consent
   screen. Add its host to `DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS` only to skip that
   screen for a client Macro has vetted.
+- Recognize a new MCP client product: a variant in `crates/mcp_client_label` →
+  its name and redirect evidence in `src/domain/client_kind.rs` → its mark in
+  `apps/web/src/lib/core/component/mcpClientMark.ts`.
 - Add a new grant type: `src/domain/models.rs` → `src/domain/service.rs` →
   `src/outbound/fusionauth.rs` → `src/inbound/axum_router.rs`.
 
