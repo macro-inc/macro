@@ -25,6 +25,7 @@ import {
   type ComponentProps,
   createComputed,
   createContext,
+  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
@@ -500,29 +501,63 @@ function Root(props: ViewShellRootProps) {
  * ViewSidebar.Root inside keeps the landmark.
  */
 function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const ws = useViewShellInternal();
+  return (
+    <Show when={ws.narrowList()} fallback={<AsideHost {...props} />}>
+      <NarrowListAside {...props} />
+    </Show>
+  );
+}
+
+/**
+ * A narrow list fills the shell over Main, which waits beneath it. While an
+ * entity is open the list stays mounted but hidden, so it keeps its scroll.
+ */
+function NarrowListAside(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   const ws = useViewShellInternal();
   const asideTarget = tourTarget(VIEW_SHELL_TOUR.aside);
+  const hidden = () => ws.narrowList() === 'main';
+  let list: HTMLDivElement | undefined;
 
-  // A narrow list fills the shell over Main, which waits beneath it.
+  // Back leaves with the entity it was on; hand focus to the list, unless
+  // the user has already moved it outside this view.
+  createEffect(
+    on(
+      hidden,
+      (isHidden) => {
+        if (isHidden || !list) return;
+        const active = document.activeElement;
+        const focusLost = !active || active === document.body;
+        const shell = list.closest('[data-view-shell]');
+        if (!focusLost && !shell?.contains(active)) return;
+        if (list.contains(active)) return;
+
+        list.focus({ preventScroll: true });
+      },
+      { defer: true }
+    )
+  );
+
   return (
-    <Show
-      when={!ws.narrowList()}
-      fallback={
-        <Show when={ws.narrowList() === 'list'}>
-          <div
-            {...rest}
-            ref={asideTarget}
-            class={cn('absolute inset-0 z-20 min-h-0 bg-panel', local.class)}
-            data-view-shell-aside=""
-          >
-            {local.children}
-          </div>
-        </Show>
-      }
+    <div
+      {...rest}
+      ref={(element) => {
+        list = element;
+        asideTarget(element);
+      }}
+      tabIndex={-1}
+      class={cn(
+        'absolute inset-0 z-20 min-h-0 bg-panel outline-none',
+        hidden() && 'invisible',
+        local.class
+      )}
+      data-view-shell-aside=""
+      inert={hidden()}
+      aria-hidden={hidden()}
     >
-      <AsideHost {...props} />
-    </Show>
+      {local.children}
+    </div>
   );
 }
 
