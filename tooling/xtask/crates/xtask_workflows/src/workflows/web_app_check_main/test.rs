@@ -369,31 +369,102 @@ fn build_job_uses_remote_sccache_and_wasm_cache() {
     );
 }
 
-#[test]
-fn test_job_runs_signup_browser_tests_after_vitest() {
-    let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    // The job and its vitest step are both named "Test"; slice from the job.
-    let start = yaml.find("name: Test\n").expect("Test job");
+/// The Test legs, up to the next job.
+fn test_job(yaml: &str) -> &str {
+    let start = yaml
+        .find("name: Test (${{ matrix.shard }}/3)")
+        .expect("Test job");
+    let end = yaml[start..]
+        .find("name: Functional Tests\n")
+        .map_or(yaml.len(), |offset| start + offset);
+    &yaml[start..end]
+}
+
+fn browser_job(yaml: &str) -> &str {
+    let start = yaml
+        .find("name: Browser Tests\n")
+        .expect("Browser Tests job");
     let end = yaml[start..]
         .find("name: Cycles Import Check")
         .map_or(yaml.len(), |offset| start + offset);
-    let test_job = &yaml[start..end];
+    &yaml[start..end]
+}
+
+fn functional_job(yaml: &str) -> &str {
+    let start = yaml
+        .find("name: Functional Tests\n")
+        .expect("Functional Tests job");
+    let end = yaml[start..]
+        .find("name: Browser Tests\n")
+        .map_or(yaml.len(), |offset| start + offset);
+    &yaml[start..end]
+}
+
+#[test]
+fn test_job_shards_vitest_after_building_its_wasm() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let test_job = test_job(&yaml);
     let wasm = test_job
         .find("just build-agent-fold-wasm")
         .expect("build WASM before the test setup hook");
-    let vitest = test_job.find("bun run test").expect("vitest step");
+    let vitest = test_job
+        .find("bun run test --shard=${{ matrix.shard }}/3")
+        .expect("vitest step runs one shard");
     assert!(wasm < vitest, "cold WASM compilation precedes Vitest");
-    let browser = test_job
-        .find("just test-signup-browser")
-        .expect("sign-up browser step");
     assert!(
-        vitest < browser,
-        "browser tests run after vitest: {test_job}"
+        test_job.contains("fail-fast: false"),
+        "a failing shard must not hide the others' failures: {test_job}"
     );
     assert!(
-        test_job.contains("playwright: 'true'"),
-        "the Test job installs Playwright's Chromium: {test_job}"
+        test_job.contains(&format!("WASM_PKG_CACHE_DIR: {}", vars::WASM_PKG_CACHE_DIR)),
+        "unchanged wasm packages are reused: {test_job}"
     );
+}
+
+#[test]
+fn browser_suites_build_the_wasm_they_load_first() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let functional = functional_job(&yaml);
+    let wasm = functional.find("just build-wasm").expect("wasm packages");
+    let suite = functional
+        .find("bun run test:functional")
+        .expect("functional suite");
+    assert!(
+        wasm < suite,
+        "the bundle imports every package: {functional}"
+    );
+    assert!(
+        functional.contains("playwright: 'true'"),
+        "the job installs Playwright's Chromium: {functional}"
+    );
+
+    let browser = browser_job(&yaml);
+    let wasm = browser
+        .find("just build-agent-fold-wasm")
+        .expect("agent-fold package");
+    for suite in [
+        "just test-signup-browser",
+        "just test-i18n-browser",
+        "just test-database-browser",
+        "just test-calendar-details-browser",
+    ] {
+        let at = browser
+            .find(suite)
+            .unwrap_or_else(|| panic!("{suite} runs: {browser}"));
+        assert!(wasm < at, "{suite} needs the package: {browser}");
+    }
+    assert!(
+        browser.contains("playwright: 'true'"),
+        "the job installs Playwright's Chromium: {browser}"
+    );
+}
+
+/// A browser suite that isn't required could fail without blocking a merge.
+#[test]
+fn status_check_requires_the_browser_jobs() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    assert!(yaml.contains(r#"[[ "${{ needs.functional.result }}" == "failure" ]]"#));
+    assert!(yaml.contains(r#"[[ "${{ needs.browser.result }}" == "failure" ]]"#));
 }
 
 /// The event details fixture replaces the calendar query modules with preview
@@ -417,11 +488,7 @@ fn calendar_details_browser_tests_run_when_the_replaced_queries_change() {
     ] {
         assert!(calendar.contains(path), "{path} runs the suite: {calendar}");
     }
-    let start = yaml.find("name: Test\n").expect("Test job");
-    let end = yaml[start..]
-        .find("name: Cycles Import Check")
-        .map_or(yaml.len(), |offset| start + offset);
-    let step = yaml[start..end]
+    let step = browser_job(&yaml)
         .split("- name: Calendar Event Details Browser Tests")
         .nth(1)
         .and_then(|rest| rest.split("- name:").next())
@@ -436,11 +503,7 @@ fn calendar_details_browser_tests_run_when_the_replaced_queries_change() {
 #[test]
 fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let start = yaml.find("name: Test\n").expect("Test job");
-    let end = yaml[start..]
-        .find("name: Cycles Import Check")
-        .map_or(yaml.len(), |offset| start + offset);
-    let test_job = &yaml[start..end];
+    let test_job = test_job(&yaml);
     let mounted = format!("  {}\n", vars::VITEST_MODULE_CACHE_VOLUME_DIR);
     assert!(
         test_job.contains(&mounted),
@@ -666,4 +729,54 @@ fn ios_gate_status_and_comment_scenarios() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn build_job(yaml: &str) -> &str {
+    yaml.split("\n  build:\n")
+        .nth(1)
+        .and_then(|rest| rest.split("\n  ios-native-check:").next())
+        .expect("build job")
+}
+
+/// A failed preview must not read as a failed build or block a merge, and a
+/// `[no preview]` title or a fork skips it.
+#[test]
+fn preview_steps_follow_the_build_and_cannot_fail_it() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let build = build_job(&yaml);
+    let build_at = build.find("just build-dev").expect("bundle");
+    let deploy_at = build.find("scripts/preview/deploy.ts").expect("deploy");
+    assert!(
+        build_at < deploy_at,
+        "the deploy reuses the bundle: {build}"
+    );
+    assert!(
+        build.contains("--skip-build"),
+        "the deploy must not rebuild: {build}"
+    );
+    for name in [
+        "Configure AWS Credentials",
+        "Get or create preview ID",
+        "Validate bucket name",
+        "Deploy to S3",
+        "Comment on PR",
+    ] {
+        let step = build
+            .split(&format!("name: {name}"))
+            .nth(1)
+            .and_then(|rest| rest.split("\n    - ").next())
+            .unwrap_or_else(|| panic!("{name} step: {build}"));
+        assert!(step.contains("continue-on-error: true"), "{name}: {step}");
+        assert!(step.contains("[no preview]"), "{name}: {step}");
+        assert!(step.contains("web_artifact_changed"), "{name}: {step}");
+        assert!(step.contains("head.repo.full_name"), "{name}: {step}");
+    }
+}
+
+/// A job that hits its timeout reports `cancelled`, so the required check must
+/// not pass on a generated code job that never finished.
+#[test]
+fn status_check_rejects_a_cancelled_generated_code_job() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    assert!(yaml.contains(r#"[[ "${{ needs.generated-code.result }}" == "cancelled" ]]"#));
 }
