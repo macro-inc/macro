@@ -1191,6 +1191,21 @@ with the PR's status, title, `owner/repo#N`, and line changes. Clicking it opens
 Macro in a new split (in place on touch devices); a PR Macro has not synced yet opens on
 GitHub instead.
 
+Assignees lists and searches current team members and available agents, keeping
+each surface's existing search placeholder, styling, and selected-first ordering
+when opening the picker. Rows stay in place while selecting or deselecting.
+Existing selected outsiders remain visible and removable,
+including references absent from contacts. The picker has no contact discovery;
+a removed outsider cannot be added again unless they join the team.
+
+The same scope applies to task/project creation and editing, bulk Set assignee,
+and desktop/mobile Assignee filters. Existing **Me** and **Unassigned** choices
+keep their semantics; Created by and custom people fields keep their contact lists.
+Check that a teammate absent from contacts appears and can be selected, that
+searching by email cannot select an unassigned outsider, and that an existing
+outsider can be removed. Repeat with keyboard navigation and a touch picker
+sheet; Cancel still discards drafts and Done still applies them.
+
 The Assignees picker offers people and available agents together. Agent rows show
 their name and an `Agent` label; saved agents also show their `@handle`. Search by
 name or handle to find one. Built-in session agents follow the same availability
