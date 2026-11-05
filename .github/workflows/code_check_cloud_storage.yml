@@ -651,7 +651,7 @@ jobs:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
-    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci-int
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
       NEXTEST_TEST_THREADS: '32'
@@ -700,7 +700,7 @@ jobs:
         set -euo pipefail
         env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
         trap 'rm -f "$env_file"' EXIT
-        if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+        if nsc cache sccache setup --cache_name sccache-ci-int > "$env_file"; then
           # Register credential values as masked BEFORE exporting: GitHub only
           # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
           # ~24h Namespace workspace token (registry + cache write) — printed
