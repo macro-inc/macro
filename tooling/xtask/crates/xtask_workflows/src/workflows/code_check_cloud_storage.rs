@@ -9,6 +9,10 @@
 //! Critical path: `path-check` (no Rust compile on a warm binary cache) →
 //! `test`. `check` (fmt + clippy), `doppler-config`, and
 //! `graphql-schema-compat` run alongside `test`.
+//!
+//! `check` lints every affected package. `test` runs only the changed packages
+//! and their direct dependents; `main_rust_check` runs the whole suite after
+//! merge.
 
 use gh_workflow::{
     Container, Env, Event, Expression, Job, Port, PullRequest, PullRequestType, Run, Step, Workflow,
@@ -74,6 +78,10 @@ fn path_check() -> Job {
             "${{ steps.nextest-filter.outputs.rust_packages }}",
         )
         .add_output(
+            "test_packages",
+            "${{ steps.nextest-filter.outputs.test_packages }}",
+        )
+        .add_output(
             "skip_tests",
             "${{ steps.nextest-filter.outputs.skip_tests }}",
         )
@@ -97,8 +105,15 @@ fn path_check() -> Job {
 
 /// fmt + clippy.
 fn check() -> Job {
-    steps::gated_job()
-        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
+    check_job(
+        steps::gated_job(),
+        "${{ needs.path-check.outputs.rust_packages }}",
+    )
+}
+
+/// `check`'s body on top of `base`, linting `packages`.
+pub(super) fn check_job(base: Job, packages: &str) -> Job {
+    base.runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
@@ -107,7 +122,7 @@ fn check() -> Job {
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(steps::code_mode_assets())
         .add_step(cargo_fmt())
-        .add_step(cargo_clippy())
+        .add_step(cargo_clippy(packages))
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }
@@ -170,15 +185,18 @@ fn graphql_schema_compat() -> Job {
 /// the path filter selected no Rust packages (Nix-only / unmapped files) or
 /// when `skip_tests` is set (`.sqlx`-only diffs still clippy the snapshot).
 fn test() -> Job {
-    steps::gated_job()
-        .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
-        ))
-        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_env((
-            "RUST_PACKAGES",
-            "${{ needs.path-check.outputs.rust_packages }}",
-        ))
+    test_job(
+        steps::gated_job().cond(Expression::new(
+            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.test_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
+        )),
+        "${{ needs.path-check.outputs.test_packages }}",
+    )
+}
+
+/// `test`'s body on top of `base`, testing `packages`.
+pub(super) fn test_job(base: Job, packages: &str) -> Job {
+    base.runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
+        .add_env(("RUST_PACKAGES", packages))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
         .add_env(("CARGO_BUILD_JOBS", vars::RUST_TEST_BUILD_JOBS))
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
@@ -358,14 +376,11 @@ fn cargo_fmt() -> Step<Run> {
     Step::new("fmt").run("cargo fmt --check")
 }
 
-/// `cargo clippy`, scoped to the same package set as nextest.
-fn cargo_clippy() -> Step<Run> {
+/// `cargo clippy`, scoped to every package the change can affect.
+fn cargo_clippy(packages: &str) -> Step<Run> {
     Step::new("clippy")
         .run(include_str!("scripts/cargo_clippy.sh"))
-        .add_env((
-            "RUST_PACKAGES",
-            "${{ needs.path-check.outputs.rust_packages }}",
-        ))
+        .add_env(("RUST_PACKAGES", packages))
 }
 
 /// Match production's PostgreSQL major version so CI rejects incompatible migrations.

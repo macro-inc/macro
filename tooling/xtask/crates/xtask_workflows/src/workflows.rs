@@ -49,6 +49,7 @@ mod ios_app_store_release;
 mod ios_preview;
 mod ios_release_drift;
 mod ios_release_watch;
+mod main_rust_check;
 mod native_check_label;
 mod path_validation;
 mod pr_privacy_check;
@@ -197,6 +198,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "cla",
         file_name: "cla.yml",
         render_yaml: || render_gh_workflow(cla::cla)(),
+    },
+    WorkflowFile {
+        slug: "main_rust_check",
+        file_name: "main_rust_check.yml",
+        render_yaml: || render_gh_workflow(main_rust_check::main_rust_check)(),
     },
     WorkflowFile {
         slug: "cleanup_preview",

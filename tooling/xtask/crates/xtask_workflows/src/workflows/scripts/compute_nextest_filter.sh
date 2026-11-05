@@ -1,7 +1,9 @@
 set -euo pipefail
 
 # Writes for the check/test jobs:
-#   rust_packages — all | none | space-separated packages (changed + reverse deps)
+#   rust_packages — all | none | space-separated packages (changed + reverse deps);
+#                   clippy lints these
+#   test_packages — the same forms, changed + direct dependents; the test job runs these
 #   skip_tests    — true keeps clippy on rust_packages while the live-Postgres
 #                   test job stays skipped (`.sqlx`-only or clippy.toml-only diffs)
 #
@@ -52,6 +54,7 @@ mkdir -p "$FILTER_CACHE_DIR/bin"
 
 emit() {
   echo "rust_packages=$1" >> "$GITHUB_OUTPUT"
+  echo "test_packages=${3:-$1}" >> "$GITHUB_OUTPUT"
   echo "skip_tests=$2" >> "$GITHUB_OUTPUT"
   exit 0
 }
@@ -81,10 +84,11 @@ if ! grep -qvE '^\.sqlx/' /tmp/changed-files; then
 fi
 
 ensure_filter_bin
-packages="$("$filter_bin" /tmp/changed-files "$(< /tmp/base-revision)")"
+selections="$("$filter_bin" /tmp/changed-files "$(< /tmp/base-revision)")"
+packages="$(sed -n 1p <<< "$selections")"
+test_packages="$(sed -n 2p <<< "$selections")"
 
-# One package list drives both clippy and tests, so a clippy.toml edit can
-# only skip tests when nothing else selected a package.
+# A clippy.toml edit can only skip tests when nothing else selected a package.
 if [ "$clippy_config_changed" = true ]; then
   if [ -z "$packages" ] || [ "$packages" = "none" ]; then
     echo "Only clippy.toml affects Rust; clippy all, skip live-Postgres tests"
@@ -100,4 +104,5 @@ if [ -z "$packages" ] || [ "$packages" = "none" ]; then
 fi
 
 echo "rust packages: $packages"
-emit "$packages" false
+echo "test packages: $test_packages"
+emit "$packages" false "$test_packages"
