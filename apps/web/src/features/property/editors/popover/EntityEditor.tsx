@@ -1,21 +1,22 @@
+import { t } from '@app/lib/i18n';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
-import type { IUser } from '@core/user';
-import { idToDisplayName, idToEmail } from '@core/user/util';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
 } from '@property/utils/entityConversion';
-import { useCurrentTeamQuery } from '@queries/team/teams';
+import { useTeamMembers } from '@queries/team/members';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { createSignal, Show, Suspense } from 'solid-js';
+import { createMemo, createSignal, Show, Suspense } from 'solid-js';
 import { useProperty } from '../../core/context';
 import { useAgentAssignees } from '../../queries/agent-assignees';
 import type { EntityProperty, PropertyApiValues } from '../../types';
 import { isEntityProperty } from '../../utils';
+import { useQuickAccessEntities } from '../selectors/entityUtils';
 import { PropertyEntitySelector } from '../selectors/PropertyEntitySelector';
+import { scopedUserOptions } from '../selectors/scoped-user-options';
 import type { EntityPickerOptions } from '../selectors/types';
 import { EditorPopover } from './EditorPopover';
 
@@ -116,20 +117,26 @@ function EntityEditorSelector(
 ) {
   const property = props.draft.property;
 
-  // Company owners are always teammates, so the owner picker offers the
-  // team roster instead of the default quick-access people pool.
   const isCompanyOwner =
     property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.COMPANY_OWNER;
-  const agents = useAgentAssignees(
-    () => property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES
-  );
-  const teamQuery = useCurrentTeamQuery();
-  const teamMembers = (): IUser[] =>
-    (teamQuery.data?.members ?? []).map((member) => ({
-      id: member.user_id,
-      email: idToEmail(member.user_id),
-      name: idToDisplayName(member.user_id),
-    }));
+  const isAssignees =
+    property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES;
+  const agents = useAgentAssignees(() => isAssignees);
+  const team = useTeamMembers(() => isCompanyOwner || isAssignees);
+  const { items: people } = useQuickAccessEntities(() => 'USER');
+  const users = createMemo(() => {
+    if (!isAssignees) return team.users();
+    return scopedUserOptions(
+      [...agents(), ...team.users()],
+      people().map((item) => item.data),
+      props.draft.selectedRefs().map((ref) => ref.entity_id)
+    );
+  });
+  const showRosterStatus = () => {
+    if (!isCompanyOwner && !isAssignees) return false;
+
+    return team.isLoading() || team.isError();
+  };
 
   return (
     <>
@@ -148,10 +155,10 @@ function EntityEditorSelector(
             specificEntityType:
               props.entityPicker?.entityTypes ?? property.specificEntityType,
             selfFilter: props.selfFilter,
-            users: isCompanyOwner ? teamMembers : undefined,
-            additionalUsers: agents,
+            users: isCompanyOwner || isAssignees ? users : undefined,
             fillHeight: props.fillHeight,
           }}
+          emptyState={showRosterStatus() ? null : undefined}
           selectedOptions={() =>
             entityReferencesToIdSet(props.draft.selectedRefs())
           }
@@ -169,6 +176,13 @@ function EntityEditorSelector(
           onCancel={props.onCancel}
         />
       </Suspense>
+      <Show when={showRosterStatus()}>
+        <div role="status" class="shrink-0 px-3 py-2 text-sm text-ink-muted">
+          {team.isLoading()
+            ? t('viewMenus.loadingTeamMembers')
+            : t('viewMenus.teamMembersUnavailable')}
+        </div>
+      </Show>
       <Show
         when={
           props.selfFilter?.entityType === 'INITIATIVE' &&

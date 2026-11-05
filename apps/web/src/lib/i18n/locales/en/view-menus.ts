@@ -123,6 +123,8 @@ export default {
   filterByTag: 'Filter by tag...',
   searchAssignees: 'Search assignees...',
   searchAssigneesLabel: 'Search assignees',
+  loadingTeamMembers: 'Loading team members…',
+  teamMembersUnavailable: 'Team members could not be loaded.',
   createdBy: 'Created by',
   searchCreators: 'Search creators...',
   searchCreatorsLabel: 'Search creators',

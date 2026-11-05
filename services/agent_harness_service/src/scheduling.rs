@@ -19,16 +19,20 @@ pub mod config;
 mod routine_analytics;
 mod routine_run_notifications;
 use config::Config;
+use scheduled_action::domain::code_upgrade;
+use scheduled_action::domain::drafts::RoutineDrafts;
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, condition::ConditionGate,
     dispatch::EventDispatchService,
 };
 use scheduled_action::domain::ports::ScheduledActionDispatcher;
+use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
 use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, scheduled_action_router};
+use scheduled_action::inbound::draft_router::{RoutineDraftRouterState, routine_draft_router};
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
 use scheduled_action::inbound::template_router::{
@@ -39,6 +43,7 @@ use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdate
 use scheduled_action::outbound::event_access::EventAccessAdapter;
 use scheduled_action::outbound::event_content::EventContentAdapter;
 use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
+use scheduled_action::outbound::pg_code_upgrades::PgCodeUpgrades;
 use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
@@ -89,6 +94,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     config: Config,
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
+    code: Option<crate::routine_code::SdkRoutineCode>,
+    drafter: crate::routine_drafts::ModelDrafts,
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
 ) -> Result<SchedulingRuntime> {
@@ -126,16 +133,68 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         &format!("http://{harness_address}"),
         &config.internal_api_key,
     )?);
+    // Conditions and decisions share one classifier, the only model work this
+    // process meters (agent targets are funded by the harness); both are off
+    // without a TypeSafe key. Counted usage asks the authentication service to
+    // settle the payer, as every other host does.
+    let typesafe = config
+        .typesafe_api_key
+        .value()
+        .map(SystemOneJev::typesafe)
+        .transpose()
+        .context("invalid TYPESAFE_API_KEY")?;
+    let conditions_enabled = typesafe.is_some();
+    let classifier = typesafe
+        .map(|provider| -> Result<_> {
+            Ok(Arc::new(JevClassifier::new(
+                provider,
+                ai_billing::composition::pg_settling_recorder(
+                    db.clone(),
+                    config.enable_ai_usage_enforcement,
+                    config.ai_pricing(),
+                    config.settlement_route()?,
+                ),
+            )))
+        })
+        .transpose()?;
+    // Trigger content is read for templates and the agent's account of the
+    // event whether or not there is a classifier.
     let event_content = Arc::new(event_content(
         &db,
         &registrar,
         Arc::clone(&access),
         &config,
     )?);
-    let runner = Arc::new(TargetRunner::new(
-        Arc::clone(&sessions),
-        Arc::clone(&event_content),
-    ));
+    // Tool and code steps run in this process, as the owner; agent steps
+    // still go through the routine-session operations.
+    let code = Arc::new(code);
+    let upgrades = Arc::new(PgCodeUpgrades::new(db.clone()));
+    // After a release, bring routines' code to the new SDK before their runs
+    // need it; a run still upgrades its own code if this hasn't reached it.
+    {
+        let (code, upgrades, repo) = (Arc::clone(&code), Arc::clone(&upgrades), Arc::clone(&repo));
+        let stop = lifecycle.stop_workers.clone();
+        let mut ready = ready.clone();
+        lifecycle.workers.spawn(async move {
+            tokio::select! {
+                biased;
+                _ = stop.cancelled() => return,
+                result = ready.wait_for(|ready| *ready) => if result.is_err() { return; },
+            }
+            if let Err(error) =
+                code_upgrade::sweep(code.as_ref(), upgrades.as_ref(), repo.as_ref(), &stop).await
+            {
+                tracing::warn!(error = ?error, "routine code sweep stopped");
+            }
+        });
+    }
+    let runner = Arc::new(
+        ProgramRunner::new(
+            Arc::new(TargetRunner::new(Arc::clone(&sessions))),
+            Arc::clone(&event_content),
+        )
+        .with_code(Arc::clone(&code), Arc::clone(&upgrades)),
+    );
     let dispatcher_executor = InProcessExecutor::new(
         Arc::clone(&repo),
         runner,
@@ -143,7 +202,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         lifecycle.executions.clone(),
         lifecycle.stop_executions.clone(),
     )
-    .with_admission(ai_admission)
+    .with_admission(Arc::clone(&ai_admission))
     .with_observer(Arc::new((
         routine_analytics::RoutineAnalytics(
             agent_harness_service::product_analytics::ProductAnalytics::new(
@@ -190,31 +249,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // eventually block cron dispatch or its shutdown.
     drop(execution_rx);
 
-    let typesafe = config
-        .typesafe_api_key
-        .value()
-        .map(SystemOneJev::typesafe)
-        .transpose()
-        .context("invalid TYPESAFE_API_KEY")?;
-    let conditions_enabled = typesafe.is_some();
-    let conditions = match typesafe {
-        Some(provider) => Some(ConditionGate::new(
-            event_content,
-            // Condition evaluation is the only model work this process meters
-            // (agent targets are funded by the harness). Counted usage asks the
-            // authentication service to settle the payer, as every other host does.
-            Arc::new(JevClassifier::new(
-                provider,
-                ai_billing::composition::pg_settling_recorder(
-                    db.clone(),
-                    config.enable_ai_usage_enforcement,
-                    config.ai_pricing(),
-                    config.settlement_route()?,
-                ),
-            )),
-        )),
-        None => None,
-    };
+    let conditions = classifier.map(|classifier| ConditionGate::new(event_content, classifier));
     let event_dispatch = EventDispatchService::new(
         Arc::clone(&event_repo),
         Arc::clone(&event_access),
@@ -263,6 +298,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         },
     );
 
+    // AI drafts routines as their owner would save them, checking code
+    // with the same checker.
+    let drafts = RoutineDrafts::new(Arc::clone(&code), Arc::new(drafter), ai_admission)
+        .with_conditions_enabled(conditions_enabled);
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -273,7 +312,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_event_management_enabled(config.event_routines_enabled)
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(TargetValidation::new(sessions))
-        .with_github_links(PgGithubInstallationClaims::new(db.clone())),
+        .with_github_links(PgGithubInstallationClaims::new(db.clone()))
+        .with_code(code, upgrades),
     );
     let template_flags = config
         .posthog_api_key
@@ -299,13 +339,18 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         access_service: Arc::clone(&access),
         authorization_state: authorization_state.clone(),
     };
+    let draft_state = RoutineDraftRouterState {
+        service: Arc::new(drafts),
+        authorization_state: authorization_state.clone(),
+    };
     let state = ScheduledActionRouterState {
         service,
         access_service: access,
         authorization_state,
     };
     let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
-        .merge(routine_template_router::<_, _, _, ()>(template_state));
+        .merge(routine_template_router::<_, _, _, ()>(template_state))
+        .merge(routine_draft_router::<_, _, ()>(draft_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())
@@ -324,8 +369,9 @@ fn mount_router(routes: Router) -> Router {
 }
 
 /// Read-only views of the domains whose events can trigger a routine, for
-/// condition checks and the agent's account of the event. None of these reads
-/// notify, publish or enqueue.
+/// trigger conditions, code and the agent's account of the event. None of
+/// these reads notify, publish or enqueue; routine writes go through code
+/// steps' SDK calls or the agent.
 fn event_content(
     db: &sqlx::PgPool,
     registrar: &OwnedEntityRegistrar<PgBotsRepo>,
