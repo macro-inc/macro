@@ -17,6 +17,7 @@ env:
     - ready_for_review
     branches:
     - main
+    - 'synoet/ci-seed-arms-base'
 jobs:
   path-check:
     runs-on: namespace-profile-linux-small;overrides.cache-tag=sccache-ci
@@ -296,11 +297,181 @@ jobs:
       shell: bash
       env:
         FILTER_CACHE_DIR: /home/runner/.cache/macro-nextest-filter
-  check:
+  check-control:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-seed-arm-c-check-${{ github.run_id }}-${{ github.run_attempt }}
+    env:
+      RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
+      RUSTDOCFLAGS: '-Dwarnings'
+      SQLX_OFFLINE: 'true'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Build code-mode assets
+      run: |
+        set -euo pipefail
+
+        # Build the code-mode assets once per SDK state, not once per job. Cache volumes
+        # are forks of past jobs, so most jobs miss the store path another job just built.
+        # The key is the store path, which covers every input of the build.
+        assets="$(nix eval --raw .#code-mode-assets.outPath)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+
+        if nix-store --check-validity "$assets" 2>/dev/null; then
+          echo "Code-mode assets already in the store"
+          exit 0
+        fi
+
+        # Forks have no remote cache credentials.
+        if [ -z "${SCCACHE_WEBDAV_ENDPOINT:-}" ]; then
+          nix build --no-link --print-build-logs .#code-mode-assets
+          exit 0
+        fi
+
+        cache_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$assets").closure.gz"
+
+        # The token goes through a config descriptor so it stays out of curl's arguments.
+        cache_request() {
+          curl --fail --silent --show-error --max-time 30 --retry 2 \
+            -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$@"
+        }
+
+        if cache_request "$cache_url" | gunzip | nix-store --import; then
+          echo "Code-mode assets restored from the remote cache"
+          exit 0
+        fi
+
+        nix build --no-link --print-build-logs .#code-mode-assets
+
+        # Losing the upload costs the next job a rebuild, not a failure.
+        if nix-store --export "$assets" | gzip | cache_request --upload-file - "$cache_url"; then
+          echo "Code-mode assets saved to the remote cache"
+        else
+          echo "::warning::Could not save code-mode assets to the remote cache"
+        fi
+    - name: fmt
+      run: cargo fmt --check
+    - name: clippy
+      run: |
+        set -euo pipefail
+
+        # Mirrors run_tests.sh package selection so clippy only lints the crates this
+        # PR can actually affect. `all` keeps the historical workspace invocation,
+        # including sync_service's special-cased feature set.
+
+        packages="${RUST_PACKAGES:-}"
+
+        clippy_sync_service() {
+          cargo clippy -p sync_service -- \
+            -A clippy::unnecessary_map_or \
+            -A clippy::collapsible_if
+        }
+
+        # Most of soup's dependents build it without `outbound` (no features, or
+        # `ports` alone), where helpers only the service or the Postgres repository
+        # call are dead code that --all-features hides.
+        clippy_soup_without_outbound() {
+          cargo clippy -p soup --no-default-features
+          cargo clippy -p soup --no-default-features --features ports
+        }
+
+        if [ -z "$packages" ] || [ "$packages" = "all" ]; then
+          cargo clippy --workspace --all-features --exclude sync_service
+          clippy_sync_service
+          clippy_soup_without_outbound
+          exit 0
+        fi
+
+        if [ "$packages" = "none" ]; then
+          echo "No Rust packages to lint"
+          exit 0
+        fi
+
+        sync=false
+        soup=false
+        pkg_args=()
+        for p in $packages; do
+          if [ "$p" = "sync_service" ]; then
+            sync=true
+          else
+            pkg_args+=(-p "$p")
+          fi
+          if [ "$p" = "soup" ]; then
+            soup=true
+          fi
+        done
+
+        if [ "${#pkg_args[@]}" -gt 0 ]; then
+          cargo clippy --all-features "${pkg_args[@]}"
+        fi
+
+        if [ "$sync" = true ]; then
+          clippy_sync_service
+        fi
+
+        if [ "$soup" = true ]; then
+          clippy_soup_without_outbound
+        fi
+      env:
+        RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  check-seed:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-seed-arm-s-check-${{ github.run_id }}-${{ github.run_attempt }}
     env:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
       RUSTDOCFLAGS: '-Dwarnings'
@@ -671,11 +842,278 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
-  test:
+  test-control:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.test_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
-    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-seed-arm-c-test-${{ github.run_id }}-${{ github.run_attempt }}
+    env:
+      RUST_PACKAGES: ${{ needs.path-check.outputs.test_packages }}
+      NEXTEST_TEST_THREADS: '32'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
+      SCCACHE_IDLE_TIMEOUT: '0'
+    services:
+      postgres:
+        image: pgvector/pgvector:pg14
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: macrodb
+        ports:
+        - '5432:5432'
+        options: '--health-cmd pg_isready --health-interval 1s --health-start-period 30s --health-timeout 5s --health-retries 5 --shm-size 1g'
+      redis:
+        image: redis:7
+        ports:
+        - '6379:6379'
+        options: '--health-cmd "redis-cli ping" --health-interval 1s --health-start-period 30s --health-timeout 5s --health-retries 5'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Start sccache server
+      run: sccache --start-server
+    - name: Build code-mode assets
+      run: |
+        set -euo pipefail
+
+        # Build the code-mode assets once per SDK state, not once per job. Cache volumes
+        # are forks of past jobs, so most jobs miss the store path another job just built.
+        # The key is the store path, which covers every input of the build.
+        assets="$(nix eval --raw .#code-mode-assets.outPath)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+
+        if nix-store --check-validity "$assets" 2>/dev/null; then
+          echo "Code-mode assets already in the store"
+          exit 0
+        fi
+
+        # Forks have no remote cache credentials.
+        if [ -z "${SCCACHE_WEBDAV_ENDPOINT:-}" ]; then
+          nix build --no-link --print-build-logs .#code-mode-assets
+          exit 0
+        fi
+
+        cache_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$assets").closure.gz"
+
+        # The token goes through a config descriptor so it stays out of curl's arguments.
+        cache_request() {
+          curl --fail --silent --show-error --max-time 30 --retry 2 \
+            -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$@"
+        }
+
+        if cache_request "$cache_url" | gunzip | nix-store --import; then
+          echo "Code-mode assets restored from the remote cache"
+          exit 0
+        fi
+
+        nix build --no-link --print-build-logs .#code-mode-assets
+
+        # Losing the upload costs the next job a rebuild, not a failure.
+        if nix-store --export "$assets" | gzip | cache_request --upload-file - "$cache_url"; then
+          echo "Code-mode assets saved to the remote cache"
+        else
+          echo "::warning::Could not save code-mode assets to the remote cache"
+        fi
+    - name: configure postgres for concurrent tests
+      run: |
+        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
+        if [ -z "$postgres_container" ]; then
+          echo "pgvector/pgvector:pg14 service container not found" >&2
+          docker ps
+          exit 1
+        fi
+
+        docker exec -i "$postgres_container" psql -U user -d macrodb <<'SQL'
+        ALTER SYSTEM SET fsync = off;
+        ALTER SYSTEM SET synchronous_commit = off;
+        ALTER SYSTEM SET full_page_writes = off;
+        ALTER SYSTEM SET max_wal_size = '4GB';
+        ALTER SYSTEM SET checkpoint_timeout = '30min';
+        ALTER SYSTEM SET max_locks_per_transaction = 8192;
+        SQL
+        docker restart "$postgres_container"
+        until docker exec "$postgres_container" pg_isready -U user -d macrodb; do
+          sleep 1
+        done
+        docker exec "$postgres_container" psql -U user -d macrodb -c "SHOW max_locks_per_transaction;"
+    - name: prepare tests
+      run: just setup_test_envs && just initialize_dbs && just setup_test_template
+    - name: run tests
+      run: |
+        set -euo pipefail
+
+        # --no-tests=pass: a package filter can legitimately select a crate with no
+        # tests; treat that as success, not nextest's default error.
+        # sync-service is not part of this suite, and its storage backends are mutually
+        # exclusive under --all-features.
+        #
+        # Package selection uses `cargo nextest run -p`, not `--workspace -E rdeps(...)`.
+        # The filterset only decides which tests *run* after a workspace build; `-p`
+        # is what keeps an unrelated crate's test binary from being compiled.
+        #
+        # `--lib --bins --tests` is safe with `--workspace` (cargo skips packages that
+        # lack a given target type) but fails with `-p` when any selected package has
+        # no lib — xtask binaries such as xtask_nextest_filter / xtask_workflows.
+        # Unconstrained `-p` still runs that package's tests.
+
+        : "${RUST_PACKAGES:?RUST_PACKAGES is required}"
+        # Nothing in this build carries debug info: the job sets CARGO_PROFILE_*_DEBUG=0 for
+        # workspace crates, and this flag covers dependencies. Panic messages keep their
+        # file and line; backtrace frames keep function names only.
+        common=(
+          --config 'profile.dev.package."*".debug=false'
+          --all-features --no-tests=pass
+        )
+
+        # The Deno tests are ignored by default because they need the pinned runtime. They
+        # run from this same script so cargo sees identical flags and selection and reuses
+        # what the first run compiled. Only tests in packages this PR selected can match.
+        if [ "${NEXTEST_RUN_DENO_TESTS:-}" = "true" ]; then
+          common+=(
+            --run-ignored only --test-threads 2
+            -E 'package(code_execution) or (package(agent_harness_service) and test(authenticated_mcp_runs_javascript_and_persists_source_and_result))'
+          )
+        else
+          common+=(--test-threads "$NEXTEST_TEST_THREADS")
+        fi
+
+        if [ "$RUST_PACKAGES" = "all" ]; then
+          cargo nextest run --workspace --exclude sync_service --lib --bins --tests "${common[@]}"
+          exit 0
+        fi
+
+        pkg_args=()
+        for package in $RUST_PACKAGES; do
+          [ "$package" = "sync_service" ] || pkg_args+=(-p "$package")
+        done
+
+        if [ "${#pkg_args[@]}" -eq 0 ]; then
+          echo "No packages in the test suite were affected"
+          exit 0
+        fi
+
+        cargo nextest run "${common[@]}" "${pkg_args[@]}"
+    - name: Set up code execution runtime
+      if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')
+      uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+      with:
+        deno-version: '2.9.6'
+    - name: Test Deno sandbox and authenticated SDK execution
+      if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')
+      run: |
+        set -euo pipefail
+
+        # --no-tests=pass: a package filter can legitimately select a crate with no
+        # tests; treat that as success, not nextest's default error.
+        # sync-service is not part of this suite, and its storage backends are mutually
+        # exclusive under --all-features.
+        #
+        # Package selection uses `cargo nextest run -p`, not `--workspace -E rdeps(...)`.
+        # The filterset only decides which tests *run* after a workspace build; `-p`
+        # is what keeps an unrelated crate's test binary from being compiled.
+        #
+        # `--lib --bins --tests` is safe with `--workspace` (cargo skips packages that
+        # lack a given target type) but fails with `-p` when any selected package has
+        # no lib — xtask binaries such as xtask_nextest_filter / xtask_workflows.
+        # Unconstrained `-p` still runs that package's tests.
+
+        : "${RUST_PACKAGES:?RUST_PACKAGES is required}"
+        # Nothing in this build carries debug info: the job sets CARGO_PROFILE_*_DEBUG=0 for
+        # workspace crates, and this flag covers dependencies. Panic messages keep their
+        # file and line; backtrace frames keep function names only.
+        common=(
+          --config 'profile.dev.package."*".debug=false'
+          --all-features --no-tests=pass
+        )
+
+        # The Deno tests are ignored by default because they need the pinned runtime. They
+        # run from this same script so cargo sees identical flags and selection and reuses
+        # what the first run compiled. Only tests in packages this PR selected can match.
+        if [ "${NEXTEST_RUN_DENO_TESTS:-}" = "true" ]; then
+          common+=(
+            --run-ignored only --test-threads 2
+            -E 'package(code_execution) or (package(agent_harness_service) and test(authenticated_mcp_runs_javascript_and_persists_source_and_result))'
+          )
+        else
+          common+=(--test-threads "$NEXTEST_TEST_THREADS")
+        fi
+
+        if [ "$RUST_PACKAGES" = "all" ]; then
+          cargo nextest run --workspace --exclude sync_service --lib --bins --tests "${common[@]}"
+          exit 0
+        fi
+
+        pkg_args=()
+        for package in $RUST_PACKAGES; do
+          [ "$package" = "sync_service" ] || pkg_args+=(-p "$package")
+        done
+
+        if [ "${#pkg_args[@]}" -eq 0 ]; then
+          echo "No packages in the test suite were affected"
+          exit 0
+        fi
+
+        cargo nextest run "${common[@]}" "${pkg_args[@]}"
+      env:
+        NEXTEST_RUN_DENO_TESTS: 'true'
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  test-seed:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.test_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-seed-arm-s-test-${{ github.run_id }}-${{ github.run_attempt }}
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.test_packages }}
       NEXTEST_TEST_THREADS: '32'
@@ -962,9 +1400,11 @@ jobs:
   status-check:
     needs:
     - path-check
-    - check
+    - check-control
+    - check-seed
     - doppler-config
-    - test
+    - test-control
+    - test-seed
     - graphql-schema-compat
     if: always()
     name: Cloud Storage Status Check
