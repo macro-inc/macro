@@ -8,8 +8,8 @@ import type {
 } from 'lexical';
 import type {
   DocumentLexicalConflict,
-  DocumentLexicalConflictEntry,
   DocumentLexicalInvalid,
+  DocumentLexicalNodeConflict,
 } from '../../../generated/storage/types.gen';
 import type { MacroClient } from '../../utils/client';
 import { MacroApiError, unwrap } from '../../utils/unwrap';
@@ -47,7 +47,7 @@ interface LexicalModules {
 export interface DocumentEditConflict {
   /** The conflicting node's id; null when the revision itself can't be rebuilt. */
   id: string | null;
-  reason: DocumentLexicalConflictEntry['reason'];
+  reason: DocumentLexicalNodeConflict['reason'];
 }
 
 /** Options for `DocumentLexical.commit`. */

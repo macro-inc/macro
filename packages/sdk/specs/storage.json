@@ -10914,156 +10914,6 @@
         }
       }
     },
-    "/documents/{document_id}/lexical": {
-      "get": {
-        "tags": [
-          "document"
-        ],
-        "summary": "Read a markdown document as a Lexical editor state with its revision.",
-        "operationId": "get_document_lexical",
-        "parameters": [
-          {
-            "name": "document_id",
-            "in": "path",
-            "description": "Document identity",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentLexicalState"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Not a markdown document",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Document view access denied"
-          },
-          "404": {
-            "description": "Document not found"
-          },
-          "502": {
-            "description": "The editing worker could not read the document",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "document"
-        ],
-        "summary": "Commit changed top-level Lexical blocks against a revision.",
-        "operationId": "commit_document_lexical",
-        "parameters": [
-          {
-            "name": "document_id",
-            "in": "path",
-            "description": "Document identity",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DocumentLexicalCommitRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentLexicalCommitted"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Not a markdown document, or too many blocks",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Document edit access denied"
-          },
-          "404": {
-            "description": "Document not found"
-          },
-          "409": {
-            "description": "The commit conflicts with concurrent edits; nothing changed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentLexicalConflict"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "The commit is invalid; nothing changed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentLexicalInvalid"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "The commit may have applied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentLexicalOutcomeUnknown"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/documents/{document_id}/ai-edit": {
       "post": {
         "tags": ["document"],
@@ -11480,6 +11330,162 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/lexical": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Read a markdown document or task as Lexical state with the caller's view\naccess, with the revision to commit against.",
+        "operationId": "get_document_lexical",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentLexicalState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document view access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "500": {
+            "description": "The document could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["document"],
+        "summary": "Commit changed top-level blocks of a markdown document or task with the\ncaller's edit access. The worker merges them three-way against the\nrevision they were read at, keeping concurrent collaborators' edits, and\napplies all or nothing. Retrying a commit that landed changes nothing.",
+        "operationId": "commit_document_lexical",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentLexicalCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentLexicalCommitted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown document, more than 500 blocks, or a malformed body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "409": {
+            "description": "Nodes could not merge with the live document; nothing was applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentLexicalConflict"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The blocks are malformed; nothing was applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentLexicalInvalid"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The commit could not be sent; nothing was applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Outcome unknown: the commit may have applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentLexicalOutcomeUnknown"
                 }
               }
             }
@@ -28399,159 +28405,6 @@
           }
         }
       },
-      "DocumentLexicalState": {
-        "type": "object",
-        "required": [
-          "state",
-          "revision"
-        ],
-        "properties": {
-          "state": {},
-          "revision": {
-            "type": "string"
-          }
-        }
-      },
-      "DocumentLexicalBlock": {
-        "type": "object",
-        "required": [
-          "id",
-          "node"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "after": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "node": {}
-        }
-      },
-      "DocumentLexicalCommitRequest": {
-        "type": "object",
-        "required": [
-          "revision",
-          "blocks",
-          "removed"
-        ],
-        "properties": {
-          "revision": {
-            "type": "string"
-          },
-          "blocks": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DocumentLexicalBlock"
-            }
-          },
-          "removed": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "DocumentLexicalCommitted": {
-        "type": "object",
-        "required": [
-          "state",
-          "revision"
-        ],
-        "properties": {
-          "state": {},
-          "revision": {
-            "type": "string"
-          }
-        }
-      },
-      "DocumentLexicalConflictReason": {
-        "type": "string",
-        "enum": [
-          "changed",
-          "removed",
-          "moved",
-          "revision"
-        ]
-      },
-      "DocumentLexicalConflictEntry": {
-        "type": "object",
-        "required": [
-          "reason"
-        ],
-        "properties": {
-          "id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reason": {
-            "$ref": "#/components/schemas/DocumentLexicalConflictReason"
-          }
-        }
-      },
-      "DocumentLexicalConflict": {
-        "type": "object",
-        "required": [
-          "error",
-          "conflicts"
-        ],
-        "properties": {
-          "error": {
-            "type": "string",
-            "enum": [
-              "conflict"
-            ]
-          },
-          "conflicts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DocumentLexicalConflictEntry"
-            }
-          }
-        }
-      },
-      "DocumentLexicalInvalid": {
-        "type": "object",
-        "required": [
-          "error",
-          "message"
-        ],
-        "properties": {
-          "error": {
-            "type": "string",
-            "enum": [
-              "invalid"
-            ]
-          },
-          "message": {
-            "type": "string"
-          }
-        }
-      },
-      "DocumentLexicalOutcomeUnknown": {
-        "type": "object",
-        "required": [
-          "error",
-          "message"
-        ],
-        "properties": {
-          "error": {
-            "type": "string",
-            "enum": [
-              "edit_outcome_unknown"
-            ]
-          },
-          "message": {
-            "type": "string"
-          }
-        }
-      },
       "DocumentAiEditFailed": {
         "type": "object",
         "description": "The edit failed after it started, so it may have partly applied. Read the\ndocument before retrying.",
@@ -28995,6 +28848,164 @@
           "reason": {
             "$ref": "#/components/schemas/InteractionReason",
             "description": "What triggered this interaction."
+          }
+        }
+      },
+      "DocumentLexicalBlock": {
+        "type": "object",
+        "description": "One new, changed or moved top-level block.",
+        "required": ["id", "node"],
+        "properties": {
+          "after": {
+            "type": ["string", "null"],
+            "description": "The id of the top-level block this one follows, or `null` for first."
+          },
+          "id": {
+            "type": "string",
+            "description": "The block's durable node id; equals the id inside `node`."
+          },
+          "node": {
+            "type": "object",
+            "description": "The block's serialized Lexical node, ids included."
+          }
+        }
+      },
+      "DocumentLexicalCommitRequest": {
+        "type": "object",
+        "description": "The change to a document's top-level blocks since `revision`.",
+        "required": ["revision", "blocks", "removed"],
+        "properties": {
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentLexicalBlock"
+            },
+            "description": "Every new, changed or moved top-level block, in document order; at most 500.",
+            "maxItems": 500
+          },
+          "removed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ids of the top-level blocks the change removes."
+          },
+          "revision": {
+            "type": "string",
+            "description": "The revision the change was made against, from the read."
+          }
+        }
+      },
+      "DocumentLexicalCommitted": {
+        "type": "object",
+        "description": "A committed change.",
+        "required": ["revision", "state"],
+        "properties": {
+          "revision": {
+            "type": "string",
+            "description": "The document's version after the commit."
+          },
+          "state": {
+            "type": "object",
+            "description": "The live document after the commit, merged with everyone's edits and\nnormalized as a read is."
+          }
+        }
+      },
+      "DocumentLexicalConflict": {
+        "type": "object",
+        "description": "Nodes that could not merge with the live document; nothing was applied.\nRead the document again and redo the change.",
+        "required": ["error", "conflicts"],
+        "properties": {
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentLexicalNodeConflict"
+            },
+            "description": "Each node that could not merge, and why."
+          },
+          "error": {
+            "$ref": "#/components/schemas/DocumentLexicalConflictCode",
+            "description": "Always `conflict`."
+          }
+        }
+      },
+      "DocumentLexicalConflictCode": {
+        "type": "string",
+        "description": "Error code of a commit that could not merge.",
+        "enum": ["conflict"]
+      },
+      "DocumentLexicalConflictReason": {
+        "type": "string",
+        "description": "Why a node could not merge.",
+        "enum": ["changed", "removed", "moved", "revision"]
+      },
+      "DocumentLexicalInvalid": {
+        "type": "object",
+        "description": "The blocks are malformed: an unknown node type, duplicate or mismatched\nids, or an `after` outside the document. Nothing was applied.",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentLexicalInvalidCode",
+            "description": "Always `invalid`."
+          },
+          "message": {
+            "type": "string",
+            "description": "What is wrong, for the program that built the blocks."
+          }
+        }
+      },
+      "DocumentLexicalInvalidCode": {
+        "type": "string",
+        "description": "Error code of a malformed commit.",
+        "enum": ["invalid"]
+      },
+      "DocumentLexicalNodeConflict": {
+        "type": "object",
+        "description": "One node of a commit that could not merge with the live document.",
+        "required": ["reason"],
+        "properties": {
+          "id": {
+            "type": ["string", "null"],
+            "description": "The node's id; `null` for a `revision` conflict."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/DocumentLexicalConflictReason",
+            "description": "Why it could not merge."
+          }
+        }
+      },
+      "DocumentLexicalOutcomeUnknown": {
+        "type": "object",
+        "description": "The commit was sent but never acknowledged, so it may have applied. Read\nthe document before retrying.",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentLexicalOutcomeUnknownCode",
+            "description": "Always `edit_outcome_unknown`."
+          },
+          "message": {
+            "type": "string",
+            "description": "What the editing worker reported."
+          }
+        }
+      },
+      "DocumentLexicalOutcomeUnknownCode": {
+        "type": "string",
+        "description": "Error code of a commit whose outcome is unknown.",
+        "enum": ["edit_outcome_unknown"]
+      },
+      "DocumentLexicalState": {
+        "type": "object",
+        "description": "A markdown document read as Lexical state.",
+        "required": ["state", "revision"],
+        "properties": {
+          "revision": {
+            "type": "string",
+            "description": "The document version the state was read at, as sync-service encodes\nit. Commit against it."
+          },
+          "state": {
+            "type": "object",
+            "description": "The serialized Lexical editor state, normalized through a headless\neditor with every Macro node registered."
           }
         }
       },
