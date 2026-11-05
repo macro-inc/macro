@@ -408,8 +408,8 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                             props.onPropertyPinned ? pinProperty : undefined
                           }
                         >
-                          <PropertyRowActions.Pin />
                           <PropertyRowActions.Remove />
+                          <PropertyRowActions.Pin />
                         </PropertyRowActions.Root>
                       </EntityCollectionProperty>
                     )}
@@ -644,8 +644,8 @@ function SidePanelPropertyRow(props: {
                         onRemovePendingProperty={props.onRemovePendingProperty}
                         onPropertyPinned={props.onPropertyPinned}
                       >
-                        <PropertyRowActions.Pin />
                         <PropertyRowActions.Remove />
+                        <PropertyRowActions.Pin />
                       </PropertyRowActions.Root>
                     </MultiValue>
                   </Match>

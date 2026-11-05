@@ -17,6 +17,8 @@ import {
 type PropertyRowActionsContextValue = {
   canPin: Accessor<boolean>;
   canRemove: Accessor<boolean>;
+  reservePin: Accessor<boolean>;
+  reserveRemove: Accessor<boolean>;
   isPinned: Accessor<boolean>;
   isSaving: Accessor<boolean>;
   pinLabel: Accessor<string>;
@@ -52,19 +54,22 @@ function PropertyRowActionsRoot(props: {
   const ctx = usePropertiesContext();
   const [isSaving, setIsSaving] = props.saving ?? createSignal(false);
 
+  const panelCanRemove = () => ctx.canEdit && Boolean(ctx.removeProperty);
+  const panelCanPin = () =>
+    ctx.canEdit &&
+    Boolean(
+      props.onPropertyPinned && ctx.onPropertyUnpinned && ctx.pinnedPropertyIds
+    );
   const canRemove = () =>
     props.canRemoveFromEntity &&
     ctx.canEdit &&
     !props.property.isMetadata &&
     (isPendingProperty(props.property) || Boolean(ctx.removeProperty));
   const canPin = () =>
-    ctx.canEdit &&
+    panelCanPin() &&
     !props.property.isMetadata &&
     (!isPendingProperty(props.property) ||
-      props.canPinPendingProperty === true) &&
-    Boolean(
-      props.onPropertyPinned && ctx.onPropertyUnpinned && ctx.pinnedPropertyIds
-    );
+      props.canPinPendingProperty === true);
   const isPinned = () =>
     ctx.pinnedPropertyIds?.().includes(props.property.propertyId) ?? false;
   const pinLabel = () => (isPinned() ? 'Unpin from title' : 'Pin below title');
@@ -117,6 +122,8 @@ function PropertyRowActionsRoot(props: {
       value={{
         canPin,
         canRemove,
+        reservePin: () => panelCanPin() || canPin(),
+        reserveRemove: () => panelCanRemove() || canRemove(),
         isPinned,
         isSaving,
         pinLabel,
@@ -124,7 +131,11 @@ function PropertyRowActionsRoot(props: {
         removeFromEntity,
       }}
     >
-      <Show when={canRemove() || canPin()}>
+      <Show
+        when={
+          panelCanRemove() || panelCanPin() || canRemove() || canPin()
+        }
+      >
         <div
           class="flex shrink-0 items-center gap-0.5"
           onMouseDown={stopRowInteraction}
@@ -136,11 +147,23 @@ function PropertyRowActionsRoot(props: {
   );
 }
 
+/** Keeps a row's action column aligned when one of its actions is unavailable. */
+function ActionSlot() {
+  return <span aria-hidden="true" class="size-6 shrink-0" />;
+}
+
 function PropertyPinAction() {
   const actions = usePropertyRowActions();
 
   return (
-    <Show when={actions.canPin()}>
+    <Show
+      when={actions.canPin()}
+      fallback={
+        <Show when={actions.reservePin()}>
+          <ActionSlot />
+        </Show>
+      }
+    >
       <Button
         variant="ghost"
         size="icon-xs"
@@ -167,7 +190,14 @@ function PropertyRemoveAction() {
   const actions = usePropertyRowActions();
 
   return (
-    <Show when={actions.canRemove()}>
+    <Show
+      when={actions.canRemove()}
+      fallback={
+        <Show when={actions.reserveRemove()}>
+          <ActionSlot />
+        </Show>
+      }
+    >
       <Button
         variant="danger-ghost"
         size="icon-xs"
