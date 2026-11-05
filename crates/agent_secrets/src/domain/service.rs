@@ -103,7 +103,7 @@ where
 
         Ok(AgentSecret {
             name: stored.name,
-            value: value.expose().to_string(),
+            value,
             updated_at: stored.updated_at,
         })
     }

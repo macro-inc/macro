@@ -4,7 +4,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
 use crate::domain::models::{
-    AgentSecretError, AgentSecretSummary, EncryptedSecret, SecretName, StoredSecret,
+    AgentSecretError, AgentSecretSummary, EncryptedSecret, KmsKeyId, SecretName, StoredSecret,
 };
 use crate::domain::ports::AgentSecretRepository;
 
@@ -32,8 +32,7 @@ impl AgentSecretRepository for PgAgentSecretsRepo {
         name: &SecretName,
         encrypted: &EncryptedSecret,
     ) -> Result<AgentSecretSummary, AgentSecretError> {
-        sqlx::query_as!(
-            AgentSecretSummary,
+        let row = sqlx::query!(
             r#"
             INSERT INTO agent_secrets
                 (agent_user_id, name, ciphertext, encryption_version, kms_key_id)
@@ -49,11 +48,16 @@ impl AgentSecretRepository for PgAgentSecretsRepo {
             name.as_str(),
             encrypted.ciphertext,
             encrypted.encryption_version,
-            encrypted.kms_key_id,
+            encrypted.kms_key_id.as_str(),
         )
         .fetch_one(&self.pool)
         .await
-        .map_err(AgentSecretError::internal)
+        .map_err(AgentSecretError::internal)?;
+        Ok(AgentSecretSummary {
+            name: SecretName::parse(&row.name).map_err(AgentSecretError::internal)?,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -75,16 +79,20 @@ impl AgentSecretRepository for PgAgentSecretsRepo {
         .await
         .map_err(AgentSecretError::internal)?;
 
-        Ok(row.map(|row| StoredSecret {
-            name: row.name,
-            encrypted: EncryptedSecret {
-                ciphertext: row.ciphertext,
-                encryption_version: row.encryption_version,
-                kms_key_id: row.kms_key_id,
-            },
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-        }))
+        row.map(|row| {
+            Ok(StoredSecret {
+                name: SecretName::parse(&row.name).map_err(AgentSecretError::internal)?,
+                encrypted: EncryptedSecret {
+                    ciphertext: row.ciphertext,
+                    encryption_version: row.encryption_version,
+                    kms_key_id: KmsKeyId::parse(row.kms_key_id)
+                        .map_err(AgentSecretError::internal)?,
+                },
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            })
+        })
+        .transpose()
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -92,8 +100,7 @@ impl AgentSecretRepository for PgAgentSecretsRepo {
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<Vec<AgentSecretSummary>, AgentSecretError> {
-        sqlx::query_as!(
-            AgentSecretSummary,
+        let rows = sqlx::query!(
             r#"
             SELECT name, created_at, updated_at
             FROM agent_secrets
@@ -104,7 +111,16 @@ impl AgentSecretRepository for PgAgentSecretsRepo {
         )
         .fetch_all(&self.pool)
         .await
-        .map_err(AgentSecretError::internal)
+        .map_err(AgentSecretError::internal)?;
+        rows.into_iter()
+            .map(|row| {
+                Ok(AgentSecretSummary {
+                    name: SecretName::parse(&row.name).map_err(AgentSecretError::internal)?,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                })
+            })
+            .collect()
     }
 
     #[tracing::instrument(skip(self), err)]

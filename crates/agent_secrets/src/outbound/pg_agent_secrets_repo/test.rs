@@ -47,7 +47,8 @@ async fn a_secret_is_stored_replaced_listed_and_deleted(pool: PgPool) {
             &EncryptedSecret {
                 ciphertext: b"first".to_vec(),
                 encryption_version: 1,
-                kms_key_id: "key-1".to_string(),
+                kms_key_id: crate::domain::models::KmsKeyId::parse("key-1".to_string())
+                    .expect("key id"),
             },
         )
         .await
@@ -59,13 +60,14 @@ async fn a_secret_is_stored_replaced_listed_and_deleted(pool: PgPool) {
             &EncryptedSecret {
                 ciphertext: b"second".to_vec(),
                 encryption_version: 1,
-                kms_key_id: "key-1".to_string(),
+                kms_key_id: crate::domain::models::KmsKeyId::parse("key-1".to_string())
+                    .expect("key id"),
             },
         )
         .await
         .expect("replaced");
 
-    assert_eq!(second.name, "github-token");
+    assert_eq!(second.name.as_str(), "github-token");
     assert_eq!(second.created_at, first.created_at);
     assert!(second.updated_at >= first.updated_at);
 
@@ -75,7 +77,7 @@ async fn a_secret_is_stored_replaced_listed_and_deleted(pool: PgPool) {
         .expect("read")
         .expect("stored secret");
     assert_eq!(stored.encrypted.ciphertext, b"second".to_vec());
-    assert_eq!(stored.encrypted.kms_key_id, "key-1");
+    assert_eq!(stored.encrypted.kms_key_id.as_str(), "key-1");
 
     let listed = repo.list(&agent).await.expect("listed");
     assert_eq!(
@@ -104,7 +106,8 @@ async fn deleting_the_account_deletes_its_secrets(pool: PgPool) {
         &EncryptedSecret {
             ciphertext: b"secret".to_vec(),
             encryption_version: 1,
-            kms_key_id: "key-1".to_string(),
+            kms_key_id: crate::domain::models::KmsKeyId::parse("key-1".to_string())
+                .expect("key id"),
         },
     )
     .await

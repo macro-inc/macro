@@ -31,6 +31,9 @@ agent, `GET /{agent_user_id}/secrets` (names only) and
 
 ## Gotchas
 
+- Keep secret names as validated `SecretName` values in storage and responses;
+  deserialize and read database strings through its parser. JSON remains a string.
+
 - The encryption context binds `macro:agent-user-id` and `macro:secret-name`;
   a row copied to another agent or renamed fails to decrypt, by design.
 - Values are capped at 4096 bytes, KMS's direct-encrypt limit.

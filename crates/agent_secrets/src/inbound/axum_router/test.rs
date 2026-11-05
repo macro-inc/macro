@@ -47,7 +47,7 @@ impl AgentSecretService for FakeService {
     ) -> Result<AgentSecretSummary, AgentSecretError> {
         self.record(format!("put {caller} {name} {value}"));
         Ok(AgentSecretSummary {
-            name: name.to_string(),
+            name: crate::domain::models::SecretName::parse(name).unwrap(),
             created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
             updated_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
         })
@@ -60,8 +60,9 @@ impl AgentSecretService for FakeService {
     ) -> Result<AgentSecret, AgentSecretError> {
         self.record(format!("get {caller} {name}"));
         Ok(AgentSecret {
-            name: name.to_string(),
-            value: "ghp_abc".to_string(),
+            name: crate::domain::models::SecretName::parse(name).unwrap(),
+            value: crate::domain::models::SecretValue::parse("ghp_abc".to_string())
+                .expect("valid secret"),
             updated_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
         })
     }

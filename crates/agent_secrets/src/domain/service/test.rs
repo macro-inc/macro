@@ -40,7 +40,7 @@ impl AgentSecretRepository for FakeRepository {
         );
 
         Ok(AgentSecretSummary {
-            name: name.as_str().to_string(),
+            name: name.clone(),
             created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
             updated_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
         })
@@ -60,7 +60,7 @@ impl AgentSecretRepository for FakeRepository {
                 name.as_str().to_string(),
             ))
             .map(|encrypted| StoredSecret {
-                name: name.as_str().to_string(),
+                name: name.clone(),
                 encrypted: encrypted.clone(),
                 created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
                 updated_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
@@ -84,7 +84,7 @@ impl AgentSecretRepository for FakeRepository {
         Ok(names
             .into_iter()
             .map(|name| AgentSecretSummary {
-                name,
+                name: SecretName::parse(&name).unwrap(),
                 created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
                 updated_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
             })
@@ -122,7 +122,7 @@ impl SecretCipher for FakeCipher {
             ciphertext: format!("{agent_user_id}/{}:{}", name.as_str(), value.expose())
                 .into_bytes(),
             encryption_version: 1,
-            kms_key_id: "key".to_string(),
+            kms_key_id: crate::domain::models::KmsKeyId::parse("key".to_string()).expect("key id"),
         })
     }
 
@@ -168,14 +168,14 @@ async fn an_agent_stores_reads_and_deletes_its_own_secret() {
         .put(&user(AGENT), "github-token", "ghp_abc".to_string())
         .await
         .expect("stored");
-    assert_eq!(summary.name, "github-token");
+    assert_eq!(summary.name.as_str(), "github-token");
 
     let secret = service
         .get(&user(AGENT), "github-token")
         .await
         .expect("read");
-    assert_eq!(secret.name, "github-token");
-    assert_eq!(secret.value, "ghp_abc");
+    assert_eq!(secret.name.as_str(), "github-token");
+    assert_eq!(secret.value.expose(), "ghp_abc");
 
     service
         .delete(&user(AGENT), "github-token")

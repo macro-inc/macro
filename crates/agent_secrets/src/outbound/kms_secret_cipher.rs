@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use cursor_api_key::cipher::KmsCiphertexts;
 use macro_user_id::user_id::MacroUserIdStr;
 
-use crate::domain::models::{AgentSecretError, EncryptedSecret, SecretName, SecretValue};
+use crate::domain::models::{AgentSecretError, EncryptedSecret, KmsKeyId, SecretName, SecretValue};
 use crate::domain::ports::SecretCipher;
 
 /// The encryption scheme this adapter writes.
@@ -85,7 +85,7 @@ impl<Kms: KmsCiphertexts + 'static> SecretCipher for KmsSecretCipher<Kms> {
         Ok(EncryptedSecret {
             ciphertext,
             encryption_version: ENCRYPTION_VERSION,
-            kms_key_id,
+            kms_key_id: KmsKeyId::parse(kms_key_id).map_err(AgentSecretError::internal)?,
         })
     }
 
@@ -104,7 +104,7 @@ impl<Kms: KmsCiphertexts + 'static> SecretCipher for KmsSecretCipher<Kms> {
         let plaintext = self
             .kms
             .decrypt(
-                &encrypted.kms_key_id,
+                encrypted.kms_key_id.as_str(),
                 &encrypted.ciphertext,
                 encryption_context(agent_user_id, name),
             )

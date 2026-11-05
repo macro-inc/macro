@@ -4,12 +4,16 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
+#[cfg(test)]
+mod test;
+
 /// Largest secret value, in bytes: KMS's direct-encrypt limit.
 pub const MAX_SECRET_BYTES: usize = 4096;
 
 /// A secret's name: lowercase letters, digits, `_`, `-` and `.`, 1 to 64
 /// characters, starting with a letter or digit.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 pub struct SecretName(String);
 
 impl SecretName {
@@ -27,6 +31,12 @@ impl SecretName {
     /// The name.
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for SecretName {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::parse(&String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
     }
 }
 
@@ -52,9 +62,61 @@ impl SecretValue {
     }
 }
 
+impl Serialize for SecretValue {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.expose())
+    }
+}
+
+impl<'de> Deserialize<'de> for SecretValue {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::parse(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
 impl std::fmt::Debug for SecretValue {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("SecretValue(redacted)")
+    }
+}
+
+/// A KMS key identifier, alias, or ARN. Keep provider identifiers bounded and
+/// free of whitespace/control characters before passing them back to KMS.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct KmsKeyId(String);
+
+impl KmsKeyId {
+    /// Validate the character set shared by KMS key IDs, aliases and ARNs.
+    pub fn parse(raw: String) -> Result<Self, InvalidKmsKeyId> {
+        if !lazy_regex::regex_is_match!(r"^[A-Za-z0-9:/_.-]{1,2048}$", &raw) {
+            return Err(InvalidKmsKeyId);
+        }
+        Ok(Self(raw))
+    }
+
+    /// The provider's identifier, for storage and KMS calls.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// A malformed key identifier; errors never include the supplied value.
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error("invalid KMS key identifier")]
+pub struct InvalidKmsKeyId;
+
+impl TryFrom<String> for KmsKeyId {
+    type Error = InvalidKmsKeyId;
+
+    fn try_from(raw: String) -> Result<Self, Self::Error> {
+        Self::parse(raw)
+    }
+}
+
+impl From<KmsKeyId> for String {
+    fn from(key: KmsKeyId) -> Self {
+        key.0
     }
 }
 
@@ -66,14 +128,14 @@ pub struct EncryptedSecret {
     /// The scheme that produced it.
     pub encryption_version: i16,
     /// The KMS key that encrypted it.
-    pub kms_key_id: String,
+    pub kms_key_id: KmsKeyId,
 }
 
 /// A stored secret, still encrypted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredSecret {
     /// The secret's name.
-    pub name: String,
+    pub name: SecretName,
     /// The ciphertext.
     pub encrypted: EncryptedSecret,
     /// When it was first stored.
@@ -103,7 +165,8 @@ impl std::fmt::Debug for PutAgentSecret {
 #[serde(rename_all = "camelCase")]
 pub struct AgentSecretSummary {
     /// The secret's name.
-    pub name: String,
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub name: SecretName,
     /// When it was first stored.
     pub created_at: DateTime<Utc>,
     /// When it was last replaced.
@@ -125,9 +188,11 @@ pub struct AgentSecretSummaries {
 #[serde(rename_all = "camelCase")]
 pub struct AgentSecret {
     /// The secret's name.
-    pub name: String,
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub name: SecretName,
     /// The plaintext value.
-    pub value: String,
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub value: SecretValue,
     /// When it was last replaced.
     pub updated_at: DateTime<Utc>,
 }
