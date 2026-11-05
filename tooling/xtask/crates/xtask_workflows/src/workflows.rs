@@ -55,6 +55,7 @@ mod pr_privacy_check;
 mod publish_sdk;
 mod pulumi_preview_pr;
 mod push_local_stack_binaries;
+mod regenerate_generated_code;
 mod release_label_check;
 mod release_sdk;
 mod reusable_deploy_service;
@@ -265,6 +266,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_preview",
         file_name: "deploy_preview.yml",
         render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
+    },
+    WorkflowFile {
+        slug: "regenerate_generated_code",
+        file_name: "regenerate_generated_code.yml",
+        render_yaml: || render_gh_workflow(regenerate_generated_code::regenerate_generated_code)(),
     },
     WorkflowFile {
         slug: "deploy_sync_service",
