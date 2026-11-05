@@ -5,8 +5,8 @@
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /slug/{slug}` - get document by team slug
 //! - `POST /{document_id}/ai-edit` — edit a markdown document by instructions
-//! - `POST /{document_id}/spreadsheet/read`, `/calculate`, `/edits` — read,
-//!   calculate and edit a native spreadsheet
+//! - `POST /{document_id}/spreadsheet/read`, `/calculate`, `/edits`, `/ai-edit` —
+//!   read, calculate and edit a native spreadsheet, by operations or instructions
 //! - `POST /create_spreadsheet` — create a native spreadsheet
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
 //! - `GET /{document_id}/branch_name` — get short ID + task-aware git branch name (when the document is a task)
@@ -206,6 +206,10 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     /// The spreadsheet tools' read, calculate and edit workflows.
     #[cfg(feature = "ai_tools")]
     pub spreadsheet: Arc<crate::domain::spreadsheet::SpreadsheetService<T, DefaultEditingWorker>>,
+    /// Spreadsheet edits by instructions, with the host's admission and metering.
+    #[cfg(feature = "ai_tools")]
+    pub spreadsheet_ai_edit:
+        Arc<crate::domain::spreadsheet::SpreadsheetAiEditService<T, DefaultEditingWorker>>,
     /// JWT secret for signing document permission tokens.
     pub document_permission_jwt_secret: String,
     /// Whether a team bot with no acting user may own what it creates.
@@ -228,6 +232,8 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             ai_editing: self.ai_editing.clone(),
             #[cfg(feature = "ai_tools")]
             spreadsheet: self.spreadsheet.clone(),
+            #[cfg(feature = "ai_tools")]
+            spreadsheet_ai_edit: self.spreadsheet_ai_edit.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             non_user_owners: self.non_user_owners,
         }
@@ -346,6 +352,10 @@ where
         .route(
             "/{document_id}/spreadsheet/edits",
             axum::routing::post(spreadsheet::edit_spreadsheet_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/spreadsheet/ai-edit",
+            axum::routing::post(spreadsheet::ai_edit_spreadsheet_handler::<T, Svc, Auth>),
         );
 
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(

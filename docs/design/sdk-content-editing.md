@@ -349,7 +349,9 @@ generated at build time), and adds the direct tool it replaces to
    `documents.spreadsheet(document)` with `read`, `calculate` and
    `applyEdits` over `SpreadsheetService`. Hides `ReadSpreadsheet`,
    `CalculateSpreadsheet` and `EditSpreadsheet`. Then `sheet.edit(instructions,
-   { signal })` with a new writer model over the same service.
+   { signal })` with a new writer model over the same engine: the worker's
+   `/spreadsheet/instructions` reads, calculates and commits one batch, and
+   DSS `POST /documents/{id}/spreadsheet/ai-edit` admits and meters it.
 4. **PowerPoint** (MACRO-4581). `deck.edit(instructions, { signal, saveAs })`
    with a new writer model over `PresentationService`; changed slides, the new
    version or the new `Presentation` for `saveAs`. Hides `EditPresentation`.

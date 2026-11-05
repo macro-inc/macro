@@ -20328,6 +20328,165 @@ export const setSkillDescriptionResponse = zod
   .describe("A skill's routing description.");
 
 /**
+ * A client that disconnects drops the worker request, which cancels the
+edit before its save.
+ * @summary Edit a native spreadsheet by instructions with the caller's edit access:
+a writer model reads the workbook and saves one atomic batch, with AI
+admission and billing. A workbook changed while it worked saves nothing
+and answers 409.
+ */
+export const editSpreadsheetWithAiParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const editSpreadsheetWithAiBody = zod
+  .object({
+    instructions: zod
+      .string()
+      .min(1)
+      .describe(
+        'Natural-language instructions. Name the sheet and the cells, columns\nor table to change, describe the outcome, and say what must stay.'
+      ),
+  })
+  .describe('What to change in a workbook, in words.');
+
+export const editSpreadsheetWithAiResponseSheetsItemColumnCountMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemErrorCellsMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemFormulaCellsMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemPopulatedCellsMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemRowCountMin = 0;
+
+export const editSpreadsheetWithAiResponse = zod
+  .object({
+    applied: zod.boolean().describe('Whether a new change was persisted.'),
+    changes: zod
+      .array(
+        zod
+          .object({
+            range: zod
+              .string()
+              .nullish()
+              .describe('Affected range, when applicable.'),
+            sheetId: zod.string().describe('Affected stable sheet identity.'),
+            summary: zod.string().describe('Human-readable change summary.'),
+            type: zod.string().describe('Operation type.'),
+          })
+          .describe('Applied edit summary.')
+      )
+      .describe('What changed, one summary per operation.'),
+    revision: zod.string().describe('Revision after the edit.'),
+    sheets: zod
+      .array(
+        zod
+          .object({
+            columnCount: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemColumnCountMin)
+              .describe('Available columns.'),
+            errorCells: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemErrorCellsMin)
+              .describe('Number of calculated errors.'),
+            formulaCells: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemFormulaCellsMin)
+              .describe('Number of formulas.'),
+            id: zod
+              .string()
+              .describe('Stable sheet identity for future calls.'),
+            name: zod.string().describe('Current sheet name.'),
+            populatedCells: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemPopulatedCellsMin)
+              .describe('Number of populated cells.'),
+            rowCount: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemRowCountMin)
+              .describe('Available rows.'),
+            tables: zod
+              .array(
+                zod
+                  .object({
+                    columnTypes: zod
+                      .array(
+                        zod
+                          .object({
+                            column: zod
+                              .string()
+                              .describe(
+                                'Header name of the column, ignoring case.'
+                              ),
+                            type: zod
+                              .enum([
+                                'text',
+                                'number',
+                                'percent',
+                                'currency',
+                                'date',
+                                'datetime',
+                                'time',
+                                'checkbox',
+                                'dropdown',
+                                'person',
+                              ])
+                              .describe(
+                                'What a table column holds, as Google Sheets types table columns.'
+                              ),
+                          })
+                          .describe(
+                            "A table column's type, by its header name."
+                          )
+                      )
+                      .optional()
+                      .describe('Typed columns; untyped columns are left out.'),
+                    columns: zod
+                      .array(zod.string())
+                      .describe('Column names, from the header row.'),
+                    filteredColumns: zod
+                      .array(zod.string())
+                      .optional()
+                      .describe('Columns whose filters currently hide rows.'),
+                    name: zod
+                      .string()
+                      .describe('Table name, as in Sales[Amount].'),
+                    range: zod
+                      .string()
+                      .describe(
+                        'A1 rectangle from the header row through the total row, if any.'
+                      ),
+                    totalsRow: zod
+                      .boolean()
+                      .describe('Whether the last row is a total row.'),
+                  })
+                  .describe(
+                    'A named table (an Excel table) that formulas address with structured references.'
+                  )
+              )
+              .optional()
+              .describe('Named tables on the sheet.'),
+            usedRange: zod
+              .string()
+              .nullish()
+              .describe(
+                'Bounding rectangle of used cells, or null for an empty sheet.'
+              ),
+          })
+          .describe('Compact metadata for a sheet.')
+      )
+      .describe('Every sheet after the edit.'),
+    warnings: zod
+      .array(zod.string())
+      .describe(
+        'Issues to check, such as formula errors; they are not repaired.'
+      ),
+  })
+  .describe('A completed edit by instructions.');
+
+/**
  * @summary Evaluate scratch formulas against a native spreadsheet with view access,
 optionally with hypothetical inputs. Nothing is saved.
  */

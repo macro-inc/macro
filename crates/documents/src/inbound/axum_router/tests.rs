@@ -1063,6 +1063,18 @@ fn test_router_with(
             ),
             "unused-jwt-secret".to_string(),
         )),
+        #[cfg(feature = "ai_tools")]
+        spreadsheet_ai_edit: Arc::new(crate::domain::spreadsheet::SpreadsheetAiEditService::new(
+            document_service.clone(),
+            Arc::new(
+                crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                    "http://localhost/unused-editing-worker".to_string(),
+                ),
+            ),
+            "unused-jwt-secret".to_string(),
+            Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
+            Arc::new(ai_usage::NoOpUsageRecorder),
+        )),
         document_permission_jwt_secret: "unused-jwt-secret".to_string(),
         non_user_owners,
     };

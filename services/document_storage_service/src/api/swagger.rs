@@ -257,6 +257,7 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::spreadsheet::read_spreadsheet_handler,
         documents_hex::inbound::axum_router::spreadsheet::calculate_spreadsheet_handler,
         documents_hex::inbound::axum_router::spreadsheet::edit_spreadsheet_handler,
+        documents_hex::inbound::axum_router::spreadsheet::ai_edit_spreadsheet_handler,
         documents_hex::inbound::axum_router::get_branch_name::get_branch_name_handler,
         documents_hex::inbound::axum_router::get_github_pull_requests::get_github_pull_requests_handler,
         documents_hex::inbound::axum_router::get_github_pull_request_tasks::get_github_pull_request_tasks_handler,

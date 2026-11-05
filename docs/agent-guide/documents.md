@@ -903,6 +903,9 @@ In code mode these tools are hidden: programs use the SDK's
 `applyEdits(operations, { expectedRevision })`, over DSS
 `POST /documents/{id}/spreadsheet/read|calculate|edits`), which runs the same
 engine, and `macro.documents.createSpreadsheet()` creates a blank workbook.
+`sheet.edit(instructions)` (`POST /documents/{id}/spreadsheet/ai-edit`) hands a
+described change to the editing worker's writer model, which saves one batch;
+it is billed as an AI edit, and the result lists the changes and warnings.
 
 Verify with a saved workbook: select B4:E9, click Ask Macro, check the adjacent
 chat's mention and trailing space, and ask for a total or a what-if calculation.
