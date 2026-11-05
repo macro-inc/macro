@@ -223,7 +223,7 @@ export function GanttBar(
                     class="pointer-events-none absolute inset-0 rounded-[inherit] shadow-sm [--gantt-bar-bg:var(--color-surface)] bg-[color:var(--gantt-bar-bg)] [background-image:var(--gantt-bar-gradient,none)] group-hover/bar:[background-image:linear-gradient(var(--color-hover),var(--color-hover)),var(--gantt-bar-gradient,none)] light-mode:[--gantt-bar-bg:color-mix(in_oklch,var(--color-surface)_92%,var(--color-ink))]"
                     style={{
                       '--gantt-bar-bg': local.tint
-                        ? `color-mix(in oklch, ${local.tint} 18%, var(--color-surface))`
+                        ? `color-mix(in oklab, ${local.tint} 18%, var(--color-surface))`
                         : undefined,
                       '--gantt-bar-gradient':
                         deadlineUrgency() > 0
