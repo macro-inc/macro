@@ -8,7 +8,6 @@ import { TruncatedText } from '@core/component/FileList/TruncatedText';
 import type { EntityDragData } from '@entity';
 import {
   DragDropProvider,
-  DragDropSensors,
   DragOverlay,
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
@@ -23,6 +22,7 @@ import {
   Show,
   useContext,
 } from 'solid-js';
+import { createDistancePointerSensor } from '../drag-drop/create-distance-pointer-sensor';
 import { createPointerCollisionDetector } from './pointer-collision';
 
 type DragOperationContextValue = {
@@ -124,6 +124,22 @@ function ItemDragOverlay() {
   );
 }
 
+function ItemDragSensors(props: { onCancel: () => void }) {
+  const context = useDragDropContext();
+  if (!context) throw new Error('Item drag sensors require DragDropProvider');
+
+  createDistancePointerSensor(
+    10,
+    () => {
+      props.onCancel();
+      context[1].detectCollisions();
+    },
+    { id: 'pointer-sensor', activationDelay: 250 }
+  );
+
+  return null;
+}
+
 export function ItemDndProvider(props: { children: JSXElement }) {
   let pointerPosition: { x: number; y: number } | undefined;
   const pointerWithin = createPointerCollisionDetector(() => pointerPosition);
@@ -187,7 +203,11 @@ export function ItemDndProvider(props: { children: JSXElement }) {
         collisionDetector={pointerWithin}
         onDragEnd={handlePointerEnd}
       >
-        <DragDropSensors />
+        <ItemDragSensors
+          onCancel={() => {
+            pointerPosition = undefined;
+          }}
+        />
         {props.children}
         <DragOverlay class="z-drag pointer-events-none">
           <ItemDragOverlay />

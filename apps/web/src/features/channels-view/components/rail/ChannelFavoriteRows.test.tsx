@@ -82,12 +82,26 @@ vi.mock('@queries/favorites/favorites', () => ({
   useReorderFavoritesMutation: () => ({ mutateAsync: drag.reorder }),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => drag.viewer() }));
-vi.mock('@app/components/drag-drop/create-distance-pointer-sensor', () => ({
-  createDistancePointerSensor: () => ({
-    start: (_event: MouseEvent, id: string) => drag.activate(id),
-    cancel: vi.fn(),
-  }),
-}));
+vi.mock(
+  '@app/components/drag-drop/create-distance-pointer-sensor',
+  async (importOriginal) => {
+    const original =
+      await importOriginal<
+        typeof import('@app/components/drag-drop/create-distance-pointer-sensor')
+      >();
+    return {
+      createDistancePointerSensor: (
+        ...args: Parameters<typeof original.createDistancePointerSensor>
+      ) => {
+        if (drag.real) return original.createDistancePointerSensor(...args);
+        return {
+          start: (_event: MouseEvent, id: string) => drag.activate(id),
+          cancel: vi.fn(),
+        };
+      },
+    };
+  }
+);
 vi.mock('@macro-inc/observability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@macro-inc/observability')>()),
   Telemetry: {
@@ -568,7 +582,11 @@ describe('favorite reordering', () => {
 
       const rows = screen.getAllByRole('treeitem');
       fireEvent.mouseDown(rows[1], { button: 0, clientX: 20, clientY: 60 });
-      fireEvent.mouseMove(globalThis.document, { clientX: 20, clientY: 20 });
+      fireEvent.mouseMove(globalThis.document, {
+        buttons: 1,
+        clientX: 20,
+        clientY: 20,
+      });
       if (destination === 'outside')
         hit.mockReturnValue(globalThis.document.body);
       fireEvent.pointerUp(rows[0], { button: 0, clientX: 20, clientY: 20 });

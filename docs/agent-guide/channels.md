@@ -1170,6 +1170,9 @@ their positions. **Sort → Custom order** restores dragging after choosing an
 automatic sort. Releasing over a favorite preserves the drop target through
 scroll updates; releasing outside the list leaves the order unchanged. Dropping
 a favorite does not open its conversation or move it into a custom section.
+Interrupted mouse drags cancel without saving when the window loses focus, the
+document becomes hidden, or the pointer is canceled. Returning with the primary
+button already released also clears the drag, so later clicks and drags work.
 Failed saves roll back and show an error toast.
 
 ### Sections

@@ -30,6 +30,7 @@ const mock = vi.hoisted(() => {
   return {
     actions,
     state: {
+      draggables: { item: {}, section: {} },
       active: {
         get sensorId() {
           return sensorId;
@@ -74,6 +75,7 @@ function setup(
     const event = new MouseEvent('mousemove', {
       clientX: x,
       clientY: y,
+      buttons: 1,
       cancelable: true,
     });
     document.dispatchEvent(event);

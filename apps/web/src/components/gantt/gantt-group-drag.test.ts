@@ -124,7 +124,7 @@ function fixture(withPreview = false) {
       button: 0,
     });
   const hover = (y = 220) =>
-    fireEvent.mouseMove(document, { clientX: 300, clientY: y });
+    fireEvent.mouseMove(document, { buttons: 1, clientX: 300, clientY: y });
   const release = () =>
     fireEvent.mouseUp(document, { clientX: 300, clientY: 220 });
   return {

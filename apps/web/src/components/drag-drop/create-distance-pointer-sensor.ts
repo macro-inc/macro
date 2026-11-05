@@ -1,11 +1,12 @@
+import { debounce } from '@solid-primitives/scheduled';
 import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import { onCleanup, onMount } from 'solid-js';
 
-/** The stock pointer sensor activates after 250ms or 10px. This one has no timer. */
+/** Distance-only by default, with an optional hold delay for ordinary item drags. */
 export function createDistancePointerSensor(
   distance: number,
   onCancel: () => void,
-  options: { id?: string; manual?: boolean } = {}
+  options: { id?: string; manual?: boolean; activationDelay?: number } = {}
 ) {
   const context = useDragDropContext();
   if (!context)
@@ -20,39 +21,69 @@ export function createDistancePointerSensor(
   const clearSelection = () => window.getSelection()?.removeAllRanges();
 
   const detach = () => {
-    document.removeEventListener('mousemove', move);
-    document.removeEventListener('mouseup', up);
+    activateAfterDelay.clear();
+    window.removeEventListener('mousemove', move, true);
+    window.removeEventListener('mouseup', up, true);
+    window.removeEventListener('pointercancel', cancelOnPointerCancel, true);
     document.removeEventListener('selectionchange', clearSelection);
     document.removeEventListener('keydown', cancelOnEscape, true);
+    document.removeEventListener('visibilitychange', cancelWhenHidden);
     window.removeEventListener('blur', cancelOnBlur);
     attached = false;
     pendingId = undefined;
     cancelled = false;
   };
+
+  const activate = () => {
+    if (!attached || cancelled || pendingId === undefined) return;
+    if (state.active.sensor && !isActive()) {
+      detach();
+      return;
+    }
+    if (isActive()) return;
+    if (!state.draggables[pendingId]) {
+      detach();
+      return;
+    }
+
+    activateAfterDelay.clear();
+    actions.sensorStart(id, origin);
+    actions.dragStart(pendingId);
+    clearSelection();
+    document.addEventListener('selectionchange', clearSelection);
+  };
+  const activateAfterDelay = debounce(activate, options.activationDelay);
+
   const attach = (event: MouseEvent, draggableId: string | number) => {
-    if (event.button !== 0 || attached) return;
+    if (event.button !== 0 || attached || state.active.sensor) return;
     origin = { x: event.clientX, y: event.clientY };
     pendingId = draggableId;
     attached = true;
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mouseup', up);
+    window.addEventListener('mousemove', move, true);
+    window.addEventListener('mouseup', up, true);
+    window.addEventListener('pointercancel', cancelOnPointerCancel, true);
+    document.addEventListener('visibilitychange', cancelWhenHidden);
+    window.addEventListener('blur', cancelOnBlur);
     if (options.manual) {
       document.addEventListener('keydown', cancelOnEscape, true);
-      window.addEventListener('blur', cancelOnBlur);
     }
+    if (options.activationDelay !== undefined) activateAfterDelay();
   };
+
   const move = (event: MouseEvent) => {
+    if ((event.buttons & 1) === 0) {
+      cancel(true);
+      return;
+    }
     if (cancelled) return;
+
     const coordinates = { x: event.clientX, y: event.clientY };
     if (!state.active.sensor && pendingId !== undefined) {
       if (
         Math.hypot(coordinates.x - origin.x, coordinates.y - origin.y) >
         distance
       ) {
-        actions.sensorStart(id, origin);
-        actions.dragStart(pendingId);
-        clearSelection();
-        document.addEventListener('selectionchange', clearSelection);
+        activate();
       }
     } else if (state.active.sensor && !isActive()) {
       detach();
@@ -98,6 +129,13 @@ export function createDistancePointerSensor(
     event.stopPropagation();
   };
   const cancelOnBlur = () => cancel(true);
+  const cancelOnPointerCancel = (event: PointerEvent) => {
+    if (event.pointerType && event.pointerType !== 'mouse') return;
+    cancel(true);
+  };
+  const cancelWhenHidden = () => {
+    if (document.visibilityState === 'hidden') cancel(true);
+  };
 
   onMount(() =>
     actions.addSensor({
