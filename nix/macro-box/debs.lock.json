@@ -1,0 +1,2197 @@
+{
+ "snapshot": "20261101T000000Z",
+ "debs": [
+  {
+   "file": "adduser_3.137ubuntu1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/a/adduser/adduser_3.137ubuntu1_all.deb",
+   "hash": "sha512-fKD3QPF48Z09XD4CgPNYgU2ZZi7/eIE7boRdWW+FEQCE+geuODo2MHMCIPksAQyO8z9hd3/s02XorbvoyX+x4w=="
+  },
+  {
+   "file": "apt_2.8.3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/a/apt/apt_2.8.3_amd64.deb",
+   "hash": "sha512-mFYRH5V5NswM2qbb8BP/KbBPNsm1NCzMJWu2h+T1LKqqch0CXbh8CeX5XTsNHnLb82pyOiXkMlGG/t7rr1yZiQ=="
+  },
+  {
+   "file": "base-files_13ubuntu10.5_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/base-files/base-files_13ubuntu10.5_amd64.deb",
+   "hash": "sha512-/DapFF3vhjvB3sqBLx19EguYLE+I3PUR35j7tDv8Do7g+fr/zg1rBIhif0/9cbOHBtvm43dDp75LbPiygO7CRQ=="
+  },
+  {
+   "file": "base-passwd_3.6.3build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/base-passwd/base-passwd_3.6.3build1_amd64.deb",
+   "hash": "sha512-VDZbT0DYsXQYP375jSiouCRaUlEm0CvV6phCO71emLAWbAlq8yno3heUe5Rwgr33pKRryenYdEZbRZZukzBcHg=="
+  },
+  {
+   "file": "bash_5.2.21-2ubuntu4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/bash/bash_5.2.21-2ubuntu4_amd64.deb",
+   "hash": "sha512-wUwsj6DRrnUw76A3WEUle07AuqW8Qpgu/KLX+oYLTk6j8E0xz6Mo0vJQsrrqw3lcizGqX/LVFO0Wpc+MMTKlkA=="
+  },
+  {
+   "file": "binutils-common_2.42-4ubuntu2.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/binutils/binutils-common_2.42-4ubuntu2.10_amd64.deb",
+   "hash": "sha512-kKpljvBcG8AfO9u+n9Q5EqSeM07/Fb5tlj27t/+K7/9PeIMAK2ACdtmx/kaCb/vZ8106k0gvfI+PQDyjovcn6Q=="
+  },
+  {
+   "file": "binutils-x86-64-linux-gnu_2.42-4ubuntu2.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/binutils/binutils-x86-64-linux-gnu_2.42-4ubuntu2.10_amd64.deb",
+   "hash": "sha512-V/9pJqQMbQRvkXNkM7ttZuRz6NXNIWTq/seBsh9ZYpJYm+oiSJ5oF+W2ldz0TDj3GWh5KSacif7K71PAd7vs0w=="
+  },
+  {
+   "file": "binutils_2.42-4ubuntu2.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/binutils/binutils_2.42-4ubuntu2.10_amd64.deb",
+   "hash": "sha512-2MjqeXXdTi1puV897gcPp44LI83tGxrUKA1jjL0/Wip2c9R08fn/OlK4ChG08hn6kqFHCvwYw54nVfZbezz0qA=="
+  },
+  {
+   "file": "bsdutils_2.39.3-9ubuntu6.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/u/util-linux/bsdutils_2.39.3-9ubuntu6.6_amd64.deb",
+   "hash": "sha512-UDbSZr1UmWkS3NKyVJTplhxw9/2yygeF5xpFTKDO7iJHVE+KsZr2ses2zmNEvc1t6h69fDQj1XNsEvdb8NU6kA=="
+  },
+  {
+   "file": "build-essential_12.10ubuntu1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/build-essential/build-essential_12.10ubuntu1_amd64.deb",
+   "hash": "sha512-QrOsRWARjhHC2IrqmdQPqnBU841yCGtN+8O7IiuvIn1zJgOOf2UuAw7jC/XP3VcMeTH8jxn0C3zhSinsNA8nwg=="
+  },
+  {
+   "file": "busybox-initramfs_1.36.1-6ubuntu3.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/busybox/busybox-initramfs_1.36.1-6ubuntu3.1_amd64.deb",
+   "hash": "sha512-c+XE2pVZieVTgmFBaCNC73/rl7fMI3TJnjWNBKVfYpYwQjsiAbkgYsU+/kI+fje8wXQSaYVFdBMcJdcIh6Xb4w=="
+  },
+  {
+   "file": "bzip2_1.0.8-5.1ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/bzip2/bzip2_1.0.8-5.1ubuntu0.1_amd64.deb",
+   "hash": "sha512-PLNtK3L+yvmknqfqLoV55mJ5DsrayWUC7AiYQ5tvOAO0xklaQrfzwfgcm1g5axgJvknS+rwFgp3PXcVrefIfeg=="
+  },
+  {
+   "file": "ca-certificates_20260816ubuntu0.24.04.1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/ca-certificates/ca-certificates_20260816ubuntu0.24.04.1_all.deb",
+   "hash": "sha512-ZYeRG4mZBZ3DhyK7HuonpfmV1OCDzxsDMbMMF0e7SooqQNx4vvAvqNsIwNHHZyyq9snEYPEJsTOShcfaWfiH8A=="
+  },
+  {
+   "file": "cloud-guest-utils_0.33-1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/cloud-utils/cloud-guest-utils_0.33-1_all.deb",
+   "hash": "sha512-ogR0T6TMrOQpAVkw/1F5GaZ9tF+eaCYKS0FArRAwLFlS0+hnNzNZ/SyNQDWNGk2Vs6sxM1eRmMFDkBqbRCuNuA=="
+  },
+  {
+   "file": "containerd_2.2.1-0ubuntu1~24.04.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/containerd-app/containerd_2.2.1-0ubuntu1%7e24.04.4_amd64.deb",
+   "hash": "sha512-tsmR+CWEuHSOimZAjFLLapBJghM1m5Qno6MAgFJzcvu3MGWCXVIr/ZIMS5zhQRdE1FkMxId/ekQk9o80BC04ZQ=="
+  },
+  {
+   "file": "coreutils_9.4-3ubuntu6.3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/coreutils/coreutils_9.4-3ubuntu6.3_amd64.deb",
+   "hash": "sha512-dGja2KOC5HoxPC/exrNhU2IoLcM/jSsda+v9sV1Lp4eGRtYJ/6DWArk9TaaqQ4p1aLJI3qoSc+aSdfuI7MsMvA=="
+  },
+  {
+   "file": "cpio_2.15+dfsg-1ubuntu2.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/cpio/cpio_2.15%2bdfsg-1ubuntu2.1_amd64.deb",
+   "hash": "sha512-J5UVealcUehl2CjpY0eJRSkYzHHFa8zWpKbXrLuZDSWl/4zZ/Wt+O3+y45FCnJlvcmiQg9mbIgTyb1d5di6jfg=="
+  },
+  {
+   "file": "cpp-13-x86-64-linux-gnu_13.3.0-6ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-13/cpp-13-x86-64-linux-gnu_13.3.0-6ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-LOQWmXQxLhLhRnm2z/VhLzmC5mcmCBx4xd9mvE7z+WoxOHFPwT3jve18fMJeQW257OiZ0+ccLS91GW+HsEfrlg=="
+  },
+  {
+   "file": "cpp-13_13.3.0-6ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-13/cpp-13_13.3.0-6ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-SJ2wuRiRpE0yj1X8fdrlyLI3waMcLd+gO9dLQsQIcvibKlvMVEMqsjkz055p1LcVuMW4RFPeRLJvRaQdfmtQMQ=="
+  },
+  {
+   "file": "cpp-x86-64-linux-gnu_13.2.0-7ubuntu1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-defaults/cpp-x86-64-linux-gnu_13.2.0-7ubuntu1_amd64.deb",
+   "hash": "sha512-6QSBy8Sm6BcqQHIHBXQnUgI4UzWKO28eS2TEeDdLvwzrG2vPHh2IeUBmbUoE8fRAUixTdpiep7ppVbtWJNy19A=="
+  },
+  {
+   "file": "cpp_13.2.0-7ubuntu1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-defaults/cpp_13.2.0-7ubuntu1_amd64.deb",
+   "hash": "sha512-X8yPWOTkmy0oD3VnEgMpPWpu7JlpZOAb7p8a4Sit+W7GuWRhRrPgDUeLvL5epD15Oq12wUBwvE0L8oXIlZazrw=="
+  },
+  {
+   "file": "curl_8.5.0-2ubuntu10.16_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/curl/curl_8.5.0-2ubuntu10.16_amd64.deb",
+   "hash": "sha512-fls070E/9bxebB8LDUnecHH/hSJXyV1tv/2Ret6bRd37Feet0HvcSC8NgoWadLRZRrzzVuw5SwSV4fnsj/HoCw=="
+  },
+  {
+   "file": "dash_0.5.12-6ubuntu5_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dash/dash_0.5.12-6ubuntu5_amd64.deb",
+   "hash": "sha512-BkIRlMUjxepBRVxA7f0Q4k9W6E58ZUFoQ0KVjZj0L0Ba6iK6Aa9Xht8O/6HwI/XH07EUQtS66wzbFeCUhiYrdg=="
+  },
+  {
+   "file": "dbus-bin_1.14.10-4ubuntu4.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dbus/dbus-bin_1.14.10-4ubuntu4.1_amd64.deb",
+   "hash": "sha512-s0PnO7VADCsWqZx7X9d0rn8vAyRv97ce8TcWR3TPJZxGtZaF8S/4lsZkZZQJX/0tUBOCInMcLABp0dOrAE/fZA=="
+  },
+  {
+   "file": "dbus-daemon_1.14.10-4ubuntu4.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dbus/dbus-daemon_1.14.10-4ubuntu4.1_amd64.deb",
+   "hash": "sha512-9W5DP2WbI8QdgeDCRfSG8MoTAP5J/SVeNrYEPKaDSDc+GHsOtntOxpjdLz4PmYocKTUSFyKkNR7Zn0bOQxSJRQ=="
+  },
+  {
+   "file": "dbus-session-bus-common_1.14.10-4ubuntu4.1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dbus/dbus-session-bus-common_1.14.10-4ubuntu4.1_all.deb",
+   "hash": "sha512-peIjTqdQskkF9g7h0xH1brHz7eYBZ31R+XQwxXQWMz4K1quCLgrQ8s4Hi2s91EzNQ9hFu2y0xRrv6sn1cYkduQ=="
+  },
+  {
+   "file": "dbus-system-bus-common_1.14.10-4ubuntu4.1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dbus/dbus-system-bus-common_1.14.10-4ubuntu4.1_all.deb",
+   "hash": "sha512-epNOqtRjVJBKmaJUCqGJDX+CsVdwUn95/8aKIo9TNFgZPBm7gS8Nk3qHjJXrzAtUSxTb6ynJW2O4eXtOIvF0IQ=="
+  },
+  {
+   "file": "dbus_1.14.10-4ubuntu4.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dbus/dbus_1.14.10-4ubuntu4.1_amd64.deb",
+   "hash": "sha512-UJm+6lSacJl4CwGjV61k4PgVOdrep6xQSiypCUY6l6oGQTfBklC29fC2m7aB5rQNYU/s0DrqpKNNSYbDXRla8A=="
+  },
+  {
+   "file": "debconf_1.5.86ubuntu1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/debconf/debconf_1.5.86ubuntu1_all.deb",
+   "hash": "sha512-azW0GxfL+8YrkckaNcHaL3rjSGScF0insj45qW/o/pozk+A7E49nRWT7Z4/TTmyg/8YhFNqOCHQGKFHD05BU2A=="
+  },
+  {
+   "file": "debianutils_5.17build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/debianutils/debianutils_5.17build1_amd64.deb",
+   "hash": "sha512-STd/PWWTPmZelAbmy9wQPlHHkUIbra8yfm1Fb6M4BWyYtWuM2+ZrOb69NAcT+FjYx/jzr2q3QDJl/YN9jOEWYw=="
+  },
+  {
+   "file": "dhcpcd-base_10.0.6-1ubuntu3.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dhcpcd/dhcpcd-base_10.0.6-1ubuntu3.2_amd64.deb",
+   "hash": "sha512-2xqWF2azBeFAQK2WFYIrTBaONZXKV0XSzWNVQrE8q1rc0T9Unh3ovjDw1TbulMQpb3T82jxvT0s7ZEP44GTTBQ=="
+  },
+  {
+   "file": "diffutils_3.10-1ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/diffutils/diffutils_3.10-1ubuntu0.1_amd64.deb",
+   "hash": "sha512-40e2WFZDH0TEtoW7kyzSwup3q+ivS2Nh8wQr50hMlQiGmE++dbaxFtBOY6PloJ6904S1/OM8HnwkxVlj+zN2SQ=="
+  },
+  {
+   "file": "dirmngr_2.4.4-2ubuntu17.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gnupg2/dirmngr_2.4.4-2ubuntu17.6_amd64.deb",
+   "hash": "sha512-AjwPmjYIHVHWrCmTxcbGffwA7b7w+6DkXcBwJN18NkbebWgI+IBnE/agVjcqsHPvB8g4Y5ybc/0BNsn7PhWJqQ=="
+  },
+  {
+   "file": "docker-buildx_0.30.1-0ubuntu1~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/d/docker-buildx/docker-buildx_0.30.1-0ubuntu1%7e24.04.1_amd64.deb",
+   "hash": "sha512-6wzUf8YEdwxm4tWG2e8TOFLma59TqD1BWkJ2S2Cix3BKghguoN/SpmXUJNGiyZFq+FsYl/VcD6vswcqqIJ3FIA=="
+  },
+  {
+   "file": "docker-compose-v2_2.40.3+ds1-0ubuntu1~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/d/docker-compose-v2/docker-compose-v2_2.40.3%2bds1-0ubuntu1%7e24.04.1_amd64.deb",
+   "hash": "sha512-U4cY9Pmva1T0D0DAZEWD12ZeMoFJUOgIAJuatMFiZ3/mjK2VhRw43LYlNZivFa50IBtVpmf/t4we/q5NE0VFfw=="
+  },
+  {
+   "file": "docker.io_29.1.3-0ubuntu3~24.04.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/d/docker.io-app/docker.io_29.1.3-0ubuntu3%7e24.04.2_amd64.deb",
+   "hash": "sha512-VD/8MKadqqjJuS6tC6rCrL7aMqOPVmVL0BfkyVWu+ydJfAkFKYEWZoFEIwCr5vObhUDMjBwf9tVe9EjMCjXpUA=="
+  },
+  {
+   "file": "dpkg-dev_1.22.6ubuntu6.6_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dpkg/dpkg-dev_1.22.6ubuntu6.6_all.deb",
+   "hash": "sha512-6jpy4V8CzzQM8NfHUjrW7e7S8onm0YPbY/2k2aQ1e0UMGv6om8cCo+z+zZdvXMmdWCsaAkotzFUCGvftRMfFwg=="
+  },
+  {
+   "file": "dpkg_1.22.6ubuntu6.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dpkg/dpkg_1.22.6ubuntu6.6_amd64.deb",
+   "hash": "sha512-9OsI3mwcKYdZQjE9ZsL4Ta/yKBHBaFNdErTZgAJg+AlV861aVygER2jiDsi+0wfBnOGLWYvDDu9SWreuHZ4z5A=="
+  },
+  {
+   "file": "dracut-install_060+5-1ubuntu3.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dracut/dracut-install_060%2b5-1ubuntu3.4_amd64.deb",
+   "hash": "sha512-OyRsv7rwBweG8L0qpCi+UxDOMYyzyqSC+7PdkSSr1IcefBVTukt5DNuztzCR8i1nkwRlnrU00Q2glz8ZLxuVfA=="
+  },
+  {
+   "file": "e2fsprogs_1.47.0-2.4~exp1ubuntu4.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/e/e2fsprogs/e2fsprogs_1.47.0-2.4%7eexp1ubuntu4.1_amd64.deb",
+   "hash": "sha512-1yiny5m/xh0XNWGbxpZkWi3o7ebxNIf9sifyIoXxYQYnD34mmPC4BIPzJW2iOkMTbfAC/oyB37gsXbfFk5xlmQ=="
+  },
+  {
+   "file": "fakeroot_1.33-1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/fakeroot/fakeroot_1.33-1_amd64.deb",
+   "hash": "sha512-wam6s/0ChRxO7NopRDgy0AuIFkn6JfPARYVIzM3l6Ulp8GNX08oV3DF2IqSWHapryZ3xVMJcdOIXrTA/VksgQQ=="
+  },
+  {
+   "file": "fdisk_2.39.3-9ubuntu6.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/u/util-linux/fdisk_2.39.3-9ubuntu6.6_amd64.deb",
+   "hash": "sha512-o2N7EZg45ZWHJ3bR9ick91N5kgVvosGivruF2jKKM72G8L2rCAf+fNSSP1tJMV0GBAvpMIj/6E9YwI+VBq1KDQ=="
+  },
+  {
+   "file": "file_5.45-3build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/file/file_5.45-3build1_amd64.deb",
+   "hash": "sha512-m2XG1iSgRTsQ0uu+RWdbGOb6RbO4kGvsUE5pQMyIym1ypR2DPKxT+JGr4Wk6mdSxusVbpzl12uIt6pP+9t32DA=="
+  },
+  {
+   "file": "findutils_4.9.0-5build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/findutils/findutils_4.9.0-5build1_amd64.deb",
+   "hash": "sha512-o+154Z04RhOCCCAayM1Lt5mALIzZTxWP0kBhdMJsrezUmP5ukj/WNKyi7eVaslEuhryTU2DoEfNHlcwKLjyQ0A=="
+  },
+  {
+   "file": "fontconfig-config_2.15.0-1.1ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/fontconfig/fontconfig-config_2.15.0-1.1ubuntu2_amd64.deb",
+   "hash": "sha512-GOohf5+lNqo3xwlvFTntSc9zSKhO8suna8X/5n37IjFsflnEWl6zfgl3N74GL3JuMT8GwtnXuG0ViQoVwYy/zQ=="
+  },
+  {
+   "file": "fontconfig_2.15.0-1.1ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/fontconfig/fontconfig_2.15.0-1.1ubuntu2_amd64.deb",
+   "hash": "sha512-Rxzc0nWQTIwn7sgjzTvdpQw2R4GNAqivRf3Wmsr9gqPVgimT7n+d+wQFx2Dfc3tppYU6S8LYPYNxrPhNdX+VVg=="
+  },
+  {
+   "file": "fonts-dejavu-core_2.37-8_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/fonts-dejavu/fonts-dejavu-core_2.37-8_all.deb",
+   "hash": "sha512-MkdhuCxQ0P/vz+IbWOggZBzX/ehdOzg1+Rq5aIO8NNiFlClIBLmQrSaWwZtOL0+Qa+f611RXTrVidvKD6tZaiA=="
+  },
+  {
+   "file": "fonts-dejavu-mono_2.37-8_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/fonts-dejavu/fonts-dejavu-mono_2.37-8_all.deb",
+   "hash": "sha512-NIShmJZylfKg00pRY7FKSfVrM4zRpVQkE/6UYAAsl/YqIG9klCyBsfpuZks0/H3qOG4uV8DehQunc84oCg9EXw=="
+  },
+  {
+   "file": "fonts-liberation_2.1.5-3_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/fonts-liberation/fonts-liberation_2.1.5-3_all.deb",
+   "hash": "sha512-OlUablp/Ra8lstUrrk39zSfSGblE0y1JQCe8MkfHLuawLzHxVHZCyItDo+2e81N9FQ5hBOmIeRB9hAyDIan6ug=="
+  },
+  {
+   "file": "fonts-noto-color-emoji_2.047-0ubuntu0.24.04.1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/fonts-noto-color-emoji/fonts-noto-color-emoji_2.047-0ubuntu0.24.04.1_all.deb",
+   "hash": "sha512-ksWKt560MSpKGsEYJoqi4qxuIUpbzbmLgy7IzAxetr6hY8VQYZ4CARmpj05p75WcI0u/bqdWRMsaJHqEkcp1/w=="
+  },
+  {
+   "file": "fonts-urw-base35_20200910-8_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/fonts-urw-base35/fonts-urw-base35_20200910-8_all.deb",
+   "hash": "sha512-/851id3sJvMUwI1d2+b1OBTW+2CUxxs1X5ySANukZDUaWLMaHQ0BUcvkGu1TN4ZBGPhTJS84vn9pSYY/HjXHoA=="
+  },
+  {
+   "file": "g++-13-x86-64-linux-gnu_13.3.0-6ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-13/g%2b%2b-13-x86-64-linux-gnu_13.3.0-6ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-ujs+ZwQ2w7qCVeiraKJiUSEgC7RBcaCxu/vMPhB7BmbrOsh6R7iVGS9NNPbuXAjTes418L8v7ZYbK9TjxEnjZw=="
+  },
+  {
+   "file": "g++-13_13.3.0-6ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-13/g%2b%2b-13_13.3.0-6ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-LWrVy93HYzYdg1teONT0OE/14ljtL8Iga6IwFa1C9Kk4w4L43lgYqo9ncVnyw3gGW5rJY4aOhMiGTnFjOBUK+w=="
+  },
+  {
+   "file": "g++-x86-64-linux-gnu_13.2.0-7ubuntu1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-defaults/g%2b%2b-x86-64-linux-gnu_13.2.0-7ubuntu1_amd64.deb",
+   "hash": "sha512-/XJBMinueXHuv/trNcAZxolXwbRBi3HyN/w9VHRCw9WOLF3O0MJR/8cTPRjNzc+YSM9k2LuA/V0RKErfJ/zHUQ=="
+  },
+  {
+   "file": "g++_13.2.0-7ubuntu1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-defaults/g%2b%2b_13.2.0-7ubuntu1_amd64.deb",
+   "hash": "sha512-VHKDHEe9G9FjtysdyyU+CBwOy3JOpRVUj42k8GmfEfz1S/jDOrHn9vimDVL1dGYqnQ1clF3hiNPN5N1LqzAUWw=="
+  },
+  {
+   "file": "gcc-13-base_13.3.0-6ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-13/gcc-13-base_13.3.0-6ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-vJ5aSjJx8CY2lMbsAMAxQN3KOiQbB6atyDlpEOvL382PIQd7P+2mUPEDYEzFtkf0wAqNL1fw+y7CQp1Hl0DUgQ=="
+  },
+  {
+   "file": "gcc-13-x86-64-linux-gnu_13.3.0-6ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-13/gcc-13-x86-64-linux-gnu_13.3.0-6ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-5y0mIHSukw4PTEoIZfygUSkmbO7joXAxMgFPiVCD2x1XVNAB4+7NxR+FaumQFQIe6gusOuqNGPTeCmmcpn+BTg=="
+  },
+  {
+   "file": "gcc-13_13.3.0-6ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-13/gcc-13_13.3.0-6ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-ziZESIlcwn7zZniY2H8dlgXhf81mcxW9WzOBueSEorwctKb52Q3xlUBFKOKeuaw0XtdGKcPdNqd9+TqszfP3Qw=="
+  },
+  {
+   "file": "gcc-14-base_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-14/gcc-14-base_14.2.0-4ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-YKFjfzDhRXv8TZ3XR5kjezgSrdwnSXc53e85A7rgvrSOG8+u7mcxtvX1NemM4vmKD+0omIrx4N8wzgtXCIODHQ=="
+  },
+  {
+   "file": "gcc-x86-64-linux-gnu_13.2.0-7ubuntu1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-defaults/gcc-x86-64-linux-gnu_13.2.0-7ubuntu1_amd64.deb",
+   "hash": "sha512-OBFo/nIIENH81yCc0eWvIyzOt8h4sLnGUXQeDxq58TJ2rLhKSFI3K6HjXupDWxVOprvjIb1Mwti9n7anV533ug=="
+  },
+  {
+   "file": "gcc_13.2.0-7ubuntu1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-defaults/gcc_13.2.0-7ubuntu1_amd64.deb",
+   "hash": "sha512-ycTYriTI9IdPpoPNTYzoOPU1+pPw/jxipKV1bH9nzaOqVLLwb8k/DhYEPbqkkpkdQCHDmbQWSE0j/qWtsjMfqA=="
+  },
+  {
+   "file": "git-man_2.43.0-1ubuntu7.4_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/git/git-man_2.43.0-1ubuntu7.4_all.deb",
+   "hash": "sha512-Bfy9kbMhSYt1IbHA3tI1YBPNKn+RhC35mJ10r3QZgbQkxskJzCeYmATEJXKZtB4sOydyYBsdkuqXO+rfKfKCEg=="
+  },
+  {
+   "file": "git_2.43.0-1ubuntu7.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/git/git_2.43.0-1ubuntu7.4_amd64.deb",
+   "hash": "sha512-gUnXQUxM3ErO35EnXlXb7iuXWpCTBSlVuXRGxsxS34JiTSw8bYNpy6RSEvqV9EAZ1Kk5jB2E8vzwqDePK/9G4Q=="
+  },
+  {
+   "file": "gnupg-utils_2.4.4-2ubuntu17.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gnupg2/gnupg-utils_2.4.4-2ubuntu17.6_amd64.deb",
+   "hash": "sha512-TxEBa1ZM097ly5panxHA0aqIC6FglGQqDFq37e124SIAiMiDE3zTjVeoujLnpGK89rxrESXwZ5vpDA3e+APSjw=="
+  },
+  {
+   "file": "gnupg_2.4.4-2ubuntu17.6_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gnupg2/gnupg_2.4.4-2ubuntu17.6_all.deb",
+   "hash": "sha512-CAsX5tMIYvkCa5kb75jvC0MNh9Ai2sec3V737gkllSwIk124Y9Sy/AsLs0RzhcJpC5vWoNR22dsB+slE0I9v3A=="
+  },
+  {
+   "file": "gpg-agent_2.4.4-2ubuntu17.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gnupg2/gpg-agent_2.4.4-2ubuntu17.6_amd64.deb",
+   "hash": "sha512-/KOGvSmMatkm44jLpBwkfOQUKhe7uAzYC9t89rgooapDgpxqhYcfclQi1iFFt2DnVZMTGLfFgLhD6aKZY4YmuA=="
+  },
+  {
+   "file": "gpg_2.4.4-2ubuntu17.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gnupg2/gpg_2.4.4-2ubuntu17.6_amd64.deb",
+   "hash": "sha512-NS/5WpXn/VHnDJqwCNGFsSIVscSdfidf+AodPjVslE4CFIm+ZxZGpTUuVcHaBQn+VcXGGnkmDRZ2aLLKgP5a1Q=="
+  },
+  {
+   "file": "gpgconf_2.4.4-2ubuntu17.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gnupg2/gpgconf_2.4.4-2ubuntu17.6_amd64.deb",
+   "hash": "sha512-G8iEK30Ee3Vr7tcxaDWmwiLmZRoPCm7a8S7Y1C8YkWrsCmI64KywS3rUjz8U/TzztRERI1wAIcpmB9MQwC4jUg=="
+  },
+  {
+   "file": "gpgsm_2.4.4-2ubuntu17.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gnupg2/gpgsm_2.4.4-2ubuntu17.6_amd64.deb",
+   "hash": "sha512-nE8AAhOn9rjayxZjT2pTgdU3T5fRmQdBhE3K2X3OdbgXbkyY0vHmDg3SX4LDjNwV4zP9EbxWNlnZj0GQMxcsGg=="
+  },
+  {
+   "file": "gpgv_2.4.4-2ubuntu17.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gnupg2/gpgv_2.4.4-2ubuntu17.6_amd64.deb",
+   "hash": "sha512-ctuqMK/ryaJ1J7sMzi8TSKLbfo4EoTWg0uB1Cr8j7B79rvtuhcyGXVoxqzOhvVlEF9x1QZmaHBHzDQvXdG4lsg=="
+  },
+  {
+   "file": "grep_3.11-4build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/grep/grep_3.11-4build1_amd64.deb",
+   "hash": "sha512-M+0RSNIkYyBTeyat/N5Iy06MleXGuIkBATidE80C6mJK/Aj+wDkFmtkgIAC23axnfq/gsmcdoeROakCxp6LrLg=="
+  },
+  {
+   "file": "gzip_1.12-1ubuntu3.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gzip/gzip_1.12-1ubuntu3.2_amd64.deb",
+   "hash": "sha512-MeWdWhD4Z0JKLrf8ygMG0jFZvgTNUryUsc0fYoJowhIS4hSnASOwYrlq7wViOzTLiyknPcf82FQaI2YdwFn6ag=="
+  },
+  {
+   "file": "hostname_3.23+nmu2ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/h/hostname/hostname_3.23%2bnmu2ubuntu2_amd64.deb",
+   "hash": "sha512-iS9mWFea2RAn9vIK3HygwqnAq9VcgQKdw3p8O+f9lu3L1TM25a9sFco4xVUlBdmKuLwFpTS74P2z5+kZUHk8Rg=="
+  },
+  {
+   "file": "htop_3.3.0-4build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/h/htop/htop_3.3.0-4build1_amd64.deb",
+   "hash": "sha512-IA8ZAvc3Zy11O4anmSCLi8xX4364cyAE1haUaEVofeHZE4LB1VklBZd8nQc4RL0SbgjulekisbHkBxctbznudA=="
+  },
+  {
+   "file": "init-system-helpers_1.66ubuntu1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/i/init-system-helpers/init-system-helpers_1.66ubuntu1_all.deb",
+   "hash": "sha512-A/s7NFs5NsSAriLr/yQ5CpD8F+rTtUWGScDxyAGXMAiSB7lFJM+jglXdyFrPXq3homjCUbLXQEd8FV7B9Y3VnQ=="
+  },
+  {
+   "file": "initramfs-tools-bin_0.142ubuntu25.8_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/i/initramfs-tools/initramfs-tools-bin_0.142ubuntu25.8_amd64.deb",
+   "hash": "sha512-xy5Bwv7IivTe3DZZrT8if/eoiEEHcOchmgt0BJhx3RW/8YhzKUaUgy13OtxbHLY89fjCfqgKhUWT39JX9RdBKw=="
+  },
+  {
+   "file": "initramfs-tools-core_0.142ubuntu25.8_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/i/initramfs-tools/initramfs-tools-core_0.142ubuntu25.8_all.deb",
+   "hash": "sha512-6sELQ0pPVF9plKAiBZa6ZVHjq8PGc3FInPkPXAEGuLfoIH76G/7qxn2DlMhcmxH5FgCXOUufLR+lbB2o3H8kHQ=="
+  },
+  {
+   "file": "initramfs-tools_0.142ubuntu25.8_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/i/initramfs-tools/initramfs-tools_0.142ubuntu25.8_all.deb",
+   "hash": "sha512-OdiZ0JTOjrKy7gomVGdjLjwpAW+oWthUyUjzpykBnRq4Y6HpXqZbEnLOaXq3DbUnN0/8dMQMGQMJyX3JGMhiYw=="
+  },
+  {
+   "file": "iproute2_6.1.0-1ubuntu6.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/i/iproute2/iproute2_6.1.0-1ubuntu6.4_amd64.deb",
+   "hash": "sha512-+mY456ipu54pLfd0nLxW0WBPi8IB41BY1PBpb4CvJVt82ZRsF49pTrwhv/O5SHfjE31xz1xxbpwrYb+SMMy0xA=="
+  },
+  {
+   "file": "iptables_1.8.10-3ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/i/iptables/iptables_1.8.10-3ubuntu2_amd64.deb",
+   "hash": "sha512-k91LstuW0KakROnG+/MQbuLwVUGnehsDGgxdZ/y2amyCyA2q05YqGqCyuiFzYNXOvcaqobOYU4aj8vUA8qCBiQ=="
+  },
+  {
+   "file": "iputils-ping_20240117-1ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/i/iputils/iputils-ping_20240117-1ubuntu0.1_amd64.deb",
+   "hash": "sha512-gX2CSSCbeaH4aHQneFd6iC5YTscQ8ZydMU0Au0LJdA65mWZjkvjkzfGHv/5gRZAC1xlXoceb8Eu9xWrYwB69uQ=="
+  },
+  {
+   "file": "jq_1.7.1-3ubuntu0.24.04.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/j/jq/jq_1.7.1-3ubuntu0.24.04.2_amd64.deb",
+   "hash": "sha512-ErpZW46Yx3lloHis9JKbWAy3bF85DpqGvZVyUOX3NNGBxkM0Fx/X5swTJAIH/1TdEIx++oAt2dpffMtoAN6PYA=="
+  },
+  {
+   "file": "keyboxd_2.4.4-2ubuntu17.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gnupg2/keyboxd_2.4.4-2ubuntu17.6_amd64.deb",
+   "hash": "sha512-J696+XzwBHN2YZWoPSnEA2gHWnbL88coqZMKakTX4YQe9aIk9q5WEPHaVwGBkzMSmn6SwzY1yAClRxaah2wCBw=="
+  },
+  {
+   "file": "klibc-utils_2.0.13-4ubuntu0.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/k/klibc/klibc-utils_2.0.13-4ubuntu0.2_amd64.deb",
+   "hash": "sha512-lp4d9muC7zmmYKeNECXN4iDCohQ30UGY8ksl91WDVjsQfrlvg/h2+2k8AKW+QiYWOtjPYn6zr+XGwWDRQjbFaw=="
+  },
+  {
+   "file": "kmod_31+20240202-2ubuntu7.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/k/kmod/kmod_31%2b20240202-2ubuntu7.2_amd64.deb",
+   "hash": "sha512-218MEm4gBzcB9fr31vf/uGTPSEI3NtgAtpLzk9ZY1KWJIQW0uuCsBBJkmmo/qaO6NKQDQ5EVCt/C8HQ6jp7VGw=="
+  },
+  {
+   "file": "less_590-2ubuntu2.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/less/less_590-2ubuntu2.1_amd64.deb",
+   "hash": "sha512-gdzcnTN1nThBhZuVPcKYtfjql7weYqM0RtkRiXDYAvlNtUyL7A+sdRe4/jiWTmP8dUX3ZssQHro3TX2r2UHxEw=="
+  },
+  {
+   "file": "libacl1_2.3.2-1build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/a/acl/libacl1_2.3.2-1build1.1_amd64.deb",
+   "hash": "sha512-nmziISdeCDzedQkJBrwCWxXbHPcKxxz01TnGi/KgwQVUN8EE48ZJXaotOIUUY/5IE2CLLrRNKNbZzbeY9/6yIQ=="
+  },
+  {
+   "file": "libaom3_3.8.2-2ubuntu0.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/a/aom/libaom3_3.8.2-2ubuntu0.2_amd64.deb",
+   "hash": "sha512-D+24keYk8idyV1LS+GwlwGxVdwJvA8ZWGfjFxZq4sW5S3X9ksvI/XlCPrLTC1jfzF0AkF5Nfe2KTwoaAMSmpyQ=="
+  },
+  {
+   "file": "libapparmor1_4.0.1really4.0.1-0ubuntu0.24.04.9_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/a/apparmor/libapparmor1_4.0.1really4.0.1-0ubuntu0.24.04.9_amd64.deb",
+   "hash": "sha512-osUziVRXsBEnWBtg6LuT1Hp/SCPqIGCtHyMmPG1lc4xQ0jLzKnGI5zuNpNybsEeylln9pNJEJSUwHE1obbTVxQ=="
+  },
+  {
+   "file": "libapt-pkg6.0t64_2.8.3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/a/apt/libapt-pkg6.0t64_2.8.3_amd64.deb",
+   "hash": "sha512-H1YluZlgCuU+zRleUtwpTMUnUGA4crUhB86Wjuycm6Unod5Lseh8M+2Rwo3nC1184spc8tw89Hjxoke/9RdGFQ=="
+  },
+  {
+   "file": "libargon2-1_0~20190702+dfsg-4build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/a/argon2/libargon2-1_0%7e20190702%2bdfsg-4build1_amd64.deb",
+   "hash": "sha512-4iMUq4VZnTxYN4tHex18XMacx58Y0ExTqPEXzWpEH+GlP+Kp7ey/m2yCUk8MHNRhM+4577M++nNekrs5Jpkn7A=="
+  },
+  {
+   "file": "libasan8_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-14/libasan8_14.2.0-4ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-JgqEKUze2pPiiLOHGthIM2DPBv9VcSfiu4HJRwY/b7PsnfboGImIaU3v4vGqDtigY9Z4WvTYDwybVuDgnZ0ULQ=="
+  },
+  {
+   "file": "libassuan0_2.5.6-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/liba/libassuan/libassuan0_2.5.6-1build1_amd64.deb",
+   "hash": "sha512-Fby3I0rpwmKTTQSf7T8tGgBmPnR9e0It2KMX0sDfhBSBqbqq/DUmTeLCEN9icbmU+06hecMQR4m8R4yr/ds9Yg=="
+  },
+  {
+   "file": "libatomic1_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-14/libatomic1_14.2.0-4ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-RjGgI9opAmz9EWykebvbaes8pALiaRKAQgHz5TEQ5vWFASaCY37XNyp+XOvnHv20Acs5Zv/50nj/ICsaP19vQQ=="
+  },
+  {
+   "file": "libattr1_2.5.2-1ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/a/attr/libattr1_2.5.2-1ubuntu0.1_amd64.deb",
+   "hash": "sha512-WgO+eNrRGx5fzjIduhtg0UNOnj85oVYlbFSO7AS6HQNuZ4M+rt6Hf2m1Eezf3t7uhnTfEXCj+8DHtZygjjPt5g=="
+  },
+  {
+   "file": "libaudit-common_3.1.2-2.1ubuntu0.1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/a/audit/libaudit-common_3.1.2-2.1ubuntu0.1_all.deb",
+   "hash": "sha512-oKg6DLGLdO5Yx46/yMCocd5tQtBdIkluFuHeE2rc6l9GLeqejD7ELj5plNrmAcUDSbR+P2N+Kh2on5tDp+TxpQ=="
+  },
+  {
+   "file": "libaudit1_3.1.2-2.1ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/a/audit/libaudit1_3.1.2-2.1ubuntu0.1_amd64.deb",
+   "hash": "sha512-1Wkz0dG6Q+uXkJML1S5Bp8zf3QArOmpFK0FW2WhYlbflsGDdUo3B1IY+p7r2bzoklELgiiTDfhojxVCh4RqOXg=="
+  },
+  {
+   "file": "libavahi-client3_0.8-13ubuntu6.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/a/avahi/libavahi-client3_0.8-13ubuntu6.2_amd64.deb",
+   "hash": "sha512-pPv+xIx7yjaGPXklTRAJKq7ayGMneUtxKWfzdellqEQ6/UY3ZvurJZUAfL4DlliTMwVWUgGf/q3RAAk69Bc43w=="
+  },
+  {
+   "file": "libavahi-common-data_0.8-13ubuntu6.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/a/avahi/libavahi-common-data_0.8-13ubuntu6.2_amd64.deb",
+   "hash": "sha512-//3TgatZ42IPyVOh0repHQHLgVZ7AIL+t5B3JT9M2cupAqPLA1cKRUH8ksivV/CNst7pbZmA3NL+RyJBRfEexQ=="
+  },
+  {
+   "file": "libavahi-common3_0.8-13ubuntu6.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/a/avahi/libavahi-common3_0.8-13ubuntu6.2_amd64.deb",
+   "hash": "sha512-Gonu6DpelLOwCwiyB7Ze55qIfhd2IVRlHluYVrq9Ak0F1m6Gc4lcZUOXv7hjGnw2/MPzr972/j1ByBWuYyltGQ=="
+  },
+  {
+   "file": "libbinutils_2.42-4ubuntu2.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/binutils/libbinutils_2.42-4ubuntu2.10_amd64.deb",
+   "hash": "sha512-4FcLLpgfmibxzC6QXSMoafnrW+5NyT1luUcUTwOL/Z+ePk2SKkXVwKfdBVmjALAUmij7viv3vDcqfXTmeXL4Cw=="
+  },
+  {
+   "file": "libblkid1_2.39.3-9ubuntu6.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/u/util-linux/libblkid1_2.39.3-9ubuntu6.6_amd64.deb",
+   "hash": "sha512-+ldUcbsq+EZebze5Q8Mq9egOTeOtKOu0KbgdJ/G4oPxgwyKoRSxU0C9Omn+Shf3D28aOaldJwFyosuhqHZ4VgQ=="
+  },
+  {
+   "file": "libbpf1_1.3.0-2build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libb/libbpf/libbpf1_1.3.0-2build2_amd64.deb",
+   "hash": "sha512-zcFvN/+StShEqiUMJIHqZ5jKiWeyHmoFHi330DxhRn+XKCwDsSBMVjARCYOfMYZzy0RVd+knJ/1mj0bKN9DIzw=="
+  },
+  {
+   "file": "libbrotli1_1.1.0-2ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/brotli/libbrotli1_1.1.0-2ubuntu0.1_amd64.deb",
+   "hash": "sha512-eSWHrLNIo+6JCWX6O9XFZQM7EGaYNMZYnvkk0XCm9LovpJS1uEYoP+V79eruZdXb8KpID1DDEFTvYJ+pPN8I6A=="
+  },
+  {
+   "file": "libbsd0_0.12.1-1build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libb/libbsd/libbsd0_0.12.1-1build1.1_amd64.deb",
+   "hash": "sha512-Y8WzPlj6sfwFncQLVZWFroM2VFmWb5c2s/sJu/67Y6Y/wwL7EqdFMPP6P/+AG2kGhzJZ2HaxvKYbOrnUxbm8Dg=="
+  },
+  {
+   "file": "libbz2-1.0_1.0.8-5.1ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/bzip2/libbz2-1.0_1.0.8-5.1ubuntu0.1_amd64.deb",
+   "hash": "sha512-vhTPVYA58WUExcFHYRo4LfiFusY0yXHdEoumWJv3Ed8XzaELoRWHzXUcgenpJFSs34uvQ6hSEBkFKbWlK8167g=="
+  },
+  {
+   "file": "libc-bin_2.39-0ubuntu8.9_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/glibc/libc-bin_2.39-0ubuntu8.9_amd64.deb",
+   "hash": "sha512-4oq2MJPDhBpyyNNR16MEjkF07i75WFEwHQ+oPs4yad+L3Q/ctZyrOC5Bk96pel5RKXCqt2uiUUrJlMmzjmH27w=="
+  },
+  {
+   "file": "libc-dev-bin_2.39-0ubuntu8.9_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/glibc/libc-dev-bin_2.39-0ubuntu8.9_amd64.deb",
+   "hash": "sha512-b6ShOD62CJ0d3o3FOyuf1m0I1X8Na0uwBmsBhdWEk6D3/Bpr1TF7rlrxAupiAPOVeg2InL382DYxeq+RbxCjTQ=="
+  },
+  {
+   "file": "libc6-dev_2.39-0ubuntu8.9_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/glibc/libc6-dev_2.39-0ubuntu8.9_amd64.deb",
+   "hash": "sha512-Wm5rbotrj527NUIaWwRxEELlaNTT7wCsgeglOXboWkIiXuAjxEVUagxosL64qTOKOADTeTLimPrCkx7fXiTKkw=="
+  },
+  {
+   "file": "libc6_2.39-0ubuntu8.9_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/glibc/libc6_2.39-0ubuntu8.9_amd64.deb",
+   "hash": "sha512-eFeoVLUuEDVu8s9UYqOSM7R4MKGNUZcBGcgflrNJFdstmwsl+Fn66F5Xs/AhEhLNZOFgSA+AJ84u9JZQ58k7qA=="
+  },
+  {
+   "file": "libcairo-gobject2_1.18.0-3build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/cairo/libcairo-gobject2_1.18.0-3build1_amd64.deb",
+   "hash": "sha512-2QJHpp/CaqURY/ufAmippoI379aIAybmo6U1KJuk3Q913z5dhUToPqNSbgAH147V7NN4mwhGO1DrPxZFDf2MQA=="
+  },
+  {
+   "file": "libcairo2_1.18.0-3build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/cairo/libcairo2_1.18.0-3build1_amd64.deb",
+   "hash": "sha512-DrlYptg0Kw1XebxFvc6KmCgQvXItyF2TsF8J3WaNWlO+W2C3FA4GKGj9VcwgXb5i2NHtaqb7MwuA5fpDj+MlQg=="
+  },
+  {
+   "file": "libcap-ng0_0.8.4-2build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libc/libcap-ng/libcap-ng0_0.8.4-2build2_amd64.deb",
+   "hash": "sha512-O+oVZNIEjTFgGUrXP4JYmTsJx8L4xOE9U2nV5wDMK38MTKuz3jw8KlPuLxCS7BsFD9+DBpIXi4idMHJLHlOv2w=="
+  },
+  {
+   "file": "libcap2-bin_2.66-5ubuntu2.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libc/libcap2/libcap2-bin_2.66-5ubuntu2.4_amd64.deb",
+   "hash": "sha512-eQxf12smAFjKMMPuksNl8Anp3iYR4hykMGrX+pJ1f9uUziO9KSSDptgdt+OVPzi/ofXBqxF4NbrXj8DsZ3J+vg=="
+  },
+  {
+   "file": "libcap2_2.66-5ubuntu2.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libc/libcap2/libcap2_2.66-5ubuntu2.4_amd64.deb",
+   "hash": "sha512-joMa0/+rdwLd8bzxkNWRhc5E2ufup1bQcfbbUr7qPOnd1ArLg+TVmc9rU6d30bd+xD8ZxASoI57DByVp3CKpyg=="
+  },
+  {
+   "file": "libcbor0.10_0.10.2-1.2ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libc/libcbor/libcbor0.10_0.10.2-1.2ubuntu2_amd64.deb",
+   "hash": "sha512-P7+wSMTNv3kTmDVedcHAll/sYarZqvP3ZwNAY+PxRqoVneqEqCadJ+mmClSTcaBByRMRoFjBMMvrNXdMAM3Ztw=="
+  },
+  {
+   "file": "libcc1-0_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-14/libcc1-0_14.2.0-4ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-8LgNwo682/W9NExVXxJGW6oo2DOF/spfTjVHVg+xkA4HBA0X22dc1T3FexZxqZBWCMA62ZgGPnyFTFaXn7yiLA=="
+  },
+  {
+   "file": "libcom-err2_1.47.0-2.4~exp1ubuntu4.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/e/e2fsprogs/libcom-err2_1.47.0-2.4%7eexp1ubuntu4.1_amd64.deb",
+   "hash": "sha512-dk5fosTZt/3smJurzm1xu8+dt1KM7/xTrN47pqKZwBFKA8t5TPCyN2wevmcVVrtGcoxXqC/zd4WN3vR8fOJDqg=="
+  },
+  {
+   "file": "libcrypt-dev_4.4.36-4build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxcrypt/libcrypt-dev_4.4.36-4build1_amd64.deb",
+   "hash": "sha512-GX/mT5mS8koNJH6K3DTNxEXjh8NQjrdcHw2mqqn3qtV3LV3Zi46L9uy2IAsz6FU96RK1Ms807W6vuZ/M2+stwA=="
+  },
+  {
+   "file": "libcrypt1_4.4.36-4build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxcrypt/libcrypt1_4.4.36-4build1_amd64.deb",
+   "hash": "sha512-pUTXyJRfb39HIbVfg/QnjLSBFwQDyctz4f4v4aW7cj74N4C7KdSX4rfeunmhZL41PLsd6pb22QsY0JfiVA6QMw=="
+  },
+  {
+   "file": "libcryptsetup12_2.7.0-1ubuntu4.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/cryptsetup/libcryptsetup12_2.7.0-1ubuntu4.2_amd64.deb",
+   "hash": "sha512-0TJHK1MbICUXrXnWn1eYxr+kewhg52flKMTBKD6LZ9Am/u2BXoGgis5XRAspgKP/SmxgB5L39stqjHgc6Wj2lQ=="
+  },
+  {
+   "file": "libctf-nobfd0_2.42-4ubuntu2.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/binutils/libctf-nobfd0_2.42-4ubuntu2.10_amd64.deb",
+   "hash": "sha512-oQIR/TXTKxO2JcL8pgfPLVUg7Qt7BJgKkb5XSwzduDd1mnQpqy+er38gG2T1h1iM+RadUj85RJt1aYl3REzp+A=="
+  },
+  {
+   "file": "libctf0_2.42-4ubuntu2.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/binutils/libctf0_2.42-4ubuntu2.10_amd64.deb",
+   "hash": "sha512-0yhO5cSiN8nR1vNqjyxsDFV5WLXOQyTIADz2Rugeg5CDKV1fE01vvIa/8G+5Mm5SLPcLz20+ENzvKFs4dsrUHQ=="
+  },
+  {
+   "file": "libcups2t64_2.4.7-1.2ubuntu7.14_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/cups/libcups2t64_2.4.7-1.2ubuntu7.14_amd64.deb",
+   "hash": "sha512-tHcykkGzrk9vBwAXJ+Rw8hiRuum9TCh1wRhB9C7t4xdX+nLChuTRLBChNSB9LOAI02SpeAI/t58Wb8MFytnmBQ=="
+  },
+  {
+   "file": "libcurl3t64-gnutls_8.5.0-2ubuntu10.16_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/curl/libcurl3t64-gnutls_8.5.0-2ubuntu10.16_amd64.deb",
+   "hash": "sha512-S0+k5b9hBHbl6FeckLA21/tS+i5mpf7B/Ii3x2nKTXWYMh1Za6V7b4v7FaHtSMPLgc9C5md2jrA1opODaFLskw=="
+  },
+  {
+   "file": "libcurl4t64_8.5.0-2ubuntu10.16_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/curl/libcurl4t64_8.5.0-2ubuntu10.16_amd64.deb",
+   "hash": "sha512-UFkBpkUA1DrQU4UgHpncPLV3icveK9FuYecCzuDG0X3+4eK/rgY2xF8VLmQhZvOW097dbdRPCvxcSZ1ahsfesg=="
+  },
+  {
+   "file": "libdatrie1_0.2.13-3build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libd/libdatrie/libdatrie1_0.2.13-3build1_amd64.deb",
+   "hash": "sha512-JXnHFNda0Dgff4Wd4GWKecs6iEdJUhHQ8zJcr9jGPVHLRrWVwEHHeOcakRQv7Uc4jftAoi4AcjCUOv6ji8LMFg=="
+  },
+  {
+   "file": "libdb5.3t64_5.3.28+dfsg2-7_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/db5.3/libdb5.3t64_5.3.28%2bdfsg2-7_amd64.deb",
+   "hash": "sha512-CmXWQcetebi/CC0LVvKoDDo6trvQyYxM39GwzKBYthxsDInvMl02l5KXg7rXZj1XypuJyBS8edspsFBTMRvL4g=="
+  },
+  {
+   "file": "libdbus-1-3_1.14.10-4ubuntu4.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dbus/libdbus-1-3_1.14.10-4ubuntu4.1_amd64.deb",
+   "hash": "sha512-fTyatTfn5C+Qqz4Y6/cTAe0lgPXeKKkPzlYMmz8S36qAByt2ahAMg1Qh2aiACKciW5KMxRUSFMgu57fz6m/eXw=="
+  },
+  {
+   "file": "libdebconfclient0_0.271ubuntu3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/cdebconf/libdebconfclient0_0.271ubuntu3_amd64.deb",
+   "hash": "sha512-3MCpEQ+pJTz4PREIxRctXoqHTWrLPbrLyeFzuVGep+gSM0u9m/RJYWVjIsZrkKhr/vw5Wlbw14hV4AUuWugjEg=="
+  },
+  {
+   "file": "libdeflate0_1.19-1build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libd/libdeflate/libdeflate0_1.19-1build1.1_amd64.deb",
+   "hash": "sha512-G2mqZtEQ0G6c8n5zrtapHX1AzLUvBc3Uo/OkYXxRIRPU3gKYcmyDJ5q7iR8+B6Ta/lZjtfMStTZWAptyXxlBsQ=="
+  },
+  {
+   "file": "libdevmapper1.02.1_1.02.185-3ubuntu3.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/lvm2/libdevmapper1.02.1_1.02.185-3ubuntu3.2_amd64.deb",
+   "hash": "sha512-MKXAdSAQw+ynjy+3AV4zR6MuCM3nvS5QQ2pXqYk5QmjCefY0zVVB9sdbmzk8P4fLsnmM07IuIXRPl2+YuiGErQ=="
+  },
+  {
+   "file": "libdpkg-perl_1.22.6ubuntu6.6_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/d/dpkg/libdpkg-perl_1.22.6ubuntu6.6_all.deb",
+   "hash": "sha512-qCG0WX7gYoK1QbT+nqp9ShFA2q+xqpyZFVAm9wcFR3n3+hEFUYGdcTYysZ9rlkXbypbc+0TH3cio3xEdlpDpJw=="
+  },
+  {
+   "file": "libdrm-amdgpu1_2.4.125-1ubuntu0.1~24.04.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libd/libdrm/libdrm-amdgpu1_2.4.125-1ubuntu0.1%7e24.04.2_amd64.deb",
+   "hash": "sha512-PzDjMYEC83EWzg6YvJ4p/D44U66wHEs8Sz1mvVjM1nC3QyHI9M43PmZKWT9v2dXUk49oi4OR7KzwaRLzWtUm7A=="
+  },
+  {
+   "file": "libdrm-common_2.4.125-1ubuntu0.1~24.04.2_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libd/libdrm/libdrm-common_2.4.125-1ubuntu0.1%7e24.04.2_all.deb",
+   "hash": "sha512-TyOVSoNaRNQZVIbO/bJnJHpDqWAxXWdw+80grMrnudIyFbUkcXKlNN0r/ymeBv1HTqL8UWup3Cmm6R+PbUJ2EA=="
+  },
+  {
+   "file": "libdrm-intel1_2.4.125-1ubuntu0.1~24.04.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libd/libdrm/libdrm-intel1_2.4.125-1ubuntu0.1%7e24.04.2_amd64.deb",
+   "hash": "sha512-Hxj+CGGe58xHT0AHihC9KX5ineCRtzbCHwEGwziXmgcXdgZZQp0MAnb6Je2yLPD2nm+KYDRwuPN9iFjcnkAoeg=="
+  },
+  {
+   "file": "libdrm2_2.4.125-1ubuntu0.1~24.04.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libd/libdrm/libdrm2_2.4.125-1ubuntu0.1%7e24.04.2_amd64.deb",
+   "hash": "sha512-YQM2epEshGETVfFtwsMCHoFXZEsioKRD2ZpV8eHQJNBDTZKMR46m/UyWMwskIE0IcXOsEXBS//yCZHh6J5hj+A=="
+  },
+  {
+   "file": "libedit2_3.1-20230828-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libe/libedit/libedit2_3.1-20230828-1build1_amd64.deb",
+   "hash": "sha512-1R7PFsNP26owCbGfq2l4PXkV3o7NLIStpuv18W5ggOcOQNAVbb52He98D34PPgCypJASD5z02JLpU1S3h/NyeA=="
+  },
+  {
+   "file": "libelf1t64_0.190-1.1ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/e/elfutils/libelf1t64_0.190-1.1ubuntu0.1_amd64.deb",
+   "hash": "sha512-33pgV6E8k+2BlaKQwclN4r/a5YLJZUFDKN5mQ2w9Y8Q+mFEiYwkLPK0U3dklMC4zN5pdg2BKpv2HfmcuSp7ePA=="
+  },
+  {
+   "file": "liberror-perl_0.17029-2_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libe/liberror-perl/liberror-perl_0.17029-2_all.deb",
+   "hash": "sha512-5oOY/IYK7Rd7AphSvpzBTOL+nahhkhyOdEO2aXl/VqT9EGEEH3thNs4zmRERrZLD7LtP+MGNVBgfyhNPI0wYaQ=="
+  },
+  {
+   "file": "libevent-core-2.1-7t64_2.1.12-stable-9ubuntu2.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libe/libevent/libevent-core-2.1-7t64_2.1.12-stable-9ubuntu2.2_amd64.deb",
+   "hash": "sha512-wijvfcpAj47TRASitJCG5lSVs4YUGSIyOY7oqAQHtrZu47A6MSuMFQCEQwwbA+6BTNrAwLKzfFcpsTignAykqw=="
+  },
+  {
+   "file": "libexpat1-dev_2.6.1-2ubuntu0.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/e/expat/libexpat1-dev_2.6.1-2ubuntu0.6_amd64.deb",
+   "hash": "sha512-NGZSVwSValF7SUrwHzVqmPkEJG/GjtIbH+TQbOuG+0tuFfU7+QTR8J02NS2hM4vY7LLOdegw0aQPEMIXPU6o8g=="
+  },
+  {
+   "file": "libexpat1_2.6.1-2ubuntu0.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/e/expat/libexpat1_2.6.1-2ubuntu0.6_amd64.deb",
+   "hash": "sha512-9fzsUjvDPBt2+ODnKJrOZlynHddZoq0erB8sByJZ9jJnn6R/Bn8dBlvxkDn/CCkTN1SBMGaigGLWTL9/MSpbmQ=="
+  },
+  {
+   "file": "libext2fs2t64_1.47.0-2.4~exp1ubuntu4.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/e/e2fsprogs/libext2fs2t64_1.47.0-2.4%7eexp1ubuntu4.1_amd64.deb",
+   "hash": "sha512-0D7I3DWX8WrI1qZZoREFySE1DLBYv/29t+ik+pHZrqcFyQXZQ9Imnjz8QLxMhf/MnFQI0oWdtCbX90NdQhyg6Q=="
+  },
+  {
+   "file": "libfakeroot_1.33-1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/fakeroot/libfakeroot_1.33-1_amd64.deb",
+   "hash": "sha512-EEhv9ado0FiPUkHCbKoZHayHem3M/ywGgNEMwO57ONx8g94+P8/dcBJXptTxVrq3EFdnh/Iq5kZhA3u0YNKlEA=="
+  },
+  {
+   "file": "libfdisk1_2.39.3-9ubuntu6.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/u/util-linux/libfdisk1_2.39.3-9ubuntu6.6_amd64.deb",
+   "hash": "sha512-xwyfhFVAuivN9IW5QQOT5K6L+VxzjPEtIhMQ3upfcsUBf14tBQszmLEH5GAUHYjS4/VhBmd6qJPlrwdjN2ORGA=="
+  },
+  {
+   "file": "libffi8_3.4.6-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libf/libffi/libffi8_3.4.6-1build1_amd64.deb",
+   "hash": "sha512-CXkI+yykNK7mnXJnrVWTbYp//lZbl3LO9YqQx8khvv57wyuOixNBKDu0AvGx+B94f6QIGVvn5blqXDO9rjTq5A=="
+  },
+  {
+   "file": "libfido2-1_1.14.0-1build3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libf/libfido2/libfido2-1_1.14.0-1build3_amd64.deb",
+   "hash": "sha512-YRzZ0ZzvVWDBq5K3e1X5ZJrGgt66nfHbvhukvkaaK2yy0wpTzFJIHtRRMd0cjHaILYllS0SKlvHAKfiWHbfjPA=="
+  },
+  {
+   "file": "libfile-readbackwards-perl_1.06-2_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/libf/libfile-readbackwards-perl/libfile-readbackwards-perl_1.06-2_all.deb",
+   "hash": "sha512-+yBpEii8wstV8iHkyNu4WBeMyijl0Qz3CZN6mpjlAcYzLG0ppwbLIhQEMmIaEax9Oy5r0gKLDlZgLWQ2i9vgMw=="
+  },
+  {
+   "file": "libfontconfig1_2.15.0-1.1ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/fontconfig/libfontconfig1_2.15.0-1.1ubuntu2_amd64.deb",
+   "hash": "sha512-s+hfxIpyGUik2B9frsL6o20p/62LMvoEUdrcS0m65S3Q20Z3Fg3QqdiLPklh87pTaRfBVbYDy0D65sntt1XE1A=="
+  },
+  {
+   "file": "libfontenc1_1.1.8-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libf/libfontenc/libfontenc1_1.1.8-1build1_amd64.deb",
+   "hash": "sha512-FH9L2SvZnyvJ2LR6pMLxOOqiymwqeaN8CY1TaCQvZRGMk5rl11of104dfDPOLCoOPuWXm9l3T2QkMNdYRSY3dg=="
+  },
+  {
+   "file": "libfreetype6_2.13.2+dfsg-1ubuntu0.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/freetype/libfreetype6_2.13.2%2bdfsg-1ubuntu0.2_amd64.deb",
+   "hash": "sha512-0T5lur4BMtNpJbqDn+weAtqIzcy2QxGx/Lx6ksPlMxw4XUMkoozEtOunIjaRhBo7pnnymoAqOrwfnT7pj2mL5g=="
+  },
+  {
+   "file": "libfribidi0_1.0.13-3build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/fribidi/libfribidi0_1.0.13-3build1_amd64.deb",
+   "hash": "sha512-YEgARs8W/WBOna37H5fyUP4wGNnO9JfZZ4X0NbqhnU3KalOCCSkRnnrzpBfBB3OZfIxrGAbeqan19rxBhA8I8Q=="
+  },
+  {
+   "file": "libgbm1_25.2.8-0ubuntu0.24.04.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/m/mesa/libgbm1_25.2.8-0ubuntu0.24.04.4_amd64.deb",
+   "hash": "sha512-BaW2gnE5ybM+a4In1Wjj/MGzMWBAY/qO9bqDgpjlvcKCHJwevoZgitkDZSd+6dWp+qPb3sypEULV3CZZdDM80A=="
+  },
+  {
+   "file": "libgcc-13-dev_13.3.0-6ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-13/libgcc-13-dev_13.3.0-6ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-JyVquskaOHOE/yYXUcgUK3Sxlhgn3bi1w2Xse18hhnH4PLfFRTiCMwRNF8v+l0fBEe5mdpmngTuU3NjMi2NFcA=="
+  },
+  {
+   "file": "libgcc-s1_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-14/libgcc-s1_14.2.0-4ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-gromrwA/taJoVIAkUgcdA6PXjY8B0HgzjO2J6v+WP8jo42lqheoQIapFRlgGMUQSZJFMLy07vX5r9ano4Ph0NQ=="
+  },
+  {
+   "file": "libgcrypt20_1.10.3-2ubuntu0.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libg/libgcrypt20/libgcrypt20_1.10.3-2ubuntu0.2_amd64.deb",
+   "hash": "sha512-Zs9+wT+5oO7ZErg9BCOtiy8RJ7gv1KhScF7//sNv5+th5D7Tzebu/nF/GoCxGNUzTXx9f2euJ4Ay95ZJVVkLew=="
+  },
+  {
+   "file": "libgdbm-compat4t64_1.23-5.1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gdbm/libgdbm-compat4t64_1.23-5.1build1_amd64.deb",
+   "hash": "sha512-2+lNYzsxW7ZRzhVaZLHYcYi0n6XtSuy66+G7O59+bcPeMratRpsXuZhfYP9py7lM9V3GDIWKOWu+t0yOgxTo2g=="
+  },
+  {
+   "file": "libgdbm6t64_1.23-5.1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gdbm/libgdbm6t64_1.23-5.1build1_amd64.deb",
+   "hash": "sha512-6TWdQFifygTk5Ypsm1eagCKqJeRs0IUvtgqRTfxJ+Il1vRsTMsHWzcv4ldTcTIwlqmZLMRC/wfFOc8zrS4GN/A=="
+  },
+  {
+   "file": "libgdk-pixbuf-2.0-0_2.42.10+dfsg-3ubuntu3.3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gdk-pixbuf/libgdk-pixbuf-2.0-0_2.42.10%2bdfsg-3ubuntu3.3_amd64.deb",
+   "hash": "sha512-F2ltYv/y9FBXdL4jjxjDkFlaWoCzNzBJQWME8ySa1HOakUrmj0uOAMnlPdjKjU/t2M6cOckVQQmRehi6smAPDQ=="
+  },
+  {
+   "file": "libgdk-pixbuf2.0-common_2.42.10+dfsg-3ubuntu3.3_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gdk-pixbuf/libgdk-pixbuf2.0-common_2.42.10%2bdfsg-3ubuntu3.3_all.deb",
+   "hash": "sha512-8qdvDjRLGnhpu5Hnpm/2gAF0R0N1Yrwqh7ijp6lFSe5b+Uk/qnt6O9yVAohvy6/9qT5vw2PFDGjzPl0PJrVHsQ=="
+  },
+  {
+   "file": "libgif7_5.2.2-1ubuntu1.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/giflib/libgif7_5.2.2-1ubuntu1.2_amd64.deb",
+   "hash": "sha512-1FQf2sjHsa2tyv0MuXuLLJzy1/oQVCERuqkYoM8NylibSexztRRi2pDBUzTXDrH6ppa2roXM71NsQelqxwoE7Q=="
+  },
+  {
+   "file": "libgl1-mesa-dri_25.2.8-0ubuntu0.24.04.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/m/mesa/libgl1-mesa-dri_25.2.8-0ubuntu0.24.04.4_amd64.deb",
+   "hash": "sha512-Xo7NV3PPmMePShi4PA5HFiKNKH3b2Dv9CRMKS5a5RY5DK/O0VCfuVQF2xK5cyGxMEtNSGe+yAkVTv4GU35q7XQ=="
+  },
+  {
+   "file": "libgl1_1.7.0-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libg/libglvnd/libgl1_1.7.0-1build1_amd64.deb",
+   "hash": "sha512-JTRiMzIarY/sit939EMrLqSeMCnzAzQLZcSpjPMZ7bvzGsvP5Y9Ae0vgo9ER7iSLN7hGwaVGriiLoufLPiNaWg=="
+  },
+  {
+   "file": "libglib2.0-0t64_2.80.0-6ubuntu3.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/glib2.0/libglib2.0-0t64_2.80.0-6ubuntu3.10_amd64.deb",
+   "hash": "sha512-8EANiOoW8JRIYkep7Fjf9UGPvUWeGALTpJWKh4dO96tCfoUy3JOfyy+Cn6FKA5q5Ra8r0HLGRXA0JvykRtHe/Q=="
+  },
+  {
+   "file": "libglvnd0_1.7.0-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libg/libglvnd/libglvnd0_1.7.0-1build1_amd64.deb",
+   "hash": "sha512-qn9iCBpxIrvXJiifbAY0EUBj0S1OY630yga1h3c0l1aMCfTKQOQCXCDUScvVMwCu1XKLpzNm9u+CTOL5EqjpqQ=="
+  },
+  {
+   "file": "libglx-mesa0_25.2.8-0ubuntu0.24.04.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/m/mesa/libglx-mesa0_25.2.8-0ubuntu0.24.04.4_amd64.deb",
+   "hash": "sha512-oOqNX6bDYzPeK88dkbC6WzhEZ3ZjEq7mQ9901ULVVyJLO6McHlWzQ9jfKxqaBMmWlwRwd6AjHYQSDJ7R7Rt71g=="
+  },
+  {
+   "file": "libglx0_1.7.0-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libg/libglvnd/libglx0_1.7.0-1build1_amd64.deb",
+   "hash": "sha512-fRoKzy0XNmHEHSEDbfzducaKYdBwtn7vTJPJfY8WCK1lvYQ61Bl56lJhpqSqLp5I2uSQPvBxJbhQ2SKadFiuqw=="
+  },
+  {
+   "file": "libgmp10_6.3.0+dfsg-2ubuntu6.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gmp/libgmp10_6.3.0%2bdfsg-2ubuntu6.1_amd64.deb",
+   "hash": "sha512-/yeAKuwFLfbgWud8Maqlz+r+CS4MuKIw4sdN6sW6ZYRpqVFsdN4ftHTCaW0RoUeytMDjBKMF430d1waAq+Cf3g=="
+  },
+  {
+   "file": "libgnutls30t64_3.8.3-1.1ubuntu3.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gnutls28/libgnutls30t64_3.8.3-1.1ubuntu3.6_amd64.deb",
+   "hash": "sha512-voIVz+JxCXgMY1W3E8g0mPVH9Nc4s8sTeSmf1IqBpSPffN6NluHloOhVAcs10OzfPmgPgzHxkK7ydVPmM7Mukw=="
+  },
+  {
+   "file": "libgomp1_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-14/libgomp1_14.2.0-4ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-Yn+KCXyqThp714njADA7sIroXy0tT5L7Wzaw5Pb1EnIyxG9HZYogujk+fXO7g+fNQm6Oynctlk7xJpoqHgJNjA=="
+  },
+  {
+   "file": "libgpg-error0_1.47-3build2.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libg/libgpg-error/libgpg-error0_1.47-3build2.1_amd64.deb",
+   "hash": "sha512-jJLdNDQcTt+kRkCRu27d2jnHe+Bk/jbudjyQ1KvHcqkEoWSX3K2KzBfYqSItjYXXh2NagpigxfqMr4U7SjINUg=="
+  },
+  {
+   "file": "libgprofng0_2.42-4ubuntu2.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/binutils/libgprofng0_2.42-4ubuntu2.10_amd64.deb",
+   "hash": "sha512-E1hFX21ehHLszqIgYMlH7mdPu6VrRPy+odXVHxXus5yxJlhrqrlbx6GD1ngoqFNYLb9sjwGhWQ5SbimouXxBIA=="
+  },
+  {
+   "file": "libgraphite2-3_1.3.14-2ubuntu0.24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/graphite2/libgraphite2-3_1.3.14-2ubuntu0.24.04.1_amd64.deb",
+   "hash": "sha512-kNpPk+3ZkZEXnYwwiCbWTIY1CUOp0f8R/1luezUoquusRFkLycx2mdZBshvuxwU+Suh0Thz9M+DaDmbuc4wAaA=="
+  },
+  {
+   "file": "libgs-common_10.02.1~dfsg1-0ubuntu7.10_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/ghostscript/libgs-common_10.02.1%7edfsg1-0ubuntu7.10_all.deb",
+   "hash": "sha512-kxrU/8ztyyUVyXvKgAW48s95I1w7scWABbJZfgnOsO9w8Hm6kT4c4ZbVXaimKhdaThFGpeRljczZecGpuLBJgg=="
+  },
+  {
+   "file": "libgs10-common_10.02.1~dfsg1-0ubuntu7.10_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/ghostscript/libgs10-common_10.02.1%7edfsg1-0ubuntu7.10_all.deb",
+   "hash": "sha512-dmCVuk1ZD78EVfMBF4h7JwoyLXCPtkgLs7pqwo2Si9fHgoIlxFsNpFrKY2t9YsCCFmA0zg7jMlcGLtEomp12LQ=="
+  },
+  {
+   "file": "libgs10_10.02.1~dfsg1-0ubuntu7.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/ghostscript/libgs10_10.02.1%7edfsg1-0ubuntu7.10_amd64.deb",
+   "hash": "sha512-wP7OV2i3pdVQ3yIuhfpzKpHhBbnG/sQEtprtLUA4pW1kL2SggHZ/IvwoS3w5Jjl5k+L/JppeJxedOCDD6BDy6Q=="
+  },
+  {
+   "file": "libgssapi-krb5-2_1.20.1-6ubuntu2.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/k/krb5/libgssapi-krb5-2_1.20.1-6ubuntu2.10_amd64.deb",
+   "hash": "sha512-rvOIwSC+HEFDqw5ByKz1b83evXLgN4tjENsppPKHriVWWv6bBtSFByXKzL6sJLV+toQwWX+taN/a1PUf2sfNgw=="
+  },
+  {
+   "file": "libharfbuzz0b_8.3.0-2build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/h/harfbuzz/libharfbuzz0b_8.3.0-2build2_amd64.deb",
+   "hash": "sha512-KJK3DDdqT41nipvN2dvTdwsqTbrqkzugQEP4lj06VdghbVoM9E+Zmvty3GdUA1K0VHkLYLaDSBYvOWZ1aHkzWQ=="
+  },
+  {
+   "file": "libheif-plugin-aomdec_1.17.6-1ubuntu4.9_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libh/libheif/libheif-plugin-aomdec_1.17.6-1ubuntu4.9_amd64.deb",
+   "hash": "sha512-hcVnj2GgNmNj4FCIcjzAYy2w102zuTJQ0LnQgt5UAyYswLQJitVwaYBwpx8iPXEXJ2Jy1YvSujFxKrEPaMACCA=="
+  },
+  {
+   "file": "libheif1_1.17.6-1ubuntu4.9_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libh/libheif/libheif1_1.17.6-1ubuntu4.9_amd64.deb",
+   "hash": "sha512-VMmJRELgfAlKzP/YsPbd49FQ7WE3CW35AjWYaxJLzROhcWJRpr1Vz9moCCm9LRR7eCWZzWAIasfAEhw7otiKLg=="
+  },
+  {
+   "file": "libhogweed6t64_3.9.1-2.2build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/n/nettle/libhogweed6t64_3.9.1-2.2build1.1_amd64.deb",
+   "hash": "sha512-KMflGoYcQTYann5I3l5YswNA80KCSARxpjVcoM/kSOBQHTT8AQMzNFj1CVCunkflDRsLpt8ftWVlPve5/0dUgQ=="
+  },
+  {
+   "file": "libhwasan0_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-14/libhwasan0_14.2.0-4ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-04Ru02cdeTc6f6RV+6fuXqLGYV0821lZLxzgwaiTGDZjwyCe/tTOP5AkdA73stY1kgf1SFieRyNgZZY54hqW7w=="
+  },
+  {
+   "file": "libhwy1t64_1.0.7-8.1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/h/highway/libhwy1t64_1.0.7-8.1build1_amd64.deb",
+   "hash": "sha512-W9xPOXwfe8Wff0Y306j/DN26iKHzdnb46QkWKfgzNLN6jftRRd2LrmlswMmi0S1Yn9gV/LWVhHK5bga35rGARw=="
+  },
+  {
+   "file": "libice6_1.0.10-1build3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libi/libice/libice6_1.0.10-1build3_amd64.deb",
+   "hash": "sha512-JB2vNTDOfmv/zc5OPZ7hLUiXhW/AM83KijWI2ZMyQpNLcAonfBGLy+r6xe6/jMrdKXaaDm2zrmUGpjOn3lIvtg=="
+  },
+  {
+   "file": "libicu74_74.2-1ubuntu3.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/i/icu/libicu74_74.2-1ubuntu3.1_amd64.deb",
+   "hash": "sha512-GZRFMfMU/bcL1KNmjgcLWJaQ2WnwG7oUWiBn6sv9/WcxoUFL4GJUun7iXQcRRNraOnNWvqedBb50F157rGGn7A=="
+  },
+  {
+   "file": "libid3tag0_0.15.1b-14build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/libi/libid3tag/libid3tag0_0.15.1b-14build1_amd64.deb",
+   "hash": "sha512-2+2yYZTSL7iIgjL4NUXPfe7yNmoMWFLRvJOtG6lp6fhwwpVFR87SFbLUWWcwOLVQkdhw8vbCnmHuZ/h3ZqyT2g=="
+  },
+  {
+   "file": "libidn12_1.42-1ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libi/libidn/libidn12_1.42-1ubuntu0.1_amd64.deb",
+   "hash": "sha512-kMSIil4CkFcQwqrk7kSarzdOU8cTvBnvBZuCbK7nmAjVPL2P40//7OskJ1w1Hm+Pbtjng/jak2YI99uACfMzYA=="
+  },
+  {
+   "file": "libidn2-0_2.3.7-2build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libi/libidn2/libidn2-0_2.3.7-2build1.1_amd64.deb",
+   "hash": "sha512-tBmrkfmGOSxRe0T1aBR+OVi42tW1vf6i598WV8utdExtfBarI0SmgMaGuj0TX1zZsFAKKHWZoC1s5R/qVX0UnQ=="
+  },
+  {
+   "file": "libijs-0.35_0.35-15.1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/i/ijs/libijs-0.35_0.35-15.1build1_amd64.deb",
+   "hash": "sha512-NxL8R0awMOCt5g6w4aS5z34/FWegWr6xfxDtn7ZGDur7xaNFK11jpHo0/Sz8t9mbbrhaVB139l8Wu4o8fzEVEg=="
+  },
+  {
+   "file": "libimlib2t64_1.12.1-1.1build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/i/imlib2/libimlib2t64_1.12.1-1.1build2_amd64.deb",
+   "hash": "sha512-IPuh7UaRIn4biwSTa5tQ4Yu1FSGWKuAgIzAAYzQm+rUBtdGYTTGu2bW8SeS4k6tBnx2sQwiBSn4ogNEeaMmxsA=="
+  },
+  {
+   "file": "libip4tc2_1.8.10-3ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/i/iptables/libip4tc2_1.8.10-3ubuntu2_amd64.deb",
+   "hash": "sha512-YRoRG2HmBPwe84ffI4ONVtCjfmApSZ3f79KMidKLYfc3HaQs7TZzBDrt0Nz9fA6mHzpcO5IGkbpqmI5obth4pQ=="
+  },
+  {
+   "file": "libip6tc2_1.8.10-3ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/i/iptables/libip6tc2_1.8.10-3ubuntu2_amd64.deb",
+   "hash": "sha512-eADWX9ej7FNtZSa3dm/PA99FxrH68jEx96oIXxxsGW9HbGed3T0c70KcmnZN+7AJ42TRpNL/22nTnYMAd1CrbA=="
+  },
+  {
+   "file": "libisl23_0.26-3build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/i/isl/libisl23_0.26-3build1.1_amd64.deb",
+   "hash": "sha512-aDKeNL8Amh0wfZqHxkRog0YuwMMRJJlNddyaBwUuQMhmO7zEFHvESAjM84JLja5YmWTNMv4geUPFTqO90Q/O9A=="
+  },
+  {
+   "file": "libitm1_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-14/libitm1_14.2.0-4ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-xGiiw6Ohuow/RcurIRksKMXMzVCpoDxedMpZGBOwdZ3UnHVgcoJR2QnRibvE6faK6fxgFn17CWDf6S1O2v/3Ow=="
+  },
+  {
+   "file": "libjansson4_2.14-2build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/j/jansson/libjansson4_2.14-2build2_amd64.deb",
+   "hash": "sha512-Ciay1ySE/xNhRvN9Xo1SlxJ/uJ0tkMEHL+ihYoUFB38ywnGH1Tz8vEdhTa0OfB0+c5R0puJod2roaM/oxpo18Q=="
+  },
+  {
+   "file": "libjbig0_2.1-6.1ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/j/jbigkit/libjbig0_2.1-6.1ubuntu2_amd64.deb",
+   "hash": "sha512-6f+kC16kvunCPl0cHYCXySMHLP91v5r2WzPDTLPYzqKr3B8KvP9SRXV9JQdBB21SYVKbwOe7RKOQgWCuZqBs1w=="
+  },
+  {
+   "file": "libjbig2dec0_0.20-1ubuntu0.24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/j/jbig2dec/libjbig2dec0_0.20-1ubuntu0.24.04.1_amd64.deb",
+   "hash": "sha512-bddYTCPI/uakf0doiaYZOglVsJjcUdkjO8cSAdJotrLYrVcDmMJIky4IpgBYUcQCGtrG57J61l/vpYX1wruApQ=="
+  },
+  {
+   "file": "libjpeg-turbo8_2.1.5-2ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libj/libjpeg-turbo/libjpeg-turbo8_2.1.5-2ubuntu2_amd64.deb",
+   "hash": "sha512-PBzI4vYrg7BNqbHKw7XLDV5erzUh4l0DzRXVa4F7498JsJEtK95xWeZDP6s9C6BQN7nuYkgQh3Ih4XhbTsq1EQ=="
+  },
+  {
+   "file": "libjpeg8_8c-2ubuntu11_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libj/libjpeg8-empty/libjpeg8_8c-2ubuntu11_amd64.deb",
+   "hash": "sha512-3lRqFoz5LrQBmkM1uoZMomceU6zK/HKO+gvZz+yHQi7WZ22TliFjFyOVFm/7Jlaa4Ir+JXdpRzWMW1xWUXeBqQ=="
+  },
+  {
+   "file": "libjq1_1.7.1-3ubuntu0.24.04.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/j/jq/libjq1_1.7.1-3ubuntu0.24.04.2_amd64.deb",
+   "hash": "sha512-Vxy1Ltm/7UfS0jA7YmGMYccu6SFTgLDEXNW3zFrmnePlsiaEB0escw2GPdQgGn0yjmVvTJ7IMfkVG0jo2fw8gg=="
+  },
+  {
+   "file": "libjs-jquery_3.6.1+dfsg+~3.5.14-1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/n/node-jquery/libjs-jquery_3.6.1%2bdfsg%2b%7e3.5.14-1_all.deb",
+   "hash": "sha512-IcKOwV2Sae71YVrZnXfwnf7siO8yijwrhpMAVW1GwQqS57WgDoP4XL5LjqzKTbnoOtN3SmX0yt/y6fRnBGKgqg=="
+  },
+  {
+   "file": "libjs-sphinxdoc_7.2.6-6_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/sphinx/libjs-sphinxdoc_7.2.6-6_all.deb",
+   "hash": "sha512-oZ58sgRQeOzN6naQDKm+q8X81+0MzYWM76cQH/sUiJvvxG2KYKdtfE1UNmF56hL8Mm8CSCFw7vd9jAKsZN9o+w=="
+  },
+  {
+   "file": "libjs-underscore_1.13.4~dfsg+~1.11.4-3_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/u/underscore/libjs-underscore_1.13.4%7edfsg%2b%7e1.11.4-3_all.deb",
+   "hash": "sha512-P1S6VgingUgNETmwDFbYxGrWOEXQ9IJno1cSbJ9cmMXPx48Q6X/pXECzVvQshh5KgwXYwdg6XNRMiMgl/MbQJw=="
+  },
+  {
+   "file": "libjson-c5_0.17-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/j/json-c/libjson-c5_0.17-1build1_amd64.deb",
+   "hash": "sha512-jlzedBsSwG5kDq6TLxKSRkn4g4Q2+Uc/LMchtnGCm/xvVVhSkCrEVsNA7jRyKouY8fLtB2iWHuiAZB0/kwzbPQ=="
+  },
+  {
+   "file": "libjxl0.7_0.7.0-10.2ubuntu6.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/j/jpeg-xl/libjxl0.7_0.7.0-10.2ubuntu6.1_amd64.deb",
+   "hash": "sha512-eWApuulcDVfO1sNCkNacoaFmwATJJYoANG86oLbLmysovwGjqZdCEVRV8MsaAT5DoabCrBsHoJ0X8wMUfH+NkA=="
+  },
+  {
+   "file": "libk5crypto3_1.20.1-6ubuntu2.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/k/krb5/libk5crypto3_1.20.1-6ubuntu2.10_amd64.deb",
+   "hash": "sha512-fgHybzErpsDagFdXC1oRnsshVgnG3G6nY16Q8SUIqhOZ6MMpfZ91D37+iqY+zuM7ezi/qkM6aKCGlc1lk684hQ=="
+  },
+  {
+   "file": "libkeyutils1_1.6.3-3build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/k/keyutils/libkeyutils1_1.6.3-3build1_amd64.deb",
+   "hash": "sha512-lTyLOOS1A6kbqZjs5AS/MgkTYu5/6bI3019qCuTbAuYiBBAXOPEjlMHZlG0C4Bwogw3VTyaX4p6nHnzRbunOrw=="
+  },
+  {
+   "file": "libklibc_2.0.13-4ubuntu0.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/k/klibc/libklibc_2.0.13-4ubuntu0.2_amd64.deb",
+   "hash": "sha512-6g7dQk9dHAqlVZZT7u8Dcsf12u1DqP/popNOoB/IkjgC2BHie3oJhyrNMm9IIMVELGiWX+X9rjBgkLydPBHbGw=="
+  },
+  {
+   "file": "libkmod2_31+20240202-2ubuntu7.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/k/kmod/libkmod2_31%2b20240202-2ubuntu7.2_amd64.deb",
+   "hash": "sha512-bBHltoF02Elv64M+HdrpXDdPhxLyBsOkaNw0X12brfhf+EzSCbaF9p82DCNty90mUo4PqHatQHFOs8mIbogdmg=="
+  },
+  {
+   "file": "libkrb5-3_1.20.1-6ubuntu2.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/k/krb5/libkrb5-3_1.20.1-6ubuntu2.10_amd64.deb",
+   "hash": "sha512-O8iuq+QFcibg6xuIupJ76UzI5rE/NhIsOUq5KosH7vYeJnn0aY4gsAtQtwjExGlikY17xbZyza9Gy5gaDUwItw=="
+  },
+  {
+   "file": "libkrb5support0_1.20.1-6ubuntu2.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/k/krb5/libkrb5support0_1.20.1-6ubuntu2.10_amd64.deb",
+   "hash": "sha512-mAelJc8/54BLK+r1WpshQDAico9bZszv8u3aBKnwQhZxfSgxFpR5N4UhIHLoPp4S+PBEsappWdPt8y33pO97IQ=="
+  },
+  {
+   "file": "libksba8_1.6.6-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libk/libksba/libksba8_1.6.6-1build1_amd64.deb",
+   "hash": "sha512-v0Ev0mE03bGTI2rZtIMf/d84SGmrxlRR7w2kkHbYCRMqDY6qkXJ1Z0+xoqkYuyZguFZpd185Sn8piyYZb5WF8A=="
+  },
+  {
+   "file": "liblcms2-2_2.14-2ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/lcms2/liblcms2-2_2.14-2ubuntu0.1_amd64.deb",
+   "hash": "sha512-v41Rsq9uWtRaMqcEGoLYiRXADFxo2JnoezC1yAdITUx6u3b1RHqBlgf0+XsB6e+jJ3IJI5c7Scct8ybNG2ozMA=="
+  },
+  {
+   "file": "libldap2_2.6.10+dfsg-0ubuntu0.24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/o/openldap/libldap2_2.6.10%2bdfsg-0ubuntu0.24.04.1_amd64.deb",
+   "hash": "sha512-NCLNiFFzPSFPqpNiPuyBpleuXAr8JwWB3dqmxxQ7/1UxjjP/EjfICzAHmNwgXINPzbnS1QWBhR6kBrMrHbWkUg=="
+  },
+  {
+   "file": "liblerc4_4.0.0+ds-4ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/lerc/liblerc4_4.0.0%2bds-4ubuntu2_amd64.deb",
+   "hash": "sha512-a6laofxH3OiDbqwjYJimtwovcs9xKtRkjI8w3w05PABEpTVWMp+Q9JdnEEx+JR2XeL7bZxKHsKvdgmXOF7qbsg=="
+  },
+  {
+   "file": "libllvm20_20.1.2-0ubuntu1~24.04.3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/llvm-toolchain-20/libllvm20_20.1.2-0ubuntu1%7e24.04.3_amd64.deb",
+   "hash": "sha512-H9BssKJgETN6J4xgkLg0Nk5z1UUXMwftVBto1R0fYI1N22Ot3lGLMoZtlMnbue9wLXvjh0Tje/eafWCLxHTzYA=="
+  },
+  {
+   "file": "liblsan0_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-14/liblsan0_14.2.0-4ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-BuZbrSYrrpOo3oOVlBDXxO6m6qwitt4RSawQJmyRVnBqPXPBeWuNiIoGd3pd2v1ezcmX87IQQAE5dOZ/JNZZBA=="
+  },
+  {
+   "file": "liblz4-1_1.9.4-1build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/lz4/liblz4-1_1.9.4-1build1.1_amd64.deb",
+   "hash": "sha512-oRb9FozNPFMbM5X3vrh4lS/m6IHvy6EnSAkN+CwYCWjW6W/m/HnlQnQnJLDP+ZN3+yO98cZN3G6z6ridvUiB+A=="
+  },
+  {
+   "file": "liblzma5_5.6.1+really5.4.5-1ubuntu0.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/x/xz-utils/liblzma5_5.6.1%2breally5.4.5-1ubuntu0.4_amd64.deb",
+   "hash": "sha512-cBAZ40tHKWESvgVOghM19bBnDQF7nhMGvwz+4fe3MUHxb5yb3B9daAE5a0PDBDumtNvxJRF4+36j5wV8w3OSGQ=="
+  },
+  {
+   "file": "libmagic-mgc_5.45-3build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/file/libmagic-mgc_5.45-3build1_amd64.deb",
+   "hash": "sha512-yh5ZT/MW4j5vjME7U62S7/thbeyg928HCKYZUYcLZrhYYsrHZm/eU0v6L6Dtd1LILTwcePC4g0617OG3tm4vgQ=="
+  },
+  {
+   "file": "libmagic1t64_5.45-3build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/f/file/libmagic1t64_5.45-3build1_amd64.deb",
+   "hash": "sha512-xB5K+E0CjePQYUMrrCbPhc4oLu4UZI8VRcpFXW4dzGEw+el4ORAbr/JRbQiQCFgMPPhdu2PbUAePIWK9YmOdXg=="
+  },
+  {
+   "file": "libmd0_1.1.0-2build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libm/libmd/libmd0_1.1.0-2build1.1_amd64.deb",
+   "hash": "sha512-q+RNg9S8q69XmKrKPKh0PVD/2W1ohun0VlKFSoKimL5udRoTEIU9N++0KLpWq1jaXAJjvBgQpfRhEPzW6gJINQ=="
+  },
+  {
+   "file": "libmnl0_1.0.5-2build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libm/libmnl/libmnl0_1.0.5-2build1_amd64.deb",
+   "hash": "sha512-ipn4HrMS6mx7r1WG6Ngaz/m1v8CKxoxom66u90dQu8YBdULzmlzJbjlTVebXxOSyEpCvQv/GkXxpROCKEzuZSg=="
+  },
+  {
+   "file": "libmount1_2.39.3-9ubuntu6.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/u/util-linux/libmount1_2.39.3-9ubuntu6.6_amd64.deb",
+   "hash": "sha512-VDMZBv4DQYdv8/7wbYkkMEk8YEjUt/mvWFDDuqRY83jt6wPhjpFtnbPmX1YawteI/St+vRJHSJFjUkMDqblbFw=="
+  },
+  {
+   "file": "libmpc3_1.3.1-1build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/m/mpclib3/libmpc3_1.3.1-1build1.1_amd64.deb",
+   "hash": "sha512-PKqnvWLXUD8QYEgnsoBMLFA0ayekkXgrtZaSCJtF6lXxcWilDdlyyrVlTHRqFKpXnu48YeqqIqvdL2VXwm6ZZg=="
+  },
+  {
+   "file": "libmpfr6_4.2.1-1build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/m/mpfr4/libmpfr6_4.2.1-1build1.1_amd64.deb",
+   "hash": "sha512-3Yy/VI+R5+hNrontQRfrTEsXupI27DSPGgLdz8dGYqTx2ErpZMJCEmvnj11EBvPTi/gEFUnsu1Nj6V0sUuYNUg=="
+  },
+  {
+   "file": "libncursesw6_6.4+20240113-1ubuntu2.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/n/ncurses/libncursesw6_6.4%2b20240113-1ubuntu2.2_amd64.deb",
+   "hash": "sha512-IHSSAO8IpIhTiE+VPBKdto5LHXqHmqarl4EXh2v2O07AIjMSfAFzzjV0fwXASJkt/LmTMNrm36YCcrjZ193cMw=="
+  },
+  {
+   "file": "libnetfilter-conntrack3_1.0.9-6build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libn/libnetfilter-conntrack/libnetfilter-conntrack3_1.0.9-6build1_amd64.deb",
+   "hash": "sha512-VJMyxr/NRgb2hfCgnATjYMs4u4CBfv1jxO1rsX2i9SqCrvMZPTASmSVyD0CcSoMm1bW4p9Z/lDBUIGbaYC74ow=="
+  },
+  {
+   "file": "libnettle8t64_3.9.1-2.2build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/n/nettle/libnettle8t64_3.9.1-2.2build1.1_amd64.deb",
+   "hash": "sha512-XOQjS52ukXua+YA6t9cAb3kxB+wXwxE7ekaTeEnZZpHjvGLff5sq9oVBV+58OpWN7FMhP8IwkgGR1ciGhiK5CA=="
+  },
+  {
+   "file": "libnfnetlink0_1.0.2-2build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libn/libnfnetlink/libnfnetlink0_1.0.2-2build1_amd64.deb",
+   "hash": "sha512-NnjaHqb8zafWIsUmzIrw+o2gzVpSmFUpG4UJjhjLdoR0J3AlR686sem046KgU/cOsFHx24+WgjLCB+5NWPFYtA=="
+  },
+  {
+   "file": "libnftables1_1.0.9-1ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/n/nftables/libnftables1_1.0.9-1ubuntu0.1_amd64.deb",
+   "hash": "sha512-qI8THPrmDafKgj4J2nJv1TFEQGOrMdya9loOvgodDPHuuzOtRmBQc5c5D6x9WUE2Q7H07PmZ6jHjQRG+weJxug=="
+  },
+  {
+   "file": "libnftnl11_1.2.6-2build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libn/libnftnl/libnftnl11_1.2.6-2build1_amd64.deb",
+   "hash": "sha512-OM6+m5OmMK2+f3Iw5ya8XtBIkCadsn564kegtZES57leXQ6d2TqTEePLfzhWFaB4Lk9dRZvVZ097i9mCLOf8Ag=="
+  },
+  {
+   "file": "libnghttp2-14_1.59.0-1ubuntu0.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/n/nghttp2/libnghttp2-14_1.59.0-1ubuntu0.4_amd64.deb",
+   "hash": "sha512-pSVGjCki1xT659999b9Ya7cP6W4r8L1EeHZ5wSzdaRJdzckDQjTJZL5Hqrhlf3b6pLTZGU9oCokLoZTfAVeTMw=="
+  },
+  {
+   "file": "libnl-3-200_3.7.0-0.3build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libn/libnl3/libnl-3-200_3.7.0-0.3build1.1_amd64.deb",
+   "hash": "sha512-D5ad3b8fC9l4SB7Os/BtaJ4L/+Nhoe3pK3hSqqic3L7iOqmyw6xqHeLxtAihEu9FvKw7rNU+Q7cVz5VPFIPzkA=="
+  },
+  {
+   "file": "libnl-genl-3-200_3.7.0-0.3build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libn/libnl3/libnl-genl-3-200_3.7.0-0.3build1.1_amd64.deb",
+   "hash": "sha512-MVpNs7ybboTve+B+qaE1oPnDmYc7JLEhSjvDUrnMjgOLxxPUMdo745hkdjsBTfd297rhmtdU+BBtG5egsJMFQA=="
+  },
+  {
+   "file": "libnpth0t64_1.6-3.1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/n/npth/libnpth0t64_1.6-3.1build1_amd64.deb",
+   "hash": "sha512-oqWKv30cGB0QPkgZWDUwS3Za4RSd4vDnlpXaxaHSNWAPOvh/pFBFue6bOa87+x3+vqONAdzdS7grQnfXgOvPeg=="
+  },
+  {
+   "file": "libobrender32v5_3.6.1-12build5_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/o/openbox/libobrender32v5_3.6.1-12build5_amd64.deb",
+   "hash": "sha512-I2Pgg9LgdQ68A5h9SD1058NFaGKfVewOnWzRwBzVqRZbSU+IDwv4hIxGSDakT2zofAnjePuxVC0+G1diZG75kA=="
+  },
+  {
+   "file": "libobt2v5_3.6.1-12build5_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/o/openbox/libobt2v5_3.6.1-12build5_amd64.deb",
+   "hash": "sha512-ryHZ0Cjl37bc7u7f2rAryVdhZfdXumVKE1VUMAL+q5tFFsoWyAtPNKMV9fe9ffnMOiAZP0AjpKcuu3wp7jCFVQ=="
+  },
+  {
+   "file": "libonig5_6.9.9-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libo/libonig/libonig5_6.9.9-1build1_amd64.deb",
+   "hash": "sha512-jkFQA9RXRYfTAaCA61COtDnOYHgpLrz/HYzqLn/n+sv77W6EkCUWJo60OlRdCkfeUjyJcD311Qy/vSXwmT4bhQ=="
+  },
+  {
+   "file": "libopenjp2-7_2.5.0-2ubuntu0.5_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/o/openjpeg2/libopenjp2-7_2.5.0-2ubuntu0.5_amd64.deb",
+   "hash": "sha512-/1aQPrMUZk9fYIA9Pb4wqSFDpHCdeU/cW2T5SwjPbS08H0iCjxlwrlORFp2uM+nVyCFvUwIm64FRCOfqtOAarg=="
+  },
+  {
+   "file": "libp11-kit0_0.25.3-4ubuntu2.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/p11-kit/libp11-kit0_0.25.3-4ubuntu2.2_amd64.deb",
+   "hash": "sha512-6xs3FIsSXa+CTVwYa+L+1S9U7a5YEz4V4RnvV3f3/laQ9V9/N1kJBiqTAG6YAhW7fDyi5PZmjOgq3TuKbhADQQ=="
+  },
+  {
+   "file": "libpam-modules-bin_1.5.3-5ubuntu5.7_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pam/libpam-modules-bin_1.5.3-5ubuntu5.7_amd64.deb",
+   "hash": "sha512-VBsdt/0/bb5GR/B9dUk4kQHMjJavdLCOEKUu+ayACH1aDpttzb9YUtlioIZjns2xNrfzM+dByZEn6q+5dClKEQ=="
+  },
+  {
+   "file": "libpam-modules_1.5.3-5ubuntu5.7_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pam/libpam-modules_1.5.3-5ubuntu5.7_amd64.deb",
+   "hash": "sha512-FolCGKVog9rL2VHV39WvBn/Z56JVOZYYJbywtj4W8HWq9eL7CwjTd3z1cM+d/6hPx9X85PxqtyQynpjB+4JUKg=="
+  },
+  {
+   "file": "libpam-runtime_1.5.3-5ubuntu5.7_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pam/libpam-runtime_1.5.3-5ubuntu5.7_all.deb",
+   "hash": "sha512-D2n4U9rbylVlBFgEPiHAMUCIM/ui50BO7d5gNQhyUjDPBplEEfUdyg9A9gFPn/YDbxdfP9jGlAtmsZjsSp946w=="
+  },
+  {
+   "file": "libpam0g_1.5.3-5ubuntu5.7_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pam/libpam0g_1.5.3-5ubuntu5.7_amd64.deb",
+   "hash": "sha512-ID37i2YbEGGSOD84URb4GGHwErMToOOZ4+DGWBT3Yfh8VmNI1yPUdoR0bb8tDOXJNdAskYicveoVbXkkFnascg=="
+  },
+  {
+   "file": "libpango-1.0-0_1.52.1+ds-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pango1.0/libpango-1.0-0_1.52.1%2bds-1build1_amd64.deb",
+   "hash": "sha512-B93f70xJwmlNOSInDpjpIpmtHNO8brNicUh0mu3lvCAWf6D5/Sck13W4XqM6t7kNimURi0na+MPmZNMZ2NUDaw=="
+  },
+  {
+   "file": "libpangocairo-1.0-0_1.52.1+ds-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pango1.0/libpangocairo-1.0-0_1.52.1%2bds-1build1_amd64.deb",
+   "hash": "sha512-qWCMweodu8QdghJsGwnaD7jP+yxvPXcwwopiO0N+xpBtiJUTI0dB9SqSZjjsIdrazEWmZAkpWqCYFRrFlOxT4A=="
+  },
+  {
+   "file": "libpangoft2-1.0-0_1.52.1+ds-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pango1.0/libpangoft2-1.0-0_1.52.1%2bds-1build1_amd64.deb",
+   "hash": "sha512-znv63yeWxRymXOEFY0hlU6S7gWXj3YLrw5abVfMc5jTgFbTXgz6VaugWgWddICvqE/kFkmy4R51b4FttthgJjw=="
+  },
+  {
+   "file": "libpangoxft-1.0-0_1.52.1+ds-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pango1.0/libpangoxft-1.0-0_1.52.1%2bds-1build1_amd64.deb",
+   "hash": "sha512-NSWvtJs75WvNIlYilEFxd6fe9WdpyXHDdLsFxFjPWFvlWelI6/0ZHUF+kh0HcA/8J6PgAu3V+i+coeTT/ECs1Q=="
+  },
+  {
+   "file": "libpaper1_1.1.29build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libp/libpaper/libpaper1_1.1.29build1_amd64.deb",
+   "hash": "sha512-2dnUujZLHODp8V72B0//fy292uAkz4u52ET9ZApZ/lfaTEjhMFgRNvFMfXddLe+H7w8Ss4oQvnfjNckeZ4PfWA=="
+  },
+  {
+   "file": "libpciaccess0_0.17-3ubuntu0.24.04.3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libp/libpciaccess/libpciaccess0_0.17-3ubuntu0.24.04.3_amd64.deb",
+   "hash": "sha512-swXkRmINAyoi874NCfsnaRCkUs7UmSeOaxZjoDmzkUQU7F16HzLXk4GtpOXzBUeAKD+YFULChKz9XGvsTwJguA=="
+  },
+  {
+   "file": "libpcre2-8-0_10.42-4ubuntu2.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pcre2/libpcre2-8-0_10.42-4ubuntu2.1_amd64.deb",
+   "hash": "sha512-n3iKXDiPoE0LZh5kVC0UsDIu3/kztJaQdvFActzGXqa6aBxTnPYm8dbqEwGeP7AQ8MSXamSn/RjNkc0enrM4TA=="
+  },
+  {
+   "file": "libperl5.38t64_5.38.2-3.2ubuntu0.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/perl/libperl5.38t64_5.38.2-3.2ubuntu0.6_amd64.deb",
+   "hash": "sha512-gyXQg/gK0B9mDfi4IXmW0BF/PFw9LBggymnKH81woTVpK7wZFbrCFOHfQmdbmnpZvkhKIxplq7sNjEyhnTnlNg=="
+  },
+  {
+   "file": "libpixman-1-0_0.42.2-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pixman/libpixman-1-0_0.42.2-1build1_amd64.deb",
+   "hash": "sha512-wYiuLwcP2VaToOKeVeHUY3t8m3mCSFX2l8p7PA0n0yjmtjMGm6seYdASjzAe4FtT78Vn6yW7+VtmiJs/xYCO8g=="
+  },
+  {
+   "file": "libpkgconf3_1.8.1-2build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pkgconf/libpkgconf3_1.8.1-2build1_amd64.deb",
+   "hash": "sha512-tNOl1c1ovxZqUs7sA3E/5Tiiy+RPFsiwIXwdj2EIpdJQVYMuG2BKpl8R+qtXJFqeJqFcRYuwEb7Iv2Rpvq2YFg=="
+  },
+  {
+   "file": "libpng16-16t64_1.6.43-5ubuntu0.7_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libp/libpng1.6/libpng16-16t64_1.6.43-5ubuntu0.7_amd64.deb",
+   "hash": "sha512-Mr5EoNxcQjNFLIaazCj3XvysITW8D0vPocb3OQ2HtED0SYGZ4SQsplgn8o6BJRDMEzxvUEo4WDCw8Hgb2Z5ZUQ=="
+  },
+  {
+   "file": "libpopt0_1.19+dfsg-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/popt/libpopt0_1.19%2bdfsg-1build1_amd64.deb",
+   "hash": "sha512-3jR6RxGxz7mhq77rW0Zf4/+EtPh9vQXHuAVmyzzIxrawxr2STnoDFInUixBMcrHX30UH4H27jrlhZrE+huAp+w=="
+  },
+  {
+   "file": "libproc2-0_4.0.4-4ubuntu3.3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/procps/libproc2-0_4.0.4-4ubuntu3.3_amd64.deb",
+   "hash": "sha512-Ju7AxdPPr2dbzAp7khQJfTZOnKWQnxjuUMour5+L+SjGZdInq4646EgcZf7TllGYU1Pj6enB3kDw9MpT7Tx3QA=="
+  },
+  {
+   "file": "libpsl5t64_0.21.2-1.1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libp/libpsl/libpsl5t64_0.21.2-1.1build1_amd64.deb",
+   "hash": "sha512-MBnyUb3vhbRaYrfnvBRmN+8jHXbQAyqQvxcBKTN3l53eWlSYq0HglAJ1s7Svz493IH3TzIxATnNlnsyTEsIfnA=="
+  },
+  {
+   "file": "libpython3-dev_3.12.3-0ubuntu2.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/python3-defaults/libpython3-dev_3.12.3-0ubuntu2.1_amd64.deb",
+   "hash": "sha512-N+3MUSZuA2VF4lXCIIT+I/VTliFqPj8Bl/YCDY8IbgPZStF8s8qpUHIh7tgTTFcWfJFaQhN8x75zA5iXO/dlzQ=="
+  },
+  {
+   "file": "libpython3-stdlib_3.12.3-0ubuntu2.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/python3-defaults/libpython3-stdlib_3.12.3-0ubuntu2.1_amd64.deb",
+   "hash": "sha512-7dNtWx+aTb1al4R8EMYSi4DMJL4QSyf2iuSNjeOo5UGEzGO993YXHrXSXvwBucMDmMmu1q3W3nchib5/yUOqTA=="
+  },
+  {
+   "file": "libpython3.12-dev_3.12.3-1ubuntu0.17_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/python3.12/libpython3.12-dev_3.12.3-1ubuntu0.17_amd64.deb",
+   "hash": "sha512-X8u0kaLv8P4j1izeGZpH326YaDeXdLGReylOi8DqEPV4/eiDWisYSpp+K4gQbvyRC1rNkITMAtcCQVy4CceTHw=="
+  },
+  {
+   "file": "libpython3.12-minimal_3.12.3-1ubuntu0.17_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/python3.12/libpython3.12-minimal_3.12.3-1ubuntu0.17_amd64.deb",
+   "hash": "sha512-0SpFWS1/tAJbsXNGPZj9Bt/VG3SF9+8eyJPBFmPb/uSe4jBVzAyUgDuaPMn9d0HqpZSiQLz3egp32BKaic6jcg=="
+  },
+  {
+   "file": "libpython3.12-stdlib_3.12.3-1ubuntu0.17_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/python3.12/libpython3.12-stdlib_3.12.3-1ubuntu0.17_amd64.deb",
+   "hash": "sha512-CkVNfgQMMXmMruyAbPagrCyKC97b0rGLU/OuQht2PgwnuXRSIDn6K0cdnn2Iglo5VaC+Q66FhBvzw0jJM5cUKg=="
+  },
+  {
+   "file": "libpython3.12t64_3.12.3-1ubuntu0.17_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/python3.12/libpython3.12t64_3.12.3-1ubuntu0.17_amd64.deb",
+   "hash": "sha512-+BekHuOAz2ILr8sPY11cXQhS0eht3nUZSrxV5LW6bovymN7VSlG0tL+UOlmYbp/ejG5I5C+V7FkEidnRtgkjPQ=="
+  },
+  {
+   "file": "libquadmath0_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-14/libquadmath0_14.2.0-4ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-8ID3PCgh8Xmqe+C1r6IPtdZjC9m5F6s9dDefCBqXExEWyi0GmY5ikEt3g+R6fbd/HZF4AvRlRFyPmGnjpIRbQQ=="
+  },
+  {
+   "file": "libreadline8t64_8.2-4build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/r/readline/libreadline8t64_8.2-4build1_amd64.deb",
+   "hash": "sha512-0ZoWIOnoefRhbhVk/5fGgWqMnHkgEpLS2Gyd4MFCYHvQi+cS1ZnujOgwH2iGoNKKqT7FUEriHZx/QrqBUVgerg=="
+  },
+  {
+   "file": "librsvg2-2_2.58.0+dfsg-1ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libr/librsvg/librsvg2-2_2.58.0%2bdfsg-1ubuntu0.1_amd64.deb",
+   "hash": "sha512-9/ZYEL46TAlP52AAGDFSYpLSsdxPDZctpdygfK6X5ihq/Kq8nzdl9cyPuzDylvtfGqAHqfau8MNNPPPF/rH6Gg=="
+  },
+  {
+   "file": "librtmp1_2.4+20151223.gitfa8646d.1-2build7_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/r/rtmpdump/librtmp1_2.4%2b20151223.gitfa8646d.1-2build7_amd64.deb",
+   "hash": "sha512-r4GmaqFji7PWTNHEofxQslAppqc8bdzJQ28I8ke7axI+2u6Y9ha9vswLt5i+xy02E4XQLbCPS61eg1Lh74figw=="
+  },
+  {
+   "file": "libsasl2-2_2.1.28+dfsg1-5ubuntu3.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/cyrus-sasl2/libsasl2-2_2.1.28%2bdfsg1-5ubuntu3.1_amd64.deb",
+   "hash": "sha512-UcOWPKXwKRQww73p5LeuwhJ4uDNr2JN8Aa17qQNHp9loJ12VP1x0OoRVa4+TLoFYKS0vVymx2w7X/JYJb1O04g=="
+  },
+  {
+   "file": "libsasl2-modules-db_2.1.28+dfsg1-5ubuntu3.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/c/cyrus-sasl2/libsasl2-modules-db_2.1.28%2bdfsg1-5ubuntu3.1_amd64.deb",
+   "hash": "sha512-SmWmFEZG1NlfkM9dH5knuTwdIS40vmK32Jimxhj/c+PSSZBrlSGctdjy5PmtAoD3Ev7wRVJIEuzxpopGq7wejg=="
+  },
+  {
+   "file": "libseccomp2_2.5.5-1ubuntu3.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libs/libseccomp/libseccomp2_2.5.5-1ubuntu3.1_amd64.deb",
+   "hash": "sha512-wAgjRbT55G2WGBXU9S2kEWW8RoMvcXz0YaDeOGC6s+12UtCob55QaWr8moMQz9W1BHQzxngEWBuRi1iLy6zxxg=="
+  },
+  {
+   "file": "libselinux1_3.5-2ubuntu2.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libs/libselinux/libselinux1_3.5-2ubuntu2.1_amd64.deb",
+   "hash": "sha512-cT1B6ZZY8efnFKz8fDyB8AAGpWv3HaBNDGSmkFCnz+jmkvqvSFMgNK7AANCXkR52g00porJgx3Np98m9vbAjqw=="
+  },
+  {
+   "file": "libsemanage-common_3.5-1build5_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libs/libsemanage/libsemanage-common_3.5-1build5_all.deb",
+   "hash": "sha512-NR8yXBM1hJeqHpghwXeXjAQFXnEamd3Ut26/tPeW38TIbz38LShgi8ttPa1nj+nKwdRGvL2xkWykZyZmt0w2+w=="
+  },
+  {
+   "file": "libsemanage2_3.5-1build5_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libs/libsemanage/libsemanage2_3.5-1build5_amd64.deb",
+   "hash": "sha512-5RGFaVEonUFnycn+Z5nrUA9YB06TEh+4UkaKz83AQ5s63P6WSmV2dKV0BmCyoiFKw4F+WOyqXLEj8ELaYxp6AQ=="
+  },
+  {
+   "file": "libsensors-config_3.6.0-9build1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/lm-sensors/libsensors-config_3.6.0-9build1_all.deb",
+   "hash": "sha512-1tXzNQnGFYGeHOpj74pXR5S1Qm9KDRxCYM2kYnzbYWMdzIZRMW4DLX01Ch1umsFCIiSvtZwJETDr7+x1osiW4A=="
+  },
+  {
+   "file": "libsensors5_3.6.0-9build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/lm-sensors/libsensors5_3.6.0-9build1_amd64.deb",
+   "hash": "sha512-B4goeJV1UdkMuVvZGnc+1oyJywNvYpAxT8jWkb/rZk4CdDT2GNZGkySkUnE3oSlnrY/XzM654oJJg7p4fiNZ3Q=="
+  },
+  {
+   "file": "libsepol2_3.5-2build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libs/libsepol/libsepol2_3.5-2build1_amd64.deb",
+   "hash": "sha512-5M3hQr0VILC0+fpbzbdhCru9aAC8fWTnYcFfcKFq4ly/3UVHwn0B7DcuNyn2IjkZuTsD8Gp08wlLhQ+LhKi/NA=="
+  },
+  {
+   "file": "libsframe1_2.42-4ubuntu2.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/b/binutils/libsframe1_2.42-4ubuntu2.10_amd64.deb",
+   "hash": "sha512-q9UazkGIysGhAFRWQuaHj4TDEbphTVIPZGn1mGOvyYqIC1fMolIExAS57KPl3U6sREGLvheJ3UUYS16SsSe/Qg=="
+  },
+  {
+   "file": "libsharpyuv0_1.3.2-0.4build3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libw/libwebp/libsharpyuv0_1.3.2-0.4build3_amd64.deb",
+   "hash": "sha512-9+yIDS7ojRAxGFiwCp+HGRMuK4DcKy3JE9UxeSVEgApiseGeVVQGbgg5EpI8L5FokHoY3TsHmyAQwcabE7V/Ow=="
+  },
+  {
+   "file": "libsm6_1.2.3-1build3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libs/libsm/libsm6_1.2.3-1build3_amd64.deb",
+   "hash": "sha512-r47zju+t3g8wYL8Z45LUbFGk0BduJV7PiEUbQLjzAZQJmlvM4bgZXnEq6IBNIkUY9HwQyLHzcgYp3zrmzyCKHQ=="
+  },
+  {
+   "file": "libsmartcols1_2.39.3-9ubuntu6.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/u/util-linux/libsmartcols1_2.39.3-9ubuntu6.6_amd64.deb",
+   "hash": "sha512-HBtZvfBR508Y1THuA8JCfnzn8r8DP00enkMC85q5rTJSB5jfSylJtsjWKmMf71inHW+Ke8mmEP9nOHXaW+sAOg=="
+  },
+  {
+   "file": "libspectre1_0.2.12-1build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libs/libspectre/libspectre1_0.2.12-1build2_amd64.deb",
+   "hash": "sha512-95EyVJHPcAy0x50Oc87wvdjenoJFp0pz3CpWhhASAg8+hl6SJRTR+TO0OqhfZ069tC5LHRe5LZrMgOtvX9pXZA=="
+  },
+  {
+   "file": "libsqlite3-0_3.45.1-1ubuntu2.8_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/sqlite3/libsqlite3-0_3.45.1-1ubuntu2.8_amd64.deb",
+   "hash": "sha512-QL/3gSqe4AZLwA78h0B1Xxp1zm9y3SKic3qUjAFbNo9L776AoQburklt9LQQXnh6d1U1+nspog3dwJzXRv8usQ=="
+  },
+  {
+   "file": "libss2_1.47.0-2.4~exp1ubuntu4.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/e/e2fsprogs/libss2_1.47.0-2.4%7eexp1ubuntu4.1_amd64.deb",
+   "hash": "sha512-l4KbdE6XKnzlWUbW+lebMeTSGvadxb8zHs3IuYkKqEYPPwnPQtn/7DVIW4F/nwrsTXTkIMqTdP7kU1yMZe9weQ=="
+  },
+  {
+   "file": "libssh-4_0.10.6-2ubuntu0.5_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libs/libssh/libssh-4_0.10.6-2ubuntu0.5_amd64.deb",
+   "hash": "sha512-cuEBuqvfRNZ/NGY5NuiOgi6LbbmtOzFRKDX7sQFbGdgpFZycohNNdNcNDdq8ScZTCiHG5TZhzKwQLIq/1E+KsQ=="
+  },
+  {
+   "file": "libssl-dev_3.0.13-0ubuntu3.16_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/o/openssl/libssl-dev_3.0.13-0ubuntu3.16_amd64.deb",
+   "hash": "sha512-4kxLQeIf1qr9GicgfkhA+upu3kwIvhTaWzbTLLfuuzruCUnaeMG5tws0/oUL2XqImkULjALSUp3hgrNV+FM4ng=="
+  },
+  {
+   "file": "libssl3t64_3.0.13-0ubuntu3.16_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/o/openssl/libssl3t64_3.0.13-0ubuntu3.16_amd64.deb",
+   "hash": "sha512-nvMoYaCGCzu88xeilt7MrIQKabvtMbpWLEXeUhfCkYGlEpiWEt97qF+V0DGrdoAJsc/36XzHD7SWAjeXtN7naw=="
+  },
+  {
+   "file": "libstartup-notification0_0.12-6build3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/startup-notification/libstartup-notification0_0.12-6build3_amd64.deb",
+   "hash": "sha512-GxbPTxjqSfOztVDeP8QJvMIWXDG3WYAndks4OmkR2ud4D0sZupV2f7CgyabEK3f8FESm7reMXvNSWEjvRJ4NEQ=="
+  },
+  {
+   "file": "libstdc++-13-dev_13.3.0-6ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-13/libstdc%2b%2b-13-dev_13.3.0-6ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-KKRqQSOV2ozRcQ5PMTxjTGIIRdEw+IiU4wAM2aCfOzBhskgZCtSJIBksrAkKvoXXNRPeVi5MpMUITeQVFnRIOg=="
+  },
+  {
+   "file": "libstdc++6_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-14/libstdc%2b%2b6_14.2.0-4ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-piIkyc2oHkpQD7ceQOz8GpuRBoW3W2kwEkkKOg+E/F4e7laUnBLYNWX5jfeTOhswvK3fXK8o+V2nTZQIicWV9w=="
+  },
+  {
+   "file": "libsystemd-shared_255.4-1ubuntu8.18_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/systemd/libsystemd-shared_255.4-1ubuntu8.18_amd64.deb",
+   "hash": "sha512-mgW2m0Fx4HUCFi1AJIPhVSxmEaF1KwuTLct55PbdBBGPlxrd0MwEIw1fEJx0H52bpyRoJon3SlLkg6Bbh316Rw=="
+  },
+  {
+   "file": "libsystemd0_255.4-1ubuntu8.18_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/systemd/libsystemd0_255.4-1ubuntu8.18_amd64.deb",
+   "hash": "sha512-z8EC/DogLIIGv1FBGSFCw5sq59ZwTg/kYCz6W4Ma/IQPrMjIUiKuMKn9qAiCAGBm1U2HL3fcQuydr2ozC2rrTg=="
+  },
+  {
+   "file": "libtasn1-6_4.19.0-3ubuntu0.24.04.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libt/libtasn1-6/libtasn1-6_4.19.0-3ubuntu0.24.04.2_amd64.deb",
+   "hash": "sha512-vWZqa4DkqlhNh65R1BBC/LOKwSV2/ksV3gV+QVqipziAJogy6GBUl9D7eNTznmMh8P6dDqGaAcS43hD+OTbciA=="
+  },
+  {
+   "file": "libthai-data_0.1.29-2build1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libt/libthai/libthai-data_0.1.29-2build1_all.deb",
+   "hash": "sha512-Wpuep+p9Su3thysl7/F6OClHAEQ3TTjTkmuWnv3zxtLXPfRJtObakf4he7Qmujpapcl2HGqjMZmcQeC8Q6TLaw=="
+  },
+  {
+   "file": "libthai0_0.1.29-2build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libt/libthai/libthai0_0.1.29-2build1_amd64.deb",
+   "hash": "sha512-K9VtsOOT/d/2dbR5Lfs1Z1YSUStdsYsDbSb1uaS5RSG2X0Ou+lGd+CgNFx16Gv+hUzKHskMq2kTvJNNvEJaHsg=="
+  },
+  {
+   "file": "libtiff6_4.5.1+git230720-4ubuntu2.5_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/t/tiff/libtiff6_4.5.1%2bgit230720-4ubuntu2.5_amd64.deb",
+   "hash": "sha512-bur4B2TcChmNVCBEF/p/Tijg2QHzcu7rBHdK5vrEu5tBQlxTNEDarz+lMsezjtTE4EeBRDZwQtlZV9S3PJTMPA=="
+  },
+  {
+   "file": "libtinfo6_6.4+20240113-1ubuntu2.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/n/ncurses/libtinfo6_6.4%2b20240113-1ubuntu2.2_amd64.deb",
+   "hash": "sha512-+x1BoIRsmQqxnPqI2Ifeokmvyr1PZqFENLArGRPlhEyf4NvYENchg5cH7IybZpAGVhb/YRwktDstD6cLUbE/HQ=="
+  },
+  {
+   "file": "libtirpc-common_1.3.4+ds-1.1build1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libt/libtirpc/libtirpc-common_1.3.4%2bds-1.1build1_all.deb",
+   "hash": "sha512-B4Qmbhn7Tk1NW7ueRw+C8UJPaJaEWbLIArvVu1KVemwdwOtiiprYSs5aQF0BgjVDNWTANutRa0U4fUbWF1hTJA=="
+  },
+  {
+   "file": "libtirpc3t64_1.3.4+ds-1.1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libt/libtirpc/libtirpc3t64_1.3.4%2bds-1.1build1_amd64.deb",
+   "hash": "sha512-xmF0xfAe1mmWz9aYagMKq6lrbYlJxpk4gxw14NdypDePdlRYMXbcUJ59idiTZL8Pc9AF+VeUBJ6yfOOB9Ff6wg=="
+  },
+  {
+   "file": "libtsan2_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-14/libtsan2_14.2.0-4ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-4/B10gV3cxyJu7LNJP7qkSrYDI0VYgZl7vF/aHYm1pnPpgh8Bge1ADQSlGPv68EXPz8x9X2EXWPHzn7PvnvIoA=="
+  },
+  {
+   "file": "libubsan1_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/gcc-14/libubsan1_14.2.0-4ubuntu2%7e24.04.1_amd64.deb",
+   "hash": "sha512-UVYvlNAuEn2SnJZpirsPvzDgpQLiaFgEBlLZchNJ/ouyHvK0AyvmdTd5bMH0b2kciyPshd13Yi8Dm1i3Z9KA1Q=="
+  },
+  {
+   "file": "libudev1_255.4-1ubuntu8.18_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/systemd/libudev1_255.4-1ubuntu8.18_amd64.deb",
+   "hash": "sha512-5WUx8J55PW+0zXAiUE8QzQafAptbu7O+O2CzTjWoh4jotW+jnAGxN2I4Yo6j+Ej6vtXsa5mEmM7hnl+6Wbcbjg=="
+  },
+  {
+   "file": "libunistring5_1.1-2build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libu/libunistring/libunistring5_1.1-2build1.1_amd64.deb",
+   "hash": "sha512-JgPpDuq20LwxsO8LapNhH1yy9IgoXWoxQbbbhmwKJtLEoTCvOshJK0ALZHwFFsluRMiw2cg+J69zHKhe/2H5OQ=="
+  },
+  {
+   "file": "libunwind8_1.6.2-3build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libu/libunwind/libunwind8_1.6.2-3build1.1_amd64.deb",
+   "hash": "sha512-Md+NboU90IEMtlGQL97K6bUT2jQIQ9ZLdw2q92AR0fN9J/pogl+WtjTW0Wv02m3UoIdoQn3kITXIm22ZtSP0wQ=="
+  },
+  {
+   "file": "libutempter0_1.2.1-3build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libu/libutempter/libutempter0_1.2.1-3build1_amd64.deb",
+   "hash": "sha512-22v3CBwDYQr/kqDPAss6NgEdTG5lVsJsXrfZs5PQEindPgtsqCMH6fevF96dYqaBGE1dy9Vr1l4B4fi9eMEFkQ=="
+  },
+  {
+   "file": "libuuid1_2.39.3-9ubuntu6.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/u/util-linux/libuuid1_2.39.3-9ubuntu6.6_amd64.deb",
+   "hash": "sha512-8uYhQIWQwidzsFKa4lAg8vjMrkVvykFV2tVVlbFzZgpzy8O94sYielombqCIwLYwn/WozuQ//gmOAZZt9S/fkQ=="
+  },
+  {
+   "file": "libvulkan1_1.3.275.0-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/v/vulkan-loader/libvulkan1_1.3.275.0-1build1_amd64.deb",
+   "hash": "sha512-BXzpuRyLtB02lt6Lj42sTAsaZ3KccK6AJV095+7hOKPPoLszI9owCgyJB119wfdEl/ex/lQvGYx7nHbkJUEAdg=="
+  },
+  {
+   "file": "libwebp7_1.3.2-0.4build3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libw/libwebp/libwebp7_1.3.2-0.4build3_amd64.deb",
+   "hash": "sha512-nC3X/y8Hkwqvr9cjgyET+0ovCnoYTCfgHdZGp2e9OvBuoRoXoIQZPG2alFhIlh7neKFYZY3xqbYm0GieiVu94A=="
+  },
+  {
+   "file": "libwebpdemux2_1.3.2-0.4build3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libw/libwebp/libwebpdemux2_1.3.2-0.4build3_amd64.deb",
+   "hash": "sha512-BKE8nCRoS5fkSZTFGMGaES34PyV3FYOnw81K+S/Fw0BKvsQnUNVqFMb0i6cKdCf47Q3kAWLrWL6JzUuiBZD+Iw=="
+  },
+  {
+   "file": "libx11-6_1.8.7-1ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libx11/libx11-6_1.8.7-1ubuntu0.1_amd64.deb",
+   "hash": "sha512-YO4qTdGV24oacOAbaaPLAgfg33Z5NqiIesFOEvRZadVI27ES+HtN9rkStijZF+G/EPAztzBjdz4h24/vjJQtGg=="
+  },
+  {
+   "file": "libx11-data_1.8.7-1ubuntu0.1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libx11/libx11-data_1.8.7-1ubuntu0.1_all.deb",
+   "hash": "sha512-yjpisdV739tOxiq/pSByBbIBSbrS6MOuwnIVcu3bsFVoJ2Y+ZKWnNfogIPcPuVles6CHsPGonGFH93Bl/wD67g=="
+  },
+  {
+   "file": "libx11-xcb1_1.8.7-1ubuntu0.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libx11/libx11-xcb1_1.8.7-1ubuntu0.1_amd64.deb",
+   "hash": "sha512-l2h2nLriZSEuVlMMV32Gx0XKSWoZPsWpu9qQefaOy2XeDKnG6Wtf1JdpQDESsn8h9W2Refn9bxDeSNKNhMXp2A=="
+  },
+  {
+   "file": "libxau6_1.0.9-1build6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxau/libxau6_1.0.9-1build6_amd64.deb",
+   "hash": "sha512-+FrjPnjY3cVM/mt2w7iS98nJhyzO1Yk0zwLr/R2nscQ3ubfriw62CNqacLqYFboMTblqsa9ARhjzGrjcR0FjJQ=="
+  },
+  {
+   "file": "libxaw7_1.0.14-1build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxaw/libxaw7_1.0.14-1build2_amd64.deb",
+   "hash": "sha512-zoV359armqAS1heTRvwgiaFqsRjPMzDY8SZilYYwgdVg9dmo4gE1S8wTfx+eI6BozxDz2DIEGjICWxuf01MtCA=="
+  },
+  {
+   "file": "libxcb-dri3-0_1.15-1ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxcb/libxcb-dri3-0_1.15-1ubuntu2_amd64.deb",
+   "hash": "sha512-kNBCVq29sMQwsffoJeYiFPyS3+MC3aAJm5YmfI/nNifz7s+CyV0JMFb5vjvu+RZhyBY3OWIKX/yvowLSR+18rQ=="
+  },
+  {
+   "file": "libxcb-glx0_1.15-1ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxcb/libxcb-glx0_1.15-1ubuntu2_amd64.deb",
+   "hash": "sha512-+MzV6LDj3HrmGA7pj2FVM7mGJaBggBSfSEnVvm79kt1xvMo+vkGfO8nVh1UQEee9DiL9ZU/YiIomai7AfIUrsw=="
+  },
+  {
+   "file": "libxcb-present0_1.15-1ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxcb/libxcb-present0_1.15-1ubuntu2_amd64.deb",
+   "hash": "sha512-1bB0YO8/M7q1LuvB4kSjSclKQ+AX+ctW2KbogR+qHrAtMsKOz5CqMH0H+CRoATf1IvKQzHcyTND2P/dfRyNm7A=="
+  },
+  {
+   "file": "libxcb-randr0_1.15-1ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxcb/libxcb-randr0_1.15-1ubuntu2_amd64.deb",
+   "hash": "sha512-s7h3NRWTxi0RP44x0XgLrxxhwdC7An7WhTsajQiiKrkX8vo7jreg0bvyopEe8HE1r1yVAMee+HptzUHCZJQHhg=="
+  },
+  {
+   "file": "libxcb-render0_1.15-1ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxcb/libxcb-render0_1.15-1ubuntu2_amd64.deb",
+   "hash": "sha512-Jdbzy6qlLmfO093az84l+EuR6fWZQq8rzJEdFHGDwSzmnaQB0ldr061Dhte90/XVj2QlkFTRt5jToSPRU5Txsg=="
+  },
+  {
+   "file": "libxcb-shm0_1.15-1ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxcb/libxcb-shm0_1.15-1ubuntu2_amd64.deb",
+   "hash": "sha512-FkA+RyAlE4AXgh1dKJCKHHxx9If9jPkllUqNg8YjobBTBVm3n014pnbdNQQ4soPrnm50x7d17Sk1ByAPh158fA=="
+  },
+  {
+   "file": "libxcb-sync1_1.15-1ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxcb/libxcb-sync1_1.15-1ubuntu2_amd64.deb",
+   "hash": "sha512-33q4lxEnW1Pjq+hTyvkGf/KzLQdtwCpdBJC8HP6J1175ZEgmEgXxst+zhpX/d9F8Sh4TOxKr24AP3i0yv9J0Ug=="
+  },
+  {
+   "file": "libxcb-util1_0.4.0-1build3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/x/xcb-util/libxcb-util1_0.4.0-1build3_amd64.deb",
+   "hash": "sha512-eFhyV0To4WqOKUrNAbUauODQijPTvE+qBU+IzhSNiftKtnVAKSfWyoR8Tp1Xo2SqnxPgnZ9S0eRa5INkYrr5Zg=="
+  },
+  {
+   "file": "libxcb-xfixes0_1.15-1ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxcb/libxcb-xfixes0_1.15-1ubuntu2_amd64.deb",
+   "hash": "sha512-oVJTwNaXsg8H5MrjUy27ey8d2Li/zs0fzZGpncBiDe5/mnTZsPT5q8B6D92pEnc1UW/4c46JJB3q4YXz7PKb1A=="
+  },
+  {
+   "file": "libxcb1_1.15-1ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxcb/libxcb1_1.15-1ubuntu2_amd64.deb",
+   "hash": "sha512-WVFgWjmwbfetORZGa32Fyo333VobWfzBY+aPjlhMlkZljKPpc/B3XYx2ljJuDuxNMYF9lIjRTQ9ZIWKM7WQJIw=="
+  },
+  {
+   "file": "libxcursor1_1.2.1-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxcursor/libxcursor1_1.2.1-1build1_amd64.deb",
+   "hash": "sha512-ADKCQkvi2U9aJ5C5kpIbeEq98MJVljtBFLwL4NOpkdD8PZPvZixWQ9EkWORq0RKoYJ0rd+AvRz32ON3lDq6EEA=="
+  },
+  {
+   "file": "libxdmcp6_1.1.3-0ubuntu6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxdmcp/libxdmcp6_1.1.3-0ubuntu6_amd64.deb",
+   "hash": "sha512-+TxyQaydnhVBBYV1oTyD9X48T8Vgmz90FqnzDW4t+zpqm46+5HgK+yrFVJwRsELnWKmadU2YkTLT1mZ5FphT+w=="
+  },
+  {
+   "file": "libxext6_1.3.4-1build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxext/libxext6_1.3.4-1build2_amd64.deb",
+   "hash": "sha512-OgGncR8pTTLTOOr7EsHkyIbl90lvut1nv8Vi9I6V++WyoS4t8xqS5oAKl3wvhBz8NU6AC81HYskpwiySxpy0rw=="
+  },
+  {
+   "file": "libxfixes3_6.0.0-2build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxfixes/libxfixes3_6.0.0-2build1_amd64.deb",
+   "hash": "sha512-fYQQe4Yids9o5BAmOgVdAdT48lZiDF7jXLiUN3CXelf475vhLAbtsMqweV8b0j04M9YlXvykJ9DRWlWS+wlgUg=="
+  },
+  {
+   "file": "libxfont2_2.0.6-1+deb13u1build0.24.04.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxfont/libxfont2_2.0.6-1%2bdeb13u1build0.24.04.2_amd64.deb",
+   "hash": "sha512-be4e2ZQ/Uz/3AAw4WgzYO73XHEToHALlg9xhSqQnL9EIclJhSBw6xEJbwaAlNR9/SwSfhlaa1+zDWapkTBfJWw=="
+  },
+  {
+   "file": "libxft2_2.3.6-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/x/xft/libxft2_2.3.6-1build1_amd64.deb",
+   "hash": "sha512-0x2q1C07QNJORGl60fIoZqYZf+eWkpDECWkyE6w/A8G5nQz6Z5nE4skgvKtsuzFn/cxVuk0BNp9yC5fGyE8MPg=="
+  },
+  {
+   "file": "libxi6_1.8.1-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxi/libxi6_1.8.1-1build1_amd64.deb",
+   "hash": "sha512-QMnx0tb0PxDLYNAiXrkhLi7ql1lfX9BpFwCTp6Ai6DAAM3A6+/os+u1Mq4RdR4zrO7way7igRG6uy1Cznq6eMg=="
+  },
+  {
+   "file": "libxinerama1_1.1.4-3build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxinerama/libxinerama1_1.1.4-3build1_amd64.deb",
+   "hash": "sha512-HYFWoU3uZXNsduOBWiUg8niC1e/cjDH+UIUpG+uHxjoYgrjTEoiaaoXc3U/+tYadDjC48SF4xKJ0jEt5ULRpYA=="
+  },
+  {
+   "file": "libxkbfile1_1.1.0-1build4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxkbfile/libxkbfile1_1.1.0-1build4_amd64.deb",
+   "hash": "sha512-+Z8yrSvR3YF80w4G8G9XvCL1PNKiqulXJ6SwWaazuYavqdTlsomgy2/1dlJwF5j6TXKMgrzGEG5mXiAtNufAow=="
+  },
+  {
+   "file": "libxml2_2.9.14+dfsg-1.3ubuntu3.10_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxml2/libxml2_2.9.14%2bdfsg-1.3ubuntu3.10_amd64.deb",
+   "hash": "sha512-n4TLeC96YsjvU0QfA6HFwWCS05tffvdzczo5ZdelipORNI/vChraZBzwND9gFsD5Xds5S3FiESvU4Xi2SMBvzA=="
+  },
+  {
+   "file": "libxmu6_1.1.3-3build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxmu/libxmu6_1.1.3-3build2_amd64.deb",
+   "hash": "sha512-JFRNZVJQvr0M8ZD+B4ssV1NbLuvzAyr0LqZ2xe5EW9GJL78EI8+5u8nS04pD3nbXmHEu337Ui0T5sl6byvFtKA=="
+  },
+  {
+   "file": "libxmuu1_1.1.3-3build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxmu/libxmuu1_1.1.3-3build2_amd64.deb",
+   "hash": "sha512-vdSkyDenQRU0XBZq843B4DozCS8d20KIUL84e0bV942UVztfFp20n6twaVPAMo4lZRXQ+yCHdasmmUlJc+PgqA=="
+  },
+  {
+   "file": "libxpm4_3.5.17-1ubuntu0.24.04.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxpm/libxpm4_3.5.17-1ubuntu0.24.04.2_amd64.deb",
+   "hash": "sha512-AbEOIG6L0X7zrKrFVNGv/X2XvStE4b64t4V4AZvvbMphPsdv1W2ldr/tSfWoBeHOa0TqdDMjWYFZdJ3g+nmUXQ=="
+  },
+  {
+   "file": "libxrandr2_1.5.2-2build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxrandr/libxrandr2_1.5.2-2build1_amd64.deb",
+   "hash": "sha512-tB96xgTPLiloLUiiPRG+hKVAa+2n5L1Ti62a0QFT6Gqhj8dWHcnRji+ShE6q+S0P4ld/xKnLhvc7/GWWFeWMWQ=="
+  },
+  {
+   "file": "libxrender1_0.9.10-1.1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxrender/libxrender1_0.9.10-1.1build1_amd64.deb",
+   "hash": "sha512-BO5mlJLodXPE1EyyJGOf8z0/IeFMqx7pOZiP0KXzkHA0gLIFpTftAWKxVwkdMJF0bZrY+B3pnc7M6JpjRajDsQ=="
+  },
+  {
+   "file": "libxshmfence1_1.3-1build5_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxshmfence/libxshmfence1_1.3-1build5_amd64.deb",
+   "hash": "sha512-i9DbjDeKiZiJTojNagl2npmcE/fClVTd5Lu5wJNlsJboWuxWqqjxG4TIsz2l7za2kQ3h7PTHpituVY2ctmEWiw=="
+  },
+  {
+   "file": "libxt6t64_1.2.1-1.2build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxt/libxt6t64_1.2.1-1.2build1_amd64.deb",
+   "hash": "sha512-Jq6vvp587UCOiYx8E2mvlnReIppqKdMq86doAjsl84aR//3buBDv+5KSCMICS4sSo0+I4eJ8fvsMTIqgzaxltg=="
+  },
+  {
+   "file": "libxtables12_1.8.10-3ubuntu2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/i/iptables/libxtables12_1.8.10-3ubuntu2_amd64.deb",
+   "hash": "sha512-uEBOxSEm4x9YqpNRMVGR8FrwRY+9TX/M/q1+27xB152X/9p0neU6eNooY0PG42rz3HhV6xNw1jsoGHRhFP9k0g=="
+  },
+  {
+   "file": "libxxf86vm1_1.1.4-1build4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libx/libxxf86vm/libxxf86vm1_1.1.4-1build4_amd64.deb",
+   "hash": "sha512-prhOdzP8/4HM6KET7UVh8w7XZPeKebHH38w7ibPYAQue4M3ILqc6dK/pT8Y+ldXTe472B+mRuw5N5ig60HwY0w=="
+  },
+  {
+   "file": "libxxhash0_0.8.2-2build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/x/xxhash/libxxhash0_0.8.2-2build1_amd64.deb",
+   "hash": "sha512-2GenuewIGnKELBJiLaQFJtreMi2UKnozENaQj6q706139YdTaLx96HDMrClpTMGdrCsxuTjfT8yYt9orRsVRZw=="
+  },
+  {
+   "file": "libzstd1_1.5.5+dfsg2-2build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libz/libzstd/libzstd1_1.5.5%2bdfsg2-2build1.1_amd64.deb",
+   "hash": "sha512-4e5tSlDtmcyZTiBz5N7EQb/i1wgaU9OfXow2GGvBNBdKjRs/jZM2Plcm97ABS8bunPxp0zrW/KFO5Tau71dIgw=="
+  },
+  {
+   "file": "linux-base_4.5ubuntu9+24.04.2_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/linux-base/linux-base_4.5ubuntu9%2b24.04.2_all.deb",
+   "hash": "sha512-8qveU6k4gAUuthxpCsXTB0xnCiyBLadFQSENqRi6XzxkvAH+Jcd5LdMIdeMab5ykkNR7TbCjcaqF3IMUPv6BAw=="
+  },
+  {
+   "file": "linux-image-6.8.0-147-generic_6.8.0-147.147_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/linux-signed/linux-image-6.8.0-147-generic_6.8.0-147.147_amd64.deb",
+   "hash": "sha512-3x8U1dozlhlmparhuo83UqpMqUaJdSv0o0eOYmw2bIjB6ek3O4MLT+AH0yn+h9UclNu7+Dbc3GzxvS6FlTZzrg=="
+  },
+  {
+   "file": "linux-image-virtual_6.8.0-147.147_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/linux-meta/linux-image-virtual_6.8.0-147.147_amd64.deb",
+   "hash": "sha512-751Jslk73y54y2GLIbQ9qHf5rZDZ4iZH8+QUHXsUvUPqss/PLZEbPYctGG2DHJbkTOLcXwKsOO0f+vMv7hYJiQ=="
+  },
+  {
+   "file": "linux-libc-dev_6.8.0-147.147_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/linux/linux-libc-dev_6.8.0-147.147_amd64.deb",
+   "hash": "sha512-npCK8XYqMlr8f4aiLJKdeVjVv3+CcNxWvmXQb1ykyDBwKJu6P55cr9AttBFTz1Oh/FVOisTKXO/iaD8Z3DAopg=="
+  },
+  {
+   "file": "linux-modules-6.8.0-147-generic_6.8.0-147.147_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/linux/linux-modules-6.8.0-147-generic_6.8.0-147.147_amd64.deb",
+   "hash": "sha512-qZccWK+9WBh3f7UwOsMu8kc9oLCzjoE7YQIqS5G9b5XKuw2xqFR1oKdG2phfC6/abXrGW+L30+kmQOZnC45o/g=="
+  },
+  {
+   "file": "locales_2.39-0ubuntu8.9_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/glibc/locales_2.39-0ubuntu8.9_all.deb",
+   "hash": "sha512-ipbxQnAEZ1t3BWmlyRcO+89+VwgsaFC3/0yYEQrtcy7WwFhyhqQC3qsaqERwk7MeNaarj+2SIX0TAR45M3dnyw=="
+  },
+  {
+   "file": "login_4.13+dfsg1-4ubuntu3.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/shadow/login_4.13%2bdfsg1-4ubuntu3.2_amd64.deb",
+   "hash": "sha512-w0++jyjSKdZ+267xXGvnGLcsLxkBphMnoZVf/ibsmUmZAMW2TMfei/E39XDQJBzHBgBh0t3ajniTatpu0tKprA=="
+  },
+  {
+   "file": "logsave_1.47.0-2.4~exp1ubuntu4.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/e/e2fsprogs/logsave_1.47.0-2.4%7eexp1ubuntu4.1_amd64.deb",
+   "hash": "sha512-qq21ZrpIvkubWKnXAv+l8T2kjqtiovTN5eDDc5g/Z/1+1VgWDwc1AGCsx856BTXH7Osh2nrzNOWqhToTxrpUfw=="
+  },
+  {
+   "file": "lsof_4.95.0-1build3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/lsof/lsof_4.95.0-1build3_amd64.deb",
+   "hash": "sha512-cdW191wkrLf/qXJvqE0PiPyuLolwuMK/CTVgD83f4wQOOa7ZJIU3DAmjXw/siEH/pHqBSnz9TuiynQZZWkVQCg=="
+  },
+  {
+   "file": "lto-disabled-list_47_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/lto-disabled-list/lto-disabled-list_47_all.deb",
+   "hash": "sha512-THWhmKWCaCfHEqEN3LqE7MUieD4eIVzU5hq0CmF4+81i9xHSuCXNslAKdLkNiVl/vEuoVMRCnnVRZXKYhsjcSA=="
+  },
+  {
+   "file": "make_4.3-4.1build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/m/make-dfsg/make_4.3-4.1build2_amd64.deb",
+   "hash": "sha512-MpTHhKmQDElOGp9JGIqhK/HM903aXPCTBJXogP6DwMaEAaryzh1C/TaxPUr3IPl5EP6bQxKNPk12kmlBKYGljg=="
+  },
+  {
+   "file": "mawk_1.3.4.20240123-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/m/mawk/mawk_1.3.4.20240123-1build1_amd64.deb",
+   "hash": "sha512-qlN3TTUUD7qrer/iCOmLWGqOBsu1klpXjzHYSkBBD4szxngvUf/9Z4IEJzA2GnZFoLCAEWJ/4QCHNj3bLQqL1Q=="
+  },
+  {
+   "file": "media-types_10.1.0_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/m/media-types/media-types_10.1.0_all.deb",
+   "hash": "sha512-yx8Rm0e6eix2vgwbphz5EmMCF2Gucjj+w7pNpg5p1Rz/ydMydbD74/X6O3q66JIEO5ownHz5RHqCXbGVldE73g=="
+  },
+  {
+   "file": "mesa-libgallium_25.2.8-0ubuntu0.24.04.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/m/mesa/mesa-libgallium_25.2.8-0ubuntu0.24.04.4_amd64.deb",
+   "hash": "sha512-tWEBIl2VnSJoScSHqpn8W4wQ/kAQXTxKnMCDcJJJRARo+fMtO2FKUKT46zIDVehp7eDHoNern9z258Podf4w8A=="
+  },
+  {
+   "file": "mount_2.39.3-9ubuntu6.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/u/util-linux/mount_2.39.3-9ubuntu6.6_amd64.deb",
+   "hash": "sha512-KVKW9WhVU/QSZec080zRJhpSAdAgr3kYz0/pKAzD3yYOA6OL3mHQ7Y8ipwBtag3c5II4KWoy0LHuENMAEmMOAw=="
+  },
+  {
+   "file": "nano_7.2-2ubuntu0.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/n/nano/nano_7.2-2ubuntu0.2_amd64.deb",
+   "hash": "sha512-8xiG+bfslrSFIcMfOhmNL8xz7rLapW38JAAqaoI7lDZn+/zOwqSjLRgvHEVSWJhk8DzEHODcw1UKNTHEyYc+rA=="
+  },
+  {
+   "file": "ncurses-base_6.4+20240113-1ubuntu2.2_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/n/ncurses/ncurses-base_6.4%2b20240113-1ubuntu2.2_all.deb",
+   "hash": "sha512-VZngq3LDoprOPeKd9Sj/WgKOqpxzkD5P7CBYKwDltWFk7rcN+EQWt/3Ed3cYvOXprtZziNk1AiPm0R4egvBoLQ=="
+  },
+  {
+   "file": "ncurses-bin_6.4+20240113-1ubuntu2.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/n/ncurses/ncurses-bin_6.4%2b20240113-1ubuntu2.2_amd64.deb",
+   "hash": "sha512-TurSj87X9UwLNZApVe7wuQuVbzNEut9SCY6iozzo0b9LuOMKNQfvXVBT4g5+/drlI1M/c8Q4yXi4/o1eBQew1g=="
+  },
+  {
+   "file": "netbase_6.4_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/n/netbase/netbase_6.4_all.deb",
+   "hash": "sha512-ESaP+B5mM5Z9xoaRP84gY+mZOI5thqWR60nUlyEfJRL5G5pnJ8nS+863wYeQxi64LupFkDiMJTH+gmyQUfb9Xw=="
+  },
+  {
+   "file": "openbox_3.6.1-12build5_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/o/openbox/openbox_3.6.1-12build5_amd64.deb",
+   "hash": "sha512-25YBAXk8qS6psBX2OWm/c1fMQdtXh/lX+svNQTWxHhVNkwlxVWkLECyEraf0v1d3IGfO75ZVfpG18DK+Y+tkyA=="
+  },
+  {
+   "file": "openssh-client_9.6p1-3ubuntu13.20_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/o/openssh/openssh-client_9.6p1-3ubuntu13.20_amd64.deb",
+   "hash": "sha512-Ukrwp6pnuklI/JHY322pJXr1cHLjnBt7QqsMOnsqfXnnFWq86C8zwX0LNfG5MHXjtP4BCKJ4hWFCKDWIFDe9GA=="
+  },
+  {
+   "file": "openssl_3.0.13-0ubuntu3.16_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/o/openssl/openssl_3.0.13-0ubuntu3.16_amd64.deb",
+   "hash": "sha512-ZJYLJpzKgrjXR5MfJFU3pZTS7icuv6edB2B4LTO0KVYzmtPUV5ROVHcJ+BtecrPDATqmlP3W6rb6eBDcKi/jdQ=="
+  },
+  {
+   "file": "passwd_4.13+dfsg1-4ubuntu3.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/shadow/passwd_4.13%2bdfsg1-4ubuntu3.2_amd64.deb",
+   "hash": "sha512-T3hcN6L4BpydgQdUiVWgDYSwDjW8oroVSjY0W4z0l6rGDFKrBBepO35FLj/TnKTjPWA/rPI6Z8lqlA4GrqBXxA=="
+  },
+  {
+   "file": "patch_2.7.6-7build3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/patch/patch_2.7.6-7build3_amd64.deb",
+   "hash": "sha512-X2FVJy3F34INtDv6m96wKiQSqSbhW/jyqwaH0vwfHKxQtI5B/i8gZePW4iHT4xoqmeGqCpDtFV9YJflLYi6BRA=="
+  },
+  {
+   "file": "perl-base_5.38.2-3.2ubuntu0.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/perl/perl-base_5.38.2-3.2ubuntu0.6_amd64.deb",
+   "hash": "sha512-6WxPaTm5yfbVpXOLWx/nVycvPuMs798EZVCCMU130TuUby9PWvVFp2mW2SuT+fduTuHaepPU69JK/RFwe/J/vw=="
+  },
+  {
+   "file": "perl-modules-5.38_5.38.2-3.2ubuntu0.6_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/perl/perl-modules-5.38_5.38.2-3.2ubuntu0.6_all.deb",
+   "hash": "sha512-wZMWJE8qY/HHcYb6E3QxCEAbW0XWf3g3mMk59H+YxGCuXbxi9yEEJD5vD+F2ahTLphRWLBgmXUKqNF22DUPGqw=="
+  },
+  {
+   "file": "perl_5.38.2-3.2ubuntu0.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/perl/perl_5.38.2-3.2ubuntu0.6_amd64.deb",
+   "hash": "sha512-0k1YVY55q1ixMuo3QLKeacS6m1iQ2kzFHElaWnAn5JHUlhefd6RZ3ZeBe+lBIUQ5oucvxCs8o+ad7uUcMu7toA=="
+  },
+  {
+   "file": "pinentry-curses_1.2.1-3ubuntu5_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pinentry/pinentry-curses_1.2.1-3ubuntu5_amd64.deb",
+   "hash": "sha512-ffv7jwtNUO6yPqEi6YkA9GJ74eESSkgalPnPuR/aq3m4pQDLQkA+X+XpYTJT0QOrzNgxlh+9QC0IoRKzSlDU4g=="
+  },
+  {
+   "file": "pkg-config_1.8.1-2build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pkgconf/pkg-config_1.8.1-2build1_amd64.deb",
+   "hash": "sha512-+g7seFf1zxZSpcMFnKYrK31dAR5fvKEHuHZStN3jPTdgLi3CAmLwEgH+k9hR9xABwKFD+Letu3HLr0RV/ZCuIg=="
+  },
+  {
+   "file": "pkgconf-bin_1.8.1-2build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pkgconf/pkgconf-bin_1.8.1-2build1_amd64.deb",
+   "hash": "sha512-vpzFufOrQAdSdkCiy5BZvbwdbxQ7Cvnw/csf3fnTPthwgkgOYfvYLnOFhPxO8eWVONradHjKRnfL220k0b6jfw=="
+  },
+  {
+   "file": "pkgconf_1.8.1-2build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/pkgconf/pkgconf_1.8.1-2build1_amd64.deb",
+   "hash": "sha512-oHFyrQ5/CqBv5u9pP8ltx/G850I2Mk+7KrkWk4rjqQYO102V6QdGmu8ASTQK9iz+RMPIiAGJmZA9sR64fFzRcw=="
+  },
+  {
+   "file": "poppler-data_0.4.12-1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/poppler-data/poppler-data_0.4.12-1_all.deb",
+   "hash": "sha512-mvgCH/nSy1aewBtZeRDv+CjQmvRc1WpmmgUfSuCmvg2/4ur/jsQfLi2uKmfJ8UpLGpyxvb3nfAD7nLvdDad8+w=="
+  },
+  {
+   "file": "procps_4.0.4-4ubuntu3.3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/procps/procps_4.0.4-4ubuntu3.3_amd64.deb",
+   "hash": "sha512-MqVZy6BBRfueaGDxj3vFqfSZ6Z4CJB0jMB8BZHfKoOat+Af9CCnCdrI4uRusjRV3KKNDDSIsGWN5c2J093O4qQ=="
+  },
+  {
+   "file": "psmisc_23.7-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/psmisc/psmisc_23.7-1build1_amd64.deb",
+   "hash": "sha512-AgGec2uZrtg7R7wzbFGy3QD/XFkx/Ntad5UEPKd/wv5pULGzFE7InO9Clz+Pz9eoA9FboZy94Xlaekpneh1Kkw=="
+  },
+  {
+   "file": "python3-dev_3.12.3-0ubuntu2.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/python3-defaults/python3-dev_3.12.3-0ubuntu2.1_amd64.deb",
+   "hash": "sha512-jKJW9q9lAJJQ+pMc+/SEty8cRg0GvFtswz+/79a5QADbC0xzqTkpWS4fJGralBTqXLU6OQ9avhuQMRPvsU0u/Q=="
+  },
+  {
+   "file": "python3-minimal_3.12.3-0ubuntu2.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/python3-defaults/python3-minimal_3.12.3-0ubuntu2.1_amd64.deb",
+   "hash": "sha512-5kprfRv8JEYp+4UoimHBEpoc/Xu5iqanAMNXty6W+A0Ni2w8mwZBaqCYzbZ7NG70UtaWuMEU7xNDIzsZe1d7MA=="
+  },
+  {
+   "file": "python3-pip-whl_24.0+dfsg-1ubuntu1.3_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/p/python-pip/python3-pip-whl_24.0%2bdfsg-1ubuntu1.3_all.deb",
+   "hash": "sha512-x/r1szQO/1EXhgQYN4VTj0cLrbe82clNAg1XnbhpZ4WkFIKj4ENvPAsBDAy1smLaA+hmJGBl39fj6y6c4c9SiQ=="
+  },
+  {
+   "file": "python3-pip_24.0+dfsg-1ubuntu1.3_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/p/python-pip/python3-pip_24.0%2bdfsg-1ubuntu1.3_all.deb",
+   "hash": "sha512-TOYLe2qWG085N2B4bKP6HUQmyangS0FgQMLjW5ZgnQF0e1V4LLxdUoTkCc1ZMkqRbBsi/ouKwnBdCUHs7JJGzw=="
+  },
+  {
+   "file": "python3-pkg-resources_68.1.2-2ubuntu1.2_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/setuptools/python3-pkg-resources_68.1.2-2ubuntu1.2_all.deb",
+   "hash": "sha512-xC960SSiQDpIqUUTKTHh95wccSYIL1vmzAxAz5UGon3IhOQR2+Sie8Qz816s2Qf/+RhRRtwslMAixf5BhUbyPg=="
+  },
+  {
+   "file": "python3-setuptools-whl_68.1.2-2ubuntu1.2_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/s/setuptools/python3-setuptools-whl_68.1.2-2ubuntu1.2_all.deb",
+   "hash": "sha512-aLHXmQvjsRKJsWZEwEgI88LpoivoCOzJ6+ZgzbmxOcgayMV4OFIHUEpUzBfvZXLYU/khvKQR2ixm1v6WSfGWnA=="
+  },
+  {
+   "file": "python3-setuptools_68.1.2-2ubuntu1.2_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/setuptools/python3-setuptools_68.1.2-2ubuntu1.2_all.deb",
+   "hash": "sha512-U0TR6xuqqwx+0MxZOQJ7vMRS56VlL9U8QBaT5ocR0nJHKzPiJmf0aFIsdWOctWBoj4NdW88QmqTP3NeZc3W+KA=="
+  },
+  {
+   "file": "python3-venv_3.12.3-0ubuntu2.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/p/python3-defaults/python3-venv_3.12.3-0ubuntu2.1_amd64.deb",
+   "hash": "sha512-j5vBm1My74/LQGTgJYALkD7CbjZm0kJTpIWIapsRolrLn1Ef8D/8gjn6kqBQvznAtgUteRyBC9TMAIh9INaA7w=="
+  },
+  {
+   "file": "python3-wheel_0.42.0-2_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/w/wheel/python3-wheel_0.42.0-2_all.deb",
+   "hash": "sha512-RQWX6OFVnVvIiouwti6cRrNs+JZaGzmAIg87cTaifVhF35GrQWfAVx+MpomvzgtlFLGuZq/yLWz3qamQKm8Byw=="
+  },
+  {
+   "file": "python3.12-dev_3.12.3-1ubuntu0.17_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/python3.12/python3.12-dev_3.12.3-1ubuntu0.17_amd64.deb",
+   "hash": "sha512-hh/xhLxoCBFqs/8M+401XkPWbgoCJztkD8P9ltSRn0Oh2DPkkwz6eXu1aYZ60d7htegnnglNLzIxowaYD/FYbw=="
+  },
+  {
+   "file": "python3.12-minimal_3.12.3-1ubuntu0.17_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/python3.12/python3.12-minimal_3.12.3-1ubuntu0.17_amd64.deb",
+   "hash": "sha512-tX2ZLTzLgpVf3pwNOnZoEH1D+6t6up/5aSNz1IdMdlJM5TdtYeHA2YjBcRK5g95OEM4wRKg8cQtnwNR71jEu6g=="
+  },
+  {
+   "file": "python3.12-venv_3.12.3-1ubuntu0.17_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/p/python3.12/python3.12-venv_3.12.3-1ubuntu0.17_amd64.deb",
+   "hash": "sha512-Nxr/JFBHt/tQkz+2taXr7/hs6LE+fMtnSlkgXrAgy0IWONa6id8Jk0Gr+njyQjoiiyGYM9ZBtCgETh/i2KZyyw=="
+  },
+  {
+   "file": "python3.12_3.12.3-1ubuntu0.17_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/python3.12/python3.12_3.12.3-1ubuntu0.17_amd64.deb",
+   "hash": "sha512-NDPwzwt+NM+DFwtZad6q5D5Hsed32LmMNnXuDHwqBcYam9/xfUsSN5j2X/r68VvsH/ucicO9llWwxgtxsfiqmA=="
+  },
+  {
+   "file": "python3_3.12.3-0ubuntu2.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/p/python3-defaults/python3_3.12.3-0ubuntu2.1_amd64.deb",
+   "hash": "sha512-aPXV20RjLEtxHSrCiN++vrqVxpciw4wnXkQBNF1UhBTt+RoaN4Xe01JEggpxX2l23fMAJR9j4yOPVcneEFcUFg=="
+  },
+  {
+   "file": "readline-common_8.2-4build1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/r/readline/readline-common_8.2-4build1_all.deb",
+   "hash": "sha512-5Haba0cwikG5ywdBkct8f2vUbOao/FGK4ZJMuiaDlF8TW8FNIXZaFp2Izz2lhvVB/P8jhimdITNu92sP0h+ATg=="
+  },
+  {
+   "file": "rpcsvc-proto_1.4.2-0ubuntu7_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/r/rpcsvc-proto/rpcsvc-proto_1.4.2-0ubuntu7_amd64.deb",
+   "hash": "sha512-XHcHUJed03fugnh7vhqLmvXs8VzCqfKsOGS+aZHLrXlNSGliZ2Yczs5IfVSPIsyEUlnTogq/WA0Oi8IbVx2WrA=="
+  },
+  {
+   "file": "rsync_3.2.7-1ubuntu1.5_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/r/rsync/rsync_3.2.7-1ubuntu1.5_amd64.deb",
+   "hash": "sha512-ZN+NFJWBvEWBzMp6PdTdiUzRAWiZfEahYA94DJkM31N3NcKqov+c56bGhcROtNABc6U+fGSq+QcV3bxidMrvFg=="
+  },
+  {
+   "file": "runc_1.3.4-0ubuntu1~24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/r/runc-app/runc_1.3.4-0ubuntu1%7e24.04.1_amd64.deb",
+   "hash": "sha512-jhiGha0bSaoIY4AZEGu9EDyatHUbIwkFk7iYFSF5ZR2n4BGKUl26/CTobuV2d32cNkk26qwtiytqXrxrp7EOxw=="
+  },
+  {
+   "file": "sed_4.9-2ubuntu0.24.04.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/sed/sed_4.9-2ubuntu0.24.04.1_amd64.deb",
+   "hash": "sha512-fYsGP7XW0HSBrlCgyQ2g6VgKFPzt56Cuu6I07bMIYoWMHfNYfQXKKT3ZIx2BcLWl6mO0krTWFlUlqSirCUHvBg=="
+  },
+  {
+   "file": "sensible-utils_0.0.22_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/sensible-utils/sensible-utils_0.0.22_all.deb",
+   "hash": "sha512-ora8CEbmZODg8ujTr/XEK80r5bx+JvBs7qwk/266g9eqUfNK+CyhHEE6dAzu8mYvOHfIV0ZKApsa7SDhQRTjzg=="
+  },
+  {
+   "file": "shared-mime-info_2.4-4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/shared-mime-info/shared-mime-info_2.4-4_amd64.deb",
+   "hash": "sha512-QU432pTvykMubfzQGZwgL9J0Nfqm4L836eV71AB1VBtzE7LBcR/I6FcxCgMx57suXINQflm6mMvYIJC0/KQmXw=="
+  },
+  {
+   "file": "sudo_1.9.15p5-3ubuntu5.24.04.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/sudo/sudo_1.9.15p5-3ubuntu5.24.04.4_amd64.deb",
+   "hash": "sha512-YAl+jIv8NYnFDxMyGa1oABwRbi2ydEuliloLEhXy8394ibegGZgTsXzNn1vjvUW62Wgoxm+onjgDlhyozwL2Ag=="
+  },
+  {
+   "file": "systemd-dev_255.4-1ubuntu8.18_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/systemd/systemd-dev_255.4-1ubuntu8.18_all.deb",
+   "hash": "sha512-IHTixB1TjOqxUDlKQg20QOwGV28MJEGlTvezG2VZ2HK8I+iK0stk5n0B6cVdhkNJMNz8zeoTYHESDyDXuD2isw=="
+  },
+  {
+   "file": "systemd-resolved_255.4-1ubuntu8.18_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/systemd/systemd-resolved_255.4-1ubuntu8.18_amd64.deb",
+   "hash": "sha512-SnARSVrKg9PSLX94Ht/sbptnCuXz7lL3BUXco/JomEa4G0gNsfTxdJN0KfnPp49ipie/sxZvcv4oDWnHYSaJ/w=="
+  },
+  {
+   "file": "systemd-sysv_255.4-1ubuntu8.18_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/systemd/systemd-sysv_255.4-1ubuntu8.18_amd64.deb",
+   "hash": "sha512-oZTUcGGLQw/bqTl2oLfa4HqhmQ+9bbOxRtrJriLdjE957whpRlXnF/rs+TaJZBLFkocxXv9OpSKfMorOZDetcg=="
+  },
+  {
+   "file": "systemd-timesyncd_255.4-1ubuntu8.18_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/systemd/systemd-timesyncd_255.4-1ubuntu8.18_amd64.deb",
+   "hash": "sha512-MP+q9hb7g42QcvaPg1b9Bna4O/bLUCcHa5SqMK7Esbi0IyFXV9kN7NH/qtNc6IO6jV8FWrsmN5Ezzs6ITAGHGQ=="
+  },
+  {
+   "file": "systemd_255.4-1ubuntu8.18_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/systemd/systemd_255.4-1ubuntu8.18_amd64.deb",
+   "hash": "sha512-WqhA6kn3r5LqS823+BZY4kpItgD7e9AUSy11HzQNQ0bQdH7sQlQYJwPRpm24Pa+3KMDrwp7xraMNZK2x41ls7g=="
+  },
+  {
+   "file": "sysvinit-utils_3.08-6ubuntu3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/sysvinit/sysvinit-utils_3.08-6ubuntu3_amd64.deb",
+   "hash": "sha512-HI8amABFDa/0JwC7i7+NZ2aXPw11OtcBADuNy2HKi8mF/vpMygm1pwObhRC4nvAQoP9JeHFc1Am9wlLvvjy1og=="
+  },
+  {
+   "file": "tar_1.35+dfsg-3ubuntu0.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/t/tar/tar_1.35%2bdfsg-3ubuntu0.4_amd64.deb",
+   "hash": "sha512-n0+hNL4zlDY5aypBktO/sEACJ58NKIIZn2bLG1I8kel8f0iLjVmfv1EZWAJQcNqdl1bXbG/lbMGh/A7UiDt2MQ=="
+  },
+  {
+   "file": "tigervnc-common_1.13.1+dfsg-2build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/t/tigervnc/tigervnc-common_1.13.1%2bdfsg-2build2_amd64.deb",
+   "hash": "sha512-ysXzmqhjhCGciz8HAAED5se49fnqe3HSD6nsDcQLZp6ttIA6NYvQ0VSeFjqsStMhP0Ucq425ihw7IV8LBWIjSw=="
+  },
+  {
+   "file": "tigervnc-standalone-server_1.13.1+dfsg-2build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/t/tigervnc/tigervnc-standalone-server_1.13.1%2bdfsg-2build2_amd64.deb",
+   "hash": "sha512-i+bnIdak7sQJVGWk055MUHruwaxVBAT+qiuGq8OeAo8I1L7SE/7wFaoMuums2vZvD2NH8MuODLXqk8xbdE6LSA=="
+  },
+  {
+   "file": "tmux_3.4-1ubuntu0.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/t/tmux/tmux_3.4-1ubuntu0.2_amd64.deb",
+   "hash": "sha512-WuoVcjBjVXR4GGHiO7kv4SF7Cdixk37BRCKo2p3zZoJj19XBpIM6oINpZFx+sa27izX9Yx5tcaceNeLEbck33Q=="
+  },
+  {
+   "file": "tzdata_2026e-0ubuntu0.24.04.1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/t/tzdata/tzdata_2026e-0ubuntu0.24.04.1_all.deb",
+   "hash": "sha512-n7fWzFbuIcyFlzOKD/Cdk8f2qXnwqOItlCHTvUaFwhTZKOFDbs8pEYQVegKeBV/TCRzmjRweQdVsFcAc86VDyg=="
+  },
+  {
+   "file": "ubuntu-keyring_2023.11.28.1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/u/ubuntu-keyring/ubuntu-keyring_2023.11.28.1_all.deb",
+   "hash": "sha512-tY8aPEBm/d/j2vFRp1JsqRskzbGl629v3GVbN/YiblMy7uI+IwifjwRjUWJ/YZCpRquMSNxtUCyEN2iRtMkvVg=="
+  },
+  {
+   "file": "ucf_3.0043+nmu1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/u/ucf/ucf_3.0043%2bnmu1_all.deb",
+   "hash": "sha512-LqdxyfM3LBpm0D3/ytGyxoG8sVwmH6TyU0QkJDde+Dc565BBaH8UYhPLh0UzWmGhqRhjg8QmTnR4iuNKXZKlgA=="
+  },
+  {
+   "file": "udev_255.4-1ubuntu8.18_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/systemd/udev_255.4-1ubuntu8.18_amd64.deb",
+   "hash": "sha512-H7QtnfJmL2g/ieGrSiu/NhRVFPcOWfpY1HjYN+nlcndGrNvey/CO3S1HlCeKPhyO/X4dMaUeapHSD52cnjyLRQ=="
+  },
+  {
+   "file": "unzip_6.0-28ubuntu4.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/u/unzip/unzip_6.0-28ubuntu4.1_amd64.deb",
+   "hash": "sha512-vLoheogD5IDUIo8YtQaVBbd5azfRq1+6Q+FiI3V/297WmputkBQpmnWzysJAd0jbZI67IUq/PCnpVsY0TpKotg=="
+  },
+  {
+   "file": "util-linux_2.39.3-9ubuntu6.6_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/u/util-linux/util-linux_2.39.3-9ubuntu6.6_amd64.deb",
+   "hash": "sha512-+5oFl3q0OSrBHHT9gN0IdmXeUlT/IKOTQK6Iuu+U4yrlamq3VbPuE329Kh3bxegkiG+LkBPhY155RF3z6/7g6g=="
+  },
+  {
+   "file": "vim-common_9.1.0016-1ubuntu7.20_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/v/vim/vim-common_9.1.0016-1ubuntu7.20_all.deb",
+   "hash": "sha512-4AyLCtTzLAMtQNVjTKpkzCB2Qtc7/8U0ejcoEcVMLFZj596Vk+OAfWFpENiw8wLhSCwy6v3d8WpzWUFm0+71kg=="
+  },
+  {
+   "file": "vim-tiny_9.1.0016-1ubuntu7.20_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/v/vim/vim-tiny_9.1.0016-1ubuntu7.20_amd64.deb",
+   "hash": "sha512-AnxANPBUCORwohR0imKvBr0UGyzixUOJEbR1ieGhr32Enh3s9VvG2Xyr+/IRlLHCbatXXv1GGRnPo9oe7nogbQ=="
+  },
+  {
+   "file": "wget_1.21.4-1ubuntu4.5_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/w/wget/wget_1.21.4-1ubuntu4.5_amd64.deb",
+   "hash": "sha512-X8u2pwIXSaT64hYu6nQQeA77twMARkf2xEuYdmu25bUvNb6iIVXVn4NAEs0srQf6MK746/2QrU9wnD8YmB9dWA=="
+  },
+  {
+   "file": "x11-common_7.7+23ubuntu3_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/x/xorg/x11-common_7.7%2b23ubuntu3_all.deb",
+   "hash": "sha512-BgxFolNCYuKfOfcFVhlfVqfVRD+fgbaZgh4SR3uDA/cBQBdD438b4GK0tX1nIsLnDnGIrdcSGuVQEdtmBVNmFQ=="
+  },
+  {
+   "file": "x11-xkb-utils_7.7+8build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/x/x11-xkb-utils/x11-xkb-utils_7.7%2b8build2_amd64.deb",
+   "hash": "sha512-dd5fMNCsTVGvm+BdOpxqrAFz8gv/QLChfTHGTggwv74cQKnbMUeRUvghzs8OOiWgPLdoyXgi3CZqWMm3NFUrag=="
+  },
+  {
+   "file": "x11-xserver-utils_7.7+10build2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/x/x11-xserver-utils/x11-xserver-utils_7.7%2b10build2_amd64.deb",
+   "hash": "sha512-6J3EfruJpxQ4s0KO0MOLrgKosbZy15BrEAvOSRRq/03EtnLqmWVlIMrr4BUPk3zk7a9ld48ikurI16SdHRoRfQ=="
+  },
+  {
+   "file": "xauth_1.1.2-1build1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/x/xauth/xauth_1.1.2-1build1_amd64.deb",
+   "hash": "sha512-lxnn2IJmU0hB0O6EC4dnEyldsyU1euRpX/I+voJZ7NJQ5LWKNuxPz2by2LW2N9lx7O0mqSTLz7LuJb8EkllfGA=="
+  },
+  {
+   "file": "xbitmaps_1.1.1-2.2_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/x/xbitmaps/xbitmaps_1.1.1-2.2_all.deb",
+   "hash": "sha512-H0pInTmEQYhf2dseJr7Qnigwak7D+gLrYpGDcDZVIzWnE6UfrO0t83wUntExAUFqV1wCQrLb5fQoJ2aibz7ZxQ=="
+  },
+  {
+   "file": "xfonts-encodings_1.0.5-0ubuntu2_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/x/xfonts-encodings/xfonts-encodings_1.0.5-0ubuntu2_all.deb",
+   "hash": "sha512-c0sVJglSg64XrbwdlxuVLMXK+N7hXJSSGAkB5dQrCzH1+dU73sX4Q6ihKCZBCqEMlgrlQ+E6Y/sdQhU3scjswA=="
+  },
+  {
+   "file": "xfonts-utils_7.7+6build3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/x/xfonts-utils/xfonts-utils_7.7%2b6build3_amd64.deb",
+   "hash": "sha512-o8niGWIC82lfHPhSgb/rrm/k5Lsu9jQuUPsjhOGXKFeZiWp/7NFed4gObq9pzr8KTKTz2ERaqBeYMg3NpI1h2g=="
+  },
+  {
+   "file": "xkb-data_2.41-2ubuntu1.1_all.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/x/xkeyboard-config/xkb-data_2.41-2ubuntu1.1_all.deb",
+   "hash": "sha512-BGWq1TJ1di0X5fsht1JQKeoeq0oAPO9SB5F0IPYdu9HAbKJy/HQ/1fcRQFxC3uRkM8G2VK3oEK01wusROrV0GQ=="
+  },
+  {
+   "file": "xterm_390-1ubuntu3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/x/xterm/xterm_390-1ubuntu3_amd64.deb",
+   "hash": "sha512-hxcBaRnHYEEOHVg/BRp6qdQB/Hhc82YKccPv0QOGd9Knzr50AFNygmVwsQBu/ERMdgbX5rk1sOnZuKLr1/By7Q=="
+  },
+  {
+   "file": "xz-utils_5.6.1+really5.4.5-1ubuntu0.4_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/x/xz-utils/xz-utils_5.6.1%2breally5.4.5-1ubuntu0.4_amd64.deb",
+   "hash": "sha512-SFzYUkpndyKtjXsPJmT+shGhmG2GyWd9LQJZD2nl8mJpa4GjkY/z05dNM7wuLP/RKnwUdubUWFF//6g3Q9YLiA=="
+  },
+  {
+   "file": "zip_3.0-13ubuntu0.2_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/z/zip/zip_3.0-13ubuntu0.2_amd64.deb",
+   "hash": "sha512-nA8kfxCk/mG5z5cG6AJsb2KlwILHNTsY+RynG9ZWxzxcWh2TKIvn4sXZ9v+NxI2CWiSpgtnT9QGv6J2RxDaVTA=="
+  },
+  {
+   "file": "zlib1g-dev_1.3.dfsg-3.1ubuntu2.3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/z/zlib/zlib1g-dev_1.3.dfsg-3.1ubuntu2.3_amd64.deb",
+   "hash": "sha512-peqmJEEOddcZrDFqqi6Or4E1aFuSx3CtMYBQte6IS0gS1uLn6ZODhvFb8n94I+tmF3G6G4ICpQqJcfM0+yW8uQ=="
+  },
+  {
+   "file": "zlib1g_1.3.dfsg-3.1ubuntu2.3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/z/zlib/zlib1g_1.3.dfsg-3.1ubuntu2.3_amd64.deb",
+   "hash": "sha512-A3+W/c+IxYfZ6O4UQa5mcgixPXPpdzkwhLEpe4HaK3NA92/mU8XI8Sr0pW6HuVvmmZyV0k4wLMi8jVSvigBoxw=="
+  },
+  {
+   "file": "zstd_1.5.5+dfsg2-2build1.1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/libz/libzstd/zstd_1.5.5%2bdfsg2-2build1.1_amd64.deb",
+   "hash": "sha512-OHTVOdHpjcrVMmUdlBCgGi/iKF8VbSDloRsjR7EOCJToYwCfhiEe3tdclJqYP59CnJwmdHc5GTuyihkSFWx6Ow=="
+  }
+ ],
+ "efi": [
+  {
+   "file": "grub-efi-amd64-signed_1.202.5+2.12-1ubuntu7.3_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/g/grub2-signed/grub-efi-amd64-signed_1.202.5%2b2.12-1ubuntu7.3_amd64.deb",
+   "hash": "sha512-i76dIDQG1kAuMGplMoYdXz+Eic+w664HRw7NIjDCizCRbC61wf5MDmYFaMB3iK+ox4lgvdnW/Kfsws/5aXL74g=="
+  },
+  {
+   "file": "shim-signed_1.58+15.8-0ubuntu1_amd64.deb",
+   "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/s/shim-signed/shim-signed_1.58%2b15.8-0ubuntu1_amd64.deb",
+   "hash": "sha512-sUFGgmoLdUk0ritx4ZdfqlkpZUVCOZAVw8MunZ10xngpTUgaeUZHG/44tsbm8wP1C65y/DDehJSTMIPaYmrE3g=="
+  }
+ ]
+}
