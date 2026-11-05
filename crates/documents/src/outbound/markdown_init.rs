@@ -22,12 +22,12 @@ use crate::domain::ports::markdown::{
 };
 
 impl LexicalSnapshotPort for LexicalClient {
-    fn markdown_to_loro_snapshot(
+    async fn markdown_to_loro_snapshot(
         &self,
         markdown: &str,
-        initial_pins: Option<&[String]>,
-    ) -> impl Future<Output = anyhow::Result<Vec<u8>>> + Send {
-        LexicalClient::markdown_to_loro_snapshot(self, markdown, initial_pins)
+        initial_pins: Option<Vec<String>>,
+    ) -> anyhow::Result<Vec<u8>> {
+        LexicalClient::markdown_to_loro_snapshot(self, markdown, initial_pins.as_deref()).await
     }
 
     async fn notion_to_loro_snapshot(
@@ -138,7 +138,7 @@ where
             MARKDOWN_GOLDEN_SNAPSHOT.into()
         } else {
             self.lexical_client
-                .markdown_to_loro_snapshot(markdown, initial_pins)
+                .markdown_to_loro_snapshot(markdown, initial_pins.map(<[String]>::to_vec))
                 .await
                 .map_err(DocumentError::Internal)?
         };
@@ -267,7 +267,7 @@ mod tests {
         lexical
             .expect_markdown_to_loro_snapshot()
             .withf(|markdown, pins| {
-                markdown.is_empty() && *pins == Some(&["field".to_string()][..])
+                markdown.is_empty() && pins.as_deref() == Some(&["field".to_string()][..])
             })
             .times(1)
             .returning(|_, _| Box::pin(async { Ok(vec![4, 2]) }));
