@@ -108,7 +108,7 @@ test('desktop sign-up: slides, Google, then onboarding resumes at the work inbox
   await page.getByRole('button', { name: 'Get started' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: 'Connect work email' }).click();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
 
   // Back from Google: signed in, onboarding picks up where sign-up left off.
   await expect(
@@ -179,7 +179,7 @@ test('returning from Google sign-up settles into onboarding without flashing', a
   await page.getByRole('button', { name: 'Get started' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: 'Connect work email' }).click();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
 
   // Back from Google: the session takes 500ms to resolve on the fresh load.
   await expect(

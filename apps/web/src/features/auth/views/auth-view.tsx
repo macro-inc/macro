@@ -26,6 +26,7 @@ import {
 /** What desktop sign-up hands onboarding's opening slides. */
 export type SignupJourneySlots = {
   onGoogle: () => Promise<void>;
+  onMicrosoft: () => Promise<void>;
   onBackFromEmail: () => void;
   onSignIn: () => void;
   onAgentSignup: () => void;
@@ -80,6 +81,7 @@ export function AuthView(props: {
         {(journey) =>
           journey()({
             onGoogle: () => context.startSso('google', 'signup'),
+            onMicrosoft: () => context.startSso('microsoft', 'signup'),
             onBackFromEmail: login.back,
             onSignIn: () => props.onSignIn?.(),
             onAgentSignup: () => props.onAgentSignup?.(),
@@ -117,6 +119,12 @@ export function AuthView(props: {
                 onGoogle={() =>
                   fireAndForget(
                     context.startSso('google', props.intent),
+                    'auth'
+                  )
+                }
+                onMicrosoft={() =>
+                  fireAndForget(
+                    context.startSso('microsoft', props.intent),
                     'auth'
                   )
                 }

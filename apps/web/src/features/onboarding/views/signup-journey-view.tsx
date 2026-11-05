@@ -20,6 +20,8 @@ import { StoryStageView } from './story-stage-view';
 export function SignupJourneyView(props: {
   /** Starts Google sign-up; on web the page navigates away. */
   onGoogle: () => Promise<void>;
+  /** Starts Microsoft sign-up; on web the page navigates away. */
+  onMicrosoft: () => Promise<void>;
   onBackFromEmail: () => void;
   /** Sends a returning user to sign in. */
   onSignIn: () => void;
@@ -95,10 +97,17 @@ export function SignupJourneyView(props: {
               <GoogleAccountsStep
                 mode="work"
                 connecting={journey.connecting() ? 'work' : undefined}
+                microsoftConnecting={journey.connecting() === 'microsoft'}
                 error={journey.error()}
                 onConnectWork={() =>
                   fireAndForget(
-                    journey.connectGoogle(props.onGoogle),
+                    journey.connect('google', props.onGoogle),
+                    'onboarding'
+                  )
+                }
+                onConnectMicrosoft={() =>
+                  fireAndForget(
+                    journey.connect('microsoft', props.onMicrosoft),
                     'onboarding'
                   )
                 }

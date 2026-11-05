@@ -54,6 +54,7 @@ export function Onboarding() {
 /** The signed-out opening slides, hosted by the sign-up page. */
 export function OnboardingSignup(props: {
   onGoogle: () => Promise<void>;
+  onMicrosoft: () => Promise<void>;
   onBackFromEmail: () => void;
   onSignIn: () => void;
   onAgentSignup: () => void;

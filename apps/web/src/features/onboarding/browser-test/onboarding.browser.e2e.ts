@@ -28,7 +28,7 @@ test('a new user signs up, connects everything, and starts the trial', async ({
   await page.getByRole('button', { name: 'Continue' }).click();
 
   // Google sign-up leaves the page; the account exists when it returns.
-  await page.getByRole('button', { name: 'Connect work email' }).click();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
   await expect(heading(page, /Connect your work/)).toBeVisible();
   expect((await fakeWorld(page)).accent).toBe('#f77d67');
 

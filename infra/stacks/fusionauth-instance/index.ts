@@ -509,8 +509,10 @@ new FusionAuthIdpOpenIdConnect(
 );
 
 // -- Microsoft
+const MICROSOFT_COMMON_AUTHORITY = 'https://login.microsoftonline.com/common';
+
 if (config.get('microsoft-idp-secret-key')) {
-  const { client_id, client_secret, tenant_id } = aws.secretsmanager
+  const { client_id, client_secret } = aws.secretsmanager
     .getSecretVersionOutput({
       secretId: config.require('microsoft-idp-secret-key'),
     })
@@ -519,16 +521,20 @@ if (config.get('microsoft-idp-secret-key')) {
         JSON.parse(secret.secretString) as {
           client_id: string;
           client_secret: string;
-          tenant_id: string;
         }
     );
 
-  if (!client_id || !client_secret || !tenant_id) {
+  if (!client_id || !client_secret) {
     throw new Error(
-      'incorrectly configured microsoft idp secret. expected {client_id:"", client_secret:"", tenant_id:""'
+      'incorrectly configured microsoft idp secret. expected {client_id:"", client_secret:""}'
     );
   }
 
+  // Sign in with Microsoft. The `common` endpoints admit work, school, and
+  // personal accounts from any tenant; a tenant-specific issuer would admit
+  // only one directory. Discovery is skipped because `common` publishes a
+  // templated issuer. Sign-in asks for identity only: mailbox access comes
+  // from the separate `/link/outlook` consent, which uses its own grant.
   new FusionAuthIdpOpenIdConnect(
     'microsoft-idp',
     {
@@ -537,10 +543,11 @@ if (config.get('microsoft-idp-secret-key')) {
       oauth2ClientId: client_id,
       oauth2ClientSecret: client_secret,
       oauth2ClientAuthenticationMethod: 'client_secret_basic',
-      oauth2Issuer: pulumi.interpolate`https://login.microsoftonline.com/${tenant_id}/v2.0`,
+      oauth2AuthorizationEndpoint: `${MICROSOFT_COMMON_AUTHORITY}/oauth2/v2.0/authorize?prompt=select_account`,
+      oauth2TokenEndpoint: `${MICROSOFT_COMMON_AUTHORITY}/oauth2/v2.0/token`,
+      oauth2UserInfoEndpoint: 'https://graph.microsoft.com/oidc/userinfo',
       buttonText: 'Microsoft',
-      oauth2Scope:
-        'openid email offline_access profile Mail.ReadWrite Mail.Send',
+      oauth2Scope: 'openid email profile offline_access',
       oauth2UniqueIdClaim: 'sub',
       linkingStrategy: 'LinkByEmail',
       debug: stack !== 'prod',

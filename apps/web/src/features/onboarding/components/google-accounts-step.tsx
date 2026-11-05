@@ -1,4 +1,5 @@
 import GoogleIcon from '@icon/macro-google.svg';
+import MicrosoftIcon from '@icon/microsoft-color.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import HandIcon from '@icon/system/regular/hand-palm.svg';
 import LockIcon from '@icon/system/regular/lock-key.svg';
@@ -15,12 +16,16 @@ export interface GoogleAccountsStepProps {
   workNeedsReconnect?: boolean;
   personalEmail?: string;
   connecting?: 'work' | 'personal';
+  /** The pending connection is the Microsoft one, not Google's. */
+  microsoftConnecting?: boolean;
   loading?: boolean;
   disabled?: boolean;
   error?: string;
   onRetry?: () => void;
   onConnectWork: () => void;
   onConnectPersonal: () => void;
+  /** Sign-up offers Microsoft beside Google; the signed-in flow does not. */
+  onConnectMicrosoft?: () => void;
   onContinue?: () => void;
   onSkip?: () => void;
 }
@@ -38,6 +43,17 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
     personal() ? !!props.personalEmail : !!props.workConnected;
   const blocked = () =>
     !!props.disabled || !!props.loading || !!props.connecting;
+  const withMicrosoft = () => !personal() && !!props.onConnectMicrosoft;
+  const googleConnecting = () =>
+    !!props.connecting && !props.microsoftConnecting;
+  const googleLabel = () => {
+    if (props.loading) return 'Checking connection…';
+    if (googleConnecting()) return 'Opening Google…';
+    if (withMicrosoft()) return 'Continue with Google';
+    if (personal()) return 'Connect personal email';
+    if (props.workNeedsReconnect) return 'Reconnect work email';
+    return 'Connect work email';
+  };
   return (
     <div
       ref={root}
@@ -49,12 +65,16 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
           class="font-[Roboto_Slab_Variable] text-[clamp(22px,6.6vw,30px)] font-[315] leading-[1.2] tracking-[-.025em] [text-wrap:balance] sm:text-[36px]"
         >
           {personal() ? 'Add your personal' : 'Connect your work'} <br />
-          Google email and calendar.
+          {withMicrosoft()
+            ? 'email and calendar.'
+            : 'Google email and calendar.'}
         </h1>
         <p class="mt-7 max-w-[440px] font-[Inter_Variable] text-sm font-normal leading-6 text-ink-muted sm:text-[15px] [text-wrap:balance]">
-          {personal()
-            ? 'Add a personal account for email and calendar in Macro. This is optional; your Macro sign-in stays the same. Agents ask for approval before sending email, and you can disconnect anytime.'
-            : 'Connect through Google to read, send, and organize email and manage your calendars in Macro. Agents ask for your approval before sending email. Your password stays with Google, and you can disconnect anytime.'}
+          {withMicrosoft()
+            ? 'Sign up with your Google or Microsoft work account to bring email and calendars into Macro.'
+            : personal()
+              ? 'Add a personal account for email and calendar in Macro. This is optional; your Macro sign-in stays the same. Agents ask for approval before sending email, and you can disconnect anytime.'
+              : 'Connect through Google to read, send, and organize email and manage your calendars in Macro. Agents ask for your approval before sending email. Your password stays with Google, and you can disconnect anytime.'}
         </p>
       </header>
 
@@ -83,10 +103,10 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
               onClick={() =>
                 personal() ? props.onConnectPersonal() : props.onConnectWork()
               }
-              class="flex min-h-14 w-full items-center justify-center gap-3 rounded-full bg-ink px-6 py-4 text-base font-medium text-surface transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
+              class="flex min-h-14 w-full items-center justify-center gap-3 rounded-full border border-transparent bg-ink px-6 py-4 text-base font-medium text-surface transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
             >
               <Show
-                when={!!props.connecting || props.loading}
+                when={googleConnecting() || props.loading}
                 fallback={
                   <GoogleIcon
                     viewBox="0 0 24 24"
@@ -99,15 +119,7 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
               >
                 <SpinnerIcon class="size-5 animate-spin" />
               </Show>
-              {props.loading
-                ? 'Checking connection…'
-                : props.connecting
-                  ? 'Opening Google…'
-                  : personal()
-                    ? 'Connect personal email'
-                    : props.workNeedsReconnect
-                      ? 'Reconnect work email'
-                      : 'Connect work email'}
+              {googleLabel()}
             </button>
           }
         >
@@ -125,6 +137,29 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
               onClick={() => props.onContinue?.()}
             />
           </Show>
+        </Show>
+        <Show when={!connected() && withMicrosoft()}>
+          <button
+            type="button"
+            disabled={blocked()}
+            onClick={() => props.onConnectMicrosoft?.()}
+            class="flex min-h-14 w-full items-center justify-center gap-3 rounded-full border border-edge bg-surface px-6 py-4 text-base font-medium text-ink transition-colors hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
+          >
+            <Show
+              when={props.microsoftConnecting}
+              fallback={
+                <MicrosoftIcon
+                  class="size-[18px] shrink-0"
+                  aria-hidden="true"
+                />
+              }
+            >
+              <SpinnerIcon class="size-5 animate-spin" />
+            </Show>
+            {props.microsoftConnecting
+              ? 'Opening Microsoft…'
+              : 'Continue with Microsoft'}
+          </button>
         </Show>
         <Show when={!connected() && props.onSkip}>
           <button

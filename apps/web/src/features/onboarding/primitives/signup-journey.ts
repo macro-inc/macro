@@ -1,10 +1,14 @@
 import { createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { SignupStep } from '../core/signup-draft';
 import { readSignupDraft, saveSignupDraft } from './flow-storage';
 
+/** The identity providers a new account can sign up with. */
+export type SignupProvider = 'google' | 'microsoft';
+
 /**
- * The signed-out slides. Only the step and accent cross the Google sign-up
- * redirect; the flow resumes at the work step once the account exists.
+ * The signed-out slides. Only the step and accent cross the Google or
+ * Microsoft sign-up redirect; the flow resumes at the work step once the account exists.
  */
 export function createSignupJourney(options: { showingEmail: boolean }) {
   const draft = readSignupDraft();
@@ -12,7 +16,7 @@ export function createSignupJourney(options: { showingEmail: boolean }) {
     options.showingEmail ? 'work' : (draft?.step ?? 'welcome')
   );
   const [accent, setAccent] = createSignal(draft?.accent);
-  const [connecting, setConnecting] = createSignal(false);
+  const [connecting, setConnecting] = createSignal<SignupProvider>();
   const [error, setError] = createSignal<string>();
 
   /** Show `next`; moving between slides drops any pending sign-up. */
@@ -21,17 +25,24 @@ export function createSignupJourney(options: { showingEmail: boolean }) {
     setStep(next);
   };
 
-  const connectGoogle = async (startSignup: () => Promise<void>) => {
+  const connect = async (
+    provider: SignupProvider,
+    startSignup: () => Promise<void>
+  ) => {
     if (connecting()) return;
     saveSignupDraft({ step: 'work', accent: accent(), authenticating: true });
-    setConnecting(true);
+    setConnecting(provider);
     setError();
     try {
       await startSignup();
     } catch {
-      setError("Couldn't open Google. Please try again.");
+      const name = match(provider)
+        .with('google', () => 'Google')
+        .with('microsoft', () => 'Microsoft')
+        .exhaustive();
+      setError(`Couldn't open ${name}. Please try again.`);
     } finally {
-      setConnecting(false);
+      setConnecting();
     }
   };
 
@@ -42,6 +53,6 @@ export function createSignupJourney(options: { showingEmail: boolean }) {
     commit,
     connecting,
     error,
-    connectGoogle,
+    connect,
   };
 }
