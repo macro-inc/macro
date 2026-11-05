@@ -55,7 +55,10 @@ import {
   DeleteSavedViewDialog,
   SavedViewDialog,
 } from '../../saved-views/views/saved-view-dialogs';
-import { EmailSavedViewFields } from '../components/EmailSavedViewFields';
+import {
+  EmailSavedViewAgentHint,
+  EmailSavedViewFields,
+} from '../components/EmailSavedViewFields';
 import { useEmailView } from '../email-view-context';
 import {
   canSaveEmailTab,
@@ -178,6 +181,7 @@ function EmailSavedViewDialog(props: BuilderProps) {
       config={config()}
       title={props.title}
       submitLabel={props.submitLabel}
+      hint={<EmailSavedViewAgentHint />}
       fields={fields}
       onSaved={(created) => {
         analytics.track('email_saved_view_created', {

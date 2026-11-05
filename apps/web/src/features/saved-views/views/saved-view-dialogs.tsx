@@ -44,6 +44,7 @@ function createDialogLifetime(props: Scope, ownerId?: string) {
 export function SavedViewDialog(
   props: Scope & {
     summary?: JSX.Element;
+    hint?: JSX.Element;
     fields?: JSX.Element;
     invalid?: boolean;
     team?: { id: string; name: string };

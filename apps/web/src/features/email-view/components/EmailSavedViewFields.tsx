@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { parseDomain } from '@core/util/domain';
 import GlobeIcon from '@icon/system/regular/globe.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import {
   Button,
   Checkbox,
@@ -174,6 +175,16 @@ const PARTICIPANT_FIELDS: readonly EmailParticipantField[] = [
  * Edits every condition of an email view; the dialog around it owns saving.
  * Typed lists keep their own text, so remount it to show new filters.
  */
+/** Shown over a new view's name: an agent can make the view from a request. */
+export function EmailSavedViewAgentHint() {
+  return (
+    <p class="flex items-start gap-2 rounded-md border border-edge-muted bg-input/50 px-3 py-2 text-sm text-ink-muted">
+      <SparkleIcon class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      {t('emailViews.agentHint')}
+    </p>
+  );
+}
+
 export function EmailSavedViewFields(props: {
   filters: EmailSavedViewFilters;
   onChange: (filters: EmailSavedViewFilters) => void;

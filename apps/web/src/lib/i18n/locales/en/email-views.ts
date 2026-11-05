@@ -26,6 +26,8 @@ export default {
   viewDefinition: 'Saved definition',
   deleteDescription: 'This removes the view. Your email isn’t deleted.',
   // Builder
+  agentHint:
+    'Agents can also create Saved Email Views for you. Just ask an agent to create one for you.',
   people: 'People and companies',
   peoplePlaceholder: 'Add people, companies, or domains',
   addEntry: 'Add “{{entry}}”',

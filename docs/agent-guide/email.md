@@ -1382,7 +1382,8 @@ Behind `enable-email-saved-views` (on in dev). A saved view is a named
 live mail with the viewer's access. See `docs/design/saved-views.md`.
 
 - **Create.** The sidebar **Saved views** `+` (or the empty state's Create view)
-  opens the builder: name, People and companies (one chip picker listing
+  opens the builder: a hint that agents can create saved email views too,
+  then name, People and companies (one chip picker listing
   companies first, CRM companies by name and then your contacts' domains by
   how many contacts use them, then people, your own address included; typing
   `example.com` offers the domain above the people at it. A typed address adds
