@@ -1,3 +1,8 @@
+import {
+  CallWorkPrompt,
+  CallWorkTab,
+  createCallWork,
+} from '@app/features/agent-work/views/call-work';
 import { t } from '@app/lib/i18n';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { Resize } from '@core/component/Resize';
@@ -324,7 +329,6 @@ export function CallOverlay(props: {
   const [sidebarMount, setSidebarMount] = createSignal<HTMLDivElement>();
   const [overlayMount, setOverlayMount] = createSignal<HTMLDivElement>();
   const widePanel = () => !isMobile() && (resizeContext()?.size() ?? 0) >= 800;
-  const activeTab = () => (canChat() ? selectedTab() : 'participants');
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [sharingOpen, setSharingOpen] = createSignal(false);
   const [keyboardFocus, setKeyboardFocus] = createSignal(false);
@@ -360,6 +364,7 @@ export function CallOverlay(props: {
   const PanelToggle = () => (
     <Button
       ref={panelButton}
+      class="relative"
       variant="secondary"
       size={isMobile() ? 'icon-xl' : 'icon-lg'}
       aria-label={panelOpen() ? t('calls.closePanel') : t('calls.openPanel')}
@@ -377,11 +382,47 @@ export function CallOverlay(props: {
       >
         <ChatIcon class="size-4 mobile:size-6" />
       </Show>
+      <Show when={callWork.showButtonDot()}>
+        <span
+          aria-hidden="true"
+          class="absolute top-1 right-1 size-1.5 rounded-full bg-accent"
+        />
+      </Show>
     </Button>
   );
 
   const participants = () =>
     Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
+
+  const callWork = createCallWork({
+    accountIds: () =>
+      participants().map((participant) => tryMacroId(participant.identity)),
+    selectedTab,
+    panelOpen,
+    canChat,
+  });
+  const work = callWork.work;
+  const hasWork = callWork.hasWork;
+  const activeTab = callWork.activeTab;
+  const workArrivals = callWork.arrivals;
+  const workTab = () => {
+    if (!hasWork()) return undefined;
+
+    return (
+      <CallWorkTab
+        accounts={work.accountsWithWork()}
+        itemsFor={(id) => work.byAccount().get(id) ?? []}
+        isSpeaking={isAccountSpeaking}
+      />
+    );
+  };
+  const openWork = () => {
+    workArrivals.dismiss();
+    setFocusChatOnOpen(false);
+    setSelectedTab('work');
+    setPanelMounted(true);
+    setPanelOpen(true);
+  };
 
   const [selectedParticipant, setSelectedParticipant] = createSignal<
     RemoteParticipant | 'local'
@@ -435,6 +476,13 @@ export function CallOverlay(props: {
       const pub = p.getTrackPublication(LK_TRACK_SOURCE.ScreenShare);
       return !!pub?.track && pub.isSubscribed && !pub.isMuted;
     });
+  };
+
+  const isAccountSpeaking = (accountId: string) => {
+    const participant = participants().find(
+      (candidate) => tryMacroId(candidate.identity) === accountId
+    );
+    return participant ? callCtx.isParticipantSpeaking(participant) : false;
   };
 
   const hasAnyScreenShare = () =>
@@ -579,6 +627,14 @@ export function CallOverlay(props: {
                     </For>
                   </div>
 
+                  <Show when={callWork.showPrompt()}>
+                    <CallWorkPrompt
+                      accounts={work.accountsWithWork()}
+                      onView={openWork}
+                      onDismiss={workArrivals.dismiss}
+                    />
+                  </Show>
+
                   {/* Local participant PIP (Google Meet style: small, bottom-right) */}
                   <div
                     class={cn(
@@ -671,6 +727,8 @@ export function CallOverlay(props: {
             chatAvailable={canChat()}
             participantCount={participants().length + 1}
             participants={<CallParticipantsList localName={props.localName} />}
+            work={workTab()}
+            workDot={callWork.showTabDot()}
             sidebarMount={widePanel() ? sidebarMount() : undefined}
             overlayMount={overlayMount()}
             returnFocus={panelButton}

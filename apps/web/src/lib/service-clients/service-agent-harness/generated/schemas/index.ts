@@ -422,3 +422,4 @@ export * from './warmAgentSessionResponse';
 export * from './warmAgentSessionResponseSession';
 export * from './weekdayCode';
 export * from './withAgentSessionId';
+export * from './workRegistrationResponse';

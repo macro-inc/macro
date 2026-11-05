@@ -2161,6 +2161,22 @@ async fn run_server() -> anyhow::Result<()> {
     let feed_viewers: Arc<dyn attention_feed::inbound::viewers::FeedViewerResolver> = Arc::new(
         attention_feed::inbound::viewers::EntityAccessFeedViewers(entity_access_service.clone()),
     );
+    // Reads the primary: a client refetches right after the change it heard about.
+    let graphql_registered_work_context = complete_graph::RegisteredWorkGraphqlContext::new(
+        agent_session::domain::work_registration::WorkRegistrationService::new(
+            agent_session::outbound::postgres::PgAgentSessionRepo::new(
+                db.clone(),
+                owned_entity_registrar.clone(),
+            ),
+            Arc::new(
+                agent_session::domain::audience::EntityAccessSessionView::new(
+                    entity_access_service.as_ref().clone(),
+                ),
+            ),
+            agent_session::domain::work_registration::NoWorkRegistrationSignal,
+        ),
+        soup_realtime_service.clone(),
+    );
     let graphql_work_feed_context = complete_graph::WorkFeedGraphqlContext::new(
         work_feed::domain::service::WorkFeedServiceImpl::new(
             attention_feed::outbound::soup::SoupCandidateSource::new(
@@ -2202,6 +2218,7 @@ async fn run_server() -> anyhow::Result<()> {
         sync_sessions,
         dictation_state,
         graphql_work_feed_context,
+        graphql_registered_work_context,
         graphql_notification_inbox_context,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
