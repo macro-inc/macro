@@ -19,4 +19,8 @@ export default {
   docsSnippet:
     'Mention anything, edit live with your team, and agents with a live cursor',
   docsLength: '1:48',
+  tasksTitle: 'Learn how to use Macro Tasks',
+  tasksSnippet:
+    'Create tasks from anywhere, from email, docs and channels, linked back both ways',
+  tasksLength: '1:22',
 };
