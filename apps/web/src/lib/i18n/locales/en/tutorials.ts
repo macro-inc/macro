@@ -9,8 +9,8 @@ export default {
   mailLength: '1:27',
   crmTitle: 'Learn how to use Macro CRM',
   crmSnippet:
-    'Auto-enriched records and comment threads, built into your workspace',
-  crmLength: '1:49',
+    'A pipeline that updates itself: kanban, routines after calls, AI chat',
+  crmLength: '1:27',
   githubTitle: 'Learn how to use Macro with GitHub',
   githubSnippet:
     'Pull request previews, coding agents that merge from channels, and PRs in splits',
