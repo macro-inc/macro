@@ -84,7 +84,7 @@ channels in **Share** and can remove them.
 
 The timeline pages newest-first from
 `GET /external-chats/<id>/messages`, including verified sender names,
-replies, grouped reactions, edit/delete flags, attachment states, and delivery
+replies, reactions grouped by emoji with their reactors, edit/delete flags, attachment states, and delivery
 for the caller's own sends. Entering the view marks messages read through `/read`.
 The timeline uses Chat's layout: rows and the composer share Chat's centered
 message column (`macro-message-width`) and custom scrollbar, and the view
@@ -97,9 +97,13 @@ timeline opens at the bottom. Stickers show small and unframed, GIFs loop muted
 in place, voice notes read **Voice note · 0:42** above an inline player; bytes
 come from the attachment's static file, like Chat's media. Other ready files
 (PDF, text) show as file chips that open the stored file in a new tab; other
-states show loading, unavailable or unsupported. Senders
-show their WhatsApp name. `@<number>` in a body shows the person: a verified
-Macro user as Chat's mention chip, anyone else their WhatsApp name in bold.
+states show loading, unavailable or unsupported. Senders, reactors (the
+reaction chip's tooltip), poll voters, members and mentioned people who are
+not Macro users go by the chat owner's contact name for them, else their
+WhatsApp name, else their phone number; "WhatsApp participant" only when
+WhatsApp gave neither (a LID with no number). `@<number>` in a body shows the
+person: a verified Macro user as Chat's mention chip, anyone else that name in
+bold.
 Bare URLs are links with Chat's hover preview. **Forwarded** marks forwarded
 messages. Polls (read-only tallies, "Vote in WhatsApp"), locations (**Open in
 Maps**, no map tiles), contact cards and WhatsApp events render as small cards
