@@ -1,3 +1,4 @@
+import './ci-proof-this-module-does-not-exist';
 import { initializeBrowserObservability } from './observability/browser';
 import './index.css';
 
