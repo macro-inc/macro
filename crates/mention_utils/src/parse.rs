@@ -9,7 +9,7 @@ use nom::{
     multi::{many_till, many0},
     sequence::{delimited, preceded, terminated},
 };
-use serde::{Deserialize, de::IgnoredAny};
+use serde::Deserialize;
 use std::{
     borrow::Cow,
     fmt::{Formatter, Write},
@@ -119,16 +119,10 @@ pub struct ParsedDocumentMention<'a> {
     pub document_name: Cow<'a, str>,
     #[serde(borrow, default)]
     pub block_name: Cow<'a, str>,
+    /// Free-form navigation parameters. Any shape is accepted, so an odd
+    /// value never stops the rest of the text from being formatted.
     #[serde(default)]
-    pub block_params: Option<ParsedDocumentMentionParams>,
-}
-
-#[derive(Debug, Deserialize)]
-#[non_exhaustive]
-pub struct ParsedDocumentMentionParams {
-    /// Set when a channel mention points at one message in the channel.
-    #[serde(default)]
-    pub channel_message_id: Option<IgnoredAny>,
+    pub block_params: serde_json::Value,
 }
 
 impl ParsedDocumentMention<'_> {
@@ -137,8 +131,8 @@ impl ParsedDocumentMention<'_> {
     pub fn kind(&self) -> &'static str {
         let is_message = self
             .block_params
-            .as_ref()
-            .is_some_and(|params| params.channel_message_id.is_some());
+            .get("channel_message_id")
+            .is_some_and(|id| !id.is_null());
 
         match self.block_name.as_ref() {
             "channel" if is_message => "message",

@@ -86,6 +86,16 @@ fn document_mention_without_name_or_params_renders_as_its_kind() {
 }
 
 #[test]
+fn document_mention_with_odd_block_params_still_renders() {
+    let input = concat!(
+        r#"<m-document-mention>{"documentId":"d1","documentName":"","blockName":"md","blockParams":"x"}</m-document-mention>"#,
+        r#" and <m-document-mention>{"documentId":"c1","documentName":"","blockName":"channel","blockParams":{"channel_message_id":null}}</m-document-mention>"#,
+    );
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "<document> and <channel>");
+}
+
+#[test]
 fn named_document_mention_renders_its_name() {
     let input = r#"<m-document-mention>{"documentId":"t1","documentName":"Ship it","blockName":"task","blockParams":{}}</m-document-mention>"#;
     let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
