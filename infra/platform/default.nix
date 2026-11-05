@@ -6,6 +6,7 @@
   pkgs,
   nixidy,
   nix2container,
+  terranix,
 }:
 let
   inherit (pkgs) lib;
@@ -238,6 +239,37 @@ rec {
         done
         python3 ${./parity/check_parity.py} local prod | tee $out
       '';
+
+  # What sits outside the cluster on AWS, rendered for OpenTofu. Nothing here applies
+  # anything: `awsCheck` validates offline, with no credentials.
+  aws =
+    settings:
+    terranix.lib.terranixConfiguration {
+      system = pkgs.stdenv.hostPlatform.system;
+      modules = [
+        ./aws/terraform.nix
+        { macro = settings; }
+      ];
+    };
+
+  awsCheck =
+    let
+      config = aws {
+        cluster = "macro-check";
+        domain = "example.com";
+        zoneId = "Z0000000000000";
+      };
+      tofu = pkgs.opentofu.withPlugins (providers: [
+        providers.hashicorp_aws
+        providers.hashicorp_random
+      ]);
+    in
+    pkgs.runCommand "platform-aws-check" { nativeBuildInputs = [ tofu ]; } ''
+      cp ${config} config.tf.json
+      export HOME=$TMPDIR
+      tofu init -backend=false -input=false > /dev/null
+      tofu validate -no-color | tee $out
+    '';
 
   # Host-built binaries as store paths (the fast loop): cargo's output dir ->
   # attrset of wrapped binaries.

@@ -8,6 +8,6 @@ in
 {
   flake.platform = import ../infra/platform {
     inherit pkgs;
-    inherit (inputs) nixidy nix2container;
+    inherit (inputs) nixidy nix2container terranix;
   };
 }

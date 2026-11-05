@@ -63,6 +63,8 @@ deploy repo, which Argo CD syncs.
 - `python3 -m unittest test_generate_chart` in `selfhost/`, and `test_check_parity` in
   `parity/`.
 - `nix build --no-link .#platform.parity`: local and prod differ only in size.
+- `nix build --no-link .#platform.awsCheck`: the AWS configuration validates, offline
+  and without credentials. Never apply it without explicit permission.
 - Render an environment: `nix build --impure --expr '... f.platform.cluster.manifests'`
   (see `nix_build` in `platform.rs`). The flake reads only git-tracked files, so
   `git add` new files first.

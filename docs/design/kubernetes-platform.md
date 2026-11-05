@@ -354,14 +354,17 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
   and not again since.
 - **Delivery:** Nix-built OCI images, nixidy, the deploy repo, and Argo CD with sync
   waves. Argo CD reports every Application Synced and Healthy.
+- **Pipelines through Kafka:** an S3 write reaches the upload finalizer (RustFS webhook,
+  bridge, queue), and a queued message reaches an unmodified Lambda handler. The gateway
+  passes 27 behaviour checks against real Kafka, and keeps in-flight messages and queue
+  settings across a restart. Processing a real document through them is not verified.
 - **Phase 3, for the core app:** every Rust service in the inventory, lexical,
   websocket, the edge, and the frontend. Sign-up reaches onboarding in a browser
   on these images.
 - **Phase 4, in part:** RustFS, ExtendDB, local-kms, and the Kafka-backed queue gateway
   behind one AWS gateway; sync-service, analytics-proxy, and ai-editing-worker as celld fleets;
   Valkey for Redis; provisioning as in-cluster Jobs; eleven Lambda handlers,
-  unmodified, behind `lambda-runner`. The handlers start and stay up, but no
-  handler has been driven end to end, and neither have uploads or search indexing.
+  unmodified, behind `lambda-runner`. Search indexing has not been verified.
 - **Phase 5, in part:** Gitea, its runners, and CI checks. See CI status below.
 - **Phase 7, in part:** `cargo x platform chart` builds the Helm chart from an
   instance's manifests. A plain `helm install` into an empty namespace on this
@@ -386,11 +389,21 @@ on the NixOS host, and it belongs in a forge job once the failure above is fixed
 
 Not built yet:
 
-- convert-service, and the Lambda handlers with S3 or SNS triggers.
 - OpenBao for KMS, the email and push ports, and KEDA.
 - The bots, and deploys on the forge.
-- Phases 6, 8, and 9: AWS (the terranix module exists; nothing is wired or applied),
-  gRPC and service splits, and the prod cutover.
+- Phase 6's deployment: the terranix configuration renders and passes `tofu validate`
+  in CI (`.#platform.awsCheck`), but it has never been planned against an account or
+  applied. Node configuration, ECR pull credentials on k3s, and the AWS image push are
+  not wired.
+- Phases 8 and 9: gRPC and service splits, and the prod cutover.
+- convert-service, which the local compose stack does not run either: it needs
+  LibreOffice assets and invokes an AWS Lambda for its responses.
+- Workers and handlers the instance does not run yet: `agent_trigger_service`,
+  `email_focus_worker`, `mcp_auth_proxy`, `slack_import_worker`, `sha_cleanup_worker`,
+  `worker_trigger`, and the S3 and SNS handlers (`docx_unzip_handler`,
+  `search_upload_handler`, `image_optimizer`, `call_recording_preview_handler`,
+  `dataloss_prevention_handler`, `email_suppression_handler`,
+  `upload_extractor_lambda_trigger`).
 - The rest of phase 7: publishing the images and chart per release, a generator for
   the Secrets a self-hoster must supply, a production-sized install, and a run on a
   stock cluster such as kind.

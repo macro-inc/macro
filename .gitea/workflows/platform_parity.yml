@@ -27,6 +27,8 @@ jobs:
       uses: ./.github/actions/setup-nix
     - name: Compare renderings
       run: nix build --no-link -L .#platform.parity
+    - name: Validate the AWS configuration
+      run: nix build --no-link -L .#platform.awsCheck
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
