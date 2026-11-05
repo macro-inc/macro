@@ -310,9 +310,9 @@ services:
   # Channel messages -> agent session trigger events -> sandboxed coding agent
   # sessions, plus the session control routes, which have to be served from the
   # process that owns the live transports they act on.
-  # Daytona-backed sandboxes require DAYTONA_API_KEY; `just run_local` sets
-  # DEV_DANGEROUS_LOCAL_CONTAINERS and runs sandboxes on the host Docker daemon
-  # instead. Trigger processing and external sessions run without either.
+  # `just run_local` sets DEV_DANGEROUS_LOCAL_CONTAINERS and runs sandboxes
+  # on the host Docker daemon. Deployed harnesses have no sandbox provider;
+  # trigger processing and external sessions do not require one.
   # ============================================================================
   agent_harness_service:
     <<: [*common-env, *rust-services-image]
@@ -333,8 +333,7 @@ services:
       - OVERRIDE_SYNC_SERVICE_URL=http://sync-service:8787
     volumes:
       # The local container provider drives the host's Docker daemon, so
-      # sandboxes are siblings of this container rather than children. Harmless
-      # under the Daytona provider, which never opens it.
+      # sandboxes are siblings of this container rather than children.
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - postgres
