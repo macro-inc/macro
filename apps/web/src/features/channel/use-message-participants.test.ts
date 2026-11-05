@@ -17,11 +17,6 @@ vi.mock('./use-channel-participants', () => ({
     ids: () => [],
   }),
 }));
-vi.mock('@queries/contacts/contacts', () => ({
-  useContacts: () => {
-    throw new Error('Unexpected full-directory read');
-  },
-}));
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({
     get isPending() {

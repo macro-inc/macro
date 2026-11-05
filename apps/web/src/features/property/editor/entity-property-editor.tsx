@@ -1,8 +1,8 @@
 import { t } from '@app/lib/i18n';
 import type { ListNavActions } from '@core/util/useListKeyBindings';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
-import { usePinnedContactUsers } from '@queries/contacts/use-directory';
 import { useTeamMembers } from '@queries/team/members';
+import { usePinnedContactUsers } from '@queries/contacts/use-directory';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import {
   CommandMenuEmptyState,
@@ -155,7 +155,11 @@ export function EntityPropertyEditor(props: {
     if (!isCompanyOwner() && !isAssignees()) return undefined;
     const pool = [...agents(), ...team.users()];
     if (!isAssignees()) return pool;
-    return scopedUserOptions(pool, people(), localSelectedIds());
+    return scopedUserOptions(
+      pool,
+      people(),
+      localSelectedIds()
+    );
   });
   const { entities } = useEntitiesForProperty(
     () => props.property,

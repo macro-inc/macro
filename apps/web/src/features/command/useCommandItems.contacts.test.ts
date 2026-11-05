@@ -156,7 +156,7 @@ function setup(initialCategory: CategoryFilter = 'dms', crmEnabled = true) {
           users().filter((user) =>
             contacts().some(
               (contact) =>
-                contact.email?.trim().toLowerCase() ===
+                contact.email.trim().toLowerCase() ===
                 user.data.email.toLowerCase()
             )
           ),

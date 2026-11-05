@@ -29,12 +29,12 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
-import { useContactFilterOptions } from '@core/user/use-contact-filter-options';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Accordion } from '@kobalte/core/accordion';
+import { useContactFilterOptions } from '@core/user/use-contact-filter-options';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { ConsolidatedFilterChip } from './consolidated-filter-chip';
 import { useInboxPicker } from './inbox-picker';
@@ -471,9 +471,7 @@ export const MobileFilterDrawer = (props: {
                 groupId="created-by"
                 createSource={useContactFilterOptions}
                 activeIds={createdByIds}
-                enabled={() =>
-                  open() && expandedSections().includes('created-by')
-                }
+                enabled={() => open() && expandedSections().includes('created-by')}
                 placeholder={t('viewMenus.searchCreators')}
                 onChange={(id) => toggleCreatedBy(id)}
               />

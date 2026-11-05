@@ -1131,10 +1131,7 @@ export type Outcome = {
   rows: (Cell | null)[][];
   /**  For a row-shaped result, the row entity id behind each result row. */
   rowIds: RowId[];
-  /**
-   *  The tables read, so a caller can watch them for changes. Built-in IDs
-   *  are UUID-shaped constants, not RFC-versioned UUIDs.
-   */
+  /**  The tables read, so a caller can watch them for changes. */
   readTables: TableId[];
   /**  Whether the read hit [`ROW_CAP`], making aggregates partial. */
   truncated: boolean;

@@ -135,7 +135,6 @@ export default defineConfig({
       ...Object.entries({
         '@service-storage/graphql-contacts': `${directory}/network.ts`,
         '@queries/auth/use-query-account': `${directory}/calendar-adapters.tsx`,
-        '@queries/contacts/contacts': `${directory}/soup-filter-adapters.tsx`,
         '@queries/contacts/use-directory': `${directory}/calendar-adapters.tsx`,
         '@core/component/UserIcon': `${directory}/calendar-adapters.tsx`,
         '@core/component/UserTooltip': `${directory}/calendar-adapters.tsx`,

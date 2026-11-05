@@ -138,9 +138,6 @@ vi.mock('@core/context/emailLinks', () => ({
   }),
 }));
 vi.mock('@core/user', () => ({
-  useContacts: () => {
-    throw new Error('Quick Access must not mount the full personal directory');
-  },
   useIsConnectedSecondaryInbox: () => () => false,
 }));
 vi.mock('@queries/channel/channels', () => ({

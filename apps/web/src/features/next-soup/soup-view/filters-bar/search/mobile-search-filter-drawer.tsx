@@ -232,13 +232,7 @@ function FacetSection(props: {
             {(facet) => (
               <Show
                 when={facet().createSource}
-                fallback={
-                  <MultiFacetContent
-                    facet={facet()}
-                    query={props.query}
-                    onQueryChange={props.onQueryChange}
-                  />
-                }
+                fallback={<MultiFacetContent facet={facet()} query={props.query} onQueryChange={props.onQueryChange} />}
               >
                 {(createSource) => (
                   <MobileFilterDrawer.SourceOptions

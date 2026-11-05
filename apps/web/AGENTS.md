@@ -1,12 +1,12 @@
 ## Development Commands
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
-- `bun run test`: run tests
+- `bun run test`: run tests 
 - `bun run check`: check typescript changes
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
-- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
-- `bun run lint`: lint with biome
-- `bun run format`: format changes with biome
+- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write. 
+- `bun run lint`: lint with biome 
+- `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - Refresh `nix-support/node_modules-hashes.json` for Linux and Darwin when dependency manifests, the lockfile, or dependency patches change.
@@ -47,8 +47,12 @@ must start at page one. Person hydration wakes an initially unavailable offline
 window, never an authorization error or server continuation. Resolve self separately
 when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
 over a person's stored command target, then use recent conversations as fallback.
+Contact invalidations from messages, native sharing and websocket events call
+`requestContactRefresh()` in `queries/contacts/refresh`; the coalesced bounded
+runner owns the work. Full-list hooks, query keys and handwritten GET clients
+are retired; no compatibility query should be created by an invalidation.
 Ranked person
-cursors use coordinator protocol 15; native menu policy version 4 retains
+cursors use coordinator protocol 16; native menu policy version 4 retains
 mention scoring/property boosts and excludes automated recipient addresses before
 the limit unless their full address was typed. Generate the policy floor from Rust
 with the transport schema; older policy replies are not ranked

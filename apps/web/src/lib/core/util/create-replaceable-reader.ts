@@ -1,4 +1,3 @@
-import { anyAbortSignal } from './abort-signal';
 import { fireAndForget } from './fireAndForget';
 
 type Job<Input, Output> = {
@@ -36,14 +35,7 @@ export function createReplaceableReader<Input, Output>(
     }
   }
   function read(input: Input, callerSignal: AbortSignal): Promise<Output> {
-    // The browser-floor helper detaches its parent listeners on abort. Finish
-    // each job's signal too, rather than retaining completed reads on lifetime.
-    const completion = new AbortController();
-    const signal = anyAbortSignal([
-      callerSignal,
-      lifetime.signal,
-      completion.signal,
-    ]);
+    const signal = AbortSignal.any([callerSignal, lifetime.signal]);
     return new Promise<Output>((resolve, reject) => {
       signal.throwIfAborted();
       const abort = () => {
@@ -56,10 +48,7 @@ export function createReplaceableReader<Input, Output>(
         signal,
         resolve,
         reject,
-        detach: () => {
-          signal.removeEventListener('abort', abort);
-          completion.abort();
-        },
+        detach: () => signal.removeEventListener('abort', abort),
       };
       signal.addEventListener('abort', abort, { once: true });
       if (running) {

@@ -22,7 +22,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import type { WithCustomUserInput } from '@core/user';
-import { invalidateContacts } from '@core/user/contactService';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -39,6 +38,7 @@ import {
 } from '@queries/channel/get-or-create-dm';
 import { usePrepareSharedMediaMutation } from '@queries/channel/share-upload';
 import { useCombinedRecipientSource } from '@queries/contacts/recipient-source';
+import { requestContactRefresh } from '@queries/contacts/refresh';
 import {
   newMessageId,
   useSendMessageMutation,
@@ -216,7 +216,7 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
   const sendShare = createNativeShareSend<InputSnapshot>({
     clear: async () => {
       fireAndForget(invalidateListChannels(), 'native-share-sheet');
-      fireAndForget(invalidateContacts(), 'native-share-sheet');
+      requestContactRefresh();
       await shareTarget?.clearPendingShareFiles(batchTokens);
     },
     send: async (snapshot) => {

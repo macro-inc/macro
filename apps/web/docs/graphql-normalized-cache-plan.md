@@ -1277,8 +1277,11 @@ new epoch. Missing inputs pause rather than publish emptiness. Source changes
 coalesce for 250 ms, with three exponential retries and reconnect wakeup; lost
 scope or unsupported hosts stop until the lifecycle changes. Context maps scale
 with existing DM peers/inboxes; full channel sources are still in memory.
-Quick Access now reads a replaceable person window rather than `useContacts()` or
-its global item index. Commands/mentions forward typed queries; CRM alias matching
+The web full-list query/hooks, shared recipient pool and manual contacts GET
+wrapper are removed. Message/native-share/websocket invalidations now issue only
+coalesced `requestContactRefresh()` hints; deployed backend and SDK APIs remain
+compatible. Quick Access reads a replaceable person window rather than a global
+contact item index. Commands/mentions forward typed queries; CRM alias matching
 uses exact lookup for only the current 50-row CRM window. Soup facets and property
 pickers preserve selections separately. General Soup assignee/creator menus and
 chips also use lazy windows; closed-chip labels resolve explicit IDs independently,
@@ -1315,7 +1318,7 @@ compiler metadata and input ownership fence answers, and each observer retains o
 physical operation plus one replaceable input. The unnecessary `/databases/read`
 endpoint/client is removed. Fresh queries work offline once synchronization is
 complete; unsupported/incomplete reads stay explicit. Wider join parity, removal
-reconciliation and legacy cleanup remain open.
+reconciliation and shared-name storage bounds remain open.
 Calendar create/edit, event-detail guest actions and AI-draft
 composers now use bounded property windows with event-owned guest extras. Chosen
 names stay in selection metadata rather than a directory map, and person pages
