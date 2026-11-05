@@ -57,6 +57,8 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   first follow crash/restart. Re-enrollment re-keys the harness. A canceled
   computer with no guest becomes Destroyed and revokes its harness without
   removing billing again. Missing stop/destroy are idempotent successes.
+- **Reprovision**: `InstanceLost` recreates the guest from the base image with the
+  saved persona and a fresh pairing for the same harness; the guest disk is not restored.
 - **Persona**: `Persona { name, os_user, extra_service: { unit_name, exec, env }, config }`.
   `macrod enroll` creates `os_user`, writes `config` to `/etc/macro/personas/<os_user>.env`
   (the unit's `EnvironmentFile`), and installs + starts `/etc/systemd/system/<unit_name>.service`

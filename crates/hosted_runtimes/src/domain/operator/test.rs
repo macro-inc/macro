@@ -4,6 +4,7 @@ use std::sync::Mutex;
 use uuid::Uuid;
 
 use super::*;
+use crate::domain::enrollment::{Persona, PersonaService};
 use crate::domain::fakes::{FakeError, FakeRepo, FixedClock, HOST, TEAM, now};
 use crate::domain::lifecycle::ComputerState;
 use crate::domain::models::{HostRegistration, NewComputer};
@@ -400,4 +401,81 @@ async fn reconcile_recreates_missing_cold_or_failed_guests_but_keeps_existing_gu
             );
         }
     }
+}
+
+#[tokio::test]
+async fn a_lost_guest_is_recreated_with_the_saved_persona_and_fresh_pairing() {
+    let operator = operator(FakeFleet::default()).await;
+    let id = paid_computer(&operator).await;
+    let first_persona = Persona {
+        name: "Agent".to_owned(),
+        os_user: "agent".to_owned(),
+        extra_service: PersonaService {
+            unit_name: "macro-agent".to_owned(),
+            exec: "/usr/local/bin/agent".to_owned(),
+            env: BTreeMap::from([("AGENT_MODE".to_owned(), "hosted".to_owned())]),
+        },
+        config: BTreeMap::from([
+            (
+                "REPO_URL".to_owned(),
+                "https://example.com/initial.git".to_owned(),
+            ),
+            ("AGENT_ID".to_owned(), "initial-agent".to_owned()),
+        ]),
+    };
+    operator
+        .repo
+        .computers
+        .lock()
+        .unwrap()
+        .get_mut(&id)
+        .unwrap()
+        .persona = Some(first_persona.clone());
+    operator.run_fleet_effects().await.unwrap();
+    // Connecting happens after the guest claims its approved pairing.
+    operator.macrod_connected(HARNESS).await.unwrap();
+
+    // The saved persona can change after enrollment; recreate must read the row.
+    let saved_persona = Persona {
+        config: BTreeMap::from([
+            (
+                "REPO_URL".to_owned(),
+                "https://example.com/saved.git".to_owned(),
+            ),
+            ("AGENT_ID".to_owned(), "saved-agent".to_owned()),
+        ]),
+        ..first_persona.clone()
+    };
+    operator
+        .repo
+        .computers
+        .lock()
+        .unwrap()
+        .get_mut(&id)
+        .unwrap()
+        .persona = Some(saved_persona.clone());
+    operator
+        .repo
+        .apply(id, Event::InstanceLost, now())
+        .await
+        .unwrap();
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
+
+    let recreated = operator.repo.get(id).await.unwrap().unwrap();
+    assert_eq!(recreated.id, id);
+    assert_eq!(recreated.harness_id, Some(HARNESS));
+    assert_eq!(recreated.persona, Some(saved_persona.clone()));
+    let enrollments = operator.fleet.enrollments.lock().unwrap();
+    assert_eq!(enrollments.len(), 2);
+    let first = &enrollments[0].0;
+    let replacement = &enrollments[1].0;
+    assert_eq!(first.persona, Some(first_persona));
+    assert_eq!(replacement.persona, Some(saved_persona));
+    assert_eq!(replacement.computer_id, id);
+    assert_ne!(replacement.pairing_id, first.pairing_id);
+    assert_ne!(replacement.device_secret, first.device_secret);
+    assert_eq!(
+        *operator.harnesses.enrollments.lock().unwrap(),
+        vec![None, Some(HARNESS)]
+    );
 }

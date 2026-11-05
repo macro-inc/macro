@@ -387,3 +387,51 @@ async fn an_enrolled_computer_refreshes_only_its_privileged_token_store() {
     assert!(unit.contains("User=root\n"));
     assert!(unit.contains("computer-token-store --owner "));
 }
+
+#[test]
+fn a_recreated_guest_installs_its_saved_persona_and_enables_the_unit_idempotently() {
+    let original = tempfile::tempdir().unwrap();
+    let recreated = tempfile::tempdir().unwrap();
+    let persona = Persona {
+        config: BTreeMap::from([
+            (
+                "REPO_URL".to_owned(),
+                "https://example.com/repository.git".to_owned(),
+            ),
+            ("AGENT_ID".to_owned(), "saved-agent".to_owned()),
+        ]),
+        ..enrollment().persona.unwrap()
+    };
+    for root in [original.path(), recreated.path()] {
+        let paths = SystemPaths {
+            root: root.to_owned(),
+        };
+        let files = PersonaFiles::render(&persona, &paths).unwrap();
+        let host = FakeHost::default();
+        let env_path = root.join("etc/macro/personas/ada.env");
+        let unit_path = root.join("etc/systemd/system/macro-brain-ada.service");
+        assert!(!env_path.exists());
+        assert!(!unit_path.exists());
+
+        for _ in 0..2 {
+            host.calls.borrow_mut().clear();
+            files.install(&host).unwrap();
+            assert_eq!(
+                std::fs::read_to_string(&env_path).unwrap(),
+                "AGENT_ID=\"saved-agent\"\nREPO_URL=\"https://example.com/repository.git\"\n"
+            );
+            let unit = std::fs::read_to_string(&unit_path).unwrap();
+            assert!(unit.contains("EnvironmentFile=/etc/macro/personas/ada.env\n"));
+            assert!(unit.contains("ExecStart=/usr/local/bin/brain --persona ada\n"));
+            assert_eq!(
+                *host.calls.borrow(),
+                vec![
+                    "ensure_user ada".to_owned(),
+                    format!("chown {} 1001:1002", env_path.display()),
+                    "systemctl daemon-reload".to_owned(),
+                    "systemctl enable --now macro-brain-ada.service".to_owned(),
+                ]
+            );
+        }
+    }
+}
