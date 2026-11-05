@@ -145,12 +145,26 @@ export function invalidateExternalChat(chatId: string) {
     predicate: (query) => query.queryKey.at(-1) === chatId,
   });
 }
+/**
+ * Refetches one chat's timeline. A refetch cancels whatever fetch is in flight,
+ * and when that is the older page a viewer asked for, the page is lost and the
+ * button just reappears, so wait for it. A refresh loses nothing by waiting.
+ */
+export async function invalidateExternalChatMessages(
+  userId: string,
+  chatId: string
+) {
+  const queryKey = externalChatsKeys.messages(userId, chatId).queryKey;
+  const query = queryClient.getQueryCache().find({ queryKey });
+  if (query?.state.fetchMeta?.fetchMore) {
+    await Promise.allSettled([query.promise]);
+  }
+  return queryClient.invalidateQueries({ queryKey });
+}
 /** A send was recorded: its row and the chat's place in lists follow. */
 export function refreshExternalChatTimeline(userId: string, chatId: string) {
   return Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: externalChatsKeys.messages(userId, chatId).queryKey,
-    }),
+    invalidateExternalChatMessages(userId, chatId),
     queryClient.invalidateQueries({
       queryKey: externalChatsKeys.delivery(userId, chatId).queryKey,
     }),
