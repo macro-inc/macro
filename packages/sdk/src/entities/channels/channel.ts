@@ -21,6 +21,7 @@ import {
 import { entitySearch } from '../search';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
+import { ChannelAccessRequest } from './access-request';
 import { ChannelActivity } from './activity';
 import { Message } from './message';
 import type { ChannelPicture } from './picture';
@@ -259,6 +260,54 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
       }),
     );
     return join_code;
+  }
+
+  /**
+   * Read the current user's join request, eligibility, and retry time.
+   * Works without channel access. Denial or withdrawal may delay retries.
+   */
+  async myAccessRequest(): Promise<{
+    request?: ChannelAccessRequest;
+    canRequest: boolean;
+    retryAfter?: string;
+  }> {
+    const state = unwrap(
+      await this.client.storage.getMyChannelAccessRequest({
+        path: { channel_id: this.id },
+      }),
+    );
+    return {
+      request: state.request
+        ? ChannelAccessRequest.from(this.client, this, state.request)
+        : undefined,
+      canRequest: state.can_request,
+      retryAfter: state.retry_after ?? undefined,
+    };
+  }
+
+  /**
+   * Ask to join a private or team channel.
+   * Repeated calls return the pending request.
+   */
+  async requestAccess(): Promise<ChannelAccessRequest> {
+    return ChannelAccessRequest.from(
+      this.client,
+      this,
+      unwrap(
+        await this.client.storage.requestChannelAccess({
+          path: { channel_id: this.id },
+        }),
+      ),
+    );
+  }
+
+  /** Withdraw the current user's pending join request. */
+  async cancelAccessRequest(): Promise<void> {
+    unwrap(
+      await this.client.storage.cancelChannelAccessRequest({
+        path: { channel_id: this.id },
+      }),
+    );
   }
 
   /** Leave the channel as the current user. */
