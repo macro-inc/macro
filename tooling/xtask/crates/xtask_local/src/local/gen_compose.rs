@@ -376,6 +376,12 @@ fn add_proxy_service(
         )));
     }
     let mut ports = vec![format!("{proxy_port}:{proxy_port}")];
+    // Incus reverse tunnels dial the host loopback; Docker computers use the
+    // proxy's services-network name and need no host DNS or guest CA changes.
+    let computer_gateway_port = instance.port(Port::ComputerGateway);
+    ports.push(format!(
+        "127.0.0.1:{computer_gateway_port}:{computer_gateway_port}"
+    ));
     if previews {
         ports.push(format!("{}:8443", instance.port(Port::PreviewHttps)));
         volumes.push(dct::Volumes::Simple(format!(
@@ -389,6 +395,7 @@ fn add_proxy_service(
             image: Some(CADDY_IMAGE.to_string()),
             environment: kv(&[
                 ("PROXY_PORT", &proxy_port.to_string()),
+                ("COMPUTER_GATEWAY_PORT", &computer_gateway_port.to_string()),
                 ("VITE_PORT", &instance.port(Port::Frontend).to_string()),
             ]),
             extra_hosts: vec!["host.docker.internal:host-gateway".to_string()],

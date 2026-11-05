@@ -479,6 +479,7 @@ fn build(setup: Setup) -> (Service, Arc<Journal>) {
         },
         setup.flags,
         "https://dev-gateway.macro.com/".to_string(),
+        "https://dev-gateway.macro.com/agent-harness-egress/brain/anthropic".to_string(),
     );
 
     (service, journal)
@@ -563,6 +564,12 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
                     env: BTreeMap::new(),
                 },
                 config: BTreeMap::from([
+                    (
+                        "ANTHROPIC_BASE_URL".to_string(),
+                        "https://dev-gateway.macro.com/agent-harness-egress/brain/anthropic"
+                            .to_string()
+                    ),
+                    ("ANTHROPIC_AUTH_TOKEN".to_string(), "mak_secret".to_string()),
                     (
                         "MACRO_AGENT_USER_ID".to_string(),
                         "macro|sam@agents.example.com".to_string(),

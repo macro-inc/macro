@@ -57,13 +57,15 @@ from the hosted-runtimes size catalog alongside the seat and computer price.
 ## Gotchas
 
 - The config file `/etc/macro/personas/<os_user>.env` holds the bootstrap
-  credentials: `MACRO_API_KEY` and the repo-scoped `MACRO_REPO_TOKEN`. Write
-  it with mode 600, owned by `os_user`. Every other secret goes through
-  `agent_secrets`, fetched per use.
+  credentials: `MACRO_API_KEY` (also `ANTHROPIC_AUTH_TOKEN`) and the repo-scoped
+  `MACRO_REPO_TOKEN`. Write it with mode 600, owned by `os_user`. Every other
+  secret goes through `agent_secrets`, fetched per use.
 - Run `/opt/macro/brain run` as the name-derived OS user, with `MACRO_GATEWAY`,
   `BRAIN_WORKSPACE=/home/<os_user>/workspace`, `BRAIN_HEALTH_PORT=7801`,
-  `MACRO_REPO_URL`, `MACRO_REPO_TOKEN`, `MACRO_AGENT_USER_ID`, and `MACRO_API_KEY`
-  in the persona config.
+  `MACRO_REPO_URL`, `MACRO_REPO_TOKEN`, `MACRO_AGENT_USER_ID`, `MACRO_API_KEY`,
+  `ANTHROPIC_BASE_URL=<egress>/brain/anthropic`, and `ANTHROPIC_AUTH_TOKEN`
+  in the persona config. The Anthropic token is that agent's own revocable API
+  key, reused from `MACRO_API_KEY`.
 - `outbound/hosted_runtimes_computers.rs` calls `ComputerService` in process;
   its purchase forwards the persona and seat in `extra_items` for one Stripe
   update. Tests keep the fake `Computers` port. The persona (name, job,
@@ -77,8 +79,12 @@ from the hosted-runtimes size catalog alongside the seat and computer price.
   so a retry after a partial failure still finds the agent.
 - Without `DEAD_SIMPLE_MAIL_API_KEY` agents get an `@agents.macro.invalid`
   placeholder address and the email routes answer 503.
-- The brain reaches Macro through `ApiGatewayUrl` (a local stack overrides it
-  to its proxy), never the auth container's in-network service URLs.
+- The brain reaches Macro through the typed public gateway and git URLs in
+  deployed environments. Local bootstrap uses `COMPUTERS_SERVICE_URL_OVERRIDES`:
+  Docker uses the proxy's internal HTTP listener and service-network git/egress;
+  Incus uses bridge addresses through reverse tunnels. Keep internal repo API
+  calls separate from the computer-facing clone URL. Local guests need no host
+  DNS entries, local CA import or TLS bypass.
 
 ## Related
 

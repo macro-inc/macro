@@ -40,6 +40,10 @@ const COMPUTER_LINK_FAILED_REASON: &str =
 
 /// Config drive keys the brain reads from its environment file.
 pub mod config_keys {
+    /// Macro's brain-specific Anthropic gateway endpoint.
+    pub const ANTHROPIC_BASE_URL: &str = "ANTHROPIC_BASE_URL";
+    /// The revocable first-party agent API key used to authenticate to it.
+    pub const ANTHROPIC_AUTH_TOKEN: &str = "ANTHROPIC_AUTH_TOKEN";
     /// The agent's Macro user id.
     pub const AGENT_USER_ID: &str = "MACRO_AGENT_USER_ID";
     /// Public API gateway origin; each service is under its path prefix.
@@ -69,6 +73,7 @@ pub struct TeamAgentServiceImpl<Repository, Membership, ApiKeys, Inboxes, Comput
     flags: Option<Flags>,
     /// Public API gateway origin the brain reaches Macro through.
     gateway_url: String,
+    anthropic_base_url: String,
 }
 
 impl<Repository, Membership, ApiKeys, Inboxes, Computer, Repos, Flags>
@@ -85,6 +90,7 @@ impl<Repository, Membership, ApiKeys, Inboxes, Computer, Repos, Flags>
         repos: Repos,
         flags: Option<Flags>,
         gateway_url: String,
+        anthropic_base_url: String,
     ) -> Self {
         Self {
             repository,
@@ -95,6 +101,7 @@ impl<Repository, Membership, ApiKeys, Inboxes, Computer, Repos, Flags>
             repos,
             flags,
             gateway_url,
+            anthropic_base_url,
         }
     }
 }
@@ -170,10 +177,19 @@ fn persona(
     os_user: &str,
     agent_user_id: &MacroUserIdStr<'_>,
     gateway_url: &str,
+    anthropic_base_url: &str,
     repo: &AgentRepo,
     api_key: &Credential,
 ) -> Persona {
     let config = BTreeMap::from([
+        (
+            config_keys::ANTHROPIC_BASE_URL.to_string(),
+            anthropic_base_url.trim_end_matches('/').to_string(),
+        ),
+        (
+            config_keys::ANTHROPIC_AUTH_TOKEN.to_string(),
+            api_key.expose().to_string(),
+        ),
         (
             config_keys::AGENT_USER_ID.to_string(),
             agent_user_id.as_ref().to_string(),
@@ -366,6 +382,7 @@ where
                     &os_user,
                     &user_id,
                     &self.gateway_url,
+                    &self.anthropic_base_url,
                     &repo,
                     &api_key,
                 )),

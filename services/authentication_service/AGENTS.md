@@ -194,3 +194,11 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   Its adapter receives the same computer repository for scoped bootstrap reads
   and the harness domain repository for enrolled-persona health and last-turn
   time. Repo recovery uses the internal git `ensure` API without token rotation.
+
+- `src/outbound/computer_urls.rs` resolves bootstrap addresses separately from
+  browser and service-internal URLs. Enabled local fleets require complete
+  `COMPUTERS_SERVICE_URL_OVERRIDES` entries for the SDK gateway, harness egress
+  and git; deployed environments use typed public URLs. The git adapter advertises
+  the computer-facing remote while retaining the internal API address for create.
+  Brain Anthropic credentials reuse that agent's revocable Macro API key on the
+  dedicated `/brain/anthropic` gateway path.

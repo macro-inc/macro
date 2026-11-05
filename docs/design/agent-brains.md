@@ -112,6 +112,11 @@ encryption context `{agent_user_id, name}` (the `cursor_api_key` pattern).
 `PUT/GET/DELETE /auth/team_agents/me/secrets/{name}` for the agent; list and
 delete for team admins. Never in prompts, files or the config drive.
 
+The bootstrap API key and repo token follow the
+[persona config contract](../../crates/team_agents/AGENTS.md). The agent's own
+API key also authorizes its dedicated Anthropic route; it is not a shared service
+credential.
+
 ## PR A contract relied on
 
 - Purchase a computer for a team with a persona: `{ size, persona: { name,

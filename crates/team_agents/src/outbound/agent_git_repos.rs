@@ -12,12 +12,16 @@ use crate::domain::ports::AgentRepos;
 /// Creates and deletes agents' repos with the agent git client.
 pub struct AgentGitRepos {
     client: AgentGitClient,
+    clone_base_url: String,
 }
 
 impl AgentGitRepos {
     /// Wraps the agent git client.
-    pub fn new(client: AgentGitClient) -> Self {
-        Self { client }
+    pub fn new(client: AgentGitClient, clone_base_url: String) -> Self {
+        Self {
+            client,
+            clone_base_url,
+        }
     }
 }
 
@@ -29,6 +33,17 @@ impl AgentRepos for AgentGitRepos {
         team_id: Uuid,
         seed: &PersonaSeed,
     ) -> Result<AgentRepo, TeamAgentError> {
+        // The internal create endpoint's address need not be reachable from a
+        // computer. Build its advertised remote before creating any resources.
+        let mut clone_url =
+            reqwest::Url::parse(&self.clone_base_url).map_err(TeamAgentError::internal)?;
+        clone_url
+            .path_segments_mut()
+            .map_err(|_| {
+                TeamAgentError::internal_message("the computer git URL is not a base URL")
+            })?
+            .pop_if_empty()
+            .push(&format!("{}.git", agent_user_id.as_ref()));
         let created = self
             .client
             .create_repo(
@@ -46,7 +61,7 @@ impl AgentRepos for AgentGitRepos {
             })?;
 
         Ok(AgentRepo {
-            url: created.clone_url,
+            url: clone_url.to_string(),
             token: Credential::new(created.token),
         })
     }
@@ -87,3 +102,6 @@ impl AgentRepos for AgentGitRepos {
             })
     }
 }
+
+#[cfg(test)]
+mod test;

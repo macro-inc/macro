@@ -59,6 +59,12 @@ pub const COMPUTER_ID_LABEL: &str = "macro.computer_id";
 /// a box dials through the reverse tunnel. The app origin has no port: macrod
 /// only prints links to it, which open in the developer's browser.
 const MACROD_SERVICES: &[(&str, Option<Port>)] = &[
+    ("OVERRIDE_API_GATEWAY_URL", Some(Port::ComputerGateway)),
+    (
+        "OVERRIDE_AGENT_HARNESS_EGRESS_URL",
+        Some(Port::AgentHarnessEgress),
+    ),
+    ("OVERRIDE_AGENT_GIT_SERVICE_URL", Some(Port::AgentGit)),
     (
         "OVERRIDE_AGENT_HARNESS_EGRESS_URL",
         Some(Port::AgentHarnessEgress),
@@ -183,7 +189,14 @@ impl Computers {
     fn docker_env(&self, env: &BTreeMap<String, String>) -> Result<BTreeMap<String, String>> {
         let overrides = MACROD_SERVICES
             .iter()
-            .map(|(name, _)| Ok((name.to_string(), in_network(env, name)?)))
+            .map(|(name, _)| {
+                let url = if *name == "OVERRIDE_API_GATEWAY_URL" {
+                    format!("http://proxy:{}", self.instance.port(Port::ComputerGateway))
+                } else {
+                    in_network(env, name)?
+                };
+                Ok((name.to_string(), url))
+            })
             .collect::<Result<BTreeMap<_, _>>>()?;
         Ok(BTreeMap::from([
             ("COMPUTERS_FLEET".into(), "docker".into()),

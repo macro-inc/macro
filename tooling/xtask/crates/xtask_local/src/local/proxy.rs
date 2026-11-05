@@ -125,8 +125,16 @@ fn caddyfile(mode: Mode, static_frontend: bool) -> String {
         ""
     };
     let special_routes = SPECIAL_ROUTES.replace("SYNC_ORIGIN_HEADER", sync_origin);
+    let computer_gateway = if mode == Mode::Local {
+        format!(
+            "\nhttp://:{{$COMPUTER_GATEWAY_PORT}} {{\n{}{special_routes}{static_block}}}\n",
+            service_routes(mode)
+        )
+    } else {
+        String::new()
+    };
     format!(
-        "{CADDY_HEAD}{cors_block}{routes}{special_routes}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}{preview_block}",
+        "{CADDY_HEAD}{cors_block}{routes}{special_routes}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}{preview_block}{computer_gateway}",
         routes = service_routes(mode)
     )
 }

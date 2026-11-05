@@ -698,6 +698,11 @@ pub async fn run() -> anyhow::Result<()> {
     let teams_service = Arc::new(teams_service_impl);
     let team_agents_repository =
         team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone());
+    let computer_urls = crate::outbound::computer_urls::ComputerUrls::new(
+        config.environment,
+        config.computers_fleet.is_some(),
+        config.computers_service_url_overrides.as_deref(),
+    )?;
     let team_agents_service = Arc::new(team_agents::domain::service::TeamAgentServiceImpl::new(
         team_agents_repository.clone(),
         team_agents::outbound::team_membership::TeamsMembership::new(teams_service.clone()),
@@ -721,13 +726,15 @@ pub async fn run() -> anyhow::Result<()> {
                 internal_key.clone(),
             )
             .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+            computer_urls.git,
         ),
         // Gates quoting and creating agents per admin (`enable-team-agents`).
         // Without a PostHog key (local, tests) the feature is open.
         feature_flags.clone(),
         // The brain runs on its own computer, so it reaches Macro through the
-        // public gateway, never this container's in-network addresses.
-        macro_service_urls::ApiGatewayUrl::new()?.to_string(),
+        // computer-facing gateway, never this container's in-network addresses.
+        computer_urls.gateway,
+        format!("{}/brain/anthropic", computer_urls.egress),
     ));
     let agent_secrets_service =
         Arc::new(agent_secrets::domain::service::AgentSecretServiceImpl::new(

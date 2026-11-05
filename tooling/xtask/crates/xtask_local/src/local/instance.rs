@@ -123,6 +123,8 @@ pub enum Port {
     /// Agent git remotes (`agent-git-service`). Appended at the end so existing
     /// per-instance port offsets stay stable.
     AgentGit = 8111,
+    /// Local-only plaintext gateway reachable from Macro computers.
+    ComputerGateway = 8112,
 }
 
 impl Port {
