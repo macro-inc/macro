@@ -261,6 +261,78 @@ describe('createDatabaseSqlQuery', () => {
     }
   );
 
+  it('shows cached rows when a refresh starts before the opening cache read lands', async () => {
+    let finishNetwork: (() => void) | undefined;
+    const policies: string[] = [];
+    const exchange: Exchange = () => (incoming) =>
+      pipe(
+        incoming,
+        mergeMap((operation) => {
+          if (operation.kind === 'teardown') return empty;
+          policies.push(operation.context.requestPolicy);
+          const response = {
+            operation,
+            data: {
+              user: {
+                id: 'macro|viewer@databases.test',
+                soup: { items: [globex], nextCursor: null },
+              },
+            },
+            stale: false,
+            hasNext: false,
+          };
+          return fromPromise(
+            new Promise<typeof response>((resolve) => {
+              finishNetwork = () => resolve(response);
+            })
+          );
+        })
+      );
+    const client = createClient({
+      url: 'http://test.invalid/graphql',
+      exchanges: [exchange],
+    });
+    const query = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createDatabaseSqlQuery(
+        () => ({ schema, sql: 'SELECT name FROM crm.deals' }),
+        {
+          client: () => client,
+          cacheHost: () => ({
+            readQuery: async (): Promise<ReadResult> => ({
+              kind: 'hit',
+              data: {
+                user: {
+                  id: 'macro|viewer@databases.test',
+                  soup: { items: [acme], nextCursor: null },
+                },
+              },
+            }),
+            onCacheChanged: () => () => {},
+            entityFilter: vi.fn(),
+            readRecordsByKeys: vi.fn(),
+          }),
+          people: async () => [],
+          catalog: async () => catalog,
+          open: names,
+        }
+      );
+    });
+    const refreshed = query.refresh('refresh');
+    await vi.waitFor(() =>
+      expect(query.outcome()?.rows).toEqual([[{ type: 'text', value: 'Acme' }]])
+    );
+    expect(query.loading()).toBe(true);
+    await vi.waitFor(() => expect(finishNetwork).toBeDefined());
+    finishNetwork?.();
+    expect((await refreshed)._unsafeUnwrap()).toEqual({ landed: true });
+    expect(query.outcome()?.rows).toEqual([
+      [{ type: 'text', value: 'Globex' }],
+    ]);
+    expect(query.loading()).toBe(false);
+    expect(policies).toEqual(['network-only']);
+  });
+
   it('lands an after-write refresh while its initial cache probe is still pending', async () => {
     let finishCache!: (result: ReadResult) => void;
     const readQuery = vi.fn(

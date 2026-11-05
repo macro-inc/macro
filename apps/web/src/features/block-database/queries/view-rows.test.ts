@@ -161,6 +161,24 @@ describe('server view pages', () => {
     expect(query.loading()).toBe(false);
   });
 
+  it('shows the cached first page when a refresh replaces the opening read', async () => {
+    const network = Promise.withResolvers<DatabaseViewPage>();
+    const { query, readPage } = harness((request) => {
+      if (request.requestPolicy === 'cache-and-network')
+        request.onCachedPage?.(page(['cached']));
+      return ResultAsync.fromSafePromise(network.promise);
+    });
+    const refreshed = query.refresh('refresh');
+    await waitFor(() => expect(query.outcome()?.rowIds).toEqual(['cached']));
+    expect(query.loading()).toBe(true);
+    network.resolve(page(['fresh']));
+    expect((await refreshed)._unsafeUnwrap()).toEqual({ landed: true });
+    expect(query.outcome()?.rowIds).toEqual(['fresh']);
+    expect(
+      readPage.mock.calls.map(([request]) => request.requestPolicy)
+    ).toEqual(['cache-and-network']);
+  });
+
   it('keeps a delayed cache hit when the network fails first', async () => {
     let resolve!: (page: DatabaseViewPage) => void;
     const pending = new Promise<DatabaseViewPage>((done) => {

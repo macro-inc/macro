@@ -176,6 +176,10 @@ export function createDatabaseSqlQuery(
   const [error, setError] = createSignal<DatabaseSqlFailure>();
   const [loading, setLoading] = createSignal(false);
   let latest = 0;
+  // The run whose answer is on screen, and a count of opened statements, so
+  // an opening cache read answers only its own statement.
+  let shown = 0;
+  let opened = 0;
   let activeRead: AbortController | undefined;
   let cancelFrame: (() => void) | undefined;
   // The cache may not hold what an in-flight network read will bring, so a
@@ -190,12 +194,27 @@ export function createDatabaseSqlQuery(
     requestPolicy: RequestPolicy,
     reconcile: boolean,
     reason: DatabaseSqlReadReason,
-    options: { reportFailure?: boolean; keepLoading?: boolean } = {}
+    options: {
+      reportFailure?: boolean;
+      keepLoading?: boolean;
+      /**
+       * The opening cache read: a later run doesn't cancel it, and its answer
+       * shows unless a newer one already has.
+       */
+      opening?: boolean;
+    } = {}
   ): ResultAsync<DatabaseSqlRun, DatabaseSqlFailure> => {
     const generation = ++latest;
-    activeRead?.abort();
+    const statementRun = opened;
     const controller = new AbortController();
-    activeRead = controller;
+    if (!options.opening) {
+      activeRead?.abort();
+      activeRead = controller;
+    }
+    const applies = () =>
+      options.opening
+        ? statementRun === opened && generation > shown
+        : generation === latest;
     const querySpan = Telemetry.span('database_sql.query');
     querySpan.setAttr('database_sql.read_reason', reason);
     querySpan.setAttr('database_sql.request_policy', requestPolicy);
@@ -235,7 +254,8 @@ export function createDatabaseSqlQuery(
             )
           )
           .map((answer): DatabaseSqlRun => {
-            if (generation !== latest) return { landed: false };
+            if (!applies()) return { landed: false };
+            shown = generation;
             // A cache change that left the answer alone keeps the same outcome.
             querySpan.setAttr('database_sql.row_count', answer.rows.length);
             querySpan.setAttr('database_sql.truncated', answer.truncated);
@@ -319,6 +339,7 @@ export function createDatabaseSqlQuery(
     const cached = run(current, 'cache-only', false, reason, {
       reportFailure: false,
       keepLoading: true,
+      opening: true,
     });
     const generation = latest;
     const reconcile = async () => {
@@ -334,6 +355,7 @@ export function createDatabaseSqlQuery(
       cancelFrame?.();
       baselines = new Map();
       latest += 1;
+      opened += 1;
       activeRead?.abort();
       setError(undefined);
       setLoading(false);
@@ -373,6 +395,7 @@ export function createDatabaseSqlQuery(
   onCleanup(() => {
     cancelFrame?.();
     latest += 1;
+    opened += 1;
     activeRead?.abort();
   });
 
