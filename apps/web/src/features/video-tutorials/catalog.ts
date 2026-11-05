@@ -11,6 +11,8 @@ import docsVideo from './assets/docs.mp4';
 import docsPoster from './assets/docs-poster.jpg';
 import githubVideo from './assets/github.mp4';
 import githubPoster from './assets/github-poster.jpg';
+import homeVideo from './assets/home.mp4';
+import homePoster from './assets/home-poster.jpg';
 import mailVideo from './assets/mail.mp4';
 import mailPoster from './assets/mail-poster.jpg';
 import schedulingVideo from './assets/scheduling.mp4';
@@ -162,5 +164,19 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     },
     videoUrl: calendarVideo,
     posterUrl: calendarPoster,
+  },
+  home: {
+    id: 'home',
+    get title() {
+      return t('tutorials.homeTitle');
+    },
+    get snippet() {
+      return t('tutorials.homeSnippet');
+    },
+    get length() {
+      return t('tutorials.homeLength');
+    },
+    videoUrl: homeVideo,
+    posterUrl: homePoster,
   },
 };

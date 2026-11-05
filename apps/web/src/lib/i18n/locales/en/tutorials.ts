@@ -39,4 +39,8 @@ export default {
   calendarSnippet:
     'Agents that schedule for you, and meetings right in your channels',
   calendarLength: '0:55',
+  homeTitle: 'Learn how to use Macro Home',
+  homeSnippet:
+    'One inbox for everything, built for speed, with everything linked together',
+  homeLength: '1:00',
 };
