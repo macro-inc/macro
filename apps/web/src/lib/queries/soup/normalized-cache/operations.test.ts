@@ -480,6 +480,67 @@ describe('refetchSoupEntity', () => {
         unmount();
       });
 
+      it('reads each list again as soon as its own first read settles', async () => {
+        const never = () => new Promise(() => {});
+        const slowKey = [
+          ...soupKeys.astItems._def,
+          { params: { sort_method: 'notified_at' }, body: { slow: true } },
+        ];
+        let settleFirstRead = (_data: unknown) => {};
+        const queryFn = vi
+          .fn()
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                settleFirstRead = resolve;
+              })
+          )
+          .mockResolvedValue({
+            pages: [
+              {
+                kind: 'flat',
+                items: [mockDocumentItem('doc-new')],
+                nextCursor: null,
+              },
+            ],
+            pageParams: [null],
+          });
+        testQueryClient.removeQueries({ queryKey: notifiedKey });
+        const unmountFast = new QueryObserver(testQueryClient, {
+          queryKey: notifiedKey,
+          queryFn,
+          staleTime: Number.POSITIVE_INFINITY,
+        }).subscribe(() => {});
+        const unmountSlow = new QueryObserver(testQueryClient, {
+          queryKey: slowKey,
+          queryFn: never,
+          staleTime: Number.POSITIVE_INFINITY,
+        }).subscribe(() => {});
+
+        updateSoupForNotification(notification);
+        await vi.waitFor(() => {
+          expect(getSoupItemsMock).toHaveBeenCalledOnce();
+        });
+        await getSoupItemsMock.mock.results[0]?.value;
+        await new Promise((resolve) => setTimeout(resolve));
+        settleFirstRead({
+          pages: [
+            {
+              kind: 'flat',
+              items: [mockDocumentItem('d-1')],
+              nextCursor: null,
+            },
+          ],
+          pageParams: [null],
+        });
+
+        await vi.waitFor(() => {
+          expect(queryFn).toHaveBeenCalledTimes(2);
+        });
+        unmountFast();
+        unmountSlow();
+      });
+
       it('fetches nothing when no notified_at list is mounted', async () => {
         await refetchSoupEntity('doc-new', 'document', { notified: true });
 

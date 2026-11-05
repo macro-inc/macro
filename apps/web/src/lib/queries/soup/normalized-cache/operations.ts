@@ -833,17 +833,19 @@ function mountedNotifiedLists() {
 /**
  * A list's first read has no pages to insert into, and invalidating reuses it
  * rather than restarting it, so its response can predate a new notification.
- * Read those lists again once it settles.
+ * Read each of those lists again once its own first read settles.
  */
 async function rereadNotifiedListsAfterFirstRead(): Promise<void> {
   const firstReads = mountedNotifiedLists().filter(
     (query) =>
       query.state.data === undefined && query.state.fetchStatus === 'fetching'
   );
-  await Promise.allSettled(firstReads.map((query) => query.promise));
-  for (const query of firstReads) {
-    queryClient.invalidateQueries({ queryKey: query.queryKey, exact: true });
-  }
+  await Promise.allSettled(
+    firstReads.map(async (query) => {
+      await Promise.allSettled([query.promise]);
+      queryClient.invalidateQueries({ queryKey: query.queryKey, exact: true });
+    })
+  );
 }
 
 /**
