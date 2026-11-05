@@ -480,6 +480,44 @@ fn direct_selection_stops_after_one_hop() {
     );
 }
 
+/// Reached only as a dependent: linted, not tested. Changed itself: tested.
+#[test]
+fn slow_service_is_tested_only_when_it_changed() {
+    const SERVICE: &str = TESTED_ONLY_WHEN_CHANGED[0];
+    let workspace = SyntheticWorkspace::with_members(
+        &[
+            ("a", ""),
+            (SERVICE, "[dependencies]\na = { path = \"../a\" }\n"),
+            ("d", "[dependencies]\na = { path = \"../a\" }\n"),
+        ],
+        "",
+    );
+    let graph = workspace.graph();
+
+    let dependency_changed = changed_files(&["a/src/lib.rs"]);
+    let expected = Selections {
+        affected: PackageSelection::All,
+        direct: PackageSelection::Packages(BTreeSet::from(["a", "d"].map(str::to_owned))),
+    };
+    assert_eq!(
+        select_by_paths(&graph, &dependency_changed, &no_path_rules()).unwrap(),
+        expected
+    );
+    assert_eq!(
+        compute_packages(&graph, &graph, &dependency_changed, &no_path_rules()).unwrap(),
+        expected
+    );
+
+    let both_changed = changed_files(&["a/src/lib.rs", &format!("{SERVICE}/src/lib.rs")]);
+    assert_eq!(
+        select_by_paths(&graph, &both_changed, &no_path_rules()).unwrap(),
+        Selections {
+            affected: PackageSelection::All,
+            direct: PackageSelection::All,
+        }
+    );
+}
+
 /// A direct edge nobody enables builds nothing, so it stays out of both sets.
 #[test]
 fn direct_selection_skips_edges_outside_the_affected_set() {

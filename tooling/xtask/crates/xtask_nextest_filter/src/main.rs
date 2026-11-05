@@ -20,8 +20,9 @@
 //! Stdout is two lines, each one of `all`, `none` or space-separated names:
 //! - line 1, every affected package: clippy lints these.
 //! - line 2, the changed packages, their direct dependents, and crates whose own
-//!   dependencies changed: pull requests test these, and the run on `main` after
-//!   merge tests everything.
+//!   dependencies changed, except [`TESTED_ONLY_WHEN_CHANGED`] reached only as a
+//!   dependent: pull requests test these, and the run on `main` after merge tests
+//!   everything.
 //!
 //! `all` means every workspace package. `none` means no changed file mapped to
 //! a package (a top-level JSON, a Nix shell tweak, docs, …); CI must not treat
@@ -176,6 +177,12 @@ fn run(changed_files_path: &Path, base_revision: &str) -> Result<()> {
 const ROOT_MANIFEST: &str = "Cargo.toml";
 const WORKSPACE_HACK: &str = "workspace-hack";
 
+/// Dependents whose tests pull requests skip unless the package itself changed.
+/// `document_storage_service` ends the longest compile chain and takes about a
+/// minute of the `test` job for a few seconds of tests. Clippy still builds it
+/// on every pull request that reaches it, and the run on `main` tests it.
+const TESTED_ONLY_WHEN_CHANGED: &[&str] = &["document_storage_service"];
+
 fn read_manifest(dir: &Path) -> Result<String> {
     let path = dir.join(ROOT_MANIFEST);
     std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))
@@ -313,7 +320,10 @@ fn selections<'g>(
                 package
                     .reverse_direct_links()
                     .map(|link| link.from())
-                    .filter(|dependent| dependent.in_workspace())
+                    .filter(|dependent| {
+                        dependent.in_workspace()
+                            && !TESTED_ONLY_WHEN_CHANGED.contains(&dependent.name())
+                    })
                     .map(|dependent| dependent.name().to_owned()),
             );
         }
