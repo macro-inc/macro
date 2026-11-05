@@ -1,5 +1,7 @@
 import { t } from '@app/lib/i18n';
+import type { UnifiedNotification } from '@notifications/types';
 import type {
+  InboxDoneResult,
   InboxFeedSource,
   NotificationInboxRow,
 } from '../context/notifications-inbox-context';
@@ -68,19 +70,12 @@ export function createInboxList(
     };
   };
 
-  const markDone = async (rows: readonly NotificationInboxRow[]) => {
-    if (rows.length === 0) return;
-    let result: Awaited<ReturnType<InboxFeedSource['markDone']>>;
-    try {
-      result = await traceInboxRows('notifications_inbox.row_done', rows, () =>
-        feed.markDone(rows)
-      );
-    } catch {
-      notices.announceFailure(
-        t('notificationsInbox.markDoneFailed', { count: rows.length })
-      );
-      return;
-    }
+  /** Put a completed done on the undo stack and announce it. */
+  const offerUndo = (
+    rows: readonly NotificationInboxRow[],
+    count: number,
+    result: InboxDoneResult
+  ) => {
     let dismiss = () => {};
     const handle = notices.pushUndo({
       label: t('notificationsInbox.markDone'),
@@ -96,12 +91,53 @@ export function createInboxList(
       },
       onUndone: () => dismiss(),
     });
-    dismiss = notices.announceDone(rows.length, handle.undo);
+    dismiss = notices.announceDone(count, handle.undo);
+  };
+
+  const markDone = async (rows: readonly NotificationInboxRow[]) => {
+    if (rows.length === 0) return;
+    let result: InboxDoneResult;
+    try {
+      result = await traceInboxRows('notifications_inbox.row_done', rows, () =>
+        feed.markDone(rows)
+      );
+    } catch {
+      notices.announceFailure(
+        t('notificationsInbox.markDoneFailed', { count: rows.length })
+      );
+      return;
+    }
+    offerUndo(rows, rows.length, result);
+  };
+
+  /** Complete one notification of a stack, leaving the rest of it. */
+  const markNotificationDone = async (
+    row: NotificationInboxRow,
+    notification: UnifiedNotification
+  ) => {
+    let result: InboxDoneResult;
+    try {
+      result = await traceInboxRows(
+        'notifications_inbox.notification_done',
+        [row],
+        (span) => {
+          span.setAttr('notification.id', notification.id);
+          return feed.markNotificationDone(row, notification);
+        }
+      );
+    } catch {
+      notices.announceFailure(
+        t('notificationsInbox.markDoneFailed', { count: 1 })
+      );
+      return;
+    }
+    offerUndo([row], 1, result);
   };
 
   return {
     view,
     markDone,
+    markNotificationDone,
     loadMore: feed.loadMore,
     refresh: feed.refresh,
   };

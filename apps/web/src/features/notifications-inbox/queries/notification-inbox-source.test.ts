@@ -228,6 +228,72 @@ describe('createNotificationInboxSource', () => {
     expect(rowIds()).toContain('document:doc-a#task');
   });
 
+  const stacked = inboxEntry({
+    docId: 'doc-s',
+    sortAt: '2026-02-01T10:09:00Z',
+    rows: [
+      {
+        id: 'document:doc-s#top_level',
+        latestAt: '2026-02-01T10:09:00Z',
+        notificationIds: ['n-3', 'n-2', 'n-1'],
+      },
+    ],
+  });
+
+  async function loadedStack(mutationData: Record<string, unknown> = {}) {
+    const context = setup(mutationData);
+    await flush();
+    context.fake.queries[0].resolve(inboxPage([stacked]));
+    await flush();
+    return context;
+  }
+
+  it('hides one notification of a stack and completes only it', async () => {
+    vi.useFakeTimers();
+    const { fake, feed, row, overrideNotificationsDone } = await loadedStack({
+      MarkNotificationInboxNotificationDone: {
+        markNotificationInboxNotificationDone: {
+          patches: [],
+          undoToken: 'undo-n-2',
+        },
+      },
+    });
+    const stack = row('document:doc-s#top_level');
+
+    await feed.markNotificationDone(stack, stack.content.notifications[1]);
+
+    expect(fake.mutations[0]).toEqual({
+      name: 'MarkNotificationInboxNotificationDone',
+      variables: {
+        input: {
+          rowId: 'document:doc-s#top_level',
+          notificationId: 'n-2',
+          scope: WIRE_SCOPE,
+        },
+      },
+    });
+    expect(overrideNotificationsDone).toHaveBeenCalledWith(['n-2']);
+    const after = row('document:doc-s#top_level');
+    expect(after.count).toBe(2);
+    expect(after.content.notifications.map(({ id }) => id)).toEqual([
+      'n-3',
+      'n-1',
+    ]);
+  });
+
+  it('shows the notification again when its done fails', async () => {
+    vi.useFakeTimers();
+    const { feed, row, restoreNotifications } = await loadedStack();
+    const stack = row('document:doc-s#top_level');
+
+    await expect(
+      feed.markNotificationDone(stack, stack.content.notifications[1])
+    ).rejects.toThrow();
+
+    expect(restoreNotifications).toHaveBeenCalled();
+    expect(row('document:doc-s#top_level').count).toBe(3);
+  });
+
   it('shows a done row again when a newer notification reopens it', async () => {
     vi.useFakeTimers();
     const { fake, feed, row, rowIds } = await loaded(doneResult);

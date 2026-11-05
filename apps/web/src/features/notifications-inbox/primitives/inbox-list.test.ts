@@ -36,6 +36,7 @@ function fakeFeed(overrides: Partial<InboxFeedSource> = {}) {
     loadMore: vi.fn(async () => {}),
     refresh: vi.fn(async () => {}),
     markDone: vi.fn(async () => ({ undo: vi.fn(async () => {}) })),
+    markNotificationDone: vi.fn(async () => ({ undo: vi.fn(async () => {}) })),
     markSeen: vi.fn(async () => {}),
     ...overrides,
   };

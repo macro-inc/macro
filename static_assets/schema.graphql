@@ -439,6 +439,13 @@ type CompleteMutationRoot {
 	"""
 	markNotificationInboxRowsDone(input: MarkNotificationInboxRowsDoneInput!): MarkNotificationInboxRowsDonePayload!
 	"""
+	Mark one notification of a row done for the authenticated user, with
+	the hidden notifications about the same message or comment. A row's last
+	shown notification completes the row, as marking the row done does.
+	Returns the row's group's place in the requested inbox.
+	"""
+	markNotificationInboxNotificationDone(input: MarkNotificationInboxNotificationDoneInput!): MarkNotificationInboxNotificationDonePayload!
+	"""
 	Reverse one mark-done for the authenticated user without overwriting
 	anything that happened since, and return the restored groups' places
 	in the requested inbox.
@@ -10764,6 +10771,38 @@ input MarkEmailThreadUnreadInput {
 	Email thread to mark unread; its inbox determines the UNREAD label.
 	"""
 	threadId: ID!
+}
+
+"""
+Input for marking one notification of a row done.
+"""
+input MarkNotificationInboxNotificationDoneInput {
+	"""
+	The row showing the notification.
+	"""
+	rowId: ID!
+	"""
+	The notification, as the row lists it.
+	"""
+	notificationId: ID!
+	"""
+	The inbox the row's group is placed in.
+	"""
+	scope: NotificationInboxScopeInput
+}
+
+"""
+The result of marking one notification of a row done.
+"""
+type MarkNotificationInboxNotificationDonePayload {
+	"""
+	The row's group's place in the requested inbox.
+	"""
+	patches: [NotificationInboxPatch!]!
+	"""
+	Opaque token that reverses exactly this operation.
+	"""
+	undoToken: String!
 }
 
 """

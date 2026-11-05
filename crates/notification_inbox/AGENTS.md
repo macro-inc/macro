@@ -12,7 +12,8 @@ or agent session). Built on the shared feed layer, `crates/attention_feed`.
 - `src/domain/rows.rs`: the row rules — every notification's home row,
   one message one row, one stack per top-level message and per entity's
   comments, noise hidden in its natural row.
-- `src/domain/service.rs`: page, recompute, done, seen and undo.
+- `src/domain/service.rs`: page, recompute, done (of rows or of one notification of a
+  stack), seen and undo.
 - `src/domain/policy.rs`: which groups the inbox lists.
 
 ## Scope

@@ -47,6 +47,15 @@ export type InboxFeedSource = {
    */
   markDone: (rows: readonly NotificationInboxRow[]) => Promise<InboxDoneResult>;
   /**
+   * Hide one notification of a stack now and complete it, with the hidden
+   * ones about the same message. Rejects, showing it again, when the done
+   * fails; resolves to the undo otherwise.
+   */
+  markNotificationDone: (
+    row: NotificationInboxRow,
+    notification: UnifiedNotification
+  ) => Promise<InboxDoneResult>;
+  /**
    * Read rows as seen now and mark them seen, hidden notifications included;
    * they read as unseen again when that fails.
    */

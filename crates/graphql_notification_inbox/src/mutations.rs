@@ -8,8 +8,8 @@ use graphql_soup::SoupEntityEdges;
 use crate::{
     context::{NotificationInboxGraphqlContext, to_graphql_error},
     inputs::{
-        MarkNotificationInboxRowsDoneInput, MarkNotificationInboxRowsSeenInput,
-        UndoNotificationInboxRowsDoneInput,
+        MarkNotificationInboxNotificationDoneInput, MarkNotificationInboxRowsDoneInput,
+        MarkNotificationInboxRowsSeenInput, UndoNotificationInboxRowsDoneInput,
     },
     objects::GraphqlNotificationInboxPatch,
 };
@@ -20,6 +20,15 @@ pub struct MarkNotificationInboxRowsDonePayload {
     /// The completed rows; remove them from every inbox. Rows that were
     /// already gone are included.
     row_ids: Vec<ID>,
+    /// Opaque token that reverses exactly this operation.
+    undo_token: String,
+}
+
+/// The result of marking one notification of a row done.
+#[derive(SimpleObject)]
+pub struct MarkNotificationInboxNotificationDonePayload<E: SoupEntityEdges> {
+    /// The row's group's place in the requested inbox.
+    patches: Vec<GraphqlNotificationInboxPatch<E>>,
     /// Opaque token that reverses exactly this operation.
     undo_token: String,
 }
@@ -70,6 +79,35 @@ impl<E: SoupEntityEdges> NotificationInboxMutationRoot<E> {
             .map_err(to_graphql_error)?;
         Ok(MarkNotificationInboxRowsDonePayload {
             row_ids: outcome.rows.iter().map(|row| ID(row.id())).collect(),
+            undo_token: outcome.receipt.encode(),
+        })
+    }
+
+    /// Mark one notification of a row done for the authenticated user, with
+    /// the hidden notifications about the same message or comment. A row's last
+    /// shown notification completes the row, as marking the row done does.
+    /// Returns the row's group's place in the requested inbox.
+    async fn mark_notification_inbox_notification_done(
+        &self,
+        ctx: &Context<'_>,
+        input: MarkNotificationInboxNotificationDoneInput,
+    ) -> async_graphql::Result<MarkNotificationInboxNotificationDonePayload<E>> {
+        let user = require_authenticated_user(ctx)?;
+        let context = ctx.data::<NotificationInboxGraphqlContext>()?;
+        let scope = input.scope.clone().unwrap_or_default().into_scope();
+        let (row, notification) = input.into_target()?;
+        let viewer = context.viewer(user).await?;
+        let outcome = context
+            .service
+            .mark_notification_done(viewer, scope, row, notification)
+            .await
+            .map_err(to_graphql_error)?;
+        Ok(MarkNotificationInboxNotificationDonePayload {
+            patches: outcome
+                .changes
+                .into_iter()
+                .map(GraphqlNotificationInboxPatch::from)
+                .collect(),
             undo_token: outcome.receipt.encode(),
         })
     }
