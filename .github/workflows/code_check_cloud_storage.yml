@@ -170,7 +170,8 @@ jobs:
         # Writes for the check/test jobs:
         #   rust_packages — all | none | space-separated packages (changed + reverse deps);
         #                   clippy lints these
-        #   test_packages — the same forms, changed + direct dependents; the test job runs these
+        #   test_packages — the same forms, changed + direct dependents + crates whose own
+        #                   dependencies changed; the test job runs these
         #   skip_tests    — true keeps clippy on rust_packages while the live-Postgres
         #                   test job stays skipped (`.sqlx`-only or clippy.toml-only diffs)
         #
