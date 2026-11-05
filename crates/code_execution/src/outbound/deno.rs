@@ -117,12 +117,17 @@ impl DenoRunner {
         tokio::fs::write(root.join("timers.mjs"), TIMERS)
             .await
             .map_err(internal)?;
-        tokio::fs::write(
-            root.join("imports.json"),
-            r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","handlebars":"./handlebars.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","node:worker_threads":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","worker_threads":"./timers.mjs"}}"#,
-        )
-        .await
-        .map_err(internal)?;
+        tokio::fs::create_dir(root.join("lexical"))
+            .await
+            .map_err(internal)?;
+        for module in code_mode_assets::LEXICAL_MODULES {
+            tokio::fs::write(root.join(module.path), module.source)
+                .await
+                .map_err(internal)?;
+        }
+        tokio::fs::write(root.join("imports.json"), import_map())
+            .await
+            .map_err(internal)?;
         let mut destinations = std::collections::BTreeSet::new();
         for base in job.environment.hosts.values() {
             let url = url::Url::parse(base).map_err(internal)?;
@@ -218,6 +223,33 @@ impl CodeRunner for DenoRunner {
 async fn reap(child: &mut Child) {
     let _ = child.start_kill();
     let _ = child.wait().await;
+}
+
+/// Every bare specifier a program or `sdk.mjs` may import. Timer and worker
+/// modules point at the bootstrap's ban; Lexical specifiers at their one copy.
+fn import_map() -> String {
+    let mut imports = serde_json::Map::new();
+    for (specifier, path) in [
+        ("@macro-inc/sdk", "./sdk.mjs"),
+        ("handlebars", "./handlebars.mjs"),
+        ("node:timers", "./timers.mjs"),
+        ("node:timers/promises", "./timers.mjs"),
+        ("node:worker_threads", "./timers.mjs"),
+        ("timers", "./timers.mjs"),
+        ("timers/promises", "./timers.mjs"),
+        ("worker_threads", "./timers.mjs"),
+    ] {
+        imports.insert(specifier.to_owned(), Value::String(path.to_owned()));
+    }
+    for module in code_mode_assets::LEXICAL_MODULES {
+        if let Some(specifier) = module.specifier {
+            imports.insert(
+                specifier.to_owned(),
+                Value::String(format!("./{}", module.path)),
+            );
+        }
+    }
+    serde_json::json!({ "imports": imports }).to_string()
 }
 
 fn internal(_error: impl std::fmt::Display) -> ExecutionFailure {
