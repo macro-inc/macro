@@ -22,8 +22,8 @@ use uuid::Uuid;
 pub enum UpsertScheduledError {
     #[error("{0}")]
     Email(#[from] EmailErr),
-    /// A scheduled draft sends without anyone seeing it, so a program is
-    /// refused here as it is on an immediate send.
+    /// A scheduled draft sends without anyone seeing it, so a program must
+    /// quote the user's approval here.
     #[error("{0}")]
     Program(#[from] SendMessageError),
 }
@@ -66,6 +66,11 @@ pub struct UpsertScheduledRequest {
     pub send_time: DateTime<Utc>,
     /// Per-message signature override; absent uses the inbox's send defaults.
     pub include_signature: Option<bool>,
+    /// The user's own reply approving this send, quoted verbatim. Required
+    /// from an agent's program, which is refused without it; ignored for a
+    /// person in the app, whose Send Later is their confirmation.
+    #[serde(default)]
+    pub user_confirmation: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize, ToSchema)]
@@ -104,6 +109,7 @@ pub async fn handler(
     refuse_program_send(
         authorization.authorization.user.agent_id.is_some(),
         &headers,
+        request.user_confirmation.as_deref(),
     )?;
     ctx.email_service
         .service()

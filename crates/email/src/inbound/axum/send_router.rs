@@ -36,17 +36,21 @@ where
 #[cfg(test)]
 mod test;
 
-/// Why an agent's program may not send through this route: a person has to
-/// see an email before it leaves, as with the `SendEmail` tool.
-pub const PROGRAM_SEND_REFUSAL: &str = "An agent's program cannot send email directly: the user must see it first. In an agent session, present it with execution.reviews.create({kind: 'email', ...}) and return the review's reference. In a channel or document thread, write the email out, ask whether to send it, and only after the user replies approving it call macro.email.sendConfirmed with their reply quoted in userConfirmation.";
+/// Why an agent's program may not send this way: a person has to see an
+/// email before it leaves, as with the `SendEmail` tool.
+pub const PROGRAM_SEND_REFUSAL: &str = "An agent's program cannot send email without the user seeing it first. In an agent session, present it with execution.reviews.create({kind: 'email', ...}) and return the review's reference. In a channel or document thread, write the email out, ask whether to send it, and only after the user replies approving it call macro.email.sendConfirmed (or EmailMessage.forwardConfirmed, EmailDraft.send, EmailDraft.schedule) with their reply quoted in userConfirmation.";
 
-/// Refuse a send from an agent's program (see [`is_agent_run`]); a person in
-/// the app sends from the composer, which is their confirmation.
+/// Refuse a send from an agent's program (see [`is_agent_run`]) that does
+/// not quote the user's approval. A person in the app sends from the
+/// composer, which is their confirmation; a route that takes no
+/// `confirmation` refuses every program.
 pub fn refuse_program_send(
     agent_attributed: bool,
     headers: &HeaderMap,
+    confirmation: Option<&str>,
 ) -> Result<(), SendMessageError> {
-    if is_agent_run(agent_attributed, headers) {
+    let confirmed = confirmation.is_some_and(|quote| !quote.trim().is_empty());
+    if is_agent_run(agent_attributed, headers) && !confirmed {
         return Err(SendMessageError::ConfirmationRequired);
     }
     Ok(())
@@ -141,6 +145,7 @@ pub async fn send_message_handler<T: EmailService, Auth: MacroAuthorizationServi
     refuse_program_send(
         authorization.authorization.user.agent_id.is_some(),
         &headers,
+        None,
     )?;
     let mut input = body.into_domain();
     // Attribute the send to the authenticated caller, who is not necessarily
