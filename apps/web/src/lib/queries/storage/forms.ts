@@ -296,25 +296,22 @@ export function useResponseSummaryQuery(
   return useQuery(() => responseSummaryQueryOptions(formId(), enabled()));
 }
 
-function tallyQueryOptions(id: string | undefined, enabled: boolean) {
+function tallyQueryOptions(id: string | undefined) {
   return queryOptions({
     queryKey: formsKeys.tally(id ?? '').queryKey,
     queryFn: () =>
       throwOnErr(async () =>
         storageServiceClient.forms.getTally({ id: id ?? '' })
       ),
-    enabled: !!id && enabled,
+    enabled: !!id,
     // Poll cards and respondents do not join the editor presence roster.
     refetchInterval: RESPONDENT_REFRESH_INTERVAL,
     retry: false,
   });
 }
 
-export function useTallyQuery(
-  formId: Accessor<string | undefined>,
-  enabled: Accessor<boolean>
-) {
-  return useQuery(() => tallyQueryOptions(formId(), enabled()));
+export function useTallyQuery(formId: Accessor<string | undefined>) {
+  return useQuery(() => tallyQueryOptions(formId()));
 }
 
 function formSharePermissionsQueryOptions(

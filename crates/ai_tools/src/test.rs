@@ -155,6 +155,22 @@ fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
 }
 
 #[test]
+fn code_mode_runs_confirmed_actions_through_the_sdk_instead_of_the_tools() {
+    let tools = tools_for_agent_code_mode();
+    let prompt = tools.prompt.to_string();
+    for name in ["SendConfirmedEmail", "CreateConfirmedCalendarEvent"] {
+        assert!(!tools.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+        assert!(!prompt.contains(name), "{name}");
+    }
+    assert!(prompt.contains("macro.email.sendConfirmed"));
+    assert!(prompt.contains("macro.calendar.createConfirmed"));
+}
+
+#[test]
 fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
     let tools = tools_for_agent_code_mode();
     let prompt = tools.prompt.to_string();
@@ -682,16 +698,22 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     let direct = tools_for_agent_code_mode();
     let sdk = code_mode_tools();
     assert!(direct.toolset.tools.len() < standard.toolset.tools.len());
-    for name in ["ReadContent", "EditDocument"] {
+    // macro.search, macro.workspace and macro.chats replace the search tools.
+    for name in [
+        "ReadContent",
+        "EditDocument",
+        "NameSearch",
+        "ListEntities",
+        "ContentSearch",
+        "DiscoverConnectors",
+        "ConnectMcpServer",
+    ] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
         assert!(!direct.toolset.tools.contains_key(name), "{name}");
         assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
     }
     for name in [
-        "NameSearch",
-        "ListEntities",
-        "ContentSearch",
         "CreateDocument",
         "ListSkills",
         "SearchSkills",
@@ -707,7 +729,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "Subagent",
         "SearchTools",
         "LoadTools",
-        "DiscoverConnectors",
         "BashCodeExecution",
         "TextEditorCodeExecution",
     ] {
@@ -736,9 +757,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     );
     let deferred = DeferredToolSet::new(direct.toolset.clone(), direct.deferred.clone());
     let eager = deferred.request_schemas().unwrap();
-    for name in ["ListEntities", "NameSearch", "ContentSearch"] {
-        assert!(eager.iter().any(|schema| schema.name == name), "{name}");
-    }
     for name in ["SendEmail", "CreateCalendarEvent"] {
         assert!(standard.toolset.tools.contains_key(name));
         assert!(sdk.tools.contains_key(name));

@@ -2,7 +2,7 @@ use std::{collections::HashMap, time::Duration};
 
 use crate::{
     Result, UnauthedClient,
-    error::{FusionAuthClientError, GenericErrorResponse},
+    error::{FusionAuthClientError, GenericErrorResponse, GrantBlockReason},
 };
 use base64::{
     Engine,
@@ -103,16 +103,25 @@ async fn refresh_google_token_at(
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unable to read error response".to_string());
+
+            // If the user revoked Macro's access to their account, we get an invalid_grant error here
+            if error_text.contains("invalid_grant") {
+                tracing::warn!(status=?status, error=?error_text, "Google rejected the refresh token");
+                return Err(FusionAuthClientError::InvalidGrant);
+            }
+
+            if let Some(reason) =
+                grant_block_reason(&error_text).filter(|_| status.is_client_error())
+            {
+                tracing::warn!(status=?status, error=?error_text, "Google blocked the grant by policy");
+                return Err(FusionAuthClientError::GrantBlocked { reason });
+            }
+
             tracing::error!(
                 status=?status,
                 error=?error_text,
                 "failed to refresh Google access token"
             );
-
-            // If the user revoked Macro's access to their account, we get an invalid_grant error here
-            if error_text.contains("invalid_grant") {
-                return Err(FusionAuthClientError::InvalidGrant);
-            }
 
             if let Some(failure) = UpstreamFailure::from_status(status, &headers) {
                 return Err(FusionAuthClientError::Upstream {
@@ -129,6 +138,17 @@ async fn refresh_google_token_at(
             }))
         }
     }
+}
+
+/// The reason in a Google OAuth error body, when it is a policy block.
+fn grant_block_reason(body: &str) -> Option<GrantBlockReason> {
+    #[derive(serde::Deserialize)]
+    struct OAuthError {
+        error: String,
+    }
+
+    let OAuthError { error } = serde_json::from_str(body).ok()?;
+    error.parse().ok()
 }
 
 #[derive(Debug, serde::Deserialize)]

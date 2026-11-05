@@ -16,3 +16,5 @@ mod activity;
 
 mod user;
 pub use user::*;
+
+pub mod connected_apps;

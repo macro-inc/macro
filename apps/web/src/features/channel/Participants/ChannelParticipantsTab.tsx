@@ -1,12 +1,12 @@
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useChannel, useChannelType } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, idToEmail, tryMacroId } from '@core/user';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { useOpenDirectMessage } from '@core/util/open-direct-message';
 
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { usePatchChannelMutation } from '@queries/channel/channels';
-import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import {
   useAddParticipantsMutation,
   useRemoveParticipantsMutation,
@@ -31,7 +31,6 @@ export function ChannelParticipantsTab(props: {
   onCreateBot: () => void;
   onOpenBot: (botId: string) => void;
 }) {
-  const { openWithSplit } = useSplitLayout();
   const userId = useUserId();
   const channel = useChannel(props.channelId);
   const channelType = useChannelType(props.channelId);
@@ -40,7 +39,7 @@ export function ChannelParticipantsTab(props: {
   const patchChannelMutation = usePatchChannelMutation();
   const addParticipantsMutation = useAddParticipantsMutation();
   const removeParticipantsMutation = useRemoveParticipantsMutation();
-  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
+  const openDm = useOpenDirectMessage();
   const [searchQuery, setSearchQuery] = createSignal('');
 
   const participants = () => participantsQuery.data ?? [];
@@ -136,16 +135,9 @@ export function ChannelParticipantsTab(props: {
   };
 
   const openDirectMessage = (participantId: string, event: MouseEvent) => {
-    getOrCreateDmMutation.mutate(
-      { recipient_id: participantId },
-      {
-        onSuccess: ({ channel_id }) => {
-          openWithSplit(
-            { type: 'channel', id: channel_id },
-            { activate: true, preferNewSplit: event.shiftKey }
-          );
-        },
-      }
+    fireAndForget(
+      openDm(participantId, { activate: true, preferNewSplit: event.shiftKey }),
+      'channel-participants'
     );
   };
 

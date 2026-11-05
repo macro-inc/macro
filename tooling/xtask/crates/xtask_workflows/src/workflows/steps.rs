@@ -192,6 +192,13 @@ pub fn setup_nix_with_cache() -> Step<Use> {
         .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
 }
 
+/// [`setup_nix`] restoring `/nix` from Namespace's HTTP cache when the volume is
+/// empty. PR jobs write that copy, so this is only for PR check jobs: never a job
+/// that deploys or holds deploy secrets.
+pub fn setup_nix_with_seed() -> Step<Use> {
+    setup_nix().add_with(("seed-cache", vars::CI_SCCACHE_NAME))
+}
+
 /// Push built store paths to the private S3 binary cache, signing on upload —
 /// the `cachix watch-store` role. `targets` lands in the step's `TARGETS` env
 /// (space-separated flake refs or store paths; GH expressions fine) and is
@@ -246,15 +253,18 @@ pub fn setup_dev_shell_named(name: &str) -> Step<Use> {
     setup_dev_shell().add_with(("shell", name))
 }
 
-/// Mount the Namespace profile's persisted cache volume: `cache: rust` persists
-/// the cargo registry/git, and `path:` persists the Nix store. Compiled objects
-/// deliberately use Namespace's official remote sccache instead of this volume.
+/// Mount the Namespace profile's persisted cache volume: cargo's registry, git
+/// checkouts and `target/`, and the Nix store. Listing the paths mounts in under a
+/// second, where the action's `cache: rust` mode took about 12 s to find the same
+/// ones. Compiled objects deliberately use Namespace's official remote sccache
+/// instead of this volume.
 /// `continue-on-error` because the volume is a pure optimization — a failure
 /// just means cold Cargo/Nix state, never a wrong build.
 pub fn mount_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume")
-        .add_with(("cache", "rust"))
-        .add_with(("path", xtask_paths::runtime_path!("/nix").as_str()))
+    nscloud_cache_action("Mount Namespace cache volume").add_with((
+        "path",
+        "/nix\n./target\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n/home/runner/.cargo/.global-cache",
+    ))
 }
 
 /// Mount a scratch directory for building the nextest filter, plus cargo's registry
@@ -379,9 +389,11 @@ pub fn mount_web_test_cache_volume() -> Step<Use> {
         .add_with((
             "path",
             format!(
-                "{}\n{}",
+                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}\n{}",
                 vars::BUN_CACHE_VOLUME_DIR,
+                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
                 vars::VITEST_MODULE_CACHE_VOLUME_DIR,
+                vars::WASM_PKG_CACHE_DIR,
             ),
         ))
 }

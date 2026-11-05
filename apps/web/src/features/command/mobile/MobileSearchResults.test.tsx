@@ -14,6 +14,7 @@ import {
   within,
 } from '@solidjs/testing-library';
 import { CombinedError } from '@urql/core';
+import { okAsync } from 'neverthrow';
 import { type Accessor, createSignal, onMount, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { mergeCommandPeople } from '../contact-items';
@@ -107,9 +108,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
 }));
 vi.mock('@queries/channel/get-or-create-dm', () => ({
-  useGetOrCreateDirectMessageMutation: () => ({
-    mutateAsync: mocks.directMessage,
-  }),
+  existingDirectMessage: mocks.directMessage,
 }));
 vi.mock('@queries/storage/databases', () => ({
   useDatabaseDiscoverySync: vi.fn(),
@@ -329,8 +328,10 @@ it('preserves the search after a failed person lookup and on return from a succe
       },
     },
   ];
-  mocks.directMessage.mockRejectedValueOnce(new Error('Unavailable'));
-  mocks.directMessage.mockResolvedValueOnce({ channel_id: 'direct-message' });
+  mocks.directMessage.mockReturnValue(okAsync('direct-message'));
+  mocks.open.mockImplementationOnce(() => {
+    throw new Error('Unavailable');
+  });
   SearchState.setQuery('teo');
   SearchState.setCategory('people');
   render(() => <MobileSearchResults />);
@@ -340,7 +341,6 @@ it('preserves the search after a failed person lookup and on return from a succe
       'Unable to open result. Please try again.'
     )
   );
-  expect(mocks.open).not.toHaveBeenCalled();
   expect(SearchState.isOpen()).toBe(true);
   expect(SearchState.query()).toBe('teo');
   expect(SearchState.category()).toBe('people');
@@ -348,7 +348,8 @@ it('preserves the search after a failed person lookup and on return from a succe
   fireEvent.click(screen.getByRole('button', { name: 'Teo' }));
   expect(SearchState.isOpen()).toBe(true);
   await waitFor(() =>
-    expect(mocks.open).toHaveBeenCalledWith(
+    expect(mocks.open).toHaveBeenNthCalledWith(
+      2,
       { type: 'channel', id: 'direct-message' },
       { reopen: 'latest' }
     )
@@ -649,9 +650,9 @@ it.each(['before navigation', 'while away'])(
         },
       ]);
     };
-    mocks.directMessage.mockImplementation(async () => {
+    mocks.directMessage.mockImplementation(() => {
       if (arrival === 'before navigation') publishConversation();
-      return { channel_id: 'new-dm' };
+      return okAsync('new-dm');
     });
     SearchState.setQuery('Person');
     const view = render(() => <MobileSearchResults />);

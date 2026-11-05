@@ -60,6 +60,7 @@ const FILTER_CACHE_DIR: RuntimePath<'static> =
 /// it here.
 fn path_check() -> Job {
     Job::default()
+        .timeout_minutes(15u32)
         .runs_on(runners::Runner::Small.with_cache_tag(vars::CI_CACHE_TAG))
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
@@ -99,12 +100,13 @@ fn path_check() -> Job {
 /// fmt + clippy.
 fn check() -> Job {
     steps::gated_job()
+        .timeout_minutes(45u32)
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
-        .add_step(steps::setup_nix())
-        .add_step(steps::setup_dev_shell())
+        .add_step(steps::setup_nix_with_seed())
+        .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(steps::code_mode_assets())
         .add_step(cargo_fmt())
@@ -129,6 +131,7 @@ fn with_check_env(job: Job) -> Job {
 /// path filter gates it; the xtask then picks the exact binaries.
 fn doppler_config() -> Job {
     steps::gated_job()
+        .timeout_minutes(45u32)
         .cond(Expression::new(
             "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.doppler_candidates == 'true'",
         ))
@@ -139,8 +142,8 @@ fn doppler_config() -> Job {
         // git-remote-https at Nix's glibc, which aborts `git fetch`.
         .add_step(compute_changed_files())
         .add_step(steps::mount_cache_volume())
-        .add_step(steps::setup_nix())
-        .add_step(steps::setup_dev_shell())
+        .add_step(steps::setup_nix_with_seed())
+        .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(steps::code_mode_assets())
         .add_step(compute_doppler_bins())
@@ -154,6 +157,7 @@ fn doppler_config() -> Job {
 /// merge commit, so its first parent is the base branch tip.
 fn graphql_schema_compat() -> Job {
     steps::gated_job()
+        .timeout_minutes(15u32)
         .cond(Expression::new(
             "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.graphql_schema == 'true'",
         ))
@@ -172,6 +176,7 @@ fn graphql_schema_compat() -> Job {
 /// when `skip_tests` is set (`.sqlx`-only diffs still clippy the snapshot).
 fn test() -> Job {
     steps::gated_job()
+        .timeout_minutes(90u32)
         .cond(Expression::new(
             "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
         ))
@@ -181,6 +186,10 @@ fn test() -> Job {
             "${{ needs.path-check.outputs.rust_packages }}",
         ))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
+        // Debug info is most of what test builds write and link. Panic locations
+        // don't depend on it; only backtrace frames lose their file and line.
+        .add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
+        .add_env(("CARGO_PROFILE_TEST_DEBUG", "0"))
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
         // The default 10-minute idle timeout can stop the server during long
         // link or test phases, which resets the stats reported at the end.
@@ -189,8 +198,8 @@ fn test() -> Job {
         .add_service("redis", redis_service())
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
-        .add_step(steps::setup_nix())
-        .add_step(steps::setup_dev_shell())
+        .add_step(steps::setup_nix_with_seed())
+        .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
         .add_step(steps::code_mode_assets())
@@ -220,7 +229,8 @@ fn setup_execution_runtime() -> Step<gh_workflow::Use> {
 /// Exercise the real permission boundary and authenticated SDK execution in CI.
 fn test_execution_runtime() -> Step<Run> {
     Step::new("Test Deno sandbox and authenticated SDK execution")
-        .run("cargo test --locked -p code_execution -- --ignored --test-threads=2\ncargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored")
+        .run(include_str!("scripts/run_tests.sh"))
+        .add_env(("NEXTEST_RUN_DENO_TESTS", "true"))
         .if_condition(Expression::new(
             "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')",
         ))
@@ -230,6 +240,7 @@ fn test_execution_runtime() -> Step<Run> {
 /// stable — branch protection references it.
 fn status_check() -> Job {
     Job::default()
+        .timeout_minutes(5u32)
         .name("Cloud Storage Status Check")
         .runs_on(runners::Runner::Small.to_string())
         .cond(Expression::new("always()"))
@@ -384,8 +395,8 @@ fn postgres_service() -> Container {
         )
         .ports(vec![Port::Name("5432:5432".to_string())])
         .options(
-            "--health-cmd pg_isready --health-interval 10s --health-timeout 5s \
-             --health-retries 5 --shm-size 1g \
+            "--health-cmd pg_isready --health-interval 1s --health-start-period 30s \
+             --health-timeout 5s --health-retries 5 --shm-size 1g \
              -v /dev/shm/pgdata:/var/lib/postgresql/data",
         )
 }
@@ -396,7 +407,7 @@ fn redis_service() -> Container {
         .image("redis:7")
         .ports(vec![Port::Name("6379:6379".to_string())])
         .options(
-            "--health-cmd \"redis-cli ping\" --health-interval 10s \
+            "--health-cmd \"redis-cli ping\" --health-interval 1s --health-start-period 30s \
              --health-timeout 5s --health-retries 5",
         )
 }
@@ -428,15 +439,19 @@ fn check_job_results() -> Step<Run> {
         echo "test: ${{ needs.test.result }}"
         echo "graphql-schema-compat: ${{ needs.graphql-schema-compat.result }}"
 
-        # Fail if any job failed (skipped and success are both OK)
-        if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.check.result }}" == "failure" ]] || \
-           [[ "${{ needs.doppler-config.result }}" == "failure" ]] || \
-           [[ "${{ needs.test.result }}" == "failure" ]] || \
-           [[ "${{ needs.graphql-schema-compat.result }}" == "failure" ]]; then
-          echo "❌ One or more jobs failed"
-          exit 1
-        fi
+        # Only success and skipped are OK. A job that hits its timeout reports
+        # cancelled, and passing on that would merge code whose tests never ran.
+        for result in \
+          "${{ needs.path-check.result }}" \
+          "${{ needs.check.result }}" \
+          "${{ needs.doppler-config.result }}" \
+          "${{ needs.test.result }}" \
+          "${{ needs.graphql-schema-compat.result }}"; do
+          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+            echo "❌ One or more jobs failed or were cancelled"
+            exit 1
+          fi
+        done
 
         echo "✅ All jobs passed or were skipped"
     "#})

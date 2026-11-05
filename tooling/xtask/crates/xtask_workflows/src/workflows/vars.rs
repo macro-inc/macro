@@ -47,14 +47,18 @@ pub const NIX_CACHE_URL: &str = "${{ vars.NIX_CACHE_URL }}";
 /// paths verify.
 pub const NIX_CACHE_PUBLIC_KEY: &str = "${{ vars.NIX_CACHE_PUBLIC_KEY }}";
 
+/// Limit on entering the Nix dev shell. Healthy runs take under 9 minutes even
+/// from an empty cache volume, while a stalled store download has run for over
+/// an hour with no other limit to stop it.
+pub const DEV_SHELL_TIMEOUT_MINUTES: u32 = 15;
+
 /// Nextest thread count for the test job, one per vCPU of [`Runner::Large`].
 ///
 /// [`Runner::Large`]: crate::workflows::runners::Runner::Large
 pub const NEXTEST_TEST_THREADS: u32 = 32;
 
 /// Explicit Namespace cache-volume tag for the heavy compile jobs (check +
-/// test). A fixed tag (instead of the default per-branch scoping) makes the
-/// Cargo/Nix volume global across all branches — see
+/// test), apart from the profile's default volume — see
 /// [`crate::workflows::runners::Runner::with_cache_tag`]. The legacy tag name is
 /// retained so the existing warm volume is not invalidated.
 pub const CI_CACHE_TAG: &str = "sccache-ci";

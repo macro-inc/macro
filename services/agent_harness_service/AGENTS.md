@@ -30,6 +30,8 @@ Pulumi stacks; they do not host extra agent processes.
   `ai-code-mode` get only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on
   `tools/list` (`tool_service.rs`); hidden native tools stay callable. The flag
   is cached per user (`tool_mode_cache.rs`).
+  `src/code_mode/connected_apps.rs` serves a running execution's
+  `macro.connectedApps` through the in-process egress service.
   Code execution's destination list in `src/code_mode.rs` also includes the
   configured editing worker, whose comment-mark endpoint requires a scoped
   document token; this does not grant permission to edit document content.
@@ -42,6 +44,12 @@ Pulumi stacks; they do not host extra agent processes.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.
+  `src/cognition/api/confirmed_actions.rs` runs a confirmed tool as the
+  caller: `POST /cognition/email/send-confirmed` (`SendConfirmedEmail`, the
+  SDK's `email.sendConfirmed` and `EmailMessage.forwardConfirmed`) and
+  `POST /cognition/calendar/events/create-confirmed`
+  (`CreateConfirmedCalendarEvent`, `calendar.createConfirmed`): the only
+  immediate send or create open to an agent's program besides a review.
 - `crates/web_search` owns `POST /web/search` and `/web/fetch` (mounted in
   `src/cognition/api.rs`, rate limited per user through cognition's Redis) and the
   `WebSearch`/`WebFetch` tools; `TAVILY_API_KEY` comes from Doppler `shared_ai`.

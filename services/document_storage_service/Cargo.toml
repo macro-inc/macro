@@ -5,17 +5,25 @@ name = "document_storage_service"
 publish = false
 version = "0.1.0"
 
+# The bins hold no tests and the library no doctests. Neither target builds under
+# `cargo test`, so the test job compiles the library once, as its test binary.
+[lib]
+doctest = false
+
 [[bin]]
 name = "document_storage_service"
 path = "src/main.rs"
+test = false
 
 [[bin]]
 name = "document_storage_service_openapi"
 path = "src/openapi.rs"
+test = false
 
 [[bin]]
 name = "document_storage_service_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
 
 [features]
@@ -123,7 +131,7 @@ document_sub_type = { path = "../../crates/document_sub_type" }
 documents_hex = { path = "../../crates/documents", package = "documents", features = ["purge"] }
 doppler-config = { workspace = true }
 dynamodb_client = { path = "../../crates/dynamodb_client" }
-email = { path = "../../crates/email", features = ["outbound", "ports", "gmail_senders"] }
+email = { path = "../../crates/email", features = ["outbound", "ports", "gmail_senders", "sqs"] }
 gmail_client = { path = "../../crates/gmail_client" }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
 embedding = { path = "../../crates/embedding" }

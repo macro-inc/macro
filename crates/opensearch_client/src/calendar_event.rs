@@ -1,5 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
+    retry::resend_on_lost_connection,
     upsert::{self, calendar_event::UpsertCalendarEventArgs, properties::IndexedProperty},
 };
 
@@ -12,7 +13,10 @@ impl OpensearchClient {
         args: &UpsertCalendarEventArgs,
         index_override: Option<&str>,
     ) -> Result<()> {
-        upsert::calendar_event::upsert_calendar_event(&self.inner, args, index_override).await
+        resend_on_lost_connection(|| {
+            upsert::calendar_event::upsert_calendar_event(&self.inner, args, index_override)
+        })
+        .await
     }
 
     /// Deletes a calendar event from the opensearch calendar_events index
@@ -22,8 +26,14 @@ impl OpensearchClient {
         event_id: &str,
         index_override: Option<&str>,
     ) -> Result<()> {
-        delete::calendar_event::delete_calendar_event_by_id(&self.inner, event_id, index_override)
-            .await
+        resend_on_lost_connection(|| {
+            delete::calendar_event::delete_calendar_event_by_id(
+                &self.inner,
+                event_id,
+                index_override,
+            )
+        })
+        .await
     }
 
     /// Updates only the denormalized `properties` on an indexed calendar event
@@ -33,12 +43,14 @@ impl OpensearchClient {
         event_id: &str,
         properties: &[IndexedProperty],
     ) -> Result<()> {
-        upsert::calendar_event::update_calendar_event_properties(
-            &self.inner,
-            event_id,
-            properties,
-            None,
-        )
+        resend_on_lost_connection(|| {
+            upsert::calendar_event::update_calendar_event_properties(
+                &self.inner,
+                event_id,
+                properties,
+                None,
+            )
+        })
         .await
     }
 }

@@ -15,7 +15,8 @@ tools — hexagonal, heavily feature-gated.
 - `src/outbound/email_pg_repo.rs`, `src/outbound/invitation_pg.rs`: Postgres
   adapters (feature `outbound`); `src/outbound/email_service_http.rs`: calls
   into `email_service`; `src/outbound/s3_draft_attachment_storage.rs`: staged
-  draft attachments (feature `s3`).
+  draft attachments (feature `s3`); `src/outbound/sqs_enqueuer.rs`: the
+  `EmailMessageEnqueuer` adapter for `sqs_client::SQS` (feature `sqs`).
 
 ## Scope
 
@@ -34,7 +35,8 @@ tools — hexagonal, heavily feature-gated.
 
 - Depends on: `entity_access`, `entity_access_management`, `email_utils`,
   `crm`, `frecency`, `item_filters`, `lexical_client`, `macro_event_broker`,
-  `calendar_events` (optional, feature `calendar_invitations`).
+  `calendar_events` (optional, feature `calendar_invitations`), `sqs_client`
+  (optional, feature `sqs`; it must not depend back on this crate).
 - Used by: many crates and services, including `ai_tools`, `graphql_email`,
   `teams`, `databases_sql`, `attention_feed`, `calendar_service`, `email_service`,
   `email_scheduled_handler`, `search_processing_service`.
@@ -53,6 +55,12 @@ tools — hexagonal, heavily feature-gated.
   feature's tests need a local MacroDB — `just setup_macrodb`).
 
 ## Gotchas
+
+- The send route refuses an agent's program (`refuse_program_send`, 403), and
+  the schedule route admits one only with a quoted `user_confirmation`: a
+  program sends through a session review, the harness's confirmed send
+  (`SendEmail`/`SendConfirmedEmail`), or a confirmed draft schedule. Keep any
+  new route that sends or schedules mail behind the same check.
 
 - Focus's `decide` and `signals` are versioned: bump `FOCUS_RULE_VERSION` in
   `domain/focus/rule.rs` when either changes, or stored rows keep the old verdict
