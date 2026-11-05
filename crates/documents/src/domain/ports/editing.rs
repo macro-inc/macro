@@ -75,12 +75,14 @@ pub enum CommentMarkPlacement {
 #[cfg_attr(test, mockall::automock)]
 pub trait EditingWorkerService: Send + Sync + 'static {
     /// Inspect or edit the live Canvas CRDT using a scoped permission token.
+    /// `artifacts` says whether the requesting user has the artifacts rollout.
     #[cfg(feature = "ai_tools")]
     fn canvas(
         &self,
         document_id: &str,
         document_token: &DocumentPermissionToken,
         request: &crate::domain::canvas::CanvasRequest,
+        artifacts: bool,
     ) -> impl Future<Output = anyhow::Result<crate::domain::canvas::CanvasResult>> + Send;
 
     /// Run a deterministic spreadsheet operation with a scoped document token.

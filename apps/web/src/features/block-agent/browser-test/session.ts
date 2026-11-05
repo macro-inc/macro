@@ -17,6 +17,7 @@ const [metadata, setMetadata] = createSignal<SessionMetadata>({
   pendingInteractions: [],
   turn: 'idle',
   notifications: [],
+  reviewRevisions: [],
   noopTurn: null,
 });
 export const session = {

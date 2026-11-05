@@ -2816,6 +2816,12 @@ async fn test_import_email_attachment_same_attachment_id_reuses_document(pool: P
 
     assert!(matches!(first, EmailImportRepoOutcome::Created(_)));
     assert!(matches!(second, EmailImportRepoOutcome::Reused(_)));
+    // A pending document's upload is signed again from this checksum and version.
+    assert_eq!(second.metadata().sha.as_deref(), Some(sha));
+    assert_eq!(
+        second.metadata().document_version_id,
+        first.metadata().document_version_id
+    );
     assert_eq!(first.metadata().document_id, second.metadata().document_id);
     assert_eq!(
         document_email_rows(&pool, &first.metadata().document_id).await,

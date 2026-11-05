@@ -74,13 +74,23 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
         document_id: &str,
         document_token: &DocumentPermissionToken,
         request: &crate::domain::canvas::CanvasRequest,
+        artifacts: bool,
     ) -> anyhow::Result<crate::domain::canvas::CanvasResult> {
+        // Sent only when on: a worker that predates the field rejects unknown keys.
+        let mut body = serde_json::json!({ "documentId": document_id, "documentToken": document_token.as_str(), "request": request });
+        if artifacts {
+            body["artifacts"] = serde_json::Value::Bool(true);
+        }
         let mut headers = reqwest::header::HeaderMap::new();
         macro_tower_layers::inject_trace_headers(&mut headers);
-        let response = self.client.post(format!("{}/canvas", self.worker_url))
-            .headers(headers).timeout(std::time::Duration::from_secs(130))
-            .json(&serde_json::json!({ "documentId": document_id, "documentToken": document_token.as_str(), "request": request }))
-            .send().await?;
+        let response = self
+            .client
+            .post(format!("{}/canvas", self.worker_url))
+            .headers(headers)
+            .timeout(std::time::Duration::from_secs(130))
+            .json(&body)
+            .send()
+            .await?;
         let status = response.status();
         let body: serde_json::Value = response.json().await?;
         anyhow::ensure!(

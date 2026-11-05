@@ -578,6 +578,7 @@ impl EditingWorkerService for FakeEditingWorker {
         _: &str,
         _: &DocumentPermissionToken,
         _: &crate::domain::canvas::CanvasRequest,
+        _: bool,
     ) -> anyhow::Result<crate::domain::canvas::CanvasResult> {
         panic!("unexpected canvas call")
     }
