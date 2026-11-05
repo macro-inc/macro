@@ -30,7 +30,13 @@ test('a tool group opens under the pointer while the reply streams below it', as
 
   await expect(group).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByRole('region', { name: 'Tool calls' })).toBeVisible();
-  await page.waitForTimeout(1000);
+  // Keep streaming well past the press before checking the group stayed put.
+  const sentences = () =>
+    page.evaluate(
+      () => document.body.textContent?.match(/Sentence \d+ of/g)?.length ?? 0
+    );
+  const streamed = await sentences();
+  await expect.poll(sentences).toBeGreaterThan(streamed + 10);
   await expect(group).toHaveAttribute('aria-expanded', 'true');
   expect((await group.boundingBox())!.y).toBeCloseTo(pressed.y, 0);
   await page.screenshot({ path: test.info().outputPath('opened.png') });
