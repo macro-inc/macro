@@ -74,14 +74,12 @@ async fn requesting_a_code_reports_the_single_sign_on_an_address_needs() {
 
 #[tokio::test]
 async fn requesting_a_code_maps_each_refusal() {
-    let cases: [(u16, fn(&EmailCodeError) -> bool); 4] = [
-        (400, |error| matches!(error, EmailCodeError::InvalidEmail)),
-        (403, |error| matches!(error, EmailCodeError::NotAllowed)),
-        (429, |error| matches!(error, EmailCodeError::RateLimited)),
-        (500, |error| matches!(error, EmailCodeError::Unavailable(_))),
-    ];
-
-    for (status, expected) in cases {
+    for (status, expected) in [
+        (400, "invalid email address"),
+        (403, "email address may not sign in"),
+        (429, "too many attempts"),
+        (500, "email sign-in is unavailable"),
+    ] {
         let server = answer_code_request(status, serde_json::json!({})).await;
 
         let error = provider(&server)
@@ -90,7 +88,7 @@ async fn requesting_a_code_maps_each_refusal() {
             .await
             .expect_err("the request should be refused");
 
-        assert!(expected(&error), "status {status} gave {error:?}");
+        assert_eq!(error.to_string(), expected, "status {status}");
     }
 }
 
@@ -132,8 +130,7 @@ async fn redeeming_a_wrong_code_is_reported_as_such() {
         .await
         .redeem_code(EMAIL, "123456")
         .await
-        .err()
-        .expect("the code should be refused");
+        .expect_err("the code should be refused");
 
     assert!(matches!(error, EmailCodeError::InvalidCode), "{error:?}");
 }

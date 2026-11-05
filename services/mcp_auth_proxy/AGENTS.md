@@ -18,11 +18,12 @@ in front of FusionAuth, which doesn't support DCR itself.
 - `src/domain/redirect_uri.rs`: the redirect URI policy from the README: trusted,
   needs consent, or refused.
 - `src/domain/browser_binding.rs`: the cookie secret tying a flow to the browser
-  that started it, and the consent form's anti-forgery token.
+  that started it, and the anti-forgery token the broker's forms carry.
 - `templates/`: the broker's pages (sign-in chooser, consent and its cancellation,
   email sign-in, manual delivery), which share `broker_page.css`.
 - `src/domain/ports.rs`: `ClientRegistrationStore`, `OAuthProvider`,
-  `RefreshTokenBindingStore` — the ports the service depends on.
+  `EmailCodeProvider`, `RefreshTokenBindingStore` — the ports the service depends
+  on.
 - `src/inbound/axum_router.rs`: HTTP routes; `src/inbound/middleware.rs`: auth.
 - `src/outbound/postgres.rs`: the store of record for all broker state
   (registrations, refresh token bindings, pending authorizations, issued

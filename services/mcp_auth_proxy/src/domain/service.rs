@@ -786,7 +786,12 @@ where
             .map_err(CompleteCallbackError::InflightStore)
     }
 
-    #[tracing::instrument(name = "mcp_oauth.email_sign_in.check", skip_all, err, fields(%session_id))]
+    #[tracing::instrument(
+        name = "mcp_oauth.email_sign_in.check",
+        skip_all,
+        err(level = "warn"),
+        fields(%session_id)
+    )]
     async fn check_email_sign_in(
         &self,
         session_id: &str,
@@ -799,7 +804,7 @@ where
     #[tracing::instrument(
         name = "mcp_oauth.email_sign_in.request_code",
         skip_all,
-        err,
+        err(level = "warn"),
         fields(%session_id, client_id = tracing::field::Empty)
     )]
     async fn request_email_code(
@@ -832,7 +837,7 @@ where
     #[tracing::instrument(
         name = "mcp_oauth.email_sign_in.verify_code",
         skip_all,
-        err,
+        err(level = "warn"),
         fields(%session_id, client_id = tracing::field::Empty)
     )]
     async fn verify_email_code(

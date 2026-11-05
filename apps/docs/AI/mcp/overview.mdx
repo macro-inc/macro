@@ -33,12 +33,10 @@ Start Codex CLI, invoke the `macro` MCP server, and complete the OAuth login flo
 
 If your client runs on another machine, such as over SSH or in a container, a browser on your computer can't reach the client when sign-in finishes. Sign in like this instead:
 
-1. Start the login on the remote machine. For Claude Code, run `claude mcp login macro --no-browser`. For Codex CLI, run `codex mcp login macro --no-browser`.
+1. Start the login on the remote machine. For Claude Code, run `claude mcp login macro --no-browser`. For Codex CLI, run `codex mcp login macro`.
 2. Open the printed link in a browser on your computer.
 3. Select **The app I'm connecting runs on another machine**, then choose how to sign in.
-4. After you sign in, Macro shows a link. Paste it into the prompt on the remote machine.
-
-If your client doesn't ask you to paste anything, run the `curl` command Macro shows on the remote machine while the client is waiting.
+4. After you sign in, Macro shows a link and a `curl` command. If your client asks for a redirect URL, as Claude Code does, paste the link. Otherwise, run the `curl` command on the remote machine while the client is waiting, as with Codex CLI.
 
 ## IDE / JSON Configuration
 

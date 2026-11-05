@@ -56,9 +56,10 @@ option to finish elsewhere (`delivery=manual`). After sign-in, the broker shows
 the client's callback URL instead of redirecting to it, for the user to either:
 
 - paste into a client that asks for it, as `claude mcp login <name> --no-browser`
-  and `codex mcp login <name> --no-browser` do, or
-- fetch with `curl` on the client's machine, which reaches a waiting listener in
-  any loopback client, with no client support needed.
+  does, or
+- fetch with `curl` on the client's machine, which reaches the listener of any
+  waiting loopback client, such as `codex mcp login <name>`, with no client support
+  needed.
 
 The authorization code still needs the client's PKCE verifier. Because the code
 leaves the user's own machine, which is what made a loopback redirect trustworthy,
