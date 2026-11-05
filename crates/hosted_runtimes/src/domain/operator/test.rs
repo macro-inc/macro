@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use uuid::Uuid;
 
@@ -30,6 +31,8 @@ impl FleetError for FakeFleetError {
 /// Records fleet calls; `create` fails `failures` times first.
 #[derive(Default)]
 struct FakeFleet {
+    host_failures: Mutex<u32>,
+    host_attempts: AtomicU32,
     failures: Mutex<u32>,
     missing: bool,
     calls: Mutex<Vec<String>>,
@@ -114,6 +117,12 @@ impl Fleet for FakeFleet {
     }
 
     async fn host(&self) -> Result<HostRegistration, FakeFleetError> {
+        self.host_attempts.fetch_add(1, Ordering::SeqCst);
+        let mut failures = self.host_failures.lock().unwrap();
+        if *failures > 0 {
+            *failures -= 1;
+            return Err(FakeFleetError::Unavailable);
+        }
         Ok(HostRegistration {
             name: "runtime-dev-1".to_owned(),
             memory_gb: 31,
@@ -121,6 +130,56 @@ impl Fleet for FakeFleet {
             oversell_factor: 3,
         })
     }
+}
+
+#[tokio::test]
+async fn unavailable_host_does_not_abort_startup_and_registration_retries_with_backoff() {
+    struct TestClock(Mutex<DateTime<Utc>>);
+    impl Clock for TestClock {
+        fn now(&self) -> DateTime<Utc> {
+            *self.0.lock().unwrap()
+        }
+    }
+    let operator = ComputerOperator::start(
+        FakeRepo::default(),
+        FakeFleet {
+            host_failures: Mutex::new(4),
+            ..Default::default()
+        },
+        FakeHarnesses::default(),
+        TestClock(Mutex::new(now())),
+        EnrollmentDefaults {
+            service_url_overrides: BTreeMap::new(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(operator.run_fleet_effects().await.is_err());
+    assert!(operator.fire_timers().await.is_err());
+    assert!(operator.reconcile().await.is_err());
+    assert_eq!(operator.fleet.host_attempts.load(Ordering::SeqCst), 1);
+
+    *operator.clock.0.lock().unwrap() += Duration::seconds(10);
+    assert!(operator.run_fleet_effects().await.is_err());
+    assert_eq!(operator.fleet.host_attempts.load(Ordering::SeqCst), 2);
+    *operator.clock.0.lock().unwrap() += Duration::seconds(19);
+    assert!(operator.run_fleet_effects().await.is_err());
+    assert_eq!(operator.fleet.host_attempts.load(Ordering::SeqCst), 2);
+
+    *operator.clock.0.lock().unwrap() += Duration::seconds(1);
+    assert!(operator.run_fleet_effects().await.is_err());
+    assert_eq!(operator.fleet.host_attempts.load(Ordering::SeqCst), 3);
+    *operator.clock.0.lock().unwrap() += Duration::seconds(40);
+    assert!(operator.run_fleet_effects().await.is_err());
+    assert_eq!(operator.fleet.host_attempts.load(Ordering::SeqCst), 4);
+    *operator.clock.0.lock().unwrap() += Duration::seconds(59);
+    assert!(operator.run_fleet_effects().await.is_err());
+    assert_eq!(operator.fleet.host_attempts.load(Ordering::SeqCst), 4);
+    *operator.clock.0.lock().unwrap() += Duration::seconds(1);
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 0);
+    operator.reconcile().await.unwrap();
+    assert_eq!(operator.fire_timers().await.unwrap(), 0);
+    assert_eq!(operator.fleet.host_attempts.load(Ordering::SeqCst), 5);
 }
 
 #[derive(Default)]

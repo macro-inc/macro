@@ -93,6 +93,9 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   (the unit's `EnvironmentFile`), and installs + starts `/etc/systemd/system/<unit_name>.service`
   as that user. Validated by `service::validate_persona`.
 - Persona computers are never idle-frozen; they run until powered off or canceled.
+- Fleet host discovery must not abort harness startup: report unhealthy and retry
+  registration after 10, 20, 40, then 60 seconds, holding fleet effects and timers
+  until registration succeeds without consuming their attempts.
 - **Gateway**: computers call Claude via `ANTHROPIC_BASE_URL=<agent harness service>/anthropic`
   with a per-session token; see `services/agent_harness_service/AGENTS.md`.
 

@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::domain::enrollment::Enrollment;
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, Phase};
-use crate::domain::models::{Computer, EnrollmentDefaults, Host};
+use crate::domain::models::{Computer, EnrollmentDefaults};
 use crate::domain::ports::{
     ComputerRepo, Fleet, FleetError, Harnesses, InstanceStatus, PendingEffect,
 };
@@ -51,7 +51,14 @@ pub struct ComputerOperator<Repo, Machines, Registry, Time> {
     harnesses: Registry,
     clock: Time,
     defaults: EnrollmentDefaults,
-    host: HostId,
+    host: tokio::sync::Mutex<HostReadiness>,
+}
+
+#[derive(Default)]
+struct HostReadiness {
+    id: Option<HostId>,
+    retry_at: Option<DateTime<Utc>>,
+    failures: u32,
 }
 
 impl<Repo, Machines, Registry, Time> ComputerOperator<Repo, Machines, Registry, Time>
@@ -61,7 +68,7 @@ where
     Registry: Harnesses,
     Time: Clock,
 {
-    /// Register the fleet's host (refreshing its capacity) and build the operator.
+    /// Build the operator; unavailable host discovery is retried by its passes.
     #[tracing::instrument(skip_all, err)]
     pub async fn start(
         repo: Repo,
@@ -70,29 +77,63 @@ where
         clock: Time,
         defaults: EnrollmentDefaults,
     ) -> Result<Self, ComputerError> {
-        let registration = fleet.host().await.map_err(internal)?;
-        let host: Host = repo.register_host(registration).await.map_err(internal)?;
-        tracing::info!(
-            host_id = %host.id,
-            host = %host.name,
-            awake_units = host.awake_capacity_units,
-            sold_units = host.sold_capacity_units,
-            "computer host registered"
-        );
-
-        Ok(Self {
+        let operator = Self {
             repo,
             fleet,
             harnesses,
             clock,
             defaults,
-            host: host.id,
-        })
+            host: tokio::sync::Mutex::new(HostReadiness::default()),
+        };
+        // Fleet connectivity is independent of the harness's other routes.
+        // Keep the operator so its periodic passes can recover registration.
+        let _ = operator.host_id().await;
+        Ok(operator)
+    }
+
+    async fn host_id(&self) -> Result<HostId, ComputerError> {
+        let mut readiness = self.host.lock().await;
+        if let Some(id) = readiness.id {
+            return Ok(id);
+        }
+        let now = self.clock.now();
+        if readiness.retry_at.is_some_and(|at| now < at) {
+            return Err(ComputerError::Internal(rootcause::report!(
+                "computer host unhealthy; waiting to retry registration"
+            )));
+        }
+        let registration = async {
+            let registration = self.fleet.host().await.map_err(internal)?;
+            self.repo
+                .register_host(registration)
+                .await
+                .map_err(internal)
+        }
+        .await;
+        match registration {
+            Ok(host) => {
+                tracing::info!(host_id = %host.id, host = %host.name, healthy = true,
+                    awake_units = host.awake_capacity_units, sold_units = host.sold_capacity_units,
+                    "computer host registered");
+                readiness.id = Some(host.id);
+                readiness.retry_at = None;
+                Ok(host.id)
+            }
+            Err(error) => {
+                let retry_seconds = (10 * 2_i64.pow(readiness.failures.min(3))).min(60);
+                readiness.failures = readiness.failures.saturating_add(1);
+                readiness.retry_at = Some(self.clock.now() + Duration::seconds(retry_seconds));
+                tracing::error!(error = ?error, healthy = false, retry_seconds,
+                    "computer host unavailable; retrying registration");
+                Err(error)
+            }
+        }
     }
 
     /// Carry out due fleet effects; returns how many ran.
     #[tracing::instrument(skip(self), err)]
     pub async fn run_fleet_effects(&self) -> Result<usize, ComputerError> {
+        self.host_id().await?;
         let now = self.clock.now();
         let effects = self
             .repo
@@ -161,12 +202,13 @@ where
         computer_id: Uuid,
         effect: &Effect,
     ) -> Result<Option<Event>, ComputerError> {
+        let registered_host = self.host_id().await?;
         if let Some(host) = effect_host(effect)
-            && host != self.host
+            && host != registered_host
         {
             return Err(ComputerError::BadRequest(format!(
                 "effect for host {host} reached the operator of {}",
-                self.host
+                registered_host
             )));
         }
 
@@ -249,6 +291,7 @@ where
     /// Fire due timers; returns how many fired.
     #[tracing::instrument(skip(self), err)]
     pub async fn fire_timers(&self) -> Result<usize, ComputerError> {
+        self.host_id().await?;
         let now = self.clock.now();
         let due = self
             .repo
@@ -272,6 +315,7 @@ where
     /// An instance without a computer is removed.
     #[tracing::instrument(skip(self), err)]
     pub async fn reconcile(&self) -> Result<(), ComputerError> {
+        let host = self.host_id().await?;
         let instances: HashMap<Uuid, InstanceStatus> = self
             .fleet
             .instances()
@@ -279,11 +323,7 @@ where
             .map_err(internal)?
             .into_iter()
             .collect();
-        let expected = self
-            .repo
-            .instances_expected(self.host)
-            .await
-            .map_err(internal)?;
+        let expected = self.repo.instances_expected(host).await.map_err(internal)?;
 
         for computer in &expected {
             let observed = instances.get(&computer.id).copied();
@@ -339,6 +379,7 @@ where
         &self,
         activity: &Activity,
     ) -> Result<usize, ComputerError> {
+        self.host_id().await?;
         let since = self.clock.now() - IDLE_AFTER;
         let mut frozen = 0;
         for computer in self.repo.running().await.map_err(internal)? {
