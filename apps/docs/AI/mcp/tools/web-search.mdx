@@ -1,15 +1,21 @@
 ---
 title: WebSearch
 description: >-
-  Search the web for information using Claude's built-in web search tool.
+  Search the public web.
 ---
 
 # WebSearch
 
-Search the web for information using Claude's built-in web search tool.
+Search the public web. Returns up to `maxResults` pages, each with its title, URL, a query-relevant snippet and, for news, its publication date. Snippets are often enough to answer; call WebFetch on a result's URL when you need the full page. Cite the URLs you use.
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `input` | string | Yes | The search query or instruction. |
+| `query` | string | Yes | What to search for, in natural language or keywords (at most 400 characters). |
+| `domains` | string[] | No | Only return pages from these domains, e.g. `["docs.rs", "github.com"]`. |
+| `excludeDomains` | string[] | No | Never return pages from these domains. |
+| `since` | string | No | Only return pages published on or after this date (`YYYY-MM-DD`). |
+| `topic` | `"general"` \| `"news"` | No | `news` for recent articles with publication dates; `general` (the default) otherwise. |
+| `maxResults` | integer | No | How many results to return, 1 to 20 (default 5). |
+| `includeContent` | boolean | No | Also return each page's text as Markdown (up to 8,000 characters per result). |

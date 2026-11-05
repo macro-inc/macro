@@ -1167,8 +1167,10 @@ move it to that position; an accent insertion line shows the exact destination
 above or below the target row. The order saves through the shared favorites API
 and survives reloads. Hidden favorites and favorites of other entity types keep
 their positions. **Sort → Custom order** restores dragging after choosing an
-automatic sort. Dropping a favorite does not open its conversation or move it
-into a custom section. Failed saves roll back and show an error toast.
+automatic sort. Releasing over a favorite preserves the drop target through
+scroll updates; releasing outside the list leaves the order unchanged. Dropping
+a favorite does not open its conversation or move it into a custom section.
+Failed saves roll back and show an error toast.
 
 ### Sections
 

@@ -4945,55 +4945,9 @@ export type ShareLinkScope = 'off' | 'public' | 'team';
  */
 export type ShareAccess = 'off' | 'view' | 'comment' | 'edit';
 /**
- * Content of a web fetch response - either a successful result or an error
+ * The kind of results a search favours.
  */
-export type WebFetchContent =
-  | (WebFetchResult & {
-      type: 'web_fetch_result';
-    })
-  | (WebFetchToolError & {
-      type: 'web_fetch_tool_result_error';
-    });
-/**
- * Source content of a fetched document
- */
-export type WebFetchSource =
-  | {
-      media_type: string;
-      data: string;
-      type: 'text';
-    }
-  | {
-      media_type: string;
-      data: string;
-      type: 'base64';
-    };
-/**
- * Possible error codes for web fetch failures
- */
-export type WebFetchErrorCode =
-  | 'invalid_input'
-  | 'url_too_long'
-  | 'url_not_allowed'
-  | 'url_not_accessible'
-  | 'too_many_requests'
-  | 'unsupported_content_type'
-  | 'max_uses_exceeded'
-  | 'unavailable';
-/**
- * Content of a web search response — either search results or an error.
- */
-export type WebSearchContent = SearchResult[] | WebSearchToolError;
-/**
- * A single search result from web search
- */
-export type SearchResult = {
-  title: string;
-  url: string;
-  encrypted_content?: string | null;
-  page_age?: string | null;
-  type: 'web_search_result';
-};
+export type WebSearchTopic = 'general' | 'news';
 /**
  * Available SDK workflow guides.
  */
@@ -16384,83 +16338,105 @@ export interface UploadFileResponse {
   sizeBytes: number;
 }
 /**
- * Fetch the contents of a web page using Claude's built-in web fetch tool.
+ * Read the text of one public web page as Markdown. Use it on a URL the user gave you or one WebSearch returned, when the snippet is not enough. Pages that need a login, or that render only with JavaScript, may fail. Cite the URL you read.
  */
 export interface WebFetch {
   /**
-   * The URL to fetch or an instruction describing what to fetch.
-   */
-  input: string;
-}
-/**
- * Web fetch tool response content returned by Claude when using the web_fetch tool
- */
-export interface WebFetchResponse {
-  tool_use_id: string;
-  content: WebFetchContent;
-}
-/**
- * Successful web fetch result containing the fetched content
- */
-export interface WebFetchResult {
-  /**
-   * The URL that was fetched
+   * The `http` or `https` URL of the page.
    */
   url: string;
-  content: WebFetchDocument;
   /**
-   * Timestamp when the content was retrieved
+   * Most characters of page text to return, 1 to 100,000 (default 20,000).
    */
-  retrieved_at: string;
+  maxChars?: number | null;
 }
 /**
- * Document content from a web fetch
+ * The text of a fetched page.
  */
-export interface WebFetchDocument {
-  source: WebFetchSource;
+export interface WebFetchResponse {
   /**
-   * Optional title of the document
+   * The URL that was read.
+   */
+  url: string;
+  /**
+   * The page title, when the provider reports one.
    */
   title?: string | null;
   /**
-   * Optional citations configuration
+   * The page text as Markdown, cut to `maxChars`.
    */
-  citations?: CitationsConfig | null;
+  content: string;
+  /**
+   * Whether `content` was cut to `maxChars`.
+   */
+  truncated: boolean;
 }
 /**
- * Citations configuration for web fetch
- */
-export interface CitationsConfig {
-  enabled: boolean;
-}
-/**
- * Error returned when web fetch fails
- */
-export interface WebFetchToolError {
-  error_code: WebFetchErrorCode;
-}
-/**
- * Search the web for information using Claude's built-in web search tool.
+ * Search the public web. Returns up to `maxResults` pages, each with its title, URL, a query-relevant snippet and, for news, its publication date. Snippets are often enough to answer; call WebFetch on a result's URL when you need the full page. Cite the URLs you use.
  */
 export interface WebSearch {
   /**
-   * The search query or instruction.
+   * What to search for, in natural language or keywords (at most 400 characters).
    */
-  input: string;
+  query: string;
+  /**
+   * Only return pages from these domains, e.g. `["docs.rs", "github.com"]`.
+   */
+  domains?: string[] | null;
+  /**
+   * Never return pages from these domains.
+   */
+  excludeDomains?: string[] | null;
+  /**
+   * Only return pages published on or after this date (`YYYY-MM-DD`).
+   */
+  since?: string | null;
+  /**
+   * `news` for recent articles with publication dates; `general` (the default) otherwise.
+   */
+  topic?: WebSearchTopic | null;
+  /**
+   * How many results to return, 1 to 20 (default 5).
+   */
+  maxResults?: number | null;
+  /**
+   * Also return each page's text as Markdown (up to 8,000 characters per result).
+   */
+  includeContent?: boolean | null;
 }
 /**
- * Web search response content returned by Claude when using the web_search tool
+ * The pages a search found, best match first.
  */
 export interface WebSearchResponse {
-  content: WebSearchContent;
-  tool_use_id: string;
+  /**
+   * Results, best match first. Empty when nothing matched.
+   */
+  results: WebSearchResult[];
 }
 /**
- * Error returned when web search fails
+ * One page a search found.
  */
-export interface WebSearchToolError {
-  type: string;
-  error_code: string;
+export interface WebSearchResult {
+  /**
+   * The page title.
+   */
+  title: string;
+  /**
+   * The page URL; cite it when you use the result.
+   */
+  url: string;
+  /**
+   * The part of the page most relevant to the query.
+   */
+  snippet: string;
+  /**
+   * When the page was published, as the search provider reports it.
+   */
+  publishedAt?: string | null;
+  /**
+   * The page text as Markdown, when `includeContent` was set.
+   */
+  content?: string | null;
 }
 /**
  * Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog.
