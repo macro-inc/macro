@@ -22,6 +22,9 @@ deploy repo, which Argo CD syncs.
 - `components.nix`: every workload. Service names and ports match the hosts
   in the code-defined env (`xtask_local` `local_env.rs`), so services need no
   platform-specific config.
+- AWS APIs reach open-source backends through the gateway workload: S3 on RustFS,
+  DynamoDB on ExtendDB, SQS on Kafka (`services/queue_gateway`), KMS on OpenBao
+  (`services/kms_gateway`), and SNS on `push-sink/`, which logs and sends nothing.
 - `lib.nix`: OCI images (`image`, `pushImages`), the workload → Deployment/
   Service/PVC translation with sync waves, and `wrapBinary` for host-built Cargo
   binaries.
