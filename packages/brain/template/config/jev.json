@@ -1,0 +1,11 @@
+{
+  "threshold": 0.6,
+  "questions": {
+    "addressed_to_me": "Is this addressed to {{name}} by name in any case or position, an @mention, or a reply in a thread {{name}} is in, AND does it want something from {{name}} (a question, a request, a point to answer, an ack of something {{name}} did)? Score low if it @mentions only others, for group acks not aimed at {{name}}, and for a bare emoji or laugh in a group channel.",
+    "about_my_job": "Is this message about {{name}}'s job: {{job_description}}?",
+    "needs_response": "Does this message ask a question, report a problem, or make a request that someone doing {{name}}'s job should answer or act on? Score low for bare thanks, acknowledgements, and sign-offs."
+  },
+  "rule": "relevant if addressed_to_me >= threshold, or about_my_job >= threshold and needs_response >= threshold",
+  "wakeIf": [["addressed_to_me"], ["about_my_job", "needs_response"]],
+  "max_question_chars": 500
+}

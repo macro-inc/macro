@@ -1,0 +1,7 @@
+history/
+log/
+cache/
+work/
+secrets
+secrets.*
+*.secret
