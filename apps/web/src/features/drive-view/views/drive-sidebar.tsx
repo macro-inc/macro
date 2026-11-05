@@ -8,6 +8,7 @@ import { ConnectorImportSidebar } from '@app/features/connector-import/connector
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { createFolderDropTargets } from '@app/features/next-soup/actions';
+import { TutorialPill } from '@app/features/video-tutorials';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -317,6 +318,8 @@ export function DriveSidebar() {
         <DriveCreateMenu />
       </ViewSidebar.Primary>
       <ViewSidebar.Content ref={setContent}>
+        {/* Drive's list already carries Drive's tutorial row; docs live here. */}
+        <TutorialPill tutorial="docs" />
         <DriveSidebarContent />
         <DriveImportPromotion />
       </ViewSidebar.Content>

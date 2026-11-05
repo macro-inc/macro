@@ -6,6 +6,7 @@ import {
   useSavedViews,
 } from '@app/features/saved-views/queries/saved-views';
 import { ViewTour, ViewTourAction } from '@app/features/tours/ViewTour';
+import { TutorialRow } from '@app/features/video-tutorials';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
 import { projectDetailRoute } from '@app/routes/routes';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -126,7 +127,10 @@ function TasksViewRoot() {
         >
           <TaskSavedViewWarning />
           <div class="min-h-0 flex-1">
-            <TasksContent ref={setListElement} />
+            <TasksContent
+              ref={setListElement}
+              listStart={<TutorialRow tutorial="tasks" />}
+            />
           </div>
         </Show>
       </ViewShell.Content>

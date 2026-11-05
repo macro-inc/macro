@@ -31,7 +31,7 @@ import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 import { AgentUpdatesStack } from '../../agent-updates/views/AgentUpdatesStack';
 import { EffortSelector } from '../../block-agent/component/EffortSelector';
 import {
@@ -105,6 +105,8 @@ export function NewChatPage(props: {
   updateSessions?: readonly AgentSessionEntity[];
   onOpenUpdateSession?: (sessionId: string) => void;
   showUpdates?: boolean;
+  /** Centered under the composer, such as the Agents tutorial pill. */
+  belowComposer?: JSX.Element;
 }) {
   const userId = useUserId();
   const billing = useAiBillingSummaryQuery();
@@ -606,6 +608,7 @@ export function NewChatPage(props: {
               {composer()}
             </div>
           </FloatRegionOrInline>
+          {props.belowComposer}
           <Show
             when={
               props.showUpdates &&

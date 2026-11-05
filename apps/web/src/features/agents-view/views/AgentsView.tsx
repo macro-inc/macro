@@ -4,6 +4,7 @@ import { AgentSettings } from '@app/features/settings/AgentSettings';
 import { IntegrationsPage } from '@app/features/settings/IntegrationsPage';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import { TutorialPill } from '@app/features/video-tutorials';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -492,6 +493,12 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                                   availabilityLoading={rosterSource.availabilityLoading()}
                                   onStart={startConversation}
                                   onOpenRoster={openRoster}
+                                  belowComposer={
+                                    <TutorialPill
+                                      tutorial="agents"
+                                      class="self-center"
+                                    />
+                                  }
                                 />
                               </div>
                             </Suspense>

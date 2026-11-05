@@ -1,3 +1,4 @@
+import { TutorialRow } from '@app/features/video-tutorials';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Copy from '@icon/system/regular/copy.svg';
 import { CopyButton } from '@ui';
@@ -163,6 +164,7 @@ export function OwnerSettingsSection(props: {
                 )}
               </Show>
               <EventTypesPanel
+                listStart={<TutorialRow tutorial="scheduling" />}
                 owner={scope()}
                 search={props.search ?? ''}
                 events={p().eventTypes}

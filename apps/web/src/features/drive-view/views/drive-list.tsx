@@ -8,6 +8,7 @@ import {
   MaybeSoupEntityActionDrawerManager,
   SoupEntityContextMenu,
 } from '@app/features/soup';
+import { TutorialRow } from '@app/features/video-tutorials';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -85,6 +86,9 @@ export function DriveList() {
   createScrollTopFade(viewport);
 
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
+  // Rows above the virtualized ones (the tutorial row) shift its item offsets.
+  const [listStart, setListStart] = createSignal<HTMLDivElement>();
+  const listStartSize = createElementSize(listStart);
 
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
@@ -375,6 +379,12 @@ export function DriveList() {
                   ref={setViewport}
                   class="min-h-0 flex-1 overflow-auto overscroll-none"
                 >
+                  {/* Outside the virtualized rows, so list focus skips it. */}
+                  <div ref={setListStart}>
+                    <Show when={state.value().location.kind === 'tab'}>
+                      <TutorialRow tutorial="drive" />
+                    </Show>
+                  </div>
                   <Suspense>
                     <Virtualizer
                       ref={(handle) => {
@@ -383,6 +393,7 @@ export function DriveList() {
                       }}
                       data={source.items()}
                       scrollRef={viewport()}
+                      startMargin={listStartSize.height ?? 0}
                       bufferSize={240}
                       itemSize={44}
                       keepMounted={
