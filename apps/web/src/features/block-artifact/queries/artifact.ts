@@ -1,10 +1,8 @@
 import { throwOnErr } from '@core/util/result';
 import { createQueryKeys } from '@lukemorales/query-key-factory';
 import { queryClient } from '@queries/client';
-import {
-  type ArtifactViewUrl,
-  artifactsClient,
-} from '@service-storage/artifacts';
+import { artifactsClient } from '@service-storage/artifacts';
+import type { ArtifactViewUrlResponse } from '@service-storage/generated/schemas/artifactViewUrlResponse';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, untrack } from 'solid-js';
 import type { ArtifactTheme } from '../core/frame-message';
@@ -83,7 +81,7 @@ export type ViewUrlTarget = {
 };
 
 function viewUrlRefetchInterval(query: {
-  state: { data: ArtifactViewUrl | undefined };
+  state: { data: ArtifactViewUrlResponse | undefined };
 }) {
   const expiresAt = query.state.data?.expires_at;
   if (!expiresAt) return false;

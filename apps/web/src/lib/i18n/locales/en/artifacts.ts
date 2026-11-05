@@ -4,6 +4,7 @@ export default {
   scenes: 'Scenes',
   overview: 'Overview',
   loading: 'Loading artifact…',
+  nothingPublished: 'Nothing published yet',
   unavailable: 'This artifact could not be loaded.',
   retry: 'Try again',
 

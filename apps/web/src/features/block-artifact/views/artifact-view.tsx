@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
 import { toast } from '@core/component/Toast/Toast';
 import { Show } from 'solid-js';
+import { NothingPublished } from '../components/nothing-published';
 import { SceneSwitcher } from '../components/scene-switcher';
 import { VersionBanner } from '../components/version-banner';
 import { selectScene } from '../core/scenes';
@@ -10,6 +11,7 @@ import {
   useArtifactVersionQuery,
   useRestoreArtifactVersionMutation,
 } from '../queries/artifact';
+import { useArtifactPublishedSync } from '../queries/artifact-sync';
 import { ArtifactFrameView } from './artifact-frame-view';
 
 export type ArtifactViewProps = {
@@ -26,8 +28,11 @@ export type ArtifactViewProps = {
 
 /** The artifact block's body: scene tabs, an older version's banner, the page. */
 export function ArtifactView(props: ArtifactViewProps) {
+  useArtifactPublishedSync(() => props.documentId);
   const artifact = useArtifactQuery(() => props.documentId);
   usePending('artifact.detail', () => artifact.isLoading);
+  // view_url refuses an artifact with no version yet.
+  const unpublished = () => artifact.isSuccess && !artifact.data.current;
 
   const current = () =>
     artifact.isSuccess ? artifact.data.current : undefined;
@@ -44,8 +49,9 @@ export function ArtifactView(props: ArtifactViewProps) {
   };
   const scenes = () => version()?.scenes ?? [];
   const scene = () => selectScene(scenes(), props.requestedScene);
-  // A requested scene waits for the manifest; the index needs nothing.
-  const frameReady = () => !props.requestedScene || !!version();
+  // The frame waits for the manifest: nothing may be published yet, and a
+  // requested scene must exist in the shown version.
+  const frameReady = () => !!version();
 
   const restore = useRestoreArtifactVersionMutation(() => props.documentId);
   const restoreViewed = () => {
@@ -85,13 +91,15 @@ export function ArtifactView(props: ArtifactViewProps) {
         )}
       </Show>
       <div class="min-h-0 flex-1">
-        <Show when={frameReady()}>
-          <ArtifactFrameView
-            documentId={props.documentId}
-            name={props.name}
-            version={pinnedNumber()}
-            scene={scene()}
-          />
+        <Show when={!unpublished()} fallback={<NothingPublished />}>
+          <Show when={frameReady()}>
+            <ArtifactFrameView
+              documentId={props.documentId}
+              name={props.name}
+              version={pinnedNumber()}
+              scene={scene()}
+            />
+          </Show>
         </Show>
       </div>
     </div>

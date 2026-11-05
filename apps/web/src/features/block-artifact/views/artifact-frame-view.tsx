@@ -11,14 +11,14 @@ import {
   useArtifactViewUrlQuery,
   type ViewUrlTarget,
 } from '../queries/artifact';
-import { useArtifactPublishedSync } from '../queries/artifact-sync';
 
 export type ArtifactFrameViewProps = ViewUrlTarget & { name: string };
 
 /**
- * One artifact page in a sandboxed frame on the artifact's own origin. It
- * follows the current version unless pinned to one, and mounts anywhere: the
- * block, a canvas embed.
+ * One published artifact page in a sandboxed frame on the artifact's own
+ * origin, for the block and canvas embeds. It follows the current version
+ * unless pinned to one; its owner keeps the artifact's queries current with
+ * `useArtifactPublishedSync` and mounts it only once a version exists.
  */
 export function ArtifactFrameView(props: ArtifactFrameViewProps) {
   return (
@@ -37,8 +37,6 @@ export function ArtifactFrameView(props: ArtifactFrameViewProps) {
 }
 
 function ArtifactFrameContent(props: ArtifactFrameViewProps) {
-  useArtifactPublishedSync(() => props.documentId);
-
   const viewUrl = useArtifactViewUrlQuery(
     () => ({
       documentId: props.documentId,

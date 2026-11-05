@@ -6,9 +6,11 @@
 import { t } from '@app/lib/i18n';
 import { Button } from '@ui/components/Button';
 import { createEffect, For, Show } from 'solid-js';
+import { NothingPublished } from '../components/nothing-published';
 import { SceneDropdown } from '../components/scene-switcher';
 import { selectScene } from '../core/scenes';
 import { useArtifactQuery } from '../queries/artifact';
+import { useArtifactPublishedSync } from '../queries/artifact-sync';
 import { ArtifactFrameView } from './artifact-frame-view';
 
 /** The embed body; follows the current version, as every viewer's does. */
@@ -17,20 +19,23 @@ export function ArtifactCanvasEmbed(props: {
   name: string;
   scene: string | undefined;
 }) {
+  useArtifactPublishedSync(() => props.documentId);
   const artifact = useArtifactQuery(() => props.documentId);
-  const scene = () =>
-    artifact.isSuccess
-      ? selectScene(artifact.data.current.scenes, props.scene)
-      : undefined;
-  // A scene waits for the manifest: a later version may have dropped it.
-  const ready = () => !props.scene || artifact.isSuccess;
+  const current = () =>
+    artifact.isSuccess ? artifact.data.current : undefined;
+  // The manifest says whether anything is published and whether the scene
+  // is still in the current version.
   return (
-    <Show when={ready()}>
-      <ArtifactFrameView
-        documentId={props.documentId}
-        name={props.name}
-        scene={scene()}
-      />
+    <Show when={artifact.isSuccess}>
+      <Show when={current()} fallback={<NothingPublished />}>
+        {(version) => (
+          <ArtifactFrameView
+            documentId={props.documentId}
+            name={props.name}
+            scene={selectScene(version().scenes, props.scene)}
+          />
+        )}
+      </Show>
     </Show>
   );
 }
@@ -43,7 +48,7 @@ export function ArtifactSceneLabel(props: {
   const artifact = useArtifactQuery(() => props.documentId);
   const title = () =>
     artifact.isSuccess
-      ? artifact.data.current.scenes.find((scene) => scene.id === props.scene)
+      ? artifact.data.current?.scenes.find((scene) => scene.id === props.scene)
           ?.title
       : undefined;
   return (
@@ -62,7 +67,8 @@ export function ArtifactSceneSelect(props: {
   onChange: (scene: string | undefined) => void;
 }) {
   const artifact = useArtifactQuery(() => props.documentId);
-  const scenes = () => (artifact.isSuccess ? artifact.data.current.scenes : []);
+  const scenes = () =>
+    artifact.isSuccess ? (artifact.data.current?.scenes ?? []) : [];
   return (
     <Show when={scenes().length > 0}>
       <SceneDropdown
@@ -84,7 +90,8 @@ export function ArtifactScenePicker(props: {
   onPick: (scene: string | undefined) => void;
 }) {
   const artifact = useArtifactQuery(() => props.documentId);
-  const scenes = () => (artifact.isSuccess ? artifact.data.current.scenes : []);
+  const scenes = () =>
+    artifact.isSuccess ? (artifact.data.current?.scenes ?? []) : [];
   let picked = false;
   const pick = (scene: string | undefined) => {
     if (picked) return;

@@ -21,6 +21,8 @@ tool.
   only load inside Macro. The frame URL carries a short-lived token; never
   copy it into reports.
 - Opening an existing artifact never depends on the `enable-artifacts` flag.
+- An artifact created without a version yet shows **Nothing published yet**
+  (in the block and in canvas embeds) until its first publish arrives.
 
 ## The view
 
