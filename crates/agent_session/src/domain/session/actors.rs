@@ -320,14 +320,14 @@ where
                 let result = self
                     .logs
                     .present_tool(self.machine.id(), session_id, presentation)
-                    .await;
-                if let Err(error) = &result {
-                    tracing::error!(
-                        error = ?error,
-                        id = %self.machine.id(),
-                        "agent session failed to persist a tool presentation"
-                    );
-                }
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(
+                            error = ?error,
+                            id = %self.machine.id(),
+                            "agent session failed to persist a tool presentation"
+                        );
+                    });
                 let failed = result.is_err();
                 let _ = completed.send(result);
                 if failed {
