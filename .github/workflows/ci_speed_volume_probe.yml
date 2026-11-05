@@ -1,0 +1,60 @@
+# Experiment only, never merged. Reports what the shared Rust cache volume holds.
+# Every job exits non-zero on purpose: Namespace discards cache changes from
+# instances that fail, so this probe cannot write to the shared volume.
+name: ci speed volume probe
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        n: [1, 2, 3, 4, 5, 6]
+    name: probe (${{ matrix.n }})
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    steps:
+      - name: Mount Namespace cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: rust
+          path: /nix
+      - name: report
+        run: |
+          set +e
+          df -h /cache
+          echo "CISPEED target_du=$(du -s --block-size=1G target 2>/dev/null | cut -f1)G nix_du=$(du -s --block-size=1G /nix 2>/dev/null | cut -f1)G registry_du=$(du -s --block-size=1G ~/.cargo/registry 2>/dev/null | cut -f1)G git_du=$(du -s --block-size=1G ~/.cargo/git 2>/dev/null | cut -f1)G"
+          du -s --block-size=1M /cache/* 2>/dev/null | sort -rn | head -12
+          du -s --block-size=1M target/* target/debug/* 2>/dev/null | sort -rn | head -12
+          python3 - <<'PY'
+          import collections, os, re, time
+          d = 'target/debug/deps'
+          if not os.path.isdir(d):
+              print('CISPEED no deps dir'); raise SystemExit
+          kinds = collections.Counter(); sizes = collections.Counter(); names = collections.Counter(); ages = []
+          seen_inode = set()
+          for e in os.scandir(d):
+              if not e.is_file(follow_symlinks=False):
+                  continue
+              st = e.stat(follow_symlinks=False)
+              n = e.name
+              if n.endswith('.rlib'): k = 'rlib'
+              elif n.endswith('.rmeta'): k = 'rmeta'
+              elif n.endswith('.so'): k = 'so'
+              elif n.endswith('.d'): k = 'dep-info'
+              elif st.st_mode & 0o111: k = 'exe'
+              else: k = 'other'
+              kinds[k] += 1; sizes[k] += st.st_size
+              if k in ('rlib', 'exe', 'so'):
+                  base = re.sub(r'-[0-9a-f]{16}.*$', '', n.removeprefix('lib'))
+                  names[(k, base)] += 1
+              ages.append(st.st_mtime)
+          for k, s in sizes.most_common():
+              print(f'CISPEED kind={k} files={kinds[k]} gb={s/1e9:.1f}')
+          now = time.time(); ages.sort()
+          print(f'CISPEED newest_h={(now-ages[-1])/3600:.1f} median_h={(now-ages[len(ages)//2])/3600:.1f} oldest_h={(now-ages[0])/3600:.1f}')
+          print('CISPEED distinct rlib names', sum(1 for (k, _) in names if k == 'rlib'), 'total rlibs', kinds['rlib'])
+          print('CISPEED most copies:', [(b, c) for (k, b), c in names.most_common(40)])
+          PY
+          exit 1
