@@ -43,3 +43,40 @@ async fn advertised_clone_url_uses_the_computer_base_and_preserves_the_repo_toke
     assert_eq!(repo.token.expose(), "repo-bootstrap-token");
     server.abort();
 }
+
+#[tokio::test]
+async fn missing_git_returns_a_safe_pre_purchase_failure_reason() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = axum::Router::new().route(
+        "/internal/repos",
+        axum::routing::post(|| async {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "run git init: No such file or directory (os error 2)",
+            )
+        }),
+    );
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let adapter = AgentGitRepos::new(
+        AgentGitClient::new(format!("http://{address}"), "internal-key".into()).unwrap(),
+        "http://git.example.com".into(),
+    );
+    let error = adapter
+        .create(
+            &MacroUserIdStr::parse_from_str("macro|agent@example.com").unwrap(),
+            Uuid::from_u128(1),
+            &PersonaSeed {
+                creator_id: None,
+                name: "Agent".into(),
+                job_description: "Help".into(),
+                personality: "Direct".into(),
+            },
+        )
+        .await
+        .expect_err("git failed before a computer purchase");
+    assert!(matches!(error, TeamAgentError::InvitationFailed(_)));
+    assert!(error.to_string().contains("missing git"));
+    assert!(error.to_string().contains("Nothing was charged"));
+    server.abort();
+}

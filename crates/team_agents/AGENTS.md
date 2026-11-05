@@ -15,7 +15,8 @@ email over `/team_agents` in the auth service.
 item) → user API key → workspace repo (`agent_git`) → `Computers::purchase`
 with the persona and the seat item, so seat and computer share one Stripe
 update. Failures known to precede billing undo the repo, membership, account
-and mailbox. Purchase errors recover the durable computer ID from the team's
+and mailbox. Repository creation failures return a safe server reason explaining
+that nothing was charged; detailed provider errors stay in server logs. Purchase errors recover the durable computer ID from the team's
 saved agent persona. Its payment outbox resolves unknown outcomes idempotently;
 the agent remains `provisioning` at setup step `paying` ("Confirming payment").
 A definite `payment_failed` computer retains its agent as `failed` with reason

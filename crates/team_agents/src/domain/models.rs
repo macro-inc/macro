@@ -539,6 +539,9 @@ pub enum TeamAgentError {
     /// The computer billing provider failed.
     #[error("the computer billing provider failed: {0}")]
     ComputerProvider(rootcause::Report),
+    /// Repository creation failed before any purchase; the message is safe for clients.
+    #[error("{0}")]
+    InvitationFailed(String),
     /// The workspace repo provider failed.
     #[error("the repo provider failed: {0}")]
     RepoProvider(rootcause::Report),

@@ -164,7 +164,8 @@ impl IntoResponse for TeamAgentError {
             | TeamAgentError::RetryUnavailable(_) => StatusCode::CONFLICT,
             TeamAgentError::EmailProvider(_)
             | TeamAgentError::ComputerProvider(_)
-            | TeamAgentError::RepoProvider(_) => StatusCode::BAD_GATEWAY,
+            | TeamAgentError::RepoProvider(_)
+            | TeamAgentError::InvitationFailed(_) => StatusCode::BAD_GATEWAY,
             TeamAgentError::Internal(_) | TeamAgentError::ComputerIdentityUnavailable => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }

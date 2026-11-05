@@ -1,6 +1,6 @@
 //! Workspace repos through `agent_git_service`'s internal API.
 
-use agent_git::client::AgentGitClient;
+use agent_git::client::{AgentGitClient, AgentGitClientError};
 use agent_git::domain::template::PersonaSeed as RepoSeed;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -58,7 +58,16 @@ impl AgentRepos for AgentGitRepos {
             )
             .await
             .map_err(|error| {
-                TeamAgentError::RepoProvider(rootcause::Report::new(error).into_dynamic())
+                tracing::error!(error = ?error, "workspace repository creation failed before purchase");
+                let reason = match &error {
+                    AgentGitClientError::Status { body, .. }
+                        if body.contains("run git init") && body.contains("No such file or directory") =>
+                    {
+                        "The workspace repository service is missing git. Nothing was charged."
+                    }
+                    _ => "The workspace repository could not be created. Nothing was charged.",
+                };
+                TeamAgentError::InvitationFailed(reason.to_string())
             })?;
 
         Ok(AgentRepo {
