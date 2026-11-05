@@ -6,7 +6,13 @@ fn changed_files(paths: &[&str]) -> Vec<PathBuf> {
 
 /// Path-only selection on the real workspace with the repository's rules.
 fn select_in_repo(graph: &PackageGraph, paths: &[&str]) -> PackageSelection {
-    select_by_paths(graph, &changed_files(paths), &repository_rules().unwrap()).unwrap()
+    select_by_paths(
+        graph,
+        &changed_files(paths),
+        &repository_rules().unwrap(),
+        None,
+    )
+    .unwrap()
 }
 
 fn selected_packages(selection: &PackageSelection) -> &BTreeSet<String> {
@@ -435,7 +441,7 @@ fn fast_path_matches_determinator_on_build_edges() {
         PackageSelection::Packages(BTreeSet::from(["a", "b", "d", "e", "h"].map(str::to_owned)));
     let changed = changed_files(&["a/src/lib.rs"]);
     assert_eq!(
-        select_by_paths(&graph, &changed, &no_path_rules()).unwrap(),
+        select_by_paths(&graph, &changed, &no_path_rules(), None).unwrap(),
         expected
     );
     assert_eq!(

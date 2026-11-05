@@ -26,6 +26,7 @@ jobs:
       graphql_schema: ${{ steps.filter.outputs.graphql_schema }}
       rust_packages: ${{ steps.nextest-filter.outputs.rust_packages }}
       skip_tests: ${{ steps.nextest-filter.outputs.skip_tests }}
+      test_packages: ${{ steps.nextest-filter.outputs.test_packages }}
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -188,6 +189,7 @@ jobs:
         emit() {
           echo "rust_packages=$1" >> "$GITHUB_OUTPUT"
           echo "skip_tests=$2" >> "$GITHUB_OUTPUT"
+          echo "test_packages=${test_packages:-$1}" >> "$GITHUB_OUTPUT"
           exit 0
         }
 
@@ -217,6 +219,8 @@ jobs:
 
         ensure_filter_bin
         packages="$("$filter_bin" /tmp/changed-files "$(< /tmp/base-revision)")"
+        test_packages="$("$filter_bin" /tmp/changed-files "$(< /tmp/base-revision)" "$TEST_DEPTH")"
+        echo "test packages (depth $TEST_DEPTH): $test_packages"
 
         # One package list drives both clippy and tests, so a clippy.toml edit can
         # only skip tests when nothing else selected a package.
@@ -239,6 +243,7 @@ jobs:
       shell: bash
       env:
         FILTER_CACHE_DIR: /home/runner/.cache/macro-nextest-filter
+        TEST_DEPTH: '1'
   check:
     needs:
     - path-check
@@ -532,9 +537,8 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     env:
-      RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
+      RUST_PACKAGES: ${{ needs.path-check.outputs.test_packages }}
       NEXTEST_TEST_THREADS: '32'
-      CARGO_BUILD_JOBS: '2'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
       SCCACHE_IDLE_TIMEOUT: '0'
     services:
@@ -677,8 +681,127 @@ jobs:
     - name: Test Deno sandbox and authenticated SDK execution
       if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')
       run: |-
-        cargo test --locked -p code_execution -- --ignored --test-threads=2
-        cargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored
+cargo nextest run --locked --config 'profile.dev.package."*".debug=false' --all-features --no-tests=pass --test-threads 2 -p code_execution --run-ignored only
+        cargo nextest run --locked --config 'profile.dev.package."*".debug=false' --all-features --no-tests=pass -p agent_harness_service --run-ignored only -E 'test(authenticated_mcp_runs_javascript_and_persists_source_and_result)'
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  compile-tests:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci-sel
+    env:
+      RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
+      RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
+      SCCACHE_IDLE_TIMEOUT: '0'
+    services:
+      postgres:
+        image: pgvector/pgvector:pg14
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: macrodb
+        ports:
+        - '5432:5432'
+        options: '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5 --shm-size 1g'
+      redis:
+        image: redis:7
+        ports:
+        - '6379:6379'
+        options: '--health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name sccache-ci-sel > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Start sccache server
+      run: sccache --start-server
+    - name: Build code-mode assets
+      run: |
+        assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+    - name: configure postgres for concurrent tests
+      run: |
+        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
+        if [ -z "$postgres_container" ]; then
+          echo "pgvector/pgvector:pg14 service container not found" >&2
+          docker ps
+          exit 1
+        fi
+
+        docker exec -i "$postgres_container" psql -U user -d macrodb <<'SQL'
+        ALTER SYSTEM SET fsync = off;
+        ALTER SYSTEM SET synchronous_commit = off;
+        ALTER SYSTEM SET full_page_writes = off;
+        ALTER SYSTEM SET max_wal_size = '4GB';
+        ALTER SYSTEM SET checkpoint_timeout = '30min';
+        ALTER SYSTEM SET max_locks_per_transaction = 8192;
+        SQL
+        docker restart "$postgres_container"
+        until docker exec "$postgres_container" pg_isready -U user -d macrodb; do
+          sleep 1
+        done
+        docker exec "$postgres_container" psql -U user -d macrodb -c "SHOW max_locks_per_transaction;"
+    - name: prepare tests
+      run: just setup_test_envs && just initialize_dbs && just setup_test_template
+    - name: compile tests
+      run: |
+        set -euo pipefail
+        : "${RUST_PACKAGES:?RUST_PACKAGES is required}"
+        if [ "$RUST_PACKAGES" = "all" ]; then
+          cargo check --workspace --exclude sync_service --all-features --tests
+          exit 0
+        fi
+        pkg_args=()
+        for package in $RUST_PACKAGES; do
+          [ "$package" = "sync_service" ] || pkg_args+=(-p "$package")
+        done
+        if [ "${#pkg_args[@]}" -gt 0 ]; then
+          cargo check --all-features --tests "${pkg_args[@]}"
+        fi
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
@@ -710,6 +833,7 @@ jobs:
     - check
     - doppler-config
     - test
+    - compile-tests
     - graphql-schema-compat
     if: always()
     name: Cloud Storage Status Check
