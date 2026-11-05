@@ -489,6 +489,11 @@ the tool's `addMacroCall`, and the call is created when the tool executes, befor
 event is written, so the single invitation already carries the link. The MCP server
 and channel bot accept `addMacroCall` directly. `addMacroCall` and `addGoogleMeet`
 are mutually exclusive, and out-of-office entries accept neither.
+An existing event switches to a Macro call without being recreated:
+`UpdateCalendarEvent`'s `addMacroCall` and the SDK's `event.update({ macroCall: true })`
+send `macroCall` on the update route, which writes the join link and removes the
+Google Meet in one update. An event already holding a Macro call keeps it, and an
+Outlook event's Teams meeting cannot be removed this way.
 
 The sidebar's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of

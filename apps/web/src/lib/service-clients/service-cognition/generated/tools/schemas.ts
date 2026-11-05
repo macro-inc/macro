@@ -19735,6 +19735,7 @@ export const UpdateCalendarEvent = z.object({
       z.null(),
     ])
     .optional(),
+  addMacroCall: z.boolean().optional(),
   reminders: z
     .union([
       z.object({
