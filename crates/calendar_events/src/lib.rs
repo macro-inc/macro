@@ -20,3 +20,5 @@ pub mod inbound;
     feature = "call-meetings"
 ))]
 pub mod outbound;
+#[doc(hidden)]
+pub const CI_INTEGRATE_NONCE: &str = "1793882049-1";
