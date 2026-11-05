@@ -15,7 +15,8 @@ vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
 
 // The app's channel list and split router, as the dialog's support link reads them.
 const channelList = vi.hoisted(() => ({
-  channels: [] as Pick<ApiChannelWithLatest, 'id' | 'name' | 'owner_id'>[],
+  channels: [] as (Pick<ApiChannelWithLatest, 'id' | 'name' | 'owner_id'> &
+    Partial<Pick<ApiChannelWithLatest, 'updated_at'>>)[],
 }));
 vi.mock('@core/context/channels', () => ({
   useChannelsContext: () => ({
@@ -84,10 +85,10 @@ describe('block tutorial row', () => {
     expect(play).not.toHaveBeenCalled();
     // The play pill names the video and shows its presenter and length.
     const pill = screen.getByRole('button', {
-      name: 'Play Learn how to use Macro Mail, 1:27',
+      name: 'Play Learn how to use Macro Mail, 1:42',
     });
     expect(pill.textContent).toContain('Jacob Beckerman');
-    expect(pill.textContent).toContain('Watch demo · 1:27');
+    expect(pill.textContent).toContain('Watch demo · 1:42');
     expect(video()?.autoplay).toBe(false);
     expect(video()?.controls).toBe(false);
 
@@ -230,25 +231,46 @@ describe('support link under the video', () => {
     await waitFor(() => expect(dialogClosed()).toBe(true));
   });
 
-  it('leaves the lip out when the person owns no support channel', async () => {
+  it("opens a Macro team member's most recently active support channel", async () => {
     // A Macro team member is in customers' support channels but owns none.
     channelList.channels = [
       {
-        id: 'customer-support',
+        id: 'older-support',
         name: 'Macro Support x grace',
         owner_id: 'macro|grace@acme.test',
+        updated_at: '2026-11-01T10:00:00Z',
+      },
+      {
+        id: 'recent-support',
+        name: 'Macro Support x lin',
+        owner_id: 'macro|lin@acme.test',
+        updated_at: '2026-11-04T10:00:00Z',
       },
     ];
     render(() => <TutorialRow tutorial="mail" />);
     fireEvent.click(row()!);
     await screen.findByRole('dialog');
 
-    expect(screen.queryByText('Have questions about Macro Mail?')).toBeNull();
-    expect(
-      screen.queryByRole('button', {
+    fireEvent.click(
+      screen.getByRole('button', {
         name: 'Talk to us in your support channel →',
       })
-    ).toBeNull();
+    );
+    expect(openWithSplit).toHaveBeenCalledWith(
+      { type: 'channel', id: 'recent-support' },
+      { activate: true }
+    );
+  });
+
+  it('leaves the lip out when the person is in no support channel', async () => {
+    channelList.channels = [
+      { id: 'general', name: 'general', owner_id: 'macro|ada@acme.test' },
+    ];
+    render(() => <TutorialRow tutorial="mail" />);
+    fireEvent.click(row()!);
+    await screen.findByRole('dialog');
+
+    expect(screen.queryByText('Have questions about Macro Mail?')).toBeNull();
   });
 });
 

@@ -6,7 +6,7 @@ import { findSupportChannelId } from '../core/support-channel';
 
 /**
  * The person's support channel with the Macro team, and how to open it.
- * Unknown while the channel list first loads; absent when they own none.
+ * Unknown while the channel list first loads; absent when they are in none.
  */
 export function createSupportLink() {
   const { channels, isLoading } = useChannelsContext();
