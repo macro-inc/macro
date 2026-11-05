@@ -22,6 +22,7 @@ Components, styling, and interaction conventions.
   default palette is disabled via `--color-*: initial` in
   `apps/web/src/index.css`, so classes like `text-red-500` silently render
   nothing. Enforced by ast-grep `tsx-no-raw-tailwind-palette`, CI error.
+  Use existing semantic surface tokens instead of component-local color mixes.
 - Keep runtime theme tokens together in `apps/web/src/index.css`: one
   `:root, [data-theme-light]` block for dark defaults, followed by one
   `[data-theme-light='true']` override block. Keep any narrower root/device

@@ -52,6 +52,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { CombinedError } from '@urql/core';
+import { err, ok, type Result } from 'neverthrow';
 import { v7 as uuidv7 } from 'uuid';
 import {
   type LoadFailure,
@@ -173,14 +174,22 @@ export class AgentSession {
   /**
    * The shared instance for `id`, created on first acquisition. Every
    * acquisition needs a matching {@link release}; the last one closes the
-   * machine and drops the subscriptions.
+   * machine and drops the subscriptions. `hold` keeps a session open for a
+   * later view without being one, so it is not traced as an open.
    */
-  static acquire(id: string): AgentSession {
+  static acquire(id: string, purpose: 'view' | 'hold' = 'view'): AgentSession {
     const open = AgentSession.open.get(id);
     const session = open ?? new AgentSession(id);
     AgentSession.open.set(id, session);
     session.references += 1;
+    if (purpose === 'hold') return session;
     traceAcquire(id, open === undefined, session.references);
+    // A surface opening a session that is already folded waits for nothing;
+    // its render is measured from now, not from the load long ago.
+    if (session.loaded) {
+      session.trace = new SessionLoadTrace(id);
+      session.trace.end('reused');
+    }
     return session;
   }
 
@@ -264,6 +273,11 @@ export class AgentSession {
   private turn: TurnState = 'idle';
   /** Prompts issued here still waiting for their first output. */
   private readonly prompts = new Set<PromptTrace>();
+
+  /** The fetched log is folded and live rows go straight in. */
+  get loaded(): boolean {
+    return this.ready && !this.loadFailed;
+  }
 
   private setTurn(turn: TurnState | undefined): void {
     const next = turn ?? 'idle';
@@ -355,6 +369,19 @@ export class AgentSession {
    * afresh. The old watch is stopped first: its rows belong to a load that
    * is no longer the one in flight.
    */
+  /**
+   * Read the session row again, for a surface reopening a session that was
+   * held open since an earlier view: the fold is current, the row may not
+   * be. A refusal forgets the cached log, as a load's does.
+   */
+  async readRow(): Promise<Result<AgentSessionResponse, 'denied' | 'failed'>> {
+    const row = await agentHarnessServiceClient.get(this.id);
+    if (row.isOk()) return ok(row.value);
+    if (!accessDenied(row.error)) return err('failed');
+    this.forgetCached();
+    return err('denied');
+  }
+
   private reissueReads(): void {
     this.watch.stop();
     this.watch = this.openWatch();

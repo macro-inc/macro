@@ -329,7 +329,9 @@ dependencies = [
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "mcp_client",
  "nutype",
+ "pipedream_mcp",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -658,6 +660,7 @@ dependencies = [
  "pipedream_mcp",
  "prompt",
  "properties",
+ "rate_limit",
  "rdkafka",
  "readonly_pool",
  "redis",
@@ -666,6 +669,7 @@ dependencies = [
  "rmcp",
  "roles_and_permissions",
  "rootcause",
+ "routine_program",
  "scheduled_action",
  "schemars 1.2.1",
  "search_service_client",
@@ -700,6 +704,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "web_search",
  "workspace-hack",
 ]
 
@@ -1263,6 +1268,7 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "web_search",
  "workspace-hack",
 ]
 
@@ -1466,7 +1472,6 @@ dependencies = [
  "macro_env_var",
  "macro_user_id",
  "rand 0.9.4",
- "regex",
  "reqwest 0.13.4",
  "schemars 1.2.1",
  "serde",
@@ -4566,6 +4571,7 @@ dependencies = [
  "code_mode_assets",
  "futures",
  "rootcause",
+ "rustix 1.1.4",
  "serde",
  "serde_json",
  "tempfile",
@@ -7372,6 +7378,7 @@ dependencies = [
  "sha2 0.10.9",
  "specta",
  "sqlx",
+ "sqs_client",
  "strum 0.27.2",
  "subtle",
  "thiserror 2.0.18",
@@ -8601,6 +8608,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -9495,6 +9503,7 @@ dependencies = [
  "macro_uuid",
  "model_owner",
  "rootcause",
+ "routine_program",
  "scheduled_action",
  "serde_json",
  "tokio",
@@ -12834,8 +12843,10 @@ version = "0.1.0"
 dependencies = [
  "ai_toolset",
  "anyhow",
+ "askama",
  "async-trait",
  "axum",
+ "axum-extra",
  "base64 0.22.1",
  "bot_id",
  "chrono",
@@ -12844,11 +12855,14 @@ dependencies = [
  "macro_auth",
  "macro_db_migrator",
  "macro_user_id",
+ "rand 0.9.4",
  "redis",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "sqlx",
+ "strum 0.27.2",
+ "subtle",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -14607,19 +14621,25 @@ name = "opensearch_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "chrono",
+ "h2 0.4.16",
  "hyper 1.9.0",
+ "hyper-util",
  "macro_entrypoint",
  "models_opensearch",
  "models_search_cursor",
  "opensearch",
  "opensearch_query_builder",
  "reqwest 0.13.4",
+ "rustls",
  "serde",
  "serde_json",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-retry",
+ "tokio-rustls",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -17167,6 +17187,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "routine_program"
+version = "0.1.0"
+dependencies = [
+ "bots",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "routines"
 version = "0.1.0"
 dependencies = [
@@ -17180,6 +17214,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "reqwest 0.13.4",
+ "routine_program",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -17635,6 +17670,7 @@ dependencies = [
  "macro_event_broker",
  "macro_event_topics",
  "macro_service_urls",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mention_utils",
@@ -17649,6 +17685,7 @@ dependencies = [
  "reqwest 0.13.4",
  "roles_and_permissions",
  "rootcause",
+ "routine_program",
  "serde",
  "serde_json",
  "share_permission_db_utils",
@@ -19390,7 +19427,6 @@ dependencies = [
  "anyhow",
  "aws-sdk-sqs",
  "chrono",
- "email",
  "futures",
  "model",
  "models_ai_projection",
@@ -22044,6 +22080,40 @@ dependencies = [
  "phf_codegen 0.13.1",
  "string_cache 0.9.0",
  "string_cache_codegen 0.6.1",
+]
+
+[[package]]
+name = "web_search"
+version = "0.1.0"
+dependencies = [
+ "ai_billing",
+ "ai_toolset",
+ "ai_usage",
+ "anyhow",
+ "async-trait",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "http-body-util",
+ "macro_authorization",
+ "macro_env_var",
+ "macro_user_id",
+ "macro_uuid",
+ "model_user",
+ "rate_limit",
+ "reqwest 0.13.4",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "url",
+ "utoipa",
+ "wiremock",
+ "workspace-hack",
 ]
 
 [[package]]

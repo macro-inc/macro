@@ -730,6 +730,31 @@
             unzip -tqq "$out/call_recording_preview_handler/ffmpeg-layer.zip" >/dev/null
           '';
 
+      # cargo hashes the linker path into every crate's fingerprint, and zigbuild
+      # writes its linker wrapper under its cache directory. Under $TMPDIR, which
+      # is random per build on the CI runners, no handler could reuse the shared
+      # dependency layer. /tmp isn't usable instead because it isn't private there.
+      # Generating the wrappers into the store gives every build one path, and
+      # zigbuild only rewrites a wrapper whose content differs.
+      zigbuildWrappers =
+        pkgs.runCommand "cargo-zigbuild-wrappers"
+          {
+            nativeBuildInputs = [
+              rustToolchain
+              pkgs.cargo-zigbuild
+              pkgs.zig
+            ];
+          }
+          ''
+            export HOME="$TMPDIR/home" XDG_CACHE_HOME="$TMPDIR/xdg"
+            export ZIG_GLOBAL_CACHE_DIR="$TMPDIR/zig" ZIG_LOCAL_CACHE_DIR="$TMPDIR/zig"
+            export CARGO_ZIGBUILD_CACHE_DIR="$out"
+            mkdir -p "$HOME" src
+            printf '[package]\nname = "probe"\nversion = "0.0.0"\nedition = "2021"\n' > Cargo.toml
+            echo 'fn main() {}' > src/main.rs
+            cargo zigbuild --release --offline --target ${lambdaZigTarget}
+          '';
+
       lambdaCommonArgs = commonArgs // {
         # zig links the final binary (cargo-zigbuild); drop the host-only mold arg.
         RUSTFLAGS = "";
@@ -773,14 +798,14 @@
           export ZIG_GLOBAL_CACHE_DIR="$TMPDIR/zig-cache"
           export ZIG_LOCAL_CACHE_DIR="$TMPDIR/zig-cache"
           export XDG_CACHE_HOME="$TMPDIR/xdg"
+          export CARGO_ZIGBUILD_CACHE_DIR=${zigbuildWrappers}
 
           # Inherited cargoArtifacts can carry CMake configure state
-          # (CMakeCache.txt / CMakeFiles) from the deps-only layer. Its
-          # CMAKE_C_COMPILER points at a cargo-zigbuild wrapper script under
-          # $TMPDIR whose hash-suffixed name need not exist in this sandbox,
-          # and CMake hard-fails validating a cached compiler that is gone
-          # ("is not a full path to an existing compiler tool"). Drop the
-          # configure state so a build-script re-run reconfigures cleanly;
+          # (CMakeCache.txt / CMakeFiles) from the deps-only layer, which
+          # records paths from the build that made it, and CMake hard-fails
+          # validating a cached compiler that is gone ("is not a full path to
+          # an existing compiler tool"). Drop the configure state so a
+          # build-script re-run reconfigures cleanly;
           # crates whose fingerprints are clean never read it, so this costs
           # nothing on the cached path. (Today aws-lc-sys is the only cmake
           # crate in the graph, via AWS_LC_SYS_CMAKE_BUILDER below.)
@@ -809,7 +834,9 @@
       # One shared dep closure for all lambda handlers. Build it with the same
       # cargo-zigbuild target used by the final packages; Cargo fingerprints the
       # `.2.26` target separately from the plain triple, so warming the plain
-      # target does not help the deploy builds.
+      # target does not help the deploy builds. Select with --bin, as
+      # deployLambdaPackage does: without --package cargo resolves features across
+      # the workspace, and any other selection gives units the handlers can't reuse.
       lambdaDeployCargoArtifacts = craneLib.buildDepsOnly (
         lambdaCommonArgs
         // {
@@ -821,7 +848,7 @@
           cargoBuildCommand = "cargo zigbuild --release";
           cargoExtraArgs =
             "--locked --target ${lambdaZigTarget} "
-            + pkgs.lib.concatMapStringsSep " " (n: "--package ${n}") lambdaNames;
+            + pkgs.lib.concatMapStringsSep " " (n: "--bin ${n}") lambdaNames;
         }
       );
 
@@ -1176,6 +1203,7 @@
           ;
         default = cargoArtifacts;
         code-mode-assets = codeModeAssets;
+        macro-js-node-modules = jsNodeModules;
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages

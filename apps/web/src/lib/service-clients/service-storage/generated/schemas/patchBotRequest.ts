@@ -20,7 +20,7 @@ export interface PatchBotRequest {
   description?: PatchBotRequestDescription;
   /** Stable handle. */
   handle?: PatchBotRequestHandle;
-  /** Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged. */
+  /** Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged. */
   has_agent?: PatchBotRequestHasAgent;
   /** Display name. */
   name?: PatchBotRequestName;

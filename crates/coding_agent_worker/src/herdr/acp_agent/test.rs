@@ -790,6 +790,70 @@ async fn a_prompt_to_a_busy_native_session_waits_for_its_turn_then_submits() {
 }
 
 #[tokio::test]
+async fn a_stop_while_a_prompt_waits_reports_it_was_never_delivered() {
+    use std::io::Write as _;
+    let root = tempfile::tempdir().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    let transcript = save_transcript(root.path(), &id);
+    let (mut adapter, mut output) = test_adapter(root.path());
+    Arc::get_mut(&mut adapter).unwrap().herdr =
+        Some(queueing_herdr(root.path(), &transcript, "working"));
+    adapter
+        .load_session(&json!({"sessionId":id,"cwd":root.path()}))
+        .await
+        .unwrap();
+    let session = adapter.session(&json!({"sessionId":id})).unwrap();
+    session.prompt_pending.store(true, Ordering::SeqCst);
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&transcript)
+        .unwrap();
+    writeln!(
+        file,
+        "{}",
+        json!({"type":"user", "uuid":"local-user", "message":{"content":"typed in herdr"}})
+    )
+    .unwrap();
+
+    let prompt = tokio::spawn({
+        let adapter = adapter.clone();
+        async move {
+            adapter
+                .respond_to_request(
+                    json!("prompt-1"),
+                    "session/prompt",
+                    json!({"sessionId":id, "prompt":[{"type":"text", "text":"from macro"}]}),
+                )
+                .await;
+        }
+    });
+    let mut next = async || {
+        tokio::time::timeout(Duration::from_secs(5), output.recv())
+            .await
+            .unwrap()
+            .unwrap()
+    };
+    // The prompt is waiting behind the native turn when Stop arrives.
+    assert_eq!(
+        next().await["params"]["update"]["content"]["text"],
+        "typed in herdr"
+    );
+    adapter.cancel(&json!({"sessionId":session.id}));
+    prompt.await.unwrap();
+
+    let response = next().await;
+    assert_eq!(response["id"], "prompt-1");
+    assert_eq!(response["error"]["data"]["kind"], "prompt_not_delivered");
+    let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+    assert!(calls.contains(&format!(
+        "agent send-keys {} esc\n",
+        agent_name(&session.id)
+    )));
+    assert!(!calls.contains("agent prompt"));
+    adapter.shutdown.cancel();
+}
+
+#[tokio::test]
 async fn a_prompt_dismisses_the_exit_confirmation_a_second_ctrl_c_left() {
     let root = tempfile::tempdir().unwrap();
     let id = uuid::Uuid::new_v4().to_string();

@@ -1,3 +1,4 @@
+import type { Link as EmailLink } from '../../../generated/email/types.gen';
 import type { TagSetResponse } from '../../../generated/properties/types.gen';
 import type { PostSoupAstRequest } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
@@ -24,6 +25,12 @@ const excludedFilters = {
 /** Match Rust eq_ignore_ascii_case without changing non-ASCII labels. */
 const fold = (text: string) =>
   text.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+/** A tag label as a filter names it: any scope unless one is given. */
+export type TagFilter = { label: string; scope?: 'personal' | 'team' };
+
+/** One of the caller's tag options. */
+type ResolvedTag = WorkspaceTag & { id: string; definitionId: string };
+
 const and = (left: unknown, right: unknown) =>
   left == null ? right : { '&': [left, right] };
 
@@ -83,6 +90,87 @@ export class WorkspaceQuery {
     return result;
   }
 
+  /**
+   * The connected inbox an address names, matched case-insensitively; none for
+   * a blank address. An unknown or ambiguous address fails with the choices.
+   */
+  async inbox(address: string | undefined): Promise<EmailLink | undefined> {
+    const inbox = address?.trim();
+    if (!inbox) return undefined;
+    const { links } = unwrap(await this.client.email.listLinks());
+    const matches = links.filter(
+      (link) => fold(link.email_address) === fold(inbox),
+    );
+    const match = matches[0];
+    if (!match)
+      throw new Error(
+        `No connected inbox matches "${inbox}". Connected inboxes: ${links.map((link) => link.email_address).join(', ')}.`,
+      );
+    if (matches.length > 1)
+      throw new Error(
+        `Multiple connected inboxes match "${inbox}"; cannot pick one.`,
+      );
+    return match;
+  }
+
+  /**
+   * The caller's tag options that the labels name, deduplicated. An unknown
+   * label fails with the available tags; with `all`, so does a label both
+   * scopes share, rather than guessing one.
+   */
+  async tags(
+    filters: TagFilter[] | undefined,
+    match: 'any' | 'all' | undefined,
+  ): Promise<ResolvedTag[]> {
+    if (
+      filters?.some(
+        (tag) =>
+          tag.scope !== undefined &&
+          tag.scope !== 'personal' &&
+          tag.scope !== 'team',
+      )
+    )
+      throw new Error('Invalid tag scope: use personal or team.');
+    if (!filters?.length) return [];
+    const available = (await this.sets()).flatMap((set) => {
+      const definition = set.definition;
+      if (!definition) return [];
+      return set.options.flatMap((option) =>
+        option.value.type === 'string'
+          ? [
+              {
+                id: option.id,
+                definitionId: definition.id,
+                label: option.value.value,
+                scope:
+                  set.scope === 'user'
+                    ? ('personal' as const)
+                    : ('team' as const),
+              },
+            ]
+          : [],
+      );
+    });
+    const selected = new Map<string, ResolvedTag>();
+    for (const filter of filters) {
+      const matches = available.filter(
+        (tag) =>
+          fold(tag.label) === fold(filter.label.trim()) &&
+          (!filter.scope || tag.scope === filter.scope),
+      );
+      if (!matches.length)
+        throw new Error(
+          `Unknown tag "${filter.label}". Available tags: ${available.map((tag) => `${tag.label} (${tag.scope})`).join(', ')}.`,
+        );
+      if (match === 'all' && matches.length > 1)
+        throw new Error(
+          `Tag "${filter.label}" is ambiguous; specify personal or team scope.`,
+        );
+      for (const tag of matches) selected.set(tag.id, tag);
+    }
+    return [...selected.values()];
+  }
+
   async body(options: WorkspaceListOptions): Promise<PostSoupAstRequest> {
     for (const [name, value, allowed] of [
       [
@@ -103,11 +191,12 @@ export class WorkspaceQuery {
       options.includeTypes !== undefined &&
       (!Array.isArray(options.includeTypes) ||
         options.includeTypes.some(
-          (type) => !Object.hasOwn(excludedFilters, type),
+          (type) =>
+            type !== 'agent_session' && !Object.hasOwn(excludedFilters, type),
         ))
     )
       throw new Error(
-        `Invalid workspace includeTypes. Supported values: ${Object.keys(excludedFilters).join(', ')}. Tasks use document with df: {l: {dst: 'task'}}.`,
+        `Invalid workspace includeTypes. Supported values: ${[...Object.keys(excludedFilters), 'agent_session'].join(', ')}. Tasks use document with df: {l: {dst: 'task'}}.`,
       );
     for (const field of [
       'df',
@@ -119,6 +208,7 @@ export class WorkspaceQuery {
       'callf',
       'fef',
       'calf',
+      'asf',
       'propf',
     ] as const) {
       if (options[field] != null) validateFilter(options[field], field);
@@ -162,23 +252,8 @@ export class WorkspaceQuery {
       body.ef = {
         '&': [{ l: { Importance: true } }, { l: { Shared: 'exclude' } }],
       };
-    const inbox = options.inbox?.trim();
-    if (inbox) {
-      const { links } = unwrap(await this.client.email.listLinks());
-      const matches = links.filter(
-        (link) => fold(link.email_address) === fold(inbox),
-      );
-      const match = matches[0];
-      if (!match)
-        throw new Error(
-          `No connected inbox matches "${inbox}". Connected inboxes: ${links.map((link) => link.email_address).join(', ')}.`,
-        );
-      if (matches.length > 1)
-        throw new Error(
-          `Multiple connected inboxes match "${inbox}"; cannot pick one.`,
-        );
-      body.ef = and(body.ef, { l: { Owner: match.id } });
-    }
+    const link = await this.inbox(options.inbox);
+    if (link) body.ef = and(body.ef, { l: { Owner: link.id } });
     const includeTypes =
       options.includeTypes ??
       (options.emailPreset === 'signal' ? ['email'] : undefined);
@@ -188,44 +263,12 @@ export class WorkspaceQuery {
           body[field] = { l: { [literal]: nil } };
       }
     }
-    if (options.tags?.length) {
-      const available = (await this.sets()).flatMap((set) => {
-        const definition = set.definition;
-        if (!definition) return [];
-        return set.options.flatMap((option) =>
-          option.value.type === 'string'
-            ? [
-                {
-                  id: option.id,
-                  definitionId: definition.id,
-                  label: option.value.value,
-                  scope:
-                    set.scope === 'user'
-                      ? ('personal' as const)
-                      : ('team' as const),
-                },
-              ]
-            : [],
-        );
-      });
-      const selected = new Map<string, (typeof available)[number]>();
-      for (const filter of options.tags) {
-        const matches = available.filter(
-          (tag) =>
-            fold(tag.label) === fold(filter.label.trim()) &&
-            (!filter.scope || tag.scope === filter.scope),
-        );
-        if (!matches.length)
-          throw new Error(
-            `Unknown tag "${filter.label}". Available tags: ${available.map((tag) => `${tag.label} (${tag.scope})`).join(', ')}.`,
-          );
-        if (options.tagsMatch === 'all' && matches.length > 1)
-          throw new Error(
-            `Tag "${filter.label}" is ambiguous; specify personal or team scope.`,
-          );
-        for (const tag of matches) selected.set(tag.id, tag);
-      }
-      const expressions = [...selected.values()].map((tag) => ({
+    // Agent sessions are opt-in on the wire: a query without `asf` gets none.
+    if (!includeTypes?.length || includeTypes.includes('agent_session'))
+      body.asf = and(options.asf, { l: { inc: true } });
+    const selected = await this.tags(options.tags, options.tagsMatch);
+    if (selected.length) {
+      const expressions = selected.map((tag) => ({
         l: { pd: tag.definitionId, v: { so: tag.id } },
       }));
       const combined = expressions.reduce<unknown>(

@@ -75,63 +75,67 @@ pub async fn process_message(
         tracing::error!(error=?e, job_id=%job_id, "unable to cleanup folder");
     }
 
-    match result {
-        Ok(_) => {
-            if is_docx_key(&req.from_key) {
-                tracing::trace!("sending success message to lambda");
-                lambda_client
-                    .invoke_event(
-                        &WEB_SOCKET_RESPONSE_LAMBDA,
-                        &DocxUploadJobResult {
-                            job_id: Cow::Borrowed(&job_id),
-                            status: "Completed".into(),
-                            job_type: "docx_upload".into(), // TODO: will need to pass in job type to the convert message eventually
-                            data: DocxUploadJobData {
-                                error: false,
-                                message: None,
-                                data: Some(DocxUploadJobSuccessDataInner {
-                                    converted: true,
-                                    bom_parts: vec![BomPart {
-                                        sha: "bogus".to_string(),
-                                        path: "bogus".to_string(),
-                                        id: "bogus".to_string(),
-                                        document_bom_id: 1,
-                                    }],
-                                }),
-                            },
-                        },
-                    )
-                    .await?;
-            }
-        }
-        Err(e) => {
-            if is_docx_key(&req.from_key) {
-                tracing::trace!("sending failure message to lambda");
-                lambda_client
-                    .invoke_event(
-                        &WEB_SOCKET_RESPONSE_LAMBDA,
-                        &DocxUploadJobResult {
-                            job_id: Cow::Borrowed(&job_id),
-                            status: "Failed".into(),
-                            job_type: "docx_upload".into(), // TODO: will need to pass in job type to the convert message eventually
-                            data: DocxUploadJobData {
-                                error: true,
-                                message: Some("error converting document".to_string()),
-                                data: None,
-                            },
-                        },
-                    )
-                    .await?;
-            }
-            return Err(e);
-        }
+    if let Some(update) = job_update(&job_id, &req, result.is_ok()) {
+        tracing::trace!(status=%update.status, "sending job update to lambda");
+        lambda_client
+            .invoke_event(&WEB_SOCKET_RESPONSE_LAMBDA, &update)
+            .await?;
     }
+
+    result?;
 
     if let Err(e) = worker.cleanup_message(message).await {
         tracing::error!(error=?e, job_id=&job_id, "failed to cleanup message");
     }
 
     Ok(())
+}
+
+/// The job update to send for a finished conversion, if a client job is
+/// waiting on it.
+pub(super) fn job_update<'a>(
+    job_id: &'a str,
+    req: &ConvertQueueMessage,
+    converted: bool,
+) -> Option<DocxUploadJobResult<'a>> {
+    if !req.notify_job || !is_docx_key(&req.from_key) {
+        return None;
+    }
+
+    // TODO: will need to pass in job type to the convert message eventually
+    let job_type = "docx_upload".into();
+
+    if !converted {
+        return Some(DocxUploadJobResult {
+            job_id: Cow::Borrowed(job_id),
+            status: "Failed".into(),
+            job_type,
+            data: DocxUploadJobData {
+                error: true,
+                message: Some("error converting document".to_string()),
+                data: None,
+            },
+        });
+    }
+
+    Some(DocxUploadJobResult {
+        job_id: Cow::Borrowed(job_id),
+        status: "Completed".into(),
+        job_type,
+        data: DocxUploadJobData {
+            error: false,
+            message: None,
+            data: Some(DocxUploadJobSuccessDataInner {
+                converted: true,
+                bom_parts: vec![BomPart {
+                    sha: "bogus".to_string(),
+                    path: "bogus".to_string(),
+                    id: "bogus".to_string(),
+                    document_bom_id: 1,
+                }],
+            }),
+        },
+    })
 }
 
 pub async fn convert(
