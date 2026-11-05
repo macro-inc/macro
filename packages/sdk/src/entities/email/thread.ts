@@ -13,7 +13,7 @@ import type { Calendar } from '../calendar/calendar';
 import { CalendarEvent } from '../calendar/event';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
 import {
   type SharePermissionOptions,

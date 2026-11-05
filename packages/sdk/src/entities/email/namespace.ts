@@ -6,7 +6,7 @@ import type {
 import type { ListEmailRemindersData } from '../../../generated/storage/types.gen';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import type { SearchOpts } from '../search';
+import type { SearchOpts } from '../search/options';
 import { EmailAttachment } from './attachment';
 import { type DraftOptions, draftBody, EmailDraft } from './draft';
 import { EmailFilter, type EmailFilterOptions } from './filter';

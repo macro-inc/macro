@@ -53,8 +53,6 @@ export default {
     projectBadge: 'Projekt',
     newProject: 'Nytt projekt',
     contentAlreadyOpen: 'Innehållet är redan öppet',
-    unableToOpenConversation:
-      'Det gick inte att öppna konversationen. Försök igen.',
     mobileSearchPlaceholder: 'Sök…',
     closeSearch: 'Stäng sökning',
     searchFullTextFor: 'Fritextsök efter ”{{query}}”',

@@ -1,6 +1,9 @@
 use models_sfs::FileMetadata;
 
-use super::{ProfilePictureFileError, validate_profile_picture_file};
+use super::{
+    MAX_PROFILE_PICTURE_BYTES, ProfilePictureFileError, ProfilePictureUploadError,
+    validate_profile_picture_file, validate_profile_picture_upload,
+};
 
 const CALLER: &str = "macro|agent@example.com";
 
@@ -40,4 +43,36 @@ fn svg_and_other_files_are_rejected() {
             Err(ProfilePictureFileError::NotAnImage)
         );
     }
+}
+
+#[test]
+fn an_image_at_the_size_limit_can_be_uploaded() {
+    assert_eq!(
+        validate_profile_picture_upload("image/png", MAX_PROFILE_PICTURE_BYTES),
+        Ok(())
+    );
+}
+
+#[test]
+fn an_image_over_the_size_limit_is_rejected() {
+    assert_eq!(
+        validate_profile_picture_upload("image/png", MAX_PROFILE_PICTURE_BYTES + 1),
+        Err(ProfilePictureUploadError::TooLarge)
+    );
+}
+
+#[test]
+fn an_empty_upload_is_rejected() {
+    assert_eq!(
+        validate_profile_picture_upload("image/png", 0),
+        Err(ProfilePictureUploadError::Empty)
+    );
+}
+
+#[test]
+fn an_unsupported_type_is_rejected_before_its_size() {
+    assert_eq!(
+        validate_profile_picture_upload("image/svg+xml", MAX_PROFILE_PICTURE_BYTES + 1),
+        Err(ProfilePictureUploadError::UnsupportedType)
+    );
 }

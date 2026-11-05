@@ -63,6 +63,7 @@ test('workspace defaults use authenticated normal API with native defaults and g
     expect(request.headers.get('authorization')).toBe('Bearer test-token');
     expect(await request.json()).toEqual({
       ccf: { l: { id: nil } },
+      asf: { l: { inc: true } },
       expand: true,
       limit: 50,
       sort_method: 'updated_at',
@@ -588,4 +589,46 @@ test('untyped workspace enum errors list the actual supported values', async () 
       macro().workspace.page({ includeTypes: [type] } as never),
     ).rejects.toThrow('channel_thread');
   }
+});
+
+test('agent sessions are listed by default and by type, with their filter, as session handles', async () => {
+  const bodies: Record<string, unknown>[] = [];
+  serve(async (request) => {
+    bodies.push(await request.json());
+    return Response.json({
+      items: [
+        {
+          tag: 'agentSession',
+          data: {
+            id: 'session',
+            name: 'Fix login',
+            botId: 'bot',
+            createdAt: '2026-11-01T00:00:00Z',
+            harness: 'macrod',
+            ownerId: 'macro|me@example.com',
+            pullRequestUrl: 'https://github.com/acme/app/pull/1',
+            properties: [],
+          },
+          frecency_score: 1,
+          is_favorited: false,
+        },
+      ],
+    });
+  });
+  const page = await macro().workspace.page({
+    includeTypes: ['agent_session'],
+    asf: { l: { o: 'macro|me@example.com' } },
+  });
+  expect(bodies[0]?.asf).toEqual({
+    '&': [{ l: { o: 'macro|me@example.com' } }, { l: { inc: true } }],
+  });
+  expect(bodies[0]?.df).toEqual({ l: { id: nil } });
+  const item = page.items[0];
+  if (item?.type !== 'agent_session') throw new Error('expected session');
+  expect(item.entity.id).toBe('session');
+  expect(item.name).toBe('Fix login');
+  expect(item.pullRequestUrl).toBe('https://github.com/acme/app/pull/1');
+
+  await macro().workspace.page({ includeTypes: ['document'] });
+  expect(bodies[1]?.asf).toBeUndefined();
 });

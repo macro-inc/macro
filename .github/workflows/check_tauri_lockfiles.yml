@@ -18,7 +18,42 @@ permissions:
 jobs:
   check-tauri-lockfiles:
     name: check Tauri lockfiles
-    runs-on: namespace-profile-linux-small
+    runs-on: namespace-profile-linux-tiny-no-cache
+    outputs:
+      vendoring_inputs: ${{ steps.filter.outputs.vendoring_inputs }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - id: filter
+      name: Filter changed paths
+      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
+      with:
+        filters: |
+          vendoring_inputs:
+            - 'apps/web/tauri/Cargo.lock'
+            - 'apps/web/tauri/desktop-cef/Cargo.lock'
+            - 'nix/tauri-desktop.nix'
+            - 'flake.nix'
+            - 'flake.lock'
+            - '.github/workflows/check_tauri_lockfiles.yml'
+    - name: Setup Rust
+      uses: './.github/actions/setup-rust'
+      with:
+        sccache: 'false'
+        rust-cache: 'false'
+    - name: Check lockfiles match their manifests
+      run: |
+        cargo update --workspace --locked --manifest-path apps/web/tauri/Cargo.toml
+        cargo update --workspace --locked --manifest-path apps/web/tauri/desktop-cef/Cargo.toml
+  check-tauri-vendoring:
+    needs:
+    - check-tauri-lockfiles
+    if: needs.check-tauri-lockfiles.outputs.vendoring_inputs == 'true'
+    name: check Tauri vendoring
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=nix-checks
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
