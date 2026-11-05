@@ -23,4 +23,4 @@ pub mod inbound;
 ))]
 pub mod outbound;
 #[doc(hidden)]
-pub const CI_INTEGRATE_NONCE: &str = "open";
+pub const CI_INTEGRATE_NONCE: &str = "1793888736-1";
