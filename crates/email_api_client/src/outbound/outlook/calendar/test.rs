@@ -1,5 +1,5 @@
 use super::*;
-use chrono::{TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
     matchers::{body_partial_json, header, method, path, query_param},
@@ -169,6 +169,81 @@ fn all_day_utc_responses_keep_local_dates_across_dst() {
             end_date: "2026-03-09".parse().unwrap()
         }
     );
+}
+
+/// These zones stopped changing clocks in 2026 (IANA tzdata 2026b–2026e), so
+/// 2026-11-02 02:16 local is no longer daylight time in any of them.
+const CANADA_2026: [(&str, &str); 4] = [
+    ("America/Edmonton", "2026-11-02T08:16:00Z"),
+    ("America/Inuvik", "2026-11-02T08:16:00Z"),
+    ("America/Vancouver", "2026-11-02T09:16:00Z"),
+    ("America/Winnipeg", "2026-11-02T07:16:00Z"),
+];
+
+#[test]
+fn local_times_use_the_zones_2026_rules() {
+    for (zone, utc) in CANADA_2026 {
+        let instant: DateTime<Utc> = utc.parse().unwrap();
+        let read = json!({"dateTime": "2026-11-02T02:16:00.0000000", "timeZone": zone});
+        assert_eq!(normalize::instant(&read).unwrap(), instant, "{zone}");
+        let time = EventTime::Timed {
+            starts_at: instant,
+            ends_at: instant + chrono::Duration::hours(1),
+            time_zone: Some(zone.into()),
+        };
+        assert_eq!(
+            normalize::time_body(&time).unwrap().0["dateTime"],
+            "2026-11-02T02:16:00",
+            "{zone}"
+        );
+    }
+}
+
+#[test]
+fn cldr_49_windows_zones_map_to_the_zones_they_replace() {
+    for (windows, zone) in [
+        ("British Columbia Standard Time", "America/Vancouver"),
+        ("Alberta Standard Time", "America/Edmonton"),
+        ("Manitoba Standard Time", "America/Winnipeg"),
+    ] {
+        let (_, utc) = CANADA_2026.iter().find(|(z, _)| *z == zone).unwrap();
+        let read = json!({"dateTime": "2026-11-02T02:16:00.0000000", "timeZone": windows});
+        assert_eq!(
+            normalize::instant(&read).unwrap(),
+            utc.parse::<DateTime<Utc>>().unwrap(),
+            "{windows}"
+        );
+        let mut v = event("e");
+        v["originalStartTimeZone"] = json!(windows);
+        assert!(
+            matches!(normalize::event_time(&v).unwrap(), EventTime::Timed { time_zone: Some(ref z), .. } if z == zone),
+            "{windows}"
+        );
+    }
+}
+
+#[test]
+fn all_day_utc_responses_use_the_zones_2026_rules() {
+    for (zone, utc) in CANADA_2026 {
+        let midnight = utc.parse::<DateTime<Utc>>().unwrap() - chrono::Duration::minutes(136);
+        let mut v = event("all-day");
+        v["isAllDay"] = json!(true);
+        v["originalStartTimeZone"] = json!(zone);
+        v["start"]["dateTime"] = json!(midnight.format("%Y-%m-%dT%H:%M:%S").to_string());
+        v["end"]["dateTime"] = json!(
+            (midnight + chrono::Duration::days(1))
+                .format("%Y-%m-%dT%H:%M:%S")
+                .to_string()
+        );
+        assert_eq!(
+            normalize::event_time(&v).unwrap(),
+            EventTime::AllDay {
+                start_date: "2026-11-02".parse().unwrap(),
+                end_date: "2026-11-03".parse().unwrap()
+            },
+            "{zone}"
+        );
+    }
 }
 
 #[test]

@@ -406,6 +406,30 @@ fn multiple_triggers_preserve_event_filters_and_choose_the_next_schedule() {
 }
 
 #[test]
+fn schedules_use_the_zones_2026_rules() {
+    // These zones stopped changing clocks in 2026 (IANA tzdata 2026b–2026e).
+    for (timezone, next) in [
+        ("America/Edmonton", "2026-11-02T15:00:00+00:00"),
+        ("America/Inuvik", "2026-11-02T15:00:00+00:00"),
+        ("America/Vancouver", "2026-11-02T16:00:00+00:00"),
+        ("America/Winnipeg", "2026-11-02T14:00:00+00:00"),
+    ] {
+        let trigger: ActionTrigger = serde_json::from_value(
+            json!({"type": "cron", "schedule": "0 0 9 * * *", "timezone": timezone}),
+        )
+        .unwrap();
+        let after = chrono::DateTime::parse_from_rfc3339("2026-11-01T20:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        assert_eq!(
+            trigger.next_run_after(after).unwrap().to_rfc3339(),
+            next,
+            "{timezone}"
+        );
+    }
+}
+
+#[test]
 fn event_groups_must_be_combined_and_external_webhooks_are_rejected() {
     let events = serde_json::json!({"type":"events", "filters":[{"events":["document.created"]}]});
     assert!(
