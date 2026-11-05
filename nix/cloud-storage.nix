@@ -216,9 +216,17 @@
           runHook preBuild
           export HOME="$TMPDIR/home"
           mkdir -p "$HOME"
+          # Link packages rather than copying 2 GB of them. The workspace packages
+          # are relative links into this source tree, so they have to stay here.
           for project in . packages/sdk packages/sdk-docs packages/code-mode-sdk; do
-            if [ -d "${jsNodeModules}/$project/node_modules" ]; then
-              cp -a "${jsNodeModules}/$project/node_modules" "$project/"
+            installed="${jsNodeModules}/$project/node_modules"
+            if [ -d "$installed" ]; then
+              mkdir "$project/node_modules"
+              ln -s "$installed"/* "$project/node_modules/"
+              if [ -d "$installed/@macro-inc" ]; then
+                rm "$project/node_modules/@macro-inc"
+                cp -a "$installed/@macro-inc" "$project/node_modules/"
+              fi
             fi
           done
           bun packages/code-mode-sdk/scripts/generate.ts "$out"
