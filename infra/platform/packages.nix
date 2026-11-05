@@ -57,21 +57,6 @@ rec {
     meta.license = lib.licenses.asl20;
   };
 
-  # AWS KMS API emulator for local and non-prod instances (MIT). Prod uses
-  # OpenBao Transit behind the KMS port instead.
-  local-kms = pkgs.buildGoModule rec {
-    pname = "local-kms";
-    version = "3.12.0";
-    src = pkgs.fetchFromGitHub {
-      owner = "nsmithuk";
-      repo = "local-kms";
-      rev = version;
-      hash = "sha256-N71papZZK6rxmborp9I+RAgBefsvxeDXKcQHNE/3jRs=";
-    };
-    vendorHash = "sha256-ZkQuE+4rU/mOnlN0GKywcBAh6N0ar8CcsE6jVEORNYQ=";
-    doCheck = false;
-    meta.license = lib.licenses.mit;
-  };
 
   # FusionAuth's start.sh deletes the xmldsig `disallowAlg` lines from the
   # JDK's java.security at every boot (SAML with SHA-1 signatures). The store

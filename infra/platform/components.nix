@@ -105,12 +105,14 @@ let
         ~/sqs/aws4_request       queues;
         ~/dynamodb/aws4_request  extenddb;
         ~/kms/aws4_request       kms;
+        ~/sns/aws4_request       push;
         default                  s3;
       }
       upstream s3 { server rustfs:9000; }
       upstream queues { server queue-gateway:9324; }
       upstream extenddb { server extenddb:18443; }
       upstream kms { server kms:8080; }
+      upstream push { server push-sink:8080; }
       server {
         listen 4566;
         location = /_localstack/health { return 200 '{"services":{}}'; }
@@ -566,22 +568,92 @@ in
     infra = true;
   };
 
+  # Key management. `kms` serves the KMS API on OpenBao's transit engine, so services
+  # use aws_sdk_kms unchanged; see services/kms_gateway. The static seal unseals OpenBao
+  # without a person, from a key in macro-env. On first start it creates transit and a
+  # token limited to it, then revokes its root token. Each step tolerates a restart.
+  openbao = {
+    image = image {
+      name = "openbao";
+      contents = [ pkgs.openbao ];
+      env.HOME = "/tmp";
+      entrypoint = sh ''
+        set -e
+        cat > /tmp/bao.hcl <<EOF
+        ui = false
+        disable_mlock = true
+        api_addr = "http://openbao:8200"
+        default_max_lease_ttl = "87600h"
+        listener "tcp" {
+          address = "0.0.0.0:8200"
+          tls_disable = true
+        }
+        storage "file" {
+          path = "/var/lib/openbao/data"
+        }
+        seal "static" {
+          current_key_id = "v1"
+          current_key = "env://BAO_SEAL_KEY"
+        }
+        EOF
+        bao server -config=/tmp/bao.hcl &
+        server=$!
+        export BAO_ADDR=http://127.0.0.1:8200
+        until bao status -format=json >/dev/null 2>&1 || [ $? -eq 2 ]; do
+          kill -0 "$server" 2>/dev/null || exit 1
+          sleep 1
+        done
+        state=/var/lib/openbao/bootstrap
+        if ! bao status -format=json | grep -q '"initialized": true'; then
+          bao operator init -recovery-shares=1 -recovery-threshold=1 -format=json \
+            > "$state.init"
+        fi
+        if [ -f "$state.init" ]; then
+          until ! bao status >/dev/null 2>&1 || bao status | grep -q 'Sealed.*false'; do sleep 1; done
+          BAO_TOKEN="$(sed -n 's/.*"root_token": "\(.*\)".*/\1/p' "$state.init")"
+          export BAO_TOKEN
+          bao secrets enable transit 2>/dev/null || true
+          printf 'path "transit/*" { capabilities = ["create", "read", "update"] }\n' \
+            | bao policy write transit -
+          bao token create -id="$OPENBAO_TOKEN" -policy=transit -orphan -ttl=87600h \
+            >/dev/null 2>&1 || true
+          bao token revoke -self
+          unset BAO_TOKEN
+          rm -f "$state.init"
+        fi
+        wait "$server"
+      '';
+    };
+    env = {
+      BAO_SEAL_KEY.secret = "PLATFORM_KMS_SEAL_KEY";
+      OPENBAO_TOKEN.secret = "PLATFORM_KMS_TOKEN";
+    };
+    user = 1000;
+    ports = [ 8200 ];
+    volumes.data = "/var/lib/openbao";
+    singleton = true;
+    readiness.tcp = 8200;
+    infra = true;
+  };
+
   kms = {
     image = image {
-      name = "local-kms";
-      contents = [ platformPkgs.local-kms ];
-      entrypoint = [ "local-kms" ];
-      env = {
-        PORT = "8080";
-        KMS_ACCOUNT_ID = "000000000000";
-        KMS_REGION = "us-east-1";
-        KMS_DATA_PATH = "/data";
-      };
+      name = "kms_gateway";
+      contents = [ macro.binaries.kms_gateway ];
+      entrypoint = [ "/bin/kms_gateway" ];
+    };
+    env = {
+      PORT = "8080";
+      OPENBAO_ADDR = "http://openbao:8200";
+      OPENBAO_TOKEN.secret = "PLATFORM_KMS_TOKEN";
+      ENVIRONMENT.secret = "ENVIRONMENT";
     };
     user = 1000;
     ports = [ 8080 ];
-    volumes.data = "/data";
-    readiness.tcp = 8080;
+    readiness = {
+      http = "/health";
+      port = 8080;
+    };
     infra = true;
   };
 
@@ -617,6 +689,23 @@ in
     user = 1000;
     ports = [ 8080 ];
     readiness.tcp = 8080;
+    infra = true;
+  };
+
+  # Mailpit's counterpart for mobile push: see push-sink/sink.py.
+  push-sink = {
+    image = image {
+      name = "push-sink";
+      contents = [ pkgs.python3 ];
+      entrypoint = [
+        "python3"
+        "${./push-sink/sink.py}"
+      ];
+    };
+    user = 1000;
+    ports = [ 8080 ];
+    readiness.tcp = 8080;
+    singleton = true;
     infra = true;
   };
 

@@ -150,6 +150,20 @@ fn an_existing_instance_keeps_its_development_credentials() {
 }
 
 #[test]
+fn an_older_instance_gets_kms_credentials_once() {
+    let mut credentials = Credentials::development();
+    credentials.ensure_kms().unwrap();
+    let (seal, token) = (
+        credentials.kms_seal_key.clone(),
+        credentials.kms_token.clone(),
+    );
+    assert!(!seal.is_empty() && !token.is_empty());
+    credentials.ensure_kms().unwrap();
+    assert_eq!(credentials.kms_seal_key, seal);
+    assert_eq!(credentials.kms_token, token);
+}
+
+#[test]
 fn an_application_converges_only_on_the_published_revision_when_healthy() {
     let app = |revision: &str, sync: &str, health: &str| {
         json!({ "status": {

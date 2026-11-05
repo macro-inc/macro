@@ -264,6 +264,12 @@ pub struct Credentials {
     fusionauth_api_key: String,
     fusionauth_client_secret: String,
     fusionauth_admin: String,
+    /// Unseals OpenBao. Instances from before OpenBao get theirs on their next `up`.
+    #[serde(default)]
+    kms_seal_key: String,
+    /// The token limited to transit that the KMS gateway uses.
+    #[serde(default)]
+    kms_token: String,
 }
 
 /// Environment keys all holding the internal service credential.
@@ -300,6 +306,8 @@ impl Credentials {
             fusionauth_api_key: random_hex()?,
             fusionauth_client_secret: random_hex()?,
             fusionauth_admin: random_hex()?,
+            kms_seal_key: random_seal_key()?,
+            kms_token: random_hex()?,
         })
     }
 
@@ -316,7 +324,20 @@ impl Credentials {
             fusionauth_api_key: identity::FUSIONAUTH_API_KEY.into(),
             fusionauth_client_secret: identity::CLIENT_SECRET.into(),
             fusionauth_admin: DEVELOPMENT_FUSIONAUTH_ADMIN.into(),
+            kms_seal_key: String::new(),
+            kms_token: String::new(),
         }
+    }
+
+    /// Generates what an instance older than OpenBao does not have yet.
+    fn ensure_kms(&mut self) -> Result<()> {
+        if self.kms_seal_key.is_empty() {
+            self.kms_seal_key = random_seal_key()?;
+        }
+        if self.kms_token.is_empty() {
+            self.kms_token = random_hex()?;
+        }
+        Ok(())
     }
 
     /// Puts these credentials into the shared environment.
@@ -353,6 +374,8 @@ impl Credentials {
             ),
             ("PLATFORM_FUSIONAUTH_DB_PASSWORD", &self.fusionauth_db),
             ("PLATFORM_EXTENDDB_PASSWORD", &self.extenddb),
+            ("PLATFORM_KMS_SEAL_KEY", &self.kms_seal_key),
+            ("PLATFORM_KMS_TOKEN", &self.kms_token),
         ] {
             env.insert(key.to_owned(), value.clone());
         }
@@ -392,6 +415,15 @@ impl Credentials {
     }
 }
 
+/// 32 random bytes in base64, as OpenBao's static seal takes them.
+fn random_seal_key() -> Result<String> {
+    use base64::Engine as _;
+    use std::io::Read;
+    let mut bytes = [0u8; 32];
+    std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
 fn random_hex() -> Result<String> {
     use std::io::Read;
     let mut bytes = [0u8; 32];
@@ -418,6 +450,7 @@ fn write_state(instance: &Instance, state: &State) -> Result<()> {
 
 /// Workloads only instances run, outside the local stack's inventory: workload -> bin.
 const PLATFORM_WORKLOADS: &[(&str, &str)] = &[
+    ("kms", "kms_gateway"),
     ("queue-gateway", "queue_gateway"),
     ("agent-trigger-service", "agent_trigger_service"),
     ("email-focus-worker", "email_focus_worker"),
@@ -516,12 +549,13 @@ fn up(args: &UpArgs) -> Result<()> {
         access_key_id: key_id,
         secret_access_key: key_secret,
     };
-    let credentials = match &state.credentials {
+    let mut credentials = match &state.credentials {
         Some(credentials) => credentials.clone(),
         // A recorded build means its databases already exist.
         None if !state.binaries.is_empty() => Credentials::development(),
         None => Credentials::generate()?,
     };
+    credentials.ensure_kms()?;
     state.credentials = Some(credentials.clone());
     let kickstart_json = credentials.apply_to_kickstart(&kickstart_json)?;
     let shared_env = finish_shared_env(shared_env, &credentials, &aws_key);

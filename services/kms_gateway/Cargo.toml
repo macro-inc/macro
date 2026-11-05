@@ -1,0 +1,25 @@
+[package]
+edition = "2024"
+name = "kms_gateway"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "kms_gateway"
+path = "src/main.rs"
+
+[dependencies]
+axum = { workspace = true }
+base64 = { workspace = true }
+macro_config = { path = "../../crates/macro_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_tower_layers = { path = "../../crates/macro_tower_layers" }
+rand = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+rootcause = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

@@ -187,6 +187,7 @@ members = [
   "crates/sync_router",
   "services/sync-service",
   "services/sync-service/bebop-schema",
+  "services/kms_gateway",
   "services/queue_gateway",
   "services/unfurl_service",
   "services/upload_extractor_lambda_handler",

@@ -26,7 +26,7 @@ deploy repo, which Argo CD syncs.
   Service/PVC translation with sync waves, and `wrapBinary` for host-built Cargo
   binaries.
 - `packages.nix`: components nixpkgs lacks (RustFS, celld, ExtendDB,
-  local-kms, FusionAuth).
+  FusionAuth).
 - `instances.nix`: size profiles, the only thing allowed to differ between
   environments. `parity/` enforces that.
 
@@ -60,8 +60,7 @@ deploy repo, which Argo CD syncs.
 
 - `cargo test -p xtask_local --features local-stack platform`
 - `cargo x workflows --check`, for `.gitea/workflows`.
-- `python3 -m unittest test_generate_chart` in `selfhost/`, and `test_check_parity` in
-  `parity/`.
+- `python3 -m unittest` in `selfhost/`, `parity/`, `lambda-runner/`, and `push-sink/`.
 - `nix build --no-link .#platform.parity`: local and prod differ only in size.
 - `nix build --no-link .#platform.awsCheck`: the AWS configuration validates, offline
   and without credentials. Never apply it without explicit permission.

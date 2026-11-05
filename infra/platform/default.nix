@@ -211,7 +211,11 @@ rec {
           host = "parity.example.com";
           inherit size;
           frontend = stub;
-          binaries = lib.genAttrs (binaryNames ++ [ "queue_gateway" "xtask_local" ]) (_: stub);
+          binaries = lib.genAttrs (binaryNames ++ [
+            "kms_gateway"
+            "queue_gateway"
+            "xtask_local"
+          ]) (_: stub);
           node = lib.genAttrs [
             "lexical"
             "websocket"

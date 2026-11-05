@@ -310,8 +310,11 @@ maintained twice:
   default (Postgres, Kafka, OpenSearch, Valkey, RustFS, ExtendDB, celld), and
   each component can be switched off in favour of an external endpoint (a
   customer's managed Postgres or S3).
-- **Self-hosting KMS:** customers use OpenBao Transit (the prod adapter);
-  local-kms is never shipped in the chart.
+- **Mobile push:** `infra/platform/push-sink` answers SNS as Mailpit answers SMTP: it
+  remembers endpoints, logs each publish's target and size, and sends nothing. A real
+  deployment needs a real provider, through `sns_client`.
+- **Key management:** OpenBao's transit engine, behind `services/kms_gateway`, which
+  serves the KMS API. Its static seal unseals it unattended, from a key in `macro-env`.
 
 ### Auxiliary services
 
@@ -365,8 +368,8 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
 - **Phase 3, for the core app:** every Rust service in the inventory, lexical,
   websocket, the edge, and the frontend. Sign-up reaches onboarding in a browser
   on these images.
-- **Phase 4, in part:** RustFS, ExtendDB, local-kms, and the Kafka-backed queue gateway
-  behind one AWS gateway; sync-service, analytics-proxy, and ai-editing-worker as celld fleets;
+- **Phase 4, in part:** RustFS, ExtendDB, OpenBao behind a KMS gateway, and the
+  Kafka-backed queue gateway behind one AWS gateway; sync-service, analytics-proxy, and ai-editing-worker as celld fleets;
   Valkey for Redis; provisioning as in-cluster Jobs; eleven Lambda handlers,
   unmodified, behind `lambda-runner`. Search indexing has not been verified.
 - **Phase 5, in part:** Gitea, its runners, and CI checks. See CI status below.
@@ -395,7 +398,7 @@ the NixOS host, and a forge job would need network access to the instance.
 
 Not built yet:
 
-- OpenBao for KMS, the email and push ports, and KEDA.
+- KEDA.
 - The bots, and deploys on the forge.
 - Phase 6's deployment: the terranix configuration renders and passes `tofu validate`
   in CI (`.#platform.awsCheck`), but it has never been planned against an account or
@@ -412,8 +415,7 @@ Not built yet:
   `upload_extractor_lambda_trigger`).
 - The rest of phase 7: publishing the images and chart per release, and a
   production-sized install. **The chart is a preview, not safe for real data**, and
-  says so in its README: it ships `local-kms` despite the rule above (OpenBao needs a KMS
-  adapter first), mail goes to Mailpit, Kafka and OpenSearch have no authentication
+  says so in its README: mail goes to Mailpit, OpenBao's seal key sits in `macro-env`, Kafka and OpenSearch have no authentication
   inside the namespace, and signed URLs use placeholder CloudFront keys.
 - Release images on our own instances, which still wrap host-built debug binaries with
   debug info stripped, for the fast loop.

@@ -11445,6 +11445,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "kms_gateway"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "macro_config",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_tower_layers",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "lambda_client"
 version = "0.1.0"
 dependencies = [

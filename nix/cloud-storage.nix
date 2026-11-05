@@ -557,6 +557,7 @@
               "email_scheduled_handler"
               "email_sfs_delete_handler"
               "image_proxy_service"
+              "kms_gateway"
               "notification_retention_handler"
               "notification_service"
               "organization_retention_handler"
