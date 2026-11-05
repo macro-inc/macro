@@ -14,6 +14,7 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 zeroize = { workspace = true }
 user_api_key = { path = "../user_api_key", default-features = false }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 serde_json = { workspace = true }

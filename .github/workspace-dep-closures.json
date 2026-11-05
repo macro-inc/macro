@@ -385,6 +385,24 @@
       "crates/unfurl",
       "crates/workspace-hack"
     ],
+    "agent_credentials": [
+      "crates/agent_credentials",
+      "crates/bot_id",
+      "crates/bot_token",
+      "crates/cowlike",
+      "crates/harness_id",
+      "crates/harness_token",
+      "crates/macro_auth",
+      "crates/macro_authorization",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_user_id",
+      "crates/model-error-response",
+      "crates/model_user",
+      "crates/remote_env_var",
+      "crates/user_api_key",
+      "crates/workspace-hack"
+    ],
     "agent_egress": [
       "crates/activity",
       "crates/agent",
@@ -523,6 +541,7 @@
     "agent_git": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_credentials",
       "crates/agent_git",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -600,11 +619,13 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/teams",
+      "crates/user_api_key",
       "crates/workspace-hack"
     ],
     "agent_git_service": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_credentials",
       "crates/agent_git",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -686,6 +707,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/teams",
+      "crates/user_api_key",
       "crates/workspace-hack",
       "services/agent_git_service"
     ],
@@ -835,6 +857,7 @@
       "crates/agent_api_keys",
       "crates/agent_changes",
       "crates/agent_code_mode",
+      "crates/agent_credentials",
       "crates/agent_egress",
       "crates/agent_git",
       "crates/agent_harness",
@@ -2520,6 +2543,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_api_keys",
+      "crates/agent_credentials",
       "crates/agent_git",
       "crates/agent_runtime_protocol",
       "crates/agent_secrets",
@@ -14405,6 +14429,7 @@
     "team_agents": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_credentials",
       "crates/agent_git",
       "crates/agent_secrets",
       "crates/ai_toolset",
