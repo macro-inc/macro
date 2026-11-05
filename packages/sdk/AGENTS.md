@@ -11,8 +11,16 @@ enforced by the ordinary backend APIs.
 - `src/macro.ts`: public exports and namespace registration.
 - `documents.createCanvas()` creates shared content before returning a Document handle;
   it requires no browser open or upload.
+- File bytes must work inside code mode, whose sandbox reaches only Macro hosts:
+  `documents.upload()` posts them to storage's `/documents/upload`, and
+  `Document.bytes()` downloads through the CloudFront export host (`document-content`
+  in the harness's `sdk_hosts`). Never return a presigned S3 URL as the only path.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
-- `src/entities/workspace/namespace.ts`: filtered activity pages and iteration.
+- `src/entities/workspace/namespace.ts`: filtered activity pages and iteration,
+  agent sessions included.
+- `src/entities/search/namespace.ts`: `macro.search`, one unified search across
+  every kind of item with the direct search tools' filters (types, exact match,
+  tags, inbox, agent session transcripts), returning typed handles.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
@@ -77,7 +85,7 @@ the existing gateway prefixes.
   of Macro works, for agents only. Both are stripped from the public
   reference, and code-mode generation fails without the routing sentence. Put
   an area's rules there, never in `crates/prompt`; cross-namespace search
-  guidance lives on the `search.ts` module comment.
+  guidance lives on `SearchNamespace` in `search/namespace.ts`.
 - Code mode puts each relevant entity's index in the agent turn, at most 48
   KiB: a method's signature and the first sentence of its doc, cut at 160
   characters. Anything else reaches an agent only through `ReadCodeDocs`, which

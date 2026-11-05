@@ -682,9 +682,13 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     let direct = tools_for_agent_code_mode();
     let sdk = code_mode_tools();
     assert!(direct.toolset.tools.len() < standard.toolset.tools.len());
+    // macro.search, macro.workspace and macro.chats replace the search tools.
     for name in [
         "ReadContent",
         "EditDocument",
+        "NameSearch",
+        "ListEntities",
+        "ContentSearch",
         "DiscoverConnectors",
         "ConnectMcpServer",
     ] {
@@ -694,9 +698,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
     }
     for name in [
-        "NameSearch",
-        "ListEntities",
-        "ContentSearch",
         "CreateDocument",
         "ListSkills",
         "SearchSkills",
@@ -740,9 +741,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     );
     let deferred = DeferredToolSet::new(direct.toolset.clone(), direct.deferred.clone());
     let eager = deferred.request_schemas().unwrap();
-    for name in ["ListEntities", "NameSearch", "ContentSearch"] {
-        assert!(eager.iter().any(|schema| schema.name == name), "{name}");
-    }
     for name in ["SendEmail", "CreateCalendarEvent"] {
         assert!(standard.toolset.tools.contains_key(name));
         assert!(sdk.tools.contains_key(name));

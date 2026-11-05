@@ -34,7 +34,7 @@ export const listAgentsResponseItem = zod
         has_agent: zod
           .boolean()
           .describe(
-            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
           ),
         id: zod.string(),
         kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -335,7 +335,7 @@ export const updateAgentResponse = zod
         has_agent: zod
           .boolean()
           .describe(
-            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
           ),
         id: zod.string(),
         kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -772,7 +772,7 @@ export const getSelfBotResponse = zod
     has_agent: zod
       .boolean()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
       ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -4117,7 +4117,7 @@ export const createChannelScopedBotBody = zod
       .boolean()
       .nullish()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.'
       ),
     name: zod.string().describe('Display name.'),
     team_id: zod
@@ -18506,6 +18506,37 @@ export const getSystemSkillsHandlerResponse = zod
       .describe('Every system skill, in display order.'),
   })
   .describe('Response listing the built-in system skills.');
+
+/**
+ * The body is the raw file content. Preview generation and indexing may
+finish after the response.
+ * @summary Upload a file's bytes as a new document, up to 25 MiB.
+ */
+export const uploadFileQueryParams = zod.object({
+  fileName: zod
+    .string()
+    .describe(
+      'Filename including its extension, such as `report.pdf`; the extension\nsets the file type. No directory components.'
+    ),
+  projectId: zod
+    .uuid()
+    .optional()
+    .describe(
+      'Destination project. Requires edit access; omit for top-level files.'
+    ),
+});
+
+export const uploadFileResponseSizeBytesMin = 0;
+
+export const uploadFileResponse = zod
+  .object({
+    documentId: zod.string().describe('The new document.'),
+    sizeBytes: zod
+      .number()
+      .min(uploadFileResponseSizeBytesMin)
+      .describe('Number of bytes stored.'),
+  })
+  .describe('The document created from the uploaded bytes.');
 
 /**
  * Returns document metadata, user access level, and view location.

@@ -30,6 +30,7 @@ import { ProjectNamespace } from './entities/projects/namespace';
 import { PropertiesNamespace } from './entities/properties/namespace';
 import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
+import { SearchNamespace } from './entities/search/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
@@ -101,6 +102,11 @@ export {
   wrapXml,
 } from './mentions';
 export type { RequestActivity } from './utils/activity';
+/**
+ * The authenticated SDK client; every namespace hangs off it.
+ *
+ * @routing Use when a request is only about the Macro SDK client itself or its shared plumbing, such as live events or an item's access requests; not any request about the user's content, people or settings.
+ */
 export class Macro<T extends MacroOpts = MacroOpts> {
   /** routines resources and operations. */
   readonly routines: RoutineNamespace;
@@ -187,6 +193,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   readonly tasks: TaskNamespace;
 
+  /** Search every kind of item at once: documents, email, channels, calls, events, sessions and chats. */
+  readonly search: SearchNamespace;
+
   readonly teams: TeamNamespace;
 
   readonly users: UserNamespace;
@@ -244,6 +253,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.projects = new ProjectNamespace(client);
     this.properties = new PropertiesNamespace(client);
     this.referrals = new ReferralNamespace(client);
+    this.search = new SearchNamespace(client);
     this.tasks = new TaskNamespace(client);
     this.teams = new TeamNamespace(client);
     this.users = new UserNamespace(client);
@@ -327,6 +337,7 @@ export {
   EditOutcomeUnknownError,
 } from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
+export type { FileContent } from './entities/documents/namespace';
 export { DocumentVersion } from './entities/documents/version';
 export {
   DraftAttachment,
@@ -379,6 +390,14 @@ export {
   RoutineExecution,
   type RoutineOptions,
 } from './entities/routines/routine';
+export type { SearchOn, SearchOpts } from './entities/search/options';
+export type {
+  SearchOptions,
+  SearchPage,
+  SearchPageOptions,
+  SearchResult,
+  SearchType,
+} from './entities/search/types';
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
 export type { TaskSummary } from './entities/tasks/task';
