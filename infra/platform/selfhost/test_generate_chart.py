@@ -89,7 +89,7 @@ class Chart(unittest.TestCase):
         component, rewritten = g.template_item(ingress)
         text = g.render_document(component, rewritten)
         self.assertIn('"host": "{{ .Values.host }}"', text)
-        self.assertIn("{{- if .Values.tls.secretName }}", text)
+        self.assertIn("{{ if .Values.tls.secretName }}", text)
 
 
 if __name__ == "__main__":
