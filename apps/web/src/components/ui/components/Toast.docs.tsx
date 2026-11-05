@@ -1,20 +1,28 @@
+import {
+  TOAST_INVENTORY,
+  type ToastInventoryEntry,
+} from '@app/features/ui-gallery/toast-inventory';
 import { defineDoc } from '@app/features/ui-gallery/types';
 import { createMobileToastSwipe } from '@core/component/Toast/create-mobile-toast-swipe';
 import { ToastContent, ToastType } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
 import {
   type ComponentProps,
   createSignal,
   createUniqueId,
+  For,
   Match,
   onCleanup,
+  onMount,
   Show,
   Switch,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { Button } from './Button';
+import { Input } from './Input';
 import { Spinner } from './Spinner';
 import { Tabs } from './Tabs';
 
@@ -118,6 +126,101 @@ function PreviewRegion(props: {
     </div>
   );
 }
+
+// #region demo:current-toasts
+function CurrentToastPreview(props: { entry: ToastInventoryEntry }) {
+  const preview = createToastPreview();
+  const swipe = createMobileToastSwipe();
+  const replay = () => {
+    preview.clear();
+    let id: number;
+    id = preview.show({
+      ...props.entry.create(() => preview.dismiss(id)),
+      // Keep every specimen visible long enough to compare its presentation.
+      persistent: true,
+    });
+  };
+  onMount(replay);
+
+  return (
+    <article class="flex min-w-0 flex-col gap-3">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="text-xs text-ink-muted">{props.entry.category}</p>
+          <h4 class="text-sm font-medium text-ink">{props.entry.name}</h4>
+        </div>
+        <Button variant="ghost" size="sm" onClick={replay}>
+          Replay
+        </Button>
+      </div>
+      <p class="text-xs text-ink-muted">{props.entry.trigger}</p>
+      <div
+        on:pointerdown={{ capture: true, handleEvent: swipe.onPointerDown }}
+        on:pointermove={{ capture: true, handleEvent: swipe.onPointerMove }}
+        on:pointerup={{ capture: true, handleEvent: swipe.clearSwipe }}
+        on:pointercancel={{ capture: true, handleEvent: swipe.clearSwipe }}
+      >
+        <Toast.Region
+          regionId={preview.regionId}
+          aria-label={`${props.entry.name} preview`}
+          class="macro-toast-region max-w-full"
+          classList={{ 'w-full': isMobile(), 'w-95': !isMobile() }}
+          swipeDirection={isMobile() ? swipe.direction() : 'right'}
+        >
+          <Toast.List class="macro-toast-list" />
+        </Toast.Region>
+      </div>
+      <div class="mt-auto flex flex-col gap-1">
+        <p class="text-xs text-ink-muted">{props.entry.behavior}</p>
+        <code class="text-[11px] text-ink-extra-muted wrap-anywhere">
+          src/{props.entry.source}
+        </code>
+      </div>
+    </article>
+  );
+}
+
+function CurrentToastsDemo() {
+  const [search, setSearch] = createSignal('');
+  const availableEntries = () =>
+    TOAST_INVENTORY.filter((entry) => !entry.desktopOnly || !isTouchDevice());
+  const entries = () => {
+    const query = search().trim().toLowerCase();
+    if (!query) return availableEntries();
+    return availableEntries().filter((entry) =>
+      `${entry.name} ${entry.category} ${entry.trigger} ${entry.source}`
+        .toLowerCase()
+        .includes(query)
+    );
+  };
+
+  return (
+    <div class="flex w-full flex-col gap-6">
+      <div class="flex flex-wrap items-center gap-3">
+        <Input
+          type="search"
+          aria-label="Filter current app toasts"
+          placeholder="Filter by toast, category, or source…"
+          value={search()}
+          onInput={(event) => setSearch(event.currentTarget.value)}
+          class="w-full max-w-sm"
+        />
+        <span class="text-xs text-ink-muted">
+          {entries().length} of {availableEntries().length} examples
+        </span>
+      </div>
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] gap-x-8 gap-y-10">
+        <For
+          each={entries()}
+          fallback={<p class="text-sm text-ink-muted">No matching toasts.</p>}
+        >
+          {(entry) => <CurrentToastPreview entry={entry} />}
+        </For>
+      </div>
+    </div>
+  );
+}
+// #endregion
 
 // #region demo:notifications
 function StatusesDemo(props: ToastDemoProps = {}) {
@@ -536,11 +639,20 @@ function AppPositionDemo() {
 
 export default defineDoc({
   name: 'Toast',
+  wide: true,
   category: 'Feedback',
   description:
     'Standalone status icons, title-aligned content, primary actions with secondary Dismiss buttons, and compact mobile notices. Preview them inline or at the device-specific app position without triggering real operations or publishing into the app notification regions.',
   import: "import { toast } from '@core/component/Toast/Toast';",
   demos: [
+    {
+      id: 'current-toasts',
+      title: 'Current app toasts',
+      description:
+        'Review real toast copy and actions with the current shared renderer. Examples stay open for inspection; their normal lifetime and platform are listed below. Actions only dismiss the preview: they never connect accounts, change settings, move files, or reload. Replay restores a dismissed example. Account details are synthetic.',
+      render: CurrentToastsDemo,
+      fill: true,
+    },
     {
       id: 'app-position',
       title: 'App position',
