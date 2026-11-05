@@ -377,16 +377,15 @@ async fn seed_channel_list_notifications(pool: &Pool<Postgres>) -> anyhow::Resul
 }
 
 #[test]
-fn channel_list_pending_states_read_the_user_notifications_once() {
+fn channel_list_states_seek_the_viewer_entity_index() {
     use item_filters::NotificationState::{Done, Seen, Unseen};
 
-    for state in [Unseen, Seen] {
+    for state in [Unseen, Seen, Done] {
         let sql = super::build_channel_notification_state_clause(state);
-        assert!(sql.contains("= ANY(ARRAY("), "{sql}");
-        assert!(!sql.contains("n.event_item_id = (c.id)"), "{sql}");
+        assert!(sql.contains("un.event_item_id = (c.id)::text"), "{sql}");
+        assert!(!sql.contains("ARRAY("), "{sql}");
+        assert!(!sql.contains("JOIN notification"), "{sql}");
     }
-    let done = super::build_channel_notification_state_clause(Done);
-    assert!(done.contains("n.event_item_id = (c.id)::text"), "{done}");
 }
 
 #[sqlx::test(

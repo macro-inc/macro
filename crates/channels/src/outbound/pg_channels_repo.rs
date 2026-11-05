@@ -541,32 +541,17 @@ static CHANNEL_LIST_SELECT: &str = r#"
 
 /// Matches channels where the user has a live notification in `state`.
 ///
-/// Both forms read only the user's own channel rows through
-/// `idx_user_notification_viewer_entity`, which carries the entity, so neither
-/// joins `notification`. Unseen and seen rows are few per user, so those states
-/// collect the user's notified channels once: `= ANY(ARRAY(...))` keeps that
-/// set an InitPlan, where a plain `IN` is pulled up into a per-channel
-/// semi-join. Done rows accumulate without bound, so done seeks the index once
-/// per candidate channel instead.
+/// Each candidate channel is one seek on `idx_user_notification_viewer_entity`,
+/// whose key is the user, the entity and the state, so the cost is bounded by
+/// the user's channels. Collecting the user's notified channels into an array
+/// first reads every notification the user has in `state`: the planner reaches
+/// them through `(user_id, state)` and discards other entity types on the heap,
+/// which for a user with many pull request notifications is most of the read.
 #[cfg(feature = "list")]
 fn build_channel_notification_state_clause(state: item_filters::NotificationState) -> String {
     let predicate = notification_state_predicate(state);
-    match state {
-        item_filters::NotificationState::Unseen | item_filters::NotificationState::Seen => {
-            format!(
-                r#"c.id = ANY(ARRAY(
-            SELECT DISTINCT un.event_item_id::uuid
-            FROM user_notification un
-            WHERE un.user_id = $1
-              AND un.deleted_at IS NULL
-              AND un.event_item_type = 'channel'
-              AND {predicate}
-              AND un.event_item_id ~ '{UUID_TEXT_PATTERN}'
-        ))"#
-            )
-        }
-        item_filters::NotificationState::Done => format!(
-            r#"EXISTS (
+    format!(
+        r#"EXISTS (
             SELECT 1
             FROM user_notification un
             WHERE un.user_id = $1
@@ -575,8 +560,7 @@ fn build_channel_notification_state_clause(state: item_filters::NotificationStat
               AND un.event_item_id = (c.id)::text
               AND {predicate}
         )"#
-        ),
-    }
+    )
 }
 
 #[cfg(feature = "list")]
