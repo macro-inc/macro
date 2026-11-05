@@ -466,7 +466,7 @@ pub(crate) type DocumentsState =
 /// Artifacts over the documents domain and the document permission token.
 pub(crate) type DssArtifactService = artifacts::wiring::ArtifactServiceFor<
     crate::outbound::artifacts::DocumentsForArtifacts,
-    crate::outbound::artifacts::PermissionTokenViewTokens,
+    crate::outbound::artifacts::ArtifactContentViewTokens,
     crate::outbound::artifacts::ConnectionGatewayArtifactNotifier,
 >;
 

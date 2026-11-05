@@ -3,9 +3,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::future::Future;
 
-use entity_access::domain::models::{
-    AccessLevel, EditAccessLevel, EntityAccessReceipt, ViewAccessLevel,
-};
+use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use model::document::DocumentBasic;
 use model_owner::CreationPrincipal;
 
@@ -150,15 +148,11 @@ pub struct VerifiedToken {
     pub document_id: String,
 }
 
-/// Signed view tokens: the document permission token.
+/// Signed view tokens for the content origin. A page can read its own URL,
+/// so a view token grants reading that artifact's files and nothing else.
 pub trait ViewTokens: Send + Sync + 'static {
-    /// Mint a token for a viewer whose access was checked.
-    fn mint(
-        &self,
-        viewer: &Viewer,
-        document_id: &str,
-        access_level: AccessLevel,
-    ) -> Result<MintedToken, ArtifactError>;
+    /// Mint a token for a viewer whose view access was checked.
+    fn mint(&self, viewer: &Viewer, document_id: &str) -> Result<MintedToken, ArtifactError>;
 
     /// Verify a token's signature and expiry. `None` when it does not verify.
     fn verify(&self, token: &str) -> Option<VerifiedToken>;

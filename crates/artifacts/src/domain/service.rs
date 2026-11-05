@@ -6,8 +6,7 @@ mod test;
 use std::collections::{HashMap, HashSet};
 
 use entity_access::domain::models::{
-    AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, RequiredPermission,
-    ViewAccessLevel,
+    EditAccessLevel, EntityAccessReceipt, RequiredPermission, ViewAccessLevel,
 };
 use model::document::DocumentBasic;
 use model_owner::CreationPrincipal;
@@ -493,11 +492,7 @@ where
             None => String::new(),
         };
 
-        let access_level = match receipt.entity_permission() {
-            EntityPermission::AccessLevel { access_level } => *access_level,
-            _ => AccessLevel::View,
-        };
-        let minted = self.tokens.mint(viewer, &document_id, access_level)?;
+        let minted = self.tokens.mint(viewer, &document_id)?;
 
         let encoded_path = path
             .split('/')

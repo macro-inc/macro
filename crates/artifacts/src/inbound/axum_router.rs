@@ -883,7 +883,7 @@ where
     Ok((StatusCode::CREATED, Json(version.into())))
 }
 
-/// The identity a view token names, as the document permission token does.
+/// The identity a view token names, as document permission tokens do.
 fn viewer_of(authorization: Option<&MacroAuthorization>) -> Result<Viewer, ArtifactError> {
     match authorization {
         None => Ok(Viewer::default()),

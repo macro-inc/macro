@@ -14,7 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Claims minted for the sync service. `actor` is not on the public
 /// document-permissions token type so the OpenAPI validate API stays unchanged.
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct PermissionTokenClaims {
+pub(crate) struct PermissionTokenClaims {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) user_id: Option<MacroUserIdStr<'static>>,
     document_id: String,
@@ -23,13 +23,6 @@ pub struct PermissionTokenClaims {
     iss: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) actor: Option<String>,
-}
-
-impl PermissionTokenClaims {
-    /// The document the token grants access to.
-    pub fn document_id(&self) -> &str {
-        &self.document_id
-    }
 }
 
 /// Sign a document permission token for the given user and document.
@@ -82,9 +75,9 @@ pub fn encode_principal_permission_token(
     )
 }
 
-/// Read claims from a token minted by [`encode_permission_token`], checking
-/// its signature and expiry.
-pub fn decode_permission_token(
+/// Read claims from a token minted by [`encode_permission_token`].
+#[cfg(test)]
+pub(crate) fn decode_permission_token(
     token: &DocumentPermissionToken,
     jwt_secret: &str,
 ) -> Result<PermissionTokenClaims, DocumentError> {
