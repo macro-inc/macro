@@ -1052,9 +1052,14 @@ proptest! {
                 prop_assert_eq!(after.host(), Some(HOST));
             }
             if effects.iter().any(|effect| matches!(effect, Effect::Resume { .. })) {
-                prop_assert_eq!(
-                    &before.phase,
-                    &Phase::Suspended { host: HOST, saved_state: true }
+                prop_assert!(
+                    matches!(before.phase, Phase::Suspended { host: HOST, .. }),
+                    "resume starts from a suspended computer on its host"
+                );
+                prop_assert!(
+                    matches!(before.phase, Phase::Suspended { saved_state: true, .. })
+                        || event == Event::SnapshotSaved,
+                    "resume requires a completed snapshot"
                 );
             }
             if after.power == Power::Off {

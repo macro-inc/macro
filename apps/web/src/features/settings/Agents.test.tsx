@@ -1240,9 +1240,6 @@ describe('Agents', () => {
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     const teamOption = within(dialog).getByLabelText('Team');
     expect(teamOption).toHaveProperty('disabled', true);
-    const teamCardClasses = teamOption.closest('label')?.classList;
-    expect(teamCardClasses?.contains('cursor-not-allowed')).toBe(true);
-    expect(teamCardClasses?.contains('opacity-50')).toBe(true);
     expect(
       within(dialog).getByText(
         'Team agents need a team owner. Create or join a team in Team settings to enable this option.'

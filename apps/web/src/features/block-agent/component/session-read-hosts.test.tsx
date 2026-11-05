@@ -98,6 +98,9 @@ vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 // Chrome, and query-backed: both hosts render it, and this file mounts them
 // without a QueryClientProvider.
 vi.mock('./AgentPreviewBanner', () => ({ AgentPreviewBanner: () => null }));
+vi.mock('@app/features/computer-screen/agent-computer-screen', () => ({
+  AgentComputerScreen: (props: { children: JSX.Element }) => props.children,
+}));
 vi.mock('./auto-archive-file-operations', () => ({
   useAutoArchiveFileOperations: () => () => [],
 }));
