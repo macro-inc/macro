@@ -83,7 +83,7 @@ impl From<WorkRegistration> for WorkRegistrationResponse {
 /// Register a session as the caller's work. Requires edit access. Repeating returns the active
 /// registration. Registering does not share the session: viewers who cannot open it do not see
 /// it, so share it too.
-#[tracing::instrument(skip_all, fields(actor = %caller.acting_entity()), err(Debug))]
+#[tracing::instrument(skip_all, err(Debug))]
 pub async fn register_work<
     T: WorkRegistrations,
     Access: EntityAccessService,
@@ -117,7 +117,7 @@ pub async fn register_work<
 )]
 /// End the caller's own registration of a session. Repeating does nothing. It touches only the
 /// caller's own row, so it needs no access to the session: losing access must not strand it.
-#[tracing::instrument(skip_all, fields(actor = %caller.acting_entity()), err(Debug))]
+#[tracing::instrument(skip_all, err(Debug))]
 pub async fn unregister_work<
     T: WorkRegistrations,
     Access: EntityAccessService,
@@ -149,7 +149,7 @@ pub async fn unregister_work<
     )
 )]
 /// List the caller's active registrations of sessions they can still view, newest first.
-#[tracing::instrument(skip_all, fields(actor = %caller.acting_entity()), err(Debug))]
+#[tracing::instrument(skip_all, err(Debug))]
 pub async fn list_own_work<
     T: WorkRegistrations,
     Access: EntityAccessService,
@@ -163,7 +163,5 @@ pub async fn list_own_work<
         .service
         .visible_registrations(account, std::slice::from_ref(account))
         .await?;
-    Ok(Json(
-        registrations.into_iter().map(Into::into).collect(),
-    ))
+    Ok(Json(registrations.into_iter().map(Into::into).collect()))
 }

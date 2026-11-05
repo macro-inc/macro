@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, EntityType};
+use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
 use futures::{StreamExt as _, stream};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -18,7 +18,8 @@ use rootcause::Report;
 use tokio_util::task::TaskTracker;
 use tracing::Instrument as _;
 
-use super::error::{AgentSessionError, Result};
+use super::auto_archive::session_id;
+use super::error::Result;
 use super::model::{AgentSessionId, AgentSessionRenamed, LogAppended};
 use super::ports::{AgentSessionQueueChanged, AgentSessionRealtime, SessionViewAccess};
 
@@ -230,6 +231,16 @@ pub trait WorkRegistrationSignal: Clone + Send + Sync + 'static {
         &self,
         session: AgentSessionId,
     ) -> impl Future<Output = std::result::Result<(), Report>> + Send;
+}
+
+/// For a process that only reads registrations and so changes nothing to tell viewers about.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoWorkRegistrationSignal;
+
+impl WorkRegistrationSignal for NoWorkRegistrationSignal {
+    async fn session_changed(&self, _session: AgentSessionId) -> std::result::Result<(), Report> {
+        Ok(())
+    }
 }
 
 /// Registering work, reading it, and ending it.
@@ -487,15 +498,6 @@ fn report_of(ended: &[EndedRegistration]) -> WorkRegistrationSweepReport {
         }
     }
     report
-}
-
-fn session_id(access: &EntityAccessReceipt<EditAccessLevel>) -> Result<AgentSessionId> {
-    if access.entity().entity_type != EntityType::AgentSession {
-        return Err(AgentSessionError::Forbidden);
-    }
-    let id = Uuid::parse_str(&access.entity().entity_id)
-        .map_err(|error| anyhow::anyhow!("invalid agent session access receipt: {error}"))?;
-    Ok(AgentSessionId::new_from_uuid(id))
 }
 
 /// [`AgentSessionRealtime`] that also tells viewers of registered work when a session's list

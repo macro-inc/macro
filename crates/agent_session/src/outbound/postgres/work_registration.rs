@@ -54,11 +54,7 @@ impl<B: BotFacts + Clone + 'static> WorkRegistrationRepo for PgAgentSessionRepo<
         account: &MacroUserIdStr<'static>,
         session: AgentSessionId,
     ) -> Result<Registered> {
-        let mut transaction = self
-            .pool
-            .begin()
-            .await
-            .context("begin work registration")?;
+        let mut transaction = self.pool.begin().await.context("begin work registration")?;
         // Hold the row against an archive, which ends the session's registrations: it either
         // finished and is refused below, or waits and ends this one too.
         let archived = sqlx::query_scalar!(

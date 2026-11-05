@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use entity_access::domain::models::{Entity, EntityPermission};
+use entity_access::domain::models::{Entity, EntityPermission, EntityType};
 use models_permissions::share_permission::access_level::AccessLevel;
 
 use super::*;
@@ -338,7 +338,10 @@ async fn a_finished_pull_request_tells_each_session_once() {
     };
     let (service, signal) = service(repo, Vec::new());
 
-    service.pull_request_changed("example/repo/pull/7").await.unwrap();
+    service
+        .pull_request_changed("example/repo/pull/7")
+        .await
+        .unwrap();
 
     assert_eq!(signal.signalled(), vec![session]);
 }

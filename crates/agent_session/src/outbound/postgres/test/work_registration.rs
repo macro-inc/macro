@@ -79,7 +79,10 @@ async fn sweep(repo: &PgAgentSessionRepo<PgBotsRepo>) -> Vec<WorkEndReason> {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn registering_twice_returns_the_active_registration(pool: PgPool) {
     let (repo, session, account) = registered_session(&pool).await;
-    let active = repo.active_registrations(std::slice::from_ref(&account), 10).await.unwrap();
+    let active = repo
+        .active_registrations(std::slice::from_ref(&account), 10)
+        .await
+        .unwrap();
 
     let repeated = repo.register(&account, session).await.unwrap();
 
@@ -99,7 +102,10 @@ async fn unregistering_twice_ends_once_and_keeps_the_row(pool: PgPool) {
         end_state(&pool, session).await,
         vec![Some("unregistered".to_owned())]
     );
-    let active = repo.active_registrations(&[account.clone()], 10).await.unwrap();
+    let active = repo
+        .active_registrations(&[account.clone()], 10)
+        .await
+        .unwrap();
     assert!(active.is_empty());
 }
 
@@ -120,7 +126,9 @@ async fn a_later_registration_is_a_new_one(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_archived_or_missing_session_refuses_registration(pool: PgPool) {
     let (repo, session, account) = registered_session(&pool).await;
-    AgentSessionRepo::set_archived(&repo, session, true).await.unwrap();
+    AgentSessionRepo::set_archived(&repo, session, true)
+        .await
+        .unwrap();
 
     assert!(matches!(
         repo.register(&account, session).await,
@@ -136,16 +144,25 @@ async fn an_archived_or_missing_session_refuses_registration(pool: PgPool) {
 async fn archiving_ends_registrations_at_once_and_restoring_does_not_bring_them_back(pool: PgPool) {
     let (repo, session, account) = registered_session(&pool).await;
 
-    AgentSessionRepo::set_archived(&repo, session, true).await.unwrap();
+    AgentSessionRepo::set_archived(&repo, session, true)
+        .await
+        .unwrap();
 
     assert_eq!(
         end_state(&pool, session).await,
         vec![Some("session_archived".to_owned())]
     );
 
-    AgentSessionRepo::set_archived(&repo, session, false).await.unwrap();
+    AgentSessionRepo::set_archived(&repo, session, false)
+        .await
+        .unwrap();
 
-    assert!(repo.active_registrations(&[account], 10).await.unwrap().is_empty());
+    assert!(
+        repo.active_registrations(&[account], 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -180,38 +197,68 @@ async fn finished_pull_requests_end_registrations_regardless_of_auto_archive_pre
     let (repo, session, account) = registered_session(&pool).await;
     let merged = add_pull_request(&pool, 1, "merged").await;
     let open = add_pull_request(&pool, 2, "open").await;
-    repo.link_pull_request(session, &merged, &account).await.unwrap();
-    repo.link_pull_request(session, &open, &account).await.unwrap();
-
-    assert!(repo.end_for_finished_pull_requests(&merged).await.unwrap().is_empty());
-    assert_eq!(end_state(&pool, session).await, vec![None]);
-
-    sqlx::query!("UPDATE github_pull_request SET status = 'closed' WHERE github_key = $1", open)
-        .execute(&pool)
+    repo.link_pull_request(session, &merged, &account)
         .await
         .unwrap();
+    repo.link_pull_request(session, &open, &account)
+        .await
+        .unwrap();
+
+    assert!(
+        repo.end_for_finished_pull_requests(&merged)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(end_state(&pool, session).await, vec![None]);
+
+    sqlx::query!(
+        "UPDATE github_pull_request SET status = 'closed' WHERE github_key = $1",
+        open
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     assert_eq!(
         repo.end_for_finished_pull_requests(&open).await.unwrap(),
         vec![session]
     );
     // Repeating the event ends nothing more.
-    assert!(repo.end_for_finished_pull_requests(&open).await.unwrap().is_empty());
+    assert!(
+        repo.end_for_finished_pull_requests(&open)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(
         end_state(&pool, session).await,
         vec![Some("pull_request_finished".to_owned())]
     );
     // The auto-archive preference is off, so the session itself stays active.
-    assert!(AgentSessionRepo::get(&repo, session).await.unwrap().archived.is_none());
+    assert!(
+        AgentSessionRepo::get(&repo, session)
+            .await
+            .unwrap()
+            .archived
+            .is_none()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_link_with_no_stored_pull_request_is_not_finished(pool: PgPool) {
     let (repo, session, account) = registered_session(&pool).await;
     let unknown = "example/repo/pull/404";
-    repo.link_pull_request(session, unknown, &account).await.unwrap();
+    repo.link_pull_request(session, unknown, &account)
+        .await
+        .unwrap();
 
-    assert!(repo.end_for_finished_pull_requests(unknown).await.unwrap().is_empty());
+    assert!(
+        repo.end_for_finished_pull_requests(unknown)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     set_activity(&pool, session, "running", Duration::minutes(5)).await;
     assert!(sweep(&repo).await.is_empty());
 }
@@ -227,7 +274,10 @@ async fn a_sweep_ends_an_idle_session_after_a_day_unless_blocked(pool: PgPool) {
 
     set_activity(&pool, session, "idle", Duration::hours(25)).await;
     assert_eq!(sweep(&repo).await, vec![WorkEndReason::Idle]);
-    assert_eq!(end_state(&pool, session).await, vec![Some("idle".to_owned())]);
+    assert_eq!(
+        end_state(&pool, session).await,
+        vec![Some("idle".to_owned())]
+    );
     // Sweeping again ends nothing more.
     assert!(sweep(&repo).await.is_empty());
 }
@@ -260,7 +310,9 @@ async fn a_sweep_ends_a_blocked_session_after_a_week(pool: PgPool) {
 async fn a_sweep_catches_up_on_finished_pull_requests_first(pool: PgPool) {
     let (repo, session, account) = registered_session(&pool).await;
     let closed = add_pull_request(&pool, 1, "closed").await;
-    repo.link_pull_request(session, &closed, &account).await.unwrap();
+    repo.link_pull_request(session, &closed, &account)
+        .await
+        .unwrap();
     // Idle too, but the first matching reason wins.
     set_activity(&pool, session, "idle", Duration::hours(25)).await;
 
@@ -298,10 +350,17 @@ async fn archived_sessions_are_never_read_and_states_report_recent_ends(pool: Pg
     let accounts = [account.clone()];
     let long_ago = Utc::now() - Duration::hours(1);
 
-    let states = repo.registration_states(&accounts, &[session], long_ago).await.unwrap();
+    let states = repo
+        .registration_states(&accounts, &[session], long_ago)
+        .await
+        .unwrap();
     assert_eq!(states.len(), 1);
     assert!(!states[0].ended && !states[0].session_archived);
-    assert!(repo.has_current_registrations(session, long_ago).await.unwrap());
+    assert!(
+        repo.has_current_registrations(session, long_ago)
+            .await
+            .unwrap()
+    );
 
     // An archive racing the end of its registrations reads as archived, not active.
     sqlx::query!(
@@ -311,14 +370,35 @@ async fn archived_sessions_are_never_read_and_states_report_recent_ends(pool: Pg
     .execute(&pool)
     .await
     .unwrap();
-    assert!(repo.active_registrations(&accounts, 10).await.unwrap().is_empty());
-    let states = repo.registration_states(&accounts, &[session], long_ago).await.unwrap();
+    assert!(
+        repo.active_registrations(&accounts, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let states = repo
+        .registration_states(&accounts, &[session], long_ago)
+        .await
+        .unwrap();
     assert!(states[0].session_archived);
 
     repo.unregister(&account, session).await.unwrap();
-    let states = repo.registration_states(&accounts, &[session], long_ago).await.unwrap();
+    let states = repo
+        .registration_states(&accounts, &[session], long_ago)
+        .await
+        .unwrap();
     assert!(states[0].ended);
     let later = Utc::now() + Duration::hours(1);
-    assert!(repo.registration_states(&accounts, &[session], later).await.unwrap().is_empty());
-    assert!(!repo.has_current_registrations(session, later).await.unwrap());
+    assert!(
+        repo.registration_states(&accounts, &[session], later)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        !repo
+            .has_current_registrations(session, later)
+            .await
+            .unwrap()
+    );
 }
