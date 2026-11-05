@@ -105,9 +105,16 @@ export const SERVER_HOSTS: Servers =
     ? selectLocalServers()
     : serverHostRemote;
 
-/** The app talks to a local stack through its single-origin proxy. */
+/**
+ * The app talks to a self-contained local stack (`run_local`, `just stack`)
+ * through its single-origin proxy, which keeps each instance's cookies apart.
+ * `run_dev` uses the same proxy origin but not those cookie rules.
+ */
 export function usesLocalStackProxy(): boolean {
-  return SERVER_HOSTS['auth-service'] === proxyServers()?.['auth-service'];
+  return (
+    import.meta.env.VITE_LOCAL_STACK === 'true' &&
+    SERVER_HOSTS['auth-service'] === proxyServers()?.['auth-service']
+  );
 }
 
 function proxyServers(): Servers | undefined {
