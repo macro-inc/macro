@@ -372,4 +372,4 @@ pub async fn main() -> anyhow::Result<()> {
 
 /// CI proof salt.
 #[allow(dead_code)]
-pub const CI_PROOF_SALT: &str = "timeout-2";
+pub const CI_PROOF_SALT: &str = "timeout-3";

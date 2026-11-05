@@ -633,6 +633,8 @@ jobs:
         docker exec "$postgres_container" psql -U user -d macrodb -c "SHOW max_locks_per_transaction;"
     - name: prepare tests
       run: just setup_test_envs && just initialize_dbs && just setup_test_template
+    - name: Simulate a stall
+      run: sleep 600
     - name: run tests
       run: |
         set -euo pipefail

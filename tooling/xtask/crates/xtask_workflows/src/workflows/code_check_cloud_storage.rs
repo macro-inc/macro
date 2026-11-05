@@ -201,6 +201,7 @@ fn test() -> Job {
         .add_step(steps::code_mode_assets())
         .add_step(configure_postgres())
         .add_step(prepare_tests())
+        .add_step(Step::new("Simulate a stall").run("sleep 600"))
         .add_step(run_tests())
         .add_step(setup_execution_runtime())
         .add_step(test_execution_runtime())
