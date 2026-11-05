@@ -4,14 +4,19 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import { createLiveAttentionFeed } from '@queries/attention-feed/live-attention-feed';
 import {
   NotificationInboxDocument,
-  type NotificationInboxEntryFieldsFragment,
   type NotificationInboxQuery,
   type NotificationInboxQueryVariables,
   type NotificationInboxScopeInput,
   NotificationInboxUpdatesDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { type Client, stringifyDocument } from '@urql/core';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import {
+  type Accessor,
+  createComputed,
+  createMemo,
+  createSignal,
+} from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import type {
   InboxFeedSource,
   InboxScope,
@@ -25,7 +30,7 @@ import {
   withoutDoneRows,
   withSeenRows,
 } from '../core/inbox-row';
-import { encodeInboxScope, type InboxRowMemo, toInboxGroup } from './decode';
+import { encodeInboxScope, toInboxGroup } from './decode';
 import {
   type NotificationInboxGroup,
   orderInboxRows,
@@ -88,20 +93,6 @@ export function createNotificationInboxSource(
   const enabled = () =>
     options.enabled() && options.scope().rowTypes.length > 0;
 
-  // Every change rebuilds the pages; rows it didn't touch keep their objects,
-  // so what reads them, such as an open preview, doesn't rerun.
-  let decodedRows: InboxRowMemo['previous'] = new Map();
-  const readGroups = (
-    entries: readonly NotificationInboxEntryFieldsFragment[]
-  ) => {
-    const memo: InboxRowMemo = { previous: decodedRows, next: new Map() };
-    const groups = entries
-      .map((entry) => toInboxGroup(entry, memo))
-      .filter(isGroup);
-    decodedRows = memo.next;
-    return groups;
-  };
-
   const query = createUrqlInfiniteQuery<
     NotificationInboxQuery,
     NotificationInboxQueryVariables,
@@ -120,9 +111,10 @@ export function createNotificationInboxSource(
       requestPolicy: 'cache-and-network',
       keepPreviousData: true,
       select: ({ pages, pageParams }) => ({
-        groups: readGroups(
-          pages.flatMap((page) => page.user.notificationInbox.entries)
-        ),
+        groups: pages
+          .flatMap((page) => page.user.notificationInbox.entries)
+          .map((entry) => toInboxGroup(entry))
+          .filter(isGroup),
         cursors: [...pageParams],
       }),
     };
@@ -130,8 +122,18 @@ export function createNotificationInboxSource(
 
   const [done, setDone] = createSignal<RowMarks>(new Map());
   const [seen, setSeen] = createSignal<RowMarks>(new Map());
-  const ordered = createMemo(() =>
-    orderInboxRows(query.data?.groups ?? [], !query.hasNextPage)
+  // Every change rebuilds the pages. The rows live in a store that each read
+  // reconciles into by row id, so a row the change didn't touch keeps its
+  // object and a changed one updates in place: what reads them, such as an
+  // open preview, reruns only for what changed.
+  const [ordered, setOrdered] = createStore<NotificationInboxRow[]>([]);
+  createComputed(() =>
+    setOrdered(
+      reconcile(orderInboxRows(query.data?.groups ?? [], !query.hasNextPage), {
+        key: 'id',
+        merge: true,
+      })
+    )
   );
 
   const live = createLiveAttentionFeed({
@@ -154,7 +156,7 @@ export function createNotificationInboxSource(
     // acknowledged was reopened, so it shows again; while it is still
     // loaded, the same revision is a change computed before the done.
     onPatches: (patches) => {
-      const present = new Set(ordered().map((row) => row.id));
+      const present = new Set(ordered.map((row) => row.id));
       const reopened = patches.flatMap((patch) =>
         patch.__typename === 'NotificationInboxEntryUpserted'
           ? patch.entry.rows.flatMap((row) => {
@@ -171,8 +173,8 @@ export function createNotificationInboxSource(
       }
     },
     onRefetched: () => {
-      setDone((current) => settleRowMarks(current, ordered()));
-      setSeen((current) => settleRowMarks(current, ordered()));
+      setDone((current) => settleRowMarks(current, ordered));
+      setSeen((current) => settleRowMarks(current, ordered));
     },
     surface: 'notifications-inbox',
   });
@@ -180,7 +182,7 @@ export function createNotificationInboxSource(
   const rows = createMemo(() =>
     query.data === undefined
       ? undefined
-      : withSeenRows(withoutDoneRows(ordered(), done()), seen())
+      : withSeenRows(withoutDoneRows(ordered, done()), seen())
   );
 
   /** Patches for a filter that has since changed would add rows it hides. */

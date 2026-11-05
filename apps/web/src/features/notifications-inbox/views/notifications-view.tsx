@@ -104,6 +104,7 @@ import {
   crmCommentParams,
 } from '../primitives/notification-location';
 import { createRowActions, rowButtons } from '../primitives/row-actions';
+import { rowEntity } from '../primitives/row-entity';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
 
@@ -157,18 +158,12 @@ const previewSelection = (
     ? undefined
     : entity;
 
-/** The entity a row, or one of its notifications, is about. */
-const entityOf = (
-  row: NotificationInboxRow,
-  notification?: UnifiedNotification
-) => (notification ? row.content.entityAt(notification) : row.content.entity);
-
 /**
  * A calendar event row as the Calendar reads it: its notifications, such as
  * a reminder naming the occurrence, behind an accessor.
  */
 const calendarSelection = (
-  entity: ReturnType<typeof entityOf>
+  entity: ReturnType<typeof rowEntity>
 ): CalendarPreviewSelection | undefined => {
   if (entity.type !== 'calendar_event') return undefined;
   const { notifications } = entity;
@@ -190,7 +185,7 @@ const previewTargetFor = (
   row: NotificationInboxRow,
   notification?: UnifiedNotification
 ) => {
-  const entity = previewSelection(entityOf(row, notification));
+  const entity = previewSelection(rowEntity(row, notification));
   if (!entity) return undefined;
   const target = previewBlockTarget(entity);
   const params =
@@ -342,7 +337,7 @@ export function NotificationsView(props: NotificationsViewProps) {
     row: NotificationInboxRow,
     notification?: UnifiedNotification
   ) => {
-    const calendarEvent = calendarSelection(entityOf(row, notification));
+    const calendarEvent = calendarSelection(rowEntity(row, notification));
     if (
       calendarEvent &&
       guard.canSelect(undefined) &&
