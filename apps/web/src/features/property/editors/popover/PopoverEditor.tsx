@@ -12,6 +12,8 @@ type PopoverEditorProps = {
    * Has no effect for non-entity properties.
    */
   entitySelfFilter?: { entityType: EntityType; blockId?: string };
+  /** Forwarded to EntityEditor; has no effect for non-entity properties. */
+  entityTypes?: EntityType[];
 };
 
 /**
@@ -35,7 +37,10 @@ export function PopoverEditor(props: PopoverEditorProps) {
         <SelectEditor />
       </Match>
       <Match when={type() === 'ENTITY'}>
-        <EntityEditor selfFilter={props.entitySelfFilter} />
+        <EntityEditor
+          selfFilter={props.entitySelfFilter}
+          entityTypes={props.entityTypes}
+        />
       </Match>
     </Switch>
   );
@@ -51,10 +56,18 @@ export function SheetEditor(props: PopoverEditorProps) {
   const type = () => ctx.property().valueType;
   return (
     <Switch
-      fallback={<PopoverEditor entitySelfFilter={props.entitySelfFilter} />}
+      fallback={
+        <PopoverEditor
+          entitySelfFilter={props.entitySelfFilter}
+          entityTypes={props.entityTypes}
+        />
+      }
     >
       <Match when={type() === 'ENTITY'}>
-        <EntitySheetEditor selfFilter={props.entitySelfFilter} />
+        <EntitySheetEditor
+          selfFilter={props.entitySelfFilter}
+          entityTypes={props.entityTypes}
+        />
       </Match>
       <Match when={type() === 'DATE'}>
         <DateSheetEditor />

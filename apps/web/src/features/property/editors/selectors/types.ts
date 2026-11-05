@@ -14,7 +14,7 @@ export type OptionSelectorConfig = {
 export type EntitySelectorConfig = {
   isMultiSelect: boolean;
   placeholder: string;
-  specificEntityType?: EntityType | null;
+  specificEntityType?: EntityType | EntityType[] | null;
   selfFilter?: { entityType: EntityType; blockId?: string };
   /** Entities already linked to the destination are not selectable again. */
   excludedIds?: Accessor<ReadonlySet<string>>;

@@ -116,9 +116,10 @@ the dependent query refreshes before the mutation stops being pending.
 `crm.people_visibility` measures the display choice through the next paint;
 Soup retains its existing query/loading instrumentation.
 
-`task-composer.ts` owns the CRM task preset: Companies/Contacts are visible,
-Status remains a task default but is not initially shown. CRM registers live
-`{ task: TaskComposerContext }` values with the provider in
+`task-composer.ts` owns the CRM task preset: the standard task properties plus
+one Customer / Contact pill over the Companies and Contacts properties. Picking a
+company leaves the contact unset; picking a contact also sets its company. CRM
+registers live `{ task: TaskComposerContext }` values with the provider in
 `command/context/create-context.tsx`, scoped to its pane. The app shell owns the
 provider and supplies the layout's focus accessor; no global registry or manager
 key is involved. The workspace registers the unassociated preset; nested record

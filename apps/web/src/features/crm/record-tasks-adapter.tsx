@@ -93,7 +93,7 @@ function RecordTasksBody(props: { scope: CrmRecordScope }) {
         // standard property row; they cannot live only in a create callback.
         composerContext: adaptive
           ? context
-          : { ...context, visiblePropertyIds: undefined },
+          : { ...context, showCustomerContact: false },
       },
     });
   };

@@ -48,6 +48,7 @@ import {
 } from 'solid-js';
 import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
+import { CUSTOMER_CONTACT_PROPERTY_IDS } from '../core/customer-contact';
 import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
 import { showTaskCreatedToast } from './taskCreatedToast';
 
@@ -234,6 +235,9 @@ export function createTaskComposer(
   } = createTaskComposerProperties({
     initialValues: initialState.propertyValues,
     initialVisiblePropertyIds: initialState.visiblePropertyIds,
+    hiddenPropertyIds: props.composerContext?.showCustomerContact
+      ? CUSTOMER_CONTACT_PROPERTY_IDS
+      : undefined,
     allDefinitions: true,
   });
   let baselinePropertyValues = JSON.stringify(initialState.propertyValues);
@@ -631,6 +635,7 @@ export function createTaskComposer(
     handleTitleTagPickerActive,
     deleteTitleTagsAtStart,
     properties,
+    propertyValues,
     setPropertyValues,
     availableProperties,
     addProperty,

@@ -58,9 +58,12 @@ type EntityInputProps = {
 };
 
 function getEntityTypePluralLabel(
-  entityType: EntityType | null | undefined
+  entityType: EntityType | EntityType[] | null | undefined
 ): string {
   if (!entityType) return 'entities';
+  if (Array.isArray(entityType)) {
+    return entityType.map(getEntityTypePluralLabel).join(' or ');
+  }
   switch (entityType) {
     case 'USER':
       return 'users';
@@ -229,10 +232,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       } else {
         const entity = quickAccessItemToEntity(item);
         const entityType = getEntityType(entity);
-        if (
-          entityType &&
-          (!specificEntityType || entityType === specificEntityType)
-        ) {
+        const matches =
+          !specificEntityType ||
+          (Array.isArray(specificEntityType)
+            ? entityType && specificEntityType.includes(entityType)
+            : entityType === specificEntityType);
+        if (entityType && matches) {
           converted.push(entity);
         }
       }

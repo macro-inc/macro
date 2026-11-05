@@ -23,6 +23,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { tabbable } from 'tabbable';
+import { CustomerContactPill } from '../components/customer-contact-pill';
 import {
   ComposeTaskTitleEditor,
   TaskTitleAccessory,
@@ -310,6 +311,13 @@ function Properties(props: { class?: string }) {
               />
             )}
           </For>
+          <Show when={composer.props.composerContext?.showCustomerContact}>
+            <CustomerContactPill
+              values={composer.propertyValues}
+              onChange={composer.setPropertyValues}
+              editor={pickers.propertyEditor}
+            />
+          </Show>
           <Show when={composer.tagLayoutMode() === 'bottom'}>
             <Dynamic
               component={pickers.tagsPill}

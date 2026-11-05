@@ -852,8 +852,11 @@ composer is not feature-flagged. Create-menu actions, shortcuts, and pane button
 capture the provider during setup and read the preset when invoked.
 
 Customers supplies its preset when PostHog `enable-crm-activity` is enabled:
-**Companies** and **Contacts** replace Status in the initial row; Status still
-starts as Not Started on the saved task. Record-level task creation prefills the
+the standard row gains one **Customer / Contact** pill, a single-choice picker of
+companies and contacts that writes the Companies and Contacts properties. Picking
+a company leaves the contact unset; picking a contact also sets its company, and
+the pill shows the contact with both named on hover. Neither property is offered
+separately under **Add property** there. Record-level task creation prefills the
 company or contact, including the contact's company when already loaded. With the
 CRM flag off or loading, record-level creation uses the standard property row
 while retaining its record-scoped draft and associations. **Add property** opens the same property
