@@ -26,6 +26,14 @@ pub const WORKSPACE_TEMPLATE: WorkspaceTemplate = WorkspaceTemplate {
             contents: include_str!("../../../../packages/brain/template/OPERATING.md"),
         },
         TemplateFile {
+            path: "brain.ts",
+            contents: include_str!("../../../../packages/brain/template/brain.ts"),
+        },
+        TemplateFile {
+            path: "docs/brain-api.md",
+            contents: include_str!("../../../../packages/brain/template/docs/brain-api.md"),
+        },
+        TemplateFile {
             path: "brain.lock",
             contents: include_str!("../../../../packages/brain/template/brain.lock"),
         },
