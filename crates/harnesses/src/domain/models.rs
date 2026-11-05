@@ -49,11 +49,15 @@ pub struct Harness {
     pub created_at: DateTime<Utc>,
     /// Update timestamp.
     pub updated_at: DateTime<Utc>,
-    /// Whether the daemon currently holds a runtime connection.
+    /// Whether a replica currently holds a live runtime connection for it.
     pub connected: bool,
     /// When the daemon last attached a runtime connection.
     pub last_connected_at: Option<DateTime<Utc>>,
 }
+
+/// Sent by a daemon reading its own harness while it holds a runtime connection,
+/// so the service can log when its own answer disagrees.
+pub const RUNTIME_CONNECTED_HEADER: &str = "x-macro-harness-runtime-connected";
 
 /// Request to open a pairing: the daemon asks for a code the user approves.
 ///
