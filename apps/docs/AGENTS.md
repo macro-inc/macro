@@ -36,7 +36,7 @@ expose.
 - Use sentence case for headings
 - Bold for UI elements: Click **Settings**
 - Code formatting for file names, commands, paths, and code references
-- Keyboard shortcuts use `<kbd>` tags, e.g. press <kbd>c</kbd> + <kbd>t</kbd>
+- Keyboard shortcuts use `<kbd>` tags, e.g. press <kbd>g</kbd> + <kbd>h</kbd>
 - Product UI in the guides uses the same light cards as Unified Tagging (`.search-preview` and `.tag-mock` in `style.css`). Diagrams and brand graphics stay in `images/` and need descriptive alt text — never the filename
 
 ## Content boundaries
