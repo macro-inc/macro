@@ -9,7 +9,7 @@ use attention_feed::domain::{
     acknowledge::Acknowledger,
     models::{
         Acknowledgment, CandidateKeying, CandidateRequest, DoneReceipt, FeedError, FeedKey,
-        FeedViewer, Loaded, MailFacts,
+        FeedRevision, FeedViewer, Loaded, MailFacts,
     },
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
     reader::FeedReader,
@@ -21,8 +21,8 @@ use uuid::Uuid;
 
 use super::{
     models::{
-        InboxChange, InboxDoneOutcome, InboxEntry, InboxPage, InboxQuery, InboxRow, InboxRowId,
-        InboxRowTarget, InboxRowType, InboxScope,
+        InboxChange, InboxDoneOutcome, InboxEntry, InboxNotificationDoneOutcome, InboxPage,
+        InboxQuery, InboxRow, InboxRowId, InboxRowTarget, InboxRowType, InboxScope,
     },
     policy, rows,
 };
@@ -60,6 +60,18 @@ pub trait NotificationInboxService: Send + Sync + 'static {
         viewer: FeedViewer,
         targets: Vec<InboxRowTarget>,
     ) -> impl Future<Output = Result<InboxDoneOutcome, FeedError>> + Send;
+
+    /// Acknowledge one notification a row shows, with the hidden ones it speaks
+    /// for, then recompute the row's group for the caller's inbox. The row's
+    /// last shown notification completes the row, as `mark_done` does. A
+    /// notification the row no longer shows has nothing left to acknowledge.
+    fn mark_notification_done(
+        &self,
+        viewer: FeedViewer,
+        scope: InboxScope,
+        row: InboxRowId,
+        notification: Uuid,
+    ) -> impl Future<Output = Result<InboxNotificationDoneOutcome<Self::Entity>, FeedError>> + Send;
 
     /// Reverse exactly what one mark-done changed, then recompute its groups
     /// for the caller's inbox.
@@ -168,6 +180,23 @@ impl<E> Group<E> {
 
     fn row(&self, id: &InboxRowId) -> Option<&InboxRow> {
         self.rows.iter().find(|row| row.id == *id)
+    }
+
+    /// What a done of `row` up to `observed` acknowledges. Archiving takes the
+    /// whole thread out of the inbox, so a done from before newer mail arrived
+    /// leaves it there.
+    fn row_acknowledgment(&self, row: &InboxRow, observed: FeedRevision) -> Acknowledgment {
+        let notification_ids = observed.acknowledged(row.all_notifications());
+        let observed_all = notification_ids.len() == row.all_notifications().count();
+        Acknowledgment {
+            key: self.key.clone(),
+            notification_ids,
+            archive_thread: (observed_all
+                && row.row_type == InboxRowType::Email
+                && self.mail.is_some_and(|mail| mail.inbox_visible))
+            .then(|| email_thread_id(&self.key))
+            .flatten(),
+        }
     }
 }
 
@@ -345,20 +374,7 @@ where
             let acknowledgment = match current_row {
                 Some((group, row)) => {
                     found.push(row.row_type);
-                    let observed = target.revision.unwrap_or_else(|| row.revision());
-                    let notification_ids = observed.acknowledged(row.all_notifications());
-                    // Archiving takes the whole thread out of the inbox, so a
-                    // done from before newer mail arrived leaves it there.
-                    let observed_all = notification_ids.len() == row.all_notifications().count();
-                    Acknowledgment {
-                        key: group.key.clone(),
-                        notification_ids,
-                        archive_thread: (observed_all
-                            && row.row_type == InboxRowType::Email
-                            && group.mail.is_some_and(|mail| mail.inbox_visible))
-                        .then(|| email_thread_id(&group.key))
-                        .flatten(),
-                    }
+                    group.row_acknowledgment(row, target.revision.unwrap_or_else(|| row.revision()))
                 }
                 None => Acknowledgment {
                     key: target.id.group,
@@ -377,6 +393,53 @@ where
             .await?;
         span.record("notifications", receipt.notification_ids.len());
         Ok(InboxDoneOutcome { rows, receipt })
+    }
+
+    #[tracing::instrument(
+        name = "notification_inbox.mark_notification_done",
+        skip_all,
+        fields(
+            user = %viewer.user,
+            row = %row.id(),
+            notification = %notification,
+            acknowledged = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn mark_notification_done(
+        &self,
+        viewer: FeedViewer,
+        scope: InboxScope,
+        row: InboxRowId,
+        notification: Uuid,
+    ) -> Result<InboxNotificationDoneOutcome<Self::Entity>, FeedError> {
+        let groups = vec![row.group.clone()];
+        let current = self.current(&viewer, &groups).await?;
+        let acknowledgment = match current.get(&row.group).and_then(|group| {
+            let found = group.row(&row)?;
+            Some((group, found))
+        }) {
+            Some((group, found)) if found.shows_only(notification) => {
+                group.row_acknowledgment(found, found.revision())
+            }
+            Some((group, found)) => Acknowledgment {
+                key: group.key.clone(),
+                notification_ids: rows::speaks_for(found, notification, &viewer.user),
+                archive_thread: None,
+            },
+            None => Acknowledgment {
+                key: row.group.clone(),
+                notification_ids: Vec::new(),
+                archive_thread: None,
+            },
+        };
+        let receipt = self
+            .acknowledger
+            .acknowledge(&viewer, vec![acknowledgment])
+            .await?;
+        tracing::Span::current().record("acknowledged", receipt.notification_ids.len());
+        let changes = self.recompute_groups(&viewer, &scope, groups).await?;
+        Ok(InboxNotificationDoneOutcome { changes, receipt })
     }
 
     #[tracing::instrument(

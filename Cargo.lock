@@ -9452,6 +9452,7 @@ dependencies = [
  "notification_inbox",
  "soup",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
