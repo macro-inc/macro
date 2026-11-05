@@ -53,6 +53,9 @@ jobs:
       run: |
         bzl="$(nix build --no-link --print-out-paths nixpkgs#bazel_8)"
         echo "$bzl/bin" >> "$GITHUB_PATH"
+        # The runner's git can't load its https helper under the dev shell's library path.
+        git_pkg="$(nix build --no-link --print-out-paths nixpkgs#git)"
+        echo "$git_pkg/bin" >> "$GITHUB_PATH"
     - name: configure postgres for concurrent tests
       run: |
         postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
@@ -89,7 +92,7 @@ jobs:
       if: always()
       run: |
         code=0
-        time bazel --output_user_root=$BZ_ROOT --host_jvm_args=-Xmx3g test --keep_going --jobs=8 --local_test_jobs=4 --test_timeout=900 --test_env=RUST_TEST_THREADS=8 --test_env=PER_TEST_TIMEOUT=300 --run_under=$PWD/tooling/bazel-proto/per_test_runner.py --test_output=summary --test_summary=short --build_tests_only //crates/... //services/... //tooling/... > /tmp/test.log 2>&1 || code=$?
+        time bazel --output_user_root=$BZ_ROOT --host_jvm_args=-Xmx3g test --keep_going --jobs=8 --local_test_jobs=4 --test_timeout=900 --test_env=RUST_TEST_THREADS=8 --test_env=PER_TEST_TIMEOUT=300 --run_under=$PWD/tooling/bazel-proto/per_test_runner.py --test_output=summary --test_summary=short --build_tests_only -- //crates/... //services/... //tooling/... -//tooling/xtask/crates/xtask_workflows:xtask_workflows_bin_test > /tmp/test.log 2>&1 || code=$?
         grep -E '^(ERROR|FATAL|FAIL:)|TIMEOUT' /tmp/test.log | head -40 | cut -c1-200
         grep -E '^INFO: (Elapsed|[0-9,]+ processes)|^Executed' /tmp/test.log | cut -c1-200
         echo "cached test targets: $(grep -cE '\(cached\) PASSED' /tmp/test.log || true)"

@@ -221,7 +221,7 @@ def main():
         extra = " + " + json.dumps(extra_labels) if extra_labels else ""
         # The real checkout path, as cargo gives: tests read it at run time, and macros at compile
         # time. It's stable on CI runners, so it doesn't split the cache.
-        rustc_env = {"CARGO_MANIFEST_DIR": f"{root}/{directory}"}
+        rustc_env = {"CARGO_MANIFEST_DIR": f"{root}/{directory}", "CARGO_PKG_NAME": pkg["name"]}
         if uses_sqlx:
             rustc_env.update(
                 {
