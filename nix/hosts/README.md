@@ -6,11 +6,11 @@ underscore keeps `import-tree` from loading them as flake-parts modules).
 
 | File | Contents |
 | --- | --- |
-| `_nixos/incus-host.nix` | Incus (preseed: ZFS pool `default` on `tank/incus`, bridge `boxbr0` 10.210.0.1/24, profile `macro-box`), control-plane cert trust, box nftables (table `inet macro-boxes`), sshd reverse-tunnel settings, `zfs_arc_max` 8 GiB. |
+| `_nixos/incus-host.nix` | Incus (preseed: ZFS pool `default` on `tank/incus`, bridge `boxbr0` 10.210.0.1/24, profile `macro-box`), control-plane cert trust, box filter/NAT nftables, fallback sshd reverse-tunnel settings, `zfs_arc_max` 8 GiB. |
 | `_nixos/gcp.nix` | GCE guest: guest agent, OS Login, metadata, serial console, admin root key `keys/admin.pub`. |
-| `_nixos/runtime-dev-1.nix` | Hostname, `hostId`, GRUB (UEFI removable + BIOS), disko for `sda` (boot) and `sdb` (zpool `tank`). |
+| `_nixos/runtime-dev-1.nix` | Tailscale, control-plane address/ports, hostname, `hostId`, GRUB (UEFI removable + BIOS), disko for `sda` (boot) and `sdb` (zpool `tank`). |
 | `_nixos/certs/control-plane-dev.crt` | Public client cert the dev control plane uses for the Incus API. |
-| `computers-tunnels.sh` | Supervised SSH-over-IAP tunnels from the devbox to the host. |
+| `computers-tunnels.sh` | Fallback supervised SSH-over-IAP tunnels. |
 
 ## Hosts
 
@@ -22,7 +22,8 @@ underscore keeps `import-tree` from loading them as flake-parts modules).
 
 ## Access
 
-GCP only admits IAP on tcp/22, so everything rides SSH over IAP:
+The control plane uses Tailscale with a pinned Incus server certificate and
+a trusted client certificate. IAP SSH remains the break-glass/admin path:
 
 ```sh
 gcloud compute ssh runtime-dev-1 --project macro-435922 --zone us-east4-b --tunnel-through-iap   # OS Login user, sudo
@@ -55,25 +56,91 @@ the `google-*` links need GCE udev rules the installer lacks.
 `gcp.nix` exempts uid 0 from `pam_oslogin_login`'s account check, which
 otherwise denies every non-OS-Login user, including root.
 
-## Tunnels
+## Tailscale enrollment
 
-Run on the devbox; each tunnel restarts when it drops. `GCLOUD` points at the
-gcloud binary when it is not on `PATH`.
+After the first rebuild, use IAP SSH to run this interactively on the runtime:
+
+```sh
+sudo tailscale up --hostname=runtime-dev-1 --accept-routes=false --netfilter-mode=off
+```
+
+Print the login URL and have the tailnet owner approve it in the same personal
+tailnet as the devbox. No auth key belongs in Nix, git, or shell history.
+The node uses hostname `runtime-dev-1`; no ACL tag is required in this personal
+tailnet. The runtime's nftables owns filtering and masquerading, so leave
+Tailscale's netfilter mode off. Do not advertise the box subnet or accept routes.
+The login persists in `/var/lib/tailscale` across rebuilds.
+
+On the devbox, `tailscale ip -4 runtime-dev-1` must return exactly one IPv4
+address. xtask resolves this at stack start and emits
+`COMPUTERS_INCUS_URL=https://<runtime-tailnet-ip>:8443`, avoiding MagicDNS inside
+Compose. Override host-side discovery with `COMPUTERS_INCUS_ADDRESS=<IPv4>`.
+`COMPUTERS_CONTROL_PLANE_ADDRESS` defaults to `100.116.73.13` and must match the
+runtime's `macro.computers.controlPlaneAddress` option. These are xtask inputs,
+not service/Doppler secrets.
+
+Incus listens on IPv4 `0.0.0.0:8443` (including loopback for recovery); nftables
+admits that port only from `tailscale0` and `lo`. The client pins certificate
+bytes, so the tailnet IP/name need not be in the certificate's SANs. The
+existing SHA-256 pin is checked before caching a newly fetched certificate.
+
+## Devbox firewall and verification
+
+The devbox must admit the runtime's tailnet IP to the stack's four TCP host
+ports: agent egress, harness, document storage, and auth. Read them from the
+instance's `portmap.json`; do not expose the entire named-instance port window.
+On this devbox, both `ts-input` and `nixos-fw` already accept `-i tailscale0`,
+and `DOCKER-USER` has no restrictive rules, so no extra rule is needed.
+Verify without restarting anything:
+
+```sh
+sudo -n iptables -L INPUT -n --line-numbers
+sudo -n iptables -S ts-input
+sudo -n iptables -S nixos-fw
+sudo -n iptables -S DOCKER-USER
+```
+
+On a devbox with a restrictive INPUT policy, insert this rule before its reject
+(use the runtime IP and the instance's four host ports):
+
+```sh
+sudo -n iptables -I INPUT 1 -i tailscale0 -s <runtime-tailnet-ip>/32 -d 100.116.73.13 -p tcp -m multiport --dports <egress>,<harness>,<storage>,<auth> -j ACCEPT
+```
+
+For Docker-published ports, also allow forwarding in `DOCKER-USER` if that chain
+rejects traffic. Match the original published destination because DNAT has
+already run (repeat for the four host ports):
+
+```sh
+sudo -n iptables -I DOCKER-USER 1 -i tailscale0 -s <runtime-tailnet-ip>/32 -p tcp -m conntrack --ctorigdst 100.116.73.13 --ctorigdstport <host-port> -j ACCEPT
+```
+
+Persist equivalent rules in the devbox's host configuration when needed.
+From the runtime, check `curl -v http://100.116.73.13:<harness>/health`.
+From the devbox, test Incus with the client identity and pinned certificate
+using the control plane; a TLS SAN mismatch in ordinary curl is expected.
+
+## IAP tunnel fallback
+
+Keep IAP SSH available even after enrollment. Run these on the devbox only
+when diagnosing/recovering the tailnet path; `GCLOUD` can name a binary outside
+PATH. They are no longer required or started by xtask's Incus mode.
 
 ```sh
 nix/hosts/computers-tunnels.sh incus               # https://localhost:18443 -> Incus API
 nix/hosts/computers-tunnels.sh reverse 4000 4001   # boxes -> 10.210.0.1:<port> -> devbox localhost:<port>
 nix/hosts/computers-tunnels.sh all 4000 4001       # both
-systemd-run --user --unit macro-computers-tunnels -p Restart=always nix/hosts/computers-tunnels.sh all 4000 4001
 ```
 
-The Incus API listens on the host's loopback only (`127.0.0.1:8443`), so the
-`incus` tunnel is an SSH `-L` forward rather than an IAP tunnel to 8443.
-Reverse ports come from the local stack's `infra/local/generated/<instance>/portmap.json`.
-The reverse tunnel keeps the host's `@tunnel_ports` nftables set refreshed;
-entries expire 90 s after it stops, closing those ports to boxes.
+Reverse ports come from the local stack's
+`infra/local/generated/<instance>/portmap.json`. The supervisor refreshes
+`@tunnel_ports`; entries expire 90 s after it stops. This is a manual transport
+fallback: an existing tailnet-configured stack does not automatically switch to
+it. For a manual recovery client, use `https://localhost:18443` and override box
+service URLs to `http://10.210.0.1:<host port>`; Compose containers need their own
+explicit route/relay to that host-local endpoint.
 
-Check the control-plane tunnel:
+Check the fallback tunnel (diagnostic only; the control plane still pins TLS):
 
 ```sh
 curl -sk --cert ~/.config/macro-computers/dev-client.crt --key ~/.config/macro-computers/dev-client.key \
@@ -89,9 +156,15 @@ curl -sk --cert ~/.config/macro-computers/dev-client.crt --key ~/.config/macro-c
 ## Box network policy
 
 Boxes on `boxbr0` get DHCP/DNS from the bridge and outbound IPv4 internet
-(NAT). Dropped: anything to the host except DNS/DHCP and `@tunnel_ports` on
-10.210.0.1; 169.254.0.0/16 (metadata), 10.0.0.0/8, 172.16.0.0/12,
-192.168.0.0/16, 100.64.0.0/10; tcp/25; IPv6; and all inbound to boxes.
+(NAT). The only forwarded tailnet access is TCP to
+`macro.computers.controlPlaneAddress` on `macro.computers.controlPlanePorts`,
+masqueraded to the runtime's `tailscale0` address. All other traffic exiting
+`tailscale0` is dropped, as are the rest of 100.64.0.0/10, private ranges,
+metadata, tcp/25 and IPv6. The default port list covers the default stack and
+only the four service offsets in each standard named-instance window
+(20000–31999); custom `--port-base` values need an explicit option update.
+Replies are stateful; unsolicited inbound to boxes is dropped. Boxes cannot
+reach the host except DNS/DHCP and fallback `@tunnel_ports` on 10.210.0.1.
 Box-to-box traffic on the bridge is layer 2 and not filtered.
 
 Stateful stop of a VM needs room for its memory on the root volume: set

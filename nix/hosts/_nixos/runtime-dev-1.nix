@@ -1,6 +1,31 @@
 # runtime-dev-1: GCE n2-standard-8 in macro-435922/us-east4-b (UEFI, Secure Boot off).
 # sda (50 GB) boots; sdb (500 GB) is the ZFS pool for Incus.
+{ lib, ... }:
 {
+  # Login is interactive after deployment; never store a Tailscale auth key.
+  services.tailscale.enable = true;
+  services.tailscale.openFirewall = false;
+  macro.computers = {
+    controlPlaneAddress = "100.116.73.13";
+    # Default stack plus the four service offsets in each named port window.
+    # Custom --port-base values need an explicit addition here.
+    controlPlanePorts = [
+      8080
+      8086
+      8101
+      8102
+    ]
+    ++ lib.concatMap (
+      bucket:
+      map (offset: 20000 + bucket * 100 + offset) [
+        11
+        15
+        26
+        27
+      ]
+    ) (lib.range 0 119);
+  };
+
   networking.hostName = "runtime-dev-1";
   networking.hostId = "b33dcc70";
 
