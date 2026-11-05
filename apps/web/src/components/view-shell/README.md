@@ -48,5 +48,6 @@ Reduced-motion and browsers without WAAPI switch hosts immediately.
 A view whose aside is its entity list (Chat, Notifications) passes `asideList`.
 Narrow, it bypasses the overlay: the list fills the shell over an inert Main
 until `open`, then Main fills it and `ViewNavigationControls` shows Back,
-calling `onBack`, in place of Show navigation. Collapse controls and `Cmd+.` are
-off there; wide layouts are unchanged.
+calling `onBack`, in place of Show navigation. The list stays mounted, hidden
+and inert, so it keeps its scroll, and takes focus when Back returns to it.
+Collapse controls and `Cmd+.` are off there; wide layouts are unchanged.
