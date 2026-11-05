@@ -55,7 +55,7 @@ queryClient.setQueryData(
 setGlobalSplitManager({
   openWithSplit(content: SplitContent) {
     document.getElementById('opened')!.textContent = JSON.stringify(content);
-    return { status: 'unavailable' };
+    return { status: 'navigating' };
   },
 } as SplitManager);
 queryClient.setQueryData(contactsKeys.all.queryKey, { contacts: [] });
