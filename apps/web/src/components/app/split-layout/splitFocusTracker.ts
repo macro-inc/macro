@@ -41,8 +41,10 @@ export function createSplitFocusTracker(props: {
   const currentSplitsIds = () => new Set(props.splits().map((s) => s.id));
   // Weak, so the element last focused in a split doesn't keep a view the
   // split has left alive.
-  const lastFocusedChildBySplitId: Map<SplitId, WeakRef<HTMLElement>> =
-    new Map();
+  const lastFocusedChildBySplitId: Map<
+    SplitId,
+    WeakRef<HTMLElement>
+  > = new Map();
   createEffect(
     on(currentSplitsIds, (ids) => {
       for (const key of lastFocusedChildBySplitId.keys()) {
