@@ -41,6 +41,15 @@ pub fn code_check_cloud_storage() -> Workflow {
         .add_job("check", check())
         .add_job("doppler-config", doppler_config())
         .add_job("test", test())
+        .add_job("probe-sccache", probe_sccache_startup())
+        .add_job(
+            "probe-sccache-401",
+            probe_sccache_real_failure("probe sccache 401 must fail", "status:401"),
+        )
+        .add_job(
+            "probe-sccache-hang",
+            probe_sccache_real_failure("probe sccache hang must fail", "hang"),
+        )
         .add_job("graphql-schema-compat", graphql_schema_compat())
         .add_job("status-check", status_check())
 }
@@ -201,6 +210,37 @@ fn test() -> Job {
         .add_step(test_execution_runtime())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+}
+
+/// Temporary: proves the sccache startup limit on a real runner.
+fn probe_sccache_startup() -> Job {
+    steps::gated_job()
+        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
+        .timeout_minutes(30u32)
+        .add_step(steps::checkout(false, false))
+        .add_step(steps::mount_cache_volume())
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_dev_shell())
+        .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+        .add_step(Step::new("Probe sccache startup").run(include_str!("scripts/sccache_probe.sh")))
+}
+
+/// Temporary: a real backend failure must still fail the job with the limit set.
+fn probe_sccache_real_failure(name: &'static str, mode: &'static str) -> Job {
+    steps::gated_job()
+        .name(name)
+        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
+        .timeout_minutes(15u32)
+        .add_step(steps::checkout(false, false))
+        .add_step(steps::mount_cache_volume())
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_dev_shell())
+        .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+        .add_step(Step::new("Point sccache at a broken backend").run(format!(
+            "nohup python3 tooling/xtask/crates/xtask_workflows/src/workflows/scripts/sccache_probe_stub.py 19900 {mode} >/dev/null 2>&1 &\nsleep 1\necho 'SCCACHE_WEBDAV_ENDPOINT=http://127.0.0.1:19900/probe/' >> \"$GITHUB_ENV\""
+        )))
+        .add_step(steps::start_sccache_server())
+        .add_step(Step::new("This step must not run").run("echo 'SCCPROBE reached the step after a failed sccache start'"))
 }
 
 /// Install the same pinned runtime shipped in the agent harness container.

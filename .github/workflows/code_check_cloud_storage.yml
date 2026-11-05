@@ -700,6 +700,240 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
+  probe-sccache:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    timeout-minutes: 30
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Probe sccache startup
+      run: |
+        # Temporary: runs the real sccache against each backend mode, with the exported
+        # SCCACHE_CONF and without it. Never prints credentials.
+        set -uo pipefail
+        stub="$GITHUB_WORKSPACE/tooling/xtask/crates/xtask_workflows/src/workflows/scripts/sccache_probe_stub.py"
+        real_endpoint="$SCCACHE_WEBDAV_ENDPOINT"
+        real_base="$(python3 -c 'import sys,urllib.parse as u; p=u.urlsplit(sys.argv[1]); print(p.path)' "$real_endpoint")"
+        work="$RUNNER_TEMP/sccprobe"; mkdir -p "$work"
+        echo 'pub fn f() -> u32 { 7 }' > "$work/good.rs"
+        echo 'pub fn f() -> u32 { "x" }' > "$work/bad.rs"
+        echo "SCCPROBE conf=$SCCACHE_CONF contents=$(cat "$SCCACHE_CONF")"
+        port=19000
+        one() { # case mode arm run keep_token
+          local case=$1 mode=$2 arm=$3 run=$4 stub_pid="" bp sp endpoint rc start end good="" bad="" msg
+          port=$((port + 2)); bp=$port; sp=$((port + 1))
+          if [ "$mode" != refused ]; then
+            python3 "$stub" "$bp" "$mode" "$real_endpoint" >/dev/null 2>&1 &
+            stub_pid=$!
+            sleep 0.4
+          fi
+          endpoint="http://127.0.0.1:$bp/probe/"
+          [ "${mode%%:*}" = proxy ] && endpoint="http://127.0.0.1:$bp$real_base"
+          local envs=(SCCACHE_DIR="$work/d$sp" SCCACHE_SERVER_PORT="$sp" SCCACHE_WEBDAV_ENDPOINT="$endpoint")
+          [ "$arm" = without ] && envs+=(SCCACHE_CONF=/dev/null)
+          start=$(date +%s.%N)
+          env "${envs[@]}" sccache --start-server > "$work/out$sp" 2>&1; rc=$?
+          msg=$(grep -E 'error:|Listening' "$work/out$sp" | head -1 | cut -c1-90)
+          end=$(date +%s.%N)
+          if [ "$rc" = 0 ] && [ "${mode%%:*}" != proxy ]; then
+            (cd "$work"; env "${envs[@]}" sccache rustc --crate-type rlib --edition 2021 -o "g$sp.rlib" good.rs >/dev/null 2>&1; echo $? > "g$sp"; env "${envs[@]}" sccache rustc --crate-type rlib --edition 2021 -o "b$sp.rlib" bad.rs >/dev/null 2>&1; echo $? > "b$sp")
+            good=$(cat "$work/g$sp"); bad=$(cat "$work/b$sp")
+          fi
+          env "${envs[@]}" sccache --stop-server >/dev/null 2>&1
+          [ -n "$stub_pid" ] && kill "$stub_pid" 2>/dev/null
+          printf 'SCCPROBE case=%s arm=%s run=%s server_up=%s secs=%.1f good_rc=%s bad_rc=%s msg=%s\n' "$case" "$arm" "$run" "$([ "$rc" = 0 ] && echo yes || echo no)" "$(echo "$end $start" | awk '{print $1-$2}')" "$good" "$bad" "$msg"
+        }
+        for run in 1 2 3 4 5; do
+          for arm in without with; do
+            one healthy slow:0 "$arm" "$run"
+            one slow_12s slow:4 "$arm" "$run"
+            one slow_30s slow:10 "$arm" "$run"
+            one real_backend_delay_12s proxy:4 "$arm" "$run"
+            one backend_401 status:401 "$arm" "$run"
+            one backend_500 status:500 "$arm" "$run"
+            one refused refused "$arm" "$run"
+            one hang hang "$arm" "$run"
+          done
+        done
+  probe-sccache-401:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    name: probe sccache 401 must fail
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    timeout-minutes: 15
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Point sccache at a broken backend
+      run: |-
+        nohup python3 tooling/xtask/crates/xtask_workflows/src/workflows/scripts/sccache_probe_stub.py 19900 status:401 >/dev/null 2>&1 &
+        sleep 1
+        echo 'SCCACHE_WEBDAV_ENDPOINT=http://127.0.0.1:19900/probe/' >> "$GITHUB_ENV"
+    - name: Start sccache server
+      run: sccache --start-server
+    - name: This step must not run
+      run: echo 'SCCPROBE reached the step after a failed sccache start'
+  probe-sccache-hang:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    name: probe sccache hang must fail
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    timeout-minutes: 15
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Point sccache at a broken backend
+      run: |-
+        nohup python3 tooling/xtask/crates/xtask_workflows/src/workflows/scripts/sccache_probe_stub.py 19900 hang >/dev/null 2>&1 &
+        sleep 1
+        echo 'SCCACHE_WEBDAV_ENDPOINT=http://127.0.0.1:19900/probe/' >> "$GITHUB_ENV"
+    - name: Start sccache server
+      run: sccache --start-server
+    - name: This step must not run
+      run: echo 'SCCPROBE reached the step after a failed sccache start'
   graphql-schema-compat:
     needs:
     - path-check
