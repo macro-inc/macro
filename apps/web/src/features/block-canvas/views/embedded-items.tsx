@@ -2,6 +2,7 @@ import { DocumentPreviewContent } from '@core/component/DocumentPreview';
 import { DocumentPreviewSkeleton } from '@core/component/DocumentPreviewSkeleton';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { lazyNamed } from '@core/util/lazyNamed';
+import type { GraphicsItem } from '@macro-inc/graphics';
 import type { ShapeViewProps } from '@macro-inc/graphics/solid';
 import { Card } from '@ui';
 import { type Component, ErrorBoundary, Show, Suspense } from 'solid-js';
@@ -18,6 +19,35 @@ const ArtifactSceneLabel = lazyNamed(
   () => import('@app/features/block-artifact/views/artifact-canvas'),
   'ArtifactSceneLabel'
 );
+const ArtifactSceneSelect = lazyNamed(
+  () => import('@app/features/block-artifact/views/artifact-canvas'),
+  'ArtifactSceneSelect'
+);
+
+/** The inspector's scene menu for a selected artifact node. */
+export function ArtifactSceneField(props: {
+  item: GraphicsItem | undefined;
+  onChange: (id: string, subpath: string | undefined) => void;
+}) {
+  const artifact = () =>
+    props.item?.type === 'document' &&
+    props.item.geometry.fileType === 'artifact'
+      ? props.item
+      : undefined;
+  return (
+    <Show when={artifact()} keyed>
+      {(item) => (
+        <Suspense>
+          <ArtifactSceneSelect
+            documentId={item.geometry.documentId}
+            value={item.geometry.subpath}
+            onChange={(subpath) => props.onChange(item.id, subpath)}
+          />
+        </Suspense>
+      )}
+    </Show>
+  );
+}
 
 export function CanvasMediaView(
   props: ShapeViewProps<'image' | 'video'> & {
