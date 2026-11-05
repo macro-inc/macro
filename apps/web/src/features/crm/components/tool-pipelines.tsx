@@ -6,7 +6,8 @@ import { For, Show } from 'solid-js';
 
 type Pipeline = {
   name: string;
-  tracks: string;
+  /** Missing for a generic pipeline. */
+  tracks?: string | null;
   fields: { name: string; options?: string[] | null }[];
 };
 type TrackedRecord = {
@@ -14,9 +15,13 @@ type TrackedRecord = {
   name?: string | null;
   detail?: string | null;
 };
-type Entry = { record: TrackedRecord; fields: { [field: string]: unknown } };
+type Entry = {
+  /** Missing in a generic pipeline. */
+  record?: TrackedRecord | null;
+  fields: { [field: string]: unknown };
+};
 type UpdatedEntry = {
-  record: TrackedRecord;
+  record?: TrackedRecord | null;
   changes: { field: string; before: unknown; after: unknown }[];
 };
 
@@ -29,8 +34,16 @@ export function formatFieldValue(value: unknown): string {
   return String(value);
 }
 
-export function recordName(record: TrackedRecord) {
+export function recordName(record: TrackedRecord | null | undefined) {
+  if (!record) return 'Entry';
   return record.name ?? record.detail ?? record.id;
+}
+
+/** A generic pipeline's entry reads by its first filled-in field. */
+function entryName(entry: Entry) {
+  if (entry.record) return recordName(entry.record);
+  const [first] = Object.values(entry.fields);
+  return first === undefined ? recordName(null) : formatFieldValue(first);
 }
 
 function entrySummary(entry: Entry) {
@@ -40,11 +53,13 @@ function entrySummary(entry: Entry) {
     .join(' · ');
 }
 
-function RecordIcon(props: { record: TrackedRecord }) {
-  const isContact = () => props.record.detail?.includes('@') === true;
+function RecordIcon(props: { record?: TrackedRecord | null }) {
+  const isContact = () => props.record?.detail?.includes('@') === true;
   return (
-    <Show when={isContact()} fallback={<Buildings class="size-4" />}>
-      <User class="size-4" />
+    <Show when={props.record} fallback={<Kanban class="size-4" />}>
+      <Show when={isContact()} fallback={<Buildings class="size-4" />}>
+        <User class="size-4" />
+      </Show>
     </Show>
   );
 }
@@ -77,7 +92,10 @@ export function PipelinesToolResponse(props: { pipelines: Pipeline[] }) {
                 subtitle={
                   pipeline.fields
                     .find((field) => field.name === 'Stage')
-                    ?.options?.join(' → ') ?? `Tracks ${pipeline.tracks}s`
+                    ?.options?.join(' → ') ??
+                  (pipeline.tracks
+                    ? `Tracks ${pipeline.tracks}s`
+                    : 'Generic pipeline')
                 }
               />
             </Tool.ListItem>
@@ -103,10 +121,7 @@ export function PipelineEntriesToolResponse(props: {
       <For each={props.entries}>
         {(entry) => (
           <Tool.ListItem icon={<RecordIcon record={entry.record} />}>
-            <Line
-              title={recordName(entry.record)}
-              subtitle={entrySummary(entry)}
-            />
+            <Line title={entryName(entry)} subtitle={entrySummary(entry)} />
           </Tool.ListItem>
         )}
       </For>
@@ -114,7 +129,7 @@ export function PipelineEntriesToolResponse(props: {
         {(entry) => (
           <Tool.ListItem icon={<RecordIcon record={entry.record} />}>
             <Line
-              title={recordName(entry.record)}
+              title={entryName(entry)}
               subtitle={[props.noted?.note, entrySummary(entry)]
                 .filter(Boolean)
                 .join(' · ')}

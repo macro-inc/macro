@@ -22,10 +22,18 @@ import type {
   AppConnectedRequest,
   AutoArchiveOverridesBody,
   AutoArchivePreferencesBody,
+  CallConnectedTool,
   ClassifyInputRequest,
   ClassifyInputResponse,
   CodingAgentsResponse,
   CodingPreferencesBody,
+  ConnectedApp,
+  ConnectedAppKind,
+  ConnectedTool,
+  ConnectedToolResult,
+  ConnectedToolSearch,
+  ConnectMcpServer,
+  ConnectMcpServerResponse,
   ControlRequest,
   ControlResponse,
   CreateAgentSessionRequest,
@@ -33,6 +41,8 @@ import type {
   CreateReview,
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
+  DiscoverConnectorsResponse,
+  DiscoveryRequest,
   EditQueuedActionRequest,
   ExecutionRecord,
   ExtractInputRequest,
@@ -52,6 +62,7 @@ import type {
   ReviewDecision,
   ReviewRecord,
   SandboxSizeBody,
+  SearchConnectedAppToolsParams,
   SessionAutoArchiveResponse,
   SessionPullRequestsResponse,
   SetAgentSessionArchivedRequest,
@@ -2023,6 +2034,439 @@ export const getCodeExecution = async (
     status: res.status,
     headers: res.headers,
   } as getCodeExecutionResponse;
+};
+
+/**
+ * @summary List the connected apps and custom MCP servers the session's agent may use.
+ */
+export type listExecutionConnectedAppsResponse200 = {
+  data: ConnectedApp[];
+  status: 200;
+};
+
+export type listExecutionConnectedAppsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type listExecutionConnectedAppsResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type listExecutionConnectedAppsResponseSuccess =
+  listExecutionConnectedAppsResponse200 & {
+    headers: Headers;
+  };
+export type listExecutionConnectedAppsResponseError = (
+  | listExecutionConnectedAppsResponse403
+  | listExecutionConnectedAppsResponse404
+) & {
+  headers: Headers;
+};
+
+export type listExecutionConnectedAppsResponse =
+  | listExecutionConnectedAppsResponseSuccess
+  | listExecutionConnectedAppsResponseError;
+
+export const getListExecutionConnectedAppsUrl = (
+  sessionId: string,
+  executionId: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps`;
+};
+
+export const listExecutionConnectedApps = async (
+  sessionId: string,
+  executionId: string,
+  options?: RequestInit
+): Promise<listExecutionConnectedAppsResponse> => {
+  const res = await fetch(
+    getListExecutionConnectedAppsUrl(sessionId, executionId),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listExecutionConnectedAppsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listExecutionConnectedAppsResponse;
+};
+
+/**
+ * @summary Search the connectable app catalog, or inspect one app's tools and connection status.
+ */
+export type discoverConnectedAppsResponse200 = {
+  data: DiscoverConnectorsResponse;
+  status: 200;
+};
+
+export type discoverConnectedAppsResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type discoverConnectedAppsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type discoverConnectedAppsResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type discoverConnectedAppsResponseSuccess =
+  discoverConnectedAppsResponse200 & {
+    headers: Headers;
+  };
+export type discoverConnectedAppsResponseError = (
+  | discoverConnectedAppsResponse400
+  | discoverConnectedAppsResponse403
+  | discoverConnectedAppsResponse404
+) & {
+  headers: Headers;
+};
+
+export type discoverConnectedAppsResponse =
+  | discoverConnectedAppsResponseSuccess
+  | discoverConnectedAppsResponseError;
+
+export const getDiscoverConnectedAppsUrl = (
+  sessionId: string,
+  executionId: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/discover`;
+};
+
+export const discoverConnectedApps = async (
+  sessionId: string,
+  executionId: string,
+  discoveryRequest: DiscoveryRequest,
+  options?: RequestInit
+): Promise<discoverConnectedAppsResponse> => {
+  const res = await fetch(getDiscoverConnectedAppsUrl(sessionId, executionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(discoveryRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: discoverConnectedAppsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as discoverConnectedAppsResponse;
+};
+
+/**
+ * @summary Add a custom MCP server to the execution account's connections.
+ */
+export type addConnectedMcpServerResponse200 = {
+  data: ConnectMcpServerResponse;
+  status: 200;
+};
+
+export type addConnectedMcpServerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type addConnectedMcpServerResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type addConnectedMcpServerResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type addConnectedMcpServerResponseSuccess =
+  addConnectedMcpServerResponse200 & {
+    headers: Headers;
+  };
+export type addConnectedMcpServerResponseError = (
+  | addConnectedMcpServerResponse400
+  | addConnectedMcpServerResponse403
+  | addConnectedMcpServerResponse404
+) & {
+  headers: Headers;
+};
+
+export type addConnectedMcpServerResponse =
+  | addConnectedMcpServerResponseSuccess
+  | addConnectedMcpServerResponseError;
+
+export const getAddConnectedMcpServerUrl = (
+  sessionId: string,
+  executionId: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/servers`;
+};
+
+export const addConnectedMcpServer = async (
+  sessionId: string,
+  executionId: string,
+  connectMcpServer: ConnectMcpServer,
+  options?: RequestInit
+): Promise<addConnectedMcpServerResponse> => {
+  const res = await fetch(getAddConnectedMcpServerUrl(sessionId, executionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(connectMcpServer),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addConnectedMcpServerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addConnectedMcpServerResponse;
+};
+
+/**
+ * @summary Find tools across the agent's connected apps by keywords.
+ */
+export type searchConnectedAppToolsResponse200 = {
+  data: ConnectedToolSearch;
+  status: 200;
+};
+
+export type searchConnectedAppToolsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type searchConnectedAppToolsResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type searchConnectedAppToolsResponseSuccess =
+  searchConnectedAppToolsResponse200 & {
+    headers: Headers;
+  };
+export type searchConnectedAppToolsResponseError = (
+  | searchConnectedAppToolsResponse403
+  | searchConnectedAppToolsResponse404
+) & {
+  headers: Headers;
+};
+
+export type searchConnectedAppToolsResponse =
+  | searchConnectedAppToolsResponseSuccess
+  | searchConnectedAppToolsResponseError;
+
+export const getSearchConnectedAppToolsUrl = (
+  sessionId: string,
+  executionId: string,
+  params: SearchConnectedAppToolsParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/tools?${stringifiedParams}`
+    : `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/tools`;
+};
+
+export const searchConnectedAppTools = async (
+  sessionId: string,
+  executionId: string,
+  params: SearchConnectedAppToolsParams,
+  options?: RequestInit
+): Promise<searchConnectedAppToolsResponse> => {
+  const res = await fetch(
+    getSearchConnectedAppToolsUrl(sessionId, executionId, params),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: searchConnectedAppToolsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as searchConnectedAppToolsResponse;
+};
+
+/**
+ * @summary Call one tool of a connected app as the execution's account.
+ */
+export type callConnectedAppToolResponse200 = {
+  data: ConnectedToolResult;
+  status: 200;
+};
+
+export type callConnectedAppToolResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type callConnectedAppToolResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type callConnectedAppToolResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type callConnectedAppToolResponseSuccess =
+  callConnectedAppToolResponse200 & {
+    headers: Headers;
+  };
+export type callConnectedAppToolResponseError = (
+  | callConnectedAppToolResponse400
+  | callConnectedAppToolResponse403
+  | callConnectedAppToolResponse404
+) & {
+  headers: Headers;
+};
+
+export type callConnectedAppToolResponse =
+  | callConnectedAppToolResponseSuccess
+  | callConnectedAppToolResponseError;
+
+export const getCallConnectedAppToolUrl = (
+  sessionId: string,
+  executionId: string,
+  kind: ConnectedAppKind,
+  key: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/${kind}/${key}/calls`;
+};
+
+export const callConnectedAppTool = async (
+  sessionId: string,
+  executionId: string,
+  kind: ConnectedAppKind,
+  key: string,
+  callConnectedTool: CallConnectedTool,
+  options?: RequestInit
+): Promise<callConnectedAppToolResponse> => {
+  const res = await fetch(
+    getCallConnectedAppToolUrl(sessionId, executionId, kind, key),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(callConnectedTool),
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: callConnectedAppToolResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as callConnectedAppToolResponse;
+};
+
+/**
+ * @summary List the tools one connected app serves.
+ */
+export type listConnectedAppToolsResponse200 = {
+  data: ConnectedTool[];
+  status: 200;
+};
+
+export type listConnectedAppToolsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type listConnectedAppToolsResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type listConnectedAppToolsResponseSuccess =
+  listConnectedAppToolsResponse200 & {
+    headers: Headers;
+  };
+export type listConnectedAppToolsResponseError = (
+  | listConnectedAppToolsResponse403
+  | listConnectedAppToolsResponse404
+) & {
+  headers: Headers;
+};
+
+export type listConnectedAppToolsResponse =
+  | listConnectedAppToolsResponseSuccess
+  | listConnectedAppToolsResponseError;
+
+export const getListConnectedAppToolsUrl = (
+  sessionId: string,
+  executionId: string,
+  kind: ConnectedAppKind,
+  key: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/${kind}/${key}/tools`;
+};
+
+export const listConnectedAppTools = async (
+  sessionId: string,
+  executionId: string,
+  kind: ConnectedAppKind,
+  key: string,
+  options?: RequestInit
+): Promise<listConnectedAppToolsResponse> => {
+  const res = await fetch(
+    getListConnectedAppToolsUrl(sessionId, executionId, kind, key),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listConnectedAppToolsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listConnectedAppToolsResponse;
 };
 
 /**

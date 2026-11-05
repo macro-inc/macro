@@ -13,7 +13,7 @@ import type {
   DatabaseViewColumn,
 } from '../../database/core/database-view';
 import { importedDomain, importedText } from './import-companies';
-import type { Pipeline } from './pipeline';
+import type { Pipeline, PipelineRecordType } from './pipeline';
 
 /** The company or contact a pipeline row is for: its name, and its domain or email. */
 export type PipelineCsvRecord = { name: string; key: string };
@@ -41,12 +41,12 @@ export type PipelineImportPlan = {
 };
 
 export type PipelineImportFailure =
-  | { kind: 'no-record-column'; recordType: Pipeline['recordType'] }
+  | { kind: 'no-record-column'; recordType: PipelineRecordType }
   | { kind: 'no-rows' };
 
 /** The record columns of a pipeline CSV, before the pipeline's own columns. */
 export function pipelineRecordHeaders(
-  recordType: Pipeline['recordType']
+  recordType: PipelineRecordType
 ): [name: string, key: string] {
   return recordType === 'company'
     ? ['Company', 'Domain']
@@ -90,7 +90,7 @@ function exportedCell(column: DatabaseViewColumn, value: DatabaseCellValue) {
     : exportedValue(column, value);
 }
 
-/** A pipeline as CSV: the record's name and key, then every other column. */
+/** A pipeline as CSV: the record's name and key, if it tracks one, then every other column. */
 export function encodePipelineCsv(input: {
   recordType: Pipeline['recordType'];
   columns: readonly DatabaseViewColumn[];
@@ -98,20 +98,21 @@ export function encodePipelineCsv(input: {
   rows: readonly PipelineCsvRow[];
   record(id: string): PipelineCsvRecord | undefined;
 }): string {
-  const columns = input.columns.filter(
-    (column) => column.id !== input.primaryColumnId
-  );
+  const { recordType } = input;
+  // A generic pipeline's primary column is plain text, exported like the rest.
+  const columns = recordType
+    ? input.columns.filter((column) => column.id !== input.primaryColumnId)
+    : input.columns;
   return encodeDatabaseCsv(
     [
-      ...pipelineRecordHeaders(input.recordType),
+      ...(recordType ? pipelineRecordHeaders(recordType) : []),
       ...columns.map((column) => column.name),
     ],
     input.rows.map((row) => {
       const id = row.cells[input.primaryColumnId];
       const record = typeof id === 'string' ? input.record(id) : undefined;
       return [
-        record?.name ?? '',
-        record?.key ?? '',
+        ...(recordType ? [record?.name ?? '', record?.key ?? ''] : []),
         ...columns.map((column) =>
           exportedCell(column, row.cells[column.id] ?? null)
         ),
@@ -170,7 +171,7 @@ function gridValue(
   return column.isMultiSelect ? JSON.stringify(values) : (values[0] ?? '');
 }
 
-function recordKey(recordType: Pipeline['recordType'], text: string) {
+function recordKey(recordType: PipelineRecordType, text: string) {
   if (recordType === 'company')
     return text
       .split(/[;,\s]+/)
@@ -188,7 +189,7 @@ function recordKey(recordType: Pipeline['recordType'], text: string) {
 export function planPipelineImport(
   csv: DatabaseCsv,
   pipeline: {
-    recordType: Pipeline['recordType'];
+    recordType: PipelineRecordType;
     columns: readonly DatabaseViewColumn[];
     primaryColumnId: string;
   }

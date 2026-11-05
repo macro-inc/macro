@@ -94,10 +94,9 @@ searches, and picks by keyboard:
 Focus rows have a backend-free browser regression over the real row and mapping
 at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
 extra height or lost subject, touch rows of at least 44px, and the importance
-meter only under its sort, with the direction in its label while importance moves:
+meter on every row except on phones, with the direction in its label while
+importance moves:
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
-The fixture has its own sort buttons: the real touch layouts have no sort menu, so
-that coverage proves the meter's layout there, not that touch users can reach it.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
@@ -1110,6 +1109,18 @@ browser moves focus off a disabled field, so a failed save would strand it. Ente
 and Escape return focus to the value through `Property.Root`; tabbing or clicking
 away leaves focus where the user put it. The backend-free regression is
 `bunx playwright test --config src/features/property/editors/inline/browser-test/playwright.config.ts`.
+
+### Assignee people scope
+
+Use only the current team roster and available agents for new Assignee selections.
+Keep existing selected outsiders visible and removable, without contact discovery.
+Reuse the existing selected-first ordering at opening and keep row positions
+stable while selecting. Keep the generic roster hook in `src/lib/queries/team/members.ts`.
+Preserve each picker’s existing placeholder, sizing, and row styling.
+Preserve filter-only Me/Unassigned choices, company-owner scope, and unrelated
+people/contact fields.
+Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
+import it directly from Tasks and legacy `next-soup` consumers.
 
 ### Sidebar tag dragging
 

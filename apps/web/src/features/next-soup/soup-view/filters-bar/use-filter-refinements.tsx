@@ -21,6 +21,10 @@ import {
   VIEW_TAB_PRESETS,
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import {
+  AssigneePickerStatus,
+  useAssigneePicker,
+} from '@app/features/soup/assignee-picker';
 import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
@@ -146,13 +150,17 @@ export function useFilterRefinements() {
     return hasClientFilterDiff || hasQueryFilterDiff || hasSubFilters;
   });
 
+  const assigneePicker = useAssigneePicker(
+    assigneeFilter,
+    () => currentView() === 'tasks'
+  );
+
   /**
    * Human-readable options for the assignee sub-filter, keyed by assignee ID.
-   * Mirrors the same logic used in UnifiedFilterDropdown's assigneeOptions.
+   * Uses the same team and selected-outsider options as the pickers.
    */
   const assigneeOptionsMap = createMemo(
     (): Map<string, { label: string; icon?: () => JSX.Element }> => {
-      const uid = currentUserId();
       const map = new Map<
         string,
         { label: string; icon?: () => JSX.Element }
@@ -161,60 +169,12 @@ export function useFilterRefinements() {
         label: t('viewMenus.unassigned'),
         icon: () => <CircleDashedIcon class="size-3 text-ink-muted" />,
       });
-      for (const contact of contacts()) {
-        map.set(contact.id, {
-          label: buildContactLabel(contact, uid),
-          icon: () => (
-            <UserIcon
-              id={contact.id}
-              size="sm"
-              suppressClick
-              showTooltip={false}
-            />
-          ),
-        });
+      for (const option of assigneePicker.options()) {
+        map.set(option.id, { label: option.label, icon: option.icon });
       }
       return map;
     }
   );
-
-  /**
-   * Searchable options for the assignee filter (for use in searchable multi-select).
-   */
-  const assigneeSearchableOptions = createMemo((): SearchableOption[] => {
-    const uid = currentUserId();
-    const noAssigneeOption: SearchableOption = {
-      id: NO_ASSIGNEE,
-      label: t('viewMenus.unassigned'),
-      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
-    };
-    let meOption: SearchableOption | undefined;
-    const otherContactOptions: SearchableOption[] = [];
-    for (const contact of contacts()) {
-      const opt: SearchableOption = {
-        id: contact.id,
-        label: buildContactLabel(contact, uid),
-        icon: () => (
-          <UserIcon
-            id={contact.id}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
-        ),
-      };
-      if (contact.id === uid) {
-        meOption = opt;
-      } else {
-        otherContactOptions.push(opt);
-      }
-    }
-    return [
-      ...(meOption ? [meOption] : []),
-      noAssigneeOption,
-      ...otherContactOptions,
-    ];
-  });
 
   /** Creator options for the Tasks and Files Created by filter. */
   const createdByOptionsMap = createMemo(
@@ -645,11 +605,14 @@ export function useFilterRefinements() {
               return t('viewMenus.assignee');
             },
             values: getValues,
-            searchableOptions: assigneeSearchableOptions,
+            searchableOptions: assigneePicker.options,
+            get searchFooter() {
+              return <AssigneePickerStatus picker={assigneePicker} />;
+            },
             activeSearchableIds: assigneeFilter,
             onSearchableChange: handleAssigneeChange,
             get searchPlaceholder() {
-              return t('viewMenus.searchAssignees');
+              return assigneePicker.placeholder();
             },
             isPopupOpen,
             setPopupOpen,
