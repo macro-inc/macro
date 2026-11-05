@@ -4,9 +4,22 @@
 use serde::{Deserialize, Serialize};
 
 /// A size a team can buy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    strum::AsRefStr,
+    strum::EnumString,
+    strum::EnumIter,
+)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ComputerSize {
     Standard,
     Large,
@@ -35,17 +48,5 @@ impl ComputerSize {
 
     pub fn disk_gb(self) -> u32 {
         self.units() * 100
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Standard => "standard",
-            Self::Large => "large",
-            Self::Xl => "xl",
-        }
-    }
-
-    pub fn parse(value: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|size| size.as_str() == value)
     }
 }

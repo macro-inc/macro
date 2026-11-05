@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::domain::enrollment::Enrollment;
-use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId};
+use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, TimerKind};
 use crate::domain::models::{
     BillingInterval, Computer, Host, HostRegistration, NewComputer, Quote, SubscriptionItem,
 };
@@ -24,7 +24,8 @@ pub struct PendingEffect {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DueTimer {
     pub computer_id: Uuid,
-    pub event: Event,
+    pub kind: TimerKind,
+    pub fire_at: DateTime<Utc>,
 }
 
 /// Why units could not be reserved.
@@ -90,11 +91,8 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Running computers whose sessions have all been quiet since `before`.
-    fn idle_running(
-        &self,
-        before: DateTime<Utc>,
-    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+    /// Running computers with their harness, for the idle sweep.
+    fn running(&self) -> impl Future<Output = Result<Vec<Computer>, Self::Err>> + Send;
 
     /// The frozen computer on `host` that has been frozen longest.
     fn coldest_frozen(
@@ -128,12 +126,20 @@ pub trait ComputerRepo: Send + Sync + 'static {
         retry_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Remove and return timers due at `now`.
-    fn take_due_timers(
+    /// Timers due at `now`, oldest first.
+    fn due_timers(
         &self,
         now: DateTime<Utc>,
         limit: u32,
     ) -> impl Future<Output = Result<Vec<DueTimer>, Self::Err>> + Send;
+
+    /// Delete the timer if it is still the one that came due and apply its
+    /// event, in one transaction. A timer replaced meanwhile is left alone.
+    fn fire_timer(
+        &self,
+        timer: DueTimer,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
 
     /// Insert or refresh a host and its capacity.
     fn register_host(
@@ -273,7 +279,13 @@ pub trait Harnesses: Send + Sync + 'static {
     fn create_hosted_pairing(
         &self,
         computer: &Computer,
-    ) -> impl Future<Output = Result<(HostedPairing, Uuid), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<HostedPairing, Self::Err>> + Send;
+
+    /// The computer a harness runs on, if it is a computer's.
+    fn computer_for(
+        &self,
+        harness_id: Uuid,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
     /// Delete the computer's harness and its credential; absent is fine.
     fn revoke(&self, computer_id: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;

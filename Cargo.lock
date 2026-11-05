@@ -577,6 +577,7 @@ dependencies = [
  "cron",
  "cursor_api_key",
  "cursor_cloud_agents",
+ "dashmap",
  "database_env_vars",
  "databases",
  "databases_sql",
@@ -597,11 +598,13 @@ dependencies = [
  "frecency",
  "fusionauth",
  "futures",
+ "genai_telemetry",
  "github",
  "github_pull_requests",
  "granola_sync",
  "harness_id",
  "harnesses",
+ "hosted_runtimes",
  "http 1.4.0",
  "http-body-util",
  "image_generation",
@@ -609,6 +612,7 @@ dependencies = [
  "import_jira",
  "import_linear",
  "import_notion",
+ "incus_client",
  "initiative",
  "jev",
  "kafka_util",
@@ -2238,6 +2242,7 @@ dependencies = [
  "github_pull_requests",
  "gtm_invite",
  "hmac 0.12.1",
+ "hosted_runtimes",
  "http-body-util",
  "initiative",
  "jsonwebtoken 10.3.0",
@@ -10104,6 +10109,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d"
 dependencies = [
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "hosted_runtimes"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "clap",
+ "entity_access",
+ "incus_client",
+ "lazy-regex",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_env",
+ "model-error-response",
+ "proptest",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -23228,6 +23262,7 @@ dependencies = [
  "rand 0.10.1",
  "rand 0.8.6",
  "rand 0.9.4",
+ "rand_chacha 0.9.0",
  "rand_core 0.6.4",
  "redis",
  "regex",

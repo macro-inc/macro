@@ -724,6 +724,12 @@ pub async fn run() -> anyhow::Result<()> {
             invite_reminders_stop.clone().cancelled_owned(),
         ),
     );
+    // Carries out computers' billing effects (removing subscription items at
+    // period end or on release). Rows are leased, so every replica runs it.
+    invite_reminders.spawn(run_computer_billing_effects(
+        computer_service.clone(),
+        invite_reminders_stop.clone(),
+    ));
     invite_reminders.close();
     let user_deletion = Arc::new(
         crate::outbound::user_deletion::UserDeletionAdapter::new(
@@ -817,7 +823,8 @@ pub async fn run() -> anyhow::Result<()> {
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service,
             computer_prices,
-            computer_billing_observer: computer_service,
+            computer_billing_observer: computer_service.clone(),
+            computer_service,
             domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,
@@ -900,3 +907,23 @@ const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 const IOS_DEVELOPMENT_TEAM_ID: &str = "TY74Q77JBD";
 // SAFETY: this is not a secret value
 const IOS_APP_BUNDLE_ID: &str = "com.macro.app.prod";
+
+/// How often due computer billing effects are carried out.
+const COMPUTER_BILLING_TICK: std::time::Duration = std::time::Duration::from_secs(10);
+
+async fn run_computer_billing_effects(
+    service: Arc<crate::api::context::ComputerServiceType>,
+    stop: CancellationToken,
+) {
+    let mut interval = tokio::time::interval(COMPUTER_BILLING_TICK);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            () = stop.cancelled() => return,
+            _ = interval.tick() => {}
+        }
+        if let Err(error) = service.run_billing_effects().await {
+            tracing::error!(error = ?error, "computer billing effects pass failed");
+        }
+    }
+}

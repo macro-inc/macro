@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM hosted_runtime_timer\n            WHERE computer_id = $1 AND kind = $2 AND fire_at = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3333bb2529a56c1580d1df5752309826851ee103e366eec2b074b48f4e829623"
+}

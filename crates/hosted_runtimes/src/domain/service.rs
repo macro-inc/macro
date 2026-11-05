@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::domain::enrollment::Persona;
-use crate::domain::lifecycle::{EffectWorker, Event, Effect, Phase};
+use crate::domain::lifecycle::{Effect, EffectWorker, Event, Phase};
 use crate::domain::models::{
     Computer, ComputerStatus, NewComputer, PurchaseRequest, Quote, SizeOffer,
 };
@@ -127,7 +127,7 @@ where
     /// computer id at once; [`Self::status`] reports setup progress.
     #[tracing::instrument(
         skip(self, request),
-        fields(team_id = %request.team_id, size = request.size.as_str(), computer_id),
+        fields(team_id = %request.team_id, size = request.size.as_ref(), computer_id),
         err
     )]
     pub async fn purchase(&self, request: PurchaseRequest) -> Result<Uuid, ComputerError> {
@@ -279,6 +279,15 @@ where
             .collect();
         paid.sort_by_key(|computer| computer.created_at);
 
+        if billed as usize > paid.len() {
+            tracing::error!(
+                team_id = %team_id,
+                size = size.as_ref(),
+                billed,
+                computers = paid.len(),
+                "team billed for more computers than it has"
+            );
+        }
         let excess = paid.len().saturating_sub(billed as usize);
         for computer in paid.iter().rev().take(excess) {
             tracing::warn!(computer_id = %computer.id, "subscription item removed outside Macro");
@@ -309,13 +318,19 @@ where
 
         for pending in effects {
             let outcome = match pending.effect {
-                Effect::RemoveBillingItem => self.remove_item(pending.computer_id, pending.id).await,
+                Effect::RemoveBillingItem => {
+                    self.remove_item(pending.computer_id, pending.id).await
+                }
                 other => Err(ComputerError::BadRequest(format!(
                     "{other:?} is not a billing effect"
                 ))),
             };
             match outcome {
-                Ok(()) => self.repo.complete_effect(pending.id).await.map_err(internal)?,
+                Ok(()) => self
+                    .repo
+                    .complete_effect(pending.id)
+                    .await
+                    .map_err(internal)?,
                 Err(error) => {
                     tracing::warn!(effect_id = pending.id, error = ?error, "billing effect failed");
                     let backoff = chrono::Duration::seconds(30 * i64::from(pending.attempts + 1));
@@ -391,7 +406,10 @@ fn computer_name(request: &PurchaseRequest) -> Result<String, ComputerError> {
     let name = request
         .name
         .as_deref()
-        .or(request.persona.as_ref().map(|persona| persona.name.as_str()))
+        .or(request
+            .persona
+            .as_ref()
+            .map(|persona| persona.name.as_str()))
         .unwrap_or(DEFAULT_NAME)
         .trim();
     if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {

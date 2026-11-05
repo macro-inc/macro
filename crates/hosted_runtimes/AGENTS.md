@@ -21,6 +21,13 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 - `src/domain/lifecycle.rs` + `lifecycle/test.rs`: states, events, effects, invariants.
 - `src/domain/service.rs`: the team-facing `ComputerService` (purchase, quote, status, power, cancel, release).
 - `src/domain/enrollment.rs`: the first-boot contract with `macrod enroll`.
+- `src/domain/operator.rs`: the control plane (fleet effects, timers, reconcile,
+  idle sleep, macrod presence, wake on prompt); wired in
+  `services/agent_harness_service/src/computers.rs`.
+- `src/inbound/axum_router.rs`: `/team/computers*` and `/internal/computers*`,
+  mounted by authentication_service.
+- `src/outbound/`: Postgres repo, `IncusFleet`, dev-only `DockerFleet`, and
+  `ConfiguredFleet` (explicit `COMPUTERS_FLEET`, never a fallback).
 
 ## Contracts (PR B, agent brains, builds on these — keep them stable)
 
@@ -54,10 +61,16 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 
 ## Gotchas
 
+- V1 runs one fleet (one host) per control plane; an effect for another host fails.
+- `PageOperator` is the log event `computer needs an operator` (error level);
+  alerts key on it.
+- Each computer's effects run strictly in outbox order (`lease_effects` leases
+  only a computer's oldest effect per worker).
 - Timers are never cancelled: `transition` ignores events that no longer apply,
   so a new state must guard every timer event it can receive.
-- A Stripe failure after units are reserved emits `PurchaseFailed`; a purchase that
-  Stripe applied but whose response was lost is caught by the webhook count diff.
+- A Stripe failure after units are reserved emits `PurchaseFailed`. If Stripe
+  applied the update but the response was lost, the webhook count diff logs
+  `team billed for more computers than it has` for a manual refund.
 
 ## Related
 

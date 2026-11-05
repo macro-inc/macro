@@ -1,215 +1,14 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use super::*;
 use crate::domain::enrollment::PersonaService;
-use crate::domain::lifecycle::{
-    Billing as BillingState, ComputerState, Context, EffectWorker, HostId, Power, transition,
-};
-use crate::domain::models::{BillingInterval, Host, HostRegistration, SubscriptionItem};
-use crate::domain::ports::{DueTimer, PendingEffect};
-
-const TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_00aa);
-const HOST: HostId = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001);
-
-fn now() -> DateTime<Utc> {
-    Utc.with_ymd_and_hms(2026, 11, 4, 12, 0, 0).unwrap()
-}
-
-struct FixedClock;
-
-impl Clock for FixedClock {
-    fn now(&self) -> DateTime<Utc> {
-        now()
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("fake storage error")]
-struct FakeError;
-
-/// One host with `sold_units` of sold capacity; every computer awake fits.
-#[derive(Default)]
-struct FakeRepo {
-    sold_units: u32,
-    computers: Mutex<HashMap<Uuid, Computer>>,
-    effects: Mutex<Vec<PendingEffect>>,
-    events: Mutex<Vec<(Uuid, Event)>>,
-}
-
-impl ComputerRepo for FakeRepo {
-    type Err = FakeError;
-
-    async fn reserve(
-        &self,
-        computer: NewComputer,
-        now: DateTime<Utc>,
-    ) -> Result<Computer, ReserveError<FakeError>> {
-        let mut computers = self.computers.lock().unwrap();
-        let sold: u32 = computers
-            .values()
-            .filter(|existing| existing.state.phase != Phase::Destroyed)
-            .map(|existing| existing.size.units())
-            .sum();
-        if sold + computer.size.units() > self.sold_units {
-            return Err(ReserveError::SoldOut);
-        }
-        let reserved = Computer {
-            id: computer.id,
-            team_id: computer.team_id,
-            name: computer.name,
-            size: computer.size,
-            state: ComputerState::reserved(HOST, now),
-            harness_id: None,
-            persona: computer.persona,
-            created_by: computer.created_by,
-            created_at: now,
-            enrolled_at: None,
-        };
-        computers.insert(reserved.id, reserved.clone());
-        Ok(reserved)
-    }
-
-    async fn apply(
-        &self,
-        computer_id: Uuid,
-        event: Event,
-        now: DateTime<Utc>,
-    ) -> Result<Option<Computer>, FakeError> {
-        self.events.lock().unwrap().push((computer_id, event.clone()));
-        let mut computers = self.computers.lock().unwrap();
-        let Some(computer) = computers.get_mut(&computer_id) else {
-            return Ok(None);
-        };
-        let (state, effects) = transition(
-            &computer.state,
-            &event,
-            Context {
-                now,
-                host_has_room: true,
-            },
-        );
-        computer.state = state;
-        let mut outbox = self.effects.lock().unwrap();
-        for effect in effects {
-            let id = outbox.len() as i64 + 1;
-            outbox.push(PendingEffect {
-                id,
-                computer_id,
-                effect,
-                attempts: 0,
-            });
-        }
-        Ok(Some(computer.clone()))
-    }
-
-    async fn get(&self, computer_id: Uuid) -> Result<Option<Computer>, FakeError> {
-        Ok(self.computers.lock().unwrap().get(&computer_id).cloned())
-    }
-
-    async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<Computer>, FakeError> {
-        let mut computers: Vec<Computer> = self
-            .computers
-            .lock()
-            .unwrap()
-            .values()
-            .filter(|computer| computer.team_id == team_id)
-            .filter(|computer| computer.state.phase != Phase::Destroyed)
-            .cloned()
-            .collect();
-        computers.sort_by_key(|computer| computer.created_at);
-        Ok(computers)
-    }
-
-    async fn find_by_harness(&self, _harness_id: Uuid) -> Result<Option<Computer>, FakeError> {
-        Ok(None)
-    }
-
-    async fn set_harness(&self, _computer_id: Uuid, _harness_id: Uuid) -> Result<(), FakeError> {
-        Ok(())
-    }
-
-    async fn mark_enrolled(&self, _computer_id: Uuid, _now: DateTime<Utc>) -> Result<(), FakeError> {
-        Ok(())
-    }
-
-    async fn idle_running(&self, _before: DateTime<Utc>) -> Result<Vec<Uuid>, FakeError> {
-        Ok(vec![])
-    }
-
-    async fn coldest_frozen(&self, _host: HostId) -> Result<Option<Uuid>, FakeError> {
-        Ok(None)
-    }
-
-    async fn instances_expected(&self, _host: HostId) -> Result<Vec<Computer>, FakeError> {
-        Ok(vec![])
-    }
-
-    async fn lease_effects(
-        &self,
-        worker: EffectWorker,
-        limit: u32,
-        _now: DateTime<Utc>,
-        _lease_until: DateTime<Utc>,
-    ) -> Result<Vec<PendingEffect>, FakeError> {
-        Ok(self
-            .effects
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|pending| pending.effect.worker() == worker)
-            .take(limit as usize)
-            .cloned()
-            .collect())
-    }
-
-    async fn complete_effect(&self, id: i64) -> Result<(), FakeError> {
-        self.effects.lock().unwrap().retain(|pending| pending.id != id);
-        Ok(())
-    }
-
-    async fn retry_effect(
-        &self,
-        id: i64,
-        _error: String,
-        _retry_at: DateTime<Utc>,
-    ) -> Result<(), FakeError> {
-        for pending in self.effects.lock().unwrap().iter_mut() {
-            if pending.id == id {
-                pending.attempts += 1;
-            }
-        }
-        Ok(())
-    }
-
-    async fn take_due_timers(&self, _now: DateTime<Utc>, _limit: u32) -> Result<Vec<DueTimer>, FakeError> {
-        Ok(vec![])
-    }
-
-    async fn register_host(&self, _registration: HostRegistration) -> Result<Host, FakeError> {
-        Err(FakeError)
-    }
-
-    async fn sold_out_sizes(&self) -> Result<Vec<ComputerSize>, FakeError> {
-        Ok(vec![])
-    }
-
-    async fn request_notify(
-        &self,
-        _team_id: Uuid,
-        _user_id: String,
-        _size: ComputerSize,
-    ) -> Result<(), FakeError> {
-        Ok(())
-    }
-
-    async fn notify_requests(&self, _team_id: Uuid, _user_id: String) -> Result<Vec<ComputerSize>, FakeError> {
-        Ok(vec![])
-    }
-}
+use crate::domain::fakes::{FakeRepo, FixedClock, HOST, TEAM, now};
+use crate::domain::lifecycle::{Billing as BillingState, ComputerState, Power};
+use crate::domain::models::{BillingInterval, SubscriptionItem};
 
 /// Records subscription updates; fails them when `decline` is set.
 #[derive(Default)]
@@ -223,7 +22,7 @@ impl Billing for FakeBilling {
     async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
         Ok(Quote {
             size,
-            price_id: format!("price_{}", size.as_str()),
+            price_id: format!("price_{}", size.as_ref()),
             amount: 2000 * i64::from(size.units()),
             currency: "usd".to_owned(),
             interval: BillingInterval::Month,
@@ -318,7 +117,10 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
     let status = service.status(TEAM, computer_id).await.unwrap();
     assert_eq!(status.name, "Ada");
     assert_eq!(status.persona_name.as_deref(), Some("Ada"));
-    assert_eq!(status.status, crate::domain::models::ComputerStatusKind::SettingUp);
+    assert_eq!(
+        status.status,
+        crate::domain::models::ComputerStatusKind::SettingUp
+    );
     assert_eq!(
         status.setup,
         Some(crate::domain::models::SetupProgress {
@@ -459,7 +261,10 @@ async fn release_now_needs_the_name_and_removes_the_item_once() {
         .release_now(TEAM, computer_id, "Build box")
         .await
         .unwrap();
-    assert_eq!(released.status, crate::domain::models::ComputerStatusKind::Released);
+    assert_eq!(
+        released.status,
+        crate::domain::models::ComputerStatusKind::Released
+    );
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
     assert_eq!(service.run_billing_effects().await.unwrap(), 0);
     assert_eq!(
@@ -500,10 +305,7 @@ async fn other_teams_cannot_see_or_change_a_computer() {
         service.set_power(other_team, computer_id, false).await,
         Err(ComputerError::NotFound)
     ));
-    assert_eq!(
-        service.status(TEAM, computer_id).await.unwrap().powered_on,
-        true
-    );
+    assert!(service.status(TEAM, computer_id).await.unwrap().powered_on);
 }
 
 #[tokio::test]
@@ -512,7 +314,10 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
         sold_units: 9,
         ..FakeRepo::default()
     };
-    for (index, created_at) in [now() - chrono::Duration::days(3), now()].into_iter().enumerate() {
+    for (index, created_at) in [now() - chrono::Duration::days(3), now()]
+        .into_iter()
+        .enumerate()
+    {
         let mut state = ComputerState::reserved(HOST, created_at);
         state.phase = Phase::Running { host: HOST };
         repo.computers.lock().unwrap().insert(
@@ -544,5 +349,8 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
     );
     let newest = service.repo.get(Uuid::from_u128(2)).await.unwrap().unwrap();
     assert_eq!(newest.state.power, Power::Off);
-    assert!(matches!(newest.state.billing, BillingState::Canceled { .. }));
+    assert!(matches!(
+        newest.state.billing,
+        BillingState::Canceled { .. }
+    ));
 }

@@ -172,6 +172,13 @@ pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
 
 pub(crate) type EntityAccessServiceType = EntityAccessServiceImpl<PgAccessRepository>;
 
+/// Buys and manages Macro computers on team subscriptions.
+pub(crate) type ComputerServiceType = hosted_runtimes::domain::service::ComputerService<
+    hosted_runtimes::outbound::pg::PgComputerRepo,
+    crate::outbound::computer_billing::TeamComputerBilling<TeamsServiceType>,
+    hosted_runtimes::domain::service::SystemClock,
+>;
+
 pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServiceImpl<
     favorites::outbound::pg_favorites_repo::PgFavoritesRepo,
 >;
@@ -267,6 +274,8 @@ pub(crate) struct ApiContext {
     pub stripe_prices: crate::api::user::stripe::StripePrices,
     /// The Stripe prices Macro computers bill at.
     pub computer_prices: crate::domain::computer_billing::ComputerPrices,
+    /// Buys and manages Macro computers; also runs their billing effects.
+    pub computer_service: Arc<ComputerServiceType>,
     /// Cancels computers whose subscription items went away outside Macro.
     pub computer_billing_observer:
         Arc<dyn crate::domain::computer_billing::ComputerBillingObserver>,

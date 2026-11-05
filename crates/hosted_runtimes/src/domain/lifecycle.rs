@@ -36,23 +36,46 @@ pub type HostId = Uuid;
 #[serde(tag = "phase", rename_all = "snake_case")]
 pub enum Phase {
     /// Purchase in flight: units held on `host`, payment not yet confirmed.
-    Reserved { host: HostId, expires_at: DateTime<Utc> },
+    Reserved {
+        host: HostId,
+        expires_at: DateTime<Utc>,
+    },
     /// Paid; the instance is being created on `host`, started when `start`
     /// (a full host creates it stopped and wakes it later).
-    Provisioning { host: HostId, start: bool },
+    Provisioning {
+        host: HostId,
+        start: bool,
+    },
     /// The VM is starting (first boot, resume or restart); macrod not yet connected.
-    Booting { host: HostId },
-    Running { host: HostId },
+    Booting {
+        host: HostId,
+    },
+    Running {
+        host: HostId,
+    },
     /// Crashed; restarts when the backoff timer fires.
-    Restarting { host: HostId },
+    Restarting {
+        host: HostId,
+    },
     /// Paused in RAM; wakes in milliseconds.
-    Frozen { host: HostId },
+    Frozen {
+        host: HostId,
+    },
     /// RAM written to disk (`saved_state` once the snapshot finished); takes no host RAM.
-    Suspended { host: HostId, saved_state: bool },
-    Stopping { host: HostId },
-    Stopped { host: HostId },
+    Suspended {
+        host: HostId,
+        saved_state: bool,
+    },
+    Stopping {
+        host: HostId,
+    },
+    Stopped {
+        host: HostId,
+    },
     /// Gave up restarting; an operator retries.
-    Failed { host: HostId },
+    Failed {
+        host: HostId,
+    },
     Destroyed,
 }
 
@@ -70,9 +93,13 @@ pub enum Power {
 pub enum Billing {
     Active,
     /// Billing stops at `at` (the current period end); undo is allowed until then.
-    CancelAtPeriodEnd { at: DateTime<Utc> },
+    CancelAtPeriodEnd {
+        at: DateTime<Utc>,
+    },
     /// No longer billed; the disk is kept until `retained_until`.
-    Canceled { retained_until: DateTime<Utc> },
+    Canceled {
+        retained_until: DateTime<Utc>,
+    },
 }
 
 /// Everything the lifecycle knows about one computer.
@@ -165,7 +192,9 @@ pub enum Event {
     PowerOff,
     /// Timer: retry a wake that found the host full.
     WakeRetry,
-    CancelAtPeriodEnd { at: DateTime<Utc> },
+    CancelAtPeriodEnd {
+        at: DateTime<Utc>,
+    },
     UndoCancel,
     /// Timer: the billing period of a cancel-at-period-end ended.
     PeriodEnded,
@@ -176,12 +205,26 @@ pub enum Event {
     RetentionExpired,
     OperatorRetry,
     /// A fleet effect failed after its retries; an operator looks.
-    EffectFailed { reason: String },
+    EffectFailed {
+        reason: String,
+    },
 }
 
 /// Timers a computer can have pending; at most one of each kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    strum::AsRefStr,
+    strum::EnumString,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum TimerKind {
     ReservationExpired,
     MacrodMissing,
@@ -212,20 +255,41 @@ impl TimerKind {
 #[serde(tag = "effect", rename_all = "snake_case")]
 pub enum Effect {
     /// Create the instance from the base image with its enrollment; start it when `start`.
-    Create { host: HostId, start: bool },
-    Start { host: HostId },
-    Freeze { host: HostId },
-    Unfreeze { host: HostId },
+    Create {
+        host: HostId,
+        start: bool,
+    },
+    Start {
+        host: HostId,
+    },
+    Freeze {
+        host: HostId,
+    },
+    Unfreeze {
+        host: HostId,
+    },
     /// Stateful stop: save RAM to disk.
-    Suspend { host: HostId },
+    Suspend {
+        host: HostId,
+    },
     /// Start from saved state.
-    Resume { host: HostId },
-    Stop { host: HostId },
+    Resume {
+        host: HostId,
+    },
+    Stop {
+        host: HostId,
+    },
     /// Force-stop and start.
-    Restart { host: HostId },
-    Destroy { host: HostId },
+    Restart {
+        host: HostId,
+    },
+    Destroy {
+        host: HostId,
+    },
     /// Suspend the coldest idle awake computer on `host` to free units.
-    MakeRoom { host: HostId },
+    MakeRoom {
+        host: HostId,
+    },
     /// Remove this computer's item from the team subscription.
     RemoveBillingItem,
     /// Delete the computer's harness and its credential.
@@ -233,8 +297,13 @@ pub enum Effect {
     /// Fire `kind` at `at`, replacing a pending timer of that kind. Timers
     /// need no cancel: a timer that fires in a state it no longer applies to
     /// is ignored by [`transition`].
-    ScheduleTimer { kind: TimerKind, at: DateTime<Utc> },
-    PageOperator { reason: String },
+    ScheduleTimer {
+        kind: TimerKind,
+        at: DateTime<Utc>,
+    },
+    PageOperator {
+        reason: String,
+    },
 }
 
 impl Effect {
@@ -248,8 +317,11 @@ impl Effect {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::AsRefStr, strum::EnumString,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum EffectWorker {
     Fleet,
     Billing,
@@ -368,7 +440,13 @@ pub fn transition(
 
         Event::RestartDue => {
             if let Phase::Restarting { .. } = state.phase {
-                boot(&mut next, &mut effects, host, now, Some(Effect::Restart { host }));
+                boot(
+                    &mut next,
+                    &mut effects,
+                    host,
+                    now,
+                    Some(Effect::Restart { host }),
+                );
             }
         }
 
@@ -446,7 +524,13 @@ pub fn transition(
                 next.recent_crashes.clear();
                 if state.power == Power::On {
                     if context.host_has_room {
-                        boot(&mut next, &mut effects, host, now, Some(Effect::Restart { host }));
+                        boot(
+                            &mut next,
+                            &mut effects,
+                            host,
+                            now,
+                            Some(Effect::Restart { host }),
+                        );
                     } else {
                         next.phase = Phase::Stopped { host };
                         next.wake_requested = true;
@@ -545,8 +629,7 @@ fn wake(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId, conte
             saved_state: true, ..
         } => Effect::Resume { host },
         Phase::Suspended {
-            saved_state: false,
-            ..
+            saved_state: false, ..
         }
         | Phase::Stopping { .. } => {
             next.wake_requested = true;
@@ -583,7 +666,10 @@ fn crash(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId, now:
             next,
             effects,
             host,
-            format!("{crashes} crashes in {} minutes", CRASH_WINDOW.num_minutes()),
+            format!(
+                "{crashes} crashes in {} minutes",
+                CRASH_WINDOW.num_minutes()
+            ),
         );
         return;
     }

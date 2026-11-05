@@ -740,9 +740,7 @@ fn cases() -> Vec<Case> {
             name: "release now of a canceled computer only destroys",
             phase: Phase::Stopped { host: HOST },
             power: Power::Off,
-            billing: Billing::Canceled {
-                retained_until: at,
-            },
+            billing: Billing::Canceled { retained_until: at },
             macrod_connected: false,
             recent_crashes: vec![],
             wake_requested: false,
@@ -750,9 +748,7 @@ fn cases() -> Vec<Case> {
             host_has_room: true,
             expected_phase: Phase::Destroyed,
             expected_power: Power::Off,
-            expected_billing: Billing::Canceled {
-                retained_until: at,
-            },
+            expected_billing: Billing::Canceled { retained_until: at },
             expected_wake_requested: false,
             expected_effects: vec![Effect::Destroy { host: HOST }, Effect::RevokeHarness],
         },
@@ -821,7 +817,11 @@ fn transitions() {
 
         assert_eq!(next.phase, case.expected_phase, "{}: phase", case.name);
         assert_eq!(next.power, case.expected_power, "{}: power", case.name);
-        assert_eq!(next.billing, case.expected_billing, "{}: billing", case.name);
+        assert_eq!(
+            next.billing, case.expected_billing,
+            "{}: billing",
+            case.name
+        );
         assert_eq!(
             next.wake_requested, case.expected_wake_requested,
             "{}: wake_requested",

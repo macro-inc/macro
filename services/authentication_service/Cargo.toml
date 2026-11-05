@@ -101,6 +101,7 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
 ] }
 hmac = { workspace = true }
 hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = [
+  "inbound",
   "outbound",
 ] }
 http-body-util = { workspace = true }

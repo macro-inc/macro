@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH locked AS (\n                SELECT id, sold_capacity_units FROM hosted_runtime_host ORDER BY id FOR UPDATE\n            )\n            SELECT locked.id\n            FROM locked\n            LEFT JOIN hosted_runtime computer\n                ON computer.host_id = locked.id AND computer.holds_units\n            GROUP BY locked.id, locked.sold_capacity_units\n            HAVING locked.sold_capacity_units - COALESCE(SUM(computer.units), 0) >= $1::BIGINT\n            ORDER BY locked.sold_capacity_units - COALESCE(SUM(computer.units), 0) DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a885ba53c86437d432ee309b07bfa4fa95539a319f74d4a8e53f3852df85a9b9"
+}
