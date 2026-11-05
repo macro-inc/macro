@@ -436,3 +436,99 @@ mod job_cleanup {
         check(|job| std::fs::write(job, b"not a folder").unwrap(), false);
     }
 }
+
+mod job_updates {
+    //! What a finished conversion reports to the job update handler, which
+    //! rejects updates for jobs it does not track.
+
+    use model::convert::ConvertQueueMessage;
+    use serde_json::json;
+
+    use crate::process::convert::job_update;
+
+    #[test]
+    fn a_tracked_docx_conversion_reports_completion() {
+        let req: ConvertQueueMessage = serde_json::from_value(json!({
+            "job_id": "job-1",
+            "from_bucket": "docx-upload",
+            "to_bucket": "doc-storage",
+            "from_key": "owner/doc/1.docx",
+            "to_key": "owner/doc/converted.pdf",
+            "notify_job": true,
+        }))
+        .unwrap();
+
+        let update = serde_json::to_value(job_update("job-1", &req, true)).unwrap();
+
+        assert_eq!(update["jobId"], "job-1");
+        assert_eq!(update["status"], "Completed");
+        assert_eq!(update["jobType"], "docx_upload");
+        assert_eq!(update["data"]["error"], false);
+        assert_eq!(update["data"]["data"]["converted"], true);
+    }
+
+    #[test]
+    fn a_tracked_docx_conversion_reports_failure() {
+        let req: ConvertQueueMessage = serde_json::from_value(json!({
+            "job_id": "job-1",
+            "from_bucket": "docx-upload",
+            "to_bucket": "doc-storage",
+            "from_key": "owner/doc/1.docx",
+            "to_key": "owner/doc/converted.pdf",
+            "notify_job": true,
+        }))
+        .unwrap();
+
+        let update = serde_json::to_value(job_update("job-1", &req, false)).unwrap();
+
+        assert_eq!(update["status"], "Failed");
+        assert_eq!(update["data"]["error"], true);
+        assert_eq!(update["data"]["message"], "error converting document");
+    }
+
+    #[test]
+    fn a_conversion_without_a_job_reports_nothing() {
+        let req: ConvertQueueMessage = serde_json::from_value(json!({
+            "job_id": "minted",
+            "from_bucket": "docx-upload",
+            "to_bucket": "doc-storage",
+            "from_key": "owner/doc/1.docx",
+            "to_key": "owner/doc/converted.pdf",
+            "notify_job": false,
+        }))
+        .unwrap();
+
+        assert!(job_update("minted", &req, true).is_none());
+        assert!(job_update("minted", &req, false).is_none());
+    }
+
+    #[test]
+    fn messages_from_older_producers_still_report() {
+        let req: ConvertQueueMessage = serde_json::from_value(json!({
+            "job_id": "job-1",
+            "from_bucket": "docx-upload",
+            "to_bucket": "doc-storage",
+            "from_key": "owner/doc/1.docx",
+            "to_key": "owner/doc/converted.pdf",
+        }))
+        .unwrap();
+
+        assert!(job_update("job-1", &req, false).is_some());
+    }
+
+    #[test]
+    fn non_docx_conversions_report_nothing() {
+        let req: ConvertQueueMessage = serde_json::from_value(json!({
+            "job_id": "job-1",
+            "from_bucket": "doc-storage",
+            "to_bucket": "doc-storage",
+            "from_key": "owner/doc/13664129",
+            "to_key": "owner/doc/upgraded.docx",
+            "from_file_type": "doc",
+            "to_file_type": "docx",
+        }))
+        .unwrap();
+
+        assert!(job_update("job-1", &req, true).is_none());
+    }
+}

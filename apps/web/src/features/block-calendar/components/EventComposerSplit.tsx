@@ -24,6 +24,7 @@ import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Spinner } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -171,13 +172,17 @@ function EventComposerContent(
 
   return (
     <div ref={attachHotkeys} class="flex h-full min-h-0 flex-col p-4 text-ink">
-      <Show when={suggesting()}>
-        <p role="status" class="pb-2 text-xs text-ink-muted">
-          Reading the email for a time and place…
-        </p>
-      </Show>
       <PanelEventForm
         controller={controller}
+        status={
+          <Show when={suggesting()}>
+            <Spinner
+              size="sm"
+              label="Reading the email for a time and place"
+              class="text-ink-extra-muted"
+            />
+          </Show>
+        }
         macroCallsEnabled={macroCallsEnabled()}
         isEdit={isEdit()}
         saveError={editor.saveError()}

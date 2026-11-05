@@ -166,6 +166,11 @@ finished edits become one backend transaction. Tests cover conflicting strings,
 text-versus-move, new labels versus moves, and local undo preserving remote moves.
 
 Image, video and document references use the existing shape geometry mapping.
+A canvas's shared artifact styles and components use the `artifactStyles` and
+`artifactComponents` root maps, one last-writer-wins string per name. Clients that
+do not know them ignore them. `commit` takes library edits, so that a batch writes
+them in the same update as its scene change.
+
 Artifact HTML and presentation order use their own `html` and `presentOrder`
 registers, so content edits and moves merge independently. Like text, HTML is one
 whole-string register: concurrent edits to the same artifact keep one version.

@@ -77,6 +77,8 @@ type DatabaseTimelineViewProps = {
   rowPending: (rowId: string) => boolean;
   onOpen: (rowId: string) => void;
   onCreate: (creation: RecordCreation) => Promise<boolean>;
+  /** Lets the host gather required fields before creating a record. */
+  onCompose?: (values: Record<string, DatabaseCellValue>) => void;
   /** Writes one cell of a saved record; resolves whether it was saved. */
   onWrite: (
     rowId: string,
@@ -230,16 +232,17 @@ function TimelineChart(
   }
   const writeRange = (rowId: string, value: DatabaseCellValue) =>
     props.onWrite(rowId, props.rangeColumn.id, value);
+  const createRecord = (values: Record<string, DatabaseCellValue>) => {
+    if (props.onCompose) {
+      props.onCompose(values);
+      return;
+    }
+    fireAndForget(props.onCreate({ values, open: true }), 'database');
+  };
   const create = () =>
     canSchedule()
       ? (range: GanttCreation) =>
-          fireAndForget(
-            props.onCreate({
-              values: { [props.rangeColumn.id]: toCellTimeRange(range) },
-              open: true,
-            }),
-            'database'
-          )
+          createRecord({ [props.rangeColumn.id]: toCellTimeRange(range) })
       : undefined;
   /** A new record at a chart position, in the group whose row it was asked from. */
   function createAt(position: number, timed: boolean, group: string) {
@@ -247,20 +250,14 @@ function TimelineChart(
     const lane = group ? groupOf(group)?.lane : undefined;
     const groupValue =
       column?.writable && lane ? laneValue(column, lane) : undefined;
-    fireAndForget(
-      props.onCreate({
-        values: {
-          [props.rangeColumn.id]: toCellTimeRange(
-            ganttPlacedRange(position, timed)
-          ),
-          ...(column && groupValue !== undefined
-            ? { [column.id]: groupValue }
-            : {}),
-        },
-        open: true,
-      }),
-      'database'
-    );
+    createRecord({
+      [props.rangeColumn.id]: toCellTimeRange(
+        ganttPlacedRange(position, timed)
+      ),
+      ...(column && groupValue !== undefined
+        ? { [column.id]: groupValue }
+        : {}),
+    });
   }
   /** Focus a record's bar or chip again, as after its menu or an editor closes. */
   function focusRecord(rowId: string) {

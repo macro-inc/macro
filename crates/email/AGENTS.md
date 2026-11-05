@@ -15,7 +15,8 @@ tools — hexagonal, heavily feature-gated.
 - `src/outbound/email_pg_repo.rs`, `src/outbound/invitation_pg.rs`: Postgres
   adapters (feature `outbound`); `src/outbound/email_service_http.rs`: calls
   into `email_service`; `src/outbound/s3_draft_attachment_storage.rs`: staged
-  draft attachments (feature `s3`).
+  draft attachments (feature `s3`); `src/outbound/sqs_enqueuer.rs`: the
+  `EmailMessageEnqueuer` adapter for `sqs_client::SQS` (feature `sqs`).
 
 ## Scope
 
@@ -34,7 +35,8 @@ tools — hexagonal, heavily feature-gated.
 
 - Depends on: `entity_access`, `entity_access_management`, `email_utils`,
   `crm`, `frecency`, `item_filters`, `lexical_client`, `macro_event_broker`,
-  `calendar_events` (optional, feature `calendar_invitations`).
+  `calendar_events` (optional, feature `calendar_invitations`), `sqs_client`
+  (optional, feature `sqs`; it must not depend back on this crate).
 - Used by: many crates and services, including `ai_tools`, `graphql_email`,
   `teams`, `databases_sql`, `attention_feed`, `calendar_service`, `email_service`,
   `email_scheduled_handler`, `search_processing_service`.
@@ -58,17 +60,33 @@ tools — hexagonal, heavily feature-gated.
   `domain/focus/rule.rs` when either changes, or stored rows keep the old verdict
   until new mail arrives. The worker's sweep re-decides older rows from their
   stored `scores`, without calling Jev. `rule/experiment.csv` holds the expected
-  verdicts for 643 real threads; report how far a rule change moves them.
+  verdicts for 643 real threads; report how far a rule change moves them. A new
+  question's answer is `#[serde(default)]`, so stored `scores` still decode, and
+  needs no bump when it decides nothing at 0.
 - Nothing reclassifies a Focus thread as it ages, so `focus_pg` applies the wait
   and the calendar hold when it reads: `awaiting_reply` and `calendar_hold_until`
   are stored, `FOLLOW_UP_AFTER_DAYS` and the time are passed in. `focus_thread_ids`
   and `focus_for_threads` restate the same tests; change both.
+- `focus_for_threads` also moves importance when it reads, with
+  `domain/focus/importance.rs`: `importance_rate` is stored and the clock starts at
+  `classified_message_ts`. The stored `importance` is the base, and the floors in
+  `domain/focus/rule.rs` only set that base. Importance never decides membership,
+  so `focus_thread_ids` doesn't read it.
 - In Focus, Calendar only means a change whose event isn't over: the read sets it
   from `calendar_hold_until`, and the stored `category` is what the thread reads as
   afterwards. A stored Calendar is a new invite or RSVP left out, and
   `NEW_INVITES_STAY_OUT` in `domain/focus/rule.rs` is the switch for new invites.
   `stale_threads` restates `domain/focus/calendar.rs`'s test for a change in SQL;
   change both.
+- A Focus thread's `due_on` is read when new mail is classified, only for a thread
+  with `is_focus` or `awaiting_reply`, and never on the re-decide path: that path
+  keeps the stored date and calls no model, so `save` writes back what
+  `StoredClassification` read. A failed or timed-out read stores no date and never
+  fails the classification. `input.rs` gives the extractor each of the latest
+  messages' own words, never quoted history, so a relative date counts from the
+  message that wrote it. A message's day is its writer's: the owner's own mail in
+  their calendar zone, anyone else's at its `Date` header's offset, each falling back
+  on the other, then UTC. Store no mail text or extracted span.
 - A thread holding only the owner's sent mail stays out of Focus on purpose:
   it has `inbox_visible` false, which the client reads as Done, Mark Done cannot
   change it, and there is no inbound mail for the rule to judge.
@@ -95,6 +113,11 @@ tools — hexagonal, heavily feature-gated.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
+- An attachment links to its document before the bytes reach storage, and a link
+  stops sync from offering it again. `AttachmentReadService::document` stores the
+  bytes again when a linked document is still awaiting its upload, and DSS signs a
+  new upload for that reuse; DOCX is left out because it stays pending while it
+  converts.
 - Forwarded attachments register through `domain/draft_attachments.rs` and resolve
   bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
   source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.
@@ -123,6 +146,10 @@ tools — hexagonal, heavily feature-gated.
   queued goes back through `EmailRepo::revert_staged_label_change`, which
   restores the state an older write still on its way left (or the original),
   never a newer write's change.
+- A reply target outside the caller's inboxes is admitted only through
+  `SharedThreadReplyAccess` (edit access to its thread; wired in
+  `document_storage_service` with `with_shared_thread_replies`). The reply
+  starts a thread in the caller's inbox; other hosts keep `NoSharedThreadReplies`.
 - Sender discovery authorizes the inbox first. Gmail aliases use the sender
   provider; Outlook exposes its verified primary address without a Gmail lookup.
 - Outlook links have no system label rows. Move a thread in or out of the inbox

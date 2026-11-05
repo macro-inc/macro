@@ -54,7 +54,7 @@ fn filter_binary_cache_is_trusted_only() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|step| step["name"] == "Mount nextest-filter binary cache")
+        .find(|step| step["name"] == "Mount nextest-filter and cargo registry cache")
         .expect("binary cache mount");
     let condition = mount["if"].as_str().unwrap();
     assert!(
@@ -76,7 +76,7 @@ fn status_check_covers_every_job() {
         "test",
         "graphql-schema-compat",
     ] {
-        let check = format!(r#"[[ "${{{{ needs.{needed}.result }}}}" == "failure" ]]"#);
+        let check = format!(r#""${{{{ needs.{needed}.result }}}}""#);
         assert!(script.contains(&check), "{check}: {script}");
         assert!(
             status["needs"]
@@ -237,6 +237,13 @@ fn tests_build_dependencies_without_debug_info() {
 }
 
 #[test]
+fn test_job_builds_workspace_crates_without_debug_info() {
+    let job = serde_json::to_value(test()).unwrap();
+    assert_eq!(job["env"]["CARGO_PROFILE_DEV_DEBUG"], "0");
+    assert_eq!(job["env"]["CARGO_PROFILE_TEST_DEBUG"], "0");
+}
+
+#[test]
 fn test_job_keeps_one_sccache_server_for_the_whole_run() {
     let job = serde_json::to_value(test()).unwrap();
     assert_eq!(job["env"]["SCCACHE_IDLE_TIMEOUT"], "0");
@@ -282,4 +289,66 @@ fn schema_changes_run_the_compatibility_check() {
     );
     let job = job.to_string();
     assert!(job.contains("graphql-schema-compat --base HEAD^1"), "{job}");
+}
+
+/// A stalled step must not hold a runner for the default six hours, and the dev
+/// shell, where stalls have happened, must fail well before the job limit.
+#[test]
+fn rust_jobs_have_timeouts() {
+    for job in [
+        path_check(),
+        check(),
+        doppler_config(),
+        graphql_schema_compat(),
+        test(),
+        status_check(),
+    ] {
+        let job = serde_json::to_value(job).unwrap();
+        assert!(job["timeout-minutes"].is_u64(), "{job}");
+    }
+    for job in [check(), doppler_config(), test()] {
+        let job = serde_json::to_value(job).unwrap();
+        let shell = job["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|step| step["name"] == "Setup Nix dev shell")
+            .expect("dev shell step");
+        assert_eq!(shell["timeout-minutes"], vars::DEV_SHELL_TIMEOUT_MINUTES);
+    }
+}
+
+/// A job that hits its timeout reports `cancelled`, so the required check can't
+/// treat only `failure` as a problem.
+#[test]
+fn status_check_rejects_cancelled_jobs() {
+    let status = serde_json::to_value(status_check()).unwrap();
+    let script = status["steps"][0]["run"].as_str().unwrap();
+    assert!(
+        script.contains(r#"[[ "$result" != "success" && "$result" != "skipped" ]]"#),
+        "{script}"
+    );
+}
+
+/// Plain `cargo test` here rebuilt hundreds of crates under different flags to run
+/// about four seconds of tests.
+#[test]
+fn deno_tests_reuse_the_test_run_build() {
+    let deno_step = serde_json::to_value(test_execution_runtime()).unwrap();
+    let test_step = serde_json::to_value(run_tests()).unwrap();
+    assert_eq!(deno_step["run"], test_step["run"]);
+    assert_eq!(deno_step["env"]["NEXTEST_RUN_DENO_TESTS"], "true");
+}
+
+/// Per-test database creation is the bulk of the test run's time, and the
+/// settings `configure_postgres` applies only survive its restart on a bind mount.
+#[test]
+fn test_postgres_keeps_its_data_in_shared_memory_across_a_restart() {
+    let service = serde_json::to_value(postgres_service()).unwrap();
+    let options = service["options"].as_str().unwrap();
+    assert!(
+        options.contains("-v /dev/shm/pgdata:/var/lib/postgresql/data"),
+        "{options}"
+    );
+    assert!(!options.contains("--tmpfs"), "{options}");
 }

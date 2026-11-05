@@ -1,6 +1,7 @@
 use crate::{
     OpensearchClient, Result, delete,
     error::{OpensearchClientError, OpensearchOperation},
+    retry::resend_on_lost_connection,
     upsert,
 };
 
@@ -71,7 +72,10 @@ impl OpensearchClient {
         args: &ReconcileAgentSessionArgs,
         index_override: Option<&str>,
     ) -> Result<()> {
-        upsert::agent_session::reconcile_agent_session(&self.inner, args, index_override).await
+        resend_on_lost_connection(|| {
+            upsert::agent_session::reconcile_agent_session(&self.inner, args, index_override)
+        })
+        .await
     }
 
     /// Delete the parent and every folded-message child for an agent session.
@@ -81,7 +85,13 @@ impl OpensearchClient {
         agent_session_id: &str,
         index_override: Option<&str>,
     ) -> Result<()> {
-        delete::agent_session::delete_agent_session(&self.inner, agent_session_id, index_override)
-            .await
+        resend_on_lost_connection(|| {
+            delete::agent_session::delete_agent_session(
+                &self.inner,
+                agent_session_id,
+                index_override,
+            )
+        })
+        .await
     }
 }

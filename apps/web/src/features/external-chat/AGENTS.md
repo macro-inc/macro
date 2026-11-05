@@ -44,6 +44,9 @@ belong to `features/external-view`. Architecture:
 
 ## Gotchas
 
+- Refetch a timeline through `invalidateExternalChatMessages`. A plain refetch
+  cancels an older page that is loading, and the page is lost. It waits at most
+  10 s, so a hung older page can't block refreshes; past that it cancels the page.
 - `kind` is `group` or `direct`. A direct chat has no members list (header
   shows the person) and only its owner sends; shared viewers see "Only
   <owner> can reply in this chat" (`sendReason: 'not_added'`).
