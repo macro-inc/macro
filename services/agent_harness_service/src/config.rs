@@ -145,6 +145,38 @@ pub struct Config {
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
+    /// Which fleet runs Macro computers: `incus` or `docker` (local only).
+    /// Unset runs no computer control plane here.
+    pub computers_fleet: Option<String>,
+    /// Name of the computer host this control plane drives.
+    pub computers_host_name: Option<String>,
+    /// Base image computers are created from (Incus alias or Docker image).
+    #[macro_config_default(String::from("macro-box"))]
+    pub computers_image: String,
+    /// RAM kept for the host itself, in GB.
+    #[macro_config_default(7)]
+    pub computers_host_reserve_gb: u32,
+    /// Units sold per awake unit of host capacity.
+    #[macro_config_default(3)]
+    pub computers_oversell_factor: u32,
+    /// Incus API origin of the computer host.
+    pub computers_incus_url: Option<String>,
+    /// PEM client certificate the Incus host trusts.
+    pub computers_incus_client_cert: Option<String>,
+    /// PEM key of [`Self::computers_incus_client_cert`].
+    pub computers_incus_client_key: Option<String>,
+    /// PEM certificate the Incus host serves, pinned.
+    pub computers_incus_server_cert: Option<String>,
+    /// Docker network local computers join to reach the stack.
+    pub computers_docker_network: Option<String>,
+    /// Host directory holding each Docker computer's enrollment file.
+    pub computers_docker_enrollment_dir: Option<String>,
+    /// RAM the Docker fleet may hand to computers, in GB.
+    #[macro_config_default(32)]
+    pub computers_docker_memory_gb: u32,
+    /// JSON object of `OVERRIDE_*` service URLs written into every
+    /// computer's enrollment; local stacks only.
+    pub computers_service_url_overrides: Option<String>,
     /// Dedicated OAuth encryption key; absent deployments keep Codex unavailable.
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.

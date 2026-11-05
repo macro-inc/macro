@@ -108,6 +108,8 @@ github_pull_requests = { path = "../../crates/github_pull_requests", features = 
 granola_sync = { path = "../../crates/granola_sync" }
 harness_id = { path = "../../crates/harness_id" }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound", "ports"] }
+hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = ["outbound", "ports"] }
+incus_client = { path = "../../crates/incus_client" }
 http = { workspace = true }
 http-body-util = { workspace = true }
 image_generation = { path = "../../crates/image_generation", features = ["axum"] }

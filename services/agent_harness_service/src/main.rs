@@ -14,6 +14,7 @@ mod bots_directory;
 mod code_mode;
 mod coding_agent;
 mod coding_agents;
+mod computers;
 mod config;
 mod containers;
 mod conversation_admission;
@@ -1211,10 +1212,37 @@ async fn run() -> anyhow::Result<()> {
     // Each dial also reports which sessions its runtime still serves, which
     // the harness loads once it exists below.
     let (live_sessions, mut live_session_reports) = tokio::sync::mpsc::unbounded_channel();
+    // Macro computers: the fleet operator (when this deployment drives a
+    // fleet), presence that turns macrod connects into lifecycle events, and
+    // a forwarder that wakes an asleep computer for a prompt.
+    let computer_operator = computers::operator(
+        &config,
+        &pool,
+        Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
+            PgHarnessRepo::new(pool.clone()),
+        )),
+    )
+    .await?;
+    let parked_commands = Arc::new(computers::ParkedCommands::default());
+    let command_forwarder = Arc::new(RedisCommandForwarder::new(redis.clone()));
     let runtimes = RuntimeRegistry::with_presence(
-        Arc::new(PgHarnessPresence::new(pool.clone())),
+        Arc::new(computers::ComputerPresence::new(
+            Arc::new(PgHarnessPresence::new(pool.clone())),
+            computer_operator.clone(),
+            Arc::clone(&command_forwarder),
+            Arc::clone(&parked_commands),
+        )),
         live_sessions,
     );
+    let computer_tasks = tokio_util::task::TaskTracker::new();
+    if let Some(operator) = &computer_operator {
+        computers::spawn_loops(
+            Arc::clone(operator),
+            computers::PgSessionActivity::new(pool.clone()),
+            &computer_tasks,
+            service_shutdown.clone(),
+        );
+    }
     // Read once, here, rather than at every session this deployment opens: a
     // URL that names no repository is a misconfiguration of the deployment,
     // and refusing it at startup is the difference between one loud failure
@@ -1311,7 +1339,11 @@ async fn run() -> anyhow::Result<()> {
                 egress_base_url,
             )
             .with_external_base_url(config.external_egress_base_url.clone()),
-            RedisCommandForwarder::new(redis.clone()),
+            computers::WakingForwarder::new(
+                Arc::clone(&command_forwarder),
+                computer_operator.clone(),
+                Arc::clone(&parked_commands),
+            ),
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
             PgCodingAgentSource::new(PgBotsRepo::new(pool.clone())),
             defaults,
