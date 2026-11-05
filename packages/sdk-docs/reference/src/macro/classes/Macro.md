@@ -57,6 +57,7 @@
 | <a id="property-properties"></a> `properties` | `readonly` | [`PropertiesNamespace`](../../entities/properties/namespace/classes/PropertiesNamespace.md) | - |
 | <a id="property-referrals"></a> `referrals` | `readonly` | [`ReferralNamespace`](../../entities/referrals/namespace/classes/ReferralNamespace.md) | Share the caller's referral link and email invites to join Macro. |
 | <a id="property-routines"></a> `routines` | `readonly` | [`RoutineNamespace`](../../entities/routines/namespace/classes/RoutineNamespace.md) | routines resources and operations. |
+| <a id="property-savedviews"></a> `savedViews` | `readonly` | [`SavedViewsNamespace`](../../entities/saved-views/namespace/classes/SavedViewsNamespace.md) | Saved views: named filter definitions shown in a surface's sidebar, such as Email. |
 | <a id="property-tasks"></a> `tasks` | `readonly` | [`TaskNamespace`](../../entities/tasks/namespace/classes/TaskNamespace.md) | - |
 | <a id="property-teams"></a> `teams` | `readonly` | [`TeamNamespace`](../../entities/teams/namespace/classes/TeamNamespace.md) | - |
 | <a id="property-unfurls"></a> `unfurls` | `readonly` | [`UnfurlNamespace`](../../entities/unfurls/namespace/classes/UnfurlNamespace.md) | unfurls resources and operations. |

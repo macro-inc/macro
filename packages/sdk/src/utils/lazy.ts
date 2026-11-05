@@ -30,6 +30,12 @@ export class Lazy<T> {
     return this.value;
   }
 
+  /** Replace the cached value with one known to be current, such as a write's response. */
+  set(value: T): void {
+    this.value = value;
+    this.inflight = undefined;
+  }
+
   /** Drop the cached value so the next read refetches. */
   clear(): void {
     this.value = undefined;

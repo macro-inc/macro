@@ -634,6 +634,18 @@ Re-exports [SavedFormResponse](../entities/forms/form/type-aliases/SavedFormResp
 
 ***
 
+### SavedView
+
+Re-exports [SavedView](../entities/saved-views/saved-view/classes/SavedView.md)
+
+***
+
+### SavedViewConfig
+
+Re-exports [SavedViewConfig](../entities/saved-views/saved-view/type-aliases/SavedViewConfig.md)
+
+***
+
 ### SessionAutoArchive
 
 Re-exports [SessionAutoArchive](../entities/agent-sessions/agent-session/type-aliases/SessionAutoArchive.md)

@@ -41,6 +41,7 @@ field and mutate.
 - [`MessageThread`](../../messages/thread/classes/MessageThread.md)
 - [`Notification`](../../notifications/notification/classes/Notification.md)
 - [`Routine`](../../routines/routine/classes/Routine.md)
+- [`SavedView`](../../saved-views/saved-view/classes/SavedView.md)
 - [`AccessRequest`](../../sharing/access/classes/AccessRequest.md)
 - [`TeamInvite`](../../teams/invite/classes/TeamInvite.md)
 - [`Team`](../../teams/team/classes/Team.md)

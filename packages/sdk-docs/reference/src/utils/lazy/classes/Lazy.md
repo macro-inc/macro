@@ -62,3 +62,21 @@ The cached value, if already loaded — never triggers a fetch.
 #### Returns
 
 `T` \| `undefined`
+
+***
+
+### set()
+
+> **set**(`value`): `void`
+
+Replace the cached value with one known to be current, such as a write's response.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `value` | `T` |
+
+#### Returns
+
+`void`

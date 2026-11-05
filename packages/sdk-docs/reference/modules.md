@@ -118,6 +118,8 @@
 - [src/entities/referrals/namespace](src/entities/referrals/namespace/README.md)
 - [src/entities/routines/namespace](src/entities/routines/namespace/README.md)
 - [src/entities/routines/routine](src/entities/routines/routine/README.md)
+- [src/entities/saved-views/namespace](src/entities/saved-views/namespace/README.md)
+- [src/entities/saved-views/saved-view](src/entities/saved-views/saved-view/README.md)
 - [src/entities/search](src/entities/search/README.md)
 - [src/entities/sharing/access](src/entities/sharing/access/README.md)
 - [src/entities/sharing/permissions](src/entities/sharing/permissions/README.md)

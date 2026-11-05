@@ -28,6 +28,7 @@ import { ProjectNamespace } from './entities/projects/namespace';
 import { PropertiesNamespace } from './entities/properties/namespace';
 import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
+import { SavedViewsNamespace } from './entities/saved-views/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
@@ -169,6 +170,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** Share the caller's referral link and email invites to join Macro. */
   readonly referrals: ReferralNamespace;
 
+  /** Saved views: named filter definitions shown in a surface's sidebar, such as Email. */
+  readonly savedViews: SavedViewsNamespace;
+
   readonly tasks: TaskNamespace;
 
   readonly teams: TeamNamespace;
@@ -225,6 +229,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.projects = new ProjectNamespace(client);
     this.properties = new PropertiesNamespace(client);
     this.referrals = new ReferralNamespace(client);
+    this.savedViews = new SavedViewsNamespace(client);
     this.tasks = new TaskNamespace(client);
     this.teams = new TeamNamespace(client);
     this.users = new UserNamespace(client);
@@ -336,6 +341,10 @@ export {
   RoutineExecution,
   type RoutineOptions,
 } from './entities/routines/routine';
+export {
+  SavedView,
+  type SavedViewConfig,
+} from './entities/saved-views/saved-view';
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
 export type { TaskSummary } from './entities/tasks/task';

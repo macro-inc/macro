@@ -20,6 +20,9 @@ enforced by the ordinary backend APIs.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row handles.
+- `src/entities/saved-views/`: `macro.savedViews` over the revision-guarded
+  `/saved_views/definitions` routes; `edit` and `remove` send the revision the
+  handle last saw, and keep the response's record so chained writes stay guarded.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
