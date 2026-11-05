@@ -139,6 +139,8 @@
           || (rel == "static_assets")
           || (pkgs.lib.hasPrefix "static_assets/" rel)
           || (rel == "vendor")
+          || (rel == "vendor/axum")
+          || (pkgs.lib.hasPrefix "vendor/axum/" rel)
           || (rel == "vendor/utoipa-swagger-ui")
           || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
           || (
@@ -1095,6 +1097,8 @@
         pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
           grep -q "fn write_embed_code" \
             ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
+          grep -q "struct ErasedHandler" \
+            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/axum/src/boxed.rs
           touch $out
         '';
         fmt = craneLib.cargoFmt {

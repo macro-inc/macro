@@ -528,6 +528,8 @@ html-escape = "0.2"
 subtle = "2.6.1"
 
 [patch.crates-io]
+# Erases handler types so routes compile once per state; see vendor/axum/README-MACRO.md.
+axum = { path = "vendor/axum" }
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.
 tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a1837ccfe96b6895a57352d7f0112e4557516c27" }
 # Writes a checkout-independent embed folder; see vendor/utoipa-swagger-ui/README-MACRO.md.
