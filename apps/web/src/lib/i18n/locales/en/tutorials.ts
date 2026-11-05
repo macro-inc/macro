@@ -24,7 +24,7 @@ export default {
   githubBlock: 'GitHub in Macro',
   githubSnippet:
     'Pull request previews, coding agents that merge from channels, and PRs in splits',
-  githubLength: '1:02',
+  githubLength: '1:01',
   docsTitle: 'Learn how to use Macro Docs',
   docsBlock: 'Macro Docs',
   docsSnippet:
