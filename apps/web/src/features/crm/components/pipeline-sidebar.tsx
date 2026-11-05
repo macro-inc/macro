@@ -1,4 +1,5 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import TableIcon from '@icon/system/regular/table.svg';
 import { createSignal, For, Show } from 'solid-js';
@@ -18,11 +19,11 @@ export function PipelineSidebar(props: {
   return (
     <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
       <CollapsibleSection.Trigger>
-        <span>Pipelines</span>
+        <span>{t('crm.pipelines')}</span>
         <CollapsibleSection.Indicator />
       </CollapsibleSection.Trigger>
       <CollapsibleSection.Content>
-        <ViewSidebar.Nav aria-label="CRM pipelines">
+        <ViewSidebar.Nav aria-label={t('crm.pipelinesNavigation')}>
           <For each={props.pipelines}>
             {(pipeline) => (
               <ViewSidebar.Item
@@ -55,7 +56,7 @@ export function PipelineSidebar(props: {
             <ViewSidebar.Icon>
               <PlusIcon class="size-4" />
             </ViewSidebar.Icon>
-            <span>New pipeline</span>
+            <span>{t('crm.newPipeline')}</span>
           </ViewSidebar.Item>
         </ViewSidebar.Nav>
       </CollapsibleSection.Content>
