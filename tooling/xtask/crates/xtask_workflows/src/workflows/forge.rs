@@ -1,10 +1,10 @@
 //! The self-hosted forge's CI: `.gitea/workflows/`, derived from the generated
 //! GitHub workflows.
 //!
-//! Gitea reads `.gitea/workflows/` instead of `.github/workflows/` when the
-//! first exists, so this allowlist is everything that can run there. Deploy,
-//! release, and publish workflows are left out on purpose, as are native builds
-//! that need macOS or Windows runners and checks that call GitHub's own API.
+//! The forge reads only `.gitea/workflows/` (`WORKFLOW_DIRS` in
+//! infra/platform/cluster.nix), so this allowlist is everything that can run there.
+//! Deploy, release, and publish workflows are left out on purpose, as are native
+//! builds that need macOS or Windows runners and checks that call GitHub's own API.
 
 use anyhow::{Context, Result, ensure};
 use serde_yaml::Value;

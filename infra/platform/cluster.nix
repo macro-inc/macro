@@ -441,6 +441,10 @@ in
                       actions = {
                         ENABLED = true;
                         DEFAULT_ACTIONS_URL = "github";
+                        # The default also reads .github/workflows, including on
+                        # commits without a .gitea/workflows directory. That would
+                        # queue deploy workflows for every push of main.
+                        WORKFLOW_DIRS = ".gitea/workflows";
                       };
                     };
                   };
