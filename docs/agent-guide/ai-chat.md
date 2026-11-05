@@ -469,8 +469,10 @@ the shimmer.
   Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Switching conversations keeps the sidebar mounted (no reload or scroll reset)
-  and the open conversation on screen until the next one has loaded; verify by
-  tagging the workspace and row nodes and checking they survive the click.
+  and moves the selection at once; the pane shows a skeleton until the next
+  conversation has loaded. Verify by tagging the workspace and row nodes and
+  checking they survive the click. Selecting the open conversation again does
+  not remount it.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
   actions. Archived sessions are grouped at the bottom under **Archived**, a
