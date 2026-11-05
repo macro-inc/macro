@@ -37,7 +37,6 @@ mod deploy_all_services;
 mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
 mod deploy_on_push;
-mod deploy_preview;
 mod deploy_sdk_docs;
 mod deploy_sync_service;
 mod deploy_web_app;
@@ -49,6 +48,7 @@ mod ios_app_store_release;
 mod ios_preview;
 mod ios_release_drift;
 mod ios_release_watch;
+mod main_rust_check;
 mod native_check_label;
 mod path_validation;
 mod pr_privacy_check;
@@ -199,6 +199,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(cla::cla)(),
     },
     WorkflowFile {
+        slug: "main_rust_check",
+        file_name: "main_rust_check.yml",
+        render_yaml: || render_gh_workflow(main_rust_check::main_rust_check)(),
+    },
+    WorkflowFile {
         slug: "cleanup_preview",
         file_name: "cleanup_preview.yml",
         render_yaml: || render_gh_workflow(cleanup_preview::cleanup_preview)(),
@@ -260,11 +265,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
                 deploy_fusionauth_instance::patch,
             )
         },
-    },
-    WorkflowFile {
-        slug: "deploy_preview",
-        file_name: "deploy_preview.yml",
-        render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
     },
     WorkflowFile {
         slug: "deploy_sync_service",

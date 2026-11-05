@@ -21,7 +21,6 @@ name: Export CI telemetry
     - Deploy CLA Worker
     - Deploy FusionAuth Instance
     - Deploy Lexical Service
-    - Deploy Preview
     - Deploy Production Release
     - Deploy Service (Generic)
     - Deploy Sync Service
@@ -48,6 +47,7 @@ name: Export CI telemetry
     - check node_modules nix
     - check tauri lockfiles
     - cloud storage code check
+    - cloud storage main check
     - conventions code check
     - deploy pulumi service
     - iOS App Store Publish

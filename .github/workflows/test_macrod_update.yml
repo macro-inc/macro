@@ -24,8 +24,12 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: rust
-        path: /nix
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -86,6 +90,8 @@ jobs:
   macos:
     name: macrod update (macos)
     runs-on: nscloud-macos-sequoia-arm64-6x14
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -113,6 +119,8 @@ jobs:
   windows:
     name: macrod update (windows)
     runs-on: nscloud-windows-2022-amd64-8x16
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
