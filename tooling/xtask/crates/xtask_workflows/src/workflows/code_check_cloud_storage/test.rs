@@ -283,3 +283,13 @@ fn schema_changes_run_the_compatibility_check() {
     let job = job.to_string();
     assert!(job.contains("graphql-schema-compat --base HEAD^1"), "{job}");
 }
+
+/// Plain `cargo test` here rebuilt hundreds of crates under different flags to run
+/// about four seconds of tests.
+#[test]
+fn deno_tests_reuse_the_test_run_build() {
+    let deno_step = serde_json::to_value(test_execution_runtime()).unwrap();
+    let test_step = serde_json::to_value(run_tests()).unwrap();
+    assert_eq!(deno_step["run"], test_step["run"]);
+    assert_eq!(deno_step["env"]["NEXTEST_RUN_DENO_TESTS"], "true");
+}
