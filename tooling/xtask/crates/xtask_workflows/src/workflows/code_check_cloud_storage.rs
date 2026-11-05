@@ -98,7 +98,7 @@ fn path_check() -> Job {
 /// fmt + clippy.
 fn check() -> Job {
     steps::gated_job()
-        .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CHECK_CACHE_TAG))
+        .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
@@ -174,7 +174,7 @@ fn test() -> Job {
         .cond(Expression::new(
             "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
         ))
-        .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_TEST_CACHE_TAG))
+        .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env((
             "RUST_PACKAGES",
             "${{ needs.path-check.outputs.rust_packages }}",
