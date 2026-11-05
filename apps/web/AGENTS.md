@@ -29,7 +29,8 @@
 Playwright against it, not a dev server: each page otherwise fetches thousands of
 modules through the test's own routes, which limits how many tests can run at
 once. A fixture that depends on dev-only behavior won't work there. CI sets
-`FUNCTIONAL_TEST_WORKERS`; locally it defaults to one worker.
+`FUNCTIONAL_TEST_WORKERS` and retries a failed test once; locally it defaults to
+one worker and no retries.
 
 ID-only user mention rendering, name lookup failure, and composer save/reopen
 are covered on desktop/tablet/phone by `user-mentions.browser.e2e.ts` in the

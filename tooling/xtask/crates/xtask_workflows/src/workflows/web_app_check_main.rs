@@ -56,6 +56,7 @@ pub fn web_app_check_main() -> Workflow {
         .add_job("generated-code", generated_code())
         .add_job("biome-check", biome_check())
         .add_job("test", test())
+        .add_job("functional", functional())
         .add_job("browser", browser())
         .add_job("cycles", cycles())
         .add_job("build", build())
@@ -219,11 +220,10 @@ fn test() -> Job {
         .add_step(steps::teardown_nix())
 }
 
-/// Browser suites, apart from vitest and the app build so neither waits for
-/// them. They load the wasm packages through Vite, so this job restores or
-/// builds them; unchanged packages come from the shared cache.
-fn browser() -> Job {
-    gated_web_job("Browser Tests")
+/// The functional suite bundles fixtures that import every wasm package, so this
+/// job restores or builds them; unchanged packages come from the shared cache.
+fn functional() -> Job {
+    gated_web_job("Functional Tests")
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_build_check_cache_volume())
@@ -231,13 +231,28 @@ fn browser() -> Job {
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
-        .add_step(build_wasm_for_browser_tests())
+        .add_step(build_wasm_for_functional_tests())
         .add_step(run_functional_tests())
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::teardown_nix())
+}
+
+/// Browser suites that only need the agent-fold package, including the ones that
+/// run only when their paths change. Apart from vitest and the app build so
+/// neither waits for them.
+fn browser() -> Job {
+    gated_web_job("Browser Tests")
+        .runs_on(mid_web_runner())
+        .add_step(checkout("Checkout Repo", false))
+        .add_step(steps::mount_web_test_cache_volume())
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_reqs_web("Setup", true))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
+        .add_step(build_agent_fold_for_tests())
         .add_step(run_signup_browser_tests())
         .add_step(run_i18n_browser_tests())
         .add_step(run_database_browser_tests())
         .add_step(run_calendar_details_browser_tests())
-        .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
@@ -292,6 +307,7 @@ fn status_check() -> Job {
             "generated-code".to_string(),
             "biome-check".to_string(),
             "test".to_string(),
+            "functional".to_string(),
             "browser".to_string(),
             "cycles".to_string(),
             "build".to_string(),
@@ -501,7 +517,7 @@ fn run_tests() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
-fn build_wasm_for_browser_tests() -> Step<Run> {
+fn build_wasm_for_functional_tests() -> Step<Run> {
     with_pr_wasm_env(
         Step::new("Build wasm packages")
             .run("just build-wasm")
@@ -611,6 +627,7 @@ fn check_job_results() -> Step<Run> {
         echo "generated-code: ${{ needs.generated-code.result }}"
         echo "biome-check: ${{ needs.biome-check.result }}"
         echo "test: ${{ needs.test.result }}"
+        echo "functional: ${{ needs.functional.result }}"
         echo "browser: ${{ needs.browser.result }}"
         echo "cycles: ${{ needs.cycles.result }}"
         echo "build: ${{ needs.build.result }}"
@@ -624,6 +641,7 @@ fn check_job_results() -> Step<Run> {
            [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
            [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
            [[ "${{ needs.test.result }}" == "failure" ]] || \
+           [[ "${{ needs.functional.result }}" == "failure" ]] || \
            [[ "${{ needs.browser.result }}" == "failure" ]] || \
            [[ "${{ needs.cycles.result }}" == "failure" ]] || \
            [[ "${{ needs.build.result }}" == "failure" ]] || \

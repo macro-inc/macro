@@ -360,13 +360,13 @@ fn build_job_uses_remote_sccache_and_wasm_cache() {
     );
 }
 
-/// The Test legs from the first to the Browser Tests job.
+/// The Test legs, up to the next job.
 fn test_job(yaml: &str) -> &str {
     let start = yaml
         .find("name: Test (${{ matrix.shard }}/3)")
         .expect("Test job");
     let end = yaml[start..]
-        .find("name: Browser Tests\n")
+        .find("name: Functional Tests\n")
         .map_or(yaml.len(), |offset| start + offset);
     &yaml[start..end]
 }
@@ -377,6 +377,16 @@ fn browser_job(yaml: &str) -> &str {
         .expect("Browser Tests job");
     let end = yaml[start..]
         .find("name: Cycles Import Check")
+        .map_or(yaml.len(), |offset| start + offset);
+    &yaml[start..end]
+}
+
+fn functional_job(yaml: &str) -> &str {
+    let start = yaml
+        .find("name: Functional Tests\n")
+        .expect("Functional Tests job");
+    let end = yaml[start..]
+        .find("name: Browser Tests\n")
         .map_or(yaml.len(), |offset| start + offset);
     &yaml[start..end]
 }
@@ -403,12 +413,27 @@ fn test_job_shards_vitest_after_building_its_wasm() {
 }
 
 #[test]
-fn browser_job_builds_wasm_before_every_browser_suite() {
+fn browser_suites_build_the_wasm_they_load_first() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let functional = functional_job(&yaml);
+    let wasm = functional.find("just build-wasm").expect("wasm packages");
+    let suite = functional
+        .find("bun run test:functional")
+        .expect("functional suite");
+    assert!(
+        wasm < suite,
+        "the bundle imports every package: {functional}"
+    );
+    assert!(
+        functional.contains("playwright: 'true'"),
+        "the job installs Playwright's Chromium: {functional}"
+    );
+
     let browser = browser_job(&yaml);
-    let wasm = browser.find("just build-wasm").expect("wasm packages");
+    let wasm = browser
+        .find("just build-agent-fold-wasm")
+        .expect("agent-fold package");
     for suite in [
-        "bun run test:functional",
         "just test-signup-browser",
         "just test-i18n-browser",
         "just test-database-browser",
@@ -417,7 +442,7 @@ fn browser_job_builds_wasm_before_every_browser_suite() {
         let at = browser
             .find(suite)
             .unwrap_or_else(|| panic!("{suite} runs: {browser}"));
-        assert!(wasm < at, "{suite} needs the wasm packages: {browser}");
+        assert!(wasm < at, "{suite} needs the package: {browser}");
     }
     assert!(
         browser.contains("playwright: 'true'"),
@@ -427,8 +452,9 @@ fn browser_job_builds_wasm_before_every_browser_suite() {
 
 /// A browser suite that isn't required could fail without blocking a merge.
 #[test]
-fn status_check_requires_the_browser_job() {
+fn status_check_requires_the_browser_jobs() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    assert!(yaml.contains(r#"[[ "${{ needs.functional.result }}" == "failure" ]]"#));
     assert!(yaml.contains(r#"[[ "${{ needs.browser.result }}" == "failure" ]]"#));
 }
 
