@@ -17,6 +17,9 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
   `steps` instead of inlining labels, env, or step definitions.
 - Change a generated workflow (header `DO NOT EDIT`) by editing its source module,
   then run `cargo x workflows` and commit the regenerated YAML with it.
+- A required check must report in the merge queue: its workflow keeps the
+  `merge_group` trigger, and a PR-only expression or job must handle that event,
+  which has no `github.event.pull_request`.
 - A few older workflows are still hand-written YAML. When you change one
   substantially, port it to the generator instead of editing the YAML.
 

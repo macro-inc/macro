@@ -75,6 +75,12 @@ emit() {
   exit 0
 }
 
+# The merge queue is what stands between narrowed PR checks and main.
+if [ "${GITHUB_EVENT_NAME:-}" = "merge_group" ]; then
+  echo "Merge queue; running all tests"
+  emit all false
+fi
+
 if [ ! -s /tmp/changed-files ]; then
   echo "Unknown or empty change set; running all tests"
   emit all false

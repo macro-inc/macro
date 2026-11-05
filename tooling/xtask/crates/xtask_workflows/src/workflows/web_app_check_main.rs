@@ -34,14 +34,16 @@ fn mid_web_runner() -> String {
 /// Build the workflow.
 pub fn web_app_check_main() -> Workflow {
     Workflow::new("Web App Pr Checks")
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_branch("main")
-                .add_type(PullRequestType::Opened)
-                .add_type(PullRequestType::Synchronize)
-                .add_type(PullRequestType::Reopened)
-                .add_type(PullRequestType::ReadyForReview),
-        ))
+        .on(Event::default()
+            .pull_request(
+                PullRequest::default()
+                    .add_branch("main")
+                    .add_type(PullRequestType::Opened)
+                    .add_type(PullRequestType::Synchronize)
+                    .add_type(PullRequestType::Reopened)
+                    .add_type(PullRequestType::ReadyForReview),
+            )
+            .merge_group(steps::merge_queue_trigger()))
         .concurrency(
             Concurrency::new(Expression::new(
                 "${{ github.workflow }}-${{ github.ref }}-check",
@@ -56,14 +58,17 @@ pub fn web_app_check_main() -> Workflow {
         .add_job("test", test())
         .add_job("cycles", cycles())
         .add_job("build", build())
-        .add_job(ios_native_check::JOB_ID, ios_native_check::job())
+        .add_job(
+            ios_native_check::JOB_ID,
+            ios_native_check::job().cond(Expression::new(steps::NOT_IN_MERGE_QUEUE)),
+        )
         .add_job("status-check", status_check())
 }
 
 /// Always run so the required collector can distinguish a successful native
 /// check from a cancelled or skipped one, including frontend/backend-only PRs.
 fn android_native_check() -> Job {
-    android_native_check::job()
+    android_native_check::job().cond(Expression::new(steps::NOT_IN_MERGE_QUEUE))
 }
 
 fn path_check() -> Job {
@@ -301,7 +306,8 @@ fn paths_filter() -> Step<Use> {
     // tests. `calendar_details_changed` covers what the event details browser
     // tests render and the query modules their fixture replaces, whose exports
     // the fixture must keep matching.
-    Step::new("Filter changed paths")
+    steps::with_merge_queue_range(
+        Step::new("Filter changed paths")
         .uses(
             "dorny",
             "paths-filter",
@@ -314,6 +320,7 @@ fn paths_filter() -> Step<Use> {
                 "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
         ))
+    )
 }
 
 /// Build every schema binary the later steps run in one cargo invocation:
@@ -545,20 +552,44 @@ fn check_job_results() -> Step<Run> {
         echo "build: ${{ needs.build.result }}"
         echo "ios-native-check: ${{ needs.ios-native-check.result }}"
 
-        # Fail if any job failed (skipped and success are both OK). The iOS
-        # gate is the merge gate, so a cancelled gate is not OK either. The same
-        # goes for generated code: a job that hits its timeout reports cancelled.
-        if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
-           [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.typescript.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "cancelled" ]] || \
-           [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.test.result }}" == "failure" ]] || \
-           [[ "${{ needs.cycles.result }}" == "failure" ]] || \
-           [[ "${{ needs.build.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "cancelled" ]]; then
+        # Only success and skipped are OK. A job that hits its timeout reports
+        # cancelled, and passing on that would merge code that was never checked.
+        for result in \
+          "${{ needs.path-check.result }}" \
+          "${{ needs.typescript.result }}" \
+          "${{ needs.generated-code.result }}" \
+          "${{ needs.biome-check.result }}" \
+          "${{ needs.test.result }}" \
+          "${{ needs.cycles.result }}" \
+          "${{ needs.build.result }}" \
+          "${{ needs.ios-native-check.result }}"; do
+          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+            echo "One or more jobs failed or were cancelled"
+            exit 1
+          fi
+        done
+
+        if [[ "${{ github.event_name }}" == "merge_group" ]]; then
+          # The native checks read the PR's labels and passed on it before it was
+          # queued. A workflow its paths selected can't pass on skipped jobs.
+          if [[ "${{ needs.path-check.outputs.should_run }}" == "true" ]]; then
+            for result in \
+              "${{ needs.typescript.result }}" \
+              "${{ needs.biome-check.result }}" \
+              "${{ needs.test.result }}" \
+              "${{ needs.cycles.result }}" \
+              "${{ needs.build.result }}"; do
+              if [[ "$result" != "success" ]]; then
+                echo "The merge queue needs every web check to pass"
+                exit 1
+              fi
+            done
+          fi
+          if [[ "${{ needs.path-check.outputs.codegen_changed }}" == "true" && "${{ needs.generated-code.result }}" != "success" ]]; then
+            echo "The merge queue needs Generated Code Check to pass"
+            exit 1
+          fi
+        elif [[ "${{ needs.android-native-check.result }}" != "success" ]]; then
           echo "One or more jobs failed"
           exit 1
         fi

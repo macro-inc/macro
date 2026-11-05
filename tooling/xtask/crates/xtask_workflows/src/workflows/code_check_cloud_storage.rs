@@ -27,14 +27,16 @@ mod test;
 /// Build the workflow.
 pub fn code_check_cloud_storage() -> Workflow {
     Workflow::new("cloud storage code check")
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_branch("main")
-                .add_type(PullRequestType::Opened)
-                .add_type(PullRequestType::Synchronize)
-                .add_type(PullRequestType::Reopened)
-                .add_type(PullRequestType::ReadyForReview),
-        ))
+        .on(Event::default()
+            .pull_request(
+                PullRequest::default()
+                    .add_branch("main")
+                    .add_type(PullRequestType::Opened)
+                    .add_type(PullRequestType::Synchronize)
+                    .add_type(PullRequestType::Reopened)
+                    .add_type(PullRequestType::ReadyForReview),
+            )
+            .merge_group(steps::merge_queue_trigger()))
         .map(vars::with_global_env)
         .concurrency(vars::concurrency("code-check-cloud-storage"))
         .add_job("path-check", path_check())
@@ -206,6 +208,7 @@ fn test() -> Job {
         .add_step(configure_postgres())
         .add_step(prepare_tests())
         .add_step(run_tests())
+        .add_step(build_service_bins())
         .add_step(setup_execution_runtime())
         .add_step(test_execution_runtime())
         .add_step(steps::show_sccache_stats())
@@ -260,16 +263,17 @@ fn status_check() -> Job {
 /// change could affect a service's Doppler config contract (a superset of
 /// what `xtask doppler-bins` checks, so the gate never hides a bin).
 fn paths_filter() -> Step<gh_workflow::Use> {
-    Step::new("Filter changed paths")
-        .uses(
-            "dorny",
-            "paths-filter",
-            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
-        ) // v3.0.3
-        .id("filter")
-        .add_with((
-            "filters",
-            indoc::indoc! {r#"
+    steps::with_merge_queue_range(
+        Step::new("Filter changed paths")
+            .uses(
+                "dorny",
+                "paths-filter",
+                "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
+            ) // v3.0.3
+            .id("filter")
+            .add_with((
+                "filters",
+                indoc::indoc! {r#"
                 should_run:
                   - 'Cargo.toml'
                   - 'Cargo.lock'
@@ -310,7 +314,8 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - 'tooling/xtask/crates/xtask_graphql_schema_compat/**'
                   - .github/workflows/code_check_cloud_storage.yml
             "#},
-        ))
+            )),
+    )
 }
 
 /// Compute the changed-file set and write it to `/tmp/changed-files`. Stacked
@@ -322,6 +327,10 @@ fn compute_changed_files() -> Step<Run> {
     Step::new("compute changed files")
         .run(include_str!("scripts/compute_changed_files.sh"))
         .shell("bash")
+        .add_env((
+            "MERGE_GROUP_BASE_SHA",
+            "${{ github.event.merge_group.base_sha }}",
+        ))
 }
 
 /// Determine which services' Doppler config-validation binaries are affected by
@@ -430,6 +439,15 @@ fn run_tests() -> Step<Run> {
     Step::new("run tests").run(include_str!("scripts/run_tests.sh"))
 }
 
+/// `test` builds bin test harnesses, not the bins themselves, and `check` stops at
+/// type checking. A failure only a real build finds, such as an overflowed recursion
+/// limit, must not reach `main`, so the merge queue builds them.
+fn build_service_bins() -> Step<Run> {
+    Step::new("build service binaries")
+        .run(include_str!("scripts/build_service_bins.sh"))
+        .if_condition(Expression::new(steps::IN_MERGE_QUEUE))
+}
+
 /// Aggregate the upstream job results into a single required status check.
 fn check_job_results() -> Step<Run> {
     Step::new("Check job results").run(indoc::indoc! {r#"
@@ -452,6 +470,14 @@ fn check_job_results() -> Step<Run> {
             exit 1
           fi
         done
+
+        # In the merge queue, a workflow its paths selected can't pass on skipped jobs.
+        if [[ "${{ github.event_name }}" == "merge_group" && "${{ needs.path-check.outputs.should_run }}" == "true" ]]; then
+          if [[ "${{ needs.check.result }}" != "success" || "${{ needs.test.result }}" != "success" ]]; then
+            echo "❌ The merge queue needs check and test to pass"
+            exit 1
+          fi
+        fi
 
         echo "✅ All jobs passed or were skipped"
     "#})

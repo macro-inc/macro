@@ -9,6 +9,9 @@ env:
   RUST_BACKTRACE: '1'
   RUSTFLAGS: '-C link-arg=-fuse-ld=lld'
 'on':
+  merge_group:
+    types:
+    - checks_requested
   pull_request:
     types:
     - opened
@@ -83,6 +86,8 @@ jobs:
             - 'static_assets/schema.graphql'
             - 'tooling/xtask/crates/xtask_graphql_schema_compat/**'
             - .github/workflows/code_check_cloud_storage.yml
+        base: ${{ github.event.merge_group.base_sha }}
+        ref: ${{ github.event.merge_group.head_sha }}
     - name: compute changed files
       if: steps.filter.outputs.should_run == 'true'
       run: |
@@ -92,7 +97,11 @@ jobs:
         # turns a rename into a delete+add pair so the old path is attributed to its
         # package (otherwise git reports only the new name).
 
-        if [ -z "${GITHUB_BASE_REF:-}" ]; then
+        if [ -n "${MERGE_GROUP_BASE_SHA:-}" ]; then
+          # A merge queue entry has no PR. Its base is what's ahead of it in the queue.
+          git fetch --no-tags --depth=1 origin "$MERGE_GROUP_BASE_SHA"
+          compare_rev="$MERGE_GROUP_BASE_SHA"
+        elif [ -z "${GITHUB_BASE_REF:-}" ]; then
           compare_rev="$(git rev-parse HEAD~1)"
         else
           git fetch --no-tags origin "$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF"
@@ -124,6 +133,8 @@ jobs:
         printf '%s\n' "$compare_rev" > /tmp/base-revision
         git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
       shell: bash
+      env:
+        MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
     - name: Mount nextest-filter and cargo registry cache
       if: steps.filter.outputs.should_run == 'true' && ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository)
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
@@ -246,6 +257,12 @@ jobs:
           echo "skip_tests=$2" >> "$GITHUB_OUTPUT"
           exit 0
         }
+
+        # The merge queue is what stands between narrowed PR checks and main.
+        if [ "${GITHUB_EVENT_NAME:-}" = "merge_group" ]; then
+          echo "Merge queue; running all tests"
+          emit all false
+        fi
 
         if [ ! -s /tmp/changed-files ]; then
           echo "Unknown or empty change set; running all tests"
@@ -497,7 +514,11 @@ jobs:
         # turns a rename into a delete+add pair so the old path is attributed to its
         # package (otherwise git reports only the new name).
 
-        if [ -z "${GITHUB_BASE_REF:-}" ]; then
+        if [ -n "${MERGE_GROUP_BASE_SHA:-}" ]; then
+          # A merge queue entry has no PR. Its base is what's ahead of it in the queue.
+          git fetch --no-tags --depth=1 origin "$MERGE_GROUP_BASE_SHA"
+          compare_rev="$MERGE_GROUP_BASE_SHA"
+        elif [ -z "${GITHUB_BASE_REF:-}" ]; then
           compare_rev="$(git rev-parse HEAD~1)"
         else
           git fetch --no-tags origin "$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF"
@@ -529,6 +550,8 @@ jobs:
         printf '%s\n' "$compare_rev" > /tmp/base-revision
         git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
       shell: bash
+      env:
+        MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -885,6 +908,16 @@ jobs:
         fi
 
         cargo nextest run "${common[@]}" "${pkg_args[@]}"
+    - name: build service binaries
+      if: github.event_name == 'merge_group'
+      run: |
+        set -euo pipefail
+
+        # The same flags as run_tests.sh, so this reuses what it compiled and adds only the
+        # bins. sync-service isn't part of this suite: its storage backends are mutually
+        # exclusive under --all-features.
+        cargo build --workspace --exclude sync_service --bins --all-features \
+          --config 'profile.dev.package."*".debug=false'
     - name: Set up code execution runtime
       if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')
       uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
@@ -910,9 +943,9 @@ jobs:
         # Unconstrained `-p` still runs that package's tests.
 
         : "${RUST_PACKAGES:?RUST_PACKAGES is required}"
-        # Dependencies build without debug info, which cuts compile, link and disk cost.
-        # Workspace crates keep CARGO_PROFILE_*_DEBUG=limited, so backtraces still carry
-        # line numbers in our own code.
+        # Nothing in this build carries debug info: the job sets CARGO_PROFILE_*_DEBUG=0 for
+        # workspace crates, and this flag covers dependencies. Panic messages keep their
+        # file and line; backtrace frames keep function names only.
         common=(
           --config 'profile.dev.package."*".debug=false'
           --all-features --no-tests=pass
@@ -1007,6 +1040,14 @@ jobs:
             exit 1
           fi
         done
+
+        # In the merge queue, a workflow its paths selected can't pass on skipped jobs.
+        if [[ "${{ github.event_name }}" == "merge_group" && "${{ needs.path-check.outputs.should_run }}" == "true" ]]; then
+          if [[ "${{ needs.check.result }}" != "success" || "${{ needs.test.result }}" != "success" ]]; then
+            echo "❌ The merge queue needs check and test to pass"
+            exit 1
+          fi
+        fi
 
         echo "✅ All jobs passed or were skipped"
 concurrency:

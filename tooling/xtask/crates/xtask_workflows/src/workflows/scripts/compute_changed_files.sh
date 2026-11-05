@@ -4,7 +4,11 @@ set -euo pipefail
 # turns a rename into a delete+add pair so the old path is attributed to its
 # package (otherwise git reports only the new name).
 
-if [ -z "${GITHUB_BASE_REF:-}" ]; then
+if [ -n "${MERGE_GROUP_BASE_SHA:-}" ]; then
+  # A merge queue entry has no PR. Its base is what's ahead of it in the queue.
+  git fetch --no-tags --depth=1 origin "$MERGE_GROUP_BASE_SHA"
+  compare_rev="$MERGE_GROUP_BASE_SHA"
+elif [ -z "${GITHUB_BASE_REF:-}" ]; then
   compare_rev="$(git rev-parse HEAD~1)"
 else
   git fetch --no-tags origin "$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF"

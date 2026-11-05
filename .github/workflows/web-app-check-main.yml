@@ -2,6 +2,9 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
 name: Web App Pr Checks
 'on':
+  merge_group:
+    types:
+    - checks_requested
   pull_request:
     types:
     - opened
@@ -74,7 +77,10 @@ jobs:
             - 'apps/web/src/features/calendar-view/**'
             - 'apps/web/src/features/calendar/**'
             - 'apps/web/src/lib/queries/calendar/**'
+        base: ${{ github.event.merge_group.base_sha }}
+        ref: ${{ github.event.merge_group.head_sha }}
   android-native-check:
+    if: github.event_name != 'merge_group'
     name: Android Native Check
     runs-on: namespace-profile-linux-tiny-no-cache
     permissions:
@@ -669,6 +675,7 @@ jobs:
       if: always()
       uses: './.github/actions/teardown-nix'
   ios-native-check:
+    if: github.event_name != 'merge_group'
     name: iOS Native Check
     runs-on: namespace-profile-linux-tiny-no-cache
     permissions:
@@ -1061,20 +1068,44 @@ jobs:
         echo "build: ${{ needs.build.result }}"
         echo "ios-native-check: ${{ needs.ios-native-check.result }}"
 
-        # Fail if any job failed (skipped and success are both OK). The iOS
-        # gate is the merge gate, so a cancelled gate is not OK either. The same
-        # goes for generated code: a job that hits its timeout reports cancelled.
-        if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
-           [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.typescript.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "cancelled" ]] || \
-           [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.test.result }}" == "failure" ]] || \
-           [[ "${{ needs.cycles.result }}" == "failure" ]] || \
-           [[ "${{ needs.build.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "cancelled" ]]; then
+        # Only success and skipped are OK. A job that hits its timeout reports
+        # cancelled, and passing on that would merge code that was never checked.
+        for result in \
+          "${{ needs.path-check.result }}" \
+          "${{ needs.typescript.result }}" \
+          "${{ needs.generated-code.result }}" \
+          "${{ needs.biome-check.result }}" \
+          "${{ needs.test.result }}" \
+          "${{ needs.cycles.result }}" \
+          "${{ needs.build.result }}" \
+          "${{ needs.ios-native-check.result }}"; do
+          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+            echo "One or more jobs failed or were cancelled"
+            exit 1
+          fi
+        done
+
+        if [[ "${{ github.event_name }}" == "merge_group" ]]; then
+          # The native checks read the PR's labels and passed on it before it was
+          # queued. A workflow its paths selected can't pass on skipped jobs.
+          if [[ "${{ needs.path-check.outputs.should_run }}" == "true" ]]; then
+            for result in \
+              "${{ needs.typescript.result }}" \
+              "${{ needs.biome-check.result }}" \
+              "${{ needs.test.result }}" \
+              "${{ needs.cycles.result }}" \
+              "${{ needs.build.result }}"; do
+              if [[ "$result" != "success" ]]; then
+                echo "The merge queue needs every web check to pass"
+                exit 1
+              fi
+            done
+          fi
+          if [[ "${{ needs.path-check.outputs.codegen_changed }}" == "true" && "${{ needs.generated-code.result }}" != "success" ]]; then
+            echo "The merge queue needs Generated Code Check to pass"
+            exit 1
+          fi
+        elif [[ "${{ needs.android-native-check.result }}" != "success" ]]; then
           echo "One or more jobs failed"
           exit 1
         fi

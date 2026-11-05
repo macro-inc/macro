@@ -140,7 +140,7 @@ fn status_check_requires_the_ios_native_check() {
         "status-check must need the gate: {status}"
     );
     assert!(
-        status.contains("needs.ios-native-check.result }}\" == \"failure\""),
+        status.contains("\"${{ needs.ios-native-check.result }}\"; do"),
         "status-check must fail when the gate fails: {status}"
     );
 }
@@ -295,7 +295,7 @@ fn status_check_requires_generated_code() {
         .expect("status check job");
     assert!(status.contains("- generated-code"), "{status}");
     assert!(
-        status.contains("needs.generated-code.result }}\" == \"failure\""),
+        status.contains("\"${{ needs.generated-code.result }}\" \\"),
         "{status}"
     );
 }
@@ -664,5 +664,5 @@ fn ios_gate_status_and_comment_scenarios() {
 #[test]
 fn status_check_rejects_a_cancelled_generated_code_job() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    assert!(yaml.contains(r#"[[ "${{ needs.generated-code.result }}" == "cancelled" ]]"#));
+    assert!(yaml.contains(r#"[[ "$result" != "success" && "$result" != "skipped" ]]"#));
 }

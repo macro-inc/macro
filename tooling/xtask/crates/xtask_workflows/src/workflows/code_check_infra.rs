@@ -26,14 +26,16 @@ fn infra_runner() -> String {
 /// Build the workflow.
 pub fn code_check_infra() -> Workflow {
     Workflow::new("infra code check")
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_branch("main")
-                .add_type(PullRequestType::Opened)
-                .add_type(PullRequestType::Synchronize)
-                .add_type(PullRequestType::Reopened)
-                .add_type(PullRequestType::ReadyForReview),
-        ))
+        .on(Event::default()
+            .pull_request(
+                PullRequest::default()
+                    .add_branch("main")
+                    .add_type(PullRequestType::Opened)
+                    .add_type(PullRequestType::Synchronize)
+                    .add_type(PullRequestType::Reopened)
+                    .add_type(PullRequestType::ReadyForReview),
+            )
+            .merge_group(steps::merge_queue_trigger()))
         .concurrency(
             Concurrency::new(Expression::new("code-check-infra-${{ github.ref }}"))
                 .cancel_in_progress(true),
@@ -102,16 +104,17 @@ fn checkout(full_history: bool) -> Step<Use> {
 }
 
 fn paths_filter() -> Step<Use> {
-    Step::new("Filter changed paths")
-        .uses(
-            "dorny",
-            "paths-filter",
-            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
-        ) // v3.0.3
-        .id("filter")
-        .add_with((
-            "filters",
-            indoc::indoc! {r#"
+    steps::with_merge_queue_range(
+        Step::new("Filter changed paths")
+            .uses(
+                "dorny",
+                "paths-filter",
+                "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
+            ) // v3.0.3
+            .id("filter")
+            .add_with((
+                "filters",
+                indoc::indoc! {r#"
                 should_run:
                   - 'infra/**'
                   - 'flake.nix'
@@ -120,7 +123,8 @@ fn paths_filter() -> Step<Use> {
                   - '.github/actions/teardown-nix/**'
                   - '.github/workflows/code_check_infra.yml'
             "#},
-        ))
+            )),
+    )
 }
 
 fn run_biome() -> Step<Run> {
@@ -147,12 +151,24 @@ fn check_job_results() -> Step<Run> {
         echo "biome-check: ${{ needs.biome-check.result }}"
         echo "check: ${{ needs.check.result }}"
 
-        # Fail if any job failed (skipped and success are both OK)
-        if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.check.result }}" == "failure" ]]; then
-          echo "❌ One or more jobs failed"
-          exit 1
+        # Only success and skipped are OK. A job that hits its timeout reports
+        # cancelled, and passing on that would merge code that was never checked.
+        for result in \
+          "${{ needs.path-check.result }}" \
+          "${{ needs.biome-check.result }}" \
+          "${{ needs.check.result }}"; do
+          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+            echo "❌ One or more jobs failed or were cancelled"
+            exit 1
+          fi
+        done
+
+        # In the merge queue, a workflow its paths selected can't pass on skipped jobs.
+        if [[ "${{ github.event_name }}" == "merge_group" && "${{ needs.path-check.outputs.should_run }}" == "true" ]]; then
+          if [[ "${{ needs.biome-check.result }}" != "success" || "${{ needs.check.result }}" != "success" ]]; then
+            echo "❌ The merge queue needs Biome and check to pass"
+            exit 1
+          fi
         fi
 
         echo "✅ All jobs passed or were skipped"

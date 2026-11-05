@@ -4,7 +4,7 @@
 //! Third-party actions are pinned to a SHA with the human-readable version in a
 //! trailing comment, matching the rest of the repo's workflows.
 
-use gh_workflow::{Env, Expression, Job, Run, Step, Use};
+use gh_workflow::{Env, Expression, Job, MergeGroup, MergeGroupType, Run, Step, Use};
 use xtask_paths::{RepoDir, RuntimePath};
 
 use crate::workflows::vars;
@@ -454,6 +454,28 @@ pub fn show_sccache_stats() -> Step<Run> {
     Step::new("show sccache stats")
         .run("sccache --show-stats || true")
         .if_condition(Expression::new("always()"))
+}
+
+/// True in a run for a merge queue entry. These runs test what will land on
+/// `main`, so they test the whole workspace.
+pub const IN_MERGE_QUEUE: &str = "github.event_name == 'merge_group'";
+
+/// True for a job the merge queue doesn't repeat.
+pub const NOT_IN_MERGE_QUEUE: &str = "github.event_name != 'merge_group'";
+
+/// The trigger that reports a required check to the merge queue. Each queue entry
+/// gets its own `gh-readonly-queue/...` ref, so `github.ref` concurrency groups
+/// never cancel one entry's run from another's.
+pub fn merge_queue_trigger() -> MergeGroup {
+    MergeGroup::default().add_type(MergeGroupType::ChecksRequested)
+}
+
+/// Point `dorny/paths-filter` at the queue entry's own changes. A merge group has no
+/// PR to read a file list from. On a PR both values are empty and the action ignores
+/// them.
+pub fn with_merge_queue_range(step: Step<Use>) -> Step<Use> {
+    step.add_with(("base", "${{ github.event.merge_group.base_sha }}"))
+        .add_with(("ref", "${{ github.event.merge_group.head_sha }}"))
 }
 
 /// Base for jobs gated behind `path-check`: depends on it and runs only on
