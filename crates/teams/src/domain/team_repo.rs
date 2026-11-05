@@ -194,8 +194,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
-    /// Gets the members of the team.
-    /// This does not include the team owner.
+    /// Gets all team memberships, including the owner.
     fn get_team_members(
         &self,
         team_id: &uuid::Uuid,

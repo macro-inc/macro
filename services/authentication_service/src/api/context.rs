@@ -99,15 +99,20 @@ pub(crate) type AiBillingServiceType = ai_billing::domain::BillingServiceImpl<
     ai_billing::outbound::StripePaymentGateway,
 >;
 
+pub(crate) type StripePlanGatewayType = crate::outbound::subscription_plan::StripePlanGateway<
+    teams::outbound::customer_repo::CustomerRepositoryImpl,
+    teams::outbound::team_repo::TeamRepositoryImpl,
+    hosted_runtimes::outbound::pg::PgComputerRepo,
+    team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
+>;
+
 pub(crate) type SubscriptionStatusServiceType =
     crate::service::subscription_status::SubscriptionStatusService<
         ai_billing::outbound::RolesTeamsEntitlementSource<
             UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
             teams::outbound::team_repo::TeamRepositoryImpl,
         >,
-        crate::outbound::subscription_plan::StripePlanGateway<
-            teams::outbound::customer_repo::CustomerRepositoryImpl,
-        >,
+        StripePlanGatewayType,
     >;
 
 pub(crate) type DomainNoticeServiceType = teams::domain::domain_notice::DomainNoticeServiceImpl<
@@ -262,13 +267,8 @@ pub(crate) struct ApiContext {
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
     pub subscription_status: Arc<SubscriptionStatusServiceType>,
-    pub subscription_plan: Arc<
-        crate::service::subscription_plan::PlanService<
-            crate::outbound::subscription_plan::StripePlanGateway<
-                teams::outbound::customer_repo::CustomerRepositoryImpl,
-            >,
-        >,
-    >,
+    pub subscription_plan:
+        Arc<crate::service::subscription_plan::PlanService<StripePlanGatewayType>>,
     pub subscription_checkout: Arc<
         crate::service::subscription_checkout::CheckoutService<
             crate::outbound::subscription_checkout::StripeCheckoutGateway<GtmInviteServiceType>,

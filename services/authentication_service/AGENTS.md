@@ -77,6 +77,20 @@ metered AI usage policy.
   logged, never fail the webhook. With no computer price configured it does
   nothing; changing a configured price id strands items on the old price.
 
+## Subscription billing status
+
+`GET /user/stripe/subscription_status` includes nullable `billing` details for
+personal subscribers and team owners/admins. Allocation and access policy live in
+`service/subscription_status/billing_facts.rs`; the Stripe adapter supplies actual
+recurring prices, quantities, upcoming invoice amounts and owning-domain facts.
+Included memberships contribute no paid seat amount. Comped computers appear as
+zero rows, and unmatched or ambiguous provider quantities remain `other` rather
+than invented per-account charges. Unsupported interval/price shapes have no
+breakdown. Amounts preserve Stripe wire currency units, including its currency
+exceptions; clients must use provider currency scaling. The recurring subtotal
+excludes invoice adjustments; `nextInvoice.amount` is the actual provider amount
+due and its date is absent when the provider supplies no payment/due date.
+
 ## Subscription checkout
 
 - `src/service/subscription_checkout.rs` owns introductory eligibility and

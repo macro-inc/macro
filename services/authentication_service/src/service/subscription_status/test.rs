@@ -27,16 +27,28 @@ impl EntitlementSource for Entitlements {
     }
 }
 struct Gateway {
+    access: billing_facts::BillingAccess,
+    billing_reads: Mutex<Vec<bool>>,
     facts: Option<SubscriptionPlanFacts>,
     calls: Mutex<Vec<(String, SubscriptionScope, String)>>,
 }
 impl SubscriptionStatusGateway for Gateway {
+    async fn billing_access(
+        &self,
+        _: SubscriptionScope,
+        _: &MacroUserIdStr<'_>,
+    ) -> Result<billing_facts::BillingAccess, PlanChangeError> {
+        Ok(self.access.clone())
+    }
+
     async fn status(
         &self,
         customer: &str,
         scope: SubscriptionScope,
         user: &MacroUserIdStr<'_>,
+        read_billing: bool,
     ) -> Result<Option<SubscriptionPlanFacts>, PlanChangeError> {
+        self.billing_reads.lock().unwrap().push(read_billing);
         self.calls
             .lock()
             .unwrap()
@@ -62,6 +74,8 @@ fn service(
             customer_for: Mutex::new(Vec::new()),
         },
         Gateway {
+            access: billing_facts::BillingAccess::Personal,
+            billing_reads: Mutex::new(vec![]),
             facts: Some(SubscriptionPlanFacts {
                 period_end: date("2026-11-01T12:00:00Z"),
                 scheduled_change: change,
@@ -149,8 +163,8 @@ async fn canceled_schedule_has_no_banner_but_keeps_the_renewal_date() {
 }
 
 #[tokio::test]
-async fn free_and_unlimited_accounts_do_not_read_stripe() {
-    for (tier, unlimited) in [(PlanTier::Free, false), (PlanTier::Max, true)] {
+async fn free_accounts_do_not_read_stripe() {
+    for (tier, unlimited) in [(PlanTier::Free, false), (PlanTier::Free, true)] {
         let mut entitlement = Entitlement::personal(user(), tier);
         entitlement.unlimited = unlimited;
         let service = service(entitlement, None);
@@ -165,4 +179,44 @@ async fn free_and_unlimited_accounts_do_not_read_stripe() {
         assert!(service.gateway.calls.lock().unwrap().is_empty());
         assert!(service.entitlements.customer_for.lock().unwrap().is_empty());
     }
+}
+
+#[tokio::test]
+async fn unlimited_ai_usage_does_not_hide_an_existing_paid_subscription() {
+    let mut entitlement = Entitlement::personal(user(), PlanTier::Max);
+    entitlement.unlimited = true;
+    let service = service(entitlement, None);
+    assert!(
+        service
+            .status(&user())
+            .await
+            .unwrap()
+            .renewal_date
+            .is_some()
+    );
+    assert_eq!(service.gateway.calls.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn ordinary_team_members_keep_renewal_without_requesting_financial_details() {
+    let team_id = macro_uuid::generate_uuid_v7();
+    let mut entitlement = Entitlement::personal(user(), PlanTier::Max);
+    entitlement.scope = PayerScope::TeamMember { team_id };
+    let mut service = service(entitlement, None);
+    service.gateway.access =
+        billing_facts::BillingAccess::Team(Some(teams::domain::model::TeamRole::Member));
+    service.gateway.facts.as_mut().unwrap().billing =
+        Some(billing_facts::SubscriptionBillingFacts {
+            access: billing_facts::BillingAccess::Team(Some(teams::domain::model::TeamRole::Owner)),
+            currency: "usd".to_owned(),
+            interval: team_agents::domain::models::BillingInterval::Month,
+            items: vec![],
+            seats: vec![],
+            computers: vec![],
+            next_invoice: None,
+        });
+    let status = service.status(&user()).await.unwrap();
+    assert!(status.renewal_date.is_some());
+    assert!(status.billing.is_none());
+    assert_eq!(*service.gateway.billing_reads.lock().unwrap(), vec![false]);
 }

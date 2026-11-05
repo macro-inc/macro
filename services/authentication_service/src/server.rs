@@ -593,6 +593,14 @@ pub async fn run() -> anyhow::Result<()> {
         stripe_client.clone(),
         stripe_prices.seat_prices(),
         plan_customer,
+        crate::outbound::subscription_billing::StripeBillingReader::new(
+            db.clone(),
+            teams_repo_impl.clone(),
+            hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone()),
+            team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
+            stripe_prices.seat_prices(),
+            config.computer_prices(),
+        ),
     );
     let subscription_plan = Arc::new(crate::service::subscription_plan::PlanService::new(
         plan_gateway.clone(),
