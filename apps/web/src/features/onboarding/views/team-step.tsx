@@ -174,10 +174,15 @@ function TeamForm(props: {
               checked={form.allowDomainJoin()}
               onChange={form.setAllowDomainJoin}
               label={
-                <span class="text-xs text-ink sm:text-sm">
-                  Allow @{domain()} emails to join
-                  <span class="ml-1 whitespace-nowrap rounded bg-ink/5 px-1 py-0.5 text-[10px] text-ink-muted sm:ml-2 sm:px-1.5 sm:text-xs">
-                    recommended
+                <span class="flex flex-col gap-1">
+                  <span class="text-xs text-ink sm:text-sm">
+                    Allow @{domain()} emails to join
+                    <span class="ml-1 whitespace-nowrap rounded bg-ink/5 px-1 py-0.5 text-[10px] text-ink-muted sm:ml-2 sm:px-1.5 sm:text-xs">
+                      recommended
+                    </span>
+                  </span>
+                  <span class="text-[11px] text-ink-muted sm:text-xs">
+                    We'll notify your team by email.
                   </span>
                 </span>
               }
