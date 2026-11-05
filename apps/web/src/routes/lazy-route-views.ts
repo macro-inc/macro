@@ -23,6 +23,10 @@ export const CallsCallDetail = lazyNamed(
   () => import('@app/features/calls-view/views/call-detail'),
   'CallsCallDetail'
 );
+export const NotificationsCalendarRouteView = lazyNamed(
+  () => import('@app/features/notifications-inbox/route-views'),
+  'NotificationsCalendarRouteView'
+);
 export const NotificationsRouteView = lazyNamed(
   () => import('@app/features/notifications-inbox/route-views'),
   'NotificationsRouteView'

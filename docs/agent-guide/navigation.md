@@ -226,6 +226,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
 | `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
+| `/app/notifications/calendar/<month-or-week-or-day>` | Notifications with a calendar notification's event open in the Calendar beside the list; the event uses `sN.calendar.*` |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/calendar` | Redirects to `/app/calendar/<month-or-week-or-day>` at the remembered period (Day on phones and Week on desktop by default), keeping an `eventId` |
 | `/app/scheduling` | Scheduling workspace: booking links, availability, bookings, insights, and booking page |
