@@ -44,6 +44,7 @@ export const agentHarnessBacklog =
 export const authExcluded = [
   'appleLogin',
   'cancelCodexLogin',
+  'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'changePlan',
   'checkGithubLinkStatus',
   'checkGmailLinkStatus',
@@ -78,6 +79,7 @@ export const authExcluded = [
   // Renewal and scheduled-plan details are part of the app's billing settings.
   'getSubscriptionStatus',
   'getTeamByInviteLink',
+  'getTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'getTeamInviteLink',
   'getSystemStatus',
   // Introductory offers belong to the app's subscription checkout flow.
@@ -95,14 +97,20 @@ export const authExcluded = [
   'initGithubLink',
   'initGmailLink',
   'initOutlookLink',
+  'internalGetComputer', // Internal computer provisioning plumbing.
+  'internalPurchaseComputer', // Internal computer provisioning plumbing.
+  'internalQuoteComputer', // Internal computer provisioning plumbing.
   'joinTeam',
   'joinTeamByInviteLink',
   'listCodexEnvironments',
   'listCursorModels',
   'listGtmInviteLinks',
   'listSystemStatusHistory',
+  'listTeamComputerOffers', // Computer checkout offers belong to the app.
+  'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
   'logout',
   'mergeGithubPullRequest',
+  'notifyTeamComputerAvailable', // Computer availability notifications belong to the app.
   'oauth2Callback',
   'oauthRedirect',
   'passwordLogin',
@@ -117,6 +125,7 @@ export const authExcluded = [
   'pollCodexLogin',
   'postProfilePictures',
   'purchaseAiCredits',
+  'purchaseTeamComputer', // Computer checkout belongs to the app.
   'putAgentApiKey',
   'putCursorApiKey',
   'putCursorDefaultModel',
@@ -124,12 +133,15 @@ export const authExcluded = [
   // Internal to the web app's agent signup; the token is shown in its modal.
   'agentSetup',
   'putUserLanguage',
+  'quoteTeamComputer', // Computer checkout belongs to the app.
   'redeemGtmInviteLink',
   'refresh',
   'rejectInvitation',
+  'releaseTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'removeUserFromTeam',
   'resendFusionauthVerifyUserEmail',
   'resolveGtmInviteLink',
+  'retryTeamComputer', // Computer provisioning recovery belongs to the app.
   'revokeGtmInviteLink',
   'sendMobileWelcomeEmail',
   'sendTeamDomainNotice',
@@ -138,10 +150,12 @@ export const authExcluded = [
   'setGithubPullRequestDraft',
   'setGithubPullRequestState',
   'setSystemStatus',
+  'setTeamComputerPower', // Computer lifecycle controls belong to the app.
   'ssoLogin',
   'startCodexLogin',
   'toggleTeamAutoJoinDomain',
   'toggleTeamNonAdminInvites',
+  'undoCancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'updateAiBillingAutoReload',
   'updateAiBillingOverage',
   'verifyEmailLink',

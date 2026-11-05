@@ -116,6 +116,11 @@ export type AutoReloadSnapshot = {
 };
 
 /**
+ * How often the team subscription bills.
+ */
+export type BillingInterval = 'month' | 'year';
+
+/**
  * Request body for switching plans
  */
 export type ChangePlanRequest = {
@@ -275,6 +280,39 @@ export type CodexLoginStart = {
  * Device authorization state visible to its initiating user.
  */
 export type CodexLoginState = 'pending' | 'connected' | 'expired' | 'failed';
+
+/**
+ * A size a team can buy.
+ */
+export type ComputerSize = 'standard' | 'large' | 'xl';
+
+/**
+ * A computer as its team sees it.
+ */
+export type ComputerStatus = {
+    /**
+     * When billing stops, for a computer canceled at period end.
+     */
+    cancelsAt?: string | null;
+    createdAt: string;
+    harnessId?: string | null;
+    id: string;
+    name: string;
+    personaName?: string | null;
+    poweredOn: boolean;
+    /**
+     * When the disk is destroyed, for a canceled computer.
+     */
+    retainedUntil?: string | null;
+    setup?: null | SetupProgress;
+    size: ComputerSize;
+    status: ComputerStatusKind;
+};
+
+/**
+ * The coarse status the team sees.
+ */
+export type ComputerStatusKind = 'setting_up' | 'ready' | 'asleep' | 'waking' | 'stopping' | 'stopped' | 'failed' | 'released';
 
 export type CreateAccountMergeRequest = {
     /**
@@ -1221,6 +1259,24 @@ export type InitOutlookLinkResponse = {
 };
 
 /**
+ * Body of an internal purchase.
+ */
+export type InternalPurchaseBody = {
+    /**
+     * The team admin or owner the caller authorized.
+     */
+    createdBy: string;
+    /**
+     * Joined into the same subscription update, e.g. an agent seat.
+     */
+    extraItems?: Array<SubscriptionItem>;
+    name?: string | null;
+    persona?: null | Persona;
+    size: ComputerSize;
+    teamId: string;
+};
+
+/**
  * A single invite entry with email and tier
  */
 export type InviteEntry = {
@@ -1314,6 +1370,13 @@ export type MergeGithubPullRequestResponse = {
      * The merge commit's SHA.
      */
     sha: string;
+};
+
+/**
+ * Body of a notify-me request.
+ */
+export type NotifyBody = {
+    size: ComputerSize;
 };
 
 export type PasswordRequest = {
@@ -1485,6 +1548,47 @@ export type Permission = {
 };
 
 /**
+ * An agent identity that lives on the computer next to macrod: its own OS
+ * user and its own long-running systemd service.
+ */
+export type Persona = {
+    /**
+     * Written to `/etc/macro/personas/<os_user>.env` and loaded by the
+     * persona's unit as its `EnvironmentFile`.
+     */
+    config: {
+        [key: string]: string;
+    };
+    extra_service: PersonaService;
+    name: string;
+    /**
+     * Linux user created for the persona; its service runs as this user.
+     */
+    os_user: string;
+};
+
+/**
+ * The persona's systemd service, installed as
+ * `/etc/systemd/system/<unit_name>.service`.
+ */
+export type PersonaService = {
+    /**
+     * Extra `Environment=` values, on top of the `EnvironmentFile`.
+     */
+    env: {
+        [key: string]: string;
+    };
+    /**
+     * `ExecStart` command line.
+     */
+    exec: string;
+    /**
+     * Unit name without the `.service` suffix.
+     */
+    unit_name: string;
+};
+
+/**
  * One plan in the catalog.
  */
 export type PlanCatalogEntry = {
@@ -1552,6 +1656,13 @@ export type PostGetNamesRequestBody = {
     user_ids: Array<string>;
 };
 
+/**
+ * Body of a power change.
+ */
+export type PowerBody = {
+    on: boolean;
+};
+
 export type ProfilePictureQueryParams = {
     url: string;
 };
@@ -1590,6 +1701,21 @@ export type PublicGtmInviteLink = {
      * Whether the link can still be used.
      */
     status: GtmInviteLinkStatus;
+};
+
+/**
+ * Body of a team purchase.
+ */
+export type PurchaseBody = {
+    name?: string | null;
+    size: ComputerSize;
+};
+
+/**
+ * Answer of a purchase.
+ */
+export type Purchased = {
+    computerId: string;
 };
 
 /**
@@ -1643,6 +1769,20 @@ export type PutUserNameQueryParams = {
 };
 
 /**
+ * What one computer of a size costs the team.
+ */
+export type Quote = {
+    /**
+     * In the currency's smallest unit.
+     */
+    amount: number;
+    currency: string;
+    interval: BillingInterval;
+    priceId: string;
+    size: ComputerSize;
+};
+
+/**
  * Request body to redeem a link.
  */
 export type RedeemGtmInviteLinkRequest = {
@@ -1650,6 +1790,16 @@ export type RedeemGtmInviteLinkRequest = {
      * The token from the link URL.
      */
     token: string;
+};
+
+/**
+ * Body of a release.
+ */
+export type ReleaseBody = {
+    /**
+     * The computer's name, typed to confirm.
+     */
+    confirmName: string;
 };
 
 export type ResendFusionauthVerifyUserEmailRequest = {
@@ -1795,6 +1945,39 @@ export type SetGithubPullRequestStateResponse = {
     state: GithubPullRequestState;
 };
 
+/**
+ * Setup progress, for invite and purchase flows to show.
+ */
+export type SetupProgress = {
+    /**
+     * 1-based position of `step`.
+     */
+    position: number;
+    step: SetupStep;
+    total: number;
+};
+
+/**
+ * Steps a new computer goes through, in order.
+ */
+export type SetupStep = 'paying' | 'creating' | 'booting' | 'connecting' | 'ready';
+
+/**
+ * A size with its resources, price and whether it can be bought now.
+ */
+export type SizeOffer = {
+    diskGb: number;
+    memoryGb: number;
+    /**
+     * The caller asked to hear when this size is back.
+     */
+    notifyRequested: boolean;
+    quote: Quote;
+    size: ComputerSize;
+    soldOut: boolean;
+    vcpus: number;
+};
+
 export type SsoRequiredResponse = {
     /**
      * The idp_id you need to perform sso login with.
@@ -1828,6 +2011,17 @@ export type StripeSessionResponse = {
      * The URL to redirect the user to
      */
     url: string;
+};
+
+/**
+ * A Stripe price and how many of it to add to the team subscription.
+ */
+export type SubscriptionItem = {
+    priceId: string;
+    /**
+     * Added to the item's current quantity.
+     */
+    quantity: number;
 };
 
 /**
@@ -3198,6 +3392,52 @@ export type HealthHandlerResponses = {
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
 
+export type InternalPurchaseComputerData = {
+    body: InternalPurchaseBody;
+    path?: never;
+    query?: never;
+    url: '/internal/computers';
+};
+
+export type InternalPurchaseComputerResponses = {
+    200: Purchased;
+};
+
+export type InternalPurchaseComputerResponse = InternalPurchaseComputerResponses[keyof InternalPurchaseComputerResponses];
+
+export type InternalQuoteComputerData = {
+    body?: never;
+    path?: never;
+    query: {
+        teamId: string;
+        size: ComputerSize;
+    };
+    url: '/internal/computers/quote';
+};
+
+export type InternalQuoteComputerResponses = {
+    200: Quote;
+};
+
+export type InternalQuoteComputerResponse = InternalQuoteComputerResponses[keyof InternalQuoteComputerResponses];
+
+export type InternalGetComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query: {
+        teamId: string;
+    };
+    url: '/internal/computers/{computer_id}';
+};
+
+export type InternalGetComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type InternalGetComputerResponse = InternalGetComputerResponses[keyof InternalGetComputerResponses];
+
 export type MacroApiTokenData = {
     body?: never;
     path?: never;
@@ -4028,6 +4268,196 @@ export type ToggleTeamAutoJoinDomainResponses = {
 };
 
 export type ToggleTeamAutoJoinDomainResponse = ToggleTeamAutoJoinDomainResponses[keyof ToggleTeamAutoJoinDomainResponses];
+
+export type ListTeamComputersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers';
+};
+
+export type ListTeamComputersErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type ListTeamComputersError = ListTeamComputersErrors[keyof ListTeamComputersErrors];
+
+export type ListTeamComputersResponses = {
+    200: Array<ComputerStatus>;
+};
+
+export type ListTeamComputersResponse = ListTeamComputersResponses[keyof ListTeamComputersResponses];
+
+export type PurchaseTeamComputerData = {
+    body: PurchaseBody;
+    path?: never;
+    query?: never;
+    url: '/team/computers';
+};
+
+export type PurchaseTeamComputerErrors = {
+    402: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type PurchaseTeamComputerError = PurchaseTeamComputerErrors[keyof PurchaseTeamComputerErrors];
+
+export type PurchaseTeamComputerResponses = {
+    200: Purchased;
+};
+
+export type PurchaseTeamComputerResponse = PurchaseTeamComputerResponses[keyof PurchaseTeamComputerResponses];
+
+export type NotifyTeamComputerAvailableData = {
+    body: NotifyBody;
+    path?: never;
+    query?: never;
+    url: '/team/computers/notify';
+};
+
+export type NotifyTeamComputerAvailableResponses = {
+    204: void;
+};
+
+export type NotifyTeamComputerAvailableResponse = NotifyTeamComputerAvailableResponses[keyof NotifyTeamComputerAvailableResponses];
+
+export type ListTeamComputerOffersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers/offers';
+};
+
+export type ListTeamComputerOffersResponses = {
+    200: Array<SizeOffer>;
+};
+
+export type ListTeamComputerOffersResponse = ListTeamComputerOffersResponses[keyof ListTeamComputerOffersResponses];
+
+export type QuoteTeamComputerData = {
+    body?: never;
+    path?: never;
+    query: {
+        size: ComputerSize;
+    };
+    url: '/team/computers/quote';
+};
+
+export type QuoteTeamComputerResponses = {
+    200: Quote;
+};
+
+export type QuoteTeamComputerResponse = QuoteTeamComputerResponses[keyof QuoteTeamComputerResponses];
+
+export type GetTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}';
+};
+
+export type GetTeamComputerErrors = {
+    404: ErrorResponse;
+};
+
+export type GetTeamComputerError = GetTeamComputerErrors[keyof GetTeamComputerErrors];
+
+export type GetTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type GetTeamComputerResponse = GetTeamComputerResponses[keyof GetTeamComputerResponses];
+
+export type UndoCancelTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/cancel';
+};
+
+export type UndoCancelTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type UndoCancelTeamComputerResponse = UndoCancelTeamComputerResponses[keyof UndoCancelTeamComputerResponses];
+
+export type CancelTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/cancel';
+};
+
+export type CancelTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type CancelTeamComputerResponse = CancelTeamComputerResponses[keyof CancelTeamComputerResponses];
+
+export type SetTeamComputerPowerData = {
+    body: PowerBody;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/power';
+};
+
+export type SetTeamComputerPowerResponses = {
+    200: ComputerStatus;
+};
+
+export type SetTeamComputerPowerResponse = SetTeamComputerPowerResponses[keyof SetTeamComputerPowerResponses];
+
+export type ReleaseTeamComputerData = {
+    body: ReleaseBody;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/release';
+};
+
+export type ReleaseTeamComputerErrors = {
+    400: ErrorResponse;
+};
+
+export type ReleaseTeamComputerError = ReleaseTeamComputerErrors[keyof ReleaseTeamComputerErrors];
+
+export type ReleaseTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type ReleaseTeamComputerResponse = ReleaseTeamComputerResponses[keyof ReleaseTeamComputerResponses];
+
+export type RetryTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/retry';
+};
+
+export type RetryTeamComputerErrors = {
+    404: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type RetryTeamComputerError = RetryTeamComputerErrors[keyof RetryTeamComputerErrors];
+
+export type RetryTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type RetryTeamComputerResponse = RetryTeamComputerResponses[keyof RetryTeamComputerResponses];
 
 export type PatchTeamCrmSettingsData = {
     body: PatchTeamCrmSettingsRequest;
