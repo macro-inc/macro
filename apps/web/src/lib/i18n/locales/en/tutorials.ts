@@ -15,4 +15,8 @@ export default {
   githubSnippet:
     'Pull request previews, coding agents that merge from channels, and PRs in splits',
   githubLength: '1:02',
+  docsTitle: 'Learn how to use Macro Docs',
+  docsSnippet:
+    'Mention anything, edit live with your team, and agents with a live cursor',
+  docsLength: '1:48',
 };

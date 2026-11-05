@@ -1,6 +1,8 @@
 import { t } from '@app/lib/i18n';
 import crmVideo from './assets/crm.mp4';
 import crmPoster from './assets/crm-poster.jpg';
+import docsVideo from './assets/docs.mp4';
+import docsPoster from './assets/docs-poster.jpg';
 import githubVideo from './assets/github.mp4';
 import githubPoster from './assets/github-poster.jpg';
 import mailVideo from './assets/mail.mp4';
@@ -66,5 +68,19 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     },
     videoUrl: githubVideo,
     posterUrl: githubPoster,
+  },
+  docs: {
+    id: 'docs',
+    get title() {
+      return t('tutorials.docsTitle');
+    },
+    get snippet() {
+      return t('tutorials.docsSnippet');
+    },
+    get length() {
+      return t('tutorials.docsLength');
+    },
+    videoUrl: docsVideo,
+    posterUrl: docsPoster,
   },
 };
