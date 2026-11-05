@@ -1975,27 +1975,6 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Read a markdown document as a Lexical editor state with its revision.
-     */
-    public getDocumentLexical<ThrowOnError extends boolean = false>(options: Options<GetDocumentLexicalData, ThrowOnError>): RequestResult<GetDocumentLexicalResponses, GetDocumentLexicalErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<GetDocumentLexicalResponses, GetDocumentLexicalErrors, ThrowOnError>({ url: '/documents/{document_id}/lexical', ...options });
-    }
-
-    /**
-     * Commit changed top-level Lexical blocks against a revision.
-     */
-    public commitDocumentLexical<ThrowOnError extends boolean = false>(options: Options<CommitDocumentLexicalData, ThrowOnError>): RequestResult<CommitDocumentLexicalResponses, CommitDocumentLexicalErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<CommitDocumentLexicalResponses, CommitDocumentLexicalErrors, ThrowOnError>({
-            url: '/documents/{document_id}/lexical',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
      * Edit a markdown document or task by instructions with the caller's edit
      * access. Runs EditDocument's pipeline as a live collaborator, with its AI
      * admission and billing.
@@ -2058,6 +2037,31 @@ export class Sdk extends HeyApiClient {
      */
     public getDocumentGithubPullRequests<ThrowOnError extends boolean = false>(options: Options<GetDocumentGithubPullRequestsData, ThrowOnError>): RequestResult<GetDocumentGithubPullRequestsResponses, GetDocumentGithubPullRequestsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetDocumentGithubPullRequestsResponses, GetDocumentGithubPullRequestsErrors, ThrowOnError>({ url: '/documents/{document_id}/github_prs', ...options });
+    }
+
+    /**
+     * Read a markdown document or task as Lexical state with the caller's view
+     * access, with the revision to commit against.
+     */
+    public getDocumentLexical<ThrowOnError extends boolean = false>(options: Options<GetDocumentLexicalData, ThrowOnError>): RequestResult<GetDocumentLexicalResponses, GetDocumentLexicalErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetDocumentLexicalResponses, GetDocumentLexicalErrors, ThrowOnError>({ url: '/documents/{document_id}/lexical', ...options });
+    }
+
+    /**
+     * Commit changed top-level blocks of a markdown document or task with the
+     * caller's edit access. The worker merges them three-way against the
+     * revision they were read at, keeping concurrent collaborators' edits, and
+     * applies all or nothing. Retrying a commit that landed changes nothing.
+     */
+    public commitDocumentLexical<ThrowOnError extends boolean = false>(options: Options<CommitDocumentLexicalData, ThrowOnError>): RequestResult<CommitDocumentLexicalResponses, CommitDocumentLexicalErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CommitDocumentLexicalResponses, CommitDocumentLexicalErrors, ThrowOnError>({
+            url: '/documents/{document_id}/lexical',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**
