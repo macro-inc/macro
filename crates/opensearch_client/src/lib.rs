@@ -14,6 +14,8 @@ pub mod document;
 pub mod email;
 pub mod project;
 
+mod retry;
+
 pub type Result<T> = std::result::Result<T, error::OpensearchClientError>;
 
 use opensearch::{
