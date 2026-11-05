@@ -20,8 +20,20 @@ set -euo pipefail
 # line numbers in our own code.
 common=(
   --config 'profile.dev.package."*".debug=false'
-  --all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS"
+  --all-features --no-tests=pass
 )
+
+# The Deno tests are ignored by default because they need the pinned runtime. They
+# run from this same script so cargo sees identical flags and selection and reuses
+# what the first run compiled. Only tests in packages this PR selected can match.
+if [ "${NEXTEST_RUN_DENO_TESTS:-}" = "true" ]; then
+  common+=(
+    --run-ignored only --test-threads 2
+    -E 'package(code_execution) or (package(agent_harness_service) and test(authenticated_mcp_runs_javascript_and_persists_source_and_result))'
+  )
+else
+  common+=(--test-threads "$NEXTEST_TEST_THREADS")
+fi
 
 if [ "$RUST_PACKAGES" = "all" ]; then
   cargo nextest run --workspace --exclude sync_service --lib --bins --tests "${common[@]}"
