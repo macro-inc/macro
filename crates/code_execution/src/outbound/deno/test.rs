@@ -89,6 +89,7 @@ async fn respond(stream: &mut TcpStream, body: &str) {
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
 async fn real_sdk_nested_calls_are_authenticated_and_concurrent() {
+    panic!("deliberate break: the Deno step must fail on this");
     let (_root, service) = setup(Limits {
         max_output_bytes: 1024,
         max_frame_bytes: 1024,
