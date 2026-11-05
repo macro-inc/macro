@@ -26,7 +26,8 @@ let
   postgresWorkload =
     {
       user,
-      password,
+      # The key of macro-env holding this database's password.
+      passwordKey,
       maxConnections ? 500,
     }:
     {
@@ -40,7 +41,7 @@ let
           set -e
           export PGDATA=/var/lib/postgresql/data/pgdata
           if [ ! -s "$PGDATA/PG_VERSION" ]; then
-            echo '${password}' > /tmp/pw
+            printf '%s' "$POSTGRES_PASSWORD" > /tmp/pw
             ${postgres}/bin/initdb -D "$PGDATA" -U '${user}' --pwfile=/tmp/pw --auth=scram-sha-256 \
               --encoding=UTF8 --locale=en_US.UTF-8
             echo "host all all 0.0.0.0/0 scram-sha-256" >> "$PGDATA/pg_hba.conf"
@@ -54,6 +55,7 @@ let
             -c unix_socket_directories=/tmp
         '';
       };
+      env.POSTGRES_PASSWORD.secret = passwordKey;
       user = 1000;
       ports = [ 5432 ];
       volumes.data = "/var/lib/postgresql/data";
@@ -351,13 +353,13 @@ in
   # ── Data plane ────────────────────────────────────────────────────────
   postgres = postgresWorkload {
     user = "user";
-    password = "password";
+    passwordKey = "PLATFORM_POSTGRES_PASSWORD";
   };
 
   # FusionAuth's own database (`jdbc:postgresql://db:5432/fusionauth`).
   db = postgresWorkload {
     user = "postgres";
-    password = "postgres";
+    passwordKey = "PLATFORM_FUSIONAUTH_DB_ROOT_PASSWORD";
     maxConnections = 100;
   };
 
@@ -549,8 +551,8 @@ in
       '';
     };
     env = {
-      EXTENDDB_PG_PASSWORD = "password";
-      EXTENDDB_APP_PASSWORD = "extenddb";
+      EXTENDDB_PG_PASSWORD.secret = "PLATFORM_POSTGRES_PASSWORD";
+      EXTENDDB_APP_PASSWORD.secret = "PLATFORM_EXTENDDB_PASSWORD";
       AWS_ACCESS_KEY_ID = awsKey;
       AWS_SECRET_ACCESS_KEY = awsSecret;
     };
@@ -669,9 +671,9 @@ in
     env = {
       DATABASE_URL = "jdbc:postgresql://db:5432/fusionauth";
       DATABASE_ROOT_USERNAME = "postgres";
-      DATABASE_ROOT_PASSWORD = "postgres";
+      DATABASE_ROOT_PASSWORD.secret = "PLATFORM_FUSIONAUTH_DB_ROOT_PASSWORD";
       DATABASE_USERNAME = "fusionauth";
-      DATABASE_PASSWORD = "fusionauth";
+      DATABASE_PASSWORD.secret = "PLATFORM_FUSIONAUTH_DB_PASSWORD";
       FUSIONAUTH_APP_KICKSTART_FILE = "/kickstart/kickstart.json";
       FUSIONAUTH_APP_MEMORY = "512M";
       FUSIONAUTH_APP_RUNTIME_MODE = "development";

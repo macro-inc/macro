@@ -191,8 +191,6 @@ def main():
         "# Macro\n\n"
         "**Preview: not safe for production or real data.** It installs and runs, and\n"
         "these are still development defaults:\n\n"
-        "- The bundled Postgres, FusionAuth, and ExtendDB passwords are fixed values in\n"
-        "  the manifests. Use external databases, or keep this on a private network.\n"
         "- Key management is `local-kms`, which stores its keys unprotected on its volume.\n"
         "- Postgres, Kafka, and OpenSearch run one replica each, with no failover or\n"
         "  backup.\n"
@@ -201,6 +199,11 @@ def main():
         "Requirements: Kubernetes 1.30+, a default StorageClass, an ingress controller,\n"
         "and two Secrets in the release namespace: `macro-env` (the environment every\n"
         "service loads) and `fusionauth-kickstart` (`kickstart.json`).\n\n"
+        "`macro-env` also holds the bundled databases' passwords, which you choose:\n"
+        "`PLATFORM_POSTGRES_PASSWORD` (matching the password in `DATABASE_URL`),\n"
+        "`PLATFORM_FUSIONAUTH_DB_ROOT_PASSWORD`, `PLATFORM_FUSIONAUTH_DB_PASSWORD`, and\n"
+        "`PLATFORM_EXTENDDB_PASSWORD`. They take effect when each database is first\n"
+        "created. Generate your own; never reuse an example.\n\n"
         "Components that can be disabled through `disabledComponents`:\n\n"
         + "".join(f"- `{c}`\n" for c in sorted(components))
     )

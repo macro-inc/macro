@@ -26,8 +26,8 @@ use super::local_env::Tunnels;
 use super::proxy::{self, Flavor};
 use super::stage::Stage;
 use super::{
-    Mode, env_layer, frontend, fusionauth, gen_compose, inventory, kafka, kickstart, localstack,
-    repo_root,
+    Mode, env_layer, frontend, fusionauth, gen_compose, identity, inventory, kafka, kickstart,
+    localstack, repo_root,
 };
 
 mod gitops;
@@ -227,6 +227,131 @@ struct State {
     /// The instance's AWS-API key (generated once; every backend verifies it).
     #[serde(default)]
     aws_key: Option<(String, String)>,
+    /// Credentials its own services share, generated once.
+    #[serde(default)]
+    credentials: Option<Credentials>,
+}
+
+/// Credentials internal to one instance. Databases and FusionAuth keep what they are
+/// first started with, so these never change after an instance is created.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Credentials {
+    postgres: String,
+    fusionauth_db_root: String,
+    fusionauth_db: String,
+    extenddb: String,
+    internal: String,
+    jwt: String,
+    fusionauth_api_key: String,
+    fusionauth_client_secret: String,
+    fusionauth_admin: String,
+}
+
+/// Environment keys all holding the internal service credential.
+const INTERNAL_CREDENTIAL_KEYS: &[&str] = &[
+    "AUTHENTICATION_SERVICE_INTERNAL_API_SECRET_KEY",
+    "AUTHENTICATION_SERVICE_SECRET_KEY",
+    "DOCUMENT_PERMISSIONS_SECRET",
+    "DOCUMENT_PERMISSION_JWT",
+    "DOCUMENT_PERMISSION_JWT_SECRET_KEY",
+    "DOCUMENT_STORAGE_SERVICE_AUTH_KEY",
+    "INTERNAL_API_KEY",
+    "INTERNAL_API_SECRET_KEY",
+    "INTERNAL_AUTH_KEY",
+    "INTERNAL_CALL_SECRET",
+    "SERVICE_INTERNAL_AUTH_KEY",
+    "SYNC_SERVICE_AUTH_KEY",
+];
+/// The password in the code-defined environment's database URLs.
+const DEVELOPMENT_DB_URL_PASSWORD: &str = ":password@";
+/// FusionAuth's administrator in the kickstart's fixed development values.
+const DEVELOPMENT_FUSIONAUTH_ADMIN: &str = "macroIsGreat!";
+
+impl Credentials {
+    fn generate() -> Result<Self> {
+        Ok(Self {
+            postgres: random_hex()?,
+            fusionauth_db_root: random_hex()?,
+            fusionauth_db: random_hex()?,
+            extenddb: random_hex()?,
+            internal: random_hex()?,
+            jwt: random_hex()?,
+            fusionauth_api_key: random_hex()?,
+            fusionauth_client_secret: random_hex()?,
+            fusionauth_admin: random_hex()?,
+        })
+    }
+
+    /// What an instance created before credentials were generated started with. Its
+    /// databases and FusionAuth keep those, so it must keep using them.
+    fn development() -> Self {
+        Self {
+            postgres: "password".into(),
+            fusionauth_db_root: "postgres".into(),
+            fusionauth_db: "fusionauth".into(),
+            extenddb: "extenddb".into(),
+            internal: identity::INTERNAL_AUTH_KEY.into(),
+            jwt: identity::JWT_SECRET.into(),
+            fusionauth_api_key: identity::FUSIONAUTH_API_KEY.into(),
+            fusionauth_client_secret: identity::CLIENT_SECRET.into(),
+            fusionauth_admin: DEVELOPMENT_FUSIONAUTH_ADMIN.into(),
+        }
+    }
+
+    /// Puts these credentials into the shared environment.
+    fn apply_to_env(&self, env: &mut BTreeMap<String, String>) {
+        let db_url_password = format!(":{}@", self.postgres);
+        for value in env.values_mut() {
+            if value.starts_with("postgres://") {
+                *value = value.replace(DEVELOPMENT_DB_URL_PASSWORD, &db_url_password);
+            }
+        }
+        for key in INTERNAL_CREDENTIAL_KEYS {
+            if env.contains_key(*key) {
+                env.insert((*key).to_owned(), self.internal.clone());
+            }
+        }
+        for (key, value) in [
+            ("JWT_SECRET_KEY", &self.jwt),
+            ("FUSIONAUTH_API_KEY", &self.fusionauth_api_key),
+            ("FUSIONAUTH_API_KEY_SECRET_KEY", &self.fusionauth_api_key),
+            (
+                "FUSIONAUTH_CLIENT_SECRET_KEY",
+                &self.fusionauth_client_secret,
+            ),
+        ] {
+            if env.contains_key(key) {
+                env.insert(key.to_owned(), value.clone());
+            }
+        }
+        for (key, value) in [
+            ("PLATFORM_POSTGRES_PASSWORD", &self.postgres),
+            (
+                "PLATFORM_FUSIONAUTH_DB_ROOT_PASSWORD",
+                &self.fusionauth_db_root,
+            ),
+            ("PLATFORM_FUSIONAUTH_DB_PASSWORD", &self.fusionauth_db),
+            ("PLATFORM_EXTENDDB_PASSWORD", &self.extenddb),
+        ] {
+            env.insert(key.to_owned(), value.clone());
+        }
+    }
+
+    /// Replaces the fixed development values in FusionAuth's kickstart.
+    fn apply_to_kickstart(&self, kickstart: &str) -> String {
+        kickstart
+            .replace(identity::FUSIONAUTH_API_KEY, &self.fusionauth_api_key)
+            .replace(identity::CLIENT_SECRET, &self.fusionauth_client_secret)
+            .replace(identity::JWT_SECRET, &self.jwt)
+            .replace(DEVELOPMENT_FUSIONAUTH_ADMIN, &self.fusionauth_admin)
+    }
+}
+
+fn random_hex() -> Result<String> {
+    use std::io::Read;
+    let mut bytes = [0u8; 32];
+    std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
 fn state_path(instance: &Instance) -> PathBuf {
@@ -346,7 +471,16 @@ fn up(args: &UpArgs) -> Result<()> {
         access_key_id: key_id,
         secret_access_key: key_secret,
     };
+    let credentials = match &state.credentials {
+        Some(credentials) => credentials.clone(),
+        // A recorded build means its databases already exist.
+        None if !state.binaries.is_empty() => Credentials::development(),
+        None => Credentials::generate()?,
+    };
+    state.credentials = Some(credentials.clone());
+    let kickstart_json = credentials.apply_to_kickstart(&kickstart_json);
     let mut shared_env = queue_urls(shared_env);
+    credentials.apply_to_env(&mut shared_env);
     shared_env.insert(
         macro_queues::LOCAL_QUEUE_BASE_URL_ENV_VAR.into(),
         super::resources::queue_url("")
@@ -507,7 +641,11 @@ fn e2e(args: &E2eArgs) -> Result<()> {
         proxy_url: name.origin(),
         frontend_url: frontend::url(&instance),
         postgres_url: format!(
-            "postgres://user:password@localhost:{}/macrodb",
+            "postgres://user:{}@localhost:{}/macrodb",
+            read_state(&instance)
+                .credentials
+                .unwrap_or_else(Credentials::development)
+                .postgres,
             instance.port(Port::Postgres)
         ),
         fusionauth_url: format!("http://localhost:{}", instance.port(Port::FusionAuth)),

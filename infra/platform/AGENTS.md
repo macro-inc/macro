@@ -107,3 +107,6 @@ deploy repo, which Argo CD syncs.
   fixing the image (forge runners).
 - RustFS reports a blocked private webhook target as `dns_failure`, while uploads
   still succeed. Add a new target's origin to `RUSTFS_OUTBOUND_ALLOW_ORIGINS`.
+- Credentials are generated once per instance and recorded in its
+  `platform-state.json`. Databases keep what they were first created with, so losing
+  that state while keeping the volumes locks services out: `platform down` both.

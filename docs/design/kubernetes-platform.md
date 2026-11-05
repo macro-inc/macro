@@ -103,6 +103,10 @@ Both Nix frameworks were measured pushing a real service (a 388 MB binary, a
   services. This replaces the apply order `cargo x platform` used to run itself.
 - **Secrets never enter the repo.** `platform up` applies them directly. External
   Secrets replaces that in the AWS phase.
+- **Each instance generates its own internal credentials** once, for its databases,
+  service-to-service calls, JWTs, and FusionAuth, and manifests reference them by key.
+  An instance that existed before this keeps the development values its data was
+  created with.
 - **Parity check:** `nix build .#platform.parity` renders an instance at the `local`
   and `prod` sizes and diffs them, on every pull request that touches the platform.
   Only replicas, resources, and volume sizes may differ; anything else fails the build.
@@ -371,22 +375,18 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
   cluster, with no Argo CD or forge in the path, provisioned itself and reached a
   browser sign-up in about two minutes. It reused this cluster's ingress and
   registry, and dev-sized images.
-- **Rust E2E suite:** 16 pass. One assertion in
+- **Generated credentials:** a new instance bootstraps from nothing with its own, reaches
+  sign-up, and rejects the old development values.
+- **Rust E2E suite:** 16 pass, on queues in Kafka and with generated credentials. One assertion in
   `scoped_bot_resolves_document_access_through_dss` fails, and fails the same way
   on a plain compose stack, so the platform does not cause it.
 
 **CI status (forge, 2026-11-05).** The ported checks run on Gitea: dependency, generated
 code, conventions, infra, parity, and AWS validation checks pass, as do web typecheck,
-build, and 61 Playwright functional tests. What remains:
-
-- Rust `test` reaches 14,627 passed and stops at one failure in `scheduled_action`
-  (`candidates_exact_recheck_activation_and_keyset_pages`). The branch does not touch
-  that code, and it is not yet known whether this is the forge's environment. The other
-  2,662 tests have not run on the forge.
-- Web `Test` has 11 failures of 20,870 tests, all in `apps/web/scripts`. The first is a
-  timeout; they have not been checked on a quieter host.
-- cargo-deny reports a new advisory that `pin-utils` is unmaintained. It is not specific
-  to the forge.
+build, 61 Playwright functional tests, and the web unit tests. Web tests under
+`apps/web/scripts` time out when the host is heavily loaded. What remains: cargo-deny
+reports a new advisory that `pin-utils` is unmaintained, which is not specific to the
+forge.
 
 **Playwright has not run against an instance.** Its downloaded browser cannot start on
 the NixOS host, and a forge job would need network access to the instance.
@@ -411,10 +411,9 @@ Not built yet:
 - The rest of phase 7: publishing the images and chart per release, a generator for
   the Secrets a self-hoster must supply, a production-sized install, and a run on a
   stock cluster such as kind. **The chart is a preview, not safe for real data**, and
-  says so in its README: bundled databases use fixed passwords from the manifests, it
-  ships `local-kms` despite the rule above (OpenBao needs a KMS adapter first), mail
-  goes to Mailpit, and images are debug builds. Generated credentials per release are
-  the next step, and they would also remove the fixed passwords from every instance.
+  says so in its README: it ships `local-kms` despite the rule above (OpenBao needs a KMS
+  adapter first), mail goes to Mailpit, Kafka and OpenSearch have no authentication
+  inside the namespace, and images are debug builds.
 - Release images from crane. Every image today wraps a host-built debug binary with
   debug info stripped.
 - Mirroring from GitHub automatically, which needs a credential decision.

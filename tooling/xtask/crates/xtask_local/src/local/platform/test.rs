@@ -61,6 +61,70 @@ fn origin_rewrites_cover_auth_and_proxy() {
 }
 
 #[test]
+fn generated_credentials_replace_every_development_value() {
+    let credentials = Credentials::generate().unwrap();
+    assert_ne!(credentials, Credentials::generate().unwrap());
+    let mut env = BTreeMap::from([
+        (
+            "DATABASE_URL".to_owned(),
+            "postgres://user:password@postgres:5432/macrodb".to_owned(),
+        ),
+        ("INTERNAL_API_SECRET_KEY".to_owned(), "local".to_owned()),
+        ("FUSIONAUTH_API_KEY".to_owned(), "fixed".to_owned()),
+        ("APOLLO_API_KEY".to_owned(), "local".to_owned()),
+        ("SOME_URL".to_owned(), "http://a:password@b".to_owned()),
+    ]);
+    credentials.apply_to_env(&mut env);
+    assert_eq!(
+        env["DATABASE_URL"],
+        format!(
+            "postgres://user:{}@postgres:5432/macrodb",
+            credentials.postgres
+        )
+    );
+    assert_eq!(env["INTERNAL_API_SECRET_KEY"], credentials.internal);
+    assert_eq!(env["FUSIONAUTH_API_KEY"], credentials.fusionauth_api_key);
+    assert_eq!(env["PLATFORM_POSTGRES_PASSWORD"], credentials.postgres);
+    // Not ours to change: a third party's value, and a URL that is not a database's.
+    assert_eq!(env["APOLLO_API_KEY"], "local");
+    assert_eq!(env["SOME_URL"], "http://a:password@b");
+
+    let kickstart = credentials.apply_to_kickstart(&format!(
+        "{} {} {} {}",
+        identity::FUSIONAUTH_API_KEY,
+        identity::CLIENT_SECRET,
+        identity::JWT_SECRET,
+        DEVELOPMENT_FUSIONAUTH_ADMIN
+    ));
+    assert_eq!(
+        kickstart,
+        format!(
+            "{} {} {} {}",
+            credentials.fusionauth_api_key,
+            credentials.fusionauth_client_secret,
+            credentials.jwt,
+            credentials.fusionauth_admin
+        )
+    );
+}
+
+#[test]
+fn an_existing_instance_keeps_its_development_credentials() {
+    let credentials = Credentials::development();
+    let mut env = BTreeMap::from([(
+        "DATABASE_URL".to_owned(),
+        "postgres://user:password@postgres:5432/macrodb".to_owned(),
+    )]);
+    credentials.apply_to_env(&mut env);
+    assert_eq!(
+        env["DATABASE_URL"],
+        "postgres://user:password@postgres:5432/macrodb"
+    );
+    assert_eq!(env["PLATFORM_POSTGRES_PASSWORD"], "password");
+    assert_eq!(env["PLATFORM_FUSIONAUTH_DB_ROOT_PASSWORD"], "postgres");
+}
+
+#[test]
 fn an_application_converges_only_on_the_published_revision_when_healthy() {
     let app = |revision: &str, sync: &str, health: &str| {
         json!({ "status": {

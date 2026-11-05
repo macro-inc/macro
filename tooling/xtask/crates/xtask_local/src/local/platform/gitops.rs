@@ -147,7 +147,7 @@ fn ensure_secrets(stage: &Stage) -> Result<()> {
                 "Opaque",
                 &[
                     ("username".to_owned(), FORGE_ADMIN_USER.to_owned()),
-                    ("password".to_owned(), random_token()?),
+                    ("password".to_owned(), super::random_hex()?),
                     (
                         "email".to_owned(),
                         format!("{FORGE_ADMIN_USER}@{FORGE_HOST}"),
@@ -184,13 +184,6 @@ fn ensure_secrets(stage: &Stage) -> Result<()> {
         )?;
     }
     Ok(())
-}
-
-fn random_token() -> Result<String> {
-    use std::io::Read;
-    let mut bytes = [0u8; 32];
-    std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
-    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
 fn read_secret(namespace: &str, name: &str, key: &str) -> Result<String> {
