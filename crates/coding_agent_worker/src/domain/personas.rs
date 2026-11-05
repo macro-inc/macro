@@ -72,7 +72,6 @@ impl<Units: UnitController, Health: HealthProbe> Supervisor<Units, Health> {
         }
     }
 
-    #[tracing::instrument(name = "macrod.personas.reconcile", skip_all, fields(persona_count = config.len()))]
     pub(crate) async fn snapshot(
         &mut self,
         config: &Personas,
@@ -100,6 +99,24 @@ impl<Units: UnitController, Health: HealthProbe> Supervisor<Units, Health> {
                             checked_at,
                         )
                         .await;
+                    let state = match &report {
+                        PersonaHealth::Healthy { .. } => "healthy",
+                        PersonaHealth::Unhealthy { .. } => "unhealthy",
+                        PersonaHealth::Missing { .. } => "missing",
+                    };
+                    if observation.reported_state != Some(state) {
+                        let span = tracing::info_span!(
+                            "macrod.persona.health",
+                            persona_id = %macro_user_id::telemetry_id(name),
+                            health.state = state,
+                            health.previous = observation.reported_state.unwrap_or("unknown"),
+                            otel.status_code = if state == "healthy" { "OK" } else { "ERROR" }
+                        );
+                        crate::telemetry::attach(&span);
+                        let _guard = span.enter();
+                        tracing::info!("persona health changed");
+                        observation.reported_state = Some(state);
+                    }
                     (name.clone(), report)
                 }
                 .boxed()
@@ -114,6 +131,7 @@ impl<Units: UnitController, Health: HealthProbe> Supervisor<Units, Health> {
 
 #[derive(Default)]
 struct Observation {
+    reported_state: Option<&'static str>,
     failures: u8,
     retry_at: Option<Instant>,
     last_turn_at: Option<DateTime<Utc>>,
@@ -158,7 +176,16 @@ impl Observation {
                 } else {
                     UnitAction::Start
                 };
-                if units.apply(name, action).await.is_err() {
+                use tracing::Instrument;
+                let span = tracing::info_span!("macrod.persona.restart", persona_id = %macro_user_id::telemetry_id(name), action = ?action, attempt = i64::from(self.failures), backoff_seconds = delay as i64, otel.status_code = tracing::field::Empty);
+                crate::telemetry::attach(&span);
+                if units
+                    .apply(name, action)
+                    .instrument(span.clone())
+                    .await
+                    .is_err()
+                {
+                    span.record("otel.status_code", "ERROR");
                     return self.unhealthy(checked_at, "could not start the brain unit");
                 }
             }

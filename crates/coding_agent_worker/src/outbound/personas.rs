@@ -54,7 +54,6 @@ pub(crate) struct Systemd;
 impl UnitController for Systemd {
     type Err = PersonaError;
 
-    #[tracing::instrument(name = "macrod.personas.unit_state", skip_all, err)]
     async fn state(&self, os_user: &str) -> Result<UnitState, Self::Err> {
         let unit = unit_name(os_user)?;
         let output = privileged(
@@ -174,7 +173,6 @@ fn parse_unit_state(output: &str) -> Result<UnitState, PersonaError> {
 }
 
 /// Called by the unprivileged daemon. Only names and health ports return.
-#[tracing::instrument(name = "macrod.personas.discover", skip_all, err)]
 pub(crate) async fn discover() -> Result<Personas, PersonaError> {
     if rustix::process::geteuid().is_root() {
         return read_personas(Path::new(PERSONA_DIRECTORY));
@@ -291,7 +289,6 @@ enum BrainStatus {
 }
 
 impl HealthProbe for HttpHealth {
-    #[tracing::instrument(name = "macrod.personas.health", skip_all)]
     async fn probe(&self, port: NonZeroU16, checked_at: DateTime<Utc>) -> PersonaHealth {
         let mut headers = reqwest::header::HeaderMap::new();
         macro_tower_layers::inject_trace_headers(&mut headers);

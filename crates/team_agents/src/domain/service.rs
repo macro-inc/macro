@@ -335,6 +335,7 @@ where
     ) -> Result<(MacroUserIdStr<'static>, Uuid), TeamAgentError> {
         let team_id = team_id(receipt)?;
         let included = self.is_included(team_id).await?;
+        tracing::Span::current().record("billing_kind", if included { "comped" } else { "stripe" });
         if included != request.expected_included {
             return Err(TeamAgentError::QuoteChanged);
         }
@@ -356,7 +357,10 @@ where
         let user_id = MacroUserIdStr::parse_from_str(&format!("macro|{email}"))
             .map_err(|_| TeamAgentError::BadRequest(format!("{email} is not a usable address")))?
             .into_owned();
-        tracing::Span::current().record("agent_user_id", tracing::field::display(&user_id));
+        tracing::Span::current().record(
+            "agent_user_id",
+            tracing::field::display(macro_user_id::telemetry_id(user_id.as_ref())),
+        );
 
         let seed = PersonaSeed {
             creator_id: Some(created_by.as_ref().to_string()),
@@ -572,7 +576,7 @@ where
         })
     }
 
-    #[tracing::instrument(skip(self, receipt), fields(team_agents.flag), err)]
+    #[tracing::instrument(skip_all, fields(team_agents.flag), err)]
     async fn quote(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -635,7 +639,7 @@ where
         })
     }
 
-    #[tracing::instrument(skip_all, fields(team_id, agent_user_id, size = ?request.size, team_agents.flag), err)]
+    #[tracing::instrument(skip_all, fields(team_id, agent_user_id, size = ?request.size, billing_kind, team_agents.flag), err)]
     async fn create(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -710,7 +714,7 @@ where
         }
     }
 
-    #[tracing::instrument(skip(self, receipt), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn list(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -742,7 +746,7 @@ where
         Ok(TeamAgents { agents })
     }
 
-    #[tracing::instrument(skip(self, receipt), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn retry(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -815,7 +819,7 @@ where
         self.apply_computer_status(agent, computer).await
     }
 
-    #[tracing::instrument(skip(self, receipt), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn delete(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -872,13 +876,13 @@ where
             .map_err(TeamAgentError::internal)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn me(&self, caller: &MacroUserIdStr<'_>) -> Result<TeamAgent, TeamAgentError> {
         let agent = self.agent(caller).await?;
         self.refresh_status(agent).await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn list_email(
         &self,
         caller: &MacroUserIdStr<'_>,
@@ -888,7 +892,7 @@ where
         self.mailboxes.list(&mailbox_id, limit.clamp(1, 100)).await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn get_email(
         &self,
         caller: &MacroUserIdStr<'_>,
@@ -898,7 +902,7 @@ where
         self.mailboxes.get(&mailbox_id, message_id).await
     }
 
-    #[tracing::instrument(skip(self, email), fields(recipients = email.to.len()), err)]
+    #[tracing::instrument(skip_all, fields(recipients = email.to.len()), err)]
     async fn send_email(
         &self,
         caller: &MacroUserIdStr<'_>,

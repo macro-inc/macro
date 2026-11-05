@@ -199,7 +199,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
 impl<Repo: ComputerRepo, Bill, Time, Harness: HarnessRepo, Policy>
     HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy>
 {
-    #[tracing::instrument(skip(self), fields(%team_id, %computer_id), err)]
+    #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
     async fn brain_health(
         &self,
         team_id: Uuid,

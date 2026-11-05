@@ -141,3 +141,13 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 ## Related
 
 - Skill: `cloud-storage-hexagonal-architecture` · Plan: Macro Computers Plan doc
+
+## Observability
+
+Persist the purchase W3C parent in `ComputerState.provision_traceparent` and
+attach it to new worker spans before entering them; already-entered callbacks
+link to it. Fleet work and billing work emit one span per claimed effect, with
+errors marked even when retry scheduling succeeds. Enrollment passes the parent
+and opaque team/computer IDs to the persona. Metrics are
+`computer.provisioning.duration` (reservation to first macrod connection, seconds),
+`computer.effect.failures` (by phase) and `computer.incus.reachable` (0/1).

@@ -99,6 +99,7 @@ fn units(size: ComputerSize) -> i32 {
 impl PgComputerRepo {
     /// Run the transition for a computer already locked in `tx`, and store
     /// its state, effects and timers.
+    #[tracing::instrument(name = "computer.lifecycle.event", skip_all, fields(%computer_id, event, phase, team_id, size, billing_kind, otel.status_code), err)]
     async fn apply_locked(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         computer_id: Uuid,
@@ -122,6 +123,25 @@ impl PgComputerRepo {
             return Ok(None);
         };
         let mut computer = Computer::try_from(row)?;
+        crate::domain::telemetry::resume(computer.state.provision_traceparent.as_deref());
+        let span = tracing::Span::current();
+        span.record("team_id", tracing::field::display(computer.team_id));
+        span.record("size", computer.size.as_ref());
+        span.record(
+            "billing_kind",
+            if computer.state.comp_reason.is_some() {
+                "comped"
+            } else {
+                "stripe"
+            },
+        );
+        // Read only the enum tag; reasons and other event payloads are private.
+        if let Some(tag) = serde_json::to_value(event)?
+            .get("event")
+            .and_then(serde_json::Value::as_str)
+        {
+            span.record("event", tag);
+        }
 
         let host_has_room = match computer.state.host() {
             Some(host) => Self::host_has_room(tx, host, &computer).await?,
@@ -163,6 +183,12 @@ impl PgComputerRepo {
             }
         }
 
+        if let Some(tag) = serde_json::to_value(&state.phase)?
+            .get("phase")
+            .and_then(serde_json::Value::as_str)
+        {
+            span.record("phase", tag);
+        }
         let destroyed = state.phase == Phase::Destroyed;
         if destroyed {
             sqlx::query!(
@@ -278,6 +304,7 @@ impl ComputerRepo for PgComputerRepo {
         };
 
         let mut state = ComputerState::reserved(host, now);
+        state.provision_traceparent = crate::domain::telemetry::traceparent();
         if let crate::domain::models::PurchaseBilling::Comped { reason } = &computer.billing {
             state.comp_reason = Some(reason.clone());
         }
@@ -340,7 +367,7 @@ impl ComputerRepo for PgComputerRepo {
         })
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, event), err)]
     async fn apply(
         &self,
         computer_id: Uuid,

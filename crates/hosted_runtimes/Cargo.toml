@@ -32,6 +32,8 @@ macro_authorization = { path = "../macro_authorization", optional = true, defaul
 macro_env = { path = "../macro_env", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 rootcause = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace", "metrics"] }
+tracing-opentelemetry = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
@@ -44,6 +46,8 @@ uuid = { workspace = true, features = ["serde", "v7"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
+tracing-subscriber = { workspace = true }
 clap = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 proptest = { workspace = true }

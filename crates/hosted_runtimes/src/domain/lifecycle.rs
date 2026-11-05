@@ -124,6 +124,9 @@ pub enum PaymentOutcome {
 /// Everything the lifecycle knows about one computer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputerState {
+    /// Purchase context retained across outbox retries and first-boot enrollment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provision_traceparent: Option<String>,
     pub phase: Phase,
     pub power: Power,
     pub billing: Billing,
@@ -142,6 +145,7 @@ impl ComputerState {
     /// A fresh purchase holding units on `host`.
     pub fn reserved(host: HostId, now: DateTime<Utc>) -> Self {
         Self {
+            provision_traceparent: None,
             phase: Phase::PendingPayment { host, since: now },
             power: Power::On,
             billing: Billing::Active,

@@ -26,6 +26,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
         payment: PaymentOutcome::Paid,
         comp_reason: None,
         macrod_connected: false,
+        provision_traceparent: None,
         recent_crashes: vec![],
         wake_requested: false,
     };
@@ -42,6 +43,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
     assert_eq!(
         next,
         ComputerState {
+            provision_traceparent: None,
             phase: Phase::Booting { host: HOST },
             power: Power::On,
             billing: Billing::Active,
@@ -878,6 +880,7 @@ fn transitions() {
             _ => PaymentOutcome::Paid,
         };
         let state = ComputerState {
+            provision_traceparent: None,
             payment,
             comp_reason: None,
             phase: case.phase,

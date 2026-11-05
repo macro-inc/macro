@@ -91,7 +91,7 @@ impl TryFrom<AgentRow> for TeamAgent {
 impl TeamAgentRepository for PgTeamAgentsRepo {
     type Err = PgTeamAgentsError;
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn verified_email(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -110,7 +110,7 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         .await?)
     }
 
-    #[tracing::instrument(skip_all, fields(user_id = %account.user_id), err)]
+    #[tracing::instrument(skip_all, fields(agent_user_id = %macro_user_id::telemetry_id(account.user_id.as_ref())), err)]
     async fn create_account(&self, account: &NewAgentAccount) -> Result<(), Self::Err> {
         let macro_user_id = Uuid::now_v7();
         // Agents never pay or sign in; the placeholder keeps the column's
@@ -198,7 +198,7 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn delete_account(&self, user_id: &MacroUserIdStr<'_>) -> Result<(), Self::Err> {
         // Deleting macro_user cascades to "User" and everything keyed on it,
         // including the team membership and the team_agents row.
@@ -215,7 +215,7 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn get(&self, user_id: &MacroUserIdStr<'_>) -> Result<Option<TeamAgent>, Self::Err> {
         let row = sqlx::query_as!(
             AgentRow,
@@ -243,7 +243,7 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         row.map(TeamAgent::try_from).transpose()
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<TeamAgent>, Self::Err> {
         let rows = sqlx::query_as!(
             AgentRow,
@@ -272,7 +272,7 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         rows.into_iter().map(TeamAgent::try_from).collect()
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn persona_seed(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -288,7 +288,7 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         Ok(seed.map(|seed| seed.0))
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn mailbox_id(&self, user_id: &MacroUserIdStr<'_>) -> Result<Option<String>, Self::Err> {
         let mailbox_id = sqlx::query_scalar!(
             r#"SELECT mailbox_id FROM team_agents WHERE user_id = $1"#,
@@ -301,7 +301,7 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         Ok(mailbox_id)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn set_computer(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -318,7 +318,7 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn set_status(
         &self,
         user_id: &MacroUserIdStr<'_>,

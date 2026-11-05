@@ -209,3 +209,10 @@ Macro computers replace the managed `/workspace` placeholder with their configur
 workspace on session start. Enrollment’s `OVERRIDE_AGENT_HARNESS_EGRESS_URL` is
 stored as `[macro].egress_url`; computer sessions route first-party MCP and
 Anthropic requests through it without changing custom external MCP addresses.
+
+Service/enrollment telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT`
+(gRPC). Only enrollment and audited persona supervision spans export; health
+spans emit on state change and restart spans record attempt/backoff/outcome.
+Enrollment retains only W3C context in `/var/lib/macrod/provision.traceparent`;
+supervision joins it and records the marker's computer UUID plus a hashed persona ID.
+Steady unit-state polling emits no span. stdout remains the daemon protocol.

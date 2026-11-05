@@ -205,7 +205,7 @@ impl Mailboxes for DeadSimpleEmail {
         Ok(())
     }
 
-    #[tracing::instrument(name = "team_agents.mailbox.list", skip(self), err)]
+    #[tracing::instrument(name = "team_agents.mailbox.list", skip_all, err)]
     async fn list(&self, mailbox_id: &str, limit: u8) -> Result<EmailMessages, TeamAgentError> {
         let list: MessageList = self
             .call(
@@ -222,7 +222,7 @@ impl Mailboxes for DeadSimpleEmail {
         })
     }
 
-    #[tracing::instrument(name = "team_agents.mailbox.get", skip(self), err)]
+    #[tracing::instrument(name = "team_agents.mailbox.get", skip_all, err)]
     async fn get(
         &self,
         mailbox_id: &str,
@@ -237,7 +237,7 @@ impl Mailboxes for DeadSimpleEmail {
         Ok(message.into())
     }
 
-    #[tracing::instrument(name = "team_agents.mailbox.send", skip(self, email), err)]
+    #[tracing::instrument(name = "team_agents.mailbox.send", skip_all, err)]
     async fn send(&self, mailbox_id: &str, email: &SendEmail) -> Result<SentEmail, TeamAgentError> {
         let sent: Sent = self
             .call(

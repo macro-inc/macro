@@ -289,13 +289,23 @@ impl Fleet for IncusFleet {
 
     #[tracing::instrument(name = "incus_fleet.instances", skip(self), err)]
     async fn instances(&self) -> Result<Vec<(Uuid, InstanceStatus)>, IncusFleetError> {
-        let instances = self.client.list_instances().await?;
+        let result = self.client.list_instances().await;
+        opentelemetry::global::meter("hosted_runtimes")
+            .f64_gauge("computer.incus.reachable")
+            .build()
+            .record(if result.is_ok() { 1.0 } else { 0.0 }, &[]);
+        let instances = result?;
         computer_instances(&instances)
     }
 
     #[tracing::instrument(name = "incus_fleet.host", skip(self), err)]
     async fn host(&self) -> Result<HostRegistration, IncusFleetError> {
-        let resources = self.client.resources().await?;
+        let result = self.client.resources().await;
+        opentelemetry::global::meter("hosted_runtimes")
+            .f64_gauge("computer.incus.reachable")
+            .build()
+            .record(if result.is_ok() { 1.0 } else { 0.0 }, &[]);
+        let resources = result?;
         let memory_gb =
             u32::try_from(resources.memory_total_bytes / BYTES_PER_GIB).map_err(|_| {
                 IncusError::MalformedResponse(format!(

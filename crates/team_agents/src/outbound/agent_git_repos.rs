@@ -26,7 +26,7 @@ impl AgentGitRepos {
 }
 
 impl AgentRepos for AgentGitRepos {
-    #[tracing::instrument(name = "team_agents.repo.create", skip(self, seed), err)]
+    #[tracing::instrument(name = "team_agents.repo.create", skip_all, err)]
     async fn create(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
@@ -76,7 +76,7 @@ impl AgentRepos for AgentGitRepos {
         })
     }
 
-    #[tracing::instrument(name = "team_agents.repo.ensure", skip_all, fields(%agent_user_id, %team_id), err)]
+    #[tracing::instrument(name = "team_agents.repo.ensure", skip_all, fields(agent_user_id = %macro_user_id::telemetry_id(agent_user_id.as_ref()), %team_id), err)]
     async fn ensure(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
@@ -103,7 +103,7 @@ impl AgentRepos for AgentGitRepos {
         Ok(())
     }
 
-    #[tracing::instrument(name = "team_agents.repo.delete", skip(self), err)]
+    #[tracing::instrument(name = "team_agents.repo.delete", skip_all, err)]
     async fn delete(&self, agent_user_id: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
         self.client
             .delete_repo(agent_user_id)

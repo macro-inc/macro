@@ -606,6 +606,16 @@ async fn a_lost_guest_is_recreated_with_the_saved_persona_and_fresh_pairing() {
     assert_eq!(enrollments.len(), 2);
     let first = &enrollments[0].0;
     let replacement = &enrollments[1].0;
+    let mut first_persona = first_persona;
+    let mut saved_persona = saved_persona;
+    for persona in [&mut first_persona, &mut saved_persona] {
+        persona
+            .config
+            .insert("MACRO_COMPUTER_ID".to_owned(), id.to_string());
+        persona
+            .config
+            .insert("MACRO_TEAM_ID".to_owned(), recreated.team_id.to_string());
+    }
     assert_eq!(first.persona, Some(first_persona));
     assert_eq!(replacement.persona, Some(saved_persona));
     assert_eq!(replacement.computer_id, id);

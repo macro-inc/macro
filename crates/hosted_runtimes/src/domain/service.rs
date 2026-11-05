@@ -210,10 +210,18 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     /// computer id at once; [`Self::status`] reports setup progress.
     #[tracing::instrument(
         skip(self, request),
-        fields(team_id = %request.team_id, size = request.size.as_ref(), computer_id, comped = matches!(&request.billing, PurchaseBilling::Comped { .. })),
+        fields(team_id = %request.team_id, size = request.size.as_ref(), computer_id, billing_kind, comped = matches!(&request.billing, PurchaseBilling::Comped { .. })),
         err
     )]
     pub async fn purchase(&self, request: PurchaseRequest) -> Result<Uuid, ComputerError> {
+        tracing::Span::current().record(
+            "billing_kind",
+            if matches!(request.billing, PurchaseBilling::Comped { .. }) {
+                "comped"
+            } else {
+                "stripe"
+            },
+        );
         if matches!(request.billing, PurchaseBilling::Comped { .. })
             && !request.extra_items.is_empty()
         {
@@ -401,7 +409,6 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
 
     /// Carry out due billing effects. One failing effect is retried later
     /// and never blocks the others.
-    #[tracing::instrument(skip(self), err)]
     pub async fn run_billing_effects(&self) -> Result<usize, ComputerError> {
         let now = self.clock.now();
         let effects = self
@@ -417,6 +424,23 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         let count = effects.len();
 
         for pending in effects {
+            use tracing::Instrument;
+            let span = tracing::info_span!("computer.billing.effect", computer_id = %pending.computer_id, effect_id = pending.id, attempts = i64::from(pending.attempts), otel.status_code = tracing::field::Empty);
+            let computer = self
+                .repo
+                .get(pending.computer_id)
+                .await
+                .inspect_err(|_| {
+                    span.record("otel.status_code", "ERROR");
+                })
+                .map_err(internal)?;
+            super::telemetry::attach(
+                &span,
+                computer
+                    .as_ref()
+                    .and_then(|computer| computer.state.provision_traceparent.as_deref()),
+            );
+            async {
             let confirming_payment = matches!(pending.effect, Effect::ConfirmPayment { .. });
             let outcome = match pending.effect {
                 Effect::ConfirmPayment { extra_items } => {
@@ -446,6 +470,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
                     .await
                     .map_err(internal)?,
                 Err(error) => {
+                    super::telemetry::effect_failed("billing");
                     tracing::warn!(effect_id = pending.id, error = ?error, "billing effect failed");
                     if confirming_payment && pending.attempts >= 10 {
                         tracing::error!(computer_id = %pending.computer_id, effect_id = pending.id, attempts = pending.attempts, error = ?error, "computer payment unresolved");
@@ -459,6 +484,8 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
                         .map_err(internal)?;
                 }
             }
+            Ok::<(), ComputerError>(())
+            }.instrument(span.clone()).await.inspect_err(|_| { span.record("otel.status_code", "ERROR"); })?;
         }
         Ok(count)
     }

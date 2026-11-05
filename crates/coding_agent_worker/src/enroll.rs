@@ -188,6 +188,13 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
     }
 
     let enrollment = read_enrollment(&options.from, &paths).await?;
+    hosted_runtimes::domain::telemetry::resume(
+        enrollment
+            .persona
+            .as_ref()
+            .and_then(|persona| persona.config.get("BRAIN_PROVISION_TRACEPARENT"))
+            .map(String::as_str),
+    );
     tracing::Span::current().record(
         "computer_id",
         tracing::field::display(enrollment.computer_id),
@@ -218,9 +225,20 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
             .context(format!("could not create {}", parent.display()))?;
     }
     install_token_store(&options.config, &paths, host)?;
+    if let Some(parent) = enrollment
+        .persona
+        .as_ref()
+        .and_then(|persona| persona.config.get("BRAIN_PROVISION_TRACEPARENT"))
+    {
+        write_file(
+            &paths.at(crate::telemetry::PROVISION_PARENT_PATH),
+            parent,
+            0o644,
+        )?;
+    }
     std::fs::write(&marker, enrollment.computer_id.to_string())
         .context(format!("could not write {}", marker.display()))?;
-    tracing::info!(harness_name = %enrollment.name, "enrolled");
+    tracing::info!("enrolled");
     Ok(())
 }
 

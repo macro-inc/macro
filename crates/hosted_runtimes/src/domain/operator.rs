@@ -131,7 +131,6 @@ where
     }
 
     /// Carry out due fleet effects; returns how many ran.
-    #[tracing::instrument(skip(self), err)]
     pub async fn run_fleet_effects(&self) -> Result<usize, ComputerError> {
         self.host_id().await?;
         let now = self.clock.now();
@@ -143,17 +142,31 @@ where
         let count = effects.len();
 
         for pending in effects {
-            self.run_one(pending).await?;
+            use tracing::Instrument;
+            let computer = self.computer(pending.computer_id).await?;
+            let span = tracing::info_span!("computer.fleet.work", computer_id = %pending.computer_id, team_id = %computer.team_id, size = computer.size.as_ref());
+            super::telemetry::attach(&span, computer.state.provision_traceparent.as_deref());
+            self.run_one(pending).instrument(span).await?;
         }
         Ok(count)
     }
 
     #[tracing::instrument(
         skip(self, pending),
-        fields(effect_id = pending.id, computer_id = %pending.computer_id, attempts = pending.attempts),
+        fields(effect_id = pending.id, computer_id = %pending.computer_id, attempts = i64::from(pending.attempts), effect, team_id, size, otel.status_code),
         err
     )]
     async fn run_one(&self, pending: PendingEffect) -> Result<(), ComputerError> {
+        let computer = self.computer(pending.computer_id).await?;
+        super::telemetry::resume(computer.state.provision_traceparent.as_deref());
+        tracing::Span::current().record("team_id", tracing::field::display(computer.team_id));
+        tracing::Span::current().record("size", computer.size.as_ref());
+        let phase = serde_json::to_value(&pending.effect).map_err(internal)?;
+        let phase = phase
+            .get("effect")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("unknown");
+        tracing::Span::current().record("effect", phase);
         match self.carry_out(pending.computer_id, &pending.effect).await {
             Ok(follow_up) => {
                 self.repo
@@ -168,6 +181,7 @@ where
                 }
             }
             Err(error) if pending.attempts + 1 < MAX_EFFECT_ATTEMPTS => {
+                super::telemetry::effect_failed(phase);
                 tracing::warn!(error = ?error, "computer effect failed; retrying");
                 let backoff = Duration::seconds(10 * 2_i64.pow(pending.attempts));
                 self.repo
@@ -176,6 +190,7 @@ where
                     .map_err(internal)?;
             }
             Err(error) => {
+                super::telemetry::effect_failed(phase);
                 tracing::error!(error = ?error, "computer effect failed for good");
                 self.repo
                     .complete_effect(pending.id)
@@ -226,7 +241,20 @@ where
                     device_secret: pairing.device_secret,
                     name: computer.name.clone(),
                     service_url_overrides: self.defaults.service_url_overrides.clone(),
-                    persona: computer.persona.clone(),
+                    persona: computer.persona.clone().map(|mut persona| {
+                        if let Some(parent) = super::telemetry::traceparent() {
+                            persona
+                                .config
+                                .insert("BRAIN_PROVISION_TRACEPARENT".to_owned(), parent);
+                        }
+                        persona
+                            .config
+                            .insert("MACRO_COMPUTER_ID".to_owned(), computer.id.to_string());
+                        persona
+                            .config
+                            .insert("MACRO_TEAM_ID".to_owned(), computer.team_id.to_string());
+                        persona
+                    }),
                 };
                 self.fleet
                     .create(&computer, &enrollment, *start)
@@ -289,7 +317,6 @@ where
     }
 
     /// Fire due timers; returns how many fired.
-    #[tracing::instrument(skip(self), err)]
     pub async fn fire_timers(&self) -> Result<usize, ComputerError> {
         self.host_id().await?;
         let now = self.clock.now();
@@ -374,7 +401,6 @@ where
     }
 
     /// Freeze running session-only computers quiet for [`IDLE_AFTER`].
-    #[tracing::instrument(skip(self, activity), err)]
     pub async fn sleep_idle<Activity: SessionActivity>(
         &self,
         activity: &Activity,
@@ -419,6 +445,7 @@ where
             return Ok(false);
         };
         let computer = self.computer(computer_id).await?;
+        super::telemetry::resume(computer.state.provision_traceparent.as_deref());
         let now = self.clock.now();
         self.repo
             .set_harness(computer.id, harness_id)
@@ -432,6 +459,11 @@ where
             .apply(computer.id, Event::MacrodConnected, now)
             .await
             .map_err(internal)?;
+        if computer.enrolled_at.is_none() {
+            super::telemetry::provisioned(
+                (now - computer.created_at).num_milliseconds() as f64 / 1000.0,
+            );
+        }
         // The pairing is claimed, so the code is useless; remove it anyway.
         self.fleet
             .clear_enrollment(computer.id)

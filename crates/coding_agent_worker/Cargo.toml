@@ -43,6 +43,10 @@ macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 nom = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["trace", "rt-tokio"] }
+opentelemetry-otlp = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 ratatui = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 rootcause = { workspace = true }

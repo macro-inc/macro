@@ -34,6 +34,7 @@ mod repository;
 mod runtime;
 mod self_knowledge;
 mod service;
+mod telemetry;
 mod trigger;
 mod tui;
 mod turns;
@@ -200,9 +201,7 @@ async fn main() -> ExitCode {
             workspace,
         }) => {
             // stdout is the event protocol: logs go to stderr, like herdr-acp.
-            tracing_subscriber::fmt()
-                .with_writer(std::io::stderr)
-                .init();
+            let _telemetry = telemetry::install();
             return match service::run(service::ServiceOptions {
                 ignore_stdin_eof,
                 config,
@@ -227,9 +226,7 @@ async fn main() -> ExitCode {
             agent,
             root,
         }) => {
-            tracing_subscriber::fmt()
-                .with_writer(std::io::stderr)
-                .init();
+            let _telemetry = telemetry::install();
             return match enroll::run_enroll(enroll::EnrollOptions {
                 from,
                 config,

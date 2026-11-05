@@ -156,3 +156,6 @@ with its own Running computer may use `/brain/anthropic`; Frozen wake must finis
 before authorization succeeds. Ordinary user keys never qualify. The harness
 service shares session admission, model allowlisting and metering, attributing
 usage to the agent and its current team.
+
+Trace invite phases under the caller, record `billing_kind` as stripe/comped,
+and hash email-bearing agent user IDs with `macro_user_id::telemetry_id`.

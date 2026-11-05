@@ -9,3 +9,6 @@ pub mod operator;
 pub mod ports;
 pub mod service;
 pub mod size;
+
+/// Trace propagation and lifecycle measurements.
+pub mod telemetry;
