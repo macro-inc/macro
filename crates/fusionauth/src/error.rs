@@ -84,8 +84,10 @@ impl OAuth2TokenError {
     /// Whether the grant itself (code or refresh token) was refused as
     /// invalid, expired, or revoked. Only the user signing in again fixes
     /// that; every other code means the request or our client is wrong.
+    /// FusionAuth answers a dead authorization code with `invalid_request` and
+    /// the reason `auth_code_not_found`, not with `invalid_grant`.
     pub fn is_invalid_grant(&self) -> bool {
-        self.error == "invalid_grant"
+        self.error == "invalid_grant" || self.error_reason.as_deref() == Some("auth_code_not_found")
     }
 }
 

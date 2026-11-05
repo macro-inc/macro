@@ -128,7 +128,8 @@ async fn authorization_code_grant_reports_a_spent_code_as_invalid_grant() {
         .and(path("/oauth2/token"))
         .and(body_string_contains("grant_type=authorization_code"))
         .respond_with(ResponseTemplate::new(400).set_body_json(json!({
-            "error": "invalid_grant",
+            "error": "invalid_request",
+            "error_description": "Invalid Authorization Code",
             "error_reason": "auth_code_not_found",
         })))
         .expect(1)

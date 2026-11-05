@@ -53,7 +53,9 @@ passwordless/password flows against the FusionAuth HTTP API.
   credentials by name.
 - The OAuth2 token endpoint (`src/oauth.rs`) turns an RFC 6749 error body on
   400/401 into `OAuth2TokenRefused`; callers check `is_invalid_grant()` to tell
-  a dead code or refresh token from an outage.
+  a dead code or refresh token from an outage. A dead refresh token is
+  `invalid_grant`, but a dead code is `invalid_request` with the reason
+  `auth_code_not_found`.
 - `DELETE /api/jwt/refresh` takes its token as a JSON body; a form body is
   refused with `[InvalidContentType]`.
 - Calls to Google or Microsoft name the provider:

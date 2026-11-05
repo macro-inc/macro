@@ -948,7 +948,7 @@ async fn callback_with_failing_code_exchange(failure: fn() -> UpstreamGrantError
 #[tokio::test]
 async fn callback_separates_a_refused_code_from_an_upstream_fault() {
     let refused = callback_with_failing_code_exchange(|| UpstreamGrantError::InvalidGrant {
-        detail: "invalid_grant (auth_code_not_found)".to_owned(),
+        detail: "invalid_request (auth_code_not_found)".to_owned(),
     })
     .await;
     assert_eq!(refused.status, StatusCode::BAD_REQUEST);

@@ -812,7 +812,7 @@ async fn a_failed_upstream_refresh_keeps_its_cause() {
 async fn a_refused_upstream_code_fails_the_callback_without_issuing_a_code() {
     let harness = Harness::with_provider(FakeOAuthProvider::new().failing_code_exchange(|| {
         UpstreamGrantError::InvalidGrant {
-            detail: "invalid_grant (auth_code_not_found)".to_owned(),
+            detail: "invalid_request (auth_code_not_found)".to_owned(),
         }
     }));
     let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
