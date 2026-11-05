@@ -31,6 +31,10 @@ fn contact_reads_use_both_covering_indexes_without_a_sort_or_limit() {
             plan.contains("COVERING INDEX records_contacts_cover_idx"),
             "{plan}"
         );
+        assert!(
+            plan.contains("records_contacts_cover_idx (__typename=? AND id=?)"),
+            "{plan}"
+        );
         assert!(!plan.contains("TEMP B-TREE"), "{plan}");
         assert!(!sql.contains("LIMIT"));
     }
