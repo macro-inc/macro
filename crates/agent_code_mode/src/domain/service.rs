@@ -256,6 +256,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ListNotifications"
                 | "MarkNotificationsDone"
                 | "MarkNotificationsSeen"
+                // muteNotifications()/unmuteNotifications() on item handles.
+                | "MuteNotifications"
                 | "ListTeamMembers"
                 | "CreateForm"
                 | "EditForm"
