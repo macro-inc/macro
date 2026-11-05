@@ -310,6 +310,12 @@ export function NotificationsView(props: NotificationsViewProps) {
     if (!item || !isInboxNotification(item)) return undefined;
     return rowsById().get(isInboxStackItem(item) ? item.rowId : item.id);
   };
+  /** An unfolded notification's place, by its item id. */
+  const stackItemOf = (id: string) =>
+    listItems().find(
+      (item): item is InboxStackItemPlace =>
+        isInboxStackItem(item) && item.id === id
+    );
   const notificationOf = (item: InboxListItem | undefined) =>
     item && isInboxStackItem(item)
       ? rowOf(item)?.content.notifications.find(
@@ -416,6 +422,34 @@ export function NotificationsView(props: NotificationsViewProps) {
       failed: (decision) => toast.failure(decisionFailure(decision)),
     },
   });
+
+  /**
+   * Complete one notification of a stack. The stack's last one completes the
+   * row. An open preview of it moves to the stack's next notification, or its
+   * previous one when it was the last.
+   */
+  const markNotificationDone = (
+    row: NotificationInboxRow,
+    notification: UnifiedNotification
+  ) => {
+    if (row.count <= 1) {
+      markDone([row]);
+      return;
+    }
+    if (selection.selectedNotification()?.id === notification.id) {
+      const shown = row.content.notifications;
+      const index = shown.findIndex(
+        (candidate) => candidate.id === notification.id
+      );
+      const next = shown[index + 1] ?? shown[index - 1];
+      if (next) preview(row, next);
+      else preview(row);
+    }
+    fireAndForget(
+      inbox.markNotificationDone(row, notification),
+      'notifications-inbox'
+    );
+  };
 
   const markDone = (done: readonly NotificationInboxRow[]) => {
     for (const row of done) stacks.collapse(row.id);
@@ -528,9 +562,12 @@ export function NotificationsView(props: NotificationsViewProps) {
     condition: () => panel.isPanelActive() && list.focus.item() !== undefined,
     keyDownHandler: (event) => {
       if (event?.repeat) return true;
-      const row = rowOf(list.focus.item());
+      const item = list.focus.item();
+      const row = rowOf(item);
       if (!row) return false;
-      markDone([row]);
+      const notification = notificationOf(item);
+      if (notification) markNotificationDone(row, notification);
+      else markDone([row]);
       return true;
     },
   });
@@ -558,14 +595,11 @@ export function NotificationsView(props: NotificationsViewProps) {
     onCleanup(() => cancelAnimationFrame(frame));
   });
 
-  /** On touch, a left swipe marks the row done. */
-  const SwipeToDone = (swipe: {
-    row: NotificationInboxRow;
-    children: JSX.Element;
-  }) => (
+  /** On touch, a left swipe marks the row or stack notification done. */
+  const SwipeToDone = (swipe: { id: string; children: JSX.Element }) => (
     <Show when={isTouchDevice()} fallback={swipe.children}>
       <SwipableRow
-        id={swipe.row.id}
+        id={swipe.id}
         swipeLeftColor="bg-success"
         swipeLeftRevealedComponent={<CheckIcon class="size-8 text-surface" />}
       >
@@ -584,7 +618,7 @@ export function NotificationsView(props: NotificationsViewProps) {
           selection.selectedNotification() && stacks.isExpanded(card.row().id)
         ));
     return (
-      <SwipeToDone row={card.row()}>
+      <SwipeToDone id={card.row().id}>
         <NotificationRow
           id={card.row().id}
           icon={
@@ -648,38 +682,41 @@ export function NotificationsView(props: NotificationsViewProps) {
       entry.row().content.notifications.at(-1)?.id ===
       entry.place.notificationId;
     return (
-      <NotificationStackItem
-        id={entry.place.id}
-        icon={
-          <InboxSenderAvatar
-            notification={entry.notification()}
-            kind={inboxCardKind(entry.row())}
-            entity={entry.row().content.entity}
-            compact
-          />
-        }
-        by={item().by}
-        text={item().text}
-        time={formatTimestamp(item().at)}
-        last={isLast()}
-        more={
-          isLast()
-            ? entry.row().count - entry.row().content.notifications.length
-            : 0
-        }
-        unseen={entry.row().unseen}
-        highlighted={
-          list.focus.key() === entry.place.id ||
-          selection.selectedNotification()?.id === entry.place.notificationId
-        }
-        onHover={() => list.focus.set(entry.place.id, { reason: 'hover' })}
-        onClick={(event) =>
-          list.activate.key(entry.place.id, {
-            reason: 'pointer',
-            metadata: { event },
-          })
-        }
-      />
+      <SwipeToDone id={entry.place.id}>
+        <NotificationStackItem
+          id={entry.place.id}
+          icon={
+            <InboxSenderAvatar
+              notification={entry.notification()}
+              kind={inboxCardKind(entry.row())}
+              entity={entry.row().content.entity}
+              compact
+            />
+          }
+          by={item().by}
+          text={item().text}
+          time={formatTimestamp(item().at)}
+          last={isLast()}
+          more={
+            isLast()
+              ? entry.row().count - entry.row().content.notifications.length
+              : 0
+          }
+          unseen={entry.row().unseen}
+          highlighted={
+            list.focus.key() === entry.place.id ||
+            selection.selectedNotification()?.id === entry.place.notificationId
+          }
+          onHover={() => list.focus.set(entry.place.id, { reason: 'hover' })}
+          onClick={(event) =>
+            list.activate.key(entry.place.id, {
+              reason: 'pointer',
+              metadata: { event },
+            })
+          }
+          onDone={() => markNotificationDone(entry.row(), entry.notification())}
+        />
+      </SwipeToDone>
     );
   };
 
@@ -843,10 +880,21 @@ export function NotificationsView(props: NotificationsViewProps) {
           />
           <SwipableRowProvider
             container={viewport}
-            canSwipeLeft={(rowId) => rows().some((row) => row.id === rowId)}
-            onSwipeLeft={(rowId) => {
-              const row = rows().find((candidate) => candidate.id === rowId);
-              if (row) markDone([row]);
+            canSwipeLeft={(id) =>
+              rowsById().has(id) || stackItemOf(id) !== undefined
+            }
+            onSwipeLeft={(id) => {
+              const row = rowsById().get(id);
+              if (row) {
+                markDone([row]);
+                return;
+              }
+              const place = stackItemOf(id);
+              const stackRow = rowOf(place);
+              const notification = notificationOf(place);
+              if (stackRow && notification) {
+                markNotificationDone(stackRow, notification);
+              }
             }}
           >
             <div

@@ -1,4 +1,5 @@
 import {
+  MarkNotificationInboxNotificationDoneDocument,
   MarkNotificationInboxRowsDoneDocument,
   MarkNotificationInboxRowsSeenDocument,
   type NotificationInboxPatchFieldsFragment,
@@ -25,6 +26,34 @@ export async function markInboxRowsDone(
     throw result.error ?? new Error('Marking inbox rows done failed');
   }
   return { undoToken: payload.undoToken };
+}
+
+/**
+ * Mark one notification of a row done, with the hidden ones about the same
+ * message; resolves to the row's group in `scope` and the token that reverses
+ * exactly this done.
+ */
+export async function markInboxNotificationDone(
+  client: Client,
+  rowId: string,
+  notificationId: string,
+  scope: NotificationInboxScopeInput
+): Promise<{
+  patches: NotificationInboxPatchFieldsFragment[];
+  undoToken: string;
+}> {
+  const result = await client
+    .mutation(MarkNotificationInboxNotificationDoneDocument, {
+      input: { rowId, notificationId, scope },
+    })
+    .toPromise();
+  const payload = result.data?.markNotificationInboxNotificationDone;
+  if (result.error || !payload) {
+    throw (
+      result.error ?? new Error('Marking an inbox notification done failed')
+    );
+  }
+  return payload;
 }
 
 /** Reverse one done; resolves to the restored entries' places in `scope`. */

@@ -52,7 +52,7 @@ breadcrumb that clears the preview. Previewing marks the row seen, including
 notifications the row hides, and drops its unread dot. With a preview open, `j`/`k` move it along the
 list and through unfolded notifications; `l` or the right arrow unfolds the focused
 stack and the left arrow folds it from anywhere inside it. Opening a notification
-marks its whole row seen, and `e` on one marks its whole stack done. Choosing what's
+marks its whole row seen. Each small card has its own **Mark done** on hover, or `e` while it is focused, or a left swipe on touch: it completes that notification and the ones about the same message, the stack counts one less, and the stack's last one completes the row; a preview of it moves to the stack's next notification. Undo works as for a row. Choosing what's
 shown again re-aims it. A calendar event or join request opens the Calendar
 beside the list at the event, at `/app/notifications/calendar/<period>` with the
 event in `sN.calendar.*`, under the same breadcrumb; the list keeps its place.

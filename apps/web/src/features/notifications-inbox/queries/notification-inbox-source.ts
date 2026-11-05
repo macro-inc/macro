@@ -1,6 +1,7 @@
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid/create-urql-infinite-query';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
+import type { UnifiedNotification } from '@notifications/types';
 import { createLiveAttentionFeed } from '@queries/attention-feed/live-attention-feed';
 import {
   NotificationInboxDocument,
@@ -22,6 +23,7 @@ import {
   type RowMarks,
   settleRowMarks,
   unmarkRows,
+  withoutDoneNotifications,
   withoutDoneRows,
   withSeenRows,
 } from '../core/inbox-row';
@@ -31,6 +33,7 @@ import {
   orderInboxRows,
 } from './notification-inbox-groups';
 import {
+  markInboxNotificationDone,
   markInboxRowsDone,
   markInboxRowsSeen,
   undoInboxRowsDone,
@@ -130,6 +133,18 @@ export function createNotificationInboxSource(
 
   const [done, setDone] = createSignal<RowMarks>(new Map());
   const [seen, setSeen] = createSignal<RowMarks>(new Map());
+  // Notifications done one at a time. Once the server's row no longer shows
+  // one, hiding it does nothing, so it needs no settling.
+  const [doneNotifications, setDoneNotifications] = createSignal<
+    ReadonlySet<string>
+  >(new Set());
+  const hideNotification = (id: string, hidden: boolean) =>
+    setDoneNotifications((current) => {
+      const next = new Set(current);
+      if (hidden) next.add(id);
+      else next.delete(id);
+      return next;
+    });
   const ordered = createMemo(() =>
     orderInboxRows(query.data?.groups ?? [], !query.hasNextPage)
   );
@@ -180,7 +195,13 @@ export function createNotificationInboxSource(
   const rows = createMemo(() =>
     query.data === undefined
       ? undefined
-      : withSeenRows(withoutDoneRows(ordered(), done()), seen())
+      : withSeenRows(
+          withoutDoneNotifications(
+            withoutDoneRows(ordered(), done()),
+            doneNotifications()
+          ),
+          seen()
+        )
   );
 
   /** Patches for a filter that has since changed would add rows it hides. */
@@ -229,6 +250,48 @@ export function createNotificationInboxSource(
     };
   };
 
+  const markNotificationDone = async (
+    row: NotificationInboxRow,
+    notification: UnifiedNotification
+  ) => {
+    const client = options.client();
+    const scope = scopeInput();
+    hideNotification(notification.id, true);
+    const restoreNotifications = options.overrideNotificationsDone?.([
+      notification.id,
+    ]);
+    let done: Awaited<ReturnType<typeof markInboxNotificationDone>>;
+    try {
+      done = await markInboxNotificationDone(
+        client,
+        row.id,
+        notification.id,
+        scope
+      );
+    } catch (error) {
+      restoreNotifications?.();
+      hideNotification(notification.id, false);
+      throw error;
+    }
+    revalidate(client);
+    applyIfCurrent(scope, done.patches);
+    return {
+      undo: async () => {
+        // The filter may have changed since the done; restore into this one.
+        const undoScope = scopeInput();
+        const patches = await undoInboxRowsDone(
+          client,
+          done.undoToken,
+          undoScope
+        );
+        restoreNotifications?.();
+        hideNotification(notification.id, false);
+        revalidate(client);
+        applyIfCurrent(undoScope, patches);
+      },
+    };
+  };
+
   const markSeen = async (targets: readonly NotificationInboxRow[]) => {
     const unseen = targets.filter((row) => row.unseen);
     if (unseen.length === 0) return;
@@ -258,6 +321,7 @@ export function createNotificationInboxSource(
     },
     refresh: live.refetch,
     markDone,
+    markNotificationDone,
     markSeen,
   };
 }
