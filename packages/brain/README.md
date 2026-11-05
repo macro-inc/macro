@@ -70,7 +70,7 @@ The repo server (`crates/agent_git`) embeds `template/` to seed a new repo: `OPE
 `{{personality}}` and `{{creator}}` for the server to fill), `prompts/`,
 `config/{jev,events,budget}.json`, `memory/self.json`, exact-version `brain.lock`, agent-owned `brain.ts`,
 `docs/brain-api.md` and
-the server's `template/gitignore`. `{{creator}}` is the creating admin's Macro
+the canonical template's `.gitignore`. `{{creator}}` is the creating admin's Macro
 user ID, so rule changes can be checked against message sender IDs.
 `history/`, `log/`, `cache/` (lanes, spend ledger, heartbeat
 state, Claude's config) and `work/` stay on the computer.
