@@ -268,6 +268,47 @@ pub async fn complete_sender(
     Ok(())
 }
 
+/// What the account's contact store calls someone: the WhatsApp name it
+/// last saw for either address (live messages, push-name history syncs),
+/// else the owner's address-book name, else a verified business name.
+pub async fn contact_name(
+    contacts: &dyn ContactStore,
+    identity: &Identity,
+) -> Result<Option<String>, StoreError> {
+    let mut found = vec![];
+    for jid in [
+        Some(identity.jid.as_str()),
+        identity.alternate_jid.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Ok(jid) = jid.parse::<Jid>()
+            && let Some(contact) = contacts.get_contact(&jid).await?
+        {
+            found.push(contact);
+        }
+    }
+    Ok(best_contact_name(&found))
+}
+
+/// The best name among contact records: own WhatsApp name, then address
+/// book, then business name. `-` is WhatsApp's no-name.
+fn best_contact_name(contacts: &[ContactInfo]) -> Option<String> {
+    let pick = |name: fn(&ContactInfo) -> &str| {
+        contacts
+            .iter()
+            .map(name)
+            .map(str::trim)
+            .find(|name| !name.is_empty() && *name != "-")
+            .map(str::to_owned)
+    };
+    pick(|contact| &contact.push_name)
+        .or_else(|| pick(|contact| &contact.full_name))
+        .or_else(|| pick(|contact| &contact.first_name))
+        .or_else(|| pick(|contact| &contact.business_name))
+}
+
 fn person(jid: &Jid) -> Option<String> {
     (!jid.is_empty()).then(|| jid.to_non_ad().to_string())
 }

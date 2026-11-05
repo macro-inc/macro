@@ -1,4 +1,4 @@
-use super::mutations::{IssuedToken, NoOpenClients, OWNER, connected_mailbox};
+use super::mutations::{IssuedToken, NoOpenClients, OWNER, connected_mailbox, linked_mailbox};
 use super::*;
 use calendar_events::outbound::pg::PgCalendarRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -220,4 +220,31 @@ async fn a_stored_event_that_turns_unreadable_leaves_the_calendar(pool: PgPool) 
         occurrence_is_member(&pool, "AAMkChanged").await,
         "a later tombstone for it still resolves"
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_mailbox_in_a_time_zone_macro_cannot_map_still_discovers_and_syncs(pool: PgPool) {
+    let (server, api) = setup().await;
+    let repo = linked_mailbox(
+        &pool,
+        &server,
+        mailbox_settings(Some("tzone://Microsoft/Custom")),
+        json!([default_calendar("AAMkCalendar")]),
+    )
+    .await;
+    let sync = OutlookCalendarSync::new(repo, api, IssuedToken, NoOpenClients);
+    serve_delta(&server, None, &[single("AAMkReadable")], "complete").await;
+    serve_event(&server, upcoming("AAMkReadable")).await;
+    // Discovery, then the calendar's page, its event and the finish.
+    sync_until_idle(&sync).await;
+
+    assert_synced(&pool).await;
+    assert_eq!(imported(&pool).await, vec!["AAMkReadable"]);
+    let time_zone = sqlx::query_scalar!(
+        "SELECT time_zone FROM calendars WHERE provider_calendar_id = 'AAMkCalendar'"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(time_zone, None, "the calendar's zone is unknown, not UTC");
 }

@@ -91,17 +91,22 @@ function VisibilityControl(props: RecordVisibilityActionProps) {
         component={props.grouped ? ButtonGroup.Button : Button}
         ref={button}
         data-crm-visibility-record={props.recordId}
-        variant={props.hidden ? 'link' : 'ghost'}
+        variant={props.hidden ? 'secondary' : 'ghost'}
+        finish={props.hidden ? 'flat' : undefined}
         size={
           props.hidden
-            ? 'sm'
+            ? 'xs'
             : isTouchDevice()
               ? 'icon-lg'
               : props.grouped
                 ? 'icon-sm'
                 : 'icon-md'
         }
-        class={props.hidden ? 'touch:min-h-11' : undefined}
+        class={
+          props.hidden
+            ? "focus-visible:ring-2 focus-visible:ring-accent/20 touch:min-h-6 touch:min-w-11 touch:my-2.5 touch:before:absolute touch:before:-inset-x-px touch:before:top-1/2 touch:before:h-11 touch:before:-translate-y-1/2 touch:before:content-['']"
+            : undefined
+        }
         aria-label={label()}
         aria-describedby={!props.canManage ? permissionHintId : undefined}
         tooltip={
@@ -118,7 +123,7 @@ function VisibilityControl(props: RecordVisibilityActionProps) {
           when={props.hidden}
           fallback={<ArchiveIcon class="size-4 touch:size-6" />}
         >
-          <UndoIcon class="size-4" />
+          <UndoIcon class="size-3" />
         </Show>
         <Show when={props.hidden}>{label()}</Show>
       </Dynamic>
