@@ -5,6 +5,7 @@ on:
   pull_request:
     branches:
     - main
+    - 'synoet/ci-int-base*'
     paths:
     - infra/**
     - .github/kafka-cluster-topics.json
