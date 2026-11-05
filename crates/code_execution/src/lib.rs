@@ -7,4 +7,4 @@
 
 pub mod domain;
 pub mod outbound;
-// ci-bench-token nxt-med-1
+// ci-bench-token nxt-med-2
