@@ -772,7 +772,7 @@ export const listBotsResponseItem = zod
     has_agent: zod
       .boolean()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
       ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -815,7 +815,7 @@ export const createBotBody = zod
       .boolean()
       .nullish()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.'
       ),
     name: zod.string().describe('Display name.'),
     team_id: zod
@@ -951,7 +951,7 @@ export const getBotResponse = zod
     has_agent: zod
       .boolean()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
       ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -1004,7 +1004,7 @@ export const patchBotBody = zod
       .boolean()
       .nullish()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.'
       ),
     name: zod.string().nullish().describe('Display name.'),
   })
@@ -1024,7 +1024,7 @@ export const patchBotResponse = zod
     has_agent: zod
       .boolean()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
       ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -4377,7 +4377,7 @@ export const listChannelBotsResponseItem = zod
     has_agent: zod
       .boolean()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
       ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
