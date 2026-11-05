@@ -65,7 +65,7 @@ export function ToolCard(props: ToolCardProps) {
             as="span"
             class="min-w-0 max-w-full truncate"
           >
-            <TextShimmer text={props.title} active={active()} truncate />
+            <TextShimmer text={props.title} active={active()} />
           </Tooltip>
         ) : (
           props.title

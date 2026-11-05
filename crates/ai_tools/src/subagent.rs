@@ -67,12 +67,6 @@ pub struct SubagentResponse {
 )]
 pub struct Subagent {
     #[schemars(
-        description = "A short (3-6 word) summary of the task, shown to the user while the subagent works, e.g. \"List open pull requests\". Always set it."
-    )]
-    // Optional only so calls saved before it existed still parse for display;
-    // the UI reads it from the call's input.
-    pub description: Option<String>,
-    #[schemars(
         description = "A detailed description of the task for the subagent to complete. Be specific about what information to find or what action to take."
     )]
     pub task: String,
@@ -87,8 +81,7 @@ impl ToolAnnotated for Subagent {
 impl AsyncTool<SubagentContext> for Subagent {
     type Output = SubagentResponse;
 
-    // Whether the model named its work, not the words: those are prompt content.
-    #[tracing::instrument(skip_all, fields(subagent.described = self.description.is_some()), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn call(
         &self,
         service_context: ServiceContext<SubagentContext>,

@@ -70,7 +70,8 @@ service with Axum, agent-tool and Postgres adapters.
   never silently drop data outside an explicit delete.
 - Filing in a folder (`database_entities.project_id`, `MoveEntity`): owner
   only; the repository swaps the folder-inherited `entity_access` rows in the
-  same transaction (`entity_access_db_utils::project_grants`). Purging the
+  same transaction (`entity_access_db_utils::project_grants`) and bumps the
+  old and new folder's `updatedAt` (`project_modified`). Purging the
   folder returns the database to the root; trashing it does not trash the
   database, as with email threads.
 - Sharing (`src/domain/sharing.rs`): channel grants and a team share; no share
