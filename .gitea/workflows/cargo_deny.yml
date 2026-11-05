@@ -3,13 +3,6 @@
 name: cargo deny check
 on:
   pull_request:
-    types:
-    - opened
-    - synchronize
-    - reopened
-    - ready_for_review
-    branches:
-    - main
     paths:
     - Cargo.toml
     - crates/**/Cargo.toml
@@ -18,6 +11,8 @@ on:
     - Cargo.lock
     - deny.toml
     - .github/workflows/cargo_deny.yml
+    branches:
+    - main
 jobs:
   cargo-deny:
     runs-on: linux-ci

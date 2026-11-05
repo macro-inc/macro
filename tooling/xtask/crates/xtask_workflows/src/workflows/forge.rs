@@ -4,7 +4,7 @@
 //! Gitea reads `.gitea/workflows/` instead of `.github/workflows/` when the
 //! first exists, so this allowlist is everything that can run there. Deploy,
 //! release, and publish workflows are left out on purpose, as are native builds
-//! that need macOS or Windows runners.
+//! that need macOS or Windows runners and checks that call GitHub's own API.
 
 use anyhow::{Context, Result, ensure};
 use serde_yaml::Value;
@@ -55,10 +55,6 @@ pub const PORTED: &[Ported] = &[
         dropped_jobs: &[],
     },
     Ported {
-        file_name: "pr-privacy-check.yml",
-        dropped_jobs: &[],
-    },
-    Ported {
         file_name: "sdk-check.yml",
         dropped_jobs: &[],
     },
@@ -70,9 +66,19 @@ pub const PORTED: &[Ported] = &[
 ];
 
 /// Rewrite one rendered GitHub workflow for the forge: its runner label, no
-/// Namespace cache volumes (the runner keeps its own), and none of `dropped`.
+/// Namespace cache volumes (the runner keeps its own), none of `dropped`, and no
+/// `types` filter on pull requests. Gitea does not match `synchronize` there, so
+/// a filtered workflow would never re-run on a push; the default activity types
+/// are what these workflows want.
 pub fn port(yaml: &str, dropped: &[&str]) -> Result<String> {
     let mut root: Value = serde_yaml::from_str(yaml).context("parsing workflow")?;
+    if let Some(pull_request) = root
+        .get_mut("on")
+        .and_then(|on| on.get_mut("pull_request"))
+        .and_then(Value::as_mapping_mut)
+    {
+        pull_request.remove("types");
+    }
     let jobs = root
         .get_mut("jobs")
         .and_then(Value::as_mapping_mut)
@@ -111,6 +117,10 @@ mod test {
     use super::*;
 
     const WORKFLOW: &str = r#"
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [main]
 jobs:
   build:
     needs: [paths, ios]
@@ -133,6 +143,8 @@ jobs:
         assert_eq!(build["needs"].as_sequence().unwrap().len(), 1);
         assert_eq!(build["steps"].as_sequence().unwrap().len(), 1);
         assert!(ported["jobs"].get("ios").is_none());
+        assert!(ported["on"]["pull_request"].get("types").is_none());
+        assert!(ported["on"]["pull_request"].get("branches").is_some());
     }
 
     #[test]

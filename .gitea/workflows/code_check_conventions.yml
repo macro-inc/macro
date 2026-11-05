@@ -3,11 +3,6 @@
 name: conventions code check
 on:
   pull_request:
-    types:
-    - opened
-    - synchronize
-    - reopened
-    - ready_for_review
     branches:
     - main
 permissions:

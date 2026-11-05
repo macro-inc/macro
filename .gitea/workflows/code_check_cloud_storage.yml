@@ -10,11 +10,6 @@ env:
   RUSTFLAGS: -C link-arg=-fuse-ld=lld
 on:
   pull_request:
-    types:
-    - opened
-    - synchronize
-    - reopened
-    - ready_for_review
     branches:
     - main
 jobs:

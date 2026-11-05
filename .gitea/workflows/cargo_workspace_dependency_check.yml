@@ -3,13 +3,6 @@
 name: cargo workspace dependency check
 on:
   pull_request:
-    types:
-    - opened
-    - synchronize
-    - reopened
-    - ready_for_review
-    branches:
-    - main
     paths:
     - Cargo.toml
     - crates/**/Cargo.toml
@@ -22,6 +15,8 @@ on:
     - tooling/xtask/crates/xtask_deps/**
     - tooling/xtask/crates/xtask_graph/**
     - .github/workspace-dep-closures.json
+    branches:
+    - main
 jobs:
   dependency-check:
     runs-on: linux-ci
