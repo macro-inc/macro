@@ -16,7 +16,8 @@ properties, and activity.
 - `src/outbound/pg_initiative_repo.rs` (+ `create.rs`, `list.rs`, `members.rs`,
   `share.rs`): the Postgres adapter, split by operation.
 - `src/inbound/toolset/`: AI toolset surface (lifecycle, reads, sharing).
-- `src/inbound/axum_router/`: REST surface (create/get/list/update/delete).
+- `src/inbound/axum_router/`: REST surface (create/get/list/update/delete, the
+  filtered `page` with properties and progress, and the `description` read).
 - `fixtures/initiative_test_data.sql`: seed data for repo tests.
 
 ## Scope
