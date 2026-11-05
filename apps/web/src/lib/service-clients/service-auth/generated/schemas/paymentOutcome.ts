@@ -6,7 +6,7 @@
  */
 
 /**
- * Whether the computer's purchase has ever been paid.
+ * The purchase outcome, latched after payment or comp confirmation.
  */
 export type PaymentOutcome =
   (typeof PaymentOutcome)[keyof typeof PaymentOutcome];
@@ -16,4 +16,5 @@ export const PaymentOutcome = {
   pending: 'pending',
   paid: 'paid',
   unbilled: 'unbilled',
+  comped: 'comped',
 } as const;

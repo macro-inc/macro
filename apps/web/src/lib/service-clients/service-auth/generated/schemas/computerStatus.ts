@@ -7,6 +7,7 @@
 
 import type { ComputerSize } from './computerSize';
 import type { ComputerStatusCancelsAt } from './computerStatusCancelsAt';
+import type { ComputerStatusCompReason } from './computerStatusCompReason';
 import type { ComputerStatusHarnessId } from './computerStatusHarnessId';
 import type { ComputerStatusKind } from './computerStatusKind';
 import type { ComputerStatusPersonaName } from './computerStatusPersonaName';
@@ -20,6 +21,8 @@ import type { PaymentOutcome } from './paymentOutcome';
 export interface ComputerStatus {
   /** When billing stops, for a computer canceled at period end. */
   cancelsAt?: ComputerStatusCancelsAt;
+  /** Present for a comped purchase, including after release. */
+  compReason?: ComputerStatusCompReason;
   createdAt: string;
   harnessId?: ComputerStatusHarnessId;
   id: string;

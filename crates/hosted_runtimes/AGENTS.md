@@ -31,9 +31,9 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 
 ## Contracts (PR B, agent brains, builds on these — keep them stable)
 
-- **Purchase**: `ComputerService::purchase(PurchaseRequest { team_id, created_by, size, name, persona, extra_items })`
-  → `computer_id`. One Stripe subscription update adds the computer's item plus
-  every `extra_items` entry (`SubscriptionItem { price_id, quantity }`, quantity
+- **Purchase**: `ComputerService::purchase(PurchaseRequest { team_id, created_by, size, name, persona, extra_items, billing })`
+  → `computer_id`. A Stripe purchase adds the computer's item plus
+  every `extra_items` entry in one subscription update (`SubscriptionItem { price_id, quantity }`, quantity
   added to the item's current quantity), invoiced at once with proration. In-process
   in authentication_service, and on the internal route `POST /internal/computers`.
   Persist `PendingPayment` and a delayed `ConfirmPayment` outbox effect together
@@ -43,12 +43,36 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   pending and retry indefinitely with capped backoff; definite refusals become
   `PaymentFailed`, visible without holding capacity and clearable by release.
 - **Payment provenance**: Persist `ComputerState.payment` as `pending` until
-  payment confirmation latches `paid` or refusal records `unbilled`; preserve it
+  payment confirmation latches `paid`, a comp latches `comped`, or refusal records `unbilled`; preserve it
   through release and expose it in every team/internal `ComputerStatus`.
   Unbilled computers never remove a billing item. Migrate legacy state before
   running code that requires this field; do not add serde defaults.
-- **Quote**: `ComputerService::quote(team_id, size)` → `Quote { price_id, amount, currency, interval }`
+- **Quote**: `ComputerService::quote(team_id, size, &PurchaseBilling)` → `Quote { price_id, amount, currency, interval }`
   at the team subscription's interval.
+- **Comped computers**: `PurchaseBilling::{Stripe, Comped { reason: String }}`
+  selects funding on `PurchaseRequest` and `NewComputer`. `CompPolicy::comp_reason(team_id)`
+  returns `Result<Option<String>, Self::Err>`; inject it with `with_comp_policy`.
+  authentication_service explicitly wires `NoComps`. Team purchase calls
+  `purchase_for_team(PurchaseRequest)` and overwrites billing from policy; its
+  JSON body only accepts `size` and `name` (no client billing flag). Team quotes
+  and offers also use policy (`quote_for_team`). Internal-key-only
+  `POST /internal/computers` requires explicit `billing: { "kind": "stripe" }`
+  or `{ "kind": "comped", "reason": "..." }`; its quote route remains Stripe.
+  Comped purchases reject nonempty `extraItems` and never call the Billing port.
+  Reservation persists `state.comp_reason` before the delayed confirmation effect;
+  normal purchase and crash recovery apply `Event::Comped { reason }` to begin
+  provisioning. `PaymentOutcome::Comped` serializes as `"comped"`, with the
+  reason exposed separately as `ComputerStatus.compReason: string | null`.
+  Payment and reason remain latched through release. The optional persisted reason
+  is absent on legacy Stripe rows; no migration is required.
+  Comped computers never carry a charged subscription item, emit
+  `RemoveBillingItem`, or count in `reconcile_billed_count`; subscription webhooks
+  cannot cancel them. Cancel-at-period-end stops them immediately (`at = now`)
+  and retains the disk for the usual 14 days; undo is unavailable afterward.
+  Cancel, release, retention expiry and delayed payment recovery make no Billing
+  calls. A comped quote reads the Stripe quote and sets amount to zero, preserving
+  price id, currency and interval. With no subscription it uses an empty price id,
+  monthly USD and zero amount; other billing errors propagate.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →
   `ComputerStatus` with `setup: Option<SetupProgress>` (Paying → Creating → Booting →
   Connecting → Ready) until macrod first connects. Readable by any team member.

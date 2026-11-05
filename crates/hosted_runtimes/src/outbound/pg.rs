@@ -277,7 +277,10 @@ impl ComputerRepo for PgComputerRepo {
             return Err(ReserveError::SoldOut);
         };
 
-        let state = ComputerState::reserved(host, now);
+        let mut state = ComputerState::reserved(host, now);
+        if let crate::domain::models::PurchaseBilling::Comped { reason } = &computer.billing {
+            state.comp_reason = Some(reason.clone());
+        }
         let state_json = serde_json::to_value(&state)
             .map_err(|error| ReserveError::Storage(PgComputerError::from(error)))?;
         let persona_json = computer

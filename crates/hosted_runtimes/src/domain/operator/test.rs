@@ -187,6 +187,7 @@ async fn paid_computer(
         .repo
         .reserve(
             NewComputer {
+                billing: crate::domain::models::PurchaseBilling::Stripe,
                 extra_items: vec![],
                 id,
                 team_id: TEAM,

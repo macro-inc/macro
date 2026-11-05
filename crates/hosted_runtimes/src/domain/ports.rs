@@ -306,3 +306,25 @@ pub trait Harnesses: Send + Sync + 'static {
     /// Delete the computer's harness and its credential; absent is fine.
     fn revoke(&self, computer_id: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
+
+/// Server-side eligibility for complimentary computers.
+pub trait CompPolicy: Send + Sync + 'static {
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    fn comp_reason(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+}
+
+/// Explicit default policy: every team pays through Stripe.
+#[derive(Debug, Clone, Copy)]
+pub struct NoComps;
+
+impl CompPolicy for NoComps {
+    type Err = std::convert::Infallible;
+
+    async fn comp_reason(&self, _team_id: Uuid) -> Result<Option<String>, Self::Err> {
+        Ok(None)
+    }
+}

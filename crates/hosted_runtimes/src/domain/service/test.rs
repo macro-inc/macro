@@ -10,9 +10,13 @@ use crate::domain::fakes::{FakeRepo, FixedClock, HOST, TEAM, now};
 use crate::domain::lifecycle::{Billing as BillingState, ComputerState, PaymentOutcome, Power};
 use crate::domain::models::{BillingInterval, SubscriptionItem};
 
+mod comped;
+
 /// Records subscription updates; fails them when `decline` is set.
 #[derive(Default)]
 struct FakeBilling {
+    no_subscription: bool,
+    yearly: bool,
     decline: bool,
     provider_error: bool,
     charged: Mutex<HashSet<String>>,
@@ -24,12 +28,19 @@ struct FakeBilling {
 impl Billing for FakeBilling {
     async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
         self.calls.lock().unwrap().push("quote");
+        if self.no_subscription {
+            return Err(BillingError::NoSubscription);
+        }
         Ok(Quote {
             size,
             price_id: format!("price_{}", size.as_ref()),
             amount: 2000 * i64::from(size.units()),
             currency: "usd".to_owned(),
-            interval: BillingInterval::Month,
+            interval: if self.yearly {
+                BillingInterval::Year
+            } else {
+                BillingInterval::Month
+            },
         })
     }
 
@@ -106,6 +117,7 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
 
     let computer_id = service
         .purchase(PurchaseRequest {
+            billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
             created_by: "macro|admin@example.com".to_owned(),
             size: ComputerSize::Standard,
@@ -185,6 +197,7 @@ async fn declined_payment_drops_the_reservation() {
 
     let result = service
         .purchase(PurchaseRequest {
+            billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
             created_by: "macro|admin@example.com".to_owned(),
             size: ComputerSize::Large,
@@ -245,6 +258,7 @@ async fn sold_out_size_is_not_billed() {
 
     let result = service
         .purchase(PurchaseRequest {
+            billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
             created_by: "macro|admin@example.com".to_owned(),
             size: ComputerSize::Xl,
@@ -273,6 +287,7 @@ async fn persona_with_a_reserved_user_is_rejected_before_anything_is_held() {
 
     let result = service
         .purchase(PurchaseRequest {
+            billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
             created_by: "macro|admin@example.com".to_owned(),
             size: ComputerSize::Standard,
@@ -298,6 +313,7 @@ async fn release_now_needs_the_name_and_removes_the_item_once() {
     );
     let computer_id = service
         .purchase(PurchaseRequest {
+            billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
             created_by: "macro|admin@example.com".to_owned(),
             size: ComputerSize::Standard,
@@ -345,6 +361,7 @@ async fn other_teams_cannot_see_or_change_a_computer() {
     );
     let computer_id = service
         .purchase(PurchaseRequest {
+            billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
             created_by: "macro|admin@example.com".to_owned(),
             size: ComputerSize::Standard,
@@ -379,6 +396,7 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
     {
         let mut state = ComputerState::reserved(HOST, created_at);
         state.phase = Phase::Running { host: HOST };
+        state.payment = PaymentOutcome::Paid;
         repo.computers.lock().unwrap().insert(
             Uuid::from_u128(index as u128 + 1),
             Computer {
@@ -430,6 +448,7 @@ async fn retry_failed_computer_restarts_without_billing() {
                 power: Power::On,
                 billing: BillingState::Active,
                 payment: PaymentOutcome::Paid,
+                comp_reason: None,
                 macrod_connected: false,
                 recent_crashes: vec![],
                 wake_requested: false,
@@ -489,6 +508,7 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
                 power: Power::On,
                 billing: BillingState::Active,
                 payment: PaymentOutcome::Paid,
+                comp_reason: None,
                 macrod_connected: false,
                 recent_crashes: vec![],
                 wake_requested: false,
@@ -526,6 +546,7 @@ async fn retry_another_teams_computer_is_not_found() {
                 power: Power::On,
                 billing: BillingState::Active,
                 payment: PaymentOutcome::Paid,
+                comp_reason: None,
                 macrod_connected: false,
                 recent_crashes: vec![],
                 wake_requested: false,
@@ -560,6 +581,7 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
     );
     let result = service
         .purchase(PurchaseRequest {
+            billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
             created_by: "test-admin".to_owned(),
             size: ComputerSize::Large,
@@ -640,6 +662,7 @@ async fn provider_error_stays_pending_and_confirmation_keeps_retrying() {
     );
     let result = service
         .purchase(PurchaseRequest {
+            billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
             created_by: "test-admin".to_owned(),
             size: ComputerSize::Standard,
@@ -694,6 +717,7 @@ async fn already_confirmed_purchase_completes_confirmation_without_billing_again
     );
     service
         .purchase(PurchaseRequest {
+            billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
             created_by: "test-admin".to_owned(),
             size: ComputerSize::Standard,
@@ -726,6 +750,7 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
         .repo
         .reserve(
             NewComputer {
+                billing: crate::domain::models::PurchaseBilling::Stripe,
                 id,
                 team_id: TEAM,
                 name: "Build box".to_owned(),

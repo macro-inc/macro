@@ -694,7 +694,7 @@ pub async fn run() -> anyhow::Result<()> {
             computer_prices.clone(),
         ),
         hosted_runtimes::domain::service::SystemClock,
-    ));
+    ).with_comp_policy(hosted_runtimes::domain::ports::NoComps));
     let teams_service = Arc::new(teams_service_impl);
     let team_agents_repository =
         team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone());

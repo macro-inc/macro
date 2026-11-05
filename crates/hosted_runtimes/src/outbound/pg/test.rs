@@ -39,6 +39,7 @@ async fn insert_team(pool: &PgPool) {
 
 fn standard(id: u128) -> NewComputer {
     NewComputer {
+        billing: crate::domain::models::PurchaseBilling::Stripe,
         extra_items: vec![],
         id: Uuid::from_u128(id),
         team_id: TEAM,
@@ -461,4 +462,54 @@ async fn payment_provenance_migration_backfills_legacy_rows_and_preserves_resolv
         assert_eq!(computer.state.payment, expected);
         assert_eq!(computer.status().payment, expected);
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn comped_intent_survives_reservation_and_payment_recovery(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool);
+    repo.register_host(HostRegistration {
+        name: "test-host".to_owned(),
+        memory_gb: 32,
+        reserve_gb: 4,
+        oversell_factor: 2,
+    })
+    .await
+    .unwrap();
+    let mut request = standard(19);
+    request.billing = crate::domain::models::PurchaseBilling::Comped {
+        reason: "internal team".to_owned(),
+    };
+    let reserved = repo.reserve(request, now()).await.unwrap();
+    let pending = repo.get(reserved.id).await.unwrap().unwrap();
+    assert_eq!(
+        pending.state.payment,
+        crate::domain::lifecycle::PaymentOutcome::Pending
+    );
+    assert_eq!(pending.state.comp_reason.as_deref(), Some("internal team"));
+    let comped = repo
+        .apply(
+            reserved.id,
+            Event::Comped {
+                reason: "internal team".to_owned(),
+            },
+            now(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        comped.state.payment,
+        crate::domain::lifecycle::PaymentOutcome::Comped
+    );
+    assert_eq!(
+        repo.get(reserved.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .status()
+            .comp_reason
+            .as_deref(),
+        Some("internal team")
+    );
 }

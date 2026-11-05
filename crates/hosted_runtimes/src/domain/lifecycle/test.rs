@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use super::*;
 
+mod comped;
 mod instance_lost;
 mod payment;
 
@@ -23,6 +24,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
         power: Power::On,
         billing: Billing::Active,
         payment: PaymentOutcome::Paid,
+        comp_reason: None,
         macrod_connected: false,
         recent_crashes: vec![],
         wake_requested: false,
@@ -44,6 +46,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
             power: Power::On,
             billing: Billing::Active,
             payment: PaymentOutcome::Paid,
+            comp_reason: None,
             macrod_connected: false,
             recent_crashes: vec![],
             wake_requested: false,
@@ -876,6 +879,7 @@ fn transitions() {
         };
         let state = ComputerState {
             payment,
+            comp_reason: None,
             phase: case.phase,
             power: case.power,
             billing: case.billing,
@@ -912,6 +916,9 @@ fn transitions() {
 fn any_event() -> impl Strategy<Value = Event> {
     prop_oneof![
         Just(Event::PaymentConfirmed),
+        Just(Event::Comped {
+            reason: "internal team".to_owned()
+        }),
         Just(Event::PurchaseFailed),
         Just(Event::InstanceStarted),
         Just(Event::InstanceStopped),
@@ -1039,6 +1046,11 @@ proptest! {
                 prop_assert_eq!(&event, &Event::PurchaseFailed);
             }
             for (computer_index, (_, state)) in fleet.computers.iter().enumerate() {
+                if state.payment == PaymentOutcome::Comped {
+                    prop_assert!(!charged.contains(&computer_index), "comped computer was charged");
+                    prop_assert!(!removed.contains(&computer_index), "comped computer emitted a billing removal");
+                    prop_assert!(state.comp_reason.is_some());
+                }
                 if state.payment == PaymentOutcome::Unbilled {
                     prop_assert!(!removed.contains(&computer_index), "unbilled computer emitted a billing removal");
                 }

@@ -8,9 +8,11 @@ use uuid::Uuid;
 use crate::domain::enrollment::Persona;
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, Phase};
 use crate::domain::models::{
-    Computer, ComputerStatus, NewComputer, PurchaseRequest, Quote, SizeOffer,
+    Computer, ComputerStatus, NewComputer, PurchaseBilling, PurchaseRequest, Quote, SizeOffer,
 };
-use crate::domain::ports::{Billing, BillingError, ComputerRepo, ReserveError};
+use crate::domain::ports::{
+    Billing, BillingError, CompPolicy, ComputerRepo, NoComps, ReserveError,
+};
 use crate::domain::size::ComputerSize;
 
 #[cfg(test)]
@@ -69,7 +71,8 @@ impl Clock for SystemClock {
 ///
 /// Callers authorize first: team routes require an admin receipt for writes
 /// and a member receipt for reads, and pass the receipt's team id here.
-pub struct ComputerService<Repo, Bill, Time> {
+pub struct ComputerService<Repo, Bill, Time, Policy = NoComps> {
+    comp_policy: Policy,
     repo: Repo,
     billing: Bill,
     clock: Time,
@@ -83,16 +86,93 @@ where
 {
     pub fn new(repo: Repo, billing: Bill, clock: Time) -> Self {
         Self {
+            comp_policy: NoComps,
             repo,
             billing,
             clock,
         }
     }
 
-    /// The price of one computer of `size` for the team.
+    /// Replace the default policy at the composition root.
+    pub fn with_comp_policy<Policy: CompPolicy>(
+        self,
+        comp_policy: Policy,
+    ) -> ComputerService<Repo, Bill, Time, Policy> {
+        ComputerService {
+            repo: self.repo,
+            billing: self.billing,
+            clock: self.clock,
+            comp_policy,
+        }
+    }
+}
+
+impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
+    ComputerService<Repo, Bill, Time, Policy>
+{
+    /// Resolve complimentary eligibility on the server.
     #[tracing::instrument(skip(self), err)]
-    pub async fn quote(&self, team_id: Uuid, size: ComputerSize) -> Result<Quote, ComputerError> {
-        Ok(self.billing.quote(team_id, size).await?)
+    async fn purchase_billing(&self, team_id: Uuid) -> Result<PurchaseBilling, ComputerError> {
+        Ok(
+            match self
+                .comp_policy
+                .comp_reason(team_id)
+                .await
+                .map_err(internal)?
+            {
+                Some(reason) => PurchaseBilling::Comped { reason },
+                None => PurchaseBilling::Stripe,
+            },
+        )
+    }
+
+    /// Team callers cannot choose their funding source.
+    #[tracing::instrument(skip(self, request), fields(team_id = %request.team_id), err)]
+    pub async fn purchase_for_team(
+        &self,
+        mut request: PurchaseRequest,
+    ) -> Result<Uuid, ComputerError> {
+        request.billing = self.purchase_billing(request.team_id).await?;
+        self.purchase(request).await
+    }
+
+    /// Quote using server-side team policy.
+    pub async fn quote_for_team(
+        &self,
+        team_id: Uuid,
+        size: ComputerSize,
+    ) -> Result<Quote, ComputerError> {
+        self.quote(team_id, size, &self.purchase_billing(team_id).await?)
+            .await
+    }
+
+    /// The price of one computer of `size` for the team.
+    #[tracing::instrument(skip(self, billing), err)]
+    pub async fn quote(
+        &self,
+        team_id: Uuid,
+        size: ComputerSize,
+        billing: &PurchaseBilling,
+    ) -> Result<Quote, ComputerError> {
+        let quote = self.billing.quote(team_id, size).await;
+        match billing {
+            PurchaseBilling::Stripe => Ok(quote?),
+            PurchaseBilling::Comped { .. } => {
+                let mut quote = match quote {
+                    Ok(quote) => quote,
+                    Err(BillingError::NoSubscription) => Quote {
+                        size,
+                        price_id: String::new(),
+                        amount: 0,
+                        currency: "usd".to_owned(),
+                        interval: crate::domain::models::BillingInterval::Month,
+                    },
+                    Err(error) => return Err(error.into()),
+                };
+                quote.amount = 0;
+                Ok(quote)
+            }
+        }
     }
 
     /// Every size with its price, availability and the caller's notify requests.
@@ -109,6 +189,7 @@ where
             .await
             .map_err(internal)?;
 
+        let billing = self.purchase_billing(team_id).await?;
         let mut offers = Vec::new();
         for size in ComputerSize::ALL {
             offers.push(SizeOffer {
@@ -116,7 +197,7 @@ where
                 vcpus: size.vcpus(),
                 memory_gb: size.memory_gb(),
                 disk_gb: size.disk_gb(),
-                quote: self.billing.quote(team_id, size).await?,
+                quote: self.quote(team_id, size, &billing).await?,
                 sold_out: sold_out.contains(&size),
                 notify_requested: notify.contains(&size),
             });
@@ -124,15 +205,22 @@ where
         Ok(offers)
     }
 
-    /// Buy a computer: hold its units, bill it together with `extra_items`
-    /// in one subscription update, then start provisioning. Returns the
+    /// Reserve units, confirm a comp or bill with `extra_items` in one
+    /// subscription update, then start provisioning. Returns the
     /// computer id at once; [`Self::status`] reports setup progress.
     #[tracing::instrument(
         skip(self, request),
-        fields(team_id = %request.team_id, size = request.size.as_ref(), computer_id),
+        fields(team_id = %request.team_id, size = request.size.as_ref(), computer_id, comped = matches!(&request.billing, PurchaseBilling::Comped { .. })),
         err
     )]
     pub async fn purchase(&self, request: PurchaseRequest) -> Result<Uuid, ComputerError> {
+        if matches!(request.billing, PurchaseBilling::Comped { .. })
+            && !request.extra_items.is_empty()
+        {
+            return Err(ComputerError::BadRequest(
+                "comped purchases cannot add subscription items".to_owned(),
+            ));
+        }
         if let Some(persona) = &request.persona {
             validate_persona(persona)?;
         }
@@ -144,6 +232,7 @@ where
             .repo
             .reserve(
                 NewComputer {
+                    billing: request.billing.clone(),
                     extra_items: request.extra_items.clone(),
                     id: computer_id,
                     team_id: request.team_id,
@@ -161,51 +250,8 @@ where
             Err(ReserveError::Storage(error)) => return Err(internal(error)),
         }
 
-        let _payment = self
-            .repo
-            .lock_payment(computer_id)
-            .await
-            .map_err(internal)?;
-        let computer = self
-            .repo
-            .get(computer_id)
-            .await
-            .map_err(internal)?
-            .ok_or(ComputerError::NotFound)?;
-        match computer.state.phase {
-            Phase::PendingPayment { .. } => {}
-            Phase::PaymentFailed => return Err(BillingError::PaymentFailed.into()),
-            _ => return Ok(computer_id),
-        }
-        let billed = self
-            .billing
-            .add_computer(
-                request.team_id,
-                request.size,
-                &request.extra_items,
-                &format!("computer-add:{computer_id}"),
-            )
-            .await;
-        match billed {
-            Ok(()) => {
-                self.repo
-                    .apply(computer_id, Event::PaymentConfirmed, self.clock.now())
-                    .await
-                    .map_err(internal)?;
-            }
-            Err(error @ BillingError::Provider(_)) => return Err(error.into()),
-            Err(
-                error @ (BillingError::PaymentFailed
-                | BillingError::NoSubscription
-                | BillingError::IntervalNotSold(_)),
-            ) => {
-                self.repo
-                    .apply(computer_id, Event::PurchaseFailed, self.clock.now())
-                    .await
-                    .map_err(internal)?;
-                return Err(error.into());
-            }
-        }
+        self.confirm_payment(computer_id, &request.extra_items)
+            .await?;
 
         Ok(computer_id)
     }
@@ -265,8 +311,12 @@ where
         team_id: Uuid,
         computer_id: Uuid,
     ) -> Result<ComputerStatus, ComputerError> {
-        self.team_computer(team_id, computer_id).await?;
-        let at = self.billing.period_end(team_id).await?;
+        let computer = self.team_computer(team_id, computer_id).await?;
+        let at = if computer.state.payment == crate::domain::lifecycle::PaymentOutcome::Comped {
+            self.clock.now()
+        } else {
+            self.billing.period_end(team_id).await?
+        };
         self.apply_for_team(team_id, computer_id, Event::CancelAtPeriodEnd { at })
             .await
     }
@@ -370,8 +420,17 @@ where
             let confirming_payment = matches!(pending.effect, Effect::ConfirmPayment { .. });
             let outcome = match pending.effect {
                 Effect::ConfirmPayment { extra_items } => {
-                    self.confirm_payment(pending.computer_id, &extra_items)
+                    match self
+                        .confirm_payment(pending.computer_id, &extra_items)
                         .await
+                    {
+                        Err(ComputerError::Billing(
+                            BillingError::PaymentFailed
+                            | BillingError::NoSubscription
+                            | BillingError::IntervalNotSold(_),
+                        )) => Ok(()),
+                        outcome => outcome,
+                    }
                 }
                 Effect::RemoveBillingItem => {
                     self.remove_item(pending.computer_id, pending.id).await
@@ -404,7 +463,7 @@ where
         Ok(count)
     }
 
-    #[tracing::instrument(skip(self, extra_items), err)]
+    #[tracing::instrument(skip(self, extra_items), fields(comped), err)]
     async fn confirm_payment(
         &self,
         computer_id: Uuid,
@@ -421,7 +480,19 @@ where
             .await
             .map_err(internal)?
             .ok_or(ComputerError::NotFound)?;
+        if matches!(computer.state.phase, Phase::PaymentFailed) {
+            return Err(BillingError::PaymentFailed.into());
+        }
         if !matches!(computer.state.phase, Phase::PendingPayment { .. }) {
+            return Ok(());
+        }
+        tracing::Span::current().record("comped", computer.state.comp_reason.is_some());
+        if let Some(reason) = computer.state.comp_reason {
+            self.repo
+                .apply(computer_id, Event::Comped { reason }, self.clock.now())
+                .await
+                .map_err(internal)?
+                .ok_or(ComputerError::NotFound)?;
             return Ok(());
         }
         let event = match self
@@ -436,11 +507,13 @@ where
         {
             Ok(()) => Event::PaymentConfirmed,
             Err(error @ BillingError::Provider(_)) => return Err(error.into()),
-            Err(
-                BillingError::PaymentFailed
-                | BillingError::NoSubscription
-                | BillingError::IntervalNotSold(_),
-            ) => Event::PurchaseFailed,
+            Err(error) => {
+                self.repo
+                    .apply(computer_id, Event::PurchaseFailed, self.clock.now())
+                    .await
+                    .map_err(internal)?;
+                return Err(error.into());
+            }
         };
         self.repo
             .apply(computer_id, event, self.clock.now())
@@ -457,6 +530,9 @@ where
             .await
             .map_err(internal)?
             .ok_or(ComputerError::NotFound)?;
+        if computer.state.payment != crate::domain::lifecycle::PaymentOutcome::Paid {
+            return Ok(());
+        }
         // One removal per outbox row: a retry after a lost response is a no-op.
         self.billing
             .remove_computer(
@@ -503,10 +579,12 @@ impl Computer {
     pub fn is_billed(&self) -> bool {
         use crate::domain::lifecycle::Billing;
 
-        !matches!(
-            self.state.phase,
-            Phase::PendingPayment { .. } | Phase::PaymentFailed | Phase::Destroyed
-        ) && !matches!(self.state.billing, Billing::Canceled { .. })
+        self.state.payment == crate::domain::lifecycle::PaymentOutcome::Paid
+            && !matches!(
+                self.state.phase,
+                Phase::PendingPayment { .. } | Phase::PaymentFailed | Phase::Destroyed
+            )
+            && !matches!(self.state.billing, Billing::Canceled { .. })
     }
 }
 
