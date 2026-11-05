@@ -257,11 +257,18 @@ pub fn mount_cache_volume() -> Step<Use> {
         .add_with(("path", xtask_paths::runtime_path!("/nix").as_str()))
 }
 
-/// Mount only `path` from the profile's cache volume, without a framework
-/// mode. Unlike [`mount_cache_volume`] (`cache: rust` plus `/nix`, ~11 s on
-/// `linux-rust-ci`), a plain path mounts in under a second.
-pub fn mount_path_cache_volume(name: &str, path: RuntimePath<'_>) -> Step<Use> {
-    nscloud_cache_action(name).add_with(("path", path.as_str()))
+/// Mount the nextest filter's build plus cargo's registry and git checkouts.
+/// `cargo metadata` fetches every crate in the lockfile, which took about 40 s of
+/// the filter's 45 s when each `path-check` runner started without them.
+pub fn mount_nextest_filter_cache(filter_cache_dir: RuntimePath<'_>) -> Step<Use> {
+    let paths = format!(
+        "{}\n{}\n{}",
+        filter_cache_dir.as_str(),
+        xtask_paths::runtime_path!("/home/runner/.cargo/registry").as_str(),
+        xtask_paths::runtime_path!("/home/runner/.cargo/git").as_str(),
+    );
+
+    nscloud_cache_action("Mount nextest-filter and cargo registry cache").add_with(("path", paths))
 }
 
 /// The pinned `nscloud-cache-action`, shared by every mount helper below.
