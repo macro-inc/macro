@@ -159,4 +159,67 @@ describe('agents', () => {
       macro.agents.byId('00000000-0000-0000-0000-00000000c5c5').name(),
     ).rejects.toThrow('agents.coding()');
   });
+  test('update() sends only the settings it is given', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return Response.json({});
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const agent = macro.agents.byId('0198a4cc-e138-7670-a308-a6b766602701');
+
+    await agent.update({ instructions: 'Ship small diffs.' });
+    await agent.update({
+      runtime: {
+        harness: 'macrod',
+        host: macro.harnesses.byId('0198a4cc-e138-7670-a308-a6b766602708'),
+      },
+      channels: {
+        scope: 'selected',
+        channels: [macro.channels.byId('0198a4cc-e138-7670-a308-a6b766602709')],
+      },
+      apps: {
+        scope: 'selected',
+        servers: [{ appSlug: 'linear', name: 'Linear' }],
+      },
+      defaultModel: 'claude-sonnet',
+      autoAcceptPermissions: false,
+      isCoding: true,
+    });
+
+    expect(requests.map((request) => [request.method, request.url])).toEqual([
+      [
+        'PATCH',
+        'https://storage.example.test/agents/0198a4cc-e138-7670-a308-a6b766602701',
+      ],
+      [
+        'PATCH',
+        'https://storage.example.test/agents/0198a4cc-e138-7670-a308-a6b766602701',
+      ],
+    ]);
+    await expect(requests[0]?.json()).resolves.toEqual({
+      instructions: 'Ship small diffs.',
+    });
+    await expect(requests[1]?.json()).resolves.toEqual({
+      harness: {
+        harness: 'macrod',
+        harness_id: '0198a4cc-e138-7670-a308-a6b766602708',
+      },
+      channels: {
+        channel_scope: 'selected',
+        channel_ids: ['0198a4cc-e138-7670-a308-a6b766602709'],
+      },
+      mcp: {
+        scope: 'selected',
+        servers: [{ app_slug: 'linear', server_name: 'Linear' }],
+      },
+      default_model: 'claude-sonnet',
+      auto_accept_permissions: false,
+      is_coding: true,
+    });
+  });
 });

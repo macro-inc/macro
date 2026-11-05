@@ -187,6 +187,84 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": ["agents"],
+        "summary": "Handler for `PATCH /agents/{agent_id}`: change only the settings the body\nnames, keeping every other one, as the `ConfigureAgent` tool does.",
+        "operationId": "patch_agent",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "Agent bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/annotations/anchors": {
@@ -20590,6 +20668,26 @@
         "description": "Whether an agent is available everywhere or only in selected channels.",
         "enum": ["all", "selected"]
       },
+      "AgentChannelSelection": {
+        "type": "object",
+        "description": "Where an agent can be mentioned: everywhere its owner can use it, or\nexactly the listed channels.",
+        "required": ["channel_scope"],
+        "properties": {
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Selected channels. Must be non-empty only for `selected` scope."
+          },
+          "channel_scope": {
+            "$ref": "#/components/schemas/AgentChannelScope",
+            "description": "Whether the agent is global or channel-specific."
+          }
+        },
+        "additionalProperties": false
+      },
       "AgentDmProfile": {
         "type": "object",
         "description": "Historical persona identity displayed beside a private conversation.",
@@ -20608,6 +20706,29 @@
             "description": "Persona display name."
           }
         }
+      },
+      "AgentHarnessSelection": {
+        "type": "object",
+        "description": "The runtime an agent runs on: a harness slug and, for `macrod`, the\nregistered harness serving it. Travel together because one without the\nother is never a valid choice.",
+        "required": ["harness"],
+        "properties": {
+          "harness": {
+            "type": "string",
+            "description": "Harness slug, e.g. `in-memory`, `cursor`, or `macrod`."
+          },
+          "harness_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HarnessId",
+                "description": "Registered harness to run on. Required when `harness` is `macrod`,\nforbidden otherwise."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
       },
       "AgentMcpServer": {
         "type": "object",
@@ -37607,6 +37728,62 @@
         "type": "string",
         "description": "The role a user has within a channel.",
         "enum": ["owner", "admin", "member"]
+      },
+      "PatchAgentRequest": {
+        "type": "object",
+        "description": "Request to change part of a persisted agent's instructions or settings.\n\nEvery field is optional; an absent field keeps the agent's current value.\nOwnership and the bot profile (name, handle, description, avatar) are not\npatchable here: the profile has [`PatchBotRequest`], and ownership changes\ngo through [`UpdateAgentRequest`]. Unknown fields are refused, so a\nmisspelled or flattened setting is never silently ignored.",
+        "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Replacement permission choice: approve without asking (`true`) or\nprompt (`false`). A patch cannot clear the choice back to unset; an\nexplicit `false` prompts exactly as unset does."
+          },
+          "channels": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentChannelSelection",
+                "description": "Replacement channel availability."
+              }
+            ]
+          },
+          "default_model": {
+            "type": ["string", "null"],
+            "description": "Replacement model."
+          },
+          "harness": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentHarnessSelection",
+                "description": "Replacement runtime."
+              }
+            ]
+          },
+          "instructions": {
+            "type": ["string", "null"],
+            "description": "Replacement instructions, whole."
+          },
+          "is_coding": {
+            "type": ["boolean", "null"],
+            "description": "Replacement coding choice."
+          },
+          "mcp": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentMcpServers",
+                "description": "Replacement MCP server selection."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
       },
       "PatchBotRequest": {
         "type": "object",

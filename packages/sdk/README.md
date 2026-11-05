@@ -441,8 +441,9 @@ await routine.update({
 
 `macro.agents.list/create/byId` manage agent configuration; listed agents read
 their runtime, coding/chat choice, apps, channel scope and permission settings.
-`AgentOptions` takes channel, team and host handles. Updates replace the
-configuration. `macro.agents.coding()` lists the coding personas the caller can
+`agent.update(patch)` changes only the settings it names (`PATCH /agents/{id}`);
+`agent.replace(options)` replaces everything, including the owning team, and
+`AgentOptions` takes channel, team and host handles. `macro.agents.coding()` lists the coding personas the caller can
 start right now, built-in ones such as Cursor included; pass an entry's `agent`
 to `macro.agentSessions.createManaged`.
 `channel.agentConversations()` returns conversations with session and turn handles;

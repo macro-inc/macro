@@ -278,6 +278,7 @@ export {
   Agent,
   type AgentApps,
   type AgentOptions,
+  type AgentPatch,
 } from './entities/agents/agent';
 export type { CodingAgent } from './entities/agents/namespace';
 export { UserApiKey } from './entities/api-keys/api-key';

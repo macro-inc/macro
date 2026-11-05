@@ -15,6 +15,8 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   to the `macro.bots` Kafka topic (see `README.md` for the wire schema).
 - `src/inbound/axum_router.rs`, `src/inbound/channel_webhook_router.rs`,
   `src/inbound/toolset.rs`: HTTP, channel-webhook, and AI-tool adapters.
+  `PATCH /agents/{id}` and the `ConfigureAgent` tool share `patch_agent`;
+  `PUT` replaces the whole agent, ownership included.
 - `src/outbound/pg_bots_repo.rs`: Postgres repository (feature `outbound`).
 
 ## Scope
