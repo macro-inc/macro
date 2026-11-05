@@ -73,7 +73,9 @@ export class SpeechGateway {
   readonly rescue: Rescue = async (samples) => {
     const model = new GatewayStt(this);
     const stream = model.stream();
+    let timedOut = false;
     const timer = setTimeout(() => {
+      timedOut = true;
       stream.close();
       model.abortSockets();
     }, 8000);
@@ -88,6 +90,8 @@ export class SpeechGateway {
           const value = event.alternatives?.[0]?.text;
           if (value) text.push(value);
         }
+      if (timedOut) throw new Error('speech rescue timed out');
+      if (stream.terminalError) throw stream.terminalError;
       return text.join(' ');
     } finally {
       clearTimeout(timer);
