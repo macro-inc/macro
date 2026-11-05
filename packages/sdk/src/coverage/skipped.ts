@@ -416,8 +416,11 @@ export const storageExcluded = [
   'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog =
-  [] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog = [
+  // `Document.lexical()` wraps both in the SDK layer of the Lexical stack.
+  'commitDocumentLexical',
+  'getDocumentLexical',
+] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',
