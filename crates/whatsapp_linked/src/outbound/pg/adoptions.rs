@@ -28,6 +28,8 @@ impl AdoptionRepository for PgWhatsAppRepository {
         .map_err(failure)?;
         sqlx::query_scalar!("SELECT id FROM whatsapp_linked_account WHERE id = $1 AND user_id = $2 AND generation = $3 AND state = 'connected' FOR SHARE", account.id,user,account.authorization_generation)
             .fetch_optional(&mut *tx).await.map_err(failure)?.ok_or(ExternalChatError::Disconnected)?;
+        // Taken after the account, in update_chats_in's order.
+        super::chats::lock_anchors_in(&mut tx, user).await?;
         let existing = sqlx::query_as!(ChatRow,"SELECT id, provider, remote_id, kind, user_id, state, adopted_at FROM external_chat WHERE user_id = $1 AND provider = 'whatsapp' AND remote_id = $2 AND state <> 'detached' FOR UPDATE",user,adoption.jid)
             .fetch_optional(&mut *tx).await.map_err(failure)?;
         let adopted = match existing {

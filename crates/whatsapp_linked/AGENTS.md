@@ -49,7 +49,7 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   `waiting_for_message` until a chat update brings one, and a direct chat (a
   saved contact, a looked-up number) is added `done`, made
   `waiting_for_phone` only by an anchor older than its adoption while nothing
-  was imported. The phone is never asked without that Import. Saved contacts are chat-list rows with no activity. History
+  was imported. The phone is never asked without that Import. Recording an anchor and adding a chat share a per-user advisory lock (`lock_anchors_in`), so a chat added while its first message is recorded still sees it. Saved contacts are chat-list rows with no activity. History
   messages skip the adoption-time boundary but only reach the account owner's
   own groups (`observed_bindings_in`).
 - `src/outbound/pg/lookups.rs`: phone-number lookups (`whatsapp_lookup`,
