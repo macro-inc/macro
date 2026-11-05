@@ -173,7 +173,7 @@ fn test() -> Job {
         .cond(Expression::new(
             "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
         ))
-        .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
+        .runs_on(runners::Runner::Large.with_cache_tag("sccache-ci-int"))
         .add_env((
             "RUST_PACKAGES",
             "${{ needs.path-check.outputs.rust_packages }}",
@@ -193,7 +193,7 @@ fn test() -> Job {
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
-        .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+        .add_step(steps::configure_namespace_sccache("sccache-ci-int"))
         .add_step(steps::start_sccache_server())
         .add_step(steps::code_mode_assets())
         .add_step(configure_postgres())
