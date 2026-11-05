@@ -220,7 +220,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.getByTestId('title').textContent).toBe('ask');
-    expect(rendered.getByTestId('subtitle').textContent).toBe('');
+    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
   });
 
   it('reuses a known renderer for calls from the explicit Macro MCP server', () => {
@@ -265,7 +265,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
-    expect(rendered.getByTestId('subtitle').textContent).toBe('');
+    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
     expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
     expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
     expect(rendered.getByTestId('body').textContent).toBe('');
@@ -289,7 +289,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('subtitle').textContent).toBe('');
+    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
     expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
     expect(rendered.getByTestId('body').textContent).toBe('');
   });
@@ -987,6 +987,71 @@ describe('ToolCallPart subagents', () => {
     expect(rendered.getByTestId('body').textContent).toContain(
       'Run python and report the output.'
     );
+  });
+
+  it("names no agent type when the harness gave none, rather than saying 'subagent'", () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={subagent({ agentType: null })}
+        context={context(false)}
+      />
+    ));
+    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
+  });
+
+  it('says a live subagent is running', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          {
+            kind: 'subagent',
+            title: 'List open pull requests',
+            agentType: null,
+            description: 'List open pull requests',
+            prompt: 'Use the GitHub search tool to list open pull requests.',
+            background: false,
+            children: [],
+            result: null,
+          },
+          { name: 'Subagent', status: 'running' }
+        )}
+        context={context(true)}
+      />
+    ));
+    expect(rendered.getByTestId('trailing').textContent).toBe('Running');
+  });
+
+  it('says a finished subagent is done when the harness reported no stats', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={subagent({
+          agentType: null,
+          children: [],
+          result: {
+            text: 'Three open pull requests.',
+            error: null,
+            agentId: null,
+            model: null,
+            durationMs: null,
+            tokens: null,
+            toolUses: null,
+            stats: null,
+          },
+        })}
+        context={context(false)}
+      />
+    ));
+    expect(rendered.getByTestId('trailing').textContent).toBe('Done');
+  });
+
+  it('labels the instructions and the result in the detail', () => {
+    const rendered = render(() => (
+      <ToolCallPart part={subagent()} context={context(false)} />
+    ));
+    const body = rendered.getAllByTestId('body')[0]?.textContent ?? '';
+    expect(body).toContain('Instructions');
+    expect(body).toContain('Run python and report the output.');
+    expect(body).toContain('Result');
   });
 
   it('shimmers only a trailing child thought while the subagent is live', () => {
