@@ -148,9 +148,10 @@ export function withoutDoneNotifications<
   Content extends { notifications: readonly { id: string }[] },
 >(
   rows: readonly InboxRow<Content>[],
-  done: ReadonlySet<string>
+  doneIds: readonly string[]
 ): InboxRow<Content>[] {
-  if (done.size === 0) return [...rows];
+  if (doneIds.length === 0) return [...rows];
+  const done = new Set(doneIds);
   return rows.map((row) => {
     const shown = row.content.notifications.filter(
       (notification) => !done.has(notification.id)

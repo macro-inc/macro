@@ -136,15 +136,14 @@ export function createNotificationInboxSource(
   // Notifications done one at a time. Once the server's row no longer shows
   // one, hiding it does nothing, so it needs no settling.
   const [doneNotifications, setDoneNotifications] = createSignal<
-    ReadonlySet<string>
-  >(new Set());
+    readonly string[]
+  >([]);
   const hideNotification = (id: string, hidden: boolean) =>
-    setDoneNotifications((current) => {
-      const next = new Set(current);
-      if (hidden) next.add(id);
-      else next.delete(id);
-      return next;
-    });
+    setDoneNotifications((current) =>
+      hidden
+        ? [...current, id]
+        : current.filter((candidate) => candidate !== id)
+    );
   const ordered = createMemo(() =>
     orderInboxRows(query.data?.groups ?? [], !query.hasNextPage)
   );
