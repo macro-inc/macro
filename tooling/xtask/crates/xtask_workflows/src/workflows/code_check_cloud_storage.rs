@@ -385,8 +385,8 @@ fn postgres_service() -> Container {
         )
         .ports(vec![Port::Name("5432:5432".to_string())])
         .options(
-            "--health-cmd pg_isready --health-interval 10s --health-timeout 5s \
-             --health-retries 5 --shm-size 1g \
+            "--health-cmd pg_isready --health-interval 1s --health-start-period 30s \
+             --health-timeout 5s --health-retries 5 --shm-size 1g \
              -v /dev/shm/pgdata:/var/lib/postgresql/data",
         )
 }
@@ -397,7 +397,7 @@ fn redis_service() -> Container {
         .image("redis:7")
         .ports(vec![Port::Name("6379:6379".to_string())])
         .options(
-            "--health-cmd \"redis-cli ping\" --health-interval 10s \
+            "--health-cmd \"redis-cli ping\" --health-interval 1s --health-start-period 30s \
              --health-timeout 5s --health-retries 5",
         )
 }
