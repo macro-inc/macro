@@ -1,0 +1,31 @@
+[package]
+edition = "2024"
+name = "hosted_runtimes"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["inbound", "outbound", "ports"]
+inbound = ["dep:axum", "dep:utoipa", "ports"]
+outbound = ["dep:sqlx", "ports"]
+ports = ["dep:tokio"]
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+lazy-regex = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true, features = ["serde", "v7"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

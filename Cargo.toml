@@ -93,6 +93,7 @@ members = [
   "crates/harness_id",
   "crates/harness_token",
   "crates/harnesses",
+  "crates/hosted_runtimes",
   "crates/import",
   "crates/import_notion",
   "crates/import_tracker",
