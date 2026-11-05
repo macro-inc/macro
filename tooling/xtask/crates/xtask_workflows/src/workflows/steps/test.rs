@@ -370,3 +370,46 @@ fn queue_selects_the_whole_workspace_and_builds_service_bins() {
     assert_eq!(build["if"].as_str(), Some(IN_MERGE_QUEUE));
     assert!(build["run"].as_str().expect("script").contains("--bins"));
 }
+
+/// A narrower PR rule for Generated Code Check mustn't apply in the queue, or a schema
+/// change a PR skipped reaches `main` stale. The filter's own answer covers every Rust
+/// source; a step replacing it must say what it does in the queue.
+#[test]
+fn queue_runs_generated_code_check_for_any_rust_change() {
+    let workflow = workflow_by_check("Web App Status Check");
+    let path_check = &workflow["jobs"]["path-check"];
+    let output = path_check["outputs"]["codegen_changed"]
+        .as_str()
+        .expect("output");
+    let steps = path_check["steps"].as_sequence().expect("steps");
+    if output.contains("steps.filter.") {
+        let filter = steps
+            .iter()
+            .find(|step| step["id"].as_str() == Some("filter"))
+            .expect("filter");
+        let filters = filter["with"]["filters"].as_str().expect("filters");
+        let codegen = filters
+            .split("codegen_changed:")
+            .nth(1)
+            .expect("codegen filter");
+        assert!(codegen.contains("crates/**"), "{codegen}");
+        assert!(codegen.contains("services/**"), "{codegen}");
+    } else {
+        let id = output
+            .split("steps.")
+            .nth(1)
+            .and_then(|rest| rest.split('.').next())
+            .expect("step id");
+        let step = steps
+            .iter()
+            .find(|step| step["id"].as_str() == Some(id))
+            .expect("step");
+        assert!(
+            step["run"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("merge_group"),
+            "{id} must not narrow Generated Code Check in the merge queue"
+        );
+    }
+}
