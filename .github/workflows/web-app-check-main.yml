@@ -477,7 +477,9 @@ jobs:
         save_modules=false
 
         if ! nix-store --check-validity "$modules" 2>/dev/null; then
-          if cache_request --max-time 60 "$modules_url" | zstd -d | nix-store --import; then
+          # No retries: a retry would restart the stream into the same pipe, and past the limit
+          # a rebuild is faster.
+          if cache_request --retry 0 --max-time 60 "$modules_url" | zstd -d | nix-store --import; then
             echo "node_modules restored from the remote cache"
           else
             save_modules=true
