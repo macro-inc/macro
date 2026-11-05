@@ -315,6 +315,20 @@ or failed capture shows its reason under the call controls. Browsers
 and older desktop builds keep the browser's own picker. Verify on a Mac by
 sharing a display and a window, stopping, and cancelling the picker.
 
+### Work in a call
+
+Behind `enable-agent-work`, the call panel gains a **Work** tab, after Chat and
+Participants, while any other participant has registered work you can open.
+Chat stays the default tab. Each participant with work gets a section; rows keep
+their order, and clicking one opens the session in a new split so the call stays
+live. Registering is SDK-only (`session.registerAsWork()`).
+
+A dot marks the Work tab while you're elsewhere and the panel button while the
+panel is closed. A **View active work** prompt with the participants' pictures
+appears above your video tile when someone's work first shows, for eight seconds
+or until dismissed; clicking it opens the tab. It belongs to the call rather than
+the toast system.
+
 ### Browser call diagnostics
 
 Browser OpenTelemetry requires `enable-browser-otel` (or
