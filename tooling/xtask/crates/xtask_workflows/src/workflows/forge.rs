@@ -124,10 +124,10 @@ pub fn port(yaml: &str, dropped: &[&str]) -> Result<String> {
                     .is_some_and(|uses| uses.starts_with(action))
             };
             for step in steps.iter_mut() {
-                if uses(step, "actions/checkout") {
-                    if let Some(with) = step.get_mut("with").and_then(Value::as_mapping_mut) {
-                        with.remove("persist-credentials");
-                    }
+                if uses(step, "actions/checkout")
+                    && let Some(with) = step.get_mut("with").and_then(Value::as_mapping_mut)
+                {
+                    with.remove("persist-credentials");
                 }
             }
             if steps.iter().any(|step| uses(step, "dorny/paths-filter")) {
