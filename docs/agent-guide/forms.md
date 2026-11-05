@@ -37,7 +37,10 @@ decides who may respond.
   vote times keep only the day, and a vote can't be changed.
 - Asked for a poll, or for a form for a channel, the Macro agent makes a poll
   and posts it as its card in one message (its channel reply), the same card
-  `/poll` posts.
+  `/poll` posts. A form the agent made for the request and presented as a card
+  in its reply's steps is shared with the channel the same way, so everyone in
+  the channel, people outside the team included, can respond to a
+  members-only form.
 
 ## The form page
 
