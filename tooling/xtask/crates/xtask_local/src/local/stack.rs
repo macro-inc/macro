@@ -345,6 +345,7 @@ fn update_running(stage: &Stage, args: &UpdateArgs) -> Result<Vec<String>> {
         }
         Some(super::inventory::services_named(mode, &args.services)?)
     };
+    adopt_proxy_config(stage, &instance, mode, &env, &state)?;
     let mut reloaded = Vec::new();
     let remounted = if let Some(source) = args.binaries_dir.as_deref() {
         let new = super::build::BinariesDir::classify(source)?;
@@ -407,6 +408,30 @@ fn update_running(stage: &Stage, args: &UpdateArgs) -> Result<Vec<String>> {
         );
     }
     Ok(reloaded)
+}
+
+/// Rewrite the instance's Caddyfile and recreate only the proxy when it changed,
+/// so a stack started by an older xtask gets current routing and cookie rules
+/// with its data intact. `stack up` would wipe it.
+fn adopt_proxy_config(
+    stage: &Stage,
+    instance: &Instance,
+    mode: Mode,
+    env: &env_layer::ResolvedEnv,
+    state: &StackState,
+) -> Result<()> {
+    let path = super::gen_compose::caddyfile_path(instance);
+    let previous = std::fs::read_to_string(&path).ok();
+
+    proxy::write_caddyfile(instance, mode, state.serves_bundle())?;
+
+    if previous == std::fs::read_to_string(&path).ok() {
+        return Ok(());
+    }
+
+    let mut up = super::compose_cmd(instance, env);
+    up.args(["up", "-d", "--force-recreate", "--no-deps", "proxy"]);
+    stage.run("Recreating proxy (configuration changed)", &mut up)
 }
 
 fn remount(
