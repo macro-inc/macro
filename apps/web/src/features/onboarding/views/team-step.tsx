@@ -160,7 +160,7 @@ function RecommendedSwitch(props: {
       label={
         <span class="text-xs text-ink sm:text-sm">
           {props.children}
-          <span class="ml-1 whitespace-nowrap rounded bg-ink/5 px-1 py-0.5 text-[10px] text-ink-muted sm:ml-2 sm:px-1.5 sm:text-xs">
+          <span class="ml-1 whitespace-nowrap rounded bg-ink/5 px-1 py-0.5 align-middle text-[9px] text-ink-muted opacity-60 sm:ml-2 sm:px-1.5 sm:text-[10px]">
             recommended
           </span>
         </span>
