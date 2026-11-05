@@ -1,7 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { ToggleSwitch } from '@ui';
-import { createMemo, Match, Show, Switch } from 'solid-js';
+import { createMemo, type JSX, Match, Show, Switch } from 'solid-js';
 import {
   ContinueButton,
   SecondaryButton,
@@ -141,6 +141,34 @@ const pendingInvites = (
   state: ReturnType<ReturnType<typeof createTeamStep>['state']>
 ) => (state.t === 'invites' ? state.invites : undefined);
 
+/** A full-width team option switch, label left and control right, marked
+ * recommended. */
+function RecommendedSwitch(props: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+  children: JSX.Element;
+}) {
+  return (
+    <ToggleSwitch
+      size="md"
+      class="w-full flex-row-reverse justify-between gap-2"
+      controlClass="shrink-0"
+      checked={props.checked}
+      disabled={props.disabled}
+      onChange={props.onChange}
+      label={
+        <span class="text-xs text-ink sm:text-sm">
+          {props.children}
+          <span class="ml-1 whitespace-nowrap rounded bg-ink/5 px-1 py-0.5 text-[10px] text-ink-muted sm:ml-2 sm:px-1.5 sm:text-xs">
+            recommended
+          </span>
+        </span>
+      }
+    />
+  );
+}
+
 /** Creating the team switches the step to the on-team confirmation, where
  * the creator can copy the team's invite link before continuing. */
 function TeamForm(props: {
@@ -167,26 +195,23 @@ function TeamForm(props: {
       >
         <Show when={form.domain}>
           {(domain) => (
-            <ToggleSwitch
-              size="md"
-              class="w-full flex-row-reverse justify-between gap-2 border-t border-edge-muted pt-6"
-              controlClass="shrink-0"
-              checked={form.allowDomainJoin()}
-              onChange={form.setAllowDomainJoin}
-              label={
-                <span class="flex flex-col gap-1">
-                  <span class="text-xs text-ink sm:text-sm">
-                    Allow @{domain()} emails to join
-                    <span class="ml-1 whitespace-nowrap rounded bg-ink/5 px-1 py-0.5 text-[10px] text-ink-muted sm:ml-2 sm:px-1.5 sm:text-xs">
-                      recommended
-                    </span>
-                  </span>
-                  <span class="text-[11px] text-ink-muted sm:text-xs">
-                    We'll notify your team by email.
-                  </span>
-                </span>
-              }
-            />
+            <div class="flex w-full flex-col gap-4 border-t border-edge-muted pt-6">
+              <RecommendedSwitch
+                checked={form.allowDomainJoin()}
+                onChange={form.setAllowDomainJoin}
+              >
+                Allow @{domain()} emails to join
+              </RecommendedSwitch>
+              {/* The notice invites colleagues to join by domain, so it
+                  reads as off and can't be turned on without domain join. */}
+              <RecommendedSwitch
+                checked={form.notifyDomain()}
+                disabled={!form.allowDomainJoin()}
+                onChange={form.setNotifyDomain}
+              >
+                Notify your team via email
+              </RecommendedSwitch>
+            </div>
           )}
         </Show>
       </TeamSetupFields>

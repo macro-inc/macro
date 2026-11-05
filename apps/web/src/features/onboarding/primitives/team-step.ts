@@ -133,6 +133,10 @@ export function createTeamForm(
   // Only a work domain can be joined by domain; on by default.
   const [allowDomainJoin, setAllowDomainJoin] = createSignal(true);
   const domainJoin = () => seed.domain !== undefined && allowDomainJoin();
+  // The notice invites colleagues to join by domain, so it needs domain join.
+  // The choice is kept while domain join is off and returns with it.
+  const [notifyDomainChoice, setNotifyDomain] = createSignal(true);
+  const notifyDomain = () => domainJoin() && notifyDomainChoice();
 
   const invites = () => validInviteEmails(rows.slots(), options.ownEmail);
   const canCreate = () => name().trim().length > 0 && !pending();
@@ -146,6 +150,7 @@ export function createTeamForm(
         name: name().trim(),
         invites: sent,
         allowDomainJoin: domainJoin(),
+        notifyDomain: notifyDomain(),
       });
     } catch {
       // The capability reports its own failure; keep the form intact.
@@ -162,6 +167,7 @@ export function createTeamForm(
         .length,
       used_domain_suggestion: seed.domain !== undefined,
       allow_domain_join: domainJoin(),
+      notify_domain: notifyDomain(),
     });
   };
 
@@ -176,6 +182,9 @@ export function createTeamForm(
     domain: seed.domain,
     allowDomainJoin,
     setAllowDomainJoin,
+    /** Whether the domain notice will be sent; off while domain join is. */
+    notifyDomain,
+    setNotifyDomain,
     create,
   };
 }

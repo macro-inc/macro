@@ -157,6 +157,49 @@ describe('onboarding flow', () => {
     );
   });
 
+  it('notifies the domain only while domain join is on', async () => {
+    const { fake } = setup({ resume: 'team' });
+    await heading('Built for teams.');
+    await screen.findByDisplayValue('Acme');
+
+    const domainJoin = screen.getByRole('switch', {
+      name: /^Allow @acme.com emails to join/,
+    }) as HTMLInputElement;
+    const notify = screen.getByRole('switch', {
+      name: /^Notify your team via email/,
+    }) as HTMLInputElement;
+    expect(notify.checked).toBe(true);
+    expect(notify.disabled).toBe(false);
+
+    // Without domain join the notice can't go out, so it reads as off.
+    fireEvent.click(domainJoin);
+    await waitFor(() => expect(notify.disabled).toBe(true));
+    expect(notify.checked).toBe(false);
+
+    // Turning domain join back on restores the earlier choice.
+    fireEvent.click(domainJoin);
+    await waitFor(() => expect(notify.disabled).toBe(false));
+    expect(notify.checked).toBe(true);
+
+    fireEvent.click(notify);
+    click('Create team & invite 2');
+    await waitFor(() =>
+      expect(fake.calls()).toContain(
+        'createTeam:Acme:grace@acme.com,alan@acme.com:quiet'
+      )
+    );
+    expect(fake.events()).toContainEqual(
+      expect.objectContaining({
+        event: 'onboarding_v4_team',
+        data: expect.objectContaining({
+          action: 'created',
+          allow_domain_join: true,
+          notify_domain: false,
+        }),
+      })
+    );
+  });
+
   it('shows the created team with its invite link before continuing', async () => {
     const { fake } = setup({ resume: 'team' });
     await heading('Built for teams.');
