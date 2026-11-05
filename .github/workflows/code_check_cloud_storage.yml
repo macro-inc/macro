@@ -672,13 +672,13 @@ jobs:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.test_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
-    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci-cov
     env:
-      RUST_PACKAGES: ${{ needs.path-check.outputs.test_packages }}
+      RUST_PACKAGES: all
       NEXTEST_TEST_THREADS: '32'
       CARGO_PROFILE_DEV_DEBUG: '0'
       CARGO_PROFILE_TEST_DEBUG: '0'
-      RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
+      RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold -C instrument-coverage'
       SCCACHE_IDLE_TIMEOUT: '0'
     services:
       postgres:
@@ -721,7 +721,7 @@ jobs:
         set -euo pipefail
         env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
         trap 'rm -f "$env_file"' EXIT
-        if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+        if nsc cache sccache setup --cache_name sccache-ci-cov > "$env_file"; then
           # Register credential values as masked BEFORE exporting: GitHub only
           # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
           # ~24h Namespace workspace token (registry + cache write) — printed
@@ -815,6 +815,23 @@ jobs:
       run: |
         set -euo pipefail
 
+        if [ "${NEXTEST_RUN_DENO_TESTS:-}" = "true" ]; then exit 0; fi
+        pool="$RUNNER_TEMP/cov"; mkdir -p "$pool" "$RUNNER_TEMP/covbuild"
+        base=(--config 'profile.dev.package."*".debug=false' --all-features --workspace --exclude sync_service --lib --bins --tests)
+        export LLVM_PROFILE_FILE="$RUNNER_TEMP/covbuild/%1m.profraw"
+        cargo nextest list "${base[@]}" --message-format json > target/nextest-list.json
+        rm -rf "$RUNNER_TEMP/covbuild"
+        export LLVM_PROFILE_FILE="$pool/%2m.profraw"
+        set +e
+        cargo nextest run "${base[@]}" --no-fail-fast --no-tests=pass --test-threads 32
+        echo "nextest exit $?"
+        set -e
+        unset LLVM_PROFILE_FILE
+        df -h "$RUNNER_TEMP" .
+        du -sh "$pool"
+        nix shell --inputs-from . nixpkgs#llvmPackages_21.llvm nixpkgs#python3 --command python3 .github/cov_map.py target/nextest-list.json "$pool" "$RUNNER_TEMP/covwork" target/cov-map.jsonl.gz "$PWD"
+        exit 0
+
         # --no-tests=pass: a package filter can legitimately select a crate with no
         # tests; treat that as success, not nextest's default error.
         # sync-service is not part of this suite, and its storage backends are mutually
@@ -866,6 +883,15 @@ jobs:
         fi
 
         cargo nextest run "${common[@]}" "${pkg_args[@]}"
+    - name: upload diagnostics
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: sel2-cov
+        path: |
+          target/cov-map.jsonl.gz
+          target/nextest/default/junit.xml
+          target/nextest-list.json
     - name: Set up code execution runtime
       if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')
       uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed

@@ -369,3 +369,6 @@ pub async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[allow(dead_code)]
+const CI_SEL2_NONCE: &str = "5871d072f93f4e22b375eb6c273c4172";
