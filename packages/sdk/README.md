@@ -560,6 +560,31 @@ It returns the new revision, not a diff; read `content()` to see what changed.
 refused edit throws `DocumentEditRefusedError` with the editor's reason;
 `EditOutcomeUnknownError` means read the document before retrying.
 
+For exact edits with no AI, `document.lexical()` loads the document into a
+headless Lexical editor. Edit it with the ordinary Lexical API and Macro's nodes
+from `@macro-inc/sdk/lexical`, then commit. Install the optional peers first:
+`lexical` and `@lexical/{code,headless,link,list,mark,markdown,rich-text,table,utils}`,
+all at `0.45.0`.
+
+```ts
+import { $getRoot } from 'lexical';
+import { $isListItemNode, $isTaskListNode } from '@macro-inc/sdk/lexical';
+
+const lexical = await document.lexical();
+lexical.update(() => {
+  for (const block of $getRoot().getChildren()) {
+    if (!$isTaskListNode(block)) continue;
+    for (const item of block.getChildren())
+      if ($isListItemNode(item)) item.setChecked(true);
+  }
+});
+await lexical.commit();
+```
+
+`commit()` sends only the top-level blocks that changed and merges them with
+concurrent edits. It throws `DocumentEditConflictError` when someone else
+changed the same node; read again with `document.lexical()` and redo the edit.
+
 ### Document lifecycle and other resources
 
 `documents.createUpload(options)` reserves a binary document and returns upload
