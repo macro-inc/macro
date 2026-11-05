@@ -500,7 +500,8 @@ fn check_job_results() -> Step<Run> {
         echo "ios-native-check: ${{ needs.ios-native-check.result }}"
 
         # Fail if any job failed (skipped and success are both OK). The iOS
-        # gate is the merge gate, so a cancelled gate is not OK either.
+        # gate is the merge gate, so a cancelled gate is not OK either. The same
+        # goes for generated code: a job that hits its timeout reports cancelled.
         if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
            [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.typescript.result }}" == "failure" ]] || \
