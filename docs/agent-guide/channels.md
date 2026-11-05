@@ -18,6 +18,11 @@ IDs, messages and editors resolve the current name and fall back to the email
 local part when lookup fails. Verify that these mentions remain intact when
 editing and saving a message; integrations need not supply email or displayName.
 
+## Channel calls
+
+A channel call may have its own row and thread in the channel. See
+[calls whose discussion is a channel thread](calls.md#calls-whose-discussion-is-a-channel-thread).
+
 ## Channel list previews
 
 Message text in channel rows and Home cards is display-only, including quoted

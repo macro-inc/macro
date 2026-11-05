@@ -1,6 +1,6 @@
 # Call chat in the channel
 
-Status: agreed proposal. No product code has changed as part of this document.
+Status: implemented behind the server flag `enable-call-channel-thread`, off by default.
 
 Mockup: [Call chat in the channel](https://claude.ai/artifact/V1h77fWX2oMtqLihZbuaeA)
 (every artboard is clickable; start at the first one).
@@ -37,9 +37,8 @@ pub enum CallDiscussion {
   `CallChat`, so `channel_id` cannot decide this.
 - **Two client paths, not three.** Past channel calls and calls with no channel look
   the same to the client.
-- **One client branch for the panel.** The host picks the discussion component.
-  `CallOverlay` takes a panel slot, and `showChat` and `guestChatSession` move out of
-  it to the hosts.
+- **One client branch for the panel.** The host picks the discussion component and hands
+  `CallOverlay` a slot.
 - **One branch for the timeline.** The call is its own timeline entry kind, not
   optional fields on a message or activity row.
 - **Live and ended are separate components**, chosen from a status union, rather than
@@ -130,11 +129,11 @@ A normal channel mention still reaches someone during a call.
 
 ### Schema
 
-One migration, safe to run before any code uses it:
+One migration, with its constraints validated in a second, runs before any code uses it:
 
-- `calls.discussion` and `call_records.discussion`: `text NOT NULL DEFAULT 'call_chat'`,
-  with `'channel_thread'` as the other value. Archival copies it, and `call_entities`
-  exposes it.
+- `call_entities.discussion`: `text NOT NULL DEFAULT 'call_chat'`, with `'channel_thread'` as
+  the other value. `call_entities` is the durable identity of a call through archival, so
+  archiving needs no copy.
 - `comms_messages.kind`: `text NOT NULL DEFAULT 'message'`, with `'call_root'` as the other
   value.
 
@@ -147,53 +146,51 @@ already leaves a channel thread alone.
 exists only for links to existing channel calls, so the meeting path always creates calls
 with no channel.
 
-In the allocation winner's branch of `get_or_create_call`:
+Before creating the call, the service reads the flag for the caller through the `ChannelThreads`
+port. Off, or a failed load, stores `call_chat`. The value is written in the transaction that
+creates the call, so nobody can read the call with a discussion it will not keep.
 
-1. Load the flag for the caller. Off, or a failed load, stores `call_chat`.
-2. Create the call with `discussion = channel_thread`.
-3. Post the root with `post_from_event`, using the call id as the event id, so it is
-   idempotent. The caller is the sender and the body is `started a call`.
+The race winner then calls `ChannelThreads::ensure_root`, which reaches
+`MessageService::ensure_call_root(call_id)`. It takes no receipt, because everything it writes
+comes from the call's record: the channel, the sender and the text. It is idempotent on the
+call id.
 
-A failed post never blocks the call. The first reply retries it: when a channel post names
-a `thread_id` that has no root and is an active `channel_thread` call of that channel, the
-service creates the root with the same id first. This is a narrow port from `messages` to
-`call`; the reply path has no other call knowledge.
+A failed post never blocks the call. The first reply retries it: when a channel post names a
+`thread_id` with no thread and that id is a `channel_thread` call of this channel, the service
+creates the root first.
 
 ### Call root kind
 
-`PostMessage` gains a `#[serde(skip)]` server-only `kind`, like `notification_policy`, so no
-client can set it. A `call_root` message:
+`MessageKind` is on `Message`. Only `ensure_call_root` writes anything other than
+`MessageKind::Message`, and no client input reaches it. A `call_root` message:
 
-- is posted `Silent`, moves the channel up the list, and shows its text as the preview,
-- adds no unread,
-- does not run `upsert_activity`,
-- carries `kind` on `MessagePostedMetadata`, so `agent_trigger`, `scheduled_action` and
-  webhook consumers drop it (search indexing keeps it),
+- is announced by its own `MessageChange::CallRootPosted`. The match on that enum is exhaustive,
+  so every consumer decided what a root does: viewers get it live and the channel moves up the
+  list, while notifications, interaction tracking, agents, routines, webhooks and search documents
+  never see it,
 - is left out of `get_channel_message_count`, so the first real message still sends
   first-message invites,
-- rejects edit, delete, thread delete and reactions in `MessageService`, for every caller
-  including bots and agent tools.
+- rejects edit, delete and reactions in `MessageService`, for every caller including bots and
+  agent tools. Channels have no thread delete or thread patch.
 
 Its thread replies are ordinary messages and trigger everything normally. Agents in call
 threads therefore follow channel rules, not the owner-based call rules.
 
-`kind` is on `MessageListItem` as a required enum, so surfaces that show a root outside the
-timeline (a standalone thread, the Threads view) can render the action line. The plain text
-is what search, agents and notification previews read.
+The plain text `started a call` is what notification previews, agents and the channel list read.
+A surface that shows a root outside the timeline (a standalone thread, the Threads view, the call
+record) draws it as the action line from `kind`.
 
 ### Timeline
 
-Add a third `MessageTimelineEntry` kind. The repository returns `call_root` messages as
-this kind rather than as `Message`. Clients already ignore entry kinds they do not know.
+`MessageTimelineEntry` gains a third kind. `timeline_entries` turns `call_root` messages into it
+as the last step, with one batched read of `call_entities` per page, so paging and windows are
+unchanged. Clients already ignore entry kinds they do not know.
 
 ```rust
 Call {
-    call_id: Uuid,
-    caller_id: String,
-    started_at: DateTime<Utc>,
+    /// The root message, its thread state and its reply preview.
+    message: Box<MessageListItem>,
     status: CallEntryStatus,
-    /// Same shape channel messages use: reply count, preview, latest reply.
-    thread: ThreadPreview,
 }
 
 pub enum CallEntryStatus {
@@ -203,18 +200,16 @@ pub enum CallEntryStatus {
 }
 ```
 
-Read status with one batched query per page, joined on `call_entities`, never per row.
-
-`RecordArchived` carries the discussion. For a `channel_thread` call it records a new
-`CallThreadEnded` action, outside `CHANNEL_TIMELINE`, in place of `CallEnded`. The activity
-feed keeps the fact and the timeline shows no second row. Past calls keep `CallEnded`.
+`RecordArchived` carries `channel_thread`. For those calls the ending is recorded against the call
+entity rather than the channel, so the activity feed keeps the fact and the channel timeline shows
+no second row. Past calls keep their channel-targeted `CallEnded`.
 
 ### Notifications
 
-In `crates/channels/src/domain/side_effects.rs`, when the thread's root is a `call_root`,
-remove connected participants from the recipients of all three effects: `Reply`,
-`UserMention` and document mention. Read them through a new port over active participation
-rows. A failed read notifies rather than loses the notification.
+In `crates/channels/src/domain/side_effects.rs`, connected participants are left out of the
+recipients of all three effects: `Reply`, `UserMention` and document mention.
+`get_thread_notification_context` reads them from active `call_participants` rows, only when the
+thread's root is a `call_root`. A failed read notifies rather than loses the notification.
 
 Followers exclude a `call_root`'s sender: `get_channel_participants_for_thread_id` (both
 copies) counts only `kind = 'message'` senders, `parent_sender_id` is empty for call roots,
@@ -230,8 +225,8 @@ stale client cannot write to a chat nobody will see.
 `enable-call-channel-thread`, through `crates/feature_flags`, evaluated for the caller when
 the call is created and targeted by team in PostHog. The stored type then applies to everyone
 on that call, so people on one call cannot end up in different discussions. There is no client
-flag. Wire `PostHogFeatureFlags` at the composition root of the service hosting calls, where
-it is not wired yet, and follow CS-18 for its config.
+flag. `document_storage_service` wires `PostHogFeatureFlags` when its optional `POSTHOG_API_KEY`
+is set; without it every call stays `call_chat`.
 
 ## Frontend
 
@@ -240,40 +235,41 @@ with user-visible text through `t()`.
 
 ### Discussion type
 
-- Parse `CallDiscussion` at the transport boundary. Every call read returns it, and
-  `CallContext` exposes the active call's.
-- `ChannelCallTab` and the meeting route each choose the panel content from it and pass it to
-  `CallOverlay`, along with the default open state.
-- `ChannelCallPanel` serves `ChannelThread`. `CallChat` and `GuestCallChat` serve `CallChat`
-  and do not change.
-- `CallRecordingBody` chooses `CallChatHistory` or a new read-only channel thread section.
+- `CallRecord.discussion` carries `CallDiscussion`. The live record query is already mounted for an
+  active call, so nothing else on the wire needs it.
+- `ChannelCallTab` and the meeting route hand `CallOverlay` a `discussion` slot, which supplies the
+  panel content, the tab label and the default open state. `CallDiscussionContent` is the one place
+  a signed-in call chooses between `ChannelCallPanel` and `CallChat`.
+- Guests have no discussion slot and keep `GuestCallChat`. A new meeting has no channel and keeps
+  `CallChat`.
+- `CallDiscussionHistory` is the one place a call record chooses between `CallChatHistory` and the
+  read-only channel thread section.
 
 ### Channel timeline
 
-- `Channel.tsx` gains one `Match` for the call entry, rendering `CallThreadRow`, which picks
-  `LiveCallRow` or `EndedCallRow` from `status`.
-- `LiveCallRow` reuses `formatDuration` and the join logic from `ActiveCallMessage`, and
-  `UserGroup` over `useLiveCallRecordQuery`, as `JoinCallEmptyState` does.
-- The thread below reuses `ThreadCollapsedIndicator`, `ThreadReplyButton`, the thread rail and
-  `threadManager`, keyed by root id. Unread styling comes from its existing props.
-- A live `call_ended` event patches the entry's status in the timeline cache.
-- `ActiveCallMessage` shows only while the row is out of view, and adds the count for
-  `ChannelThread` calls. A `CallChat` call running at launch keeps today's banner.
-- A standalone thread renders a `call_root` as the action line, through the root's slot, with
-  no message actions.
+- `buildMessageIndex` keeps a `callStatusByKey` beside `byId`, and call rows are left out of `keys`,
+  so keyboard selection skips them as it skips activity.
+- `Channel.tsx` passes `ChannelThread` a `rootSlot` for those rows, rendering `CallRootLine`, which
+  picks a live or past line from `status`. Everything else about the row is the ordinary thread:
+  `ThreadCollapsedIndicator`, `ThreadReplyButton`, the rail, `threadManager` and quote replies.
+- `hideCollapsedPreview` and `replyInputAlwaysOpen` on `ChannelThread` give the collapsed row its
+  indicator and input.
+- `call_root_posted` and `call_ended` invalidate the channel's timeline, because the row carries
+  facts only the server has.
+- `ActiveCallMessage` hides while the live row is on screen, and adds the count for `ChannelThread`
+  calls. A `CallChat` call running at launch keeps today's banner.
 
 ### Call panel
 
-- `ChannelCallPanel` renders the timeline through `ThreadList`, with rows cut off at the call's
-  root and a final blank-slate item at least as tall as the scroll viewport when the thread is
-  empty. Extract what this shares with `Channel.tsx` first, rather than adding panel branches to
-  that file. Check the Messages and Call tabs swapping: both read the same timeline cache and
-  need their own scroll state.
-- Inline reply inputs are off in the panel. Replies bind to the panel composer. Keep one draft
-  per target, and do not remount a focused editor when the target changes.
-- The popup is a small primitive over the channel's timeline index, following the count rules
-  above. `MessageReadVisibility` already requires a message to be on screen, so nothing is marked
-  read from the panel.
+- `ChannelCallPanel` renders `Channel` with a `callPanel` prop, which is the only branch in that
+  component: rows are cut off at the root, older pages load until the root is found, the row's
+  minimum height is the scroll viewport so its first frame is the blank slate, and channel view
+  tracking is off so what's new stays new.
+- The panel always uses the unified composer. `createUnifiedInputManager` takes a `defaultThreadId`,
+  so closing a reply returns to the call thread, and the top-level composer is unreachable.
+- The popup comes from `outsideMessages` over the channel's timeline index, following the count
+  rules above. `MessageReadVisibility` already requires a message to be on screen, so nothing is
+  marked read from the panel.
 
 ### Links
 
@@ -285,7 +281,7 @@ message targets cover it. `buildCallMessageLink` stays for `CallChat`.
 | Case | Behavior |
 | --- | --- |
 | Call running at launch | Stays `call_chat`, with today's panel and row. |
-| Root post fails and nobody replies | Row is missing for that call, and the ended activity is `CallThreadEnded`, so nothing shows. Rare; log it, and retry once in the background. |
+| Root post fails and nobody replies | No row for that call. Logged at error level. |
 | Flag load fails | `call_chat`. The call behaves as today. |
 | Stale client on a `channel_thread` call | Its post is rejected and the existing "could not be sent" message shows. |
 | Member removed from the channel | Loses the thread at once, because access is the channel's. |
@@ -297,25 +293,23 @@ message targets cover it. `buildCallMessageLink` stays for `CallChat`.
 
 ## Observability
 
-- Backend: `call.discussion.create_root` with call id, channel id and outcome (including
-  retried on first reply), and `messages.call_entries` for the timeline read with a row count.
-  Record `call.discussion` on the call's start span, and the eaten count on notification spans.
-- Web: `channel.call-panel.view` as its own flow with call and channel ids and phases for timeline
-  and thread. Opening from the popup is a `beginInteraction`, recording the count. Expanding a row
-  is `useFlow().task`.
+- Backend: `call.discussion.create_root` with the call id and outcome, and `messages.call_entries`
+  for the timeline read with a row count.
+- Web: `channel.call-panel.view` is its own flow. Opening from the popup is a `beginInteraction`,
+  `call.panel.view_channel`, recording the call, channel and count.
 - Never record message content or quote text.
 
 ## Rollout
 
-1. **Backend:** schema, `CallDiscussion` on call reads, `kind` on messages, the timeline entry kind.
-   All calls are still `call_chat`.
-2. **Web:** branch on `discussion`, with `ChannelCallPanel`, `CallThreadRow`, popup and record
-   section. Unreachable until a call is `channel_thread`. Wait for this to reach clients.
-3. **Backend:** root creation behind the flag, stale-write rejection, notification changes,
-   follower and count changes, `CallThreadEnded`.
-4. **Enable** in dev, then by team.
-5. **Cleanup:** remove the flag. `CallChat`, `GuestCallChat` and `CallChatHistory` remain for calls
-   with no channel and past calls.
+Everything ships together, with the flag at 0%, so no call becomes `channel_thread` until the client
+that reads `discussion` has reached people.
+
+1. Merge and deploy. All calls are still `call_chat`.
+2. Wait for the web bundle to reach clients.
+3. Set `POSTHOG_API_KEY` in `document_storage_service`'s Doppler configs.
+4. Enable `enable-call-channel-thread` in dev, then by team.
+5. Clean up: remove the flag and `CallEnded` handling once no past-call row needs it. `CallChat`,
+   `GuestCallChat` and `CallChatHistory` remain for calls with no channel and past calls.
 
 ## Tests
 
@@ -338,7 +332,7 @@ message targets cover it. `buildCallMessageLink` stays for `CallChat`.
 - Live: a member outside the call replies from the channel and people in the call see it without a
   notification, and the reverse.
 
-## Docs to update when this ships
+## Docs
 
-`docs/agent-guide/calls.md` and `channels.md`, the `AGENTS.md` of `crates/call`, `crates/messages` and
-`crates/channels`, and `docs/design/entity-messages.md` for the new message kind.
+Done in this change: `docs/agent-guide/calls.md`, `channels.md`, the `AGENTS.md` of `crates/call`,
+`crates/messages` and `services/document_storage_service`, and `docs/design/entity-messages.md`.

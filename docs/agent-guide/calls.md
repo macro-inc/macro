@@ -72,6 +72,33 @@ conversation row's Decline. To see the section
 without starting a real call, answer `/call/active` and `/call/<channelId>/active`
 with a fake call through CDP `Fetch` interception.
 
+### Calls whose discussion is a channel thread
+
+With the `enable-call-channel-thread` server flag on for the caller, a new call in a channel stores
+`channel_thread` as its discussion, and `CallRecord.discussion` says so. Past channel calls, calls
+already running, and calls with no channel keep `call_chat`, and behave as described elsewhere here.
+
+In the channel, the call is a row at its start time: `<name> started a call`, the call time, live
+avatars and **Join** (or **Return to call**), with the thread collapsed under it and a reply input.
+When it ends the line says how long it lasted and the input gives way to `+`. While the live row is
+off screen, the banner above the composer shows a message count and scrolls to the row.
+
+In the call, the panel opens on desktop and tablet, closed on phones. Its first tab is the channel's
+name. It shows the channel up to the call's row, opened on the blank slate when the thread is empty
+and at the newest message otherwise. The composer is pinned to the call thread and returns there
+after replying elsewhere; nothing posts top-level from the panel. A popup counts top-level messages
+others have sent to the channel since you joined, and **View** swaps to the Messages tab with the
+call still connected. On the meeting page it navigates to the channel.
+
+People connected to the call get no notification from its thread, mentions included; they stay
+followers, so later replies reach them after they leave. The call's root accepts replies and nothing
+else: no edit, delete or reactions. On a call's record the chat is read-only with **Open in channel**,
+and absent for anyone who can't read the channel. Deleting a record leaves the thread in the channel.
+
+To verify, turn the flag on for your test user in PostHog, start a call in a channel from one account,
+and open the channel from a second. Check replying from each side, a quote reply inside the thread,
+that no notification reaches the person in the call, and that ending the call updates the row.
+
 While you are in a call, a green phone button (`Return to call`,
 `data-sidebar-next-item="active-call"`) sits at the bottom of the desktop rail,
 above Settings. It opens the channel's Call tab, or the meeting page for a quick call.
