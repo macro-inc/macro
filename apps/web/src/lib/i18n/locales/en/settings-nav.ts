@@ -55,4 +55,5 @@ export default {
   sectionUnavailable: 'This settings section is unavailable.',
   createTeam: 'Create a team',
   inviteTeam: 'Invite your team',
+  teamActions: 'Team actions',
 };

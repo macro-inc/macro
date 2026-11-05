@@ -10,8 +10,8 @@ import { CreateTeamDialog, InviteToTeamDialog } from './Team';
 import { canInviteToTeam, isTeamAdminOrOwner } from './teamMemberPermissions';
 
 /**
- * The settings sidebar's footer action: invite people to your team, or create
- * a team when you don't have one yet.
+ * The settings sidebar's top action: invite people to your team, or create a
+ * team when you don't have one yet.
  */
 export function TeamSidebarAction() {
   const userTeamsQuery = useUserTeamsQuery();
@@ -34,7 +34,7 @@ function CreateTeamAction() {
   const [open, setOpen] = createSignal(false);
   return (
     <>
-      <FooterItem
+      <ActionItem
         icon={<UsersThreeIcon class="size-4" />}
         label={t('settingsNav.createTeam')}
         onPress={() => setOpen(true)}
@@ -62,9 +62,10 @@ function InviteToTeamAction(props: { teamId: string }) {
 
   return (
     <Show when={canInvite()}>
-      <FooterItem
+      <ActionItem
         icon={<UserPlusIcon class="size-4" />}
         label={t('settingsNav.inviteTeam')}
+        rainbow
         onPress={() => setOpen(true)}
       />
       <InviteToTeamDialog
@@ -77,15 +78,31 @@ function InviteToTeamAction(props: { teamId: string }) {
   );
 }
 
-function FooterItem(props: {
+function ActionItem(props: {
   icon: JSX.Element;
   label: string;
+  /** Paint the label in a rainbow gradient to draw the eye. */
+  rainbow?: boolean;
   onPress: () => void;
 }) {
   return (
     <ViewSidebar.Item {...pressHandlers(() => props.onPress())}>
       <ViewSidebar.Icon>{props.icon}</ViewSidebar.Icon>
-      <span class="truncate">{props.label}</span>
+      <span
+        class="truncate font-medium"
+        style={props.rainbow ? RAINBOW_TEXT_STYLE : undefined}
+      >
+        {props.label}
+      </span>
     </ViewSidebar.Item>
   );
 }
+
+/** Saturated mid-tones that stay legible on both the light and dark sidebar. */
+const RAINBOW_TEXT_STYLE: JSX.CSSProperties = {
+  'background-image':
+    'linear-gradient(90deg, #e5484d, #f5a524, #30a46c, #0091ff, #8e4ec6, #d6409f)',
+  'background-clip': 'text',
+  '-webkit-background-clip': 'text',
+  color: 'transparent',
+};
