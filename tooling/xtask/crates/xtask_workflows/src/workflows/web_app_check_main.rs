@@ -2,7 +2,8 @@
 //! Generated into `web-app-check-main.yml`.
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, PullRequest, PullRequestType, Run, Step, Use, Workflow,
+    Concurrency, Event, Expression, Job, PullRequest, PullRequestType, Run, Step, Strategy, Use,
+    Workflow,
 };
 
 use crate::workflows::{
@@ -54,6 +55,7 @@ pub fn web_app_check_main() -> Workflow {
         .add_job("generated-code", generated_code())
         .add_job("biome-check", biome_check())
         .add_job("test", test())
+        .add_job("browser", browser())
         .add_job("cycles", cycles())
         .add_job("build", build())
         .add_job(ios_native_check::JOB_ID, ios_native_check::job())
@@ -195,18 +197,42 @@ fn biome_check() -> Job {
 }
 
 fn test() -> Job {
-    gated_web_job("Test")
+    gated_web_job("Test (${{ matrix.shard }}/3)")
         .runs_on(mid_web_runner())
+        .strategy(
+            Strategy::default()
+                .fail_fast(false)
+                .matrix(serde_json::json!({ "shard": [1, 2, 3] })),
+        )
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_test_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_reqs_web("Setup", true))
+        .add_step(steps::setup_reqs_web("Setup", false))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(build_agent_fold_for_tests())
         .add_step(run_tests())
+        .add_step(steps::teardown_nix())
+}
+
+/// Browser suites, apart from vitest and the app build so neither waits for
+/// them. They load the wasm packages through Vite, so this job restores or
+/// builds them; unchanged packages come from the shared cache.
+fn browser() -> Job {
+    gated_web_job("Browser Tests")
+        .runs_on(mid_web_runner())
+        .add_step(checkout("Checkout Repo", false))
+        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_reqs_web("Setup", true))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
+        .add_step(steps::start_sccache_server())
+        .add_step(build_wasm_for_browser_tests())
+        .add_step(run_functional_tests())
         .add_step(run_signup_browser_tests())
         .add_step(run_i18n_browser_tests())
         .add_step(run_database_browser_tests())
         .add_step(run_calendar_details_browser_tests())
+        .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
@@ -224,16 +250,14 @@ fn cycles() -> Job {
 fn build() -> Job {
     gated_web_job("Build")
         // Match preview/deploy capacity for Vite's chunk-rendering memory peak.
-        .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
+        .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_build_check_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_reqs_web("Setup", true))
+        .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
         .add_step(run_build())
-        // Exercise this revision's cache engine, already compiled by build-dev.
-        .add_step(run_functional_tests())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }
@@ -253,6 +277,7 @@ fn status_check() -> Job {
             "generated-code".to_string(),
             "biome-check".to_string(),
             "test".to_string(),
+            "browser".to_string(),
             "cycles".to_string(),
             "build".to_string(),
             ios_native_check::JOB_ID.to_string(),
@@ -398,7 +423,7 @@ fn check_floating_promises() -> Step<Run> {
 
 fn check_functional_test_types() -> Step<Run> {
     Step::new("Check Functional Test Types")
-        .run("bun run --bun --silent tsc --project tests/functional/tsconfig.json")
+        .run("bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -444,6 +469,7 @@ fn run_collaboration_biome() -> Step<Run> {
 fn build_agent_fold_for_tests() -> Step<Run> {
     Step::new("Build agent-fold WASM for tests")
         .run("just build-agent-fold-wasm")
+        .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .timeout_minutes(15u32)
 }
@@ -452,7 +478,7 @@ fn build_agent_fold_for_tests() -> Step<Run> {
 /// keeps it warm across jobs.
 fn run_tests() -> Step<Run> {
     Step::new("Test")
-        .run("bun run test")
+        .run("bun run test --shard=${{ matrix.shard }}/3")
         .add_env((
             "VITEST_MODULE_CACHE_DIR",
             vars::VITEST_MODULE_CACHE_VOLUME_DIR,
@@ -460,9 +486,18 @@ fn run_tests() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
+fn build_wasm_for_browser_tests() -> Step<Run> {
+    with_pr_wasm_env(
+        Step::new("Build wasm packages")
+            .run("just build-wasm")
+            .working_directory(xtask_paths::repo_dir!("apps/web")),
+    )
+}
+
 fn run_functional_tests() -> Step<Run> {
-    Step::new("Test Optimistic Mutations in Chromium")
+    Step::new("Functional Browser Tests")
         .run("bun run test:functional")
+        .add_env(("FUNCTIONAL_TEST_WORKERS", "8"))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -522,11 +557,32 @@ fn collaboration_cycles_import_check() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
 }
 
-fn run_build() -> Step<Run> {
-    Step::new("Build")
-        .run("just build-dev")
+/// Whole-program LTO costs the fig, psd and ai engines about 40 s each and only
+/// makes them faster to run, which a PR's tests don't need. Deploys
+/// keep it. The wasm package cache doesn't key on these, so only PR jobs, which
+/// all set them, may read it.
+const PR_WASM_ENV: [(&str, &str); 6] = [
+    ("CARGO_PROFILE_FIG_ENGINE_WASM_LTO", "off"),
+    ("CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS", "16"),
+    ("CARGO_PROFILE_PSD_ENGINE_WASM_LTO", "off"),
+    ("CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS", "16"),
+    ("CARGO_PROFILE_AI_ENGINE_WASM_LTO", "off"),
+    ("CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS", "16"),
+];
+
+fn with_pr_wasm_env(step: Step<Run>) -> Step<Run> {
+    PR_WASM_ENV
+        .into_iter()
+        .fold(step, Step::add_env)
         .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+fn run_build() -> Step<Run> {
+    with_pr_wasm_env(
+        Step::new("Build")
+            .run("just build-dev")
+            .working_directory(xtask_paths::repo_dir!("apps/web")),
+    )
 }
 
 fn check_job_results() -> Step<Run> {
@@ -537,6 +593,7 @@ fn check_job_results() -> Step<Run> {
         echo "generated-code: ${{ needs.generated-code.result }}"
         echo "biome-check: ${{ needs.biome-check.result }}"
         echo "test: ${{ needs.test.result }}"
+        echo "browser: ${{ needs.browser.result }}"
         echo "cycles: ${{ needs.cycles.result }}"
         echo "build: ${{ needs.build.result }}"
         echo "ios-native-check: ${{ needs.ios-native-check.result }}"
@@ -549,6 +606,7 @@ fn check_job_results() -> Step<Run> {
            [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
            [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
            [[ "${{ needs.test.result }}" == "failure" ]] || \
+           [[ "${{ needs.browser.result }}" == "failure" ]] || \
            [[ "${{ needs.cycles.result }}" == "failure" ]] || \
            [[ "${{ needs.build.result }}" == "failure" ]] || \
            [[ "${{ needs.ios-native-check.result }}" == "failure" ]] || \

@@ -51,15 +51,15 @@ impl fmt::Display for Runner {
 }
 
 impl Runner {
-    /// Render the `runs-on` label with an explicit, branch-independent cache
-    /// *tag* (`<profile>;overrides.cache-tag=<tag>`).
+    /// Render the `runs-on` label with an explicit cache *tag*
+    /// (`<profile>;overrides.cache-tag=<tag>`), for a volume apart from the
+    /// profile's default one.
     ///
-    /// By default Namespace scopes a profile's cache volume per branch: a fresh
-    /// branch can only inherit the *default* branch's cache, so any branch whose
-    /// workflow never runs on `main` starts cold every time. Pinning a fixed tag
-    /// makes every branch read/write the *same* volume — one global cache, like
-    /// the old globally shared cache behavior. Cache-volume writes are managed
-    /// by Namespace; compiled objects use the separately named remote sccache.
+    /// Every job on a tag forks the newest generation its node holds, and the
+    /// last job to finish cleanly on that node replaces it, with no merge. Keep
+    /// jobs that read back what they wrote apart from jobs that would overwrite
+    /// it. A new tag starts empty, so its first jobs fetch the whole Nix store.
+    /// Compiled objects use the separately named remote sccache.
     pub fn with_cache_tag(self, tag: &str) -> String {
         format!("{self};overrides.cache-tag={tag}")
     }

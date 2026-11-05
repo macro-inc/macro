@@ -56,8 +56,7 @@ pub const RUST_TEST_BUILD_JOBS: u32 = 2;
 pub const NEXTEST_TEST_THREADS: u32 = 32;
 
 /// Explicit Namespace cache-volume tag for the heavy compile jobs (check +
-/// test). A fixed tag (instead of the default per-branch scoping) makes the
-/// Cargo/Nix volume global across all branches — see
+/// test), apart from the profile's default volume — see
 /// [`crate::workflows::runners::Runner::with_cache_tag`]. The legacy tag name is
 /// retained so the existing warm volume is not invalidated.
 pub const CI_CACHE_TAG: &str = "sccache-ci";
