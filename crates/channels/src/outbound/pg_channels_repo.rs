@@ -883,39 +883,52 @@ fn push_channel_thread_participant_filter_expr(
         r#"(EXISTS (
             SELECT 1
             FROM comms_channel_participants pcp
-            WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = pcp.channel_id::text
+            WHERE pcp.channel_id = m.channel_message_parent_id
+              AND pcp.channel_id::text = m.parent_entity_id
               AND pcp.user_id = "#,
     );
     builder.push_bind(participant.clone());
+    // The root and its replies are checked apart: one `tm.id = m.id OR
+    // tm.thread_id = m.id` scan cannot use either index on its own.
     builder.push(
         r#"
               AND pcp.left_at IS NULL
-        ) AND EXISTS (
+        ) AND ((m.deleted_at IS NULL AND "#,
+    );
+    push_channel_message_participation_expr(builder, "m", &participant);
+    builder.push(
+        r#") OR EXISTS (
             SELECT 1
             FROM comms_messages tm
-            WHERE (tm.id = m.id OR tm.thread_id = m.id)
+            WHERE tm.thread_id = m.id
               AND tm.deleted_at IS NULL
-              AND (
-                tm.sender_id = "#,
+              AND "#,
     );
-    builder.push_bind(participant.clone());
-    builder.push(
+    push_channel_message_participation_expr(builder, "tm", &participant);
+    builder.push(")))");
+}
+
+/// Whether `participant` sent or is @-mentioned in the message aliased `message`.
+#[cfg(feature = "list")]
+fn push_channel_message_participation_expr(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    message: &'static str,
+    participant: &str,
+) {
+    builder.push(format!("({message}.sender_id = "));
+    builder.push_bind(participant.to_owned());
+    builder.push(format!(
         r#"
-                OR EXISTS (
-                    SELECT 1
-                    FROM comms_entity_mentions em
-                    WHERE em.source_entity_type = 'message'
-                      AND em.source_entity_id = tm.id::text
-                      AND em.entity_type = 'user'
-                      AND em.entity_id = "#,
-    );
-    builder.push_bind(participant);
-    builder.push(
-        r#"
-                )
-              )
-        ))"#,
-    );
+            OR EXISTS (
+                SELECT 1
+                FROM comms_entity_mentions em
+                WHERE em.source_entity_type = 'message'
+                  AND em.source_entity_id = {message}.id::text
+                  AND em.entity_type = 'user'
+                  AND em.entity_id = "#
+    ));
+    builder.push_bind(participant.to_owned());
+    builder.push("))");
 }
 
 #[cfg(feature = "list")]
@@ -979,8 +992,10 @@ fn channel_thread_expr_mentions_notification(expr: &Expr<ChannelThreadLiteral>) 
 /// Root ids of channel-message notifications in `state_predicate`.
 ///
 /// `$1` is the requesting user, the first bind `build_channel_thread_notification_query`
-/// pushes. The user's rows are narrowed to channel notifications through
-/// `idx_user_notification_viewer_entity` before any `notification` lookup.
+/// pushes. Message sends never carry a thread and are most of a user's channel
+/// notifications, so skipping them by the copied event type lets
+/// `idx_user_notification_channel_threads` return only rows that can name a
+/// root before any `notification` lookup.
 /// Each arm fences the user's rows and the notification lookup with
 /// `OFFSET 0`. Without the inner fence Postgres hashes every `channel_message`
 /// notification in the table when that type's statistics are too low. AND is
@@ -997,6 +1012,7 @@ fn channel_message_notification_ids_sql(state_predicate: &str) -> String {
                WHERE un.user_id = $1
                  AND un.deleted_at IS NULL
                  AND un.event_item_type = 'channel'
+                 AND un.notification_event_type <> 'channel_message_send'
                  AND {state_predicate}
                OFFSET 0
            ) un
@@ -1155,7 +1171,11 @@ fn build_channel_thread_notification_query(
         JOIN notified
           ON notified.root_id = m.id
          AND notified.channel_id = m.parent_entity_id
-        JOIN comms_channels c ON c.id::text = m.parent_entity_id
+        -- The generated uuid parent reaches the channel and participant keys;
+        -- the text comparisons keep the exact matching of the stored ids.
+        JOIN comms_channels c
+          ON c.id = m.channel_message_parent_id
+         AND c.id::text = m.parent_entity_id
         LEFT JOIN LATERAL (
             SELECT MAX(reply.updated_at) AS latest_reply_updated_at
             FROM comms_messages reply
@@ -1168,7 +1188,8 @@ fn build_channel_thread_notification_query(
           AND EXISTS (
               SELECT 1
               FROM comms_channel_participants cp
-              WHERE cp.channel_id::text = m.parent_entity_id
+              WHERE cp.channel_id = m.channel_message_parent_id
+                AND cp.channel_id::text = m.parent_entity_id
                 AND cp.user_id = "#
     ));
     // First bind. The `$1` literals inside `ids_sql` are this same user.

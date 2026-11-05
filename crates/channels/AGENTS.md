@@ -91,6 +91,9 @@ DMs, and the shared message store other domains discuss things on.
   `notification` join, and compare `c.id` as a uuid so the channel primary key
   stays usable. Web Home sends `(unseen OR seen) AND unseen`;
   `drop_implied_notification_conjuncts` folds that to one notification read.
+- The thread feed's notified roots skip `channel_message_send` rows, which never
+  name a thread, so `idx_user_notification_channel_threads` holds only rows
+  that can.
 
 ## Related
 
