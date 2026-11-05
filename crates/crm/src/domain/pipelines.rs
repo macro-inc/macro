@@ -1,7 +1,9 @@
 //! Company/contact pipelines: CRM policy over reusable database storage.
 
+mod columns;
 mod references;
 mod sharing;
+use columns::{generic_columns, tracked_columns};
 use sharing::{requested_channel_grants, share_permission};
 pub mod requirements;
 use references::primary_references;
@@ -16,10 +18,10 @@ use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use databases::domain::{
     models::{
-        AppliedOps, CardPosition, ColumnDetail, ColumnId, ColumnProtection, DatabaseId, OpBatch,
-        RowId, TableDetail, TableId, ViewId, Viewer,
+        AppliedOps, CardPosition, ColumnDetail, ColumnId, DatabaseId, OpBatch, RowId, TableDetail,
+        TableId, ViewId, Viewer,
     },
-    provisioning::{ProvisionedColumn, StorageBlueprint},
+    provisioning::StorageBlueprint,
     storage::{DatabaseStorageService, StorageRow, StorageRows, StorageRowsQuery},
 };
 use entity_access::domain::{
@@ -36,10 +38,8 @@ use models_permissions::share_permission::{
         ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
     },
 };
-use models_properties::service::{
-    property_option::PropertyOptionValue, property_value::PropertyValue,
-};
-use models_properties::{DataType, EntityType as PropertyEntityType};
+use models_properties::EntityType as PropertyEntityType;
+use models_properties::service::property_value::PropertyValue;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use uuid::Uuid;
@@ -69,6 +69,13 @@ impl PipelineRecordType {
             Self::Contact => PropertyEntityType::Contact,
         }
     }
+    /// The kind of record the primary column's cells reference.
+    pub fn entity_kind(self) -> models_databases::EntityKind {
+        match self {
+            Self::Company => models_databases::EntityKind::Company,
+            Self::Contact => models_databases::EntityKind::Contact,
+        }
+    }
 }
 
 /// Initial sharing, or the desired team grant. Individual ownership is preserved.
@@ -82,14 +89,16 @@ pub enum PipelineSharing {
     Team,
 }
 
-/// Request to create an empty pipeline with the standard CRM columns.
+/// Request to create an empty pipeline: the standard CRM columns for a tracked
+/// record, or one Name column, like a new database, for a generic pipeline.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreatePipeline {
     /// Pipeline name.
     pub name: String,
-    /// Company or contact entries.
-    pub record_type: PipelineRecordType,
+    /// Company or contact entries; omitted, a generic pipeline of free-form rows.
+    #[serde(default)]
+    pub record_type: Option<PipelineRecordType>,
     /// Defaults to private.
     #[serde(default)]
     pub sharing: PipelineSharing,
@@ -107,8 +116,10 @@ pub struct Pipeline {
     pub user_id: String,
     /// Pipeline display name.
     pub name: String,
-    /// Kind of the primary reference.
-    pub record_type: PipelineRecordType,
+    /// Kind of the primary reference; `None` for a generic pipeline, whose
+    /// primary column is plain text.
+    #[schema(required = true)]
+    pub record_type: Option<PipelineRecordType>,
     /// Dedicated backing database.
     #[schema(value_type = Uuid)]
     pub database_id: DatabaseId,
@@ -170,8 +181,8 @@ pub struct PipelineBlueprint {
     pub id: Uuid,
     /// CRM team.
     pub team_id: Uuid,
-    /// Primary reference kind.
-    pub record_type: PipelineRecordType,
+    /// Primary reference kind, if it tracks a record.
+    pub record_type: Option<PipelineRecordType>,
     /// Initial grants.
     pub sharing: PipelineSharing,
     /// Schema owned by the database domain.
@@ -180,7 +191,7 @@ pub struct PipelineBlueprint {
     pub name: String,
     /// Initial owner.
     pub creator: MacroUserIdStr<'static>,
-    /// Protected company/contact reference.
+    /// Protected company/contact reference, or a generic pipeline's Name.
     pub primary_column_id: ColumnId,
 }
 
@@ -249,8 +260,8 @@ pub trait PipelineRepo: Send + Sync + 'static {
         &self,
         ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<Pipeline>, Self::Error>> + Send;
-    /// Rows of these live pipelines whose primary column references one of
-    /// `records`, grouped by pipeline in each one's row order.
+    /// Rows of these live tracked pipelines whose primary column references one
+    /// of `records`, grouped by pipeline in each one's row order.
     fn referencing_rows(
         &self,
         pipelines: &[Uuid],
@@ -460,7 +471,8 @@ impl<R: PipelineRepo, D, A, S> PipelineServiceImpl<R, D, A, S> {
     }
 }
 
-/// Build the common CRM schema without performing I/O. Callers validate the name.
+/// Build the initial schema without performing I/O. Callers validate the name.
+/// `labels` are a tracked pipeline's stages.
 pub(crate) fn pipeline_blueprint(
     team_id: Uuid,
     creator: MacroUserIdStr<'static>,
@@ -469,57 +481,10 @@ pub(crate) fn pipeline_blueprint(
 ) -> PipelineBlueprint {
     let id = macro_uuid::generate_uuid_v7();
     let primary_column_id = ColumnId::new();
-    let primary = ProvisionedColumn {
-        id: primary_column_id,
-        name: match input.record_type {
-            PipelineRecordType::Company => "Company",
-            PipelineRecordType::Contact => "Contact",
-        }
-        .into(),
-        data_type: DataType::Entity,
-        entity_type: Some(input.record_type.property_type()),
-        options: vec![],
-        nullable: false,
-        protections: vec![ColumnProtection::Delete, ColumnProtection::ChangeType],
+    let columns = match input.record_type {
+        Some(record_type) => tracked_columns(primary_column_id, record_type, labels),
+        None => generic_columns(primary_column_id),
     };
-    let columns = vec![
-        primary,
-        ProvisionedColumn {
-            id: ColumnId::new(),
-            nullable: true,
-            protections: vec![],
-            name: "Stage".into(),
-            data_type: DataType::SelectString,
-            entity_type: None,
-            options: labels
-                .into_iter()
-                .map(|label| {
-                    (
-                        macro_uuid::generate_uuid_v7(),
-                        PropertyOptionValue::String(label),
-                    )
-                })
-                .collect(),
-        },
-        ProvisionedColumn {
-            id: ColumnId::new(),
-            nullable: true,
-            protections: vec![],
-            name: "Owner".into(),
-            data_type: DataType::Entity,
-            entity_type: Some(PropertyEntityType::User),
-            options: vec![],
-        },
-        ProvisionedColumn {
-            id: ColumnId::new(),
-            nullable: true,
-            protections: vec![],
-            name: "Revenue".into(),
-            data_type: DataType::Number,
-            entity_type: None,
-            options: vec![],
-        },
-    ];
     PipelineBlueprint {
         id,
         team_id,
@@ -558,21 +523,27 @@ where
         {
             return Err(super::model::CrmError::CrmDisabledForTeam.into());
         }
-        let stages = self.stages.get_team_stage_set(&team).await?;
-        let labels = stages
-            .map(|set| {
-                set.stages
-                    .into_iter()
-                    .map(|stage| stage.label)
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_else(|| {
-                use system_properties::StageOption::*;
-                [Lead, Qualified, Demo, Trial, Negotiation, Customer, Churned]
-                    .into_iter()
-                    .map(|stage| stage.display_value().to_owned())
-                    .collect()
-            });
+        // The team's stages describe its sales process, which a generic
+        // pipeline makes no assumption about.
+        let labels = if input.record_type.is_some() {
+            let stages = self.stages.get_team_stage_set(&team).await?;
+            stages
+                .map(|set| {
+                    set.stages
+                        .into_iter()
+                        .map(|stage| stage.label)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_else(|| {
+                    use system_properties::StageOption::*;
+                    [Lead, Qualified, Demo, Trial, Negotiation, Customer, Churned]
+                        .into_iter()
+                        .map(|stage| stage.display_value().to_owned())
+                        .collect()
+                })
+        } else {
+            Vec::new()
+        };
         let blueprint = pipeline_blueprint(
             team.team_id(),
             creator.clone(),
@@ -645,7 +616,7 @@ where
             .await
             .map_err(storage)?
             .into_iter()
-            .filter(|p| p.trashed_at.is_none() && p.record_type == record_type)
+            .filter(|p| p.trashed_at.is_none() && p.record_type == Some(record_type))
             .map(|p| (p.id, p))
             .collect();
         let live = pipelines.keys().copied().collect::<Vec<_>>();
@@ -941,7 +912,8 @@ where
         if pipeline.trashed_at.is_some() {
             return Err(PipelineError::NotFound);
         }
-        if records.is_empty() {
+        // A generic pipeline's primary cells are text, not references.
+        if records.is_empty() || pipeline.record_type.is_none() {
             return Ok(Vec::new());
         }
         self.repo
@@ -982,18 +954,20 @@ where
         };
         // A pipeline grant does not grant access to the records it references.
         // The editor may reference records from any team they can access.
-        for id in primary_references(&pipeline, &batch)? {
-            self.access
-                .generate_entity_access_receipt::<ViewAccessLevel>(
-                    &viewer.user_id,
-                    None,
-                    &id.to_string(),
-                    match pipeline.record_type {
-                        PipelineRecordType::Company => EntityType::CrmCompany,
-                        PipelineRecordType::Contact => EntityType::CrmContact,
-                    },
-                )
-                .await?;
+        if let Some(record_type) = pipeline.record_type {
+            for id in primary_references(&pipeline, record_type, &batch)? {
+                self.access
+                    .generate_entity_access_receipt::<ViewAccessLevel>(
+                        &viewer.user_id,
+                        None,
+                        &id.to_string(),
+                        match record_type {
+                            PipelineRecordType::Company => EntityType::CrmCompany,
+                            PipelineRecordType::Contact => EntityType::CrmContact,
+                        },
+                    )
+                    .await?;
+            }
         }
         let _guard = self
             .repo

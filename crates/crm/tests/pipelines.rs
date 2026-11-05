@@ -184,7 +184,7 @@ async fn create(s: &Service, team: Uuid, record_type: PipelineRecordType) -> Pip
         team_receipt(team, OWNER),
         CreatePipeline {
             name: "  Renewals  ".into(),
-            record_type,
+            record_type: Some(record_type),
             sharing: PipelineSharing::Private,
         },
     )
@@ -193,7 +193,7 @@ async fn create(s: &Service, team: Uuid, record_type: PipelineRecordType) -> Pip
     .pipeline
 }
 fn insert(p: &Pipeline, entity: Uuid) -> DatabaseOp {
-    serde_json::from_value(json!({"kind":"rows", "table":p.table_id, "change":{"kind":"insert", "rows":[[{"column":p.primary_column_id, "value":{"type":"entities","value":[{"entityType":p.record_type.as_str().to_uppercase(),"entityId":entity.to_string()}]}}]]}})).unwrap()
+    serde_json::from_value(json!({"kind":"rows", "table":p.table_id, "change":{"kind":"insert", "rows":[[{"column":p.primary_column_id, "value":{"type":"entities","value":[{"entityType":p.record_type.unwrap().as_str().to_uppercase(),"entityId":entity.to_string()}]}}]]}})).unwrap()
 }
 async fn write(
     s: &Service,
@@ -458,6 +458,63 @@ async fn primary_record_is_required_and_protected_but_can_repeat(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn generic_pipeline_holds_free_form_rows_without_record_references(pool: PgPool) {
+    let (s, _db, a, team, company) = fixture(&pool).await;
+    let p = s
+        .create(
+            team_receipt(team, OWNER),
+            CreatePipeline {
+                name: "Launch".into(),
+                record_type: None,
+                sharing: PipelineSharing::Private,
+            },
+        )
+        .await
+        .unwrap()
+        .pipeline;
+    assert_eq!(p.record_type, None);
+
+    let view = access(&a, p.id, EntityType::CrmPipeline, OWNER).await;
+    let table = s.table(view.clone()).await.unwrap();
+    let names: Vec<&str> = table.columns.iter().map(|column| column.name()).collect();
+    assert_eq!(names, ["Name"]);
+    assert_eq!(table.columns[0].column.id, p.primary_column_id);
+
+    // No company or contact is needed: a row may even start empty.
+    let blank = serde_json::from_value(
+        json!({"kind":"rows","table":p.table_id,"change":{"kind":"insert","rows":[[]]}}),
+    )
+    .unwrap();
+    let blank_row = inserted(&write(&s, &a, &p, vec![blank]).await.unwrap());
+    let named = serde_json::from_value(json!({"kind":"rows","table":p.table_id,"change":{"kind":"insert","rows":[[{"column":p.primary_column_id,"value":{"type":"text","value":"Launch site"}}]]}})).unwrap();
+    let named_row = inserted(&write(&s, &a, &p, vec![named]).await.unwrap());
+    let rows = s.rows(view.clone(), None).await.unwrap().rows;
+    assert_eq!(
+        rows.iter().map(|row| row.row_id).collect::<Vec<_>>(),
+        [blank_row, named_row]
+    );
+
+    // The pipeline's reference to its Name column stays intact.
+    let delete_name = serde_json::from_value(json!({"kind":"column","table":p.table_id,"column":p.primary_column_id,"change":{"kind":"delete"}})).unwrap();
+    assert!(matches!(
+        write(&s, &a, &p, vec![delete_name]).await,
+        Err(PipelineError::Database(DatabaseError::InvalidOp(_)))
+    ));
+
+    // It shows in navigation, and never as a place a CRM record is tracked.
+    let listed = s.list(team_receipt(team, OWNER)).await.unwrap();
+    assert!(listed.iter().any(|entry| entry.pipeline.id == p.id));
+    let owner = MacroUserIdStr::try_from(OWNER.to_string()).unwrap();
+    assert!(
+        s.entries(&owner, PipelineRecordType::Company, &[company])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(s.record_rows(view, &[company]).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn references_can_cross_teams_only_when_the_editor_has_record_access(pool: PgPool) {
     let (s, _, a, team, _) = fixture(&pool).await;
     let other_team = Uuid::now_v7();
@@ -649,7 +706,7 @@ async fn disabled_crm_cannot_create_pipeline_storage(pool: PgPool) {
             team_receipt(team, OWNER),
             CreatePipeline {
                 name: "Sales".into(),
-                record_type: PipelineRecordType::Company,
+                record_type: Some(PipelineRecordType::Company),
                 sharing: PipelineSharing::Team,
             },
         )
@@ -1255,7 +1312,7 @@ async fn editors_share_with_people_and_only_the_owner_changes_team_access(pool: 
             team_receipt(team, &owner),
             CreatePipeline {
                 name: "Renewals".into(),
-                record_type: PipelineRecordType::Company,
+                record_type: Some(PipelineRecordType::Company),
                 sharing: PipelineSharing::Private,
             },
         )
