@@ -1,0 +1,48 @@
+# Experiment only: wrangler dry run, no Cloudflare secret in the job, so it cannot deploy.
+name: ci-speed sync bundle
+on:
+  pull_request:
+    paths: ['.github/ci-speed/**', '.github/workflows/ci_speed_sync_bundle.yml']
+permissions: { contents: read }
+jobs:
+  bundle:
+    name: ${{ matrix.label }} ${{ matrix.sha }} ${{ matrix.attempt }}
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-sync-bench
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - { label: warmup, sha: 240bc4d6a324, attempt: 0 }
+          - { label: same-worker, sha: 240bc4d6a324, attempt: 1 }
+          - { label: same-worker, sha: 240bc4d6a324, attempt: 2 }
+          - { label: lock-changed, sha: 5a4d56aa13be, attempt: 1 }
+          - { label: none-changed, sha: ce7984a95c8c, attempt: 1 }
+          - { label: lock-toml-changed, sha: 45d9102dd4d9, attempt: 1 }
+          - { label: lock-toml-changed, sha: 1b51727cad95, attempt: 1 }
+          - { label: lock-changed, sha: a701da266b92, attempt: 1 }
+          - { label: worker-changed-before, sha: 70831cf4d5~1, attempt: 1 }
+          - { label: worker-changed-after, sha: 70831cf4d5, attempt: 1 }
+    env: { LABEL: "${{ matrix.label }}", ATTEMPT: "${{ matrix.attempt }}" }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { persist-credentials: false, path: harness }
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { persist-credentials: false, clean: false, fetch-depth: 0, path: src }
+      - run: git -C src checkout -q "${{ matrix.sha }}"
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: rust
+          path: |-
+            ${{ github.workspace }}/src/target
+            /home/runner/.cargo/bin
+            /home/runner/.cache/.wasm-pack
+        continue-on-error: true
+      - run: |
+          \cd src
+          channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal --target wasm32-unknown-unknown --no-self-update
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: \cd src && bash "$GITHUB_WORKSPACE/harness/.github/ci-speed/sync_bundle.sh"
