@@ -28,6 +28,7 @@ realtime = [
 ]
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation" }
 utoipa = { workspace = true, optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }

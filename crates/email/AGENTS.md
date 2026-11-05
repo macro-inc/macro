@@ -56,6 +56,12 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- The send route refuses an agent's program (`refuse_program_send`, 403), and
+  the schedule route admits one only with a quoted `user_confirmation`: a
+  program sends through a session review, the harness's confirmed send
+  (`SendEmail`/`SendConfirmedEmail`), or a confirmed draft schedule. Keep any
+  new route that sends or schedules mail behind the same check.
+
 - Focus's `decide` and `signals` are versioned: bump `FOCUS_RULE_VERSION` in
   `domain/focus/rule.rs` when either changes, or stored rows keep the old verdict
   until new mail arrives. The worker's sweep re-decides older rows from their
@@ -192,3 +198,5 @@ tools — hexagonal, heavily feature-gated.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+- Persist agent correlation with scheduled delivery and organization projection payloads, then restore it when publishing delayed activity.

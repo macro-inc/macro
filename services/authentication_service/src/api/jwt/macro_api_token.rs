@@ -89,6 +89,8 @@ pub async fn handler(
 
     let macro_api_token =
         macro_auth::macro_api_token::encode_macro_api_token(EncodeMacroApiTokenArgs {
+            agent_correlation_id: None,
+            agent_session_id: None,
             agent_id: authorization
                 .authorization
                 .user

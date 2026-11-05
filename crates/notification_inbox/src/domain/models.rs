@@ -174,6 +174,14 @@ impl InboxRow {
     pub fn revision(&self) -> FeedRevision {
         FeedRevision::covering(self.all_notifications())
     }
+
+    /// Whether the row shows the notification and nothing else.
+    pub fn shows_only(&self, notification: Uuid) -> bool {
+        matches!(
+            self.notifications.as_slice(),
+            [only] if only.notification_id == notification
+        )
+    }
 }
 
 /// One group of the inbox: the matching rows of the notifications filed
@@ -242,6 +250,15 @@ pub struct InboxRowTarget {
     /// The row's revision the caller observed; `None` acknowledges
     /// everything current.
     pub revision: Option<FeedRevision>,
+}
+
+/// The outcome of marking one notification of a row done.
+#[derive(Debug)]
+pub struct InboxNotificationDoneOutcome<E> {
+    /// The row's group in the caller's inbox, now without the notification.
+    pub changes: Vec<InboxChange<E>>,
+    /// What the operation changed, for undo.
+    pub receipt: DoneReceipt,
 }
 
 /// The outcome of marking rows done.

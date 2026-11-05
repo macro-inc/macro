@@ -504,6 +504,12 @@ it('runs a searchable action once and closes without changing the selected optio
       <Combobox.Trigger>People</Combobox.Trigger>
     </SearchableMultiSelect>
   ));
+  fireEvent.input(await screen.findByPlaceholderText('Search...'), {
+    target: { value: 'no-match' },
+  });
+  await waitFor(() =>
+    expect(screen.queryByRole('option', { name: 'Alice' })).toBeNull()
+  );
   clickSearchOption(
     await screen.findByRole('option', { name: 'Connect account' }),
     true

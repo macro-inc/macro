@@ -1,3 +1,4 @@
+import type { StepDraft } from './routine-steps';
 import type { RoutineTarget } from './routine-target';
 import type { RoutineTriggerDraft } from './routine-triggers';
 
@@ -22,7 +23,14 @@ export type ScheduleDraft = {
   /** Absent from drafts saved before the setting existed. */
   runVisibility?: RunVisibility;
   name: string;
+  /** What the routine is for; absent from drafts saved before descriptions. */
+  description?: string;
   prompt: string;
+  /**
+   * Instructions a single agent routine written through the API stores ahead
+   * of `prompt`. Kept as they are, and joined to `prompt` if steps are added.
+   */
+  basePrompt?: string;
   frequency: ScheduleFrequency;
   time: string;
   /** Day-of-week values using the cron crate's 1-7 numbering (1=Sun). */
@@ -32,6 +40,11 @@ export type ScheduleDraft = {
   target: RoutineTarget;
   /** Apps every run requires, added to the target's own. Each must be connected. */
   apps: RoutineApp[];
+  /**
+   * The routine's program. Absent for a single agent routine, which keeps its
+   * instructions in `prompt` and its model or agent in `target`.
+   */
+  steps?: StepDraft[];
   onceAt?: string;
   timezone?: string;
 };

@@ -3,6 +3,7 @@ use attention_feed::domain::models::{FeedPosition, FeedRevision};
 use notification_inbox::domain::models::{
     InboxQuery, InboxRowId, InboxRowTarget, InboxRowType, InboxScope,
 };
+use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
@@ -198,6 +199,26 @@ impl MarkNotificationInboxRowsDoneInput {
                 })
             })
             .collect()
+    }
+}
+
+/// Input for marking one notification of a row done.
+#[derive(InputObject)]
+pub struct MarkNotificationInboxNotificationDoneInput {
+    /// The row showing the notification.
+    pub row_id: ID,
+    /// The notification, as the row lists it.
+    pub notification_id: ID,
+    /// The inbox the row's group is placed in.
+    pub scope: Option<NotificationInboxScopeInput>,
+}
+
+impl MarkNotificationInboxNotificationDoneInput {
+    /// Validate and convert into a domain row id and notification id.
+    pub(crate) fn into_target(self) -> async_graphql::Result<(InboxRowId, Uuid)> {
+        let notification = Uuid::parse_str(&self.notification_id)
+            .map_err(|_| async_graphql::Error::new("invalid notification id"))?;
+        Ok((parse_row_id(&self.row_id)?, notification))
     }
 }
 

@@ -306,7 +306,21 @@ fn caller_from_receipt(
         .map_err(|_| BotsHandlerErr::BadRequest("authenticated user required"))
 }
 
-async fn create_bot_handler<
+/// Handler for `POST /bots`.
+#[utoipa::path(
+    post,
+    tag = "bots",
+    operation_id = "create_bot",
+    path = "/bots",
+    request_body = CreateBotRequest,
+    responses(
+        (status = 201, body = Bot),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn create_bot_handler<
     S: BotService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -322,7 +336,19 @@ async fn create_bot_handler<
     Ok((StatusCode::CREATED, Json(bot)))
 }
 
-async fn list_bots_handler<
+/// Handler for `GET /bots`: the bots the caller can manage.
+#[utoipa::path(
+    get,
+    tag = "bots",
+    operation_id = "list_bots",
+    path = "/bots",
+    responses(
+        (status = 200, body = Vec<Bot>),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn list_bots_handler<
     S: BotService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -398,7 +424,23 @@ pub async fn get_bot_owner_profiles_handler<
     Ok(Json(state.service.get_owner_profiles(&query.ids).await?))
 }
 
-async fn get_bot_handler<
+/// Handler for `GET /bots/{bot_id}`.
+#[utoipa::path(
+    get,
+    tag = "bots",
+    operation_id = "get_bot",
+    path = "/bots/{bot_id}",
+    params(
+        ("bot_id" = BotId, Path, description = "Bot ID")
+    ),
+    responses(
+        (status = 200, body = Bot),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn get_bot_handler<
     S: BotService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -415,7 +457,25 @@ async fn get_bot_handler<
     ))
 }
 
-async fn patch_bot_handler<
+/// Handler for `PATCH /bots/{bot_id}`.
+#[utoipa::path(
+    patch,
+    tag = "bots",
+    operation_id = "patch_bot",
+    path = "/bots/{bot_id}",
+    params(
+        ("bot_id" = BotId, Path, description = "Bot ID")
+    ),
+    request_body = PatchBotRequest,
+    responses(
+        (status = 200, body = Bot),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn patch_bot_handler<
     S: BotService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -437,7 +497,23 @@ async fn patch_bot_handler<
     ))
 }
 
-async fn delete_bot_handler<
+/// Handler for `DELETE /bots/{bot_id}`.
+#[utoipa::path(
+    delete,
+    tag = "bots",
+    operation_id = "delete_bot",
+    path = "/bots/{bot_id}",
+    params(
+        ("bot_id" = BotId, Path, description = "Bot ID")
+    ),
+    responses(
+        (status = 204),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn delete_bot_handler<
     S: BotService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -453,7 +529,25 @@ async fn delete_bot_handler<
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn create_token_handler<
+/// Handler for `POST /bots/{bot_id}/tokens`.
+#[utoipa::path(
+    post,
+    tag = "bots",
+    operation_id = "create_bot_token",
+    path = "/bots/{bot_id}/tokens",
+    params(
+        ("bot_id" = BotId, Path, description = "Bot ID")
+    ),
+    request_body = CreateBotTokenRequest,
+    responses(
+        (status = 201, body = CreateBotTokenResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn create_token_handler<
     S: BotService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -474,7 +568,23 @@ async fn create_token_handler<
     Ok((StatusCode::CREATED, Json(token)))
 }
 
-async fn list_tokens_handler<
+/// Handler for `GET /bots/{bot_id}/tokens`.
+#[utoipa::path(
+    get,
+    tag = "bots",
+    operation_id = "list_bot_tokens",
+    path = "/bots/{bot_id}/tokens",
+    params(
+        ("bot_id" = BotId, Path, description = "Bot ID")
+    ),
+    responses(
+        (status = 200, body = Vec<BotToken>),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn list_tokens_handler<
     S: BotService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -491,7 +601,24 @@ async fn list_tokens_handler<
     ))
 }
 
-async fn revoke_token_handler<
+/// Handler for `DELETE /bots/{bot_id}/tokens/{token_id}`.
+#[utoipa::path(
+    delete,
+    tag = "bots",
+    operation_id = "revoke_bot_token",
+    path = "/bots/{bot_id}/tokens/{token_id}",
+    params(
+        ("bot_id" = BotId, Path, description = "Bot ID"),
+        ("token_id" = Uuid, Path, description = "Token ID")
+    ),
+    responses(
+        (status = 204),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn revoke_token_handler<
     S: BotService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -586,7 +713,22 @@ pub async fn remove_bot_channel_handler<
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn list_channel_bots_handler<
+/// Handler for `GET /channels/{channel_id}/bots`.
+#[utoipa::path(
+    get,
+    tag = "bots",
+    operation_id = "list_channel_bots",
+    path = "/channels/{channel_id}/bots",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    responses(
+        (status = 200, body = Vec<Bot>),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn list_channel_bots_handler<
     S: BotService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -600,7 +742,25 @@ async fn list_channel_bots_handler<
     ))
 }
 
-async fn add_channel_bot_handler<
+/// Handler for `POST /channels/{channel_id}/bots`.
+#[utoipa::path(
+    post,
+    tag = "bots",
+    operation_id = "add_channel_bot",
+    path = "/channels/{channel_id}/bots",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    request_body = AddChannelBotRequest,
+    responses(
+        (status = 204),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn add_channel_bot_handler<
     S: BotService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,

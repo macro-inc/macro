@@ -1,7 +1,7 @@
 //! Composition of the domain GraphQL adapter crates (`graphql_soup`,
 //! `graphql_channel`, `graphql_properties`, `graphql_notification`, `graphql_email`,
 //! `graphql_favorite`, `graphql_entity_mutation`, `graphql_work_feed`,
-//! `graphql_notification_inbox`) into the
+//! `graphql_notification_inbox`, `graphql_registered_work`) into the
 //! complete schema served by
 //! `document_storage_service` and exported as SDL.
 #![deny(missing_docs)]
@@ -78,6 +78,7 @@ pub use graphql_properties::{
     PropertiesEntityPropertyReader, PropertiesEntityPropertyWriter, PropertiesMutationRoot,
     entity_properties_loader,
 };
+pub use graphql_registered_work::{RegisteredWorkGraphqlContext, RegisteredWorkGraphqlService};
 pub use graphql_work_feed::{WorkFeedGraphqlContext, WorkFeedGraphqlService};
 pub use mail_cache_profile::{MAIL_CACHE_PROFILE_HEADER, MailCacheProfile};
 pub use realtime::{AgentSessionLogSubscriptions, agent_session_log_subscriptions};

@@ -47,14 +47,21 @@ morning**, **Yesterday**, and so on), by each row's newest notification; `j`/`k`
 skip them.
 
 Click a row or press Enter to preview it beside the list, opened at the
-notification's message, thread, or comment, under a **Notifications >**
-breadcrumb that clears the preview. Previewing marks the row seen, including
+notification's message, thread, or comment. The shown row and stacked
+notification live in the URL (`sN.inbox.row`, `sN.inbox.item`), so each opened
+row is a history entry and browser or split back returns to the previous one;
+stepping with `j`/`k` and moving on from a done row replace the entry instead.
+In splits 720px wide or narrower the list fills the split until a row opens,
+which then fills it with **Back** (left arrow) returning to the list.
+Previewing marks the row seen, including
 notifications the row hides, and drops its unread dot. With a preview open, `j`/`k` move it along the
 list and through unfolded notifications; `l` or the right arrow unfolds the focused
 stack and the left arrow folds it from anywhere inside it. Opening a notification
-marks its whole row seen, and `e` on one marks its whole stack done. Choosing what's
-shown again re-aims it. Calendar events and projects
-open in their own views instead. Shift-click or the alternate key opens a new
+marks its whole row seen. Each small card has its own **Mark done** on hover, or `e` while it is focused, or a left swipe on touch: it completes that notification and the ones about the same message, the stack counts one less, and the stack's last one completes the row; a preview of it moves to the stack's next notification. Undo works as for a row. Choosing what's
+shown again re-aims it. A calendar event or join request opens the Calendar
+beside the list at the event, at `/app/notifications/calendar/<period>` with the
+event in `sN.calendar.*`, with the row in the same entry; the list keeps its place.
+Projects open in their own view instead. Shift-click or the alternate key opens a new
 split. Hover a row and choose **Mark done**, or press `e`, to complete that row
 only: the channel thread stays when the channel's top-level row is done, and an
 open preview moves to the next row. A toast offers **Undo**, as does

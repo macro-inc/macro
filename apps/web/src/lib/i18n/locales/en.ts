@@ -1,6 +1,7 @@
 import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
 import agentSetup from './en/agent-setup';
+import agentWork from './en/agent-work';
 import calls from './en/calls';
 import channelComposer from './en/channel-composer';
 import channelLabels from './en/channel-labels';
@@ -30,6 +31,7 @@ export default {
   agentAutoArchive,
   accountManager,
   agentSetup,
+  agentWork,
   calls,
   channelComposer,
   channelLabels,

@@ -5,18 +5,35 @@ name = "document_storage_service"
 publish = false
 version = "0.1.0"
 
+# The bins hold no tests and the library no doctests. Neither target builds under
+# `cargo test`, so the test job compiles the library once, as its test binary.
+# The `build-service-bins` job builds the real binary.
+[lib]
+doctest = false
+
 [[bin]]
 name = "document_storage_service"
 path = "src/main.rs"
+test = false
 
 [[bin]]
 name = "document_storage_service_openapi"
 path = "src/openapi.rs"
+test = false
 
 [[bin]]
 name = "document_storage_service_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
+
+
+# Built only by the `build-service-bins` CI job, which needs the real binaries;
+# `test = false` keeps it out of the test job.
+[[test]]
+name = "service_binary_builds"
+path = "tests/service_binary_builds.rs"
+test = false
 
 [features]
 connection_gateway = []
@@ -27,6 +44,7 @@ local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
+agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 access_requests = { path = "../../crates/access_requests" }
 async-trait = { workspace = true }
 ai_billing = { path = "../../crates/ai_billing" }

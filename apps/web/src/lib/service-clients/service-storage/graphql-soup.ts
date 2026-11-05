@@ -16,6 +16,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import { reloadForNewerBuild } from '@core/util/reloadForNewerBuild';
+import { ThrownResultError } from '@core/util/result';
 import {
   createMutationQueueTelemetry,
   type MutationQueueClearCause,
@@ -124,6 +125,7 @@ import {
   waitToRetryGraphqlSoupWebSocket,
 } from './graphql-soup-websocket';
 import { mailCacheProfile } from './mail-cache-profile';
+import { createPresenceRequestCoalescer } from './presence-request-coalescer';
 
 export { emailThreadSortTs } from './email-thread-sort';
 
@@ -160,8 +162,18 @@ async function authorizedDssGraphqlFetch(
   let response = await fetchWithCredentials();
   if (response.status !== 401) return response;
 
-  const tokenResult = await parent.run(fetchToken);
-  if (tokenResult.isErr()) return response;
+  const tokenResult = await parent.run(() => fetchToken(init?.signal));
+  if (tokenResult.isErr()) {
+    if (init?.signal?.aborted)
+      throw (
+        init.signal.reason ?? new DOMException('Request aborted', 'AbortError')
+      );
+    if (tokenResult.error.some((error) => error.code === 'UNAUTHORIZED'))
+      return response;
+    // A stalled refresh is a retryable transport failure, not proof that the
+    // session expired. Do not turn it back into the original HTTP 401.
+    throw new ThrownResultError(tokenResult.error);
+  }
 
   response = await fetchWithCredentials();
   return response;
@@ -293,7 +305,22 @@ async function isLegacyProjectionValidationError(
   }
 }
 
-export async function dssGraphqlFetch(
+const presenceRequests = createPresenceRequestCoalescer();
+
+/** Drops coalesced presence requests that belong to the previous session. */
+export const resetGraphqlPresenceRequests = presenceRequests.reset;
+
+export function dssGraphqlFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  queueOwner?: CacheHost
+): Promise<Response> {
+  return presenceRequests.coalesce(init, (coalescedInit) =>
+    sendDssGraphqlRequest(input, coalescedInit, queueOwner)
+  );
+}
+
+async function sendDssGraphqlRequest(
   input: RequestInfo | URL,
   init?: RequestInit,
   queueOwner?: CacheHost
@@ -598,6 +625,7 @@ export function setGraphqlSoupSessionActive(active: boolean): void {
 
 function disposeSessionClients(): void {
   cacheSessionGeneration += 1;
+  presenceRequests.reset();
   cacheRecovery.reset();
   cacheInitializationFailed = false;
   const cleanup = cachedCacheCleanup;

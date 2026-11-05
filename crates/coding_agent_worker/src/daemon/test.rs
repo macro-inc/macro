@@ -1,5 +1,24 @@
 use super::*;
 
+#[test]
+fn a_fresh_dial_is_not_a_held_connection_until_it_has_lasted() {
+    let (connected, mut runtime) = watch::channel(false);
+    assert!(!runtime_held_since_last_look(&mut runtime));
+
+    connected.send_replace(true);
+    assert!(!runtime_held_since_last_look(&mut runtime));
+    assert!(runtime_held_since_last_look(&mut runtime));
+
+    // A drop and redial between looks starts the wait over.
+    connected.send_replace(false);
+    connected.send_replace(true);
+    assert!(!runtime_held_since_last_look(&mut runtime));
+    assert!(runtime_held_since_last_look(&mut runtime));
+
+    connected.send_replace(false);
+    assert!(!runtime_held_since_last_look(&mut runtime));
+}
+
 #[tokio::test]
 async fn stop_does_not_wait_for_in_flight_work() {
     let daemon = Daemon {
@@ -7,6 +26,8 @@ async fn stop_does_not_wait_for_in_flight_work() {
         task: tokio::spawn(std::future::pending()),
         turns: ActiveTurns::default(),
         handoff: crate::harness::Handoffs::channel().1,
+        runtime_connected: watch::channel(false).1,
+        _presence_watch: AbortOnDropHandle::new(tokio::spawn(async {})),
     };
 
     tokio::time::timeout(Duration::from_secs(1), daemon.stop())
