@@ -105,7 +105,8 @@ jobs:
         set -uo pipefail
         mode=$(cat .ci-gen-exp-mode); echo "mode=$mode"
         # BASH_ENV re-sources the dev shell before every step, so GITHUB_ENV can't change this.
-        echo 'export CARGO_INCREMENTAL=1' >> "$BASH_ENV"
+        # sccache refuses CARGO_INCREMENTAL but passes incremental rustc calls through, so third-party crates stay cached.
+        echo 'unset CARGO_INCREMENTAL; export CARGO_PROFILE_DEV_INCREMENTAL=true' >> "$BASH_ENV"
         env | grep -E '^(CARGO_INCREMENTAL|RUSTC_WRAPPER|SCCACHE_C)' | cut -d= -f1,2 | cut -c 1-60 || true
         case "$mode" in seed|cold) exit 0;; esac
         s=$(date +%s)
@@ -125,7 +126,7 @@ jobs:
     - name: Build schema binaries
       run: |
         set -euo pipefail
-        echo "effective CARGO_INCREMENTAL=$CARGO_INCREMENTAL"
+        echo "effective CARGO_INCREMENTAL=${CARGO_INCREMENTAL:-unset} profile=$CARGO_PROFILE_DEV_INCREMENTAL"
         read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
         SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas
     - name: Generate API Types
