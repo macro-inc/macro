@@ -84,8 +84,10 @@ function pageLoad(
     attrs: {
       'whatsapp.connected': true,
       'whatsapp.chats.count': list.length,
+      // ast-grep-ignore: ts-no-client-list-filter -- Telemetry counting only.
       'whatsapp.chats.direct': list.filter((chat) => chat.kind === 'direct')
         .length,
+      // ast-grep-ignore: ts-no-client-list-filter -- Telemetry counting only.
       'whatsapp.chats.in_macro': list.filter((chat) => chat.inMacro).length,
     },
   };

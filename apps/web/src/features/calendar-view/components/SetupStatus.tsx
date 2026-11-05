@@ -46,7 +46,7 @@ export function SetupStatus() {
   const calendarsQuery = useVisibleCalendarsQuery();
   const warnings = createMemo(() =>
     calendarsQuery.isSuccess
-      ? calendarsQuery.data.filter((calendar) => calendar.syncError)
+      ? calendarsQuery.data.filter((calendar) => calendar.syncError) // ast-grep-ignore: tsx-no-client-list-filter -- Complete small calendar list, shared and used whole elsewhere.
       : []
   );
   const startAddInbox = useAddInboxFlow();
@@ -57,9 +57,9 @@ export function SetupStatus() {
   // calendar settings, so setup counts and acts on the viewer's own alone.
   const ownLinks = () =>
     linksQuery.isSuccess
-      ? (linksQuery.data?.links ?? []).filter(
-          (link) => link.macro_id === userId()
-        )
+      ? /* ast-grep-ignore: tsx-no-client-list-filter -- Complete small list; the same component reads all links too. */ (
+          linksQuery.data?.links ?? []
+        ).filter((link) => link.macro_id === userId())
       : [];
 
   const hasEvents = () =>

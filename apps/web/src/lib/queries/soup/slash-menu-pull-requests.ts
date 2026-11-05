@@ -19,6 +19,7 @@ export function useSlashMenuPullRequests(enabled: Accessor<boolean>) {
     () => ({ enabled: enabled(), staleTime: 60_000 })
   );
   const pullRequests = createMemo(() =>
+    // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing after the server already filtered by source.
     queryReadyGate(query) ? query.data.filter(isGithubPrEntity) : []
   );
   return { query, pullRequests };

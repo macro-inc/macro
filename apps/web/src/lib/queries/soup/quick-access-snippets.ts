@@ -39,6 +39,7 @@ export function useQuickAccessSnippetsQuery() {
   );
 
   const snippets = createMemo<SnippetEntity[]>(() =>
+    // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing after the server already filtered by subtype.
     queryReadyGate(query) ? query.data.filter(isSnippetEntity) : []
   );
 

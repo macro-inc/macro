@@ -50,6 +50,7 @@ export function transformHistoryItem(item: Item): HistoryItem {
 export function transformHistoryResponse(
   response: HistoryQueryResponse
 ): HistoryItem[] {
+  // ast-grep-ignore: ts-no-client-list-filter -- predates FE-70: drops initiative-description documents from REST `/history`; make it a query input.
   return response.data
     .filter(
       (item) =>

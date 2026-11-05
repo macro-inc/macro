@@ -23,6 +23,7 @@ export function useQuickAccessAgentSessionsQuery() {
     const bots = new Map(
       (botsQuery.isSuccess ? botsQuery.data : []).map((bot) => [bot.id, bot])
     );
+    // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing after the server already filtered by type.
     return query.data
       .filter((entity) => entity.type === 'agent_session')
       .map((session) => {

@@ -71,6 +71,7 @@ export function ChannelsMobileView(props: {
   );
   const activityChannels = createMemo(() => [
     ...pinned(),
+    // ast-grep-ignore: tsx-no-client-list-filter -- Merges pinned rows with the list for activity tracking; no rows lost.
     ...props.source.items().filter((channel) => !pinnedIds().has(channel.id)),
   ]);
   const channelActivity = useChannelRailActivity(

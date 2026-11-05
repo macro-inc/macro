@@ -92,7 +92,7 @@ function DatabaseFormsMenu(props: {
   const [creating, setCreating] = createSignal(false);
   const onTable = () =>
     forms.isSuccess
-      ? forms.data.filter((form) => form.tableId === props.tableId)
+      ? forms.data.filter((form) => form.tableId === props.tableId) // ast-grep-ignore: tsx-no-client-list-filter -- Same complete per-database forms list, also shown unfiltered.
       : [];
   async function createFromTable() {
     if (

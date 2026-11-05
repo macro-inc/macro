@@ -85,7 +85,7 @@ function createRestDriveSidebarSource(
   return {
     folders: () =>
       projects.isSuccess
-        ? projects.data.filter((folder) => !folder.deletedAt)
+        ? projects.data.filter((folder) => !folder.deletedAt) // ast-grep-ignore: ts-no-client-list-filter -- Repeats a server filter; the filter can just be deleted.
         : [],
 
     foldersLoading: () => projects.isPending,

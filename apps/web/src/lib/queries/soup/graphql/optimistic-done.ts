@@ -306,7 +306,7 @@ export function usePendingGraphqlSoupDone(): Accessor<
     const owner = viewerId();
     const currentSession = sessionId();
     return owner && currentSession && pending.isSuccess
-      ? pending.data.filter(
+      ? /* ast-grep-ignore: ts-no-client-list-filter -- Local `skipToken` client state, not fetched data. */ pending.data.filter(
           (entry) =>
             entry.viewerId === owner && entry.session === currentSession
         )

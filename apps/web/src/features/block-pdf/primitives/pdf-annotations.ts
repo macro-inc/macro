@@ -67,6 +67,7 @@ export function createPdfAnnotations(documentId: Accessor<string>) {
     id: documentId(),
   }));
   const messageThreads = createMemo(() =>
+    // ast-grep-ignore: ts-no-client-list-filter -- Fetches deleted roots on purpose to recover missed deletions; hides them only when displaying.
     (roots.data ?? []).filter((root) => !root.state.deleted_at)
   );
   const messageThreadsByRootId = createMemo(

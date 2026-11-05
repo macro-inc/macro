@@ -19,6 +19,7 @@ export function useAgentAssignees(
     if (!enabled() || !queryReadyGate(agents) || !queryReadyGate(bots))
       return [];
     const availableIds = new Set(bots.data.map((bot) => bot.id));
+    // ast-grep-ignore: ts-no-client-list-filter -- Joins two small complete per-user lists; nothing is paginated.
     return agents.data
       .filter(
         ({ bot }) =>

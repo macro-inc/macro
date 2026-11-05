@@ -185,6 +185,7 @@ export function resolveReferencedChannels(
   if (!lookup.isEnabled || lookup.error || !queryReadyGate(lookup))
     return previous;
 
+  // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing of a by-id lookup.
   return lookup.data.entities.filter(isChannelEntity);
 }
 
@@ -269,6 +270,7 @@ function useThreadChannelsDataSource(
     if (channelIds().length === 0) return [];
     if (!channelsQuery.isEnabled || channelsQuery.isLoading) return previous;
     const byId = new Map(
+      // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing; the `sortChannels` that follows orders a channel set derived from threads.
       (channelsQuery.data?.entities ?? [])
         .filter(isChannelEntity)
         .map((channel) => [channel.id, channel])
@@ -330,6 +332,7 @@ function useChannelsDataSource(
 
     const channels = filterChannelsForScope(
       scope,
+      // ast-grep-ignore: ts-no-client-list-filter -- predates FE-70: narrows to channels, then `filterChannelsForScope`; re-sorts with `sortChannels`; make it a query input.
       (query.data?.entities ?? []).filter(isChannelEntity)
     );
 

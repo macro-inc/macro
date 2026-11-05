@@ -48,6 +48,7 @@ export function useEmailLabelNames() {
   return optionSource(query, () =>
     [
       ...new Set(
+        // ast-grep-ignore: ts-no-client-list-filter -- Small complete per-user label list shaped into picker options; nothing is paginated.
         (query.data?.labels ?? [])
           .filter((label) => label.type === 'User')
           .map((label) => label.name.trim())

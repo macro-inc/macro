@@ -67,6 +67,7 @@ export function useEmailSearchMention(
 
   const remoteEmailList = createLazyMemo((): EntityItem[] => {
     if (emailSearchQuery.status !== 'success') return [];
+    // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing after the server already filtered by type.
     return emailSearchQuery.data
       .filter((e) => e.type === 'email')
       .map(

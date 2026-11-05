@@ -60,6 +60,7 @@ export function BotInviteSelect(props: {
 
   const availableBots = createMemo(() => {
     const channelBotIds = new Set(props.channelBotIds);
+    // ast-grep-ignore: tsx-no-client-list-filter -- Complete team bot list; excludes channel members known locally.
     return (botsQuery.data ?? []).filter((bot) => !channelBotIds.has(bot.id));
   });
 

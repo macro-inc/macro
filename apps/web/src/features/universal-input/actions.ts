@@ -133,7 +133,7 @@ export function createInputActions(
     }));
   const calendars = () =>
     calendarsQuery.isSuccess
-      ? calendarsQuery.data.filter((c) => c.isWritable)
+      ? calendarsQuery.data.filter((c) => c.isWritable) // ast-grep-ignore: ts-no-client-list-filter -- Small, complete list; also used unfiltered; picker narrows locally.
       : [];
   const selectedCalendar = (f: InputFields) =>
     calendars().find((c) => c.id === f.calendarId) ??

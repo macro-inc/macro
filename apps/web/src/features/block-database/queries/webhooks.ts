@@ -34,7 +34,7 @@ export function useTableWebhooks(
   return {
     webhooks: () =>
       query.isSuccess
-        ? query.data.webhooks.filter((webhook) => webhook.tableId === tableId())
+        ? query.data.webhooks.filter((webhook) => webhook.tableId === tableId()) // ast-grep-ignore: ts-no-client-list-filter -- predates FE-70: keeps one table's webhooks; make it a query input.
         : undefined,
     failed: () => query.isError,
     ready: () =>

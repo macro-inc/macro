@@ -38,7 +38,7 @@ export function useQuickAccessInitiativesQuery() {
 
   const initiatives = createMemo<InitiativeEntity[]>(() =>
     queryReadyGate(query)
-      ? query.data.filter(
+      ? /* ast-grep-ignore: ts-no-client-list-filter -- Type narrowing after the server already filtered by type. */ query.data.filter(
           (entity): entity is InitiativeEntity => entity.type === 'initiative'
         )
       : []

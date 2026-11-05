@@ -261,6 +261,7 @@ function restSoupAstItemsQueryOptions(
       const firstPage = data.pages[0];
 
       if (firstPage?.kind === 'grouped') {
+        // ast-grep-ignore: ts-no-client-list-filter -- predates FE-70: re-sorts REST Soup grouped `groups` (not-set last, priority, label); make it a query input.
         const groups = firstPage.groups
           .slice()
           .sort(makeGroupComparator(groupBy));

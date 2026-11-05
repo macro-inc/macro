@@ -281,7 +281,7 @@ export function useEmailDataSource(
     if (!search.usesServiceSearch() || search.searchQuery.isPlaceholderData)
       return [];
     return state.aliasFilter
-      ? search.data().filter((entity) => aliasSearchIds().has(entity.id))
+      ? search.data().filter((entity) => aliasSearchIds().has(entity.id)) // ast-grep-ignore: ts-no-client-list-filter -- predates FE-70: keeps search hits that are also in an alias-membership Soup query; make it a query input.
       : search.data();
   });
 
@@ -375,6 +375,7 @@ export function useEmailDataSource(
         // A failed membership read is unknown, not proof every row disappeared.
         if (!members) return undefined;
         const memberIds = new Set(members.map((entity) => entity.id));
+        // ast-grep-ignore: ts-no-client-list-filter -- predates FE-70: same alias-membership intersection of search results, per retained batch; make it a query input.
         return searchQuery.data.filter((entity) => memberIds.has(entity.id));
       },
       error: () =>
@@ -474,7 +475,7 @@ export function useEmailDataSource(
       [
         ...recoveryQueries().flatMap((query) =>
           !query.isPending && !query.isPlaceholderData
-            ? (query.data?.entities.filter(isEmailEntity) ?? [])
+            ? (query.data?.entities.filter(isEmailEntity) ?? []) // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing after the server already filtered by type.
             : []
         ),
         ...rawEntities().filter(isEmailEntity),

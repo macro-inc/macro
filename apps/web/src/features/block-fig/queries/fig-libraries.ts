@@ -33,6 +33,7 @@ export function useFigLibrarySource(documentId: string): FigLibrarySource {
   );
   const documents = createMemo<FigLibraryDocument[] | undefined>(() => {
     if (!queryReadyGate(query)) return undefined;
+    // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing after the server already filtered to fig files.
     return query.data
       .filter(isDocumentEntity)
       .filter((d) => d.fileType === 'fig')

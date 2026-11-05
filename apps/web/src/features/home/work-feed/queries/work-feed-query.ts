@@ -73,6 +73,7 @@ export function createWorkFeedQuery(options: {
       requestPolicy: 'cache-and-network',
       keepPreviousData: true,
       select: ({ pages, pageParams }) => ({
+        // ast-grep-ignore: ts-no-client-list-filter -- Structural decode guard; the feed's item types don't include database rows.
         entries: pages
           .flatMap((page) => page.user.workFeed.entries)
           .map(decodeWorkFeedEntry)

@@ -151,7 +151,7 @@ function entityPropertiesQueryOptions(
     select: (properties: Property[]) =>
       includeMetadata
         ? properties
-        : properties.filter((property) => property.isMetadata !== true),
+        : properties.filter((property) => property.isMetadata !== true), // ast-grep-ignore: ts-no-client-list-filter -- One cache entry; small complete list, also shown with metadata.
     staleTime: 0,
   });
 }

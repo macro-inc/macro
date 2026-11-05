@@ -48,7 +48,7 @@ export function registerChannelListNotificationRefresh(
       filtered: true,
       notificationIds: query.isPending
         ? []
-        : (query.data?.entities ?? [])
+        : (query.data?.entities ?? []) // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing to collect ids, not for display.
             .filter(isChannelEntity)
             .flatMap((channel) =>
               (channel.unreadNotifications ?? []).map(({ id }) => id)
@@ -111,7 +111,7 @@ export function useCachedChannelsByIds(
         );
         const channels = () =>
           queryReadyGate(query)
-            ? query.data.entities.filter(isChannelEntity)
+            ? query.data.entities.filter(isChannelEntity) // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing after an id-scoped channel query.
             : [];
         const unresolved = () => {
           const loaded = new Set(channels().map((channel) => channel.id));
