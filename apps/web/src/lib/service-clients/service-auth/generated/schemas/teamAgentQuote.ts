@@ -14,10 +14,25 @@ export interface TeamAgentQuote {
   computer: number;
   /** ISO currency code, lowercase (`usd`). */
   currency: string;
+  /**
+   * Disk capacity in GB, from the computer size catalog.
+   * @minimum 0
+   */
+  diskGb: number;
   /** How often both bill. */
   interval: BillingInterval;
+  /**
+   * RAM in GB, from the computer size catalog.
+   * @minimum 0
+   */
+  memoryGb: number;
   /** The agent's seat; 0 when the team does not bill seats. */
   seat: number;
   /** `seat + computer`. */
   total: number;
+  /**
+   * Virtual CPUs in the quoted computer size.
+   * @minimum 0
+   */
+  vcpus: number;
 }
