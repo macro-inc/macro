@@ -289,13 +289,16 @@ async fn count_with_retries<C: SenderDomainCounter>(
                 retry_after,
                 origin,
             }) => {
-                let retry_at = Instant::now() + retry_after.unwrap_or(DEFAULT_RETRY_AFTER);
-                if retry_at >= deadline {
+                // The provider sets Retry-After; an unrepresentable instant is past the deadline.
+                let Some(retry_at) = Instant::now()
+                    .checked_add(retry_after.unwrap_or(DEFAULT_RETRY_AFTER))
+                    .filter(|at| *at < deadline)
+                else {
                     return Err(EmailApiError::RateLimited {
                         retry_after,
                         origin,
                     });
-                }
+                };
 
                 tokio::time::sleep_until(retry_at).await;
             }

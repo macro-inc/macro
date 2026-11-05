@@ -302,6 +302,30 @@ async fn a_rate_limit_that_outlasts_the_deadline_counts_as_zero_at_once() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn an_unrepresentable_retry_delay_counts_as_zero_at_once() {
+    let counter = Counter::default()
+        .answers(
+            GMAIL_LINK,
+            "figma.com",
+            [Err(EmailApiError::RateLimited {
+                retry_after: Some(Duration::MAX),
+                origin: RateLimitOrigin::Provider { concurrency: false },
+            })],
+        )
+        .answers(OUTLOOK_LINK, "figma.com", [Ok(3)]);
+    let service = SenderDomainCountService::new(Mailboxes, counter);
+    let started = Instant::now();
+
+    let result = service
+        .count(&actor(), vec![domain("figma.com")])
+        .await
+        .unwrap();
+
+    assert!(started.elapsed() < DEADLINE);
+    assert_eq!(counts(result), [("figma.com".to_owned(), 3)]);
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_mailbox_whose_credentials_fail_is_not_asked_again() {
     let counter = Counter::default()
         .answers(GMAIL_LINK, "a.com", [Err(EmailApiError::AuthRequired)])
