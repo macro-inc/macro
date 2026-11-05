@@ -181,6 +181,9 @@ external chat replies depend on it. Direct session controls still mint IDs.
 
 ## Gotchas
 
+- Persona enrollment requires an `agent-` Linux username. Reject old names before
+  side effects; local preview agents with old names must be re-invited.
+
 - `src/herdr.rs` and its submodule are Unix-only (`#[cfg(unix)]`); don't add
   Windows-breaking code there without a cfg gate.
 - Set the PTY master's close-on-exec flag with `fcntl` on macOS; its

@@ -454,8 +454,10 @@ struct PersonaFiles {
 impl PersonaFiles {
     fn render(persona: &Persona, paths: &SystemPaths) -> rootcause::Result<Self> {
         let os_user = &persona.os_user;
-        if !lazy_regex::regex_is_match!(r"^[a-z_][a-z0-9_-]{0,30}$", os_user) || os_user == "root" {
-            rootcause::bail!("persona os_user `{os_user}` is not a valid new Linux user name");
+        if !lazy_regex::regex_is_match!(r"^agent-[a-z0-9][a-z0-9_-]{0,24}$", os_user) {
+            rootcause::bail!(
+                "persona os_user `{os_user}` must start with agent- and be a valid Linux user name; re-invite local preview agents with old names"
+            );
         }
         let unit_name = &persona.extra_service.unit_name;
         if !lazy_regex::regex_is_match!(r"^[a-zA-Z0-9_.@-]+$", unit_name)

@@ -19,9 +19,9 @@ const ENROLLMENT_JSON: &str = r#"{
     },
     "persona": {
         "name": "Ada 100%",
-        "os_user": "ada",
+        "os_user": "agent-ada",
         "extra_service": {
-            "unit_name": "macro-brain-ada",
+            "unit_name": "macro-brain-agent-ada",
             "exec": "/usr/local/bin/brain --persona ada",
             "env": { "BRAIN_MODE": "say \"hi\" 50%" }
         },
@@ -131,7 +131,7 @@ fn persona_installs_its_user_environment_and_unit() {
     let host = FakeHost::default();
     files.install(&host).expect("install");
 
-    let env_path = root.path().join("etc/macro/personas/ada.env");
+    let env_path = root.path().join("etc/macro/personas/agent-ada.env");
     assert_eq!(
         std::fs::read_to_string(&env_path).unwrap(),
         "MACRO_TOKEN=\"a\\$b\\\"c\"\nPERSONA=\"ada\"\n"
@@ -142,7 +142,7 @@ fn persona_installs_its_user_environment_and_unit() {
     );
     let unit_path = root
         .path()
-        .join("etc/systemd/system/macro-brain-ada.service");
+        .join("etc/systemd/system/macro-brain-agent-ada.service");
     assert_eq!(
         std::fs::read_to_string(&unit_path).unwrap(),
         "# Written by macrod enroll.\n\
@@ -152,9 +152,9 @@ fn persona_installs_its_user_environment_and_unit() {
          Wants=network-online.target\n\
          \n\
          [Service]\n\
-         User=ada\n\
+         User=agent-ada\n\
          WorkingDirectory=~\n\
-         EnvironmentFile=/etc/macro/personas/ada.env\n\
+         EnvironmentFile=/etc/macro/personas/agent-ada.env\n\
          Environment=\"BRAIN_MODE=say \\\"hi\\\" 50%%\"\n\
          ExecStart=/usr/local/bin/brain --persona ada\n\
          Restart=always\n\
@@ -166,10 +166,10 @@ fn persona_installs_its_user_environment_and_unit() {
     assert_eq!(
         host.calls.into_inner(),
         [
-            "ensure_user ada".to_owned(),
+            "ensure_user agent-ada".to_owned(),
             format!("chown {} 1001:1002", env_path.display()),
             "systemctl daemon-reload".to_owned(),
-            "systemctl enable --now --no-block macro-brain-ada.service".to_owned(),
+            "systemctl enable --now --no-block macro-brain-agent-ada.service".to_owned(),
         ]
     );
 
@@ -184,6 +184,10 @@ fn persona_names_are_validated_before_anything_is_written() {
     };
     let persona = enrollment().persona.expect("the literal has a persona");
     for os_user in [
+        "ada",
+        "legacy-persona",
+        "agent-",
+        "agent-root/../x",
         "root",
         "Ada",
         "1ada",
@@ -406,8 +410,8 @@ fn a_recreated_guest_installs_its_saved_persona_and_enables_the_unit_idempotentl
         };
         let files = PersonaFiles::render(&persona, &paths).unwrap();
         let host = FakeHost::default();
-        let env_path = root.join("etc/macro/personas/ada.env");
-        let unit_path = root.join("etc/systemd/system/macro-brain-ada.service");
+        let env_path = root.join("etc/macro/personas/agent-ada.env");
+        let unit_path = root.join("etc/systemd/system/macro-brain-agent-ada.service");
         assert!(!env_path.exists());
         assert!(!unit_path.exists());
 
@@ -419,17 +423,44 @@ fn a_recreated_guest_installs_its_saved_persona_and_enables_the_unit_idempotentl
                 "AGENT_ID=\"saved-agent\"\nREPO_URL=\"https://example.com/repository.git\"\n"
             );
             let unit = std::fs::read_to_string(&unit_path).unwrap();
-            assert!(unit.contains("EnvironmentFile=/etc/macro/personas/ada.env\n"));
+            assert!(unit.contains("EnvironmentFile=/etc/macro/personas/agent-ada.env\n"));
             assert!(unit.contains("ExecStart=/usr/local/bin/brain --persona ada\n"));
             assert_eq!(
                 *host.calls.borrow(),
                 vec![
-                    "ensure_user ada".to_owned(),
+                    "ensure_user agent-ada".to_owned(),
                     format!("chown {} 1001:1002", env_path.display()),
                     "systemctl daemon-reload".to_owned(),
-                    "systemctl enable --now --no-block macro-brain-ada.service".to_owned(),
+                    "systemctl enable --now --no-block macro-brain-agent-ada.service".to_owned(),
                 ]
             );
         }
     }
+}
+
+#[tokio::test]
+async fn old_persona_names_fail_clearly_before_enrollment_side_effects() {
+    let root = tempfile::tempdir().expect("root");
+    let file = root.path().join("enrollment.json");
+    let mut raw: serde_json::Value = serde_json::from_str(ENROLLMENT_JSON).expect("fixture");
+    raw["persona"]["os_user"] = serde_json::json!("legacy-persona");
+    std::fs::write(&file, serde_json::to_vec(&raw).expect("serialize")).expect("write enrollment");
+    let config = root.path().join("etc/macrod/macrod.toml");
+    let host = FakeHost::default();
+    let error = run_enroll_with_host(
+        EnrollOptions {
+            from: EnrollmentSource::File(file),
+            config: config.clone(),
+            workspace: root.path().join("workspace"),
+            agent: "claude".to_owned(),
+            root: root.path().to_owned(),
+        },
+        &host,
+    )
+    .await
+    .expect_err("old persona must be rejected");
+    assert!(format!("{error:?}").contains("agent-"));
+    assert!(!config.exists());
+    assert!(!root.path().join("etc/macro/personas").exists());
+    assert!(host.calls.into_inner().is_empty());
 }
