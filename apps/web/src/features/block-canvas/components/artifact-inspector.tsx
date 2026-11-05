@@ -3,6 +3,7 @@ import {
   type ArtifactContent,
   type ArtifactItem,
 } from '@macro-inc/graphics';
+import { Input } from '@ui';
 import { InspectorField } from './inspector-field';
 import { InspectorSection } from './inspector-section';
 
@@ -13,8 +14,8 @@ export function ArtifactInspector(props: {
   return (
     <InspectorSection title="Artifact">
       <InspectorField label="Title">
-        <input
-          class="w-full rounded border border-edge-muted bg-panel px-2 py-1 text-xs text-ink outline-none focus:border-edge-focus"
+        <Input
+          size="sm"
           aria-label="Artifact title"
           value={props.item.geometry.title}
           onChange={(event) =>

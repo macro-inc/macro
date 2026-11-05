@@ -97,6 +97,18 @@ describe('composeArtifactDocument', () => {
     expect(composed).not.toContain('macro-component');
   });
 
+  it('stops expanding a component that fans out past the budget', () => {
+    const fanOut = '<macro-component name="a"></macro-component>'.repeat(100);
+    const composed = composeArtifactDocument(
+      '<macro-component name="a"></macro-component>',
+      {},
+      { styles: {}, components: { a: fanOut } },
+      'token'
+    );
+
+    expect(composed).not.toContain('macro-component');
+  });
+
   it('adds shared styles and drops unknown names', () => {
     const composed = composeArtifactDocument(
       '<macro-style name="brand"></macro-style><macro-style name="constructor"></macro-style><macro-component name="constructor">Kept</macro-component>',

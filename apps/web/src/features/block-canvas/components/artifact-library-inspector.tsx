@@ -4,6 +4,7 @@ import type {
   ArtifactLibraryKind,
 } from '@macro-inc/graphics/loro';
 import { ARTIFACT_LIBRARY_ENTRY_MAX_LENGTH } from '@macro-inc/graphics/loro';
+import { Button, Input } from '@ui';
 import { createSignal, For } from 'solid-js';
 import { InspectorField } from './inspector-field';
 import { InspectorSection } from './inspector-section';
@@ -15,7 +16,8 @@ export function ArtifactLibraryInspector(props: {
   const [name, setName] = createSignal('');
   const add = (kind: ArtifactLibraryKind) => {
     const trimmed = name().trim();
-    if (!trimmed) return;
+    // Adding over an existing name would blank it for everyone.
+    if (!trimmed || Object.hasOwn(props.library[kind], trimmed)) return;
 
     props.onEdit({ kind, name: trimmed, source: '' });
     setName('');
@@ -51,28 +53,20 @@ export function ArtifactLibraryInspector(props: {
     <InspectorSection title="Shared with this canvas's artifacts">
       {entries('styles', (entry) => `Style: ${entry}`)}
       {entries('components', (entry) => `Component: ${entry}`)}
-      <input
-        class="w-full rounded border border-edge-muted bg-panel px-2 py-1 text-xs text-ink outline-none focus:border-edge-focus"
+      <Input
+        size="sm"
         aria-label="New shared entry name"
         placeholder="Name"
         value={name()}
         onInput={(event) => setName(event.currentTarget.value)}
       />
       <div class="flex gap-1">
-        <button
-          type="button"
-          class="flex-1 rounded px-2 py-1 text-xs text-accent hover:bg-hover"
-          onClick={() => add('styles')}
-        >
+        <Button variant="primary" size="sm" onClick={() => add('styles')}>
           Add style
-        </button>
-        <button
-          type="button"
-          class="flex-1 rounded px-2 py-1 text-xs text-accent hover:bg-hover"
-          onClick={() => add('components')}
-        >
+        </Button>
+        <Button variant="primary" size="sm" onClick={() => add('components')}>
           Add component
-        </button>
+        </Button>
       </div>
     </InspectorSection>
   );
