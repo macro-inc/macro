@@ -1,5 +1,5 @@
 import { t } from '@app/lib/i18n';
-import { useParams } from '@solidjs/router';
+import { useParams } from '@app/lib/split-router';
 import { AccountManagerCard } from './account-manager-card';
 
 /** Where the one-time link in an approval message lands. */

@@ -77,12 +77,13 @@ export function AccountManagerRequestButton(props: { channelId: string }) {
           <Panel.Body class="flex flex-col gap-4 p-3">
             <Show when={counterpartyIsAgent()}>
               <div class="flex flex-col items-start gap-2">
-                <p class="text-sm text-ink-muted">
+                <p class="wrap-anywhere text-sm text-ink-muted">
                   {t('accountManager.askToBeManagedWarning', {
                     name: counterpartyName(),
                   })}
                 </p>
                 <Button
+                  class="h-auto max-w-full wrap-anywhere whitespace-normal text-left"
                   variant="primary"
                   disabled={request.isPending}
                   onClick={() => ask('managed')}
@@ -95,12 +96,13 @@ export function AccountManagerRequestButton(props: { channelId: string }) {
             </Show>
             <Show when={viewerIsAgent()}>
               <div class="flex flex-col items-start gap-2">
-                <p class="text-sm text-ink-muted">
+                <p class="wrap-anywhere text-sm text-ink-muted">
                   {t('accountManager.askToManageWarning', {
                     name: counterpartyName(),
                   })}
                 </p>
                 <Button
+                  class="h-auto max-w-full wrap-anywhere whitespace-normal text-left"
                   variant="primary"
                   disabled={request.isPending}
                   onClick={() => ask('manager')}

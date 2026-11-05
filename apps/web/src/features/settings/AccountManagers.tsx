@@ -113,7 +113,7 @@ export function AccountManagers() {
           <Panel.Body class="flex flex-col gap-3 p-3">
             <Show when={pending()}>
               {(grant) => (
-                <p class="text-sm text-ink-muted">
+                <p class="wrap-anywhere text-sm text-ink-muted">
                   {t('accountManager.revokeConfirm', {
                     name: managerName(grant()),
                   })}

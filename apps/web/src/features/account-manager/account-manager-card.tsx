@@ -207,7 +207,7 @@ function GrantContent(props: { grant: AccountManagerGrant }) {
             </Dialog.Title>
           </Panel.Header>
           <Panel.Body class="flex flex-col gap-3 p-3">
-            <p class="text-sm text-ink-muted">
+            <p class="wrap-anywhere text-sm text-ink-muted">
               {isManager()
                 ? t('accountManager.confirmManager', { name: otherName() })
                 : t('accountManager.confirmManaged', { name: otherName() })}
