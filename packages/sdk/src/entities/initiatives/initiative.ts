@@ -123,16 +123,13 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
   }
 
   /**
-   * Add a comment to the discussion. Starts a new thread, or replies to an
-   * existing one when `threadId` (the thread's root comment id) is given.
+   * Start a new thread in the discussion; reply to a thread with
+   * {@link DiscussionComment.reply} on one of its comments.
    *
    * @param body - Plain text, or a rich body composed with {@link msg}.
    */
-  async comment(
-    body: string | RichMessage,
-    opts?: { threadId?: string },
-  ): Promise<DiscussionComment> {
-    return postDiscussionComment(this.client, this.commentParent, body, opts);
+  async comment(body: string | RichMessage): Promise<DiscussionComment> {
+    return postDiscussionComment(this.client, this.commentParent, body);
   }
 
   /** A handle to one of the discussion's comments by id. */

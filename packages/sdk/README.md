@@ -506,9 +506,10 @@ dueAfter, dueBefore, sort })` iterates the matching initiatives with their Statu
 Priority, assignees, due date and progress over the tasks the caller can view;
 `initiatives.summaries()` reads every name in one request.
 `initiative.description()` returns its description as Markdown, and
-`comments()`, `comment(body, { threadId })` and `commentById(id)` read and write
-its discussion, whose comments are the same `DiscussionComment` handles CRM
-companies and contacts use.
+`comments()`, `comment(body)` and `commentById(id)` read and write its
+discussion; `comment.reply(body)` answers a thread. Its comments are the same
+`DiscussionComment` handles CRM companies and contacts use (formerly
+`CrmComment`).
 
 ### Access requests and message threads
 
