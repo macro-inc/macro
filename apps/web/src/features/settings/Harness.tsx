@@ -23,6 +23,8 @@ import { CodexHarness } from './codex/views/CodexHarness';
 import { ConnectedRuntimesSection } from './components/connected-runtimes-section';
 import { CursorDefaultModel } from './components/cursor-default-model';
 import { LocalRuntimeCard } from './components/local-runtime-card';
+import { useTeamComputers } from './computers/primitives/team-computers';
+import { MacroComputers } from './computers/views/MacroComputers';
 import {
   CURSOR_KEY_FORMAT_ERROR,
   CURSOR_KEY_PREFIX,
@@ -48,6 +50,14 @@ export function Harness(
   const cursorRegistered = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const harnessesQuery = useHarnessesQuery();
+  const harnesses = () => (harnessesQuery.isSuccess ? harnessesQuery.data : []);
+  const teamComputers = useTeamComputers();
+  const computerHarnessIds = () =>
+    new Set(
+      teamComputers
+        .computers()
+        .flatMap((computer) => (computer.harnessId ? [computer.harnessId] : []))
+    );
   const deleteHarnessMutation = useDeleteHarnessMutation();
   const [pairingDialog, setPairingDialog] = createSignal<
     | {
@@ -139,10 +149,12 @@ export function Harness(
           }
         >
           <ConnectedRuntimesSection
-            harnesses={harnessesQuery.isSuccess ? harnessesQuery.data : []}
+            harnesses={harnesses()}
+            computerHarnessIds={computerHarnessIds()}
             error={harnessesQuery.isError}
             onRemove={setRemovingHarness}
           />
+          <MacroComputers harnesses={harnesses()} />
           <LocalRuntimeCard />
           <div>
             <h2 class="mb-3 px-6 text-sm font-semibold text-ink">

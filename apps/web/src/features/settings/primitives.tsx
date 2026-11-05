@@ -311,13 +311,15 @@ export function ChoiceRow(props: {
   description: string;
   suggested?: boolean;
   disabled?: boolean;
+  /** Trailing content, e.g. a price or an action for an unavailable choice. */
+  aside?: JSX.Element;
   onChange: () => void;
 }) {
   return (
     <label
       class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted has-checked:border-accent has-checked:bg-accent-bg"
       classList={{
-        'cursor-not-allowed opacity-50': props.disabled,
+        'cursor-not-allowed': props.disabled,
         'p-4': props.suggested,
         'p-3': !props.suggested,
       }}
@@ -331,8 +333,9 @@ export function ChoiceRow(props: {
         onChange={props.onChange}
         aria-label={props.title}
         class="mt-0.5 accent-accent"
+        classList={{ 'opacity-50': props.disabled }}
       />
-      <span class="min-w-0">
+      <span class="min-w-0 flex-1" classList={{ 'opacity-50': props.disabled }}>
         <span class="flex flex-wrap items-center gap-2 text-sm font-medium text-ink">
           {props.title}
           <Show when={props.suggested}>
@@ -345,6 +348,9 @@ export function ChoiceRow(props: {
           {props.description}
         </span>
       </span>
+      <Show when={props.aside}>
+        <span class="shrink-0 self-center text-right">{props.aside}</span>
+      </Show>
     </label>
   );
 }

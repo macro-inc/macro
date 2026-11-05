@@ -35,6 +35,18 @@ vi.mock('./codex/views/CodexHarness', () => ({
   CodexHarness: () => <div data-testid="codex-harness" />,
 }));
 
+vi.mock('./computers/views/MacroComputers', () => ({
+  MacroComputers: () => null,
+}));
+
+vi.mock('./computers/primitives/team-computers', () => ({
+  useTeamComputers: () => ({
+    enabled: () => false,
+    computers: () => [],
+    failed: () => false,
+  }),
+}));
+
 const mocks = vi.hoisted(() => ({
   status: {
     isSuccess: true,

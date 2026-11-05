@@ -20,6 +20,8 @@ function lastConnectedText(harness: RegisteredHarness): string {
  */
 export function ConnectedRuntimesSection(props: {
   harnesses: readonly RegisteredHarness[];
+  /** Runtimes that are the team's Macro computers; release them, not remove. */
+  computerHarnessIds: ReadonlySet<string>;
   /** The runtimes could not be loaded; say so rather than show an empty page. */
   error: boolean;
   onRemove: (harness: RegisteredHarness) => void;
@@ -51,6 +53,11 @@ export function ConnectedRuntimesSection(props: {
                     <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
                       {harness.owner.type === 'team' ? 'Team' : 'Private'}
                     </span>
+                    <Show when={props.computerHarnessIds.has(harness.id)}>
+                      <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md bg-accent-bg px-2 text-[11px]/none font-medium text-accent">
+                        Macro computer
+                      </span>
+                    </Show>
                     <StatusDot
                       state={harness.connected ? 'connected' : 'disconnected'}
                       label={harness.connected ? 'Connected' : 'Offline'}
@@ -60,13 +67,15 @@ export function ConnectedRuntimesSection(props: {
                     {lastConnectedText(harness)}
                   </p>
                 </div>
-                <div class="shrink-0">
-                  <ConnectAction
-                    label="Remove"
-                    variant="danger"
-                    onClick={() => props.onRemove(harness)}
-                  />
-                </div>
+                <Show when={!props.computerHarnessIds.has(harness.id)}>
+                  <div class="shrink-0">
+                    <ConnectAction
+                      label="Remove"
+                      variant="danger"
+                      onClick={() => props.onRemove(harness)}
+                    />
+                  </div>
+                </Show>
               </div>
             )}
           </For>
