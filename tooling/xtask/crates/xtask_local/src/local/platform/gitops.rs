@@ -247,9 +247,9 @@ fn forge_api(method: &str, path: &str, body: &Value) -> Result<u16> {
         .context("running curl")?;
     {
         use std::io::Write;
-        write!(
+        writeln!(
             child.stdin.take().context("curl stdin")?,
-            "user = \"{FORGE_ADMIN_USER}:{password}\"\n"
+            "user = \"{FORGE_ADMIN_USER}:{password}\""
         )?;
     }
     let out = child.wait_with_output()?;
@@ -363,7 +363,10 @@ fn wait_for_forge(stage: &Stage) -> Result<()> {
             if status.success() {
                 return Ok(());
             }
-            ensure!(Instant::now() < deadline, "the forge never became reachable");
+            ensure!(
+                Instant::now() < deadline,
+                "the forge never became reachable"
+            );
             std::thread::sleep(Duration::from_secs(2));
         }
     })
@@ -379,7 +382,10 @@ pub fn forge_git(cwd: &Path) -> Result<Command> {
     cmd.current_dir(cwd)
         .env("GIT_CONFIG_COUNT", "2")
         .env("GIT_CONFIG_KEY_0", "http.extraHeader")
-        .env("GIT_CONFIG_VALUE_0", format!("Authorization: Basic {token}"))
+        .env(
+            "GIT_CONFIG_VALUE_0",
+            format!("Authorization: Basic {token}"),
+        )
         .env("GIT_CONFIG_KEY_1", "http.sslCAInfo")
         .env("GIT_CONFIG_VALUE_1", ca_file())
         .env("GIT_AUTHOR_NAME", "macro-platform")
@@ -390,10 +396,7 @@ pub fn forge_git(cwd: &Path) -> Result<Command> {
 }
 
 fn git(cwd: &Path, args: &[&str]) -> Result<String> {
-    let out = forge_git(cwd)?
-        .args(args)
-        .output()
-        .context("running git")?;
+    let out = forge_git(cwd)?.args(args).output().context("running git")?;
     ensure!(
         out.status.success(),
         "git {} failed: {}",
@@ -625,7 +628,9 @@ pub fn unhealthy_resources(app: &Value) -> Vec<String> {
             resources
                 .iter()
                 .filter(|r| {
-                    r["health"]["status"].as_str().is_some_and(|h| h != "Healthy")
+                    r["health"]["status"]
+                        .as_str()
+                        .is_some_and(|h| h != "Healthy")
                         || r["status"] == "OutOfSync"
                 })
                 .map(|r| {
@@ -653,7 +658,9 @@ pub fn wait_synced(stage: &Stage, name: &str, revision: &str) -> Result<()> {
             if let Some(app) = application(name)? {
                 // Publishing another environment moves the repo's head, so an
                 // Application can legitimately sync past `revision`.
-                let at = app["status"]["sync"]["revision"].as_str().unwrap_or_default();
+                let at = app["status"]["sync"]["revision"]
+                    .as_str()
+                    .unwrap_or_default();
                 let target = if contains(at, revision) { at } else { revision };
                 if is_converged(&app, target) {
                     return Ok(());

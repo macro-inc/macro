@@ -144,8 +144,7 @@ jobs:
 
     #[test]
     fn port_rewrites_runners_and_drops_namespace_caches_and_jobs() {
-        let ported: Value =
-            serde_yaml::from_str(&port(WORKFLOW, &["ios"]).unwrap()).unwrap();
+        let ported: Value = serde_yaml::from_str(&port(WORKFLOW, &["ios"]).unwrap()).unwrap();
         let build = &ported["jobs"]["build"];
         assert_eq!(build["runs-on"], RUNNER_LABEL);
         assert_eq!(build["needs"].as_sequence().unwrap().len(), 1);

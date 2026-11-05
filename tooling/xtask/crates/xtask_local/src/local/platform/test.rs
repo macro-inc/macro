@@ -68,10 +68,22 @@ fn an_application_converges_only_on_the_published_revision_when_healthy() {
             "health": { "status": health },
         }})
     };
-    assert!(gitops::is_converged(&app("abc", "Synced", "Healthy"), "abc"));
-    assert!(!gitops::is_converged(&app("old", "Synced", "Healthy"), "abc"));
-    assert!(!gitops::is_converged(&app("abc", "OutOfSync", "Healthy"), "abc"));
-    assert!(!gitops::is_converged(&app("abc", "Synced", "Progressing"), "abc"));
+    assert!(gitops::is_converged(
+        &app("abc", "Synced", "Healthy"),
+        "abc"
+    ));
+    assert!(!gitops::is_converged(
+        &app("old", "Synced", "Healthy"),
+        "abc"
+    ));
+    assert!(!gitops::is_converged(
+        &app("abc", "OutOfSync", "Healthy"),
+        "abc"
+    ));
+    assert!(!gitops::is_converged(
+        &app("abc", "Synced", "Progressing"),
+        "abc"
+    ));
 }
 
 #[test]
