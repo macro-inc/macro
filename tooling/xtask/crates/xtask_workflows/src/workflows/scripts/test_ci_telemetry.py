@@ -73,6 +73,17 @@ class ClassifyFiles(unittest.TestCase):
         for paths, expected in cases.items():
             self.assertEqual(collect.classify_files(paths)[0], expected, paths)
 
+    def test_nested_crates_count_separately(self):
+        paths = [f"crates/client/c{i}/src/lib.rs" for i in range(4)]
+        self.assertEqual(collect.classify_files(paths), ("rust-medium", 4))
+
+    def test_one_crate_counts_once_across_its_directories(self):
+        paths = ["crates/a/src/lib.rs", "crates/a/tests/b.rs", "crates/a/Cargo.toml"]
+        self.assertEqual(collect.classify_files(paths), ("rust-small", 1))
+
+    def test_migration_counts_as_rust(self):
+        self.assertEqual(collect.classify_files(["crates/db/migrations/1_a.sql"])[0], "rust-small")
+
     def test_xtask_rust_counts_as_rust_not_infra(self):
         self.assertEqual(collect.classify_files(["tooling/xtask/src/a.rs"])[0], "rust-small")
 
@@ -121,8 +132,8 @@ class JobEvents(unittest.TestCase):
 
 
 class PushEvent(unittest.TestCase):
-    def push(self, runs, jobs, pushed=None, files=("crates/a/src/lib.rs",), pull_request=None, head=None):
-        return collect.push_event(REPO, head or runs[0], runs, jobs, pushed, pull_request, files)
+    def push(self, runs, jobs, pushed=None, files=("crates/a/src/lib.rs",), pull_request=None, head=None, repeat=0):
+        return collect.push_event(REPO, head or runs[0], runs, jobs, pushed, pull_request, files, repeat)
 
     def test_wall_is_push_to_last_job_across_workflows(self):
         runs = [run(), run(id=2, name="web")]
@@ -158,6 +169,15 @@ class PushEvent(unittest.TestCase):
         runs = [run(), run(id=2, conclusion="failure")]
         self.assertEqual(self.push(runs, {1: [job()], 2: [job(id=12)]})[2]["conclusion"], "failure")
 
+    def test_newest_run_of_a_workflow_decides_the_conclusion(self):
+        runs = [run(conclusion="failure"), run(id=2, created_at=at(2))]
+        self.assertEqual(self.push(runs, {1: [job()], 2: [job(id=12)]})[2]["conclusion"], "success")
+
+    def test_later_trigger_on_the_same_head_is_flagged(self):
+        event = self.push([run()], {1: [job()]}, repeat=1)
+        self.assertTrue(event[2]["rerun"])
+        self.assertNotEqual(event[0], self.push([run()], {1: [job()]})[0])
+
     def test_no_job_ran_is_no_event(self):
         self.assertIsNone(self.push([run()], {1: []}))
 
@@ -169,6 +189,20 @@ class PushEvent(unittest.TestCase):
 
     def test_no_pr_is_unknown_type(self):
         self.assertEqual(self.push([run()], {1: [job()]}, files=None)[2]["pr_type"], "unknown")
+
+
+class SameTriggerRuns(unittest.TestCase):
+    def test_runs_started_apart_within_the_gap_are_one_group(self):
+        runs = [run(), run(id=2, created_at=at(4, 11))]
+        self.assertEqual(collect.same_trigger_runs(runs, runs[1]), (runs, 0))
+
+    def test_a_later_edit_is_its_own_group(self):
+        first, later = run(), run(id=2, created_at=at(40))
+        self.assertEqual(collect.same_trigger_runs([later, first], first), ([first], 0))
+        self.assertEqual(collect.same_trigger_runs([later, first], later), ([later], 1))
+
+    def test_a_run_outside_the_checks_has_no_group(self):
+        self.assertEqual(collect.same_trigger_runs([run()], run(id=9)), ([], 0))
 
 
 class FakeGithub:
@@ -206,6 +240,11 @@ class CollectPush(unittest.TestCase):
         attributes = collect.collect_push(github, REPO, run())[2]
         self.assertEqual(attributes["pr_type"], "web")
         self.assertEqual(attributes["wall_start"], "push")
+
+    def test_later_edit_does_not_hold_up_the_push(self):
+        github = FakeGithub(self.responses(run(), run(id=2, created_at=at(40), status="in_progress")))
+        attributes = collect.collect_push(github, REPO, run())[2]
+        self.assertFalse(attributes["rerun"])
 
     def test_cleanup_and_other_events_do_not_block(self):
         github = FakeGithub(

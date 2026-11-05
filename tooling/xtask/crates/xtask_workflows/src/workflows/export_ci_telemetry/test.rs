@@ -42,6 +42,38 @@ fn only_the_send_step_sees_the_ingestion_headers() {
     }
 }
 
+/// A push counts as finished once every check has, and only a listed workflow's
+/// completion triggers the exporter, so an unlisted one that finishes last loses the push.
+#[test]
+fn every_pull_request_workflow_is_observed() {
+    let workflows = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../.github/workflows");
+    let mut missing = Vec::new();
+    for entry in std::fs::read_dir(workflows).unwrap() {
+        let path = entry.unwrap().path();
+        if !matches!(
+            path.extension().and_then(|extension| extension.to_str()),
+            Some("yml" | "yaml")
+        ) {
+            continue;
+        }
+        let workflow: serde_yaml::Value =
+            serde_yaml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let triggers = &workflow["on"];
+        let on_pull_request = ["pull_request", "pull_request_target"].iter().any(|name| {
+            triggers.get(*name).is_some()
+                || triggers.as_str() == Some(name)
+                || triggers
+                    .as_sequence()
+                    .is_some_and(|list| list.iter().any(|item| item.as_str() == Some(name)))
+        });
+        let name = workflow["name"].as_str().unwrap_or_default();
+        if on_pull_request && !OBSERVED_WORKFLOWS.contains(&name) {
+            missing.push(name.to_owned());
+        }
+    }
+    assert!(missing.is_empty(), "add to OBSERVED_WORKFLOWS: {missing:?}");
+}
+
 #[test]
 fn collector_scenarios() {
     let output = std::process::Command::new("python3")

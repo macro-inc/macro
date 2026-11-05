@@ -32,6 +32,9 @@ MIN_STEP_SECONDS = 1
 # Stop before the exporter's own traces start failing for lack of API budget.
 MIN_RATE_REMAINING = 100
 MAX_FILE_PAGES = 3
+# GitHub has started a push's workflows up to 241 s apart. Anything later came from
+# something else on the same head: a PR edit, a label, or leaving draft.
+SAME_TRIGGER_GAP_SECONDS = 600
 # Roll-up jobs finish last by design, so they never say what held a push up.
 ROLL_UP_JOB = re.compile(r"status[ -]check", re.IGNORECASE)
 # Loki refuses a line this far behind its stream's newest one.
@@ -40,6 +43,7 @@ SMALL_RUST_CRATES = 2
 MEDIUM_RUST_CRATES = 9
 WEB_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".css", ".html", ".svelte")
 RUST_ROOT_FILES = {"Cargo.toml", "Cargo.lock", "rust-toolchain.toml"}
+CRATE_DIRECTORIES = {"src", "tests", "benches", "examples", "migrations"}
 
 
 def parse_time(value):
@@ -76,6 +80,14 @@ class Github:
             return json.load(response)
 
 
+def crate_root(parts):
+    """The directory holding a crate's sources, which may be nested in a workspace."""
+    for index, part in enumerate(parts[:-1]):
+        if part in CRATE_DIRECTORIES:
+            return "/".join(parts[:index])
+    return "/".join(parts[:-1]) or parts[0]
+
+
 def classify_files(paths):
     """Return (pr_type, rust_crates_changed) from the changed paths.
 
@@ -88,10 +100,10 @@ def classify_files(paths):
         parts = path.split("/")
         if parts[0] in ("infra", ".github") or path.endswith(".nix"):
             infra = True
-        elif path.endswith(".rs") or parts[0] == ".sqlx" or parts[-1] in RUST_ROOT_FILES:
+        elif path.endswith(".rs") or parts[0] in ("crates", ".sqlx") or parts[-1] in RUST_ROOT_FILES:
             if len(parts) == 1:
                 root_manifest = True
-            crates.add("/".join(parts[:2]) if len(parts) > 2 else parts[0])
+            crates.add(crate_root(parts))
         elif parts[0] in ("apps", "packages") or path.endswith(WEB_SUFFIXES):
             web = True
         elif parts[0] == "tooling":
@@ -208,8 +220,27 @@ def job_events(repo, run, jobs):
     return events
 
 
+def same_trigger_runs(runs, run):
+    """The runs started together with this one, and how many such groups came before."""
+    groups = []
+    for candidate in sorted(runs, key=lambda entry: parse_time(entry["created_at"])):
+        created = parse_time(candidate["created_at"])
+        if groups and seconds(parse_time(groups[-1][-1]["created_at"]), created) <= SAME_TRIGGER_GAP_SECONDS:
+            groups[-1].append(candidate)
+        else:
+            groups.append([candidate])
+    for index, group in enumerate(groups):
+        if any(candidate["id"] == run["id"] for candidate in group):
+            return group, index
+    return [], 0
+
+
 def conclusion_of(runs):
-    conclusions = {run["conclusion"] for run in runs}
+    """A workflow's newest run decides, since a PR edit can correct an earlier failure."""
+    newest = {}
+    for run in sorted(runs, key=lambda entry: (parse_time(entry["created_at"]), entry["id"])):
+        newest[run["name"]] = run
+    conclusions = {run["conclusion"] for run in newest.values()}
     if conclusions & {"failure", "timed_out", "startup_failure"}:
         return "failure"
     return "cancelled" if "cancelled" in conclusions else "success"
@@ -225,8 +256,12 @@ def clock_start(first_created, pushed_at, pr_created_at):
     return start, "push" if start == pushed_at else "pr_open"
 
 
-def push_event(repo, run, runs, jobs_by_run, pushed_at, pull_request, files):
-    """The whole push: start to last job, by PR type. None when no job ran."""
+def push_event(repo, run, runs, jobs_by_run, pushed_at, pull_request, files, repeat=0):
+    """The whole push: start to last job, by PR type. None when no job ran.
+
+    `repeat` counts earlier groups of runs on this head. Those later groups are not
+    the push's wait, so they are flagged as reruns.
+    """
     finished = []
     for candidate in runs:
         for job in jobs_by_run[candidate["id"]]:
@@ -264,7 +299,7 @@ def push_event(repo, run, runs, jobs_by_run, pushed_at, pull_request, files):
         "workflows": len(runs),
         "jobs": len(finished),
         "cold_volumes": volumes.count("cold"),
-        "rerun": any(candidate["run_attempt"] > 1 for candidate in runs),
+        "rerun": repeat > 0 or any(candidate["run_attempt"] > 1 for candidate in runs),
     }
     attributes.pop("workflow")
     attributes.pop("run_id")
@@ -278,7 +313,8 @@ def push_event(repo, run, runs, jobs_by_run, pushed_at, pull_request, files):
     attempts = sum(candidate["run_attempt"] for candidate in runs)
     # The body and time are the same from every exporter that sees the push finish,
     # so Loki drops the duplicates when two runs complete together.
-    return (f"push {run['head_sha']} {attempts}", end, attributes, trace_ids(repo, last_run, last_job["name"]))
+    body = f"push {run['head_sha']} {repeat} {attempts}"
+    return (body, end, attributes, trace_ids(repo, last_run, last_job["name"]))
 
 
 def pushed_time(github, branch, head_sha):
@@ -309,6 +345,7 @@ def collect_push(github, repo, run):
         for candidate in listing["workflow_runs"]
         if candidate["event"] in PR_EVENTS and candidate["name"] not in NOT_A_CHECK
     ]
+    runs, repeat = same_trigger_runs(runs, run)
     if not runs or any(candidate["status"] != "completed" for candidate in runs):
         return None
     jobs_by_run = {}
@@ -327,7 +364,7 @@ def collect_push(github, repo, run):
     pushed_at = None
     if not (run.get("head_repository") or {}).get("fork") and run.get("head_branch"):
         pushed_at = pushed_time(github, run["head_branch"], run["head_sha"])
-    return push_event(repo, run, runs, jobs_by_run, pushed_at, pull_request, files)
+    return push_event(repo, run, runs, jobs_by_run, pushed_at, pull_request, files, repeat)
 
 
 def otlp_value(value):

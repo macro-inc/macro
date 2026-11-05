@@ -38,8 +38,12 @@ without a parser; each line's `trace_id` links to the run's trace.
 or any root manifest change. `wall_seconds` runs from the push, or from opening the
 PR when that came later, to the last job. If neither fits, such as a reopen or
 leaving draft, it runs from the first workflow run and `wall_start` says
-`first_run`. A push counts as finished when every workflow on the exporter's list
-has finished, so add a workflow a PR runs to that list.
+`first_run`. A push counts as finished when every workflow it started has finished,
+so a workflow a PR runs must be on the exporter's list; a test enforces this. Runs on
+the same head starting more than ten minutes after the previous one come from
+something else, such as a PR edit, a label or leaving draft. They form their own
+line with `rerun=true`, which also leaves a commit's first full run after draft out
+of the real PR numbers.
 
 Real PR numbers exclude experiments, reruns and drafts. Metadata makes an ungrouped
 query return one series per combination, so always group:
