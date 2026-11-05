@@ -181,9 +181,15 @@ it retries a lost response):
 5. When the embed fails, the error is returned and the mention stays.
    Retrying with the same `item_id` converges on one mention and one node,
    whether or not the failed attempt committed.
+   A placement that fails and is never retried leaves its reference: the
+   canvas lists the artifact in its references without a node for it.
 
 The span is `canvas.embed_artifact` (document_id, canvas_id, version, scene,
 item_id); the worker's `canvas.ai.session` span (action `embed`) joins it.
+
+The embed request needs the worker's `INTERNAL_API_KEY` to equal DSS's; the
+local stack writes it into the worker's `.dev.vars`
+(`docker/ai-editing-worker.Dockerfile`).
 
 ## Infrastructure
 

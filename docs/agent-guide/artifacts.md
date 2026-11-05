@@ -27,7 +27,8 @@ tool.
 
 ## The view
 
-- **Header:** the name, **Published by <name>**, and for a viewer outside
+- **Header:** the name, **Published by <name>** (**Published by <agent> for
+  <name>** when an agent published it), and for a viewer outside
   the owner's team a **User-generated content** chip (its tooltip warns
   against entering private information). Share and the title menu (Rename,
   Move, Delete) work as for documents; artifacts can't be duplicated.
