@@ -285,9 +285,14 @@ shows **Included for Macro**, with no currency charge.
    retried and **Remove agent**. The same actions stay reachable on mobile.
    The roster polls every three seconds while any agent is
    provisioning, then every thirty seconds while the page is visible and the
-   roster is nonempty. Running and failed rows keep refreshing so transient
-   health failures can recover without a manual refresh.
-5. **Retry** appears only when `retryable=true` and payment is **paid** or **comped**. It
+   roster is nonempty. **Unhealthy** means a ready computer's agent is
+   disconnected, missing, stale, or unhealthy; its reason stays visible without
+   a provisioning Retry action. Before the first connection, setup stays
+   **Setting up…**. Running, unhealthy, and failed rows keep refreshing, so
+   transient health failures can recover without a manual refresh. Billing
+   shows the same live agent health without changing the subscription amounts.
+5. **Retry** appears only for terminal `failed` status when `retryable=true`
+   and payment is **paid** or **comped**. It
    re-drives failed provisioning on the same computer, preserving the agent's
    workspace and billing. Retry is disabled while the request runs. Failures
    refresh the status and keep an inline error if retry is still available;

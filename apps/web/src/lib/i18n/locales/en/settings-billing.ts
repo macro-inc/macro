@@ -14,6 +14,7 @@ export default {
   running: 'Running',
   settingUp: 'Setting up…',
   failed: 'Failed',
+  unhealthy: 'Unhealthy',
   asleep: 'Asleep',
   waking: 'Waking',
   stopping: 'Stopping',

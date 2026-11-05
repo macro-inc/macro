@@ -29,6 +29,8 @@ export function canRemoveTeamMember(
 /** Retrying provisioning never starts a new purchase. */
 export function canRetryTeamAgent(agent: TeamAgent): boolean {
   return (
-    agent.retryable && (agent.payment === 'paid' || agent.payment === 'comped')
+    agent.status === 'failed' &&
+    agent.retryable &&
+    (agent.payment === 'paid' || agent.payment === 'comped')
   );
 }

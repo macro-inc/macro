@@ -1,5 +1,21 @@
 import { expect, test } from '@playwright/test';
 
+test('live unhealthy agent health overrides ready computer status without changing billing', async ({
+  page,
+}) => {
+  await page.goto('/?billing&unhealthy');
+  const status = page.getByText('Unhealthy', { exact: true });
+  await expect(status).toBeVisible();
+  await expect(status).toHaveClass(/text-failure/);
+  await expect(page.getByText('$190.00', { exact: true })).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Restore agent health', exact: true })
+    .click();
+  await expect(status).toHaveCount(0);
+  await expect(page.getByText('Running', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('$190.00', { exact: true })).toBeVisible();
+});
+
 test('shows actual subscription lines and a distinct upcoming invoice without overflow', async ({
   page,
 }) => {

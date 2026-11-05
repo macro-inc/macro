@@ -6,6 +6,8 @@ import { TeamAgentRow } from '../../components/team-agent-row';
 import { SettingsCard, SettingsPage, SettingsSection } from '../../primitives';
 
 export function MembersFixture() {
+  const unhealthy = new URLSearchParams(location.search).has('unhealthy');
+  const [health, setHealth] = createSignal<TeamAgent['status']>('unhealthy');
   const [action, setAction] = createSignal('');
   const [retries, setRetries] = createSignal(0);
   const [removals, setRemovals] = createSignal(0);
@@ -16,9 +18,16 @@ export function MembersFixture() {
       name: 'Assistant',
       email: 'agent@example.com',
       createdAt: '2026-01-01',
-      status: 'running',
+      get status() {
+        return unhealthy ? health() : 'running';
+      },
+      get statusReason() {
+        return unhealthy && health() === 'unhealthy'
+          ? 'Brain connection unavailable'
+          : null;
+      },
       payment: 'paid',
-      retryable: false,
+      retryable: unhealthy,
       lastTurnAt: '2026-01-01T12:00:00Z',
     },
     {
@@ -57,6 +66,11 @@ export function MembersFixture() {
         />
       }
     >
+      {unhealthy && (
+        <button type="button" onClick={() => setHealth('running')}>
+          Restore agent health
+        </button>
+      )}
       <SettingsSection title="Team members" description="3 agents">
         <SettingsCard>
           <For each={agents}>

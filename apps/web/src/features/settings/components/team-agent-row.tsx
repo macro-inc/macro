@@ -18,6 +18,7 @@ export function AgentStatusPill(props: {
     match(props.agent.status)
       .with('provisioning', () => 'Setting up…')
       .with('running', () => 'Running')
+      .with('unhealthy', () => 'Unhealthy')
       .with('failed', () => 'Failed')
       .exhaustive(() => 'Status unavailable');
   const status = () =>
@@ -41,7 +42,9 @@ export function AgentStatusPill(props: {
       <span
         class="rounded-full bg-ink/6 px-2 py-1"
         classList={{
-          'text-failure': props.agent.status === 'failed',
+          'text-failure':
+            props.agent.status === 'failed' ||
+            props.agent.status === 'unhealthy',
           'text-success': props.agent.status === 'running',
         }}
       >
@@ -69,9 +72,16 @@ export function AgentStatusPill(props: {
           </span>
         )}
       </Show>
-      <Show when={props.agent.status === 'failed'}>
+      <Show
+        when={
+          props.agent.status === 'failed' || props.agent.status === 'unhealthy'
+        }
+      >
         <span class="text-failure break-words">
-          {props.agent.statusReason || 'The computer could not finish setup.'}
+          {props.agent.statusReason ||
+            (props.agent.status === 'unhealthy'
+              ? 'The agent is unavailable. Its computer is still running.'
+              : 'The computer could not finish setup.')}
         </span>
       </Show>
       <Show when={canRetry()}>

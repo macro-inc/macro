@@ -1239,7 +1239,9 @@ Keep Members invitation actions in `MemberInviteActions`; the split Invite actio
 opens the existing person dialog, with person/agent choices in its dropdown.
 People and managed agents share the filtered roster; agent activity comes from
 `lastTurnAt`, and Retry uses `canRetryTeamAgent` at each entry point. The Members
-browser fixture covers header heights and invitation/row menus on desktop, phone,
+status distinguishes transient `unhealthy` agents on ready computers from
+terminal `failed` provisioning; only terminal failures can retry provisioning.
+The browser fixture covers header heights and invitation/row menus on desktop, phone,
 and tablet.
 
 Fetch agent invitation specifications from `/team_agents/sizes` independently of

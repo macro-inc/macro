@@ -22,6 +22,7 @@ function computerStatus(status: string | null | undefined): string {
     .with('running', 'ready', () => t('settingsBilling.running'))
     .with('provisioning', 'setting_up', () => t('settingsBilling.settingUp'))
     .with('failed', 'payment_failed', () => t('settingsBilling.failed'))
+    .with('unhealthy', () => t('settingsBilling.unhealthy'))
     .with('asleep', () => t('settingsBilling.asleep'))
     .with('waking', () => t('settingsBilling.waking'))
     .with('stopping', () => t('settingsBilling.stopping'))
@@ -140,6 +141,7 @@ export function TeamBillingBreakdown(props: {
                   classList={{
                     'text-failure':
                       status(line) === 'failed' ||
+                      status(line) === 'unhealthy' ||
                       status(line) === 'payment_failed',
                     'text-success':
                       status(line) === 'ready' || status(line) === 'running',

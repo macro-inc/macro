@@ -237,6 +237,38 @@ it.each(['paid', 'comped'] as const)(
   }
 );
 
+it.each(['paid', 'comped'] as const)(
+  'withdraws provisioning retry when a %s agent becomes unhealthy and recovers without retry',
+  (payment) => {
+    const [value, setValue] = createSignal<TeamAgent>({
+      ...agent,
+      status: 'failed',
+      retryable: true,
+      payment,
+    });
+    const retry = vi.fn();
+    render(() => <AgentStatusPill agent={value()} onRetry={retry} />);
+    const previousRetry = screen.getByRole('button', { name: 'Retry' });
+    setValue({
+      ...value(),
+      status: 'unhealthy',
+      statusReason: 'Brain connection unavailable',
+    });
+    expect(screen.getByRole('status').textContent).toContain('Unhealthy');
+    expect(screen.getByRole('status').textContent).toContain(
+      'Brain connection unavailable'
+    );
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    fireEvent.click(previousRetry);
+    expect(retry).not.toHaveBeenCalled();
+    setValue({ ...value(), status: 'running', statusReason: null });
+    expect(screen.getByRole('status').textContent).toContain('Running');
+    expect(screen.queryByText('Brain connection unavailable')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(retry).not.toHaveBeenCalled();
+  }
+);
+
 it('keeps a payment failure reason visible without offering provisioning retry', () => {
   const retry = vi.fn();
   render(() => (

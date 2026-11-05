@@ -51,7 +51,7 @@ describe('team agents queries', () => {
   });
 });
 
-it('refreshes visible agent health after provisioning, recovers failure, and stops on an empty roster', async () => {
+it('refreshes visible agent health after provisioning, recovers unhealthy agents, and stops on an empty roster', async () => {
   vi.useFakeTimers();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -74,7 +74,7 @@ it('refreshes visible agent health after provisioning, recovers failure, and sto
         agents: [
           {
             ...agent,
-            status: 'failed',
+            status: 'unhealthy',
             statusReason: 'Brain unavailable',
             retryable: false,
           },
@@ -95,7 +95,9 @@ it('refreshes visible agent health after provisioning, recovers failure, and sto
     await vi.advanceTimersByTimeAsync(29000);
     expect(authServiceClient.listTeamAgents).toHaveBeenCalledTimes(2);
     await vi.advanceTimersByTimeAsync(1000);
-    expect(observer.getCurrentResult().data?.agents[0].status).toBe('failed');
+    expect(observer.getCurrentResult().data?.agents[0].status).toBe(
+      'unhealthy'
+    );
     expect(observer.getCurrentResult().data?.agents[0].retryable).toBe(false);
     expect(authServiceClient.listTeamAgents).toHaveBeenCalledTimes(3);
     await vi.advanceTimersByTimeAsync(30000);
