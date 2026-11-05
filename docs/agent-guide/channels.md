@@ -751,8 +751,10 @@ names who is being waited on. Once answered, the area shows the agent's passage 
 A prompt the agent read out of a channel or document thread opens no review card at all:
 the reply writes the whole email or calendar event into the thread and asks whether to go
 ahead, and a reply in that same thread approving it ("yes, send it" / "go ahead") is the
-confirmation - the agent then sends or creates directly (`SendConfirmedEmail`,
-`CreateConfirmedCalendarEvent`), with no session visit needed. Being asked to send or
+confirmation - the agent then sends or creates directly (`SendConfirmedEmail` and
+`CreateConfirmedCalendarEvent`, or in code mode `macro.email.sendConfirmed`,
+`EmailMessage.forwardConfirmed`, `EmailDraft.send` and `macro.calendar.createConfirmed`),
+with no session visit needed. Being asked to send or
 schedule something only produces the draft; nothing goes out before that approving reply.
 Images made with `GenerateImage` are saved to static file service. The bot embeds
 the returned URL as a Markdown image in its channel reply; generated images have
@@ -1040,11 +1042,12 @@ Chat remembers this choice independently of other workspaces and restores it
 after reload. While no conversation is selected, the rail stays open regardless
 of that choice and offers no **Hide navigation** control (`Cmd+.` is inert);
 selecting a conversation applies the saved choice again. Chat uses
-the shared 256px default sidebar width and resize limits. In splits narrower than
-720px, navigation collapses; the hamburger or `Cmd+.` opens it as a slide-over
-with the same full sidebar contents. With no conversation selected, the
-slide-over opens on its own and closes once a conversation is picked; the
-backdrop or `Escape` still dismisses it. There is no separate skinny sidebar mode.
+the shared 256px default sidebar width and resize limits. In splits 720px wide or
+narrower, the rail and the conversation take turns at full width instead of a
+slide-over: with no conversation selected the rail fills the split (no Hide
+navigation, `Cmd+.` inert), and an open conversation shows **Back** (left arrow)
+where the hamburger was. Back opens the Channels list route, so browser or split
+back returns to the conversation. There is no separate skinny sidebar mode.
 
 ### Sidebar redesign rollout
 
@@ -1072,8 +1075,8 @@ collapses and sorts independently; open groups split the available height.
 the channel filter, while the Conversations section lists channels and DMs with
 threads the user participates in. Scrolling loads more. Selecting a conversation
 filters the thread view instead of opening that conversation. On desktop, Threads
-pins navigation open with no Hide navigation control. In narrow splits, changing
-between Threads, All, and Recent preserves an already-open navigation overlay.
+pins navigation open with no Hide navigation control. In narrow splits the thread
+view fills the split like a conversation, and **Back** returns to All.
 
 ### Sectioned sidebar (flag on)
 
@@ -1786,3 +1789,21 @@ For tab performance QA, switch Attachments → Calls → Participants → Messag
 in both the routed channel and a block split. Each actual selection should
 produce one `channel.tab` interaction with its `channel.*.view` child; repeat
 the current selection and confirm it does not create a new interaction.
+
+## Work in a DM with an agent account
+
+Behind `enable-agent-work`, a 1:1 DM shows the other account's registered work
+when that account is an agent (`isAgentAccount`) and has work you can open. The
+rule lives in `features/agent-work/core/work-visibility.ts`. DMs with people,
+group DMs, and channels show nothing.
+
+The side panel toggle appears in the top bar only while there's work, using the
+floating `SidePanel` the agent session uses. When the agent goes from no work to
+some, a "<name> started working" label appears beside the toggle for six
+seconds without opening the panel; clicking it opens the panel. Clicking a row
+opens the session in a new split. Rows keep their order as state changes.
+
+To exercise it, register a session as the agent account through the SDK
+(`session.registerAsWork()`), share it with the viewer, and watch the DM update
+live. `session.unregisterAsWork()` removes it. A registered session the viewer
+can't open stays hidden.

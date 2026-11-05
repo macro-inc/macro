@@ -29,6 +29,14 @@ pub trait SessionAuthority: Send + Sync {
         &self,
         token: &SessionToken,
     ) -> impl Future<Output = Result<SessionGrant, EgressError>> + Send;
+
+    /// The same grant, read by session id for an in-process caller that has
+    /// already authorized its request against the session itself. Refuses a
+    /// closed session exactly as [`Self::authorize`] does.
+    fn authorize_session(
+        &self,
+        session: AgentSessionId,
+    ) -> impl Future<Output = Result<SessionGrant, EgressError>> + Send;
 }
 
 /// Resolve an MCP destination to a live upstream call.

@@ -92,6 +92,7 @@ Module layout, layering, and TypeScript conventions.
 ## TypeScript
 
 - Represent sets of independently enabled UI features with typed arrays instead of parallel boolean props.
+- Declare TypeScript types and interfaces at module scope, outside functions and component bodies.
 
 - Name module-level value constants in `SCREAMING_SNAKE_CASE`, except schema definitions; keep functions and local variables in `camelCase`.
 - For exhaustive matching use `match(...).exhaustive()` from `ts-pattern`, never

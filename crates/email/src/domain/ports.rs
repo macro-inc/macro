@@ -718,12 +718,14 @@ pub trait EmailService: Send + Sync + 'static {
         request: super::models::mailbox_operation::MessageResolutionRequest,
     ) -> impl Future<Output = Result<Uuid, EmailErr>> + Send;
     /// Set semantic mailbox state without requiring a provider system-label ID.
+    /// The number of the thread's messages it changed; none when they were
+    /// already in that state.
     fn change_thread_mailbox_state(
         &self,
         _macro_id: MacroUserIdStr<'static>,
         _thread_id: Uuid,
         _action: crate::domain::models::mailbox_action::MailboxAction,
-    ) -> impl Future<Output = Result<(), EmailErr>> + Send {
+    ) -> impl Future<Output = Result<usize, EmailErr>> + Send {
         async { Err(no_op_email_err()) }
     }
     /// Authorize the caller's sending inbox, resolve client handles, and enqueue

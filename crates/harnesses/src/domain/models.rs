@@ -55,6 +55,10 @@ pub struct Harness {
     pub last_connected_at: Option<DateTime<Utc>>,
 }
 
+/// Sent by a daemon reading its own harness while it holds a runtime connection,
+/// so the service can log when its own answer disagrees.
+pub const RUNTIME_CONNECTED_HEADER: &str = "x-macro-harness-runtime-connected";
+
 /// Request to open a pairing: the daemon asks for a code the user approves.
 ///
 /// The daemon serializes this, so both derives are used.

@@ -112,35 +112,10 @@ impl AsyncTool<ToolServiceContext> for LoadTools {
 // Pure logic (unit-testable without a service context)
 // ---------------------------------------------------------------------------
 
-/// Match `query` against `catalog`, ranked by relevance.
-///
-/// The query is split into whitespace-separated terms; a tool matches if **any**
-/// term is a case-insensitive substring of its name or description, ranked by
-/// how many distinct terms match (so "github list commits" surfaces the most
-/// relevant tools first). All matches are returned — the caller decides how
-/// many to load. An empty query returns the whole catalog.
+/// Match `query` against `catalog`, ranked by relevance; see
+/// [`ai_toolset::tool_search::rank`].
 fn search<'c>(catalog: &'c [SearchableTool], query: &str) -> Vec<&'c SearchableTool> {
-    let query = query.to_lowercase();
-    let terms: Vec<&str> = query.split_whitespace().collect();
-
-    let mut scored: Vec<(usize, &SearchableTool)> = catalog
-        .iter()
-        .filter_map(|t| {
-            if terms.is_empty() {
-                return Some((0, t));
-            }
-            let haystack = format!("{} {}", t.name.to_lowercase(), t.description.to_lowercase());
-            let score = terms
-                .iter()
-                .filter(|term| haystack.contains(**term))
-                .count();
-            (score > 0).then_some((score, t))
-        })
-        .collect();
-    // Highest term-match count first; tie-break by name for stable ordering.
-    scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.name.cmp(&b.1.name)));
-
-    scored.into_iter().map(|(_, t)| t).collect()
+    ai_toolset::tool_search::rank(catalog, query, |tool| (&tool.name, &tool.description))
 }
 
 /// Match `query`, auto-load the top [`MAX_AUTO_LOADED_MATCHES`] matches so they

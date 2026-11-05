@@ -17,6 +17,7 @@ mod recovery;
 mod session_task;
 mod sharing;
 mod turn_state;
+mod work_registration;
 mod working_branch;
 
 use crate::domain::coding_preferences::CodingPreferences;
@@ -1128,6 +1129,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             return Err(anyhow::anyhow!("agent session not found").into());
         };
         touch_entity_updated(&mut transaction, id, Some(modified_at)).await?;
+        if archived {
+            work_registration::end_work_registrations_on_archive(&mut transaction, id).await?;
+        }
         transaction
             .commit()
             .await

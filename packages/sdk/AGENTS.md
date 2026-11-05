@@ -11,6 +11,10 @@ enforced by the ordinary backend APIs.
 - `src/macro.ts`: public exports and namespace registration.
 - `documents.createCanvas()` creates shared content before returning a Document handle;
   it requires no browser open or upload.
+- File bytes must work inside code mode, whose sandbox reaches only Macro hosts:
+  `documents.upload()` posts them to storage's `/documents/upload`, and
+  `Document.bytes()` downloads through the CloudFront export host (`document-content`
+  in the harness's `sdk_hosts`). Never return a presigned S3 URL as the only path.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
 - `src/entities/workspace/namespace.ts`: filtered activity pages and iteration,
   agent sessions included.
@@ -27,6 +31,13 @@ enforced by the ordinary backend APIs.
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
+- `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the
+  connected apps and custom MCP servers a running code execution's session
+  agent was given; `app.tools()` and `tool.call(args)` go through the harness,
+  which stamps the credential and holds each owner-account call in a turn
+  someone else prompted for the owner's approval. `discover(execution, name)`
+  and `Connector.inspect()` mirror `DiscoverConnectors`; `addServer` mirrors
+  `ConnectMcpServer`. Only works inside a running execution.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
   returns an `ExternalChat`.
 - `src/entities/me/`: `macro.me.update()` sets the caller's name and profile
@@ -41,6 +52,11 @@ enforced by the ordinary backend APIs.
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /
   `WebFetch` tools in their favour.
+- `src/entities/bots/`: `macro.bots` manages bots (`Bot`: profile, channel
+  grants, webhook URLs, `BotToken`s) with user auth, and reads the
+  authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
+  bot-management tools in its favour; `IssueBotCredential` stays, because its
+  chat card mints a token the model never reads.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 
 ## Boundaries
@@ -140,6 +156,14 @@ the existing gateway prefixes.
 - Pipeline schema reads share the parent's cache; successful op batches clear it.
 - Email sends and other writes against hosted data are real actions; use mocks
   for automated SDK mutation tests.
+- `email.send`, `EmailThread.reply` and `calendar.createEvent` are refused
+  (403) for an agent's program, and so are `EmailDraft.send`/`schedule`
+  without `userConfirmation`. Programs act through
+  `execution.reviews.create` or the confirmed methods: `email.sendConfirmed`
+  and `EmailMessage.forwardConfirmed` (cognition `send-confirmed`, typed with
+  the generated `SendEmail`/`SendEmailResponse` review types) and
+  `calendar.createConfirmed` (`CreateCalendarEvent_Deserialize`,
+  `ToolCalendarEvent`); the OpenAPI schemas are opaque.
 
 - Carry the generation read with the draft through each mutation, including
   transfer and save. Attachment handles retain their reservation generation

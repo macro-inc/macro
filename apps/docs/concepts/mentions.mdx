@@ -1,50 +1,41 @@
 ---
 title: "Mentions"
 icon: "at"
-description: "How blocks reference each other and how permissions are handled. The @mention primitive that works across every markdown surface in Macro."
+description: "How Blocks reference each other and how permissions are handled. The @mention primitive that works across every markdown surface in Macro."
 ---
 
-Mentions are how blocks reference each other across the workspace. Typing `@` in any rich-text surface (a [document](/product/docs), an email body, a channel message, an agent or [routine](/product/routines) prompt, or a task description) opens an autocomplete that lets you reference something else in Macro. Whatever you pick renders as a live inline pill that carries its target's current metadata (a task mention shows the task's status and priority, for instance), and the reference is recorded as a backlink in the target's [References panel](/concepts/blocks).
+Mentions are how Blocks reference each other across the workspace. Typing `@` in any rich-text surface (a [document](/product/docs), an email body, a channel message, an agent or [routine](/product/routines) prompt, or a task description) opens an autocomplete that lets you reference something else in Macro. Whatever you pick renders as a live inline pill that carries its target's current metadata (a task mention shows the task's status and priority, for instance), and the reference is recorded as a backlink in the target's References panel.
 
-<Frame>
-  <img
-    src="/images/Screenshot-2026-06-09-at-4.26.45-PM.png"
-    alt="The @mention autocomplete menu open in a rich-text editor"
-    title="Mention autocomplete"
-    className="mx-auto"
-    style={{ width:"57%" }}
-  />
-</Frame>
-
-<Frame>
-  ![A document @mentioned in a channel message, shared with channel members](/images/Screenshot-2026-06-09-at-3.59.41-PM.png)
-</Frame>
+<div className="mention-thread" role="img" aria-label="Riley replies and mentions Quinn and Harbor">
+  <div className="mention-msg">
+    <span className="chat-preview-avatar is-avery">A</span>
+    <div className="mention-body">
+      <div className="chat-preview-meta"><span className="chat-preview-name">Avery</span><span className="chat-preview-time">10:24 AM</span></div>
+      <p>The notes are in <span className="mention-doc"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13.5 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-10L13.5 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M13.5 3v3.5a2 2 0 0 0 2 2H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg><span className="mention-doc-name">Launch plan</span></span>.</p>
+    </div>
+  </div>
+  <div className="mention-replies">
+    <div className="mention-reply">
+      <span className="chat-preview-avatar is-riley">R</span>
+      <div className="mention-body">
+        <div className="chat-preview-meta"><span className="chat-preview-name">Riley</span><span className="chat-preview-time">10:31 AM</span></div>
+        <p>I'll ask <span className="mention-pill">@Quinn</span> to send it to <span className="mention-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 21V6.5a1.5 1.5 0 0 1 1.2-1.45l7-1.6A1.5 1.5 0 0 1 14 4.9V21m0-11h4.5a1.5 1.5 0 0 1 1.5 1.5V21M2.5 21h19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M8 10h2M8 15h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>harbor.com</span>.</p>
+      </div>
+    </div>
+  </div>
+</div>
 
 ## Mentions in Agents
 
 Mentioning entities to AI agents inserts a pointer so the AI can read the docs. In the case of markdown docs, the agent can also read images embedded in the doc. Your agents inherit the permissions you have. If you try and give an agent a doc/entity that you don't have access to, your agents won't have access either, and your agent will tell you as much.
 
-<Frame>
-  ![Mentioning a document in an agent chat to give the agent context](/images/Screenshot-2026-06-09-at-3.59.21-PM.png)
-</Frame>
-
 You don't _need to_ mention entities to agents. Since your agent has access to the search tool and list tool, it can find things in your workspace for itself. We recommend mentioning entities when you already know what the agent should look at. It skips a round of searching and guarantees the right context.
 
 ## Mentions in Channels
 
-The primary benefit of using Macro instead of Slack is that it is deeply linked to the rest of your workspace. Just mention any entity type and hit enter to insert an `@mention`. When you hit enter or press the send button, the item is shared with members of the channel. This avoids the footgun that can happen with Slack\+Notion, Slack\+Drive, etc., where you don't give the permissions and people need to ask "hey can you share \_\_ with me?"
+The primary benefit of using Macro instead of Slack is that it is deeply linked to the rest of your workspace. Mention an entity and send the message. That shares it with the people in the channel. This avoids the footgun that can happen with Slack\+Notion, Slack\+Drive, etc., where you don't give the permissions and people need to ask "hey can you share \_\_ with me?"
 
 **When people are added or removed from a channel, permissions to shared items flow through accordingly.** This is really helpful when somebody joins or leaves your company, so they already have access to everything they need. This is why we recommend using Channels for each team, so that permissions for all entities your team needs are handled automatically.
-
-<Frame>
-  <img
-    src="/images/Screenshot-2026-06-09-at-4.00.02-PM.png"
-    alt="A channel's participants list, which controls access to everything shared in it"
-    title="Channel participants"
-    className="mx-auto"
-    style={{ width:"32%" }}
-  />
-</Frame>
 
 When you mention a document or file in a channel, a bidirectional link is created so you can always trace where something has been discussed. For example, on our "8 month roadmap document" members of our team can see that this document has been mentioned by several other documents, a canvas, in the `#engineers` channel, and I can see it's been mentioned in my private DMs with Teo and Nick (other members of the team would not see that last one unless they are in that channel).
 
@@ -52,38 +43,20 @@ When you mention a document or file in a channel, a bidirectional link is create
 
 Mentioning people causes them to be added to cc on the email thread.
 
-<Frame>
-  ![An @mentioned person being added as a recipient on an email](/images/Screenshot-2026-06-09-at-4.00.50-PM.png)
-</Frame>
-
 @mentioning a document or file in an email sets it to view-only for anyone with the link and shows a confirmation. If you cannot change the file's sharing, Macro shows a warning that recipients may not have access. In other email clients, the @mention appears as a plain hyperlink.
 
 ## Mentions in Documents
 
 Mentioning documents in documents is one of the fundamental ways your workspace ties together, familiar to users of products like Notion, Coda, and Obsidian.
 
-<Frame>
-  <img
-    src="/images/Screenshot-2026-06-09-at-4.02.53-PM.png"
-    alt="A document mentioning another document as an inline pill"
-    title="Document mentions"
-    className="mx-auto"
-    style={{ width:"85%" }}
-  />
-</Frame>
-
 ## Mentions in Canvas
 
 Use canvases to embed other entities on a 2D plane. This is useful for mind-mapping, technical diagrams linking to tasks, project management, or just storing/grouping files visually.
 
-<Frame>
-  ![A canvas with workspace blocks embedded and connected on a 2D plane](/images/Screenshot-2026-06-09-at-4.05.22-PM.png)
-</Frame>
-
 ## What happens when you mention...
 
-- **People**: If you mention them by name or email in a comment or channel, even if they are not a Macro user, they will get a notification. On the other hand, if you mention them in the body of a task or markdown doc, they will _not_ get notified. If you want them to be notified, you need to manually share it. We know this is a bit of a weird design decision; the reason we made it after dogfooding for a while is that, any time you want to @mention someone in a doc, you definitionally are not finished writing the doc, so you don't want them to get a notification yet. It's unclear when they _should_ receive that notification, so we determined it best that mentions in the context of documents don't notify or share with mentioned users.
-- **Documents and Blocks**: In the context of a channel, the document gets shared. In a comment or a document, it does not.
+- **People**: If you mention them by name or email in a comment or channel, even if they are not a Macro user, they will get a notification. On the other hand, if you mention them in the body of a task or markdown doc, they will _not_ get notified. If you want them to be notified, share the document with them in a channel, or through **Share**. We know this is a bit of a weird design decision; the reason we made it after dogfooding for a while is that, any time you want to @mention someone in a doc, you definitionally are not finished writing the doc, so you don't want them to get a notification yet. It's unclear when they _should_ receive that notification, so we determined it best that mentions in the context of documents don't notify or share with mentioned users.
+- **Documents and Blocks**: Mention one in a channel and it is shared with the channel. Mention one in a document or a comment and it is not. Mentioning a person in a comment notifies them. If the document is already set to **Anyone with the link** or **Team members with the link**, they get that access.
 - **Contacts and Company Records**: These are not shared when mentioned. Their sharing is determined by Teams.
 - **Channels, Threads, or a Specific Message**: Mentioning a channel doesn't grant permissions, and neither does mentioning a message. There is no way to share a message with someone who isn't in the channel, because the ability to view a message is determined by channel membership. If you need to share a message without adding somebody to a channel, send a screenshot. To add somebody to a channel, don't mention the channel — go to the channel and add them as a participant.
 - **Dates**: Choosing a date from the date picker inserts a date reference (useful for due dates, scheduling, and filtering). Dates don't notify or share anything.
