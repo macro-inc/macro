@@ -300,9 +300,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Typecheck
-    runs-on:
-    - namespace-profile-linux-mid;overrides.cache-tag=web-ci
-    - nscloud-cache-exp-do-not-commit
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -460,9 +458,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
-    runs-on:
-    - namespace-profile-linux-small;overrides.cache-tag=web-ci
-    - nscloud-cache-exp-do-not-commit
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -493,9 +489,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Test (${{ matrix.shard }}/3)
-    runs-on:
-    - namespace-profile-linux-mid;overrides.cache-tag=web-ci
-    - nscloud-cache-exp-do-not-commit
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     strategy:
       matrix:
         shard:
@@ -623,6 +617,12 @@ jobs:
     - name: Build wasm packages
       run: just build-wasm
       env:
+        CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_PSD_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       working-directory: apps/web
     - name: Test Optimistic Mutations in Chromium
@@ -662,9 +662,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Cycles Import Check
-    runs-on:
-    - namespace-profile-linux-small;overrides.cache-tag=web-ci
-    - nscloud-cache-exp-do-not-commit
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - name: Checkout
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -746,6 +744,12 @@ jobs:
     - name: Build
       run: just build-dev
       env:
+        CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_PSD_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
         VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
