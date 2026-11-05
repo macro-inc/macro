@@ -3,7 +3,7 @@
 ## What it is
 
 A pinned copy of Macro Connect's public Rust client, `crates/connect_client`
-in the private repo macro-inc/macro-connect, at commit `0814a61`. Macro reaches
+in the private repo macro-inc/macro-connect, at commit `0814a61`, plus `org_setup` from macro-connect#118. Macro reaches
 Connect only through this crate.
 
 ## Start here

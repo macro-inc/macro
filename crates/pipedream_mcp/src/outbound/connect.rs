@@ -1,6 +1,6 @@
 use crate::domain::models::{
-    CatalogEntry, CatalogPage, ConnectApp, MacroUserIdStr, McpServer, PipedreamConnection,
-    client_info,
+    CatalogEntry, CatalogPage, ConnectApp, MacroUserIdStr, McpServer, OrgSetup,
+    PipedreamConnection, client_info,
 };
 use crate::domain::ports::{
     ConnectedAppProxy, ConnectorCapabilities, ConnectorDirectory, MacroConnect, McpConnection,
@@ -135,6 +135,13 @@ fn catalog_entry(app: &wire::CatalogEntry, app_slug: &str, api_url: &Url) -> Cat
             .and_then(|path| api_url.join(path).ok())
             .map(String::from),
         categories: Vec::new(),
+        org_setup: app.org_setup.clone().map(|setup| OrgSetup {
+            summary: setup.summary,
+            steps: setup.steps,
+            settings_url: setup.settings_url,
+            required: setup.required,
+            allowlist_url: setup.allowlist_url,
+        }),
     }
 }
 

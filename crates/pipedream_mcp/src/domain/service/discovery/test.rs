@@ -11,6 +11,7 @@ struct Directory {
 fn entry() -> CatalogEntry {
     CatalogEntry {
         categories: vec![],
+        org_setup: None,
         app_slug: "linear".into(),
         display_name: "Linear".into(),
         description: None,

@@ -3566,6 +3566,36 @@
           }
         }
       },
+      "ConnectorOrgSetupResponse": {
+        "type": "object",
+        "description": "Setup an admin of the user's organization must do at the vendor.",
+        "required": ["summary", "steps", "settings_url", "required"],
+        "properties": {
+          "allowlist_url": {
+            "type": ["string", "null"],
+            "description": "The URL the admin adds, when a step adds one."
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Connecting fails until this is done."
+          },
+          "settings_url": {
+            "type": "string",
+            "description": "Where the admin does it."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The steps, in order."
+          },
+          "summary": {
+            "type": "string",
+            "description": "One sentence on what the admin does and what happens without it."
+          }
+        }
+      },
       "ConversationRecord": {
         "type": "object",
         "required": ["chat_id", "title", "messages"],
@@ -5504,6 +5534,17 @@
           "icon_url": {
             "type": ["string", "null"],
             "description": "URL of the app's icon, when available."
+          },
+          "org_setup": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConnectorOrgSetupResponse",
+                "description": "Setup an admin of the user's organization must do at the vendor."
+              }
+            ]
           }
         }
       },

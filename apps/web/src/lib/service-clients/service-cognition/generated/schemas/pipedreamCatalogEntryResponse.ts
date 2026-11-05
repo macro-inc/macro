@@ -6,6 +6,7 @@
  */
 import type { PipedreamCatalogEntryResponseDescription } from './pipedreamCatalogEntryResponseDescription';
 import type { PipedreamCatalogEntryResponseIconUrl } from './pipedreamCatalogEntryResponseIconUrl';
+import type { PipedreamCatalogEntryResponseOrgSetup } from './pipedreamCatalogEntryResponseOrgSetup';
 
 /**
  * One connectable app in the catalog.
@@ -21,4 +22,5 @@ export interface PipedreamCatalogEntryResponse {
   display_name: string;
   /** URL of the app's icon, when available. */
   icon_url?: PipedreamCatalogEntryResponseIconUrl;
+  org_setup?: PipedreamCatalogEntryResponseOrgSetup;
 }

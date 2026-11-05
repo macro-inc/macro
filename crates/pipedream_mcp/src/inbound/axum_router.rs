@@ -454,6 +454,23 @@ pub struct PipedreamCatalogEntryResponse {
     /// Categories assigned by Pipedream.
     #[serde(default)]
     categories: Vec<String>,
+    /// Setup an admin of the user's organization must do at the vendor.
+    org_setup: Option<ConnectorOrgSetupResponse>,
+}
+
+/// Setup an admin of the user's organization must do at the vendor.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ConnectorOrgSetupResponse {
+    /// One sentence on what the admin does and what happens without it.
+    summary: String,
+    /// The steps, in order.
+    steps: Vec<String>,
+    /// Where the admin does it.
+    settings_url: String,
+    /// Connecting fails until this is done.
+    required: bool,
+    /// The URL the admin adds, when a step adds one.
+    allowlist_url: Option<String>,
 }
 
 impl From<CatalogEntry> for PipedreamCatalogEntryResponse {
@@ -464,6 +481,13 @@ impl From<CatalogEntry> for PipedreamCatalogEntryResponse {
             description: entry.description,
             icon_url: entry.icon_url,
             categories: entry.categories,
+            org_setup: entry.org_setup.map(|setup| ConnectorOrgSetupResponse {
+                summary: setup.summary,
+                steps: setup.steps,
+                settings_url: setup.settings_url,
+                required: setup.required,
+                allowlist_url: setup.allowlist_url,
+            }),
         }
     }
 }

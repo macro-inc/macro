@@ -115,6 +115,7 @@ export type PipedreamRecoverRequest = {
   app_slug: string;
   server_name?: string;
 };
+export type { ConnectorOrgSetupResponse } from './generated/schemas/connectorOrgSetupResponse';
 export type { PipedreamCatalogEntryResponse } from './generated/schemas/pipedreamCatalogEntryResponse';
 export type { PipedreamCatalogResponse } from './generated/schemas/pipedreamCatalogResponse';
 export type { PipedreamOverlayResponse } from './generated/schemas/pipedreamOverlayResponse';

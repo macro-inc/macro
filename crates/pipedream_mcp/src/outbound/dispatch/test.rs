@@ -89,6 +89,7 @@ impl ConnectorDirectory for Fake {
                 description: None,
                 icon_url: None,
                 categories: Vec::new(),
+                org_setup: None,
             }],
             next_cursor: None,
         })
@@ -105,6 +106,7 @@ impl ConnectorDirectory for Fake {
             description: None,
             icon_url: None,
             categories: Vec::new(),
+            org_setup: None,
         }))
     }
 }
