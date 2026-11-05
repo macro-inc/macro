@@ -916,6 +916,8 @@ notifications along with the other notifications for that thread.
 
 ## Chat navigation rail
 
+With no conversation open, the desktop **Select a conversation** pane shows the Chat `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog; touch layouts, which have no detail pane, show it in the empty conversation list.
+
 Following a channel mention or browser notification for the conversation already
 shown in Chat activates that workspace and jumps to the targeted message or reply.
 It keeps the shared channel detail mounted and does not show a **Content already open**
