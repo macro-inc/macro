@@ -673,7 +673,9 @@ opens Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
-sidebar layout default to 256px; manually resized Chat widths remain saved.
+sidebar layout default to 256px. Each view type saves a manually resized width
+(`asidePreferenceKey`) and restores it after reloads, view switches, and in
+other splits.
 
 After dragging a view's inner sidebar divider (or using its arrow keys), resizing
 the containing split preserves the chosen sidebar width while space permits.
