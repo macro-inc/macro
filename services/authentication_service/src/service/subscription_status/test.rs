@@ -65,6 +65,7 @@ fn service(
             facts: Some(SubscriptionPlanFacts {
                 period_end: date("2026-11-01T12:00:00Z"),
                 scheduled_change: change,
+                billing: None,
             }),
             calls: Mutex::new(Vec::new()),
         },

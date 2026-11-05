@@ -7,6 +7,12 @@ use teams::domain::model::ScheduledSeatPlan;
 
 use super::subscription_plan::PlanChangeError;
 
+mod billing;
+pub use billing::{
+    SubscriptionBilling, SubscriptionBillingLineItem, SubscriptionBillingLineKind,
+    SubscriptionNextInvoice, SubscriptionSeatTotal,
+};
+
 #[cfg(test)]
 mod test;
 
@@ -17,6 +23,8 @@ pub struct SubscriptionPlanFacts {
     pub period_end: DateTime<Utc>,
     /// Only the caller's seat, from the currently attached provider schedule.
     pub scheduled_change: Option<ScheduledSeatPlan>,
+    /// Actual provider billing details, exposed only to its billing administrator.
+    pub billing: Option<SubscriptionBilling>,
 }
 
 /// Capability for reading customer-scoped subscription and schedule facts.
@@ -38,6 +46,8 @@ pub struct SubscriptionStatus {
     pub renewal_date: Option<DateTime<Utc>>,
     /// Future downgrade for the caller's seat, if still pending.
     pub scheduled_change: Option<ScheduledSeatPlan>,
+    /// Actual provider billing details, exposed only to its billing administrator.
+    pub billing: Option<SubscriptionBilling>,
 }
 
 /// Resolves the caller's payer and scope before reading subscription facts.
@@ -93,6 +103,7 @@ impl<E: EntitlementSource, G: SubscriptionStatusGateway> SubscriptionStatusServi
         Ok(SubscriptionStatus {
             renewal_date: Some(facts.period_end),
             scheduled_change,
+            billing: facts.billing,
         })
     }
 }

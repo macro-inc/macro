@@ -2220,6 +2220,86 @@ export type StripeSessionResponse = {
 };
 
 /**
+ * Actual current recurring items and the provider's next invoice preview.
+ */
+export type SubscriptionBilling = {
+    /**
+     * Paid agent seat allocations; excludes included memberships.
+     */
+    agentSeats: SubscriptionSeatTotal;
+    /**
+     * The subscription's ISO currency, as returned by the provider.
+     */
+    currency: string;
+    /**
+     * Paid human seat allocations; excludes included memberships.
+     */
+    humanSeats: SubscriptionSeatTotal;
+    /**
+     * The actual recurring billing interval shared by these items.
+     */
+    interval: BillingInterval;
+    /**
+     * Real provider line items, allocated only when their ownership is known.
+     */
+    lineItems: Array<SubscriptionBillingLineItem>;
+    nextInvoice?: null | SubscriptionNextInvoice;
+    /**
+     * Recurring item subtotal in minor units, before invoice adjustments.
+     */
+    subscriptionTotal: number;
+};
+
+/**
+ * An allocated provider item or an explicitly included computer.
+ */
+export type SubscriptionBillingLineItem = {
+    /**
+     * Agent account associated with this computer, if known.
+     */
+    agentUserId?: string | null;
+    /**
+     * Current recurring amount for this allocated quantity, in minor units.
+     */
+    amount: number;
+    /**
+     * Identified computer, absent for aggregate or unattributed items.
+     */
+    computerId?: string | null;
+    /**
+     * Included without a subscription charge.
+     */
+    included: boolean;
+    /**
+     * Actual billing category; unmatched quantities stay `other`.
+     */
+    kind: SubscriptionBillingLineKind;
+    /**
+     * Entity name or provider item description.
+     */
+    name: string;
+    plan?: null | SeatPlan;
+    /**
+     * Actual subscription quantity allocated to this row.
+     */
+    quantity: number;
+    size?: null | ComputerSize;
+    /**
+     * Computer status supplied by its owning service.
+     */
+    status?: string | null;
+    /**
+     * Provider price per unit in minor units, when fixed.
+     */
+    unitAmount?: number | null;
+};
+
+/**
+ * What an actual subscription item pays for.
+ */
+export type SubscriptionBillingLineKind = 'human_seat' | 'agent_seat' | 'computer' | 'other';
+
+/**
  * A Stripe price and how many of it to add to the team subscription.
  */
 export type SubscriptionItem = {
@@ -2231,9 +2311,38 @@ export type SubscriptionItem = {
 };
 
 /**
+ * Provider-confirmed next invoice, including its adjustments and credits.
+ */
+export type SubscriptionNextInvoice = {
+    /**
+     * Actual upcoming invoice amount due in minor units.
+     */
+    amount: number;
+    /**
+     * Provider's next payment or due date, when supplied.
+     */
+    date?: string | null;
+};
+
+/**
+ * Billed seat quantity and current recurring amount in minor units.
+ */
+export type SubscriptionSeatTotal = {
+    /**
+     * Actual recurring price times allocated quantity, in minor units.
+     */
+    amount: number;
+    /**
+     * Actual billed quantity allocated to this seat kind.
+     */
+    quantity: number;
+};
+
+/**
  * Current renewal and scheduled change; empty for accounts without a subscription.
  */
 export type SubscriptionStatus = {
+    billing?: null | SubscriptionBilling;
     /**
      * Provider-confirmed subscription renewal date.
      */

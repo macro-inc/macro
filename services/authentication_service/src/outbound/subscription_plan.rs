@@ -160,6 +160,7 @@ impl<C: CustomerRepository> SubscriptionStatusGateway for StripePlanGateway<C> {
         Ok(Some(SubscriptionPlanFacts {
             period_end,
             scheduled_change,
+            billing: None,
         }))
     }
 }

@@ -5769,7 +5769,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/TeamAgentFailure"
                 }
               }
             }
@@ -8501,7 +8501,7 @@
       "ComputerPayment": {
         "type": "string",
         "description": "Durable payment outcome supplied by hosted runtimes.",
-        "enum": ["pending", "paid", "unbilled"]
+        "enum": ["pending", "paid", "comped", "unbilled"]
       },
       "ComputerSize": {
         "type": "string",
@@ -8723,11 +8723,21 @@
       "CreateTeamAgent": {
         "type": "object",
         "description": "Input for inviting a team agent and buying its computer.",
-        "required": ["name", "jobDescription", "personality", "size"],
+        "required": [
+          "expectedIncluded",
+          "name",
+          "jobDescription",
+          "personality",
+          "size"
+        ],
         "properties": {
           "avatarUrl": {
             "type": ["string", "null"],
             "description": "Profile picture URL (a static file the caller uploaded)."
+          },
+          "expectedIncluded": {
+            "type": "boolean",
+            "description": "Whether the reviewed quote included the seat and computer for free."
           },
           "jobDescription": {
             "type": "string",
@@ -11020,6 +11030,134 @@
           }
         }
       },
+      "SubscriptionBilling": {
+        "type": "object",
+        "description": "Actual current recurring items and the provider's next invoice preview.",
+        "required": [
+          "currency",
+          "interval",
+          "humanSeats",
+          "agentSeats",
+          "lineItems",
+          "subscriptionTotal"
+        ],
+        "properties": {
+          "agentSeats": {
+            "$ref": "#/components/schemas/SubscriptionSeatTotal",
+            "description": "Paid agent seat allocations; excludes included memberships."
+          },
+          "currency": {
+            "type": "string",
+            "description": "The subscription's ISO currency, as returned by the provider."
+          },
+          "humanSeats": {
+            "$ref": "#/components/schemas/SubscriptionSeatTotal",
+            "description": "Paid human seat allocations; excludes included memberships."
+          },
+          "interval": {
+            "$ref": "#/components/schemas/BillingInterval",
+            "description": "The actual recurring billing interval shared by these items."
+          },
+          "lineItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionBillingLineItem"
+            },
+            "description": "Real provider line items, allocated only when their ownership is known."
+          },
+          "nextInvoice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubscriptionNextInvoice",
+                "description": "Provider invoice preview, absent when no upcoming invoice is available."
+              }
+            ]
+          },
+          "subscriptionTotal": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recurring item subtotal in minor units, before invoice adjustments."
+          }
+        }
+      },
+      "SubscriptionBillingLineItem": {
+        "type": "object",
+        "description": "An allocated provider item or an explicitly included computer.",
+        "required": ["kind", "quantity", "amount", "name", "included"],
+        "properties": {
+          "agentUserId": {
+            "type": ["string", "null"],
+            "description": "Agent account associated with this computer, if known."
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current recurring amount for this allocated quantity, in minor units."
+          },
+          "computerId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Identified computer, absent for aggregate or unattributed items."
+          },
+          "included": {
+            "type": "boolean",
+            "description": "Included without a subscription charge."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SubscriptionBillingLineKind",
+            "description": "Actual billing category; unmatched quantities stay `other`."
+          },
+          "name": {
+            "type": "string",
+            "description": "Entity name or provider item description."
+          },
+          "plan": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SeatPlan",
+                "description": "Seat plan, where applicable."
+              }
+            ]
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Actual subscription quantity allocated to this row.",
+            "minimum": 0
+          },
+          "size": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerSize",
+                "description": "Identified computer's catalog size."
+              }
+            ]
+          },
+          "status": {
+            "type": ["string", "null"],
+            "description": "Computer status supplied by its owning service."
+          },
+          "unitAmount": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Provider price per unit in minor units, when fixed."
+          }
+        }
+      },
+      "SubscriptionBillingLineKind": {
+        "type": "string",
+        "description": "What an actual subscription item pays for.",
+        "enum": ["human_seat", "agent_seat", "computer", "other"]
+      },
       "SubscriptionItem": {
         "type": "object",
         "description": "A Stripe price and how many of it to add to the team subscription.",
@@ -11036,10 +11174,56 @@
           }
         }
       },
+      "SubscriptionNextInvoice": {
+        "type": "object",
+        "description": "Provider-confirmed next invoice, including its adjustments and credits.",
+        "required": ["amount"],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Actual upcoming invoice amount due in minor units."
+          },
+          "date": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Provider's next payment or due date, when supplied."
+          }
+        }
+      },
+      "SubscriptionSeatTotal": {
+        "type": "object",
+        "description": "Billed seat quantity and current recurring amount in minor units.",
+        "required": ["quantity", "amount"],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Actual recurring price times allocated quantity, in minor units."
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Actual billed quantity allocated to this seat kind.",
+            "minimum": 0
+          }
+        }
+      },
       "SubscriptionStatus": {
         "type": "object",
         "description": "Current renewal and scheduled change; empty for accounts without a subscription.",
         "properties": {
+          "billing": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubscriptionBilling",
+                "description": "Actual provider billing details, exposed only to its billing administrator."
+              }
+            ]
+          },
           "renewalDate": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -11287,12 +11471,38 @@
       "TeamAgentConflictCode": {
         "type": "string",
         "description": "Stable conflict codes for invitation and provisioning failures.",
-        "enum": ["no_subscription", "computer_unavailable", "retry_unavailable"]
+        "enum": [
+          "quote_changed",
+          "no_subscription",
+          "computer_unavailable",
+          "retry_unavailable"
+        ]
+      },
+      "TeamAgentFailure": {
+        "type": "object",
+        "description": "Public provider failure details. Never contains raw upstream response bodies.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/TeamAgentFailureCode",
+            "description": "Machine-readable failure stage."
+          },
+          "message": {
+            "type": "string",
+            "description": "Safe, actionable reason."
+          }
+        }
+      },
+      "TeamAgentFailureCode": {
+        "type": "string",
+        "description": "Stable provider failure reason safe for invitation error presentation.",
+        "enum": ["repository_creation_failed", "provider_failed"]
       },
       "TeamAgentQuote": {
         "type": "object",
         "description": "What inviting an agent adds to the team's bill, in cents per interval.",
         "required": [
+          "included",
           "vcpus",
           "memoryGb",
           "diskGb",
@@ -11317,6 +11527,10 @@
             "format": "int32",
             "description": "Disk capacity in GB, from the computer size catalog.",
             "minimum": 0
+          },
+          "included": {
+            "type": "boolean",
+            "description": "Both seat and computer are included, with no Stripe change."
           },
           "interval": {
             "$ref": "#/components/schemas/BillingInterval",
