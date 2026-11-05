@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE dialpad_sync_connections SET backfill_due_at = now() WHERE id = $1 AND enrolled_at = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b18f5d5fc303fbf483e64959462ab1ab3b8c2c455911c8b7eab8cb109ba51a7f"
+}

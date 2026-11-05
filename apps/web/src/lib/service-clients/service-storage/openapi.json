@@ -24017,7 +24017,7 @@
       "CallProvider": {
         "type": "string",
         "description": "Supported call and transcript providers. Add variants as integrations grow.",
-        "enum": ["macro", "granola"]
+        "enum": ["macro", "granola", "dialpad"]
       },
       "CallRecord": {
         "type": "object",

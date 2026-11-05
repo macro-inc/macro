@@ -76,6 +76,15 @@ describe('individual settings search', () => {
       }).some((result) => result.title === 'Email signatures')
     ).toBe(false);
   });
+  it('only offers Dialpad when its feature flag is enabled', () => {
+    expect(search('dialpad')).toEqual([]);
+    expect(
+      searchSettings(SETTINGS_TAB_GROUPS, 'dialpad', { dialpad: false })
+    ).toEqual([]);
+    expect(
+      searchSettings(SETTINGS_TAB_GROUPS, 'dialpad', { dialpad: true })[0]
+    ).toMatchObject({ tab: 'Connected', target: 'dialpad' });
+  });
   it('finds the team members page for inviting people', () => {
     for (const query of ['invite', 'members', 'team members', 'teammates']) {
       expect(search(query)[0]).toMatchObject({

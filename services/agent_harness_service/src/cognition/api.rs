@@ -153,7 +153,7 @@ fn api_router(api_context: ApiContext) -> Router {
         .merge(ai_projections::inbound::axum_router::ai_projections_router(
             ai_projections::inbound::axum_router::AiProjectionRouterState {
                 service: ai_projections_service,
-                authorization_state,
+                authorization_state: authorization_state.clone(),
             },
         ))
         .merge(
@@ -163,6 +163,12 @@ fn api_router(api_context: ApiContext) -> Router {
         .merge(mcp_client::inbound::mcp_router(mcp_state.clone()))
         .merge(pipedream_mcp::inbound::pipedream_mcp_router(
             api_context.pipedream_state.clone(),
+        ))
+        .merge(dialpad_sync::inbound::dialpad_router(
+            dialpad_sync::inbound::DialpadRouterState {
+                service: api_context.dialpad_sync.clone(),
+                authorization_state,
+            },
         ))
         .with_state(api_context.clone());
 
@@ -175,6 +181,9 @@ fn api_router(api_context: ApiContext) -> Router {
         .merge(mcp_client::inbound::mcp_oauth_callback_router(mcp_state))
         .merge(granola_sync::inbound::webhook_router(
             api_context.granola_sync.clone(),
+        ))
+        .merge(dialpad_sync::inbound::webhook_router(
+            api_context.dialpad_sync.clone(),
         ))
         // Macro Connect's consent finishes on this page; it records nothing.
         .merge(pipedream_mcp::inbound::pipedream_connect_callback_router());

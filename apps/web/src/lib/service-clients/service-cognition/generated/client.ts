@@ -13,6 +13,8 @@ import type {
   ChatHistoryBatchMessagesRequest,
   ChatMessageError,
   CompleteOnboardingRequest,
+  ConnectDialpadRequest,
+  ConnectDialpadResponse,
   CreateChatRequest,
   CreatePipedreamMcpTokenBody,
   DatabaseQueryAnswer,
@@ -22,6 +24,7 @@ import type {
   DecisionResponse,
   DeleteMcpServerParams,
   DeletePipedreamMcpConnectionParams,
+  DialpadConnectionResponse,
   DismissedPrompts,
   DocumentTextPart,
   ErrorBody,
@@ -1835,6 +1838,250 @@ export const cancelWorkspaceHandler = async (
     status: res.status,
     headers: res.headers,
   } as cancelWorkspaceHandlerResponse;
+};
+
+/**
+ * @summary The authenticated user's Dialpad call sync.
+ */
+export type getDialpadConnectionResponse200 = {
+  data: DialpadConnectionResponse;
+  status: 200;
+};
+
+export type getDialpadConnectionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getDialpadConnectionResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getDialpadConnectionResponseSuccess =
+  getDialpadConnectionResponse200 & {
+    headers: Headers;
+  };
+export type getDialpadConnectionResponseError = (
+  | getDialpadConnectionResponse401
+  | getDialpadConnectionResponse500
+) & {
+  headers: Headers;
+};
+
+export type getDialpadConnectionResponse =
+  | getDialpadConnectionResponseSuccess
+  | getDialpadConnectionResponseError;
+
+export const getGetDialpadConnectionUrl = () => {
+  return `/integrations/dialpad/connection`;
+};
+
+export const getDialpadConnection = async (
+  options?: RequestInit
+): Promise<getDialpadConnectionResponse> => {
+  const res = await fetch(getGetDialpadConnectionUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getDialpadConnectionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getDialpadConnectionResponse;
+};
+
+/**
+ * @summary Start connecting Dialpad through Macro Connect.
+ */
+export type connectDialpadResponse200 = {
+  data: ConnectDialpadResponse;
+  status: 200;
+};
+
+export type connectDialpadResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type connectDialpadResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type connectDialpadResponse501 = {
+  data: ErrorResponse;
+  status: 501;
+};
+
+export type connectDialpadResponseSuccess = connectDialpadResponse200 & {
+  headers: Headers;
+};
+export type connectDialpadResponseError = (
+  | connectDialpadResponse401
+  | connectDialpadResponse500
+  | connectDialpadResponse501
+) & {
+  headers: Headers;
+};
+
+export type connectDialpadResponse =
+  | connectDialpadResponseSuccess
+  | connectDialpadResponseError;
+
+export const getConnectDialpadUrl = () => {
+  return `/integrations/dialpad/connection`;
+};
+
+export const connectDialpad = async (
+  connectDialpadRequest: ConnectDialpadRequest,
+  options?: RequestInit
+): Promise<connectDialpadResponse> => {
+  const res = await fetch(getConnectDialpadUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(connectDialpadRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: connectDialpadResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as connectDialpadResponse;
+};
+
+/**
+ * @summary Stop syncing Dialpad calls and remove the Dialpad connection. Imported
+calls stay; the grant at Dialpad is not revoked.
+ */
+export type disconnectDialpadResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type disconnectDialpadResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type disconnectDialpadResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type disconnectDialpadResponse501 = {
+  data: ErrorResponse;
+  status: 501;
+};
+
+export type disconnectDialpadResponseSuccess = disconnectDialpadResponse204 & {
+  headers: Headers;
+};
+export type disconnectDialpadResponseError = (
+  | disconnectDialpadResponse401
+  | disconnectDialpadResponse500
+  | disconnectDialpadResponse501
+) & {
+  headers: Headers;
+};
+
+export type disconnectDialpadResponse =
+  | disconnectDialpadResponseSuccess
+  | disconnectDialpadResponseError;
+
+export const getDisconnectDialpadUrl = () => {
+  return `/integrations/dialpad/connection`;
+};
+
+export const disconnectDialpad = async (
+  options?: RequestInit
+): Promise<disconnectDialpadResponse> => {
+  const res = await fetch(getDisconnectDialpadUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: disconnectDialpadResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as disconnectDialpadResponse;
+};
+
+/**
+ * @summary Finish connecting after the user approved Dialpad in Macro Connect.
+ */
+export type completeDialpadConnectionResponse200 = {
+  data: DialpadConnectionResponse;
+  status: 200;
+};
+
+export type completeDialpadConnectionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type completeDialpadConnectionResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type completeDialpadConnectionResponse501 = {
+  data: ErrorResponse;
+  status: 501;
+};
+
+export type completeDialpadConnectionResponseSuccess =
+  completeDialpadConnectionResponse200 & {
+    headers: Headers;
+  };
+export type completeDialpadConnectionResponseError = (
+  | completeDialpadConnectionResponse401
+  | completeDialpadConnectionResponse500
+  | completeDialpadConnectionResponse501
+) & {
+  headers: Headers;
+};
+
+export type completeDialpadConnectionResponse =
+  | completeDialpadConnectionResponseSuccess
+  | completeDialpadConnectionResponseError;
+
+export const getCompleteDialpadConnectionUrl = () => {
+  return `/integrations/dialpad/connection/complete`;
+};
+
+export const completeDialpadConnection = async (
+  options?: RequestInit
+): Promise<completeDialpadConnectionResponse> => {
+  const res = await fetch(getCompleteDialpadConnectionUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: completeDialpadConnectionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as completeDialpadConnectionResponse;
 };
 
 /**

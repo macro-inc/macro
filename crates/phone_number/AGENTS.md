@@ -13,7 +13,8 @@ form, so a number typed by a person and one sent by a provider compare equal.
 ## Boundaries
 
 - Depends on: `serde` only.
-- Used by: `crm` (contact phones), `call` (readable guest numbers).
+- Used by: `crm` (contact phones), `call` (readable guest numbers),
+  `dialpad_sync` (call participants).
 
 ## Checks
 

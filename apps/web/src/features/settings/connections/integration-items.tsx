@@ -1,7 +1,9 @@
 import { SlackImport } from '@app/features/slack-import/slack-import';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import {
   ENABLE_EMAIL,
+  enableDialpad,
   enableMultiInbox,
   enableSlackArchiveImport,
 } from '@core/constant/featureFlags';
@@ -13,13 +15,22 @@ import { openExternalUrl } from '@core/util/url';
 import ClaudeIcon from '@icon/claude-color.svg';
 import GmailIcon from '@icon/gmail-color.svg';
 import OutlookIcon from '@icon/outlook-color.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
-import { type Accessor, Match, Show, Switch } from 'solid-js';
+import { Dropdown } from '@ui';
+import { type Accessor, For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
+import {
+  DIALPAD_APP_SLUG,
+  DIALPAD_BACKFILL_OPTIONS,
+  DIALPAD_ICON_URL,
+  dialpadIssueLabel,
+} from '../../dialpad-connect/core/dialpad';
+import { createDialpadConnection } from '../../dialpad-connect/primitives/create-dialpad-connection';
 import {
   GRANOLA_APP_SLUG,
   GRANOLA_ICON_URL,
@@ -389,6 +400,129 @@ export function useGranolaItem(): IntegrationItem {
     },
     get statusLabel() {
       return granola.status() === 'disabled' ? 'Paused' : undefined;
+    },
+    Actions,
+  };
+}
+
+/**
+ * Dialpad call sync. Connecting asks how far back to import, then opens
+ * Macro Connect; the row reads "Connecting" until setup finishes.
+ */
+export function useDialpadItem(): IntegrationItem {
+  const flag = useFeatureFlag(enableDialpad);
+  const dialpad = createDialpadConnection(() => flag().enabled);
+
+  function ConnectMenu(props: { label: string; ariaLabel: string }) {
+    return (
+      <Dropdown>
+        <Dropdown.Trigger
+          variant="ghost"
+          size="sm"
+          aria-label={props.ariaLabel}
+          class="text-ink-muted hover:text-ink touch:min-h-11"
+          disabled={dialpad.connecting()}
+        >
+          {props.label}
+          <ArrowUpRightIcon class="size-3.5 opacity-70" />
+        </Dropdown.Trigger>
+        <Dropdown.Content class="min-w-60 max-w-80">
+          <Dropdown.Group>
+            <For each={DIALPAD_BACKFILL_OPTIONS}>
+              {(option) => (
+                <Dropdown.Item
+                  onSelect={() =>
+                    fireAndForget(
+                      dialpad.connect(option.value),
+                      'dialpad-settings'
+                    )
+                  }
+                >
+                  {option.label}
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+    );
+  }
+
+  function Actions() {
+    const state = () => dialpad.connection()?.state;
+    return (
+      <Switch>
+        <Match
+          when={
+            state() === 'failed' ||
+            dialpad.connection()?.issue === 'needs_reauth'
+          }
+        >
+          <ConnectMenu
+            label={t('dialpad.reconnect')}
+            ariaLabel={t('dialpad.reconnectDialpad')}
+          />
+        </Match>
+        <Match when={state() === 'connected'}>
+          <ConnectAction
+            label={t('dialpad.disconnect')}
+            variant="danger"
+            ariaLabel={t('dialpad.disconnectDialpad')}
+            onClick={() =>
+              fireAndForget(dialpad.disconnect(), 'dialpad-settings')
+            }
+            disabled={dialpad.disconnecting()}
+          />
+        </Match>
+        <Match when={state() === 'connecting'}>
+          <ConnectAction
+            label={t('dialpad.connecting')}
+            variant="neutral"
+            loading
+          />
+        </Match>
+        <Match when={state() === 'not_connected'}>
+          <ConnectMenu
+            label={t('dialpad.connect')}
+            ariaLabel={t('dialpad.connectDialpad')}
+          />
+        </Match>
+      </Switch>
+    );
+  }
+
+  return {
+    id: 'dialpad',
+    name: 'Dialpad',
+    kind: 'native',
+    icon: (
+      <PipedreamConnectorIcon
+        appSlug={DIALPAD_APP_SLUG}
+        iconUrl={DIALPAD_ICON_URL}
+        class="size-5"
+      />
+    ),
+    get description() {
+      return t('dialpad.description');
+    },
+    categories: ['Meetings'],
+    get status(): IntegrationStatus {
+      const connection = dialpad.connection();
+      if (connection?.state === 'connected')
+        return connection.issue ? 'attention' : 'connected';
+      if (connection?.state === 'failed') return 'attention';
+      if (connection?.state === 'connecting') return 'disconnected';
+      return 'available';
+    },
+    get statusLabel() {
+      const connection = dialpad.connection();
+      if (!connection) return undefined;
+      if (connection.state === 'connecting') return t('dialpad.connecting');
+      return dialpadIssueLabel(connection);
+    },
+    get hidden() {
+      const state = dialpad.connection()?.state;
+      return !flag().enabled || state === undefined || state === 'unavailable';
     },
     Actions,
   };

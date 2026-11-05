@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.namespace, c.user_id, c.enabled, c.dialpad_user_id, c.webhook_id,\n                c.subscription_id, c.signing_secret, c.setup_started_at, c.backfill_since,\n                c.backfill_cursor, c.backfill_failures, c.enrolled_at, c.last_synced_at,\n                c.last_error,\n                EXISTS (\n                    SELECT 1 FROM dialpad_sync_events e\n                    WHERE e.connection_id = c.id AND e.completed_at IS NULL\n                        AND e.available_at = 'infinity'\n                ) AS \"calls_abandoned!\",\n                EXISTS (\n                    -- A leased event's latest attempt is still running.\n                    SELECT 1 FROM dialpad_sync_events e\n                    WHERE e.connection_id = c.id AND e.completed_at IS NULL\n                        AND e.attempts > CASE WHEN e.lease_id IS NULL THEN 0 ELSE 1 END\n                ) AS \"calls_retrying!\"\n            FROM dialpad_sync_connections c WHERE c.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "namespace",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "dialpad_user_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "webhook_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "subscription_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "signing_secret",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 8,
+        "name": "setup_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "backfill_since",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "backfill_cursor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "backfill_failures",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "enrolled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "last_synced_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "last_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "calls_abandoned!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 16,
+        "name": "calls_retrying!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "0629f5b3e5e62801a4a7711a062500846dd6c42e51dca2d1a2f4ee788e6516b4"
+}

@@ -826,6 +826,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             },
         },
         granola_sync: None,
+        dialpad_sync: None,
         pipedream_state: pipedream_mcp::inbound::PipedreamRouterState::new(
             pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
             None,

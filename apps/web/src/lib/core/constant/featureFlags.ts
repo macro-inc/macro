@@ -165,6 +165,15 @@ export const macroConnect = defineFlag({
   env: 'ENABLE_MACRO_CONNECT',
 });
 
+/**
+ * Dialpad call sync in Connections. Off in dev too: connecting needs Dialpad
+ * to approve Macro's app in Macro Connect.
+ */
+export const enableDialpad = defineFlag({
+  key: 'enable-dialpad',
+  env: 'ENABLE_DIALPAD',
+});
+
 /** HTML artifact nodes on Canvas, including running their scripts in a sandbox. */
 export const enableCanvasArtifacts = defineFlag({
   key: 'enable-canvas-artifacts',

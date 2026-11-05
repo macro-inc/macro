@@ -300,6 +300,12 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Connected',
+    title: 'Dialpad',
+    target: 'Dialpad',
+    keywords: 'phone calls transcripts crm import',
+  },
+  {
+    tab: 'Connected',
     title: 'Claude Code, Codex, and ChatGPT',
     target: 'Claude Code, Codex, and ChatGPT',
     keywords: 'ai apps mcp ide setup',
@@ -390,7 +396,11 @@ function tokenScore(query: string, candidate: string): number {
 export function searchSettings(
   groups: readonly SettingsTabGroup[],
   query: string,
-  options: { emailSignatures?: boolean; outlook?: boolean } = {}
+  options: {
+    emailSignatures?: boolean;
+    outlook?: boolean;
+    dialpad?: boolean;
+  } = {}
 ): SettingsSearchResult[] {
   const tokens = words(query);
   if (!tokens.length) return [];
@@ -411,7 +421,8 @@ export function searchSettings(
         setting.tab === page.tab &&
         (options.emailSignatures !== false ||
           setting.title !== 'Email signatures') &&
-        (options.outlook !== false || setting.title !== 'Outlook')
+        (options.outlook !== false || setting.title !== 'Outlook') &&
+        (options.dialpad === true || setting.title !== 'Dialpad')
     ).map((setting) => ({
       ...setting,
       target: settingsTarget(setting.target),

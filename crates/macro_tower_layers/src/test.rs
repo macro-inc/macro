@@ -387,6 +387,39 @@ fn inject_trace_headers_is_a_noop_outside_a_span() {
     assert!(headers.get("traceparent").is_none());
 }
 
+#[test]
+fn stored_traceparent_continues_the_trace_that_stored_it() {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+
+    with_default(subscriber, || {
+        let request = tracing::info_span!("webhook");
+        let stored = request.in_scope(current_traceparent).unwrap();
+        let request_trace = request.context().span().span_context().trace_id();
+
+        let job = tracing::info_span!("job");
+        adopt_traceparent(&job, &stored);
+        assert_eq!(
+            job.context().span().span_context().trace_id(),
+            request_trace
+        );
+
+        let unrelated = tracing::info_span!("unrelated");
+        adopt_traceparent(&unrelated, "not a traceparent");
+        assert_ne!(
+            unrelated.context().span().span_context().trace_id(),
+            request_trace
+        );
+    });
+}
+
 #[tokio::test]
 async fn starvation_detector_does_not_warn_within_grace_period() {
     tokio::time::pause();

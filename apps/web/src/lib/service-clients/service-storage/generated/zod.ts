@@ -2653,7 +2653,7 @@ export const getCallRecordResponse = zod
                 "Link to the call in the provider's app, if it has one."
               ),
             provider: zod
-              .enum(['macro', 'granola'])
+              .enum(['macro', 'granola', 'dialpad'])
               .describe(
                 'Supported call and transcript providers. Add variants as integrations grow.'
               ),
@@ -31713,7 +31713,7 @@ export const getItemsSoupResponse = zod
                       .union([
                         zod.null(),
                         zod
-                          .enum(['macro', 'granola'])
+                          .enum(['macro', 'granola', 'dialpad'])
                           .describe(
                             'Supported call and transcript providers. Add variants as integrations grow.'
                           ),
@@ -36699,7 +36699,7 @@ export const postItemsSoupResponse = zod
                       .union([
                         zod.null(),
                         zod
-                          .enum(['macro', 'granola'])
+                          .enum(['macro', 'granola', 'dialpad'])
                           .describe(
                             'Supported call and transcript providers. Add variants as integrations grow.'
                           ),
@@ -41126,7 +41126,7 @@ export const postItemsSoupAstResponse = zod
                       .union([
                         zod.null(),
                         zod
-                          .enum(['macro', 'granola'])
+                          .enum(['macro', 'granola', 'dialpad'])
                           .describe(
                             'Supported call and transcript providers. Add variants as integrations grow.'
                           ),
@@ -46094,7 +46094,7 @@ export const postItemsSoupAstGroupedResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .enum(['macro', 'granola'])
+                                .enum(['macro', 'granola', 'dialpad'])
                                 .describe(
                                   'Supported call and transcript providers. Add variants as integrations grow.'
                                 ),
@@ -50488,7 +50488,7 @@ export const postItemsSoupAstGroupedResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .enum(['macro', 'granola'])
+                                .enum(['macro', 'granola', 'dialpad'])
                                 .describe(
                                   'Supported call and transcript providers. Add variants as integrations grow.'
                                 ),

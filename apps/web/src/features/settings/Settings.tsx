@@ -8,7 +8,10 @@ import {
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { SplitPanel } from '@components/app/split-panel';
-import { enableEmailSignatures } from '@core/constant/featureFlags';
+import {
+  enableDialpad,
+  enableEmailSignatures,
+} from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -93,6 +96,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // from people without a team.
   const navTabs = createMemo(() => navGroups().flatMap((group) => group.items));
   const signatures = useFeatureFlag(enableEmailSignatures);
+  const dialpad = useFeatureFlag(enableDialpad);
   const outlook = useOutlookAvailable();
 
   const activeNavigationTab = activeTabId;
@@ -104,6 +108,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     searchSettings(searchGroups(), searchQuery(), {
       emailSignatures: signatures().enabled,
       outlook: outlook(),
+      dialpad: dialpad().enabled,
     })
   );
 

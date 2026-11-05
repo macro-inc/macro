@@ -92,6 +92,8 @@ vi.mock('./integration-items', async (importOriginal) => {
     useEmailItems: () => () => [],
     useGithubItem: () => item('GitHub', () => null),
     useGranolaItem: () => item('Granola', () => null),
+    // Unavailable without Macro Connect, like most deployments under test.
+    useDialpadItem: () => ({ ...item('Dialpad', () => null), hidden: true }),
     useAgentProviderItem: (_model: unknown, provider: 'slack' | 'linear') =>
       item(provider === 'slack' ? 'Slack' : provider, () => {
         const view = useConnectionsView();

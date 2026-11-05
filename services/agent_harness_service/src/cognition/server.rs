@@ -586,7 +586,8 @@ pub async fn build(
         config.mcp_credentials_key_secret_name.as_ref(),
     )
     .context("invalid MCP credentials encryption key")?;
-    let granola_signing_key = *mcp_encryption_key.as_bytes();
+    // Granola and Dialpad seal their webhook signing secrets under this key.
+    let webhook_secret_key = *mcp_encryption_key.as_bytes();
     let mcp_server_repo = mcp_client::outbound::NativeServerStore::new(
         mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key),
         Some(Arc::new(
@@ -695,7 +696,7 @@ pub async fn build(
             Arc::new(granola_sync::domain::service::Service {
                 repo: granola_sync::outbound::pg_repo::PgSyncRepository::new(
                     db.clone(),
-                    &granola_signing_key,
+                    &webhook_secret_key,
                 ),
                 granola: granola_sync::outbound::api::GranolaApi(client.clone()),
                 accounts: granola_sync::outbound::accounts::ConnectedAccounts(
@@ -714,6 +715,49 @@ pub async fn build(
     let granola_worker = granola_sync
         .as_ref()
         .map(|service| tokio::spawn(granola_sync::inbound::run_worker(service.clone())));
+
+    // Dialpad grants live in Macro Connect; without its key, sync is off.
+    let dialpad_sync: Option<Arc<dyn dialpad_sync::domain::service::SyncService>> =
+        match config.connect_customer_key.value() {
+            Some(key) => {
+                let grants = dialpad_sync::outbound::connect::ConnectGrants::new(
+                    macro_service_urls::ConnectApiUrl::new()?.as_ref(),
+                    key,
+                )
+                .map_err(|error| anyhow::anyhow!("invalid Macro Connect config: {error}"))?;
+                Some(Arc::new(dialpad_sync::domain::service::Service {
+                    repo: dialpad_sync::outbound::pg_repo::PgSyncRepository::new(
+                        db.clone(),
+                        &webhook_secret_key,
+                    ),
+                    grants,
+                    dialpad: dialpad_sync::outbound::api::DialpadApi::new(
+                        dialpad_sync::outbound::api::DIALPAD_API,
+                    )
+                    .map_err(|error| anyhow::anyhow!("Dialpad client: {error}"))?,
+                    verifier: dialpad_sync::outbound::jwt::JwtVerifier,
+                    calls: Arc::new(call::domain::imports::CallImportServiceImpl(
+                        call::outbound::pg_imported_call_repo::PgImportedCallRepository::new(
+                            db.clone(),
+                        ),
+                        macro_event_broker.clone(),
+                    )),
+                    public_url: public_url.to_string(),
+                    return_url: format!(
+                        "{}/app/settings/connections",
+                        macro_service_urls::AppServiceUrl::new()?
+                    ),
+                })
+                    as Arc<dyn dialpad_sync::domain::service::SyncService>)
+            }
+            None => {
+                tracing::info!("Macro Connect key not set; Dialpad call sync disabled");
+                None
+            }
+        };
+    let dialpad_worker = dialpad_sync
+        .as_ref()
+        .map(|service| tokio::spawn(dialpad_sync::inbound::run_worker(service.clone())));
 
     // The one sanctioned meeting point of the two MCP stacks: agents load
     // tools through this selector, which prefers a user's Pipedream
@@ -1169,6 +1213,7 @@ pub async fn build(
         mcp_state,
         pipedream_state,
         granola_sync,
+        dialpad_sync,
         mcp_selector,
         import_service,
         onboarding_service,
@@ -1177,7 +1222,7 @@ pub async fn build(
     let mut workers = vec![tokio_util::task::AbortOnDropHandle::new(
         ai_projection_worker_task,
     )];
-    if let Some(worker) = granola_worker {
+    for worker in [granola_worker, dialpad_worker].into_iter().flatten() {
         workers.push(tokio_util::task::AbortOnDropHandle::new(worker));
     }
     Ok(CognitionRuntime {

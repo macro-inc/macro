@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM dialpad_sync_events WHERE connection_id = $1 AND call_id IN (\n                SELECT call_id FROM dialpad_sync_events WHERE connection_id = $1\n                GROUP BY call_id\n                HAVING bool_and(completed_at IS NOT NULL)\n                    AND max(received_at) < now() - make_interval(days => $2)\n            )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7c30e71a41417d698142ae9d2d40193dae330d015c3f8ec460b788f6a31c7464"
+}

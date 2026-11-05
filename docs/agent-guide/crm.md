@@ -203,9 +203,10 @@ On phones each pill is a `tel:` link to the device's dialer; on larger screens
 the number sits beside a **Call** link. **Add phone** / **Edit phones** opens a
 dialog of numbers, each needing its country code (`+…`); the server stores them
 in E.164 and refuses others. Numbers also arrive from contact CSV imports and
-from imported calls whose guest matched the contact by email. Imported calls
-(Granola today) link to the contact (email first, then phone) and appear in
-its Calls section for people who can open the call.
+from imported calls whose guest matched the contact by email (Dialpad sets
+guests' numbers). Imported Granola and Dialpad calls link to the contact (email
+first, then phone) and appear in its Calls section for people who can open the
+call.
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
 On phones and tablets, the current section appears as a labeled header island

@@ -11,7 +11,7 @@ in-call chat.
 - `src/domain/service.rs` + `src/domain/models.rs`: call lifecycle policy.
 - `src/domain/service/guest_chat.rs`: active guest authorization for the shared
   call discussion; message storage and delivery belong to `messages`.
-- `src/domain/imports.rs`: the provider-neutral import port (Granola).
+- `src/domain/imports.rs`: the provider-neutral import port (Granola, Dialpad).
   Each import is a full snapshot; re-imports keep participant ids stable by
   matching email and phone together, then email, then phone, reserving stronger
   matches before shared identity hints can take another attendee's id.

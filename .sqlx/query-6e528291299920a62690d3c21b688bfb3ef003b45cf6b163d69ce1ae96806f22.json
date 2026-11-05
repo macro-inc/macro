@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT e.connection_id FROM dialpad_sync_events e\n            JOIN dialpad_sync_connections c ON c.id = e.connection_id\n            WHERE e.completed_at IS NULL AND e.available_at <= now() AND c.enabled\n                AND NOT EXISTS (\n                    SELECT 1 FROM dialpad_sync_events active\n                    WHERE active.connection_id = e.connection_id AND active.call_id = e.call_id\n                        AND active.completed_at IS NULL AND active.lease_id IS NOT NULL\n                        AND active.available_at > now()\n                )\n            ORDER BY e.available_at LIMIT 1 FOR UPDATE OF c SKIP LOCKED",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "connection_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6e528291299920a62690d3c21b688bfb3ef003b45cf6b163d69ce1ae96806f22"
+}

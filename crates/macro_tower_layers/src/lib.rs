@@ -38,15 +38,47 @@ pub struct MakeSpanWithRemoteParent;
 impl<B> MakeSpan<B> for MakeSpanWithRemoteParent {
     fn make_span(&mut self, request: &Request<B>) -> Span {
         let span = MakeHttpRequestSpan.make_span(request);
-        let parent = opentelemetry::global::get_text_map_propagator(|propagator| {
-            propagator.extract(&opentelemetry_http::HeaderExtractor(request.headers()))
-        });
-        if parent.span().span_context().is_valid() {
-            let _ = span.set_parent(parent);
-        }
+        adopt_trace_headers(&span, request.headers());
         span
     }
 }
+
+fn adopt_trace_headers(span: &Span, headers: &http::HeaderMap) {
+    let parent = opentelemetry::global::get_text_map_propagator(|propagator| {
+        propagator.extract(&opentelemetry_http::HeaderExtractor(headers))
+    });
+    if parent.span().span_context().is_valid() {
+        let _ = span.set_parent(parent);
+    }
+}
+
+/// The current span's W3C `traceparent`, for work that runs after the request
+/// that started it (a stored webhook delivery, a queued job).
+///
+/// Store it with the work and pass it to [`adopt_traceparent`] when the work
+/// runs, so both halves are one trace. `None` outside any span or without a
+/// global propagator.
+pub fn current_traceparent() -> Option<String> {
+    let mut headers = http::HeaderMap::new();
+    inject_trace_headers(&mut headers);
+    headers
+        .get(TRACEPARENT)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned)
+}
+
+/// Make `span` a child of the remote span named by a stored `traceparent`.
+/// Missing or malformed context leaves the span where it is.
+pub fn adopt_traceparent(span: &Span, traceparent: &str) {
+    let Ok(value) = HeaderValue::from_str(traceparent) else {
+        return;
+    };
+    let mut headers = http::HeaderMap::new();
+    headers.insert(TRACEPARENT, value);
+    adopt_trace_headers(span, &headers);
+}
+
+const TRACEPARENT: &str = "traceparent";
 
 /// Injects the current span's W3C trace context into outbound request headers.
 ///

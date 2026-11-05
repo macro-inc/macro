@@ -10,6 +10,7 @@ import common from './en/common';
 import contactPhones from './en/contact-phones';
 import create from './en/create';
 import crm from './en/crm';
+import dialpad from './en/dialpad';
 import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
@@ -39,6 +40,7 @@ export default {
   contactPhones,
   create,
   crm,
+  dialpad,
   entityActions,
   localRuntime,
   mobile,
