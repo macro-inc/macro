@@ -8187,6 +8187,13 @@ export type FormSection = {
      */
     questions: Array<QuestionLayout>;
     /**
+     * When to show it: the rules answers of earlier shown sections must
+     * pass, naming only their columns. A section whose rules fail is
+     * skipped: its questions are not required and their answers are
+     * not written. Absent, it is always shown.
+     */
+    showWhen?: FilterGroup;
+    /**
      * Its title; may be empty.
      */
     title: string;
@@ -8249,6 +8256,12 @@ export type FormSectionDetail = {
      * Its questions, in order.
      */
     questions: Array<FormQuestionDetail>;
+    /**
+     * When to show it, from earlier shown sections' answers; absent,
+     * it is always shown. Sent to every caller so a respondent's page
+     * can skip it.
+     */
+    showWhen?: FilterGroup;
     /**
      * Its title.
      */
@@ -9964,6 +9977,18 @@ export type LayoutProblem = {
     kind: 'gateNamesLaterColumn';
 } | {
     kind: 'gateRule';
+    /**
+     * Why.
+     */
+    reason: string;
+} | {
+    /**
+     * The column.
+     */
+    column: string;
+    kind: 'conditionNamesLaterColumn';
+} | {
+    kind: 'conditionRule';
     /**
      * Why.
      */
