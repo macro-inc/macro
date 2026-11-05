@@ -463,6 +463,9 @@ pub enum TeamAgentError {
     /// The computer can't be bought right now (sold out, no subscription).
     #[error("the computer can't be bought: {0}")]
     ComputerUnavailable(String),
+    /// Saved provisioning state cannot be retried.
+    #[error("the agent can't be retried: {0}")]
+    RetryUnavailable(String),
     /// The computer billing provider failed.
     #[error("the computer billing provider failed: {0}")]
     ComputerProvider(rootcause::Report),

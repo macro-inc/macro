@@ -53,6 +53,7 @@ fn agent() -> TeamAgent {
 struct FakeService {
     calls: Mutex<Vec<String>>,
     create_error: Mutex<Option<TeamAgentError>>,
+    retry_error: Mutex<Option<TeamAgentError>>,
 }
 
 impl FakeService {
@@ -117,7 +118,10 @@ impl TeamAgentService for FakeService {
             "retry {} {agent_user_id}",
             receipt.entity().entity_id
         ));
-        Ok(agent())
+        match self.retry_error.lock().expect("lock").take() {
+            Some(error) => Err(error),
+            None => Ok(agent()),
+        }
     }
 
     async fn delete(
@@ -528,5 +532,28 @@ async fn retry_requires_an_admin_and_uses_the_agent_path() {
     assert_eq!(
         *service.calls.lock().unwrap(),
         vec!["retry 00000000-0000-0000-0000-00000000002a macro|sam@agents.example.com"]
+    );
+}
+
+#[tokio::test]
+async fn retry_returns_conflict_when_the_computer_is_not_failed() {
+    let service = Arc::new(FakeService::default());
+    *service.retry_error.lock().unwrap() = Some(TeamAgentError::RetryUnavailable(
+        "only failed computers can be retried".to_string(),
+    ));
+    let response = router(service, TeamRole::Admin)
+        .oneshot(
+            Request::post("/macro%7Csam%40agents.example.com/retry")
+                .header(header::AUTHORIZATION, "Bearer admin")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert!(
+        body_text(response)
+            .await
+            .contains("only failed computers can be retried")
     );
 }

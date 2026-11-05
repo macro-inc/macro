@@ -589,13 +589,11 @@ where
     ) -> Result<TeamAgent, TeamAgentError> {
         let agent = self.team_agent(&receipt, agent_user_id).await?;
         let computer_id = agent.computer_id.ok_or_else(|| {
-            TeamAgentError::ComputerUnavailable(
-                "the agent has no saved computer to retry".to_string(),
-            )
+            TeamAgentError::RetryUnavailable("the agent has no saved computer to retry".to_string())
         })?;
         let computer = self.computers.status(agent.team_id, computer_id).await?;
         if computer.status == ComputerStatusKind::Released {
-            return Err(TeamAgentError::ComputerUnavailable(
+            return Err(TeamAgentError::RetryUnavailable(
                 "a released computer cannot be retried".to_string(),
             ));
         }
@@ -609,7 +607,7 @@ where
             .await
             .map_err(TeamAgentError::internal)?
             .ok_or_else(|| {
-                TeamAgentError::ComputerUnavailable(
+                TeamAgentError::RetryUnavailable(
                     "the agent predates saved recovery inputs".to_string(),
                 )
             })?;
@@ -625,7 +623,7 @@ where
             ));
         }
         let token = persona.config.get(config_keys::REPO_TOKEN).ok_or_else(|| {
-            TeamAgentError::ComputerUnavailable("the saved repo credential is missing".to_string())
+            TeamAgentError::RetryUnavailable("the saved repo credential is missing".to_string())
         })?;
         self.repos
             .ensure(
@@ -635,17 +633,8 @@ where
                 &Credential::new(token.clone()),
             )
             .await?;
-        self.computers.retry(agent.team_id, computer_id).await?;
-        self.repository
-            .set_status(agent_user_id, TeamAgentStatus::Provisioning, None)
-            .await
-            .map_err(TeamAgentError::internal)?;
-        Ok(TeamAgent {
-            status: TeamAgentStatus::Provisioning,
-            status_reason: None,
-            setup: None,
-            ..agent
-        })
+        let computer = self.computers.retry(agent.team_id, computer_id).await?;
+        self.apply_computer_status(agent, computer).await
     }
 
     #[tracing::instrument(skip(self, receipt), err)]

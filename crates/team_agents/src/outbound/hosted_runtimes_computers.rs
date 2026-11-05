@@ -26,7 +26,8 @@ pub struct HostedRuntimesComputers<Repo, Bill, Time> {
 }
 
 impl<Repo, Bill, Time> HostedRuntimesComputers<Repo, Bill, Time> {
-    /// Shares the computer service built by the authentication service.
+    /// Shares the computer service and a clone of its repository.
+    /// The repository supplies saved bootstrap personas for recovery.
     pub fn new(service: Arc<ComputerService<Repo, Bill, Time>>, repo: Repo) -> Self {
         Self { service, repo }
     }
@@ -103,29 +104,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock> Computers
             .status(team_id, computer_id)
             .await
             .map_err(error)?;
-        Ok(ComputerStatus {
-            status: match status.status {
-                models::ComputerStatusKind::SettingUp => ComputerStatusKind::SettingUp,
-                models::ComputerStatusKind::Ready => ComputerStatusKind::Ready,
-                models::ComputerStatusKind::Asleep => ComputerStatusKind::Asleep,
-                models::ComputerStatusKind::Waking => ComputerStatusKind::Waking,
-                models::ComputerStatusKind::Stopping => ComputerStatusKind::Stopping,
-                models::ComputerStatusKind::Stopped => ComputerStatusKind::Stopped,
-                models::ComputerStatusKind::Failed => ComputerStatusKind::Failed,
-                models::ComputerStatusKind::Released => ComputerStatusKind::Released,
-            },
-            setup: status.setup.map(|setup| SetupProgress {
-                step: match setup.step {
-                    models::SetupStep::Paying => SetupStep::Paying,
-                    models::SetupStep::Creating => SetupStep::Creating,
-                    models::SetupStep::Booting => SetupStep::Booting,
-                    models::SetupStep::Connecting => SetupStep::Connecting,
-                    models::SetupStep::Ready => SetupStep::Ready,
-                },
-                position: setup.position,
-                total: setup.total,
-            }),
-        })
+        Ok(computer_status(status))
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
@@ -138,7 +117,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock> Computers
             .filter(|computer| computer.team_id == team_id)
             .ok_or(TeamAgentError::NotFound)?;
         let persona = computer.persona.ok_or_else(|| {
-            TeamAgentError::ComputerUnavailable("the computer has no saved persona".to_string())
+            TeamAgentError::RetryUnavailable("the computer has no saved persona".to_string())
         })?;
         Ok(Persona {
             name: persona.name,
@@ -153,16 +132,16 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock> Computers
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
-    async fn retry(&self, team_id: Uuid, computer_id: Uuid) -> Result<(), TeamAgentError> {
-        // TODO: replace with self.service.retry(team_id, computer_id).await.map_err(error)
-        // once the owning hosted_runtimes service exposes OperatorRetry.
+    async fn retry(
+        &self,
+        team_id: Uuid,
+        computer_id: Uuid,
+    ) -> Result<ComputerStatus, TeamAgentError> {
         self.service
-            .status(team_id, computer_id)
+            .retry(team_id, computer_id)
             .await
-            .map_err(error)?;
-        Err(TeamAgentError::ComputerUnavailable(
-            "computer retry is not available yet".to_string(),
-        ))
+            .map(computer_status)
+            .map_err(error)
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
@@ -186,6 +165,32 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock> Computers
     }
 }
 
+fn computer_status(status: models::ComputerStatus) -> ComputerStatus {
+    ComputerStatus {
+        status: match status.status {
+            models::ComputerStatusKind::SettingUp => ComputerStatusKind::SettingUp,
+            models::ComputerStatusKind::Ready => ComputerStatusKind::Ready,
+            models::ComputerStatusKind::Asleep => ComputerStatusKind::Asleep,
+            models::ComputerStatusKind::Waking => ComputerStatusKind::Waking,
+            models::ComputerStatusKind::Stopping => ComputerStatusKind::Stopping,
+            models::ComputerStatusKind::Stopped => ComputerStatusKind::Stopped,
+            models::ComputerStatusKind::Failed => ComputerStatusKind::Failed,
+            models::ComputerStatusKind::Released => ComputerStatusKind::Released,
+        },
+        setup: status.setup.map(|setup| SetupProgress {
+            step: match setup.step {
+                models::SetupStep::Paying => SetupStep::Paying,
+                models::SetupStep::Creating => SetupStep::Creating,
+                models::SetupStep::Booting => SetupStep::Booting,
+                models::SetupStep::Connecting => SetupStep::Connecting,
+                models::SetupStep::Ready => SetupStep::Ready,
+            },
+            position: setup.position,
+            total: setup.total,
+        }),
+    }
+}
+
 fn computer_size(size: ComputerSize) -> size::ComputerSize {
     match size {
         ComputerSize::Standard => size::ComputerSize::Standard,
@@ -198,6 +203,7 @@ fn error(source: ComputerError) -> TeamAgentError {
     match source {
         ComputerError::NotFound => TeamAgentError::NotFound,
         ComputerError::BadRequest(message) => TeamAgentError::BadRequest(message),
+        ComputerError::NotFailed => TeamAgentError::RetryUnavailable(source.to_string()),
         ComputerError::SoldOut
         | ComputerError::Billing(
             BillingError::NoSubscription

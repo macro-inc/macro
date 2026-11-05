@@ -337,8 +337,20 @@ impl Computers for FakeComputers {
             .unwrap())
     }
 
-    async fn retry(&self, _team_id: Uuid, _computer_id: Uuid) -> Result<(), TeamAgentError> {
-        self.journal.record("computer.retry")
+    async fn retry(
+        &self,
+        _team_id: Uuid,
+        _computer_id: Uuid,
+    ) -> Result<ComputerStatus, TeamAgentError> {
+        self.journal.record("computer.retry")?;
+        Ok(ComputerStatus {
+            status: ComputerStatusKind::SettingUp,
+            setup: Some(SetupProgress {
+                step: SetupStep::Creating,
+                position: 2,
+                total: 5,
+            }),
+        })
     }
 
     async fn release(&self, _team_id: Uuid, _computer_id: Uuid) -> Result<(), TeamAgentError> {
@@ -1031,6 +1043,10 @@ async fn retry_reuses_the_seed_computer_and_credentials_without_purchasing() {
     let agent = service.retry(receipt(TEAM_ID), &user(AGENT)).await.unwrap();
     assert_eq!(agent.status, TeamAgentStatus::Provisioning);
     assert_eq!(
+        agent.setup.as_ref().map(|setup| setup.step),
+        Some(SetupStep::Creating)
+    );
+    assert_eq!(
         agent.computer_id,
         Some(Uuid::parse_str(COMPUTER_ID).unwrap())
     );
@@ -1114,7 +1130,7 @@ async fn retry_does_not_purchase_a_missing_computer() {
     journal.steps.lock().unwrap().clear();
     assert!(matches!(
         service.retry(receipt(TEAM_ID), &user(AGENT)).await,
-        Err(TeamAgentError::ComputerUnavailable(_))
+        Err(TeamAgentError::RetryUnavailable(_))
     ));
     assert!(journal.steps().is_empty());
 }
@@ -1132,7 +1148,7 @@ async fn retry_rejects_released_computers_before_repo_recovery() {
     journal.steps.lock().unwrap().clear();
     assert!(matches!(
         service.retry(receipt(TEAM_ID), &user(AGENT)).await,
-        Err(TeamAgentError::ComputerUnavailable(_))
+        Err(TeamAgentError::RetryUnavailable(_))
     ));
     assert!(journal.steps().is_empty());
 }

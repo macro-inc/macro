@@ -184,7 +184,7 @@ pub trait Computers: Send + Sync + 'static {
         &self,
         team_id: Uuid,
         computer_id: Uuid,
-    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+    ) -> impl Future<Output = Result<ComputerStatus, TeamAgentError>> + Send;
 
     /// Releases the computer now and stops billing it. Releasing one already
     /// gone succeeds.

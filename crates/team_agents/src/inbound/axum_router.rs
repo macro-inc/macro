@@ -120,7 +120,9 @@ impl IntoResponse for TeamAgentError {
             TeamAgentError::NotAnAgent | TeamAgentError::NotFound => StatusCode::NOT_FOUND,
             TeamAgentError::EmailUnavailable => StatusCode::SERVICE_UNAVAILABLE,
             TeamAgentError::Forbidden | TeamAgentError::NotEnabled => StatusCode::FORBIDDEN,
-            TeamAgentError::ComputerUnavailable(_) => StatusCode::CONFLICT,
+            TeamAgentError::ComputerUnavailable(_) | TeamAgentError::RetryUnavailable(_) => {
+                StatusCode::CONFLICT
+            }
             TeamAgentError::EmailProvider(_)
             | TeamAgentError::ComputerProvider(_)
             | TeamAgentError::RepoProvider(_) => StatusCode::BAD_GATEWAY,

@@ -341,17 +341,18 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
         })
         .await
         .expect("purchase");
-    let updates = updates.lock().unwrap();
-    assert_eq!(updates.len(), 1);
-    assert_eq!(updates[0].0, ComputerSize::Large);
-    assert_eq!(
-        updates[0].1,
-        vec![SubscriptionItem {
-            price_id: "price_seat".to_string(),
-            quantity: 1
-        }]
-    );
-    drop(updates);
+    {
+        let updates = updates.lock().unwrap();
+        assert_eq!(updates.len(), 1);
+        assert_eq!(updates[0].0, ComputerSize::Large);
+        assert_eq!(
+            updates[0].1,
+            vec![SubscriptionItem {
+                price_id: "price_seat".to_string(),
+                quantity: 1
+            }]
+        );
+    }
     assert_eq!(service.persona(TEAM, id).await.unwrap(), persona);
     assert!(matches!(
         service.persona(Uuid::now_v7(), id).await,
@@ -394,6 +395,27 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
         service.status(Uuid::now_v7(), id).await,
         Err(agent::TeamAgentError::NotFound)
     ));
+
+    assert!(matches!(
+        service.retry(TEAM, id).await,
+        Err(agent::TeamAgentError::RetryUnavailable(_))
+    ));
+    assert!(matches!(
+        service.retry(Uuid::now_v7(), id).await,
+        Err(agent::TeamAgentError::NotFound)
+    ));
+    computers.lock().unwrap().get_mut(&id).unwrap().state.phase = Phase::Failed { host: HOST };
+    let retried = service
+        .retry(TEAM, id)
+        .await
+        .expect("retry existing paid computer");
+    assert_eq!(retried.status, agent::ComputerStatusKind::SettingUp);
+    assert_eq!(service.persona(TEAM, id).await.unwrap(), persona);
+    assert_eq!(
+        updates.lock().unwrap().len(),
+        1,
+        "retry must not bill again"
+    );
 
     {
         let mut rows = computers.lock().unwrap();

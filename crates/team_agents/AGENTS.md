@@ -78,8 +78,8 @@ service's `ensure` API, which preserves live tokens and repo contents. A missing
 repo is reseeded, not restored from deleted history. Older rows with no saved seed
 or computer return 409. Retry errors leave the agent available for another attempt.
 
-The outbound adapter currently has an explicit TODO until the owning computer
-service exposes `ComputerService::retry(team_id, computer_id)`; it returns 409
-instead of silently purchasing again. Bootstrap credentials remain in the existing
-computer persona; the new seed column contains only the original name, job and
-personality.
+The outbound adapter calls the shared `ComputerService::retry(team_id, computer_id)`
+in process, maps `NotFailed` to 409 and other-team computers to 404, and returns the
+fresh computer status and setup progress on the agent. Bootstrap credentials remain
+in the existing computer persona; the seed column contains only the original name,
+job and personality.
