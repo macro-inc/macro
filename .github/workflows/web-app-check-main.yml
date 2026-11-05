@@ -388,7 +388,7 @@ jobs:
       run: |
         set -euo pipefail
         read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
-        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas
+        SQLX_OFFLINE=true cargo build --timings "${openapi_bins[@]}" --bin gen_tool_schemas
     - name: Generate API Types
       run: bun run gen-api -- --check
       working-directory: apps/web
@@ -428,6 +428,13 @@ jobs:
           exit 1
         fi
       working-directory: apps/web
+    - name: Upload timings
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: cargo-timings
+        path: target/cargo-timings/cargo-timing.html
+        retention-days: 7
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true

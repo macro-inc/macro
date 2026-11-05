@@ -92,3 +92,4 @@ where
         }
     }
 }
+// ci-speed gen-base 1
