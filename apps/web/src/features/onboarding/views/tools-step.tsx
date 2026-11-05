@@ -1,8 +1,9 @@
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { canonicalPipedreamSlug } from '@core/pipedream/slugs';
 import { fireAndForget } from '@core/util/fireAndForget';
+import GmailIcon from '@icon/gmail-color.svg';
+import OutlookIcon from '@icon/outlook-color.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import EnvelopeIcon from '@icon/system/regular/envelope-simple.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { ContinueButton } from '../components/controls';
@@ -123,23 +124,33 @@ export function ToolsStep(props: { onContinue: () => void }) {
         <h2 id="suggested-tools-heading" class="sr-only">
           Suggested for you
         </h2>
-        <p class="mx-auto -mt-2 mb-4 max-w-[440px] text-center text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
-          <Show
-            when={suggestions()}
-            fallback="Checking your inbox for the tools you already use…"
-          >
-            {(list) =>
-              list().some((suggestion) => suggestion.messageCount > 0)
-                ? 'Based on the tools that emailed you in the last six months.'
-                : 'Popular tools to connect first.'
-            }
-          </Show>
+        <p class="mx-auto -mt-2 mb-4 max-w-[600px] text-center text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
+          We recommend connecting your existing tools to Macro now so that the
+          background import process (0-2 hours) can start for each tool.
         </p>
         <ul
           aria-label="Suggested connections"
           aria-busy={suggestions() === undefined}
           class="flex flex-col [&>li:not(:first-child)]:border-t [&>li:not(:first-child)]:border-ink/10"
         >
+          <SuggestionRow
+            pill
+            icon={
+              <>
+                <GmailIcon class="size-5" />
+                <OutlookIcon class="size-5" />
+              </>
+            }
+            name="Add another inbox"
+            kind="native"
+            detail={inboxDetail()}
+            reason="Sync another email account into the same inbox, search and agents."
+            state={busy() === ADD_INBOX ? 'busy' : 'available'}
+            actionLabel="Add"
+            actionName="Add another inbox"
+            disabled={busy() !== undefined}
+            onConnect={() => fireAndForget(addInbox(), 'onboarding')}
+          />
           <Show
             when={suggestions()}
             fallback={
@@ -183,18 +194,6 @@ export function ToolsStep(props: { onContinue: () => void }) {
               </For>
             )}
           </Show>
-          <SuggestionRow
-            icon={<EnvelopeIcon class="size-6 text-ink-muted" />}
-            name="Add another inbox"
-            kind="native"
-            detail={inboxDetail()}
-            reason="Sync another email account into the same inbox, search and agents."
-            state={busy() === ADD_INBOX ? 'busy' : 'available'}
-            actionLabel="Add"
-            actionName="Add another inbox"
-            disabled={busy() !== undefined}
-            onConnect={() => fireAndForget(addInbox(), 'onboarding')}
-          />
         </ul>
       </section>
       <Show

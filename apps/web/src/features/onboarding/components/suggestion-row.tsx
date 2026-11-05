@@ -7,6 +7,8 @@ import { type JSX, Match, Show, Switch } from 'solid-js';
 /** One recommended connection: what it is, why to connect it, and the action. */
 export function SuggestionRow(props: {
   icon: JSX.Element;
+  /** Frame several logos in one pill instead of a square tile. */
+  pill?: boolean;
   name: string;
   /** How it reaches Macro, labelled as in Settings → Integrations. */
   kind: 'native' | 'mcp';
@@ -23,12 +25,18 @@ export function SuggestionRow(props: {
   onConnect: () => void;
 }) {
   return (
-    <li class="flex items-start gap-3 py-4 sm:items-center sm:gap-4">
-      <span
-        aria-hidden="true"
-        class="flex size-10 shrink-0 items-center justify-center rounded-xl sm:size-11 border border-edge-muted bg-surface shadow-sm [&_img]:size-6 [&_svg]:size-6"
-      >
-        {props.icon}
+    <li class="flex items-start gap-2 py-4 sm:items-center sm:gap-3">
+      {/* One column width for tiles and pills keeps every row's text aligned. */}
+      <span aria-hidden="true" class="flex w-[66px] shrink-0">
+        <span
+          class="flex h-10 items-center justify-center border border-edge-muted bg-surface shadow-sm sm:h-11"
+          classList={{
+            'w-10 rounded-xl sm:w-11': !props.pill,
+            'gap-1 rounded-full px-2.5': props.pill,
+          }}
+        >
+          {props.icon}
+        </span>
       </span>
       <div class="flex min-w-0 flex-1 flex-col gap-0.5">
         <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -90,8 +98,10 @@ export function SuggestionRow(props: {
 /** A placeholder row while the inbox is checked. */
 export function SuggestionRowSkeleton() {
   return (
-    <li aria-hidden="true" class="flex items-center gap-4 py-4">
-      <ListSkeleton.Bar class="size-10 shrink-0 rounded-xl sm:size-11" />
+    <li aria-hidden="true" class="flex items-center gap-3 py-4">
+      <span class="flex w-[66px] shrink-0">
+        <ListSkeleton.Bar class="size-10 rounded-xl sm:size-11" />
+      </span>
       <div class="flex flex-1 flex-col gap-2">
         <ListSkeleton.Bar class="h-3.5 w-28" />
         <ListSkeleton.Bar class="h-3 w-3/4" />

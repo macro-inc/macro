@@ -24,8 +24,8 @@ do not see it.
 
 ## Tools step — `/app/onboarding?step=tools`
 
-**Connect your tools.** lists four suggested tools and **Add another inbox**,
-each with its `native`/`mcp` badge and what connecting it does in Macro. The
+**Connect your tools.** lists **Add another inbox** first, then four suggested
+tools, each with its `native`/`mcp` badge and what connecting it does in Macro. The
 tools are ranked by mail from their sender domains in the last six months,
 searched live at Gmail or Outlook (`POST /email/senders/domain-counts`)
 because the inbox backfill hasn't run yet; with no such mail, or if the search

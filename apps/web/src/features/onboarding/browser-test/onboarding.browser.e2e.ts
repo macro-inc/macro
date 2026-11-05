@@ -580,11 +580,11 @@ test('tools keep Drive and Sheets, hide excluded Google apps and preserve native
         buttons.map((button) => button.getAttribute('aria-label'))
       )
   ).toEqual([
+    'Add another inbox',
     'Connect Slack',
     'Connected to Linear',
     'Connect Notion',
     'Connect GitHub',
-    'Add another inbox',
   ]);
   await page.getByRole('button', { name: 'Browse all integrations' }).click();
   const catalog = page.getByRole('region', { name: 'Available integrations' });

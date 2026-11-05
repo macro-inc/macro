@@ -196,11 +196,11 @@ it('suggests the tools the inbox shows, with why, and always another inbox', asy
       .getAllByRole('button')
       .map((button) => button.getAttribute('aria-label'))
   ).toEqual([
+    'Add another inbox',
     'Connect Stripe',
     'Connect PostHog',
     'Connect Slack',
     'Connect Linear',
-    'Add another inbox',
   ]);
   expect(within(list).getAllByText('mcp')).toHaveLength(4);
   expect(
@@ -225,6 +225,5 @@ it('suggests the defaults when the inbox check fails', () => {
   renderWithFakeOnboarding(() => <ToolsStep onContinue={vi.fn()} />, {
     failures: { senderDomainCounts: 'unavailable' },
   });
-  expect(screen.getByText('Popular tools to connect first.')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Connect Slack' })).toBeTruthy();
 });
