@@ -9,6 +9,7 @@ name: Ensure Daytona Snapshot
     - reopened
     branches:
     - main
+    - 'synoet/ci-int-base*'
     paths:
     - crates/agent_harness/container/**
     - crates/agent_harness/justfile
