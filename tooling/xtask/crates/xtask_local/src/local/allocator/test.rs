@@ -70,6 +70,18 @@ fn a_window_with_a_listening_port_is_skipped() {
     assert_eq!(choose_window("crmgp", None, &use_), Some(30_500));
 }
 
+/// The stack never binds a retired port, so whatever listens there doesn't
+/// block the window: `doctor-local` reports it free too.
+#[test]
+fn a_listener_on_a_retired_port_does_not_block_a_window() {
+    let retired = 30_400 + Port::AgentProxy.offset();
+    let bindable = move |port: u16| port != retired;
+    let (claimed, others, own) = (BTreeMap::new(), BTreeSet::new(), BTreeSet::new());
+    let use_ = ports(&claimed, &others, &own, &bindable);
+
+    assert_eq!(use_.blocker(30_400), None);
+}
+
 #[test]
 fn a_port_another_container_publishes_blocks_without_a_listening_socket() {
     let claimed = BTreeMap::new();
