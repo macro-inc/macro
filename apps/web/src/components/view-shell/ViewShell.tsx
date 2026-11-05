@@ -503,6 +503,34 @@ function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   const ws = useViewShellInternal();
   const asideTarget = tourTarget(VIEW_SHELL_TOUR.aside);
+
+  // A narrow list fills the shell over Main, which waits beneath it.
+  return (
+    <Show
+      when={!ws.narrowList()}
+      fallback={
+        <Show when={ws.narrowList() === 'list'}>
+          <div
+            {...rest}
+            ref={asideTarget}
+            class={cn('absolute inset-0 z-20 min-h-0 bg-panel', local.class)}
+            data-view-shell-aside=""
+          >
+            {local.children}
+          </div>
+        </Show>
+      }
+    >
+      <AsideHost {...props} />
+    </Show>
+  );
+}
+
+/** Docked or overlay navigation, whichever the layout hosts. */
+function AsideHost(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+  const ws = useViewShellInternal();
+  const asideTarget = tourTarget(VIEW_SHELL_TOUR.aside);
   // Main's width after this mount's last drag; only the aside width is saved.
   const [resizedMainWidth, setResizedMainWidth] = createSignal<number>();
   const preferredWidth = () => ws.aside.layout().width;
@@ -550,103 +578,86 @@ function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
     Math.min(preferredWidth(), ws.width() ?? preferredWidth());
 
   // Layout owns the host: closing an overlay must not mount a second sidebar
-  // while its exit animation is still retaining the first one. A narrow list
-  // fills the shell instead, over Main, which waits beneath it.
+  // while its exit animation is still retaining the first one.
   return (
     <Show
-      when={!ws.narrowList()}
+      when={ws.asideHost() === 'overlay'}
       fallback={
-        <Show when={ws.narrowList() === 'list'}>
+        <Resize.Panel
+          id={`${ws.id}-aside`}
+          index={0}
+          minSize={ws.aside.layout().min}
+          maxSize={ws.aside.layout().max}
+          redistributionPreferredSize={redistributionPreferredSize()}
+          target={{ kind: 'px', px: preferredWidth() }}
+          collapsed={() =>
+            ws.atLayoutBreakpoint()
+              ? ws.asideHost() === 'closing'
+              : ws.aside.isCollapsed()
+          }
+          onSizeChangeEnd={onWidthChangeEnd}
+        >
           <div
             {...rest}
             ref={asideTarget}
-            class={cn('absolute inset-0 z-20 min-h-0 bg-panel', local.class)}
+            class={cn('size-full min-h-0 min-w-0', local.class)}
             data-view-shell-aside=""
+            inert={ws.atLayoutBreakpoint() || ws.aside.isCollapsed()}
+            aria-hidden={ws.atLayoutBreakpoint() || ws.aside.isCollapsed()}
           >
             {local.children}
           </div>
-        </Show>
+        </Resize.Panel>
       }
     >
-      <Show
-        when={ws.asideHost() === 'overlay'}
-        fallback={
-          <Resize.Panel
-            id={`${ws.id}-aside`}
-            index={0}
-            minSize={ws.aside.layout().min}
-            maxSize={ws.aside.layout().max}
-            redistributionPreferredSize={redistributionPreferredSize()}
-            target={{ kind: 'px', px: preferredWidth() }}
-            collapsed={() =>
-              ws.atLayoutBreakpoint()
-                ? ws.asideHost() === 'closing'
-                : ws.aside.isCollapsed()
+      <CollapseTransition
+        open={ws.aside.isOverlay()}
+        axis="width"
+        container={() => overlayAside}
+      >
+        <div
+          class="absolute inset-0 z-20"
+          onKeyDown={(event) => {
+            // Portaled menus own Escape even though Solid bubbles through here.
+            if (
+              event.key === 'Escape' &&
+              !event.defaultPrevented &&
+              event.currentTarget.contains(event.target as Node) &&
+              !(event.target as Element).closest(
+                '[aria-haspopup][aria-expanded="true"]'
+              )
+            ) {
+              event.stopPropagation();
+              ws.aside.collapse();
             }
-            onSizeChangeEnd={onWidthChangeEnd}
+          }}
+        >
+          <button
+            type="button"
+            aria-label="Close navigation backdrop"
+            class="absolute inset-0 bg-modal-overlay"
+            onClick={ws.aside.collapse}
+          />
+          <div
+            {...rest}
+            class={cn(
+              'relative h-full max-w-full bg-panel shadow-menu',
+              local.class
+            )}
+            ref={(element) => {
+              overlayAside = element;
+              asideTarget(element);
+            }}
+            style={{ width: `${overlayWidth()}px` }}
+            data-view-shell-aside=""
           >
-            <div
-              {...rest}
-              ref={asideTarget}
-              class={cn('size-full min-h-0 min-w-0', local.class)}
-              data-view-shell-aside=""
-              inert={ws.atLayoutBreakpoint() || ws.aside.isCollapsed()}
-              aria-hidden={ws.atLayoutBreakpoint() || ws.aside.isCollapsed()}
-            >
+            {/* Keep text at its resting width while the outer frame reveals it. */}
+            <div class="h-full" style={{ width: `${overlayWidth()}px` }}>
               {local.children}
             </div>
-          </Resize.Panel>
-        }
-      >
-        <CollapseTransition
-          open={ws.aside.isOverlay()}
-          axis="width"
-          container={() => overlayAside}
-        >
-          <div
-            class="absolute inset-0 z-20"
-            onKeyDown={(event) => {
-              // Portaled menus own Escape even though Solid bubbles through here.
-              if (
-                event.key === 'Escape' &&
-                !event.defaultPrevented &&
-                event.currentTarget.contains(event.target as Node) &&
-                !(event.target as Element).closest(
-                  '[aria-haspopup][aria-expanded="true"]'
-                )
-              ) {
-                event.stopPropagation();
-                ws.aside.collapse();
-              }
-            }}
-          >
-            <button
-              type="button"
-              aria-label="Close navigation backdrop"
-              class="absolute inset-0 bg-modal-overlay"
-              onClick={ws.aside.collapse}
-            />
-            <div
-              {...rest}
-              class={cn(
-                'relative h-full max-w-full bg-panel shadow-menu',
-                local.class
-              )}
-              ref={(element) => {
-                overlayAside = element;
-                asideTarget(element);
-              }}
-              style={{ width: `${overlayWidth()}px` }}
-              data-view-shell-aside=""
-            >
-              {/* Keep text at its resting width while the outer frame reveals it. */}
-              <div class="h-full" style={{ width: `${overlayWidth()}px` }}>
-                {local.children}
-              </div>
-            </div>
           </div>
-        </CollapseTransition>
-      </Show>
+        </div>
+      </CollapseTransition>
     </Show>
   );
 }
