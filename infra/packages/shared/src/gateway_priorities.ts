@@ -5,6 +5,7 @@
 export enum GatewayService {
   AGENT_COGNITION_PUBLIC_HOST = 'AGENT_COGNITION_PUBLIC_HOST',
   AGENT_MCP_PUBLIC_HOST = 'AGENT_MCP_PUBLIC_HOST',
+  ARTIFACT_CONTENT_HOST = 'ARTIFACT_CONTENT_HOST',
   PREVIEW_GATEWAY = 'PREVIEW_GATEWAY',
   DOCUMENT_STORAGE_SERVICE = 'DOCUMENT_STORAGE_SERVICE',
   UNFURL_SERVICE = 'UNFURL_SERVICE',
@@ -38,6 +39,8 @@ export const GATEWAY_PRIORITIES: GatewayPriorityMap = {
   // Public host routing must precede path rules: cognition itself has /mcp paths.
   [GatewayService.AGENT_COGNITION_PUBLIC_HOST]: 5,
   [GatewayService.AGENT_MCP_PUBLIC_HOST]: 6,
+  // Artifact pages: every path on these hosts belongs to DSS's content router.
+  [GatewayService.ARTIFACT_CONTENT_HOST]: 7,
   [GatewayService.PREVIEW_GATEWAY]: 150,
   [GatewayService.DOCUMENT_STORAGE_SERVICE]: 10,
   [GatewayService.UNFURL_SERVICE]: 20,

@@ -4,6 +4,8 @@ import {
   config,
   getGatewayAlb,
   GatewayService,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -193,8 +195,64 @@ new aws.route53.Record(`${name}-ssh-${stack}`, {
     { name: sshNlb.dnsName, zoneId: sshNlb.zoneId, evaluateTargetHealth: true },
   ],
 });
+// Artifact pages share this isolated domain: `<document_id>.<artifact host>`
+// resolves to the gateway ALB, whose listener sends those hosts to document
+// storage service (cloud-storage-service stack). This stack owns the zone,
+// so it owns the record and the certificate.
+const artifactHost = new URL(getServiceUrl(ServiceUrl.ARTIFACT_CONTENT_URL))
+  .hostname;
+if (!artifactHost.endsWith(`.${domain}`)) {
+  throw new Error(`artifact host ${artifactHost} must sit under ${domain}`);
+}
+const artifactCertificate = new aws.acm.Certificate(
+  `${name}-artifacts-${stack}`,
+  {
+    domainName: `*.${artifactHost}`,
+    validationMethod: 'DNS',
+    tags,
+  }
+);
+const artifactValidation = artifactCertificate.domainValidationOptions.apply(
+  (options) =>
+    options.map(
+      (option, i) =>
+        new aws.route53.Record(`${name}-artifacts-validation-${i}-${stack}`, {
+          zoneId,
+          name: option.resourceRecordName,
+          type: option.resourceRecordType,
+          records: [option.resourceRecordValue],
+          ttl: 60,
+        })
+    )
+);
+const artifactValidated = new aws.acm.CertificateValidation(
+  `${name}-artifacts-${stack}`,
+  {
+    certificateArn: artifactCertificate.arn,
+    validationRecordFqdns: artifactValidation.apply((records) =>
+      records.map((record) => record.fqdn)
+    ),
+  }
+);
+new aws.lb.ListenerCertificate(`${name}-artifacts-${stack}`, {
+  listenerArn: gateway.httpsListenerArn,
+  certificateArn: artifactValidated.certificateArn,
+});
+new aws.route53.Record(`${name}-artifacts-wildcard-${stack}`, {
+  zoneId,
+  name: `*.${artifactHost}`,
+  type: 'A',
+  aliases: [
+    {
+      name: gateway.albDnsName,
+      zoneId: gateway.albZoneId,
+      evaluateTargetHealth: true,
+    },
+  ],
+});
 // The agent harness is the sole compute host; this stack owns networking only.
 export const previewDomain = domain;
+export const artifactContentHost = artifactHost;
 export const previewSshHost = sshHost;
 export const previewTaskSecurityGroupId = taskSg.id;
 export const previewControlTargetGroupArn = control.target_group.arn;

@@ -756,6 +756,373 @@ export const createAnchorResponse = zod
   );
 
 /**
+ * @summary Create an artifact: a document of file type `artifact`, and its version 1
+when files are given.
+ */
+export const createArtifactBody = zod
+  .object({
+    files: zod
+      .array(
+        zod
+          .object({
+            content_base64: zod
+              .string()
+              .nullish()
+              .describe(
+                'The bytes, base64. Omit when the object is already stored for this\nartifact (uploaded through `\/uploads`, or in an earlier version).'
+              ),
+            content_type: zod
+              .string()
+              .describe('One of the allowed content types.'),
+            path: zod
+              .string()
+              .describe(
+                'Relative `\/`-separated path, e.g. `scenes\/empty.html`.'
+              ),
+            sha256: zod.string().describe('Hex SHA-256 of the bytes.'),
+          })
+          .describe('A file of a version as sent.')
+      )
+      .optional()
+      .describe(
+        'Files of version 1, each with its content. Omit to create the\nartifact without a version, upload through `\/uploads`, then publish.'
+      ),
+    message: zod.string().nullish().describe('What it is.'),
+    name: zod.string().describe('Name.'),
+    project_id: zod
+      .uuid()
+      .nullish()
+      .describe('Folder to create it in; needs edit access to it.'),
+    scenes: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe('Slug: lowercase letters, digits and dashes.'),
+            path: zod
+              .string()
+              .describe("The page, one of the version's files."),
+            title: zod.string().describe('Display title.'),
+          })
+          .describe('A named page of a version.')
+      )
+      .optional()
+      .describe('Scenes.'),
+  })
+  .describe('Create an artifact with its first version.');
+
+/**
+ * @summary The artifact with its current version.
+ */
+export const getArtifactParams = zod.object({
+  document_id: zod.string().describe('Artifact document ID'),
+});
+
+export const getArtifactResponseCurrentFilesItemSizeMin = 0;
+
+export const getArtifactResponse = zod
+  .object({
+    current: zod.union([
+      zod.null(),
+      zod
+        .object({
+          created_at: zod.iso.datetime({}).describe('Publish time.'),
+          created_by: zod.string().describe('The user who published it.'),
+          created_by_agent: zod
+            .string()
+            .nullish()
+            .describe('The bot that published it for them.'),
+          files: zod
+            .array(
+              zod
+                .object({
+                  content_type: zod.string().describe('Content type.'),
+                  path: zod.string().describe('Path.'),
+                  sha256: zod.string().describe('Hex SHA-256.'),
+                  size: zod
+                    .number()
+                    .min(getArtifactResponseCurrentFilesItemSizeMin)
+                    .describe('Size in bytes.'),
+                })
+                .describe('A file of a version.')
+            )
+            .describe('Files by path.'),
+          message: zod.string().nullish().describe('What changed.'),
+          number: zod.number().describe('1, 2, 3 … per artifact.'),
+          scenes: zod
+            .array(
+              zod
+                .object({
+                  id: zod
+                    .string()
+                    .describe('Slug: lowercase letters, digits and dashes.'),
+                  path: zod
+                    .string()
+                    .describe("The page, one of the version's files."),
+                  title: zod.string().describe('Display title.'),
+                })
+                .describe('A named page of a version.')
+            )
+            .describe('Scenes in order.'),
+        })
+        .describe('A published version.'),
+    ]),
+    document_id: zod.string().describe('The artifact document.'),
+    name: zod.string().describe('Name.'),
+    owner: zod.string().describe('Owner.'),
+  })
+  .describe('An artifact with its current version.');
+
+/**
+ * @summary Presigned uploads for the objects not yet stored for this artifact.
+ */
+export const createArtifactUploadsParams = zod.object({
+  document_id: zod.string().describe('Artifact document ID'),
+});
+
+export const createArtifactUploadsBodyFilesItemSizeMin = 0;
+
+export const createArtifactUploadsBody = zod
+  .object({
+    files: zod
+      .array(
+        zod
+          .object({
+            content_type: zod.string().describe('Content type.'),
+            sha256: zod.string().describe('Hex SHA-256 of the bytes.'),
+            size: zod
+              .number()
+              .min(createArtifactUploadsBodyFilesItemSizeMin)
+              .describe('Size in bytes.'),
+          })
+          .describe('An object to upload.')
+      )
+      .describe('The objects.'),
+  })
+  .describe('Objects a publisher wants to upload.');
+
+export const createArtifactUploadsResponse = zod
+  .object({
+    uploads: zod
+      .array(
+        zod
+          .object({
+            headers: zod
+              .record(zod.string(), zod.string())
+              .describe('Headers the `PUT` must carry.'),
+            sha256: zod.string().describe("The object's digest."),
+            url: zod.string().describe('Presigned URL.'),
+          })
+          .describe('Where to `PUT` one object.')
+      )
+      .describe('One per missing object.'),
+  })
+  .describe(
+    'Uploads for the objects not yet stored. Stored ones are left out.'
+  );
+
+/**
+ * @summary Version history, newest first.
+ */
+export const listArtifactVersionsParams = zod.object({
+  document_id: zod.string().describe('Artifact document ID'),
+});
+
+export const listArtifactVersionsResponseVersionsItemFileCountMin = 0;
+
+export const listArtifactVersionsResponseVersionsItemTotalSizeMin = 0;
+
+export const listArtifactVersionsResponse = zod
+  .object({
+    versions: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso.datetime({}).describe('Publish time.'),
+            created_by: zod.string().describe('The user who published it.'),
+            created_by_agent: zod
+              .string()
+              .nullish()
+              .describe('The bot that published it for them.'),
+            file_count: zod
+              .number()
+              .min(listArtifactVersionsResponseVersionsItemFileCountMin)
+              .describe('Number of files.'),
+            message: zod.string().nullish().describe('What changed.'),
+            number: zod.number().describe('Version number.'),
+            total_size: zod
+              .number()
+              .min(listArtifactVersionsResponseVersionsItemTotalSizeMin)
+              .describe("All files' bytes together."),
+          })
+          .describe('A version in the history.')
+      )
+      .describe('Newest first.'),
+  })
+  .describe('Version history.');
+
+/**
+ * @summary Publish a new version.
+ */
+export const publishArtifactVersionParams = zod.object({
+  document_id: zod.string().describe('Artifact document ID'),
+});
+
+export const publishArtifactVersionBody = zod
+  .object({
+    base_version: zod
+      .number()
+      .nullish()
+      .describe(
+        'The version this one builds on, 0 when none is published yet;\npublishing fails with 409 when the artifact has moved past it.'
+      ),
+    files: zod
+      .array(
+        zod
+          .object({
+            content_base64: zod
+              .string()
+              .nullish()
+              .describe(
+                'The bytes, base64. Omit when the object is already stored for this\nartifact (uploaded through `\/uploads`, or in an earlier version).'
+              ),
+            content_type: zod
+              .string()
+              .describe('One of the allowed content types.'),
+            path: zod
+              .string()
+              .describe(
+                'Relative `\/`-separated path, e.g. `scenes\/empty.html`.'
+              ),
+            sha256: zod.string().describe('Hex SHA-256 of the bytes.'),
+          })
+          .describe('A file of a version as sent.')
+      )
+      .describe('Files.'),
+    message: zod.string().nullish().describe('What changed.'),
+    scenes: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe('Slug: lowercase letters, digits and dashes.'),
+            path: zod
+              .string()
+              .describe("The page, one of the version's files."),
+            title: zod.string().describe('Display title.'),
+          })
+          .describe('A named page of a version.')
+      )
+      .optional()
+      .describe('Scenes.'),
+  })
+  .describe('Publish a version.');
+
+/**
+ * @summary One version.
+ */
+export const getArtifactVersionParams = zod.object({
+  document_id: zod.string().describe('Artifact document ID'),
+  number: zod.number().describe('Version number'),
+});
+
+export const getArtifactVersionResponseFilesItemSizeMin = 0;
+
+export const getArtifactVersionResponse = zod
+  .object({
+    created_at: zod.iso.datetime({}).describe('Publish time.'),
+    created_by: zod.string().describe('The user who published it.'),
+    created_by_agent: zod
+      .string()
+      .nullish()
+      .describe('The bot that published it for them.'),
+    files: zod
+      .array(
+        zod
+          .object({
+            content_type: zod.string().describe('Content type.'),
+            path: zod.string().describe('Path.'),
+            sha256: zod.string().describe('Hex SHA-256.'),
+            size: zod
+              .number()
+              .min(getArtifactVersionResponseFilesItemSizeMin)
+              .describe('Size in bytes.'),
+          })
+          .describe('A file of a version.')
+      )
+      .describe('Files by path.'),
+    message: zod.string().nullish().describe('What changed.'),
+    number: zod.number().describe('1, 2, 3 … per artifact.'),
+    scenes: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe('Slug: lowercase letters, digits and dashes.'),
+            path: zod
+              .string()
+              .describe("The page, one of the version's files."),
+            title: zod.string().describe('Display title.'),
+          })
+          .describe('A named page of a version.')
+      )
+      .describe('Scenes in order.'),
+  })
+  .describe('A published version.');
+
+/**
+ * @summary Publish an old version again as the newest one.
+ */
+export const restoreArtifactVersionParams = zod.object({
+  document_id: zod.string().describe('Artifact document ID'),
+  number: zod.number().describe('Version to restore'),
+});
+
+/**
+ * @summary A URL rendering a version (or one scene) on the artifact's own origin.
+ */
+export const getArtifactViewUrlParams = zod.object({
+  document_id: zod.string().describe('Artifact document ID'),
+});
+
+export const getArtifactViewUrlBody = zod
+  .object({
+    scene: zod
+      .string()
+      .nullish()
+      .describe('Scene to open instead of `index.html`.'),
+    theme: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['light', 'dark'])
+          .describe('Color scheme for the rendered page.'),
+      ])
+      .optional(),
+    version: zod
+      .number()
+      .nullish()
+      .describe('Version; the current one when omitted.'),
+  })
+  .describe('Ask for a URL rendering a version.');
+
+export const getArtifactViewUrlResponse = zod
+  .object({
+    expires_at: zod.iso.datetime({}).describe('When the URL stops working.'),
+    origin: zod
+      .string()
+      .describe(
+        "The artifact's origin; frame messages must come from exactly this."
+      ),
+    url: zod.string().describe('The URL, for an iframe `src`.'),
+    version: zod.number().describe('The version it renders.'),
+  })
+  .describe("A URL rendering a version on the artifact's own origin.");
+
+/**
  * @summary Handler for `GET /bots/me`.
  */
 export const getSelfBotResponse = zod
@@ -18828,6 +19195,7 @@ export const editDocumentBody = zod
                     'md',
                     'spreadsheet',
                     'canvas',
+                    'artifact',
                     'coffee',
                     'cson',
                     'iced',
@@ -56127,6 +56495,7 @@ export const uploadFolderHandlerBody = zod.object({
                 'md',
                 'spreadsheet',
                 'canvas',
+                'artifact',
                 'coffee',
                 'cson',
                 'iced',
@@ -56633,6 +57002,7 @@ export const uploadFolderHandlerResponse = zod.object({
                     'md',
                     'spreadsheet',
                     'canvas',
+                    'artifact',
                     'coffee',
                     'cson',
                     'iced',

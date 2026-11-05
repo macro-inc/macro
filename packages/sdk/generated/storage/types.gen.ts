@@ -1157,6 +1157,207 @@ export type ApprovePairingRequest = {
 };
 
 /**
+ * A file of a version.
+ */
+export type ArtifactFileResponse = {
+    /**
+     * Content type.
+     */
+    content_type: string;
+    /**
+     * Path.
+     */
+    path: string;
+    /**
+     * Hex SHA-256.
+     */
+    sha256: string;
+    /**
+     * Size in bytes.
+     */
+    size: number;
+};
+
+/**
+ * An artifact with its current version.
+ */
+export type ArtifactResponse = {
+    current: null | ArtifactVersionResponse;
+    /**
+     * The artifact document.
+     */
+    document_id: string;
+    /**
+     * Name.
+     */
+    name: string;
+    /**
+     * Owner.
+     */
+    owner: string;
+};
+
+/**
+ * Color scheme for the rendered page.
+ */
+export type ArtifactTheme = 'light' | 'dark';
+
+/**
+ * Where to `PUT` one object.
+ */
+export type ArtifactUploadResponse = {
+    /**
+     * Headers the `PUT` must carry.
+     */
+    headers: {
+        [key: string]: string;
+    };
+    /**
+     * The object's digest.
+     */
+    sha256: string;
+    /**
+     * Presigned URL.
+     */
+    url: string;
+};
+
+/**
+ * Objects a publisher wants to upload.
+ */
+export type ArtifactUploadsRequest = {
+    /**
+     * The objects.
+     */
+    files: Array<UploadFileBody>;
+};
+
+/**
+ * Uploads for the objects not yet stored. Stored ones are left out.
+ */
+export type ArtifactUploadsResponse = {
+    /**
+     * One per missing object.
+     */
+    uploads: Array<ArtifactUploadResponse>;
+};
+
+/**
+ * A published version.
+ */
+export type ArtifactVersionResponse = {
+    /**
+     * Publish time.
+     */
+    created_at: string;
+    /**
+     * The user who published it.
+     */
+    created_by: string;
+    /**
+     * The bot that published it for them.
+     */
+    created_by_agent?: string | null;
+    /**
+     * Files by path.
+     */
+    files: Array<ArtifactFileResponse>;
+    /**
+     * What changed.
+     */
+    message?: string | null;
+    /**
+     * 1, 2, 3 … per artifact.
+     */
+    number: number;
+    /**
+     * Scenes in order.
+     */
+    scenes: Array<SceneBody>;
+};
+
+/**
+ * A version in the history.
+ */
+export type ArtifactVersionSummaryResponse = {
+    /**
+     * Publish time.
+     */
+    created_at: string;
+    /**
+     * The user who published it.
+     */
+    created_by: string;
+    /**
+     * The bot that published it for them.
+     */
+    created_by_agent?: string | null;
+    /**
+     * Number of files.
+     */
+    file_count: number;
+    /**
+     * What changed.
+     */
+    message?: string | null;
+    /**
+     * Version number.
+     */
+    number: number;
+    /**
+     * All files' bytes together.
+     */
+    total_size: number;
+};
+
+/**
+ * Version history.
+ */
+export type ArtifactVersionsResponse = {
+    /**
+     * Newest first.
+     */
+    versions: Array<ArtifactVersionSummaryResponse>;
+};
+
+/**
+ * Ask for a URL rendering a version.
+ */
+export type ArtifactViewUrlRequest = {
+    /**
+     * Scene to open instead of `index.html`.
+     */
+    scene?: string | null;
+    theme?: null | ArtifactTheme;
+    /**
+     * Version; the current one when omitted.
+     */
+    version?: number | null;
+};
+
+/**
+ * A URL rendering a version on the artifact's own origin.
+ */
+export type ArtifactViewUrlResponse = {
+    /**
+     * When the URL stops working.
+     */
+    expires_at: string;
+    /**
+     * The artifact's origin; frame messages must come from exactly this.
+     */
+    origin: string;
+    /**
+     * The URL, for an iframe `src`.
+     */
+    url: string;
+    /**
+     * The version it renders.
+     */
+    version: number;
+};
+
+/**
  * Attachment changes interpreted by the common command boundary.
  */
 export type AttachmentChange = {
@@ -4006,6 +4207,33 @@ export type CreateAgentRequest = {
      * Team owner. Omit for a private, user-owned agent.
      */
     team_id?: string | null;
+};
+
+/**
+ * Create an artifact with its first version.
+ */
+export type CreateArtifactRequest = {
+    /**
+     * Files of version 1, each with its content. Omit to create the
+     * artifact without a version, upload through `/uploads`, then publish.
+     */
+    files?: Array<FileInputBody>;
+    /**
+     * What it is.
+     */
+    message?: string | null;
+    /**
+     * Name.
+     */
+    name: string;
+    /**
+     * Folder to create it in; needs edit access to it.
+     */
+    project_id?: string | null;
+    /**
+     * Scenes.
+     */
+    scenes?: Array<SceneBody>;
 };
 
 /**
@@ -7718,6 +7946,29 @@ export type FavoritesList = {
  */
 export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
 
+/**
+ * A file of a version as sent.
+ */
+export type FileInputBody = {
+    /**
+     * The bytes, base64. Omit when the object is already stored for this
+     * artifact (uploaded through `/uploads`, or in an earlier version).
+     */
+    content_base64?: string | null;
+    /**
+     * One of the allowed content types.
+     */
+    content_type: string;
+    /**
+     * Relative `/`-separated path, e.g. `scenes/empty.html`.
+     */
+    path: string;
+    /**
+     * Hex SHA-256 of the bytes.
+     */
+    sha256: string;
+};
+
 export type FileSystemNodeWithIds = {
     document_id: string;
     item: FolderItem;
@@ -7746,7 +7997,7 @@ export type FileSystemNodeWithIds = {
  * - ContentType::mime_type() - Gets MIME type for ContentType
  *
  */
-export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'xlsm' | 'ppt' | 'doc' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'fig' | 'psd' | 'psb' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
+export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'artifact' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'xlsm' | 'ppt' | 'doc' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'fig' | 'psd' | 'psb' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
 
 /**
  * Represents a file type update: either set to a specific type or clear to null.
@@ -12181,6 +12432,29 @@ export type PropertyValue = {
 };
 
 /**
+ * Publish a version.
+ */
+export type PublishVersionRequest = {
+    /**
+     * The version this one builds on, 0 when none is published yet;
+     * publishing fails with 409 when the artifact has moved past it.
+     */
+    base_version?: number | null;
+    /**
+     * Files.
+     */
+    files: Array<FileInputBody>;
+    /**
+     * What changed.
+     */
+    message?: string | null;
+    /**
+     * Scenes.
+     */
+    scenes?: Array<SceneBody>;
+};
+
+/**
  * A versioned query definition.
  */
 export type QueryDefinition = {
@@ -12786,6 +13060,24 @@ export type SavedQuery = {
      * Identifier.
      */
     id: string;
+};
+
+/**
+ * A named page of a version.
+ */
+export type SceneBody = {
+    /**
+     * Slug: lowercase letters, digits and dashes.
+     */
+    id: string;
+    /**
+     * The page, one of the version's files.
+     */
+    path: string;
+    /**
+     * Display title.
+     */
+    title: string;
 };
 
 /**
@@ -16367,6 +16659,24 @@ export type UploadExtractFolderRequest = {
     sha: string;
 };
 
+/**
+ * An object to upload.
+ */
+export type UploadFileBody = {
+    /**
+     * Content type.
+     */
+    content_type: string;
+    /**
+     * Hex SHA-256 of the bytes.
+     */
+    sha256: string;
+    /**
+     * Size in bytes.
+     */
+    size: number;
+};
+
 export type UploadFolderRequest = {
     /**
      * The content of the folder
@@ -17390,6 +17700,228 @@ export type CreateAnchorResponses = {
 };
 
 export type CreateAnchorResponse = CreateAnchorResponses[keyof CreateAnchorResponses];
+
+export type CreateArtifactData = {
+    body: CreateArtifactRequest;
+    path?: never;
+    query?: never;
+    url: '/artifacts';
+};
+
+export type CreateArtifactErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateArtifactError = CreateArtifactErrors[keyof CreateArtifactErrors];
+
+export type CreateArtifactResponses = {
+    201: ArtifactResponse;
+};
+
+export type CreateArtifactResponse = CreateArtifactResponses[keyof CreateArtifactResponses];
+
+export type GetArtifactData = {
+    body?: never;
+    path: {
+        /**
+         * Artifact document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/artifacts/{document_id}';
+};
+
+export type GetArtifactErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetArtifactError = GetArtifactErrors[keyof GetArtifactErrors];
+
+export type GetArtifactResponses = {
+    200: ArtifactResponse;
+};
+
+export type GetArtifactResponse = GetArtifactResponses[keyof GetArtifactResponses];
+
+export type CreateArtifactUploadsData = {
+    body: ArtifactUploadsRequest;
+    path: {
+        /**
+         * Artifact document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/artifacts/{document_id}/uploads';
+};
+
+export type CreateArtifactUploadsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateArtifactUploadsError = CreateArtifactUploadsErrors[keyof CreateArtifactUploadsErrors];
+
+export type CreateArtifactUploadsResponses = {
+    200: ArtifactUploadsResponse;
+};
+
+export type CreateArtifactUploadsResponse = CreateArtifactUploadsResponses[keyof CreateArtifactUploadsResponses];
+
+export type ListArtifactVersionsData = {
+    body?: never;
+    path: {
+        /**
+         * Artifact document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/artifacts/{document_id}/versions';
+};
+
+export type ListArtifactVersionsErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListArtifactVersionsError = ListArtifactVersionsErrors[keyof ListArtifactVersionsErrors];
+
+export type ListArtifactVersionsResponses = {
+    200: ArtifactVersionsResponse;
+};
+
+export type ListArtifactVersionsResponse = ListArtifactVersionsResponses[keyof ListArtifactVersionsResponses];
+
+export type PublishArtifactVersionData = {
+    body: PublishVersionRequest;
+    path: {
+        /**
+         * Artifact document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/artifacts/{document_id}/versions';
+};
+
+export type PublishArtifactVersionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    /**
+     * The artifact moved past `base_version`
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PublishArtifactVersionError = PublishArtifactVersionErrors[keyof PublishArtifactVersionErrors];
+
+export type PublishArtifactVersionResponses = {
+    201: ArtifactVersionResponse;
+};
+
+export type PublishArtifactVersionResponse = PublishArtifactVersionResponses[keyof PublishArtifactVersionResponses];
+
+export type GetArtifactVersionData = {
+    body?: never;
+    path: {
+        /**
+         * Artifact document ID
+         */
+        document_id: string;
+        /**
+         * Version number
+         */
+        number: number;
+    };
+    query?: never;
+    url: '/artifacts/{document_id}/versions/{number}';
+};
+
+export type GetArtifactVersionErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetArtifactVersionError = GetArtifactVersionErrors[keyof GetArtifactVersionErrors];
+
+export type GetArtifactVersionResponses = {
+    200: ArtifactVersionResponse;
+};
+
+export type GetArtifactVersionResponse = GetArtifactVersionResponses[keyof GetArtifactVersionResponses];
+
+export type RestoreArtifactVersionData = {
+    body?: never;
+    path: {
+        /**
+         * Artifact document ID
+         */
+        document_id: string;
+        /**
+         * Version to restore
+         */
+        number: number;
+    };
+    query?: never;
+    url: '/artifacts/{document_id}/versions/{number}/restore';
+};
+
+export type RestoreArtifactVersionErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RestoreArtifactVersionError = RestoreArtifactVersionErrors[keyof RestoreArtifactVersionErrors];
+
+export type RestoreArtifactVersionResponses = {
+    201: ArtifactVersionResponse;
+};
+
+export type RestoreArtifactVersionResponse = RestoreArtifactVersionResponses[keyof RestoreArtifactVersionResponses];
+
+export type GetArtifactViewUrlData = {
+    body: ArtifactViewUrlRequest;
+    path: {
+        /**
+         * Artifact document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/artifacts/{document_id}/view_url';
+};
+
+export type GetArtifactViewUrlErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetArtifactViewUrlError = GetArtifactViewUrlErrors[keyof GetArtifactViewUrlErrors];
+
+export type GetArtifactViewUrlResponses = {
+    200: ArtifactViewUrlResponse;
+};
+
+export type GetArtifactViewUrlResponse = GetArtifactViewUrlResponses[keyof GetArtifactViewUrlResponses];
 
 export type GetSelfBotData = {
     body?: never;

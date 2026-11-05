@@ -18,6 +18,9 @@ import {
   stack,
   getGatewayAlb,
   GatewayService,
+  GATEWAY_PRIORITIES,
+  getServiceUrl,
+  ServiceUrl,
 } from '../../packages/shared';
 
 const gatewayLoadBalancer = getGatewayAlb();
@@ -325,6 +328,23 @@ export class CloudStorageService extends pulumi.ComponentResource {
     );
 
     this.targetGroup = gatewayTargetGroup.target_group;
+
+    // Artifact pages: `<document_id>.<artifact host>` on the shared listener
+    // goes to this service's content router. The preview-gateway stack owns
+    // the certificate and DNS record in the isolated zone.
+    const artifactHost = new URL(getServiceUrl(ServiceUrl.ARTIFACT_CONTENT_URL))
+      .hostname;
+    new aws.lb.ListenerRule(
+      `${BASE_NAME}-artifact-content-host-${stack}`,
+      {
+        listenerArn: gatewayLoadBalancer.httpsListenerArn,
+        priority: GATEWAY_PRIORITIES[GatewayService.ARTIFACT_CONTENT_HOST],
+        conditions: [{ hostHeader: { values: [`*.${artifactHost}`] } }],
+        actions: [{ type: 'forward', targetGroupArn: this.targetGroup.arn }],
+        tags: this.tags,
+      },
+      { parent: this }
+    );
 
     const dopplerEcsEnvironment = new DopplerEcsEnvironment(
       BASE_NAME,

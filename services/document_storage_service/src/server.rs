@@ -2191,9 +2191,49 @@ pub async fn run() -> anyhow::Result<()> {
         feed_viewers,
     );
 
+    let artifact_origin =
+        artifacts::wiring::content_origin(&macro_service_urls::ArtifactContentUrl::new()?)?;
+    let artifact_service = Arc::new(artifacts::wiring::build_service(
+        db.clone(),
+        macro_aws_config::s3_client().await,
+        config.document_storage_bucket.as_ref(),
+        crate::outbound::artifacts::DocumentsForArtifacts::new(
+            document_creator.clone(),
+            document_service.clone(),
+        ),
+        crate::outbound::artifacts::ArtifactContentViewTokens::new(
+            config.document_permission_jwt.as_ref(),
+        ),
+        crate::outbound::artifacts::ConnectionGatewayArtifactNotifier::new(
+            conn_gateway_client.clone(),
+        ),
+        artifact_origin.clone(),
+    ));
+    let artifact_content = crate::api::context::DssArtifactContent {
+        state: artifacts::inbound::content_router::ContentRouterState::new(
+            artifact_service.clone(),
+            artifact_origin.clone(),
+            artifacts::inbound::content_router::ContentHeaders::new(
+                &artifacts::wiring::frame_ancestors(
+                    &macro_service_urls::AppServiceUrl::new()?,
+                    config.environment,
+                )?,
+            )?,
+        ),
+        origin: artifact_origin,
+    };
+    let artifacts_state = artifacts::inbound::axum_router::ArtifactsRouterState::new(
+        artifact_service,
+        entity_access_service.clone(),
+        authorization_state.clone(),
+        non_user_owners,
+    );
+
     let sync_sessions =
         sync_router::session::SyncSessionFactory::new(SyncServiceUrl::new()?.as_ref().parse()?)?;
     let api_context = ApiContext {
+        artifacts_state,
+        artifact_content,
         sync_sessions,
         dictation_state,
         graphql_work_feed_context,

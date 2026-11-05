@@ -161,6 +161,12 @@ impl S3Client {
         .await
     }
 
+    /// Deletes every object of an artifact document.
+    pub async fn delete_artifact_objects(&self, document_id: &str) -> anyhow::Result<()> {
+        delete::delete_artifact_objects(&self.inner, &self.document_storage_bucket, document_id)
+            .await
+    }
+
     pub async fn exists(&self, key: &str) -> anyhow::Result<bool> {
         exists::exists(&self.inner, &self.document_storage_bucket, key).await
     }

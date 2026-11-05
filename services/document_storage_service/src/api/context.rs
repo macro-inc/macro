@@ -463,6 +463,27 @@ pub(crate) type AccessRequestsState =
 pub(crate) type DocumentsState =
     DocumentRouterState<DocumentService, EntityAccessService, AuthorizationService>;
 
+/// Artifacts over the documents domain and the document permission token.
+pub(crate) type DssArtifactService = artifacts::wiring::ArtifactServiceFor<
+    crate::outbound::artifacts::DocumentsForArtifacts,
+    crate::outbound::artifacts::ArtifactContentViewTokens,
+    crate::outbound::artifacts::ConnectionGatewayArtifactNotifier,
+>;
+
+/// The artifacts API router state.
+pub(crate) type DssArtifactsState = artifacts::inbound::axum_router::ArtifactsRouterState<
+    DssArtifactService,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
+/// The artifact content origin, which requests reach by their `Host`.
+#[derive(Clone)]
+pub(crate) struct DssArtifactContent {
+    pub(crate) state: artifacts::inbound::content_router::ContentRouterState<DssArtifactService>,
+    pub(crate) origin: artifacts::domain::models::ContentOrigin,
+}
+
 /// Concrete project service wired into DSS.
 pub(crate) type ProjectService = ProjectServiceImpl<
     PgProjectRepo<PgBotsRepo>,
@@ -985,6 +1006,8 @@ pub(crate) struct ApiContext {
     pub calendar_state: DssCalendarState,
     pub calendar_join_request_state: DssCalendarJoinRequestState,
     pub documents_state: DocumentsState,
+    pub artifacts_state: DssArtifactsState,
+    pub artifact_content: DssArtifactContent,
     pub projects_state: ProjectsState,
     pub channels_state: DssChannelsState,
     pub messages_state: DssMessagesState,

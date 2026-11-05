@@ -416,8 +416,17 @@ export const storageExcluded = [
   'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog =
-  [] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog = [
+  // Artifacts: the `macro.artifacts` namespace wraps these next.
+  'createArtifact',
+  'createArtifactUploads',
+  'getArtifact',
+  'getArtifactVersion',
+  'getArtifactViewUrl',
+  'listArtifactVersions',
+  'publishArtifactVersion',
+  'restoreArtifactVersion',
+] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',

@@ -59,7 +59,7 @@ pub async fn create_document_handler<
     let job_id = req.job_id.clone();
     let response_data = state
         .service
-        .create_document(&principal, new_document(req), job_id)
+        .create_document(&principal, new_document(req)?, job_id)
         .await?;
 
     Ok(Json(CreateDocumentResponse {
@@ -93,7 +93,7 @@ pub async fn create_document_internal_handler<
                 .import_email_attachment(ImportEmailAttachmentRepoArgs {
                     email_attachment_id,
                     owner: user,
-                    document: new_document(req),
+                    document: new_document(req)?,
                 })
                 .await?
         }
@@ -102,7 +102,7 @@ pub async fn create_document_internal_handler<
             let job_id = req.job_id.clone();
             state
                 .service
-                .create_document(&CreationPrincipal::User(user), new_document(req), job_id)
+                .create_document(&CreationPrincipal::User(user), new_document(req)?, job_id)
                 .await?
         }
     };
@@ -113,7 +113,9 @@ pub async fn create_document_internal_handler<
     }))
 }
 
-fn new_document(req: CreateDocumentRequest) -> NewDocument {
+/// Parse a create request. Artifacts carry a versioned file bundle, so they
+/// are created through the artifacts API, never as an empty document here.
+fn new_document(req: CreateDocumentRequest) -> Result<NewDocument, DocumentError> {
     let user_provided_file_type: Option<FileType> = req
         .file_type
         .as_deref()
@@ -144,7 +146,13 @@ fn new_document(req: CreateDocumentRequest) -> NewDocument {
         );
     }
 
-    NewDocument {
+    if file_type == Some(FileType::Artifact) {
+        return Err(DocumentError::BadRequest(
+            "create artifacts with POST /artifacts".to_string(),
+        ));
+    }
+
+    Ok(NewDocument {
         id: req.id,
         sha: req.sha,
         document_name,
@@ -159,5 +167,5 @@ fn new_document(req: CreateDocumentRequest) -> NewDocument {
             .then_some(document_sub_type::DocumentSubType::Task),
         skip_history: req.skip_history,
         initial_link_share: InitialLinkShare::EntityDefault,
-    }
+    })
 }

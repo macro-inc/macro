@@ -1,7 +1,7 @@
 use aws_sdk_s3 as s3;
 use model_owner::Owner;
 use s3::types::{Delete, ObjectIdentifier};
-use s3_key::build_cloud_storage_bucket_document_prefix;
+use s3_key::{build_artifact_document_prefix, build_cloud_storage_bucket_document_prefix};
 use tracing::instrument;
 
 #[instrument(skip(client))]
@@ -69,6 +69,38 @@ pub(in crate::service::s3) async fn delete_document(
 
     if !to_delete.is_empty() {
         delete_objects(client, bucket, to_delete).await?;
+    }
+    Ok(())
+}
+
+/// Deletes every object of an artifact document: the files of all its
+/// versions and anything uploaded for it. Empty for other documents.
+#[instrument(skip(client))]
+pub(in crate::service::s3) async fn delete_artifact_objects(
+    client: &s3::Client,
+    bucket: &str,
+    document_id: &str,
+) -> anyhow::Result<()> {
+    if cfg!(feature = "local") {
+        return Ok(());
+    }
+
+    let mut pages = client
+        .list_objects_v2()
+        .bucket(bucket)
+        .prefix(build_artifact_document_prefix(document_id))
+        .into_paginator()
+        .send();
+    while let Some(page) = pages.next().await {
+        let keys: Vec<String> = page?
+            .contents()
+            .iter()
+            .filter_map(|object| object.key().map(str::to_string))
+            .collect();
+        // A list page holds at most 1000 keys, the most one delete accepts.
+        if !keys.is_empty() {
+            delete_objects(client, bucket, keys).await?;
+        }
     }
     Ok(())
 }

@@ -51,7 +51,8 @@ pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let sync_sessions = state.sync_sessions.clone();
-    let app = api_router(state.clone())
+    let artifact_content = state.artifact_content.clone();
+    let api = api_router(state.clone())
         .layer(
             ServiceBuilder::new()
                 .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
@@ -75,6 +76,13 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
             SwaggerUi::new("/dss/docs")
                 .url("/dss/api-doc/openapi.json", swagger::ApiDoc::openapi()),
         );
+    // Artifact pages run agent-written scripts on their own origin: requests
+    // for that host reach only the content router, and no other host reaches it.
+    let app = artifacts::inbound::content_router::dispatch_by_host(
+        api,
+        artifacts::inbound::content_router::content_router(artifact_content.state),
+        artifact_content.origin,
+    );
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", state.config.port))
         .await
@@ -147,6 +155,10 @@ fn api_router(state: ApiContext) -> Router {
             github::inbound::github_sync_router::github_sync_router(
                 github_sync_service_router_state,
             ),
+        )
+        .nest(
+            "/artifacts",
+            artifacts::inbound::axum_router::artifacts_router(state.artifacts_state.clone()),
         )
         .nest(
             "/documents",

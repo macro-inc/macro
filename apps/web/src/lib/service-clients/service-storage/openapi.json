@@ -433,6 +433,613 @@
         }
       }
     },
+    "/artifacts": {
+      "post": {
+        "tags": ["artifacts"],
+        "summary": "Create an artifact: a document of file type `artifact`, and its version 1\nwhen files are given.",
+        "operationId": "create_artifact",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateArtifactRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artifacts/{document_id}": {
+      "get": {
+        "tags": ["artifacts"],
+        "summary": "The artifact with its current version.",
+        "operationId": "get_artifact",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Artifact document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artifacts/{document_id}/uploads": {
+      "post": {
+        "tags": ["artifacts"],
+        "summary": "Presigned uploads for the objects not yet stored for this artifact.",
+        "operationId": "create_artifact_uploads",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Artifact document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtifactUploadsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactUploadsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artifacts/{document_id}/versions": {
+      "get": {
+        "tags": ["artifacts"],
+        "summary": "Version history, newest first.",
+        "operationId": "list_artifact_versions",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Artifact document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactVersionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["artifacts"],
+        "summary": "Publish a new version.",
+        "operationId": "publish_artifact_version",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Artifact document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactVersionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The artifact moved past `base_version`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artifacts/{document_id}/versions/{number}": {
+      "get": {
+        "tags": ["artifacts"],
+        "summary": "One version.",
+        "operationId": "get_artifact_version",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Artifact document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "description": "Version number",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactVersionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artifacts/{document_id}/versions/{number}/restore": {
+      "post": {
+        "tags": ["artifacts"],
+        "summary": "Publish an old version again as the newest one.",
+        "operationId": "restore_artifact_version",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Artifact document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "description": "Version to restore",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactVersionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artifacts/{document_id}/view_url": {
+      "post": {
+        "tags": ["artifacts"],
+        "summary": "A URL rendering a version (or one scene) on the artifact's own origin.",
+        "operationId": "get_artifact_view_url",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Artifact document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtifactViewUrlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactViewUrlResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/bots/me": {
       "get": {
         "tags": ["bots"],
@@ -22568,6 +23175,273 @@
           }
         }
       },
+      "ArtifactFileResponse": {
+        "type": "object",
+        "description": "A file of a version.",
+        "required": ["path", "sha256", "size", "content_type"],
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "description": "Content type."
+          },
+          "path": {
+            "type": "string",
+            "description": "Path."
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Hex SHA-256."
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Size in bytes.",
+            "minimum": 0
+          }
+        }
+      },
+      "ArtifactResponse": {
+        "type": "object",
+        "description": "An artifact with its current version.",
+        "required": ["document_id", "name", "owner", "current"],
+        "properties": {
+          "current": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ArtifactVersionResponse",
+                "description": "The current version; null until the first publish."
+              }
+            ]
+          },
+          "document_id": {
+            "type": "string",
+            "description": "The artifact document."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          },
+          "owner": {
+            "type": "string",
+            "description": "Owner."
+          }
+        }
+      },
+      "ArtifactTheme": {
+        "type": "string",
+        "description": "Color scheme for the rendered page.",
+        "enum": ["light", "dark"]
+      },
+      "ArtifactUploadResponse": {
+        "type": "object",
+        "description": "Where to `PUT` one object.",
+        "required": ["sha256", "url", "headers"],
+        "properties": {
+          "headers": {
+            "type": "object",
+            "description": "Headers the `PUT` must carry.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "sha256": {
+            "type": "string",
+            "description": "The object's digest."
+          },
+          "url": {
+            "type": "string",
+            "description": "Presigned URL."
+          }
+        }
+      },
+      "ArtifactUploadsRequest": {
+        "type": "object",
+        "description": "Objects a publisher wants to upload.",
+        "required": ["files"],
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UploadFileBody"
+            },
+            "description": "The objects."
+          }
+        }
+      },
+      "ArtifactUploadsResponse": {
+        "type": "object",
+        "description": "Uploads for the objects not yet stored. Stored ones are left out.",
+        "required": ["uploads"],
+        "properties": {
+          "uploads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactUploadResponse"
+            },
+            "description": "One per missing object."
+          }
+        }
+      },
+      "ArtifactVersionResponse": {
+        "type": "object",
+        "description": "A published version.",
+        "required": ["number", "files", "scenes", "created_by", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Publish time."
+          },
+          "created_by": {
+            "type": "string",
+            "description": "The user who published it."
+          },
+          "created_by_agent": {
+            "type": ["string", "null"],
+            "description": "The bot that published it for them."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactFileResponse"
+            },
+            "description": "Files by path."
+          },
+          "message": {
+            "type": ["string", "null"],
+            "description": "What changed."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32",
+            "description": "1, 2, 3 … per artifact."
+          },
+          "scenes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SceneBody"
+            },
+            "description": "Scenes in order."
+          }
+        }
+      },
+      "ArtifactVersionSummaryResponse": {
+        "type": "object",
+        "description": "A version in the history.",
+        "required": [
+          "number",
+          "created_by",
+          "created_at",
+          "file_count",
+          "total_size"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Publish time."
+          },
+          "created_by": {
+            "type": "string",
+            "description": "The user who published it."
+          },
+          "created_by_agent": {
+            "type": ["string", "null"],
+            "description": "The bot that published it for them."
+          },
+          "file_count": {
+            "type": "integer",
+            "description": "Number of files.",
+            "minimum": 0
+          },
+          "message": {
+            "type": ["string", "null"],
+            "description": "What changed."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Version number."
+          },
+          "total_size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "All files' bytes together.",
+            "minimum": 0
+          }
+        }
+      },
+      "ArtifactVersionsResponse": {
+        "type": "object",
+        "description": "Version history.",
+        "required": ["versions"],
+        "properties": {
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactVersionSummaryResponse"
+            },
+            "description": "Newest first."
+          }
+        }
+      },
+      "ArtifactViewUrlRequest": {
+        "type": "object",
+        "description": "Ask for a URL rendering a version.",
+        "properties": {
+          "scene": {
+            "type": ["string", "null"],
+            "description": "Scene to open instead of `index.html`."
+          },
+          "theme": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ArtifactTheme",
+                "description": "Color scheme, passed to the page as `?theme=`."
+              }
+            ]
+          },
+          "version": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Version; the current one when omitted."
+          }
+        }
+      },
+      "ArtifactViewUrlResponse": {
+        "type": "object",
+        "description": "A URL rendering a version on the artifact's own origin.",
+        "required": ["url", "origin", "version", "expires_at"],
+        "properties": {
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the URL stops working."
+          },
+          "origin": {
+            "type": "string",
+            "description": "The artifact's origin; frame messages must come from exactly this."
+          },
+          "url": {
+            "type": "string",
+            "description": "The URL, for an iframe `src`."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The version it renders."
+          }
+        }
+      },
       "AttachmentChange": {
         "oneOf": [
           {
@@ -26825,6 +27699,40 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Team owner. Omit for a private, user-owned agent."
+          }
+        }
+      },
+      "CreateArtifactRequest": {
+        "type": "object",
+        "description": "Create an artifact with its first version.",
+        "required": ["name"],
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileInputBody"
+            },
+            "description": "Files of version 1, each with its content. Omit to create the\nartifact without a version, upload through `/uploads`, then publish."
+          },
+          "message": {
+            "type": ["string", "null"],
+            "description": "What it is."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name."
+          },
+          "project_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Folder to create it in; needs edit access to it."
+          },
+          "scenes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SceneBody"
+            },
+            "description": "Scenes."
           }
         }
       },
@@ -32237,6 +33145,29 @@
         "description": "What happened to a file, on the wire.",
         "enum": ["added", "modified", "deleted", "renamed"]
       },
+      "FileInputBody": {
+        "type": "object",
+        "description": "A file of a version as sent.",
+        "required": ["path", "content_type", "sha256"],
+        "properties": {
+          "content_base64": {
+            "type": ["string", "null"],
+            "description": "The bytes, base64. Omit when the object is already stored for this\nartifact (uploaded through `/uploads`, or in an earlier version)."
+          },
+          "content_type": {
+            "type": "string",
+            "description": "One of the allowed content types."
+          },
+          "path": {
+            "type": "string",
+            "description": "Relative `/`-separated path, e.g. `scenes/empty.html`."
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Hex SHA-256 of the bytes."
+          }
+        }
+      },
       "FileSystemNodeWithIds": {
         "oneOf": [
           {
@@ -32288,6 +33219,7 @@
           "md",
           "spreadsheet",
           "canvas",
+          "artifact",
           "coffee",
           "cson",
           "iced",
@@ -39910,6 +40842,36 @@
         ],
         "description": "Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database."
       },
+      "PublishVersionRequest": {
+        "type": "object",
+        "description": "Publish a version.",
+        "required": ["files"],
+        "properties": {
+          "base_version": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "The version this one builds on, 0 when none is published yet;\npublishing fails with 409 when the artifact has moved past it."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileInputBody"
+            },
+            "description": "Files."
+          },
+          "message": {
+            "type": ["string", "null"],
+            "description": "What changed."
+          },
+          "scenes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SceneBody"
+            },
+            "description": "Scenes."
+          }
+        }
+      },
       "QueryDefinition": {
         "type": "object",
         "description": "A versioned query definition.",
@@ -40873,6 +41835,25 @@
             "type": "string",
             "format": "uuid",
             "description": "Identifier."
+          }
+        }
+      },
+      "SceneBody": {
+        "type": "object",
+        "description": "A named page of a version.",
+        "required": ["id", "title", "path"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Slug: lowercase letters, digits and dashes."
+          },
+          "path": {
+            "type": "string",
+            "description": "The page, one of the version's files."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
           }
         }
       },
@@ -46350,6 +47331,27 @@
           }
         }
       },
+      "UploadFileBody": {
+        "type": "object",
+        "description": "An object to upload.",
+        "required": ["sha256", "size", "content_type"],
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "description": "Content type."
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Hex SHA-256 of the bytes."
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Size in bytes.",
+            "minimum": 0
+          }
+        }
+      },
       "UploadFolderRequest": {
         "type": "object",
         "required": ["content", "rootFolderName", "uploadRequestId"],
@@ -47623,6 +48625,10 @@
     {
       "name": "forms",
       "description": "Macro Forms: questionnaires over a database table"
+    },
+    {
+      "name": "artifacts",
+      "description": "Agent-published web pages"
     }
   ]
 }
