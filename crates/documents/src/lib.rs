@@ -22,5 +22,3 @@ pub mod inbound;
     feature = "document_create_adapters"
 ))]
 pub mod outbound;
-#[doc(hidden)]
-pub const CI_INTEGRATE_NONCE: &str = "1793890997-5";
