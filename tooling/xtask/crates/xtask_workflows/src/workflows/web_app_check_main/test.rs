@@ -72,7 +72,7 @@ fn filters(yaml: &str) -> (&str, &str) {
         .and_then(|rest| rest.split("id: filter").next())
         .expect("path-check filters");
     filters
-        .split_once("rust_sources:")
+        .split_once("codegen_inputs:")
         .expect("should_run block, then the code generation inputs")
 }
 
@@ -268,8 +268,6 @@ fn codegen_filter_covers_every_input_of_the_generated_code_job() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let (_, codegen) = filters(&yaml);
     for path in [
-        "'crates/**/*.rs'",
-        "'services/**/*.rs'",
         "'apps/web/scripts/generate-api-schema.ts'",
         "'apps/web/scripts/services.ts'",
         "'packages/sdk/**'",
@@ -285,9 +283,14 @@ fn codegen_filter_covers_every_input_of_the_generated_code_job() {
         "utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema",
         "-- Cargo.toml Cargo.lock",
         "for revision in HEAD \"$base\"",
+        "-- 'crates/*.rs' 'services/*.rs'",
     ] {
         assert!(path_check.contains(needle), "{needle}: {path_check}");
     }
+    assert!(
+        !path_check.contains("grep -q"),
+        "grep -q closes the pipe early, and pipefail reads that as no match: {path_check}"
+    );
     let generated = job(&yaml, "generated-code", "biome-check");
     assert!(generated.contains("needs.path-check.outputs.codegen_changed == 'true'"));
 }

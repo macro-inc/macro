@@ -26,7 +26,6 @@ jobs:
       name: Filter changed paths
       uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
       with:
-        list-files: shell
         filters: |
           should_run:
             - 'package.json'
@@ -53,9 +52,6 @@ jobs:
             - 'packages/code-mode-sdk/**'
             - 'crates/agent_code_mode/SKILL.md'
             - '.github/actions/setup-reqs-web/**'
-          rust_sources:
-            - 'crates/**/*.rs'
-            - 'services/**/*.rs'
           codegen_inputs:
             - 'apps/web/scripts/generate-api-schema.ts'
             - 'apps/web/scripts/services.ts'
@@ -84,26 +80,28 @@ jobs:
           exit 0
         }
         [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
-        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+        # The merge commit's first parent is the main this merge result was
+        # built on; a fresh fetch of main could be newer.
+        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | sed -n 1p)
+        [ -n "$base" ] || result "No base commit to compare with." true
         git fetch -q --depth=1 origin "$base"
         names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
-        if git diff "$base" HEAD -- Cargo.toml Cargo.lock | grep -E "^[-+].*($names)" ; then
+        # Every grep here reads all its input. One that stopped at its first
+        # match would close the pipe, and pipefail reads the writer's SIGPIPE as
+        # no match.
+        if git diff "$base" HEAD -- Cargo.toml Cargo.lock | grep -E "^[-+].*($names)"; then
           result "A schema crate's version changed." true
         fi
-        [ "$RUST_SOURCES" = true ] || result "No Rust source changed." false
-        read -ra files <<< "$RUST_FILES"
-        for file in "${files[@]}"; do
+        while IFS= read -r file; do
           for revision in HEAD "$base"; do
-            if git show "$revision:$file" 2>/dev/null | grep -qE "$names"; then
+            if git show "$revision:$file" 2>/dev/null | grep -E "$names" > /dev/null; then
               result "$file names a schema item." true
             fi
           done
-        done
+        done < <(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
         result "No changed Rust file names a schema item." false
       env:
         CODEGEN_INPUTS: ${{ steps.filter.outputs.codegen_inputs }}
-        RUST_SOURCES: ${{ steps.filter.outputs.rust_sources }}
-        RUST_FILES: ${{ steps.filter.outputs.rust_sources_files }}
   android-native-check:
     name: Android Native Check
     runs-on: namespace-profile-linux-tiny-no-cache

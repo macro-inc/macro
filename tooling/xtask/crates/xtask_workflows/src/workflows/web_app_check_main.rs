@@ -298,21 +298,25 @@ fn detect_schema_changes() -> Step<Run> {
               exit 0
             }
             [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
-            base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+            # The merge commit's first parent is the main this merge result was
+            # built on; a fresh fetch of main could be newer.
+            base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | sed -n 1p)
+            [ -n "$base" ] || result "No base commit to compare with." true
             git fetch -q --depth=1 origin "$base"
             names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
-            if git diff "$base" HEAD -- Cargo.toml Cargo.lock | grep -E "^[-+].*($names)" ; then
+            # Every grep here reads all its input. One that stopped at its first
+            # match would close the pipe, and pipefail reads the writer's SIGPIPE as
+            # no match.
+            if git diff "$base" HEAD -- Cargo.toml Cargo.lock | grep -E "^[-+].*($names)"; then
               result "A schema crate's version changed." true
             fi
-            [ "$RUST_SOURCES" = true ] || result "No Rust source changed." false
-            read -ra files <<< "$RUST_FILES"
-            for file in "${files[@]}"; do
+            while IFS= read -r file; do
               for revision in HEAD "$base"; do
-                if git show "$revision:$file" 2>/dev/null | grep -qE "$names"; then
+                if git show "$revision:$file" 2>/dev/null | grep -E "$names" > /dev/null; then
                   result "$file names a schema item." true
                 fi
               done
-            done
+            done < <(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
             result "No changed Rust file names a schema item." false
         "#})
         .id("codegen")
@@ -320,19 +324,14 @@ fn detect_schema_changes() -> Step<Run> {
             "CODEGEN_INPUTS",
             "${{ steps.filter.outputs.codegen_inputs }}",
         ))
-        .add_env(("RUST_SOURCES", "${{ steps.filter.outputs.rust_sources }}"))
-        .add_env((
-            "RUST_FILES",
-            "${{ steps.filter.outputs.rust_sources_files }}",
-        ))
 }
 
 fn paths_filter() -> Step<Use> {
     let artifact_paths = crate::workflows::web_artifact_paths::yaml_list("  ");
 
     // `codegen_inputs` holds the `gen-api` scripts and the SDK and docs packages
-    // that hold generated output; `rust_sources` goes to
-    // [`detect_schema_changes`]. xtask, flake.nix, the Nix dev-shell action, and
+    // that hold generated output; [`detect_schema_changes`] reads Rust changes
+    // from git. xtask, flake.nix, the Nix dev-shell action, and
     // this workflow file do not change generated output, so they must not start
     // that job. The Nix dev-shell action is also omitted from `should_run` so
     // Typecheck stays off for a shell-only tweak. Workflow YAML drift is `check
@@ -349,11 +348,10 @@ fn paths_filter() -> Step<Use> {
             "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
         ) // v3.0.3
         .id("filter")
-        .add_with(("list-files", "shell"))
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nrust_sources:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\ncodegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
         ))
 }
