@@ -50,11 +50,18 @@ export class ChannelNamespace {
     return Channel.byId(this.client, id);
   }
 
+  /**
+   * Open (creating if needed) the user's 1:1 direct message with one person.
+   * For several people, use {@link private}.
+   */
   async dm(recipient: User): Promise<Channel> {
     return Channel.dm(this.client, recipient);
   }
 
-  /** Open (creating if needed) the private group channel with a set of users. */
+  /**
+   * Open (creating if needed) the group direct message with exactly these
+   * people, excluding the user. For one person, use {@link dm}.
+   */
   async private(recipients: User[]): Promise<Channel> {
     return Channel.private(this.client, recipients);
   }

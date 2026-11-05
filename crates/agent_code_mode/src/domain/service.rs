@@ -242,6 +242,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ReadChannelThread"
                 | "RenameChannel"
                 | "ManageChannelParticipants"
+                // macro.channels.dm() and macro.channels.private().
+                | "OpenDirectMessage"
                 | "ReadCallRecord"
                 | "UpdateCallRecord"
                 | "DeleteCallRecord"
