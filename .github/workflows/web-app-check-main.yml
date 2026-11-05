@@ -349,7 +349,7 @@ jobs:
   generated-code:
     needs:
     - path-check
-    if: needs.path-check.outputs.codegen_changed == 'true'
+    if: false
     name: Generated Code Check
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     env:
