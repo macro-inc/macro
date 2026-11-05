@@ -2,12 +2,13 @@ import { formatLocale, t } from '@app/lib/i18n';
 import CheckIcon from '@icon/system/regular/check.svg';
 import ClockCounterClockwise from '@icon/system/regular/clock-counter-clockwise.svg';
 import { Dropdown } from '@ui';
-import { For } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 
 export type VersionRow = {
   number: number;
   message: string | undefined;
-  author: string;
+  /** Who published it; resolves names on its own. */
+  author: JSX.Element;
   createdAt: string;
 };
 
@@ -56,13 +57,10 @@ export function VersionMenu(props: {
                         : t('artifacts.version', { number: version.number })}
                     </Dropdown.ItemLabel>
                     <Dropdown.ItemDescription class="truncate text-xs text-ink-muted">
-                      {[
-                        version.message,
-                        version.author,
-                        formatVersionTime(version.createdAt),
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
+                      <Show when={version.message}>
+                        {(message) => <>{message()} · </>}
+                      </Show>
+                      {version.author} · {formatVersionTime(version.createdAt)}
                     </Dropdown.ItemDescription>
                   </span>
                   <Dropdown.ItemIndicator>
