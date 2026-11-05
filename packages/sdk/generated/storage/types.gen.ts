@@ -5800,6 +5800,158 @@ export type DocumentInteractionMetadata = {
     reason: InteractionReason;
 };
 
+/**
+ * One new, changed or moved top-level block.
+ */
+export type DocumentLexicalBlock = {
+    /**
+     * The id of the top-level block this one follows, or `null` for first.
+     */
+    after?: string | null;
+    /**
+     * The block's durable node id; equals the id inside `node`.
+     */
+    id: string;
+    /**
+     * The block's serialized Lexical node, ids included.
+     */
+    node: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * The change to a document's top-level blocks since `revision`.
+ */
+export type DocumentLexicalCommitRequest = {
+    /**
+     * Every new, changed or moved top-level block, in document order; at most 500.
+     */
+    blocks: Array<DocumentLexicalBlock>;
+    /**
+     * Ids of the top-level blocks the change removes.
+     */
+    removed: Array<string>;
+    /**
+     * The revision the change was made against, from the read.
+     */
+    revision: string;
+};
+
+/**
+ * A committed change.
+ */
+export type DocumentLexicalCommitted = {
+    /**
+     * The document's version after the commit.
+     */
+    revision: string;
+    /**
+     * The live document after the commit, merged with everyone's edits and
+     * normalized as a read is.
+     */
+    state: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * Nodes that could not merge with the live document; nothing was applied.
+ * Read the document again and redo the change.
+ */
+export type DocumentLexicalConflict = {
+    /**
+     * Each node that could not merge, and why.
+     */
+    conflicts: Array<DocumentLexicalNodeConflict>;
+    /**
+     * Always `conflict`.
+     */
+    error: DocumentLexicalConflictCode;
+};
+
+/**
+ * Error code of a commit that could not merge.
+ */
+export type DocumentLexicalConflictCode = 'conflict';
+
+/**
+ * Why a node could not merge.
+ */
+export type DocumentLexicalConflictReason = 'changed' | 'removed' | 'moved' | 'revision';
+
+/**
+ * The blocks are malformed: an unknown node type, duplicate or mismatched
+ * ids, or an `after` outside the document. Nothing was applied.
+ */
+export type DocumentLexicalInvalid = {
+    /**
+     * Always `invalid`.
+     */
+    error: DocumentLexicalInvalidCode;
+    /**
+     * What is wrong, for the program that built the blocks.
+     */
+    message: string;
+};
+
+/**
+ * Error code of a malformed commit.
+ */
+export type DocumentLexicalInvalidCode = 'invalid';
+
+/**
+ * One node of a commit that could not merge with the live document.
+ */
+export type DocumentLexicalNodeConflict = {
+    /**
+     * The node's id; `null` for a `revision` conflict.
+     */
+    id?: string | null;
+    /**
+     * Why it could not merge.
+     */
+    reason: DocumentLexicalConflictReason;
+};
+
+/**
+ * The commit was sent but never acknowledged, so it may have applied. Read
+ * the document before retrying.
+ */
+export type DocumentLexicalOutcomeUnknown = {
+    /**
+     * Always `edit_outcome_unknown`.
+     */
+    error: DocumentLexicalOutcomeUnknownCode;
+    /**
+     * What the editing worker reported.
+     */
+    message: string;
+};
+
+/**
+ * Error code of a commit whose outcome is unknown.
+ */
+export type DocumentLexicalOutcomeUnknownCode = 'edit_outcome_unknown';
+
+/**
+ * A markdown document read as Lexical state.
+ */
+export type DocumentLexicalState = {
+    /**
+     * The document version the state was read at, as sync-service encodes
+     * it. Commit against it.
+     */
+    revision: string;
+    /**
+     * The serialized Lexical editor state, normalized through a headless
+     * editor with every Macro node registered.
+     */
+    state: {
+        [key: string]: unknown;
+    };
+};
+
 export type DocumentMetadata = {
     /**
      * The id of the document this document branched from
@@ -22105,6 +22257,104 @@ export type GetDocumentGithubPullRequestsResponses = {
 };
 
 export type GetDocumentGithubPullRequestsResponse = GetDocumentGithubPullRequestsResponses[keyof GetDocumentGithubPullRequestsResponses];
+
+export type GetDocumentLexicalData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/lexical';
+};
+
+export type GetDocumentLexicalErrors = {
+    /**
+     * Not a markdown document
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document view access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The document could not be read
+     */
+    500: ErrorResponse;
+};
+
+export type GetDocumentLexicalError = GetDocumentLexicalErrors[keyof GetDocumentLexicalErrors];
+
+export type GetDocumentLexicalResponses = {
+    200: DocumentLexicalState;
+};
+
+export type GetDocumentLexicalResponse = GetDocumentLexicalResponses[keyof GetDocumentLexicalResponses];
+
+export type CommitDocumentLexicalData = {
+    body: DocumentLexicalCommitRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/lexical';
+};
+
+export type CommitDocumentLexicalErrors = {
+    /**
+     * Not a markdown document, more than 500 blocks, or a malformed body
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * Nodes could not merge with the live document; nothing was applied
+     */
+    409: DocumentLexicalConflict;
+    /**
+     * The blocks are malformed; nothing was applied
+     */
+    422: DocumentLexicalInvalid;
+    /**
+     * The commit could not be sent; nothing was applied
+     */
+    500: ErrorResponse;
+    /**
+     * Outcome unknown: the commit may have applied
+     */
+    502: DocumentLexicalOutcomeUnknown;
+};
+
+export type CommitDocumentLexicalError = CommitDocumentLexicalErrors[keyof CommitDocumentLexicalErrors];
+
+export type CommitDocumentLexicalResponses = {
+    200: DocumentLexicalCommitted;
+};
+
+export type CommitDocumentLexicalResponse = CommitDocumentLexicalResponses[keyof CommitDocumentLexicalResponses];
 
 export type GetLocationHandlerData = {
     body?: never;

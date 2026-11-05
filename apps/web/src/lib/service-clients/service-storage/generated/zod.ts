@@ -19848,6 +19848,88 @@ export const getDocumentGithubPullRequestsResponse = zod
   );
 
 /**
+ * @summary Read a markdown document or task as Lexical state with the caller's view
+access, with the revision to commit against.
+ */
+export const getDocumentLexicalParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const getDocumentLexicalResponse = zod
+  .object({
+    revision: zod
+      .string()
+      .describe(
+        'The document version the state was read at, as sync-service encodes\nit. Commit against it.'
+      ),
+    state: zod
+      .object({})
+      .describe(
+        'The serialized Lexical editor state, normalized through a headless\neditor with every Macro node registered.'
+      ),
+  })
+  .describe('A markdown document read as Lexical state.');
+
+/**
+ * @summary Commit changed top-level blocks of a markdown document or task with the
+caller's edit access. The worker merges them three-way against the
+revision they were read at, keeping concurrent collaborators' edits, and
+applies all or nothing. Retrying a commit that landed changes nothing.
+ */
+export const commitDocumentLexicalParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const commitDocumentLexicalBodyBlocksMax = 500;
+
+export const commitDocumentLexicalBody = zod
+  .object({
+    blocks: zod
+      .array(
+        zod
+          .object({
+            after: zod
+              .string()
+              .nullish()
+              .describe(
+                'The id of the top-level block this one follows, or `null` for first.'
+              ),
+            id: zod
+              .string()
+              .describe(
+                "The block's durable node id; equals the id inside `node`."
+              ),
+            node: zod
+              .object({})
+              .describe("The block's serialized Lexical node, ids included."),
+          })
+          .describe('One new, changed or moved top-level block.')
+      )
+      .max(commitDocumentLexicalBodyBlocksMax)
+      .describe(
+        'Every new, changed or moved top-level block, in document order; at most 500.'
+      ),
+    removed: zod
+      .array(zod.string())
+      .describe('Ids of the top-level blocks the change removes.'),
+    revision: zod
+      .string()
+      .describe('The revision the change was made against, from the read.'),
+  })
+  .describe("The change to a document's top-level blocks since `revision`.");
+
+export const commitDocumentLexicalResponse = zod
+  .object({
+    revision: zod.string().describe("The document's version after the commit."),
+    state: zod
+      .object({})
+      .describe(
+        "The live document after the commit, merged with everyone's edits and\nnormalized as a read is."
+      ),
+  })
+  .describe('A committed change.');
+
+/**
  * @summary Gets the presigned url(s) for the document. aka location
  */
 export const getLocationHandlerParams = zod.object({

@@ -2,7 +2,8 @@
 
 `ExecuteCode` accepts a JavaScript ES module exporting `main`. The agent harness
 starts a fresh Deno 2.9.6 child for each execution; there is no separate runner
-service. Macro SDK and Handlebars imports are bundled ahead of time, with no
+service. Macro SDK, Handlebars and Lexical (`lexical`, the `@lexical/*` packages
+documents use, `@macro-inc/sdk/lexical`) imports are bundled ahead of time, with no
 per-run package download or TypeScript compilation.
 
 ```js
@@ -94,6 +95,7 @@ cargo test -p code_execution -- --include-ignored
 ```
 
 The suite covers actual SDK HTTP authentication and concurrency, prebundled
-Handlebars, plain JavaScript entry modules, filesystem/import/process/network
+Handlebars, Lexical edits sharing one module instance with the SDK, plain
+JavaScript entry modules, filesystem/import/process/network
 restrictions including redirects, output bounds, cancellation, deadlines,
 backpressure, and cleanup. It makes no model-provider calls.

@@ -15,6 +15,8 @@ pub fn sdk_check() -> Workflow {
                 PullRequest::default()
                     .add_branch("main")
                     .add_path("packages/sdk/**")
+                    // `vendor:check` compares against the vendored source.
+                    .add_path("packages/lexical-core/**")
                     .add_path(".github/workflows/sdk-check.yml"),
             )
             // `Release SDK` publishes from `main` without re-checking the
@@ -23,6 +25,7 @@ pub fn sdk_check() -> Workflow {
                 Push::default()
                     .add_branch("main")
                     .add_path("packages/sdk/**")
+                    .add_path("packages/lexical-core/**")
                     .add_path(".github/workflows/sdk-check.yml"),
             ))
         .concurrency(

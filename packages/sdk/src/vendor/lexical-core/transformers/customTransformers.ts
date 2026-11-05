@@ -1,0 +1,66 @@
+// Vendored from packages/lexical-core/transformers/customTransformers.ts by `bun run vendor`; edit the source, not this copy.
+import { $isListNode } from '@lexical/list';
+import {
+  CHECK_LIST,
+  type ElementTransformer,
+  ORDERED_LIST,
+  TRANSFORMERS,
+  type Transformer,
+  UNORDERED_LIST,
+} from '@lexical/markdown';
+import { $isHeadingNode } from '@lexical/rich-text';
+import { $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
+import { HTML_TEXT_FORMAT_TRANSFORMERS } from './htmlTextFormats';
+
+const customTransformer = (
+  original: ElementTransformer
+): ElementTransformer => {
+  return {
+    ...original,
+    replace: (
+      parentNode: ElementNode,
+      children: LexicalNode[],
+      match: string[],
+      isImport: boolean
+    ): false | void => {
+      if (
+        parentNode &&
+        $isElementNode(parentNode) &&
+        $isHeadingNode(parentNode)
+      ) {
+        return false;
+      }
+      if (original === ORDERED_LIST) {
+        const nextNode = parentNode.getNextSibling();
+        const start = Number(match[2]);
+
+        if (
+          Number.isFinite(start) &&
+          $isListNode(nextNode) &&
+          nextNode.getListType() === 'number'
+        ) {
+          nextNode.setStart(start);
+        }
+      }
+      original.replace(parentNode, children, match, isImport);
+    },
+  };
+};
+
+const orderedListTransformer = customTransformer(ORDERED_LIST);
+
+/** Enter on `6.` (no trailing space) still starts an ordered list at 6. */
+export const ORDERED_LIST_ENTER: ElementTransformer = {
+  ...orderedListTransformer,
+  regExp: /^(\s*)(\d{1,})\.$/,
+};
+
+export const CUSTOM_TRANSFORMERS: Transformer[] = [
+  ...HTML_TEXT_FORMAT_TRANSFORMERS,
+  ...TRANSFORMERS.filter((t) => {
+    return t !== CHECK_LIST && t !== ORDERED_LIST && t !== UNORDERED_LIST;
+  }),
+  orderedListTransformer,
+  customTransformer(CHECK_LIST),
+  customTransformer(UNORDERED_LIST),
+];

@@ -17,8 +17,11 @@ service. Session authentication, token issuance and execution storage belong to
 
 The bundled public SDK makes ordinary HTTP requests. There is no tool-name
 proxy or host-call bridge. Cancellation stops the process; it does not roll back
-completed API writes. SDK and Handlebars bundles come from
-`crates/code_mode_assets`, generated from the public SDK at build time.
+completed API writes. SDK, Handlebars and Lexical modules come from
+`crates/code_mode_assets`, generated from the public SDK at build time. Each
+run writes the Lexical modules under `lexical/` and maps `lexical`, the
+`@lexical/*` packages and `@macro-inc/sdk/lexical` in `imports.json`; `sdk.mjs`
+imports them by specifier, so programs share one instance of each.
 
 Authenticated SDK requests carry `x-macro-code-execution: 1`, the only mark a
 run under a plain user token (public MCP) has. APIs that ask a program to

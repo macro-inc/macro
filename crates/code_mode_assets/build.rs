@@ -2,10 +2,16 @@
 //! directory in `CODE_MODE_ASSETS_DIR` when the build provides them prebuilt
 //! (Nix and CI), otherwise a fresh run of `packages/code-mode-sdk`'s generator
 //! into `OUT_DIR`. A failed run or a missing asset fails the build.
+//!
+//! The Lexical modules are a code-split set whose chunk names change with
+//! their content, so this script reads `lexical-modules.tsv` and writes
+//! `lexical_modules.rs`, embedding each file.
 
 use std::env;
+use std::fmt::Write as _;
+use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 const PREBUILT: &str = "CODE_MODE_ASSETS_DIR";
@@ -50,6 +56,40 @@ fn main() {
     );
 
     println!("cargo::rustc-env=CODE_MODE_ASSETS={}", directory.display());
+    write_lexical_modules(&directory);
+}
+
+/// Each manifest line is `<path>\t<specifier>`; a shared chunk has no specifier.
+fn write_lexical_modules(directory: &Path) {
+    let manifest = directory.join("lexical-modules.tsv");
+    let listing = fs::read_to_string(&manifest)
+        .unwrap_or_else(|error| panic!("could not read {}: {error}", manifest.display()));
+    let mut source = String::from("&[\n");
+    for line in listing.lines() {
+        let (path, specifier) = line
+            .split_once('\t')
+            .unwrap_or_else(|| panic!("malformed line in {}: {line:?}", manifest.display()));
+        let file = directory.join(path);
+        assert!(
+            file.is_file(),
+            "{} lists missing {}",
+            manifest.display(),
+            file.display()
+        );
+        let specifier = match specifier {
+            "" => "None".to_owned(),
+            specifier => format!("Some({specifier:?})"),
+        };
+        writeln!(
+            source,
+            "    LexicalModule {{ path: {path:?}, specifier: {specifier}, source: include_str!({:?}) }},",
+            file.display().to_string()
+        )
+        .expect("writing to a String cannot fail");
+    }
+    source.push(']');
+    let output = PathBuf::from(env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"));
+    fs::write(output.join("lexical_modules.rs"), source).expect("write lexical_modules.rs");
 }
 
 fn generate() -> PathBuf {
