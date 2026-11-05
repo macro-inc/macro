@@ -47,12 +47,9 @@ pub const NIX_CACHE_URL: &str = "${{ vars.NIX_CACHE_URL }}";
 /// paths verify.
 pub const NIX_CACHE_PUBLIC_KEY: &str = "${{ vars.NIX_CACHE_PUBLIC_KEY }}";
 
-/// Limit concurrent test links, which can each consume several GiB.
-pub const RUST_TEST_BUILD_JOBS: u32 = 2;
-
-/// Nextest thread count for the test job. Tuned for the previous
-/// `linux-extra-beefy` runner; revisit if `namespace-profile-linux-mid` is
-/// smaller.
+/// Nextest thread count for the test job, one per vCPU of [`Runner::Large`].
+///
+/// [`Runner::Large`]: crate::workflows::runners::Runner::Large
 pub const NEXTEST_TEST_THREADS: u32 = 32;
 
 /// Explicit Namespace cache-volume tag for the heavy compile jobs (check +
@@ -61,6 +58,12 @@ pub const NEXTEST_TEST_THREADS: u32 = 32;
 /// [`crate::workflows::runners::Runner::with_cache_tag`]. The legacy tag name is
 /// retained so the existing warm volume is not invalidated.
 pub const CI_CACHE_TAG: &str = "sccache-ci";
+
+/// Cache-volume tags for the `test` and `check` jobs on
+/// [`crate::workflows::runners::Runner::Large`]. Each job writes a different
+/// `target/`, so a volume of its own keeps one from replacing the other's.
+pub const CI_TEST_CACHE_TAG: &str = "rust-test-large";
+pub const CI_CHECK_CACHE_TAG: &str = "rust-check-large";
 
 /// Namespace remote sccache shared by the cloud-storage compile/test jobs and
 /// the workspace dependency checks.
