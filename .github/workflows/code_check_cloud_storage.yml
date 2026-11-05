@@ -672,7 +672,7 @@ jobs:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.test_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
-    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci-sel
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.test_packages }}
       NEXTEST_TEST_THREADS: '32'
@@ -814,6 +814,7 @@ jobs:
     - name: run tests
       run: |
         set -euo pipefail
+        export RUSTC_WRAPPER="$PWD/.github/rustc-wrap.sh"
 
         # --no-tests=pass: a package filter can legitimately select a crate with no
         # tests; treat that as success, not nextest's default error.
@@ -890,6 +891,7 @@ jobs:
       if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')
       run: |
         set -euo pipefail
+        export RUSTC_WRAPPER="$PWD/.github/rustc-wrap.sh"
 
         # --no-tests=pass: a package filter can legitimately select a crate with no
         # tests; treat that as success, not nextest's default error.

@@ -11,4 +11,4 @@ pub mod user_id;
 pub use cowlike;
 
 #[doc(hidden)]
-pub const CI_SEL2_NONCE: &str = "44d0ed36bb8d485ea4db8c25dc1cc2e1";
+pub const CI_SEL2_NONCE: &str = "d2ef5fb21b704927ab3606ff90f768b7";
