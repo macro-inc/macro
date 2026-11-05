@@ -12,6 +12,7 @@ members = [
   "crates/agent_harness",
   "crates/trigger_context",
   "crates/agent_preview",
+  "crates/artifacts",
   "crates/agent_code_mode",
   "crates/code_mode_assets",
   "crates/dynamic_ui",

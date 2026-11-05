@@ -1672,6 +1672,47 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ccd462b64c3c72f1be8305905a85d85403d768e8690c9b8bd3b9009a5761679"
 
 [[package]]
+name = "artifacts"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-sdk-s3",
+ "axum",
+ "base64 0.22.1",
+ "bot_id",
+ "bytes",
+ "chrono",
+ "entity_access",
+ "entity_registry",
+ "futures",
+ "hex",
+ "http-body-util",
+ "lazy-regex",
+ "macro_authorization",
+ "macro_aws_config",
+ "macro_db_migrator",
+ "macro_env",
+ "macro_service_urls",
+ "macro_tower_layers",
+ "macro_user_id",
+ "model",
+ "model-error-response",
+ "model_owner",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "urlencoding",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "as-any"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6601,6 +6642,7 @@ dependencies = [
  "ai_usage",
  "analytics_client",
  "anyhow",
+ "artifacts",
  "async-graphql",
  "async-graphql-axum",
  "async-trait",
