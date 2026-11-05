@@ -132,7 +132,9 @@ import type {
   SystemStatusHistory,
   Team,
   TeamAgent,
+  TeamAgentConflict,
   TeamAgentQuote,
+  TeamAgentSizes,
   TeamAgents,
   TeamInviteLinkResponse,
   TeamInviteLinkTeam,
@@ -6736,7 +6738,7 @@ export type createTeamAgentResponse403 = {
 };
 
 export type createTeamAgentResponse409 = {
-  data: ErrorResponse;
+  data: TeamAgentConflict;
   status: 409;
 };
 
@@ -7321,7 +7323,7 @@ export type quoteTeamAgentResponse403 = {
 };
 
 export type quoteTeamAgentResponse409 = {
-  data: ErrorResponse;
+  data: TeamAgentConflict;
   status: 409;
 };
 
@@ -7389,6 +7391,66 @@ export const quoteTeamAgent = async (
 };
 
 /**
+ * @summary Computer specifications for team admins, independent of billing or rollout.
+ */
+export type getTeamAgentSizesResponse200 = {
+  data: TeamAgentSizes;
+  status: 200;
+};
+
+export type getTeamAgentSizesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamAgentSizesResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getTeamAgentSizesResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamAgentSizesResponseSuccess = getTeamAgentSizesResponse200 & {
+  headers: Headers;
+};
+export type getTeamAgentSizesResponseError = (
+  | getTeamAgentSizesResponse401
+  | getTeamAgentSizesResponse403
+  | getTeamAgentSizesResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTeamAgentSizesResponse =
+  | getTeamAgentSizesResponseSuccess
+  | getTeamAgentSizesResponseError;
+
+export const getGetTeamAgentSizesUrl = () => {
+  return `/team_agents/sizes`;
+};
+
+export const getTeamAgentSizes = async (
+  options?: RequestInit
+): Promise<getTeamAgentSizesResponse> => {
+  const res = await fetch(getGetTeamAgentSizesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamAgentSizesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamAgentSizesResponse;
+};
+
+/**
  * @summary Delete a team agent: release its computer, delete its repo, remove its
 seat, mailbox and account. Requires a team admin or owner. Safe to retry.
  */
@@ -7417,6 +7479,11 @@ export type deleteTeamAgentResponse404 = {
   status: 404;
 };
 
+export type deleteTeamAgentResponse409 = {
+  data: TeamAgentConflict;
+  status: 409;
+};
+
 export type deleteTeamAgentResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -7435,6 +7502,7 @@ export type deleteTeamAgentResponseError = (
   | deleteTeamAgentResponse401
   | deleteTeamAgentResponse403
   | deleteTeamAgentResponse404
+  | deleteTeamAgentResponse409
   | deleteTeamAgentResponse500
   | deleteTeamAgentResponse502
 ) & {
@@ -7498,7 +7566,7 @@ export type retryTeamAgentResponse404 = {
 };
 
 export type retryTeamAgentResponse409 = {
-  data: ErrorResponse;
+  data: TeamAgentConflict;
   status: 409;
 };
 

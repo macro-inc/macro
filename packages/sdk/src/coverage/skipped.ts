@@ -92,6 +92,7 @@ export const authExcluded = [
   'getPermissions',
   // Renewal and scheduled-plan details are part of the app's billing settings.
   'getSubscriptionStatus',
+  'getTeamAgentSizes', // Invitation catalog belongs to the app's team settings.
   'getTeamByInviteLink',
   'getTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'getTeamInviteLink',

@@ -338,6 +338,28 @@ export type ComputerPayment = 'pending' | 'paid' | 'unbilled';
 export type ComputerSize = 'standard' | 'large' | 'xl';
 
 /**
+ * Computer specifications, available independently of subscription pricing.
+ */
+export type ComputerSizeSpec = {
+    /**
+     * Disk capacity in GB.
+     */
+    diskGb: number;
+    /**
+     * Memory in GB.
+     */
+    memoryGb: number;
+    /**
+     * Catalog size.
+     */
+    size: ComputerSize;
+    /**
+     * Virtual CPU count.
+     */
+    vcpus: number;
+};
+
+/**
  * A computer as its team sees it.
  */
 export type ComputerStatus = {
@@ -2330,6 +2352,25 @@ export type TeamAgent = {
 };
 
 /**
+ * A conflict the client can handle without inspecting error messages.
+ */
+export type TeamAgentConflict = {
+    /**
+     * Machine-readable reason.
+     */
+    code: TeamAgentConflictCode;
+    /**
+     * Human-readable explanation.
+     */
+    message: string;
+};
+
+/**
+ * Stable conflict codes for invitation and provisioning failures.
+ */
+export type TeamAgentConflictCode = 'no_subscription' | 'computer_unavailable' | 'retry_unavailable';
+
+/**
  * What inviting an agent adds to the team's bill, in cents per interval.
  */
 export type TeamAgentQuote = {
@@ -2365,6 +2406,16 @@ export type TeamAgentQuote = {
      * Virtual CPUs in the quoted computer size.
      */
     vcpus: number;
+};
+
+/**
+ * The computer catalog for inviting team agents.
+ */
+export type TeamAgentSizes = {
+    /**
+     * Available sizes in catalog order.
+     */
+    sizes: Array<ComputerSizeSpec>;
 };
 
 /**
@@ -5174,7 +5225,7 @@ export type CreateTeamAgentErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     403: ErrorResponse;
-    409: ErrorResponse;
+    409: TeamAgentConflict;
     500: ErrorResponse;
     502: ErrorResponse;
 };
@@ -5382,7 +5433,7 @@ export type QuoteTeamAgentErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     403: ErrorResponse;
-    409: ErrorResponse;
+    409: TeamAgentConflict;
     500: ErrorResponse;
     502: ErrorResponse;
 };
@@ -5394,6 +5445,27 @@ export type QuoteTeamAgentResponses = {
 };
 
 export type QuoteTeamAgentResponse = QuoteTeamAgentResponses[keyof QuoteTeamAgentResponses];
+
+export type GetTeamAgentSizesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team_agents/sizes';
+};
+
+export type GetTeamAgentSizesErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetTeamAgentSizesError = GetTeamAgentSizesErrors[keyof GetTeamAgentSizesErrors];
+
+export type GetTeamAgentSizesResponses = {
+    200: TeamAgentSizes;
+};
+
+export type GetTeamAgentSizesResponse = GetTeamAgentSizesResponses[keyof GetTeamAgentSizesResponses];
 
 export type DeleteTeamAgentData = {
     body?: never;
@@ -5412,6 +5484,7 @@ export type DeleteTeamAgentErrors = {
     401: ErrorResponse;
     403: ErrorResponse;
     404: ErrorResponse;
+    409: TeamAgentConflict;
     500: ErrorResponse;
     502: ErrorResponse;
 };
@@ -5441,7 +5514,7 @@ export type RetryTeamAgentErrors = {
     401: ErrorResponse;
     403: ErrorResponse;
     404: ErrorResponse;
-    409: ErrorResponse;
+    409: TeamAgentConflict;
     500: ErrorResponse;
     502: ErrorResponse;
 };
