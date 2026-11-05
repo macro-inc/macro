@@ -55,11 +55,12 @@ const FILTER_CACHE_DIR: RuntimePath<'static> =
     xtask_paths::runtime_path!("/home/runner/.cache/macro-nextest-filter");
 
 /// Decide whether the rest of the workflow runs and compute the nextest
-/// filter. Deliberately light: no Nix, no sccache, and a cached release
-/// binary for the filter.
+/// filter. Deliberately light: no Nix, and a cached release binary for the filter.
+/// The sccache step supplies only that cache's credentials; nothing compiles through
+/// it here.
 fn path_check() -> Job {
     Job::default()
-        .runs_on(runners::Runner::Small.with_cache_tag(vars::NEXTEST_FILTER_CACHE_TAG))
+        .runs_on(runners::Runner::Small.with_cache_tag(vars::CI_CACHE_TAG))
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
             "doppler_candidates",
@@ -87,11 +88,11 @@ fn path_check() -> Job {
                 .if_condition(Expression::new("steps.filter.outputs.should_run == 'true'")),
         )
         .add_step(
-            steps::mount_path_cache_volume("Mount nextest-filter binary cache", FILTER_CACHE_DIR)
-                .if_condition(Expression::new(format!(
-                    "steps.filter.outputs.should_run == 'true' && ({TRUSTED_CONTEXT})"
-                ))),
+            steps::mount_nextest_filter_cache(FILTER_CACHE_DIR).if_condition(Expression::new(
+                format!("steps.filter.outputs.should_run == 'true' && ({TRUSTED_CONTEXT})"),
+            )),
         )
+        .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(compute_nextest_filter())
 }
 
@@ -372,6 +373,11 @@ fn cargo_clippy() -> Step<Run> {
 }
 
 /// Match production's PostgreSQL major version so CI rejects incompatible migrations.
+///
+/// Its data lives in shared memory because `#[sqlx::test]` creates and drops a
+/// database per test, and those file operations are what limit the test run on
+/// the runner's disk. A bind mount, not `--tmpfs`: `configure_postgres` restarts
+/// the container, and a restart empties a `--tmpfs` mount.
 fn postgres_service() -> Container {
     Container::default()
         .image("pgvector/pgvector:pg14")
@@ -383,7 +389,8 @@ fn postgres_service() -> Container {
         .ports(vec![Port::Name("5432:5432".to_string())])
         .options(
             "--health-cmd pg_isready --health-interval 10s --health-timeout 5s \
-             --health-retries 5 --shm-size 1g",
+             --health-retries 5 --shm-size 1g \
+             -v /dev/shm/pgdata:/var/lib/postgresql/data",
         )
 }
 

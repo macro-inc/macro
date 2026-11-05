@@ -70,16 +70,14 @@ pub const CI_SCCACHE_NAME: &str = "sccache-ci";
 /// `linux-mid` volume.
 pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 
+/// Nix-only PR checks. They read a Nix store back, so they stay off the small
+/// profile's default volume, where other jobs would overwrite that store.
+pub const NIX_CHECKS_CACHE_TAG: &str = "nix-checks";
+
 /// Namespace remote sccache used when the web checks compile Rust API schema
 /// generators. Kept separate from [`CI_SCCACHE_NAME`] because these jobs have
 /// a different workload and runner profile.
 pub const WEB_SCCACHE_NAME: &str = "web-ci";
-
-/// Namespace cache tag for `path-check`, which keeps its release
-/// `xtask_nextest_filter` binary on the volume. Without a fixed tag the small
-/// profile's volume is scoped per branch and PR runs never persisted, so every
-/// run rebuilt the filter.
-pub const NEXTEST_FILTER_CACHE_TAG: &str = "nextest-filter";
 
 /// Namespace cache tag for the sync-service worker deploy. Its own pool: this
 /// job compiles for `wasm32-unknown-unknown`, so nothing in the host-target
