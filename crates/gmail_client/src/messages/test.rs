@@ -344,3 +344,46 @@ async fn get_raw_message_maps_not_found_to_none() {
 
     assert!(raw.is_none());
 }
+
+#[tokio::test]
+async fn estimate_message_count_reads_one_result_size_estimate() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages"))
+        .and(query_param("q", "from:linear.app after:1700000000"))
+        .and(query_param("maxResults", "1"))
+        .and(query_param("fields", "resultSizeEstimate"))
+        .and(header("authorization", "Bearer token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "resultSizeEstimate": 37
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let count = estimate_message_count(
+        &client(&server),
+        "token",
+        "from:linear.app after:1700000000",
+    )
+    .await
+    .expect("estimate should decode");
+
+    assert_eq!(count, 37);
+}
+
+#[tokio::test]
+async fn estimate_message_count_treats_a_missing_estimate_as_zero() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+        .mount(&server)
+        .await;
+
+    let count = estimate_message_count(&client(&server), "token", "from:example.com")
+        .await
+        .expect("an empty answer should decode");
+
+    assert_eq!(count, 0);
+}
