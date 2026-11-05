@@ -47,7 +47,9 @@ impl ContactPhonesRepository for CompaniesRepositoryImpl {
                     phone: PhoneNumber::parse(&phone).ok_or_else(|| {
                         CrmError::StorageLayerError(anyhow::anyhow!("stored phone is not E.164"))
                     })?,
-                    source: source.parse()?,
+                    source: source.parse().map_err(|error: strum::ParseError| {
+                        CrmError::StorageLayerError(error.into())
+                    })?,
                 })
             })
             .collect::<Result<Vec<_>, CrmError>>()
@@ -98,7 +100,7 @@ impl ContactPhonesRepository for CompaniesRepositoryImpl {
             "#,
             contact_id,
             &numbers,
-            PhoneSource::Manual.as_str(),
+            PhoneSource::Manual.as_ref(),
         )
         .execute(tx.as_mut())
         .await
@@ -132,7 +134,7 @@ impl ContactPhonesRepository for CompaniesRepositoryImpl {
             team_id,
             &contact_ids,
             &numbers,
-            source.as_str(),
+            source.as_ref(),
         )
         .execute(&self.pool)
         .await
