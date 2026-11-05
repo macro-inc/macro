@@ -69,7 +69,9 @@ advance past unavailable sessions. Quiet batches bind to the actual prompt actio
 notification-only turns record `PrompterKind::System` and no human authority.
 Never expose notification metadata through public session controls. Notification
 sessions read original log frames across load boundaries to retain trusted event
-provenance when runtimes echo their prompt history. Queue reads discard legacy
+provenance when runtimes echo their prompt history. A log trigger records this
+once as `agent_session.has_trusted_notifications`; history reads test that flag,
+never the log's JSON. Queue reads discard legacy
 private-context entries; the migration bridge preserves their review outcomes
 without restoring owner authority. Claim legacy actions with a conditional
 update of only their matching prompter; recover acting identity from that
