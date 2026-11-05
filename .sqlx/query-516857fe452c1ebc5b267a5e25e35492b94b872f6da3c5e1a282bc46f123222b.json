@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT ct.id FROM crm_contacts ct\n            LEFT JOIN crm_companies co ON co.id = ct.company_id\n            WHERE ct.id = $1 AND ct.team_id = $2\n              AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))\n            FOR UPDATE OF ct\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "516857fe452c1ebc5b267a5e25e35492b94b872f6da3c5e1a282bc46f123222b"
+}

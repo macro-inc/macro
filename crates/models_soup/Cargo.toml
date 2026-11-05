@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 mock = []
-schema = ["dep:utoipa", "item_filters/schema"]
+schema = ["call/schema", "dep:utoipa", "item_filters/schema"]
 
 [dependencies]
 anyhow = { workspace = true }

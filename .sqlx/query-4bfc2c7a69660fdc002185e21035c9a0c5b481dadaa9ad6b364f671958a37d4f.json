@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO crm_contact_phones (contact_id, phone, source)\n            SELECT $1, phone, $3 FROM UNNEST($2::text[]) AS phone\n            ON CONFLICT (contact_id, phone) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4bfc2c7a69660fdc002185e21035c9a0c5b481dadaa9ad6b364f671958a37d4f"
+}

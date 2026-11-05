@@ -65,6 +65,7 @@ import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
+import type { ContactPhonesResponse } from './generated/schemas/contactPhonesResponse';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
 import type { CreateCanvasDocumentResponse } from './generated/schemas/createCanvasDocumentResponse';
@@ -168,6 +169,7 @@ import type { SetChannelLabelRequest } from './generated/schemas/setChannelLabel
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
+import type { SetContactPhonesRequest } from './generated/schemas/setContactPhonesRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
 import type { SkillDescriptionBody } from './generated/schemas/skillDescriptionBody';
 import type { SlackCompleteRequest } from './generated/schemas/slackCompleteRequest';
@@ -2928,6 +2930,27 @@ export const storageServiceClient = {
       method: 'PUT',
       body: JSON.stringify(body),
     });
+  },
+  async getContactPhones({
+    contactId,
+    signal,
+  }: {
+    contactId: string;
+    signal?: AbortSignal;
+  }) {
+    return await dssFetch<ContactPhonesResponse>(
+      `/crm/contacts/${contactId}/phones`,
+      { method: 'GET', signal }
+    );
+  },
+  async setContactPhones({
+    contactId,
+    ...body
+  }: { contactId: string } & SetContactPhonesRequest) {
+    return await dssFetch<ContactPhonesResponse>(
+      `/crm/contacts/${contactId}/phones`,
+      { method: 'PUT', body: JSON.stringify(body) }
+    );
   },
   async setContactHidden({
     contactId,

@@ -9,6 +9,7 @@ export const crmKeys = createQueryKeys('crm', {
   pipelineRows: (id: string) => [id],
   company: (companyId: string) => [companyId],
   contact: (contactId: string) => [contactId],
+  contactPhones: (contactId: string) => [contactId],
   contactByEmail: (teamId: string, email: string) => [teamId, email],
   quickAccessContacts: null,
   blockedDomains: null,

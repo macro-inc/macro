@@ -37,6 +37,7 @@ import type { CallRecord } from '@service-call/client';
 import { ButtonGroup } from '@ui';
 import { Show } from 'solid-js';
 import { callRecordingDownloadSource } from '../../queries/recording-download';
+import { CallSourceBadge } from '../CallSourceBadge';
 import { useCallAgain } from '../use-call-again';
 
 export function CallRecordingSplitHeaderLoading() {
@@ -167,6 +168,9 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
                 <PhoneCallIcon class="size-4 touch:size-6 shrink-0 text-ink-muted" />
               }
             />
+            <Show when={record().source}>
+              {(source) => <CallSourceBadge source={source()} />}
+            </Show>
           </div>
         </div>
       </SplitHeaderLeft>

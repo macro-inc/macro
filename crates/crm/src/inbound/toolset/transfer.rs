@@ -227,5 +227,17 @@ fn pipeline_summary(outcome: &PipelineImportOutcome) -> String {
     for (field, labels) in &outcome.added_options {
         parts.push(format!("Added {field} options: {}.", labels.join(", ")));
     }
+    if outcome.phones_saved > 0 {
+        parts.push(format!(
+            "Saved {} phone numbers to contacts.",
+            outcome.phones_saved
+        ));
+    }
+    if outcome.invalid_phones > 0 {
+        parts.push(format!(
+            "Skipped {} phone values without a country code (they must start with +).",
+            outcome.invalid_phones
+        ));
+    }
     parts.join(" ")
 }

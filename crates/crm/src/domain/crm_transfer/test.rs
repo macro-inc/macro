@@ -239,6 +239,7 @@ struct Records {
     unavailable_contacts: HashSet<String>,
     companies_created: Mutex<Vec<String>>,
     contacts_created: Mutex<Vec<(Uuid, String)>>,
+    phones_added: Mutex<Vec<(Uuid, String)>>,
 }
 
 impl TransferRecords for Records {
@@ -296,6 +297,20 @@ impl TransferRecords for Records {
             &Uuid::NAMESPACE_OID,
             email.as_bytes(),
         )))
+    }
+
+    async fn add_contact_phones(
+        &self,
+        _: &Viewer,
+        phones: Vec<(Uuid, phone_number::PhoneNumber)>,
+    ) -> Result<u64, TransferError> {
+        let mut added = self.phones_added.lock().unwrap();
+        added.extend(
+            phones
+                .into_iter()
+                .map(|(contact, phone)| (contact, phone.to_string())),
+        );
+        Ok(added.len() as u64)
     }
 }
 
@@ -608,6 +623,55 @@ async fn an_export_writes_people_as_emails_and_reimports() {
     let table = parse_csv(&saved[0].1).unwrap();
     let rows = record_rows(&table, PipelineRecordType::Company).unwrap();
     assert_eq!(rows.rows[0].name, "=Acme");
+}
+
+#[tokio::test]
+async fn a_contact_csv_saves_phone_columns_on_the_contacts() {
+    let mut contacts = overview(PipelineRecordType::Contact);
+    contacts.fields[0].name = "Contact".into();
+    let pipeline = contacts.pipeline.pipeline.id;
+    let known = Uuid::now_v7();
+    let service = CrmTransferServiceImpl::new(
+        Arc::new(Workflows::new(contacts)),
+        Records {
+            contacts: HashMap::from([("ana@acme.example".to_owned(), known)]),
+            ..Records::default()
+        },
+        Files::default(),
+    );
+    let outcome = service
+        .import_to_pipeline(
+            &viewer(),
+            pipeline,
+            CsvInput::Text(
+                "Contact,Email,Phone,Mobile\n\
+                 Ana,ana@acme.example,+1 (555) 010,'+44 20 123\n\
+                 Raj,raj@beta.example,555 010,\n"
+                    .into(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        outcome.ignored_columns.is_empty(),
+        "{:?}",
+        outcome.ignored_columns
+    );
+    assert_eq!(outcome.phones_saved, 2);
+    assert_eq!(
+        outcome.invalid_phones, 1,
+        "a number without its country code"
+    );
+    let mut added = service.records.phones_added.lock().unwrap().clone();
+    added.sort();
+    assert_eq!(
+        added,
+        [
+            (known, "+1555010".to_owned()),
+            (known, "+4420123".to_owned())
+        ]
+    );
 }
 
 #[tokio::test]

@@ -5341,6 +5341,70 @@ export const setCrmContactNameBody = zod
   .describe('Request body for `PUT \/contacts\/{contact_id}\/name`.');
 
 /**
+ * @summary The contact's phone numbers. Access is enforced by
+[`CrmContactAccessLevelExtractor`], like reading the contact.
+ */
+export const getCrmContactPhonesParams = zod.object({
+  contact_id: zod.uuid().describe('The CRM contact'),
+});
+
+export const getCrmContactPhonesResponse = zod
+  .object({
+    phones: zod
+      .array(
+        zod
+          .object({
+            phone: zod
+              .string()
+              .describe('E.164: `+`, the country code and the number.'),
+            source: zod
+              .enum(['manual', 'csv', 'call'])
+              .describe("Where a contact's number came from."),
+          })
+          .describe("One of a contact's numbers.")
+      )
+      .describe('The numbers, oldest first.'),
+  })
+  .describe("A contact's phone numbers, oldest first.");
+
+/**
+ * @summary Replace the contact's phone numbers. Any team member who can see the
+contact may, as with renaming it.
+ */
+export const setCrmContactPhonesParams = zod.object({
+  contact_id: zod.uuid().describe('The CRM contact'),
+});
+
+export const setCrmContactPhonesBody = zod
+  .object({
+    phones: zod
+      .array(zod.string())
+      .describe(
+        'Every number the contact should have, as typed, each with its country\ncode. Formatting is ignored; numbers are stored in E.164. Numbers the\ncontact keeps keep their source. Empty removes them all (400 when one\nis not a number, or there are more than ten).'
+      ),
+  })
+  .describe('Request body for `PUT \/contacts\/{contact_id}\/phones`.');
+
+export const setCrmContactPhonesResponse = zod
+  .object({
+    phones: zod
+      .array(
+        zod
+          .object({
+            phone: zod
+              .string()
+              .describe('E.164: `+`, the country code and the number.'),
+            source: zod
+              .enum(['manual', 'csv', 'call'])
+              .describe("Where a contact's number came from."),
+          })
+          .describe("One of a contact's numbers.")
+      )
+      .describe('The numbers, oldest first.'),
+  })
+  .describe("A contact's phone numbers, oldest first.");
+
+/**
  * @summary List the caller's live pipelines in their CRM.
  */
 export const listCrmPipelinesResponseItem = zod
@@ -31702,6 +31766,16 @@ export const getItemsSoupResponse = zod
                           )
                       )
                       .describe('Macro-account participants in the call.'),
+                    provider: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['macro', 'granola'])
+                          .describe(
+                            'Supported call and transcript providers. Add variants as integrations grow.'
+                          ),
+                      ])
+                      .optional(),
                     startedAt: zod.iso
                       .datetime({})
                       .describe('When the call started.'),
@@ -36678,6 +36752,16 @@ export const postItemsSoupResponse = zod
                           )
                       )
                       .describe('Macro-account participants in the call.'),
+                    provider: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['macro', 'granola'])
+                          .describe(
+                            'Supported call and transcript providers. Add variants as integrations grow.'
+                          ),
+                      ])
+                      .optional(),
                     startedAt: zod.iso
                       .datetime({})
                       .describe('When the call started.'),
@@ -41095,6 +41179,16 @@ export const postItemsSoupAstResponse = zod
                           )
                       )
                       .describe('Macro-account participants in the call.'),
+                    provider: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['macro', 'granola'])
+                          .describe(
+                            'Supported call and transcript providers. Add variants as integrations grow.'
+                          ),
+                      ])
+                      .optional(),
                     startedAt: zod.iso
                       .datetime({})
                       .describe('When the call started.'),
@@ -46053,6 +46147,16 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'Macro-account participants in the call.'
                             ),
+                          provider: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum(['macro', 'granola'])
+                                .describe(
+                                  'Supported call and transcript providers. Add variants as integrations grow.'
+                                ),
+                            ])
+                            .optional(),
                           startedAt: zod.iso
                             .datetime({})
                             .describe('When the call started.'),
@@ -50437,6 +50541,16 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'Macro-account participants in the call.'
                             ),
+                          provider: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum(['macro', 'granola'])
+                                .describe(
+                                  'Supported call and transcript providers. Add variants as integrations grow.'
+                                ),
+                            ])
+                            .optional(),
                           startedAt: zod.iso
                             .datetime({})
                             .describe('When the call started.'),

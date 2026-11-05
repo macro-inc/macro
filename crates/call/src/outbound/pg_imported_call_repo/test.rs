@@ -116,3 +116,101 @@ async fn imports_require_a_complete_source_identity(pool: PgPool) {
     call.source.namespace = " ".into();
     assert!(service.ingest(call).await.is_err());
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("import_users"))
+)]
+async fn participants_sharing_a_number_keep_their_own_identities(pool: PgPool) {
+    let service = CallImportServiceImpl(
+        PgImportedCallRepository::new(pool.clone()),
+        macro_event_broker::NoopMacroEventBroker,
+    );
+    let caller = |name: &str| CallParticipant {
+        id: macro_uuid::generate_uuid_v7(),
+        user_id: None,
+        display_name: Some(name.into()),
+        email: None,
+        phone: Some("+1555010".into()),
+        external_id: None,
+        attendance: vec![],
+    };
+    let now = Utc::now();
+    let mut call = snapshot("import-a", now);
+    call.participants = vec![caller("Jane"), caller("Ravi")];
+    let id = service.ingest(call).await.unwrap();
+
+    let mut again = snapshot("import-a", now + chrono::Duration::seconds(1));
+    again.participants = vec![caller("Jane"), caller("Ravi")];
+    service.ingest(again).await.unwrap();
+    let read = service.read(&user("import-a"), id).await.unwrap().unwrap();
+    assert_eq!(read.participants.len(), 2);
+    assert_ne!(read.participants[0].id, read.participants[1].id);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("import_users"))
+)]
+async fn shared_identity_hints_do_not_swap_participants_on_reimport(pool: PgPool) {
+    let service = CallImportServiceImpl(
+        PgImportedCallRepository::new(pool),
+        macro_event_broker::NoopMacroEventBroker,
+    );
+    let now = Utc::now();
+    for (key, emails, phones) in [
+        (
+            "shared-phone",
+            [Some("first@example.com"), Some("second@example.com")],
+            [Some("+1555010"), Some("+1555010")],
+        ),
+        (
+            "shared-email",
+            [Some("shared@example.com"), Some("shared@example.com")],
+            [Some("+1555010"), Some("+1555011")],
+        ),
+        (
+            "phone-only-and-email",
+            [None, Some("second@example.com")],
+            [Some("+1555010"), Some("+1555010")],
+        ),
+    ] {
+        let mut call = snapshot("import-a", now);
+        call.source.external_id = ExternalCallId(key.into());
+        call.participants = (0..2)
+            .map(|i| CallParticipant {
+                id: macro_uuid::generate_uuid_v7(),
+                user_id: None,
+                display_name: Some(format!("Guest {i}")),
+                email: emails[i].map(str::to_owned),
+                phone: phones[i].map(str::to_owned),
+                external_id: None,
+                attendance: vec![],
+            })
+            .collect();
+        let expected = call.participants.clone();
+        let id = service.ingest(call).await.unwrap();
+
+        for reverse in [true, false] {
+            let mut call = snapshot("import-a", now);
+            call.source.external_id = ExternalCallId(key.into());
+            call.participants = expected.clone();
+            if reverse {
+                call.participants.reverse();
+            }
+            for participant in &mut call.participants {
+                participant.id = macro_uuid::generate_uuid_v7();
+            }
+            service.ingest(call).await.unwrap();
+            let actual = service.read(&user("import-a"), id).await.unwrap().unwrap();
+            for participant in &expected {
+                let stored = actual
+                    .participants
+                    .iter()
+                    .find(|p| p.display_name == participant.display_name)
+                    .unwrap();
+                assert_eq!(stored.id, participant.id, "{key}, reverse={reverse}");
+            }
+        }
+    }
+}
