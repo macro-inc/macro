@@ -6,7 +6,7 @@
  */
 
 /**
- * How often the team subscription bills.
+ * How often a recurring price bills.
  */
 export type BillingInterval =
   (typeof BillingInterval)[keyof typeof BillingInterval];

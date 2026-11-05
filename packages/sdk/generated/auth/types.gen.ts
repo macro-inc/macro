@@ -24,6 +24,52 @@ export type AgentApiKey = {
 export type AgentApiKeyProvider = 'anthropic' | 'openai';
 
 /**
+ * A secret with its value, for the agent that owns it.
+ */
+export type AgentSecret = {
+    /**
+     * The secret's name.
+     */
+    name: string;
+    /**
+     * When it was last replaced.
+     */
+    updatedAt: string;
+    /**
+     * The plaintext value.
+     */
+    value: string;
+};
+
+/**
+ * An agent's secrets, by name.
+ */
+export type AgentSecretSummaries = {
+    /**
+     * The secrets, by name.
+     */
+    secrets: Array<AgentSecretSummary>;
+};
+
+/**
+ * A secret's name and timestamps, without its value.
+ */
+export type AgentSecretSummary = {
+    /**
+     * When it was first stored.
+     */
+    createdAt: string;
+    /**
+     * The secret's name.
+     */
+    name: string;
+    /**
+     * When it was last replaced.
+     */
+    updatedAt: string;
+};
+
+/**
  * What an agent needs to start using the SDK.
  */
 export type AgentSetupResponse = {
@@ -116,7 +162,7 @@ export type AutoReloadSnapshot = {
 };
 
 /**
- * How often the team subscription bills.
+ * How often a recurring price bills.
  */
 export type BillingInterval = 'month' | 'year';
 
@@ -282,7 +328,7 @@ export type CodexLoginStart = {
 export type CodexLoginState = 'pending' | 'connected' | 'expired' | 'failed';
 
 /**
- * A size a team can buy.
+ * The size of a Macro computer, from the computers catalog.
  */
 export type ComputerSize = 'standard' | 'large' | 'xl';
 
@@ -393,6 +439,32 @@ export type CreateProfilePictureUploadRequest = {
      * File name, such as `avatar.png`.
      */
     file_name: string;
+};
+
+/**
+ * Input for inviting a team agent and buying its computer.
+ */
+export type CreateTeamAgent = {
+    /**
+     * Profile picture URL (a static file the caller uploaded).
+     */
+    avatarUrl?: string | null;
+    /**
+     * What the agent is responsible for. Seeds the persona repo.
+     */
+    jobDescription: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * How the agent behaves and talks. Seeds the persona repo.
+     */
+    personality: string;
+    /**
+     * The computer to buy.
+     */
+    size: ComputerSize;
 };
 
 /**
@@ -594,6 +666,54 @@ export type EmailConnectionProviders = {
      * `original_url` for the administrator's browser to return to.
      */
     outlook_admin_consent_url?: string | null;
+};
+
+/**
+ * One email in an agent's mailbox.
+ */
+export type EmailMessage = {
+    /**
+     * Sender.
+     */
+    from: string;
+    /**
+     * Provider message id.
+     */
+    messageId: string;
+    /**
+     * Short preview of the body.
+     */
+    preview?: string | null;
+    /**
+     * When the provider received or sent it.
+     */
+    receivedAt: string;
+    /**
+     * Subject line.
+     */
+    subject?: string | null;
+    /**
+     * Plain-text body, when fetched individually.
+     */
+    text?: string | null;
+    /**
+     * Provider thread id.
+     */
+    threadId: string;
+    /**
+     * Recipients.
+     */
+    to: Array<string>;
+};
+
+/**
+ * A page of an agent's emails, newest first.
+ */
+export type EmailMessages = {
+    /**
+     * The emails.
+     */
+    messages: Array<EmailMessage>;
 };
 
 /**
@@ -1736,6 +1856,16 @@ export type PutAgentApiKeyRequest = {
 };
 
 /**
+ * Body of `PUT /team_agents/me/secrets/{name}`.
+ */
+export type PutAgentSecret = {
+    /**
+     * The secret's value, 1 to 4096 bytes.
+     */
+    value: string;
+};
+
+/**
  * The key the user pasted.
  */
 export type PutCursorApiKeyRequest = {
@@ -1861,6 +1991,28 @@ export type SendDomainNoticeResponse = {
 };
 
 /**
+ * An email for an agent to send.
+ */
+export type SendEmail = {
+    /**
+     * Optional HTML body.
+     */
+    html?: string | null;
+    /**
+     * Subject line.
+     */
+    subject: string;
+    /**
+     * Plain-text body.
+     */
+    text: string;
+    /**
+     * Recipients.
+     */
+    to: Array<string>;
+};
+
+/**
  * The body which is used to describe the recipient email
  */
 export type SendInviteBody = {
@@ -1882,6 +2034,16 @@ export type SendMobileWelcomeEmailResponse = {
      * Whether the lead was enrolled (false if they were already enrolled previously)
      */
     sent: boolean;
+};
+
+/**
+ * The provider's id for a sent email.
+ */
+export type SentEmail = {
+    /**
+     * Provider message id.
+     */
+    messageId: string;
 };
 
 /**
@@ -1952,19 +2114,26 @@ export type SetGithubPullRequestStateResponse = {
 };
 
 /**
- * Setup progress, for invite and purchase flows to show.
+ * Setup progress, for the invite flow to show
+ * (`hosted_runtimes::SetupProgress`).
  */
 export type SetupProgress = {
     /**
      * 1-based position of `step`.
      */
     position: number;
+    /**
+     * The current step.
+     */
     step: SetupStep;
+    /**
+     * Number of steps.
+     */
     total: number;
 };
 
 /**
- * Steps a new computer goes through, in order.
+ * Steps a new computer goes through, in order (`hosted_runtimes::SetupStep`).
  */
 export type SetupStep = 'paying' | 'creating' | 'booting' | 'connecting' | 'ready';
 
@@ -2101,6 +2270,102 @@ export type Team = {
     name: string;
     owner_id: string;
     slug: string;
+};
+
+/**
+ * A team agent: an AI teammate with its own Macro account and computer.
+ */
+export type TeamAgent = {
+    /**
+     * The agent's Macro computer, once bought.
+     */
+    computerId?: string | null;
+    /**
+     * When the agent was created.
+     */
+    createdAt: string;
+    /**
+     * Admin who created the agent.
+     */
+    createdBy?: string | null;
+    /**
+     * The agent's email address.
+     */
+    email: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    setup?: null | SetupProgress;
+    /**
+     * Where the computer is in coming up.
+     */
+    status: TeamAgentStatus;
+    /**
+     * Why the status is `failed`.
+     */
+    statusReason?: string | null;
+    /**
+     * Team the agent belongs to.
+     */
+    teamId: string;
+    /**
+     * The agent's Macro user id (`macro|<email>`).
+     */
+    userId: string;
+};
+
+/**
+ * What inviting an agent adds to the team's bill, in cents per interval.
+ */
+export type TeamAgentQuote = {
+    /**
+     * The agent's computer.
+     */
+    computer: number;
+    /**
+     * ISO currency code, lowercase (`usd`).
+     */
+    currency: string;
+    /**
+     * Disk capacity in GB, from the computer size catalog.
+     */
+    diskGb: number;
+    /**
+     * How often both bill.
+     */
+    interval: BillingInterval;
+    /**
+     * RAM in GB, from the computer size catalog.
+     */
+    memoryGb: number;
+    /**
+     * The agent's seat; 0 when the team does not bill seats.
+     */
+    seat: number;
+    /**
+     * `seat + computer`.
+     */
+    total: number;
+    /**
+     * Virtual CPUs in the quoted computer size.
+     */
+    vcpus: number;
+};
+
+/**
+ * Where an agent's computer is in coming up.
+ */
+export type TeamAgentStatus = 'provisioning' | 'running' | 'failed';
+
+/**
+ * A team's agents.
+ */
+export type TeamAgents = {
+    /**
+     * The agents, oldest first.
+     */
+    agents: Array<TeamAgent>;
 };
 
 /**
@@ -4862,6 +5127,378 @@ export type GetUserInvitesResponses = {
 };
 
 export type GetUserInvitesResponse = GetUserInvitesResponses[keyof GetUserInvitesResponses];
+
+export type ListTeamAgentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team_agents';
+};
+
+export type ListTeamAgentsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListTeamAgentsError = ListTeamAgentsErrors[keyof ListTeamAgentsErrors];
+
+export type ListTeamAgentsResponses = {
+    200: TeamAgents;
+};
+
+export type ListTeamAgentsResponse = ListTeamAgentsResponses[keyof ListTeamAgentsResponses];
+
+export type CreateTeamAgentData = {
+    body: CreateTeamAgent;
+    path?: never;
+    query?: never;
+    url: '/team_agents';
+};
+
+export type CreateTeamAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type CreateTeamAgentError = CreateTeamAgentErrors[keyof CreateTeamAgentErrors];
+
+export type CreateTeamAgentResponses = {
+    201: TeamAgent;
+};
+
+export type CreateTeamAgentResponse = CreateTeamAgentResponses[keyof CreateTeamAgentResponses];
+
+export type GetMyTeamAgentData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team_agents/me';
+};
+
+export type GetMyTeamAgentErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetMyTeamAgentError = GetMyTeamAgentErrors[keyof GetMyTeamAgentErrors];
+
+export type GetMyTeamAgentResponses = {
+    200: TeamAgent;
+};
+
+export type GetMyTeamAgentResponse = GetMyTeamAgentResponses[keyof GetMyTeamAgentResponses];
+
+export type ListMyTeamAgentEmailData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Most emails to return, 1 to 100. Defaults to 20.
+         */
+        limit?: number;
+    };
+    url: '/team_agents/me/email/messages';
+};
+
+export type ListMyTeamAgentEmailErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    502: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type ListMyTeamAgentEmailError = ListMyTeamAgentEmailErrors[keyof ListMyTeamAgentEmailErrors];
+
+export type ListMyTeamAgentEmailResponses = {
+    200: EmailMessages;
+};
+
+export type ListMyTeamAgentEmailResponse = ListMyTeamAgentEmailResponses[keyof ListMyTeamAgentEmailResponses];
+
+export type GetMyTeamAgentEmailData = {
+    body?: never;
+    path: {
+        /**
+         * Provider message id.
+         */
+        message_id: string;
+    };
+    query?: never;
+    url: '/team_agents/me/email/messages/{message_id}';
+};
+
+export type GetMyTeamAgentEmailErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    502: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type GetMyTeamAgentEmailError = GetMyTeamAgentEmailErrors[keyof GetMyTeamAgentEmailErrors];
+
+export type GetMyTeamAgentEmailResponses = {
+    200: EmailMessage;
+};
+
+export type GetMyTeamAgentEmailResponse = GetMyTeamAgentEmailResponses[keyof GetMyTeamAgentEmailResponses];
+
+export type SendTeamAgentEmailData = {
+    body: SendEmail;
+    path?: never;
+    query?: never;
+    url: '/team_agents/me/email/send';
+};
+
+export type SendTeamAgentEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    502: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type SendTeamAgentEmailError = SendTeamAgentEmailErrors[keyof SendTeamAgentEmailErrors];
+
+export type SendTeamAgentEmailResponses = {
+    200: SentEmail;
+};
+
+export type SendTeamAgentEmailResponse = SendTeamAgentEmailResponses[keyof SendTeamAgentEmailResponses];
+
+export type DeleteMyTeamAgentSecretData = {
+    body?: never;
+    path: {
+        /**
+         * The secret's name.
+         */
+        name: string;
+    };
+    query?: never;
+    url: '/team_agents/me/secrets/{name}';
+};
+
+export type DeleteMyTeamAgentSecretErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteMyTeamAgentSecretError = DeleteMyTeamAgentSecretErrors[keyof DeleteMyTeamAgentSecretErrors];
+
+export type DeleteMyTeamAgentSecretResponses = {
+    204: void;
+};
+
+export type DeleteMyTeamAgentSecretResponse = DeleteMyTeamAgentSecretResponses[keyof DeleteMyTeamAgentSecretResponses];
+
+export type GetMyTeamAgentSecretData = {
+    body?: never;
+    path: {
+        /**
+         * The secret's name.
+         */
+        name: string;
+    };
+    query?: never;
+    url: '/team_agents/me/secrets/{name}';
+};
+
+export type GetMyTeamAgentSecretErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetMyTeamAgentSecretError = GetMyTeamAgentSecretErrors[keyof GetMyTeamAgentSecretErrors];
+
+export type GetMyTeamAgentSecretResponses = {
+    200: AgentSecret;
+};
+
+export type GetMyTeamAgentSecretResponse = GetMyTeamAgentSecretResponses[keyof GetMyTeamAgentSecretResponses];
+
+export type PutMyTeamAgentSecretData = {
+    body: PutAgentSecret;
+    path: {
+        /**
+         * The secret's name.
+         */
+        name: string;
+    };
+    query?: never;
+    url: '/team_agents/me/secrets/{name}';
+};
+
+export type PutMyTeamAgentSecretErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutMyTeamAgentSecretError = PutMyTeamAgentSecretErrors[keyof PutMyTeamAgentSecretErrors];
+
+export type PutMyTeamAgentSecretResponses = {
+    200: AgentSecretSummary;
+};
+
+export type PutMyTeamAgentSecretResponse = PutMyTeamAgentSecretResponses[keyof PutMyTeamAgentSecretResponses];
+
+export type QuoteTeamAgentData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The computer size to price.
+         */
+        size: ComputerSize;
+    };
+    url: '/team_agents/quote';
+};
+
+export type QuoteTeamAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type QuoteTeamAgentError = QuoteTeamAgentErrors[keyof QuoteTeamAgentErrors];
+
+export type QuoteTeamAgentResponses = {
+    200: TeamAgentQuote;
+};
+
+export type QuoteTeamAgentResponse = QuoteTeamAgentResponses[keyof QuoteTeamAgentResponses];
+
+export type DeleteTeamAgentData = {
+    body?: never;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}';
+};
+
+export type DeleteTeamAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type DeleteTeamAgentError = DeleteTeamAgentErrors[keyof DeleteTeamAgentErrors];
+
+export type DeleteTeamAgentResponses = {
+    204: void;
+};
+
+export type DeleteTeamAgentResponse = DeleteTeamAgentResponses[keyof DeleteTeamAgentResponses];
+
+export type RetryTeamAgentData = {
+    body?: never;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/retry';
+};
+
+export type RetryTeamAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type RetryTeamAgentError = RetryTeamAgentErrors[keyof RetryTeamAgentErrors];
+
+export type RetryTeamAgentResponses = {
+    200: TeamAgent;
+};
+
+export type RetryTeamAgentResponse = RetryTeamAgentResponses[keyof RetryTeamAgentResponses];
+
+export type ListTeamAgentSecretsData = {
+    body?: never;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/secrets';
+};
+
+export type ListTeamAgentSecretsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListTeamAgentSecretsError = ListTeamAgentSecretsErrors[keyof ListTeamAgentSecretsErrors];
+
+export type ListTeamAgentSecretsResponses = {
+    200: AgentSecretSummaries;
+};
+
+export type ListTeamAgentSecretsResponse = ListTeamAgentSecretsResponses[keyof ListTeamAgentSecretsResponses];
+
+export type DeleteTeamAgentSecretData = {
+    body?: never;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+        /**
+         * The secret's name.
+         */
+        name: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/secrets/{name}';
+};
+
+export type DeleteTeamAgentSecretErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteTeamAgentSecretError = DeleteTeamAgentSecretErrors[keyof DeleteTeamAgentSecretErrors];
+
+export type DeleteTeamAgentSecretResponses = {
+    204: void;
+};
+
+export type DeleteTeamAgentSecretResponse = DeleteTeamAgentSecretResponses[keyof DeleteTeamAgentSecretResponses];
 
 export type AgentSetupData = {
     body?: never;

@@ -6,7 +6,7 @@
  */
 
 /**
- * Steps a new computer goes through, in order.
+ * Steps a new computer goes through, in order (`hosted_runtimes::SetupStep`).
  */
 export type SetupStep = (typeof SetupStep)[keyof typeof SetupStep];
 

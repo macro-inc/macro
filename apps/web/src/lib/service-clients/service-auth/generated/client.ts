@@ -6,6 +6,9 @@
  */
 import type {
   AgentApiKey,
+  AgentSecret,
+  AgentSecretSummaries,
+  AgentSecretSummary,
   AgentSetupResponse,
   AiBillingErrorBody,
   AppleLoginRequest,
@@ -25,6 +28,7 @@ import type {
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
   CreateProfilePictureUploadRequest,
+  CreateTeamAgent,
   CreateTeamRequest,
   CreditCheckoutRequestBody,
   CreditCheckoutResponse,
@@ -35,6 +39,8 @@ import type {
   CursorModelsResponse,
   EmailConnectionProviders,
   EmailConnectionProvidersParams,
+  EmailMessage,
+  EmailMessages,
   EmptyResponse,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
@@ -67,6 +73,7 @@ import type {
   InviteToTeamRequest,
   JoinTeamByInviteLinkResponse,
   ListGtmInviteLinksParams,
+  ListMyTeamAgentEmailParams,
   MacroApiTokenParams,
   MacroApiTokenResponse,
   MergeGithubPullRequestRequest,
@@ -93,20 +100,24 @@ import type {
   PurchaseBody,
   Purchased,
   PutAgentApiKeyRequest,
+  PutAgentSecret,
   PutCursorApiKeyRequest,
   PutCursorDefaultModelRequest,
   PutProfilePictureFileRequest,
   PutProfilePictureParams,
   PutUserNameParams,
   Quote,
+  QuoteTeamAgentParams,
   QuoteTeamComputerParams,
   RedeemGtmInviteLinkRequest,
   ReleaseBody,
   ResendFusionauthVerifyUserEmailRequest,
   SendDomainNoticeResponse,
+  SendEmail,
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
   SendMobileWelcomeEmailResponse,
+  SentEmail,
   SetGithubPullRequestDraftRequest,
   SetGithubPullRequestDraftResponse,
   SetGithubPullRequestStateRequest,
@@ -120,6 +131,9 @@ import type {
   SystemStatus,
   SystemStatusHistory,
   Team,
+  TeamAgent,
+  TeamAgentQuote,
+  TeamAgents,
   TeamInviteLinkResponse,
   TeamInviteLinkTeam,
   TeamInviteLinkTokenRequest,
@@ -6634,6 +6648,1066 @@ export const getUserInvites = async (
     status: res.status,
     headers: res.headers,
   } as getUserInvitesResponse;
+};
+
+/**
+ * @summary The caller's team's agents, with fresh computer status. Requires a team
+admin or owner.
+ */
+export type listTeamAgentsResponse200 = {
+  data: TeamAgents;
+  status: 200;
+};
+
+export type listTeamAgentsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listTeamAgentsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listTeamAgentsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listTeamAgentsResponseSuccess = listTeamAgentsResponse200 & {
+  headers: Headers;
+};
+export type listTeamAgentsResponseError = (
+  | listTeamAgentsResponse401
+  | listTeamAgentsResponse403
+  | listTeamAgentsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listTeamAgentsResponse =
+  | listTeamAgentsResponseSuccess
+  | listTeamAgentsResponseError;
+
+export const getListTeamAgentsUrl = () => {
+  return `/team_agents`;
+};
+
+export const listTeamAgents = async (
+  options?: RequestInit
+): Promise<listTeamAgentsResponse> => {
+  const res = await fetch(getListTeamAgentsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamAgentsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamAgentsResponse;
+};
+
+/**
+ * @summary Invite a team agent and buy its computer, in one Stripe update. Requires a
+team admin or owner. The agent comes back `provisioning`.
+ */
+export type createTeamAgentResponse201 = {
+  data: TeamAgent;
+  status: 201;
+};
+
+export type createTeamAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type createTeamAgentResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type createTeamAgentResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type createTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createTeamAgentResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type createTeamAgentResponseSuccess = createTeamAgentResponse201 & {
+  headers: Headers;
+};
+export type createTeamAgentResponseError = (
+  | createTeamAgentResponse400
+  | createTeamAgentResponse401
+  | createTeamAgentResponse403
+  | createTeamAgentResponse409
+  | createTeamAgentResponse500
+  | createTeamAgentResponse502
+) & {
+  headers: Headers;
+};
+
+export type createTeamAgentResponse =
+  | createTeamAgentResponseSuccess
+  | createTeamAgentResponseError;
+
+export const getCreateTeamAgentUrl = () => {
+  return `/team_agents`;
+};
+
+export const createTeamAgent = async (
+  createTeamAgent: CreateTeamAgent,
+  options?: RequestInit
+): Promise<createTeamAgentResponse> => {
+  const res = await fetch(getCreateTeamAgentUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createTeamAgent),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createTeamAgentResponse;
+};
+
+/**
+ * @summary The calling team agent's own profile.
+ */
+export type getMyTeamAgentResponse200 = {
+  data: TeamAgent;
+  status: 200;
+};
+
+export type getMyTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getMyTeamAgentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getMyTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getMyTeamAgentResponseSuccess = getMyTeamAgentResponse200 & {
+  headers: Headers;
+};
+export type getMyTeamAgentResponseError = (
+  | getMyTeamAgentResponse401
+  | getMyTeamAgentResponse404
+  | getMyTeamAgentResponse500
+) & {
+  headers: Headers;
+};
+
+export type getMyTeamAgentResponse =
+  | getMyTeamAgentResponseSuccess
+  | getMyTeamAgentResponseError;
+
+export const getGetMyTeamAgentUrl = () => {
+  return `/team_agents/me`;
+};
+
+export const getMyTeamAgent = async (
+  options?: RequestInit
+): Promise<getMyTeamAgentResponse> => {
+  const res = await fetch(getGetMyTeamAgentUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMyTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMyTeamAgentResponse;
+};
+
+/**
+ * @summary The calling team agent's newest emails.
+ */
+export type listMyTeamAgentEmailResponse200 = {
+  data: EmailMessages;
+  status: 200;
+};
+
+export type listMyTeamAgentEmailResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listMyTeamAgentEmailResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type listMyTeamAgentEmailResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type listMyTeamAgentEmailResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type listMyTeamAgentEmailResponseSuccess =
+  listMyTeamAgentEmailResponse200 & {
+    headers: Headers;
+  };
+export type listMyTeamAgentEmailResponseError = (
+  | listMyTeamAgentEmailResponse401
+  | listMyTeamAgentEmailResponse404
+  | listMyTeamAgentEmailResponse502
+  | listMyTeamAgentEmailResponse503
+) & {
+  headers: Headers;
+};
+
+export type listMyTeamAgentEmailResponse =
+  | listMyTeamAgentEmailResponseSuccess
+  | listMyTeamAgentEmailResponseError;
+
+export const getListMyTeamAgentEmailUrl = (
+  params?: ListMyTeamAgentEmailParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/team_agents/me/email/messages?${stringifiedParams}`
+    : `/team_agents/me/email/messages`;
+};
+
+export const listMyTeamAgentEmail = async (
+  params?: ListMyTeamAgentEmailParams,
+  options?: RequestInit
+): Promise<listMyTeamAgentEmailResponse> => {
+  const res = await fetch(getListMyTeamAgentEmailUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listMyTeamAgentEmailResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listMyTeamAgentEmailResponse;
+};
+
+/**
+ * @summary One of the calling team agent's emails, with its body.
+ */
+export type getMyTeamAgentEmailResponse200 = {
+  data: EmailMessage;
+  status: 200;
+};
+
+export type getMyTeamAgentEmailResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getMyTeamAgentEmailResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getMyTeamAgentEmailResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type getMyTeamAgentEmailResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type getMyTeamAgentEmailResponseSuccess =
+  getMyTeamAgentEmailResponse200 & {
+    headers: Headers;
+  };
+export type getMyTeamAgentEmailResponseError = (
+  | getMyTeamAgentEmailResponse401
+  | getMyTeamAgentEmailResponse404
+  | getMyTeamAgentEmailResponse502
+  | getMyTeamAgentEmailResponse503
+) & {
+  headers: Headers;
+};
+
+export type getMyTeamAgentEmailResponse =
+  | getMyTeamAgentEmailResponseSuccess
+  | getMyTeamAgentEmailResponseError;
+
+export const getGetMyTeamAgentEmailUrl = (messageId: string) => {
+  return `/team_agents/me/email/messages/${messageId}`;
+};
+
+export const getMyTeamAgentEmail = async (
+  messageId: string,
+  options?: RequestInit
+): Promise<getMyTeamAgentEmailResponse> => {
+  const res = await fetch(getGetMyTeamAgentEmailUrl(messageId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMyTeamAgentEmailResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMyTeamAgentEmailResponse;
+};
+
+/**
+ * @summary Send an email as the calling team agent.
+ */
+export type sendTeamAgentEmailResponse200 = {
+  data: SentEmail;
+  status: 200;
+};
+
+export type sendTeamAgentEmailResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type sendTeamAgentEmailResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type sendTeamAgentEmailResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type sendTeamAgentEmailResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type sendTeamAgentEmailResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type sendTeamAgentEmailResponseSuccess =
+  sendTeamAgentEmailResponse200 & {
+    headers: Headers;
+  };
+export type sendTeamAgentEmailResponseError = (
+  | sendTeamAgentEmailResponse400
+  | sendTeamAgentEmailResponse401
+  | sendTeamAgentEmailResponse404
+  | sendTeamAgentEmailResponse502
+  | sendTeamAgentEmailResponse503
+) & {
+  headers: Headers;
+};
+
+export type sendTeamAgentEmailResponse =
+  | sendTeamAgentEmailResponseSuccess
+  | sendTeamAgentEmailResponseError;
+
+export const getSendTeamAgentEmailUrl = () => {
+  return `/team_agents/me/email/send`;
+};
+
+export const sendTeamAgentEmail = async (
+  sendEmail: SendEmail,
+  options?: RequestInit
+): Promise<sendTeamAgentEmailResponse> => {
+  const res = await fetch(getSendTeamAgentEmailUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sendEmail),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: sendTeamAgentEmailResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendTeamAgentEmailResponse;
+};
+
+/**
+ * @summary One of the calling team agent's secrets, decrypted.
+ */
+export type getMyTeamAgentSecretResponse200 = {
+  data: AgentSecret;
+  status: 200;
+};
+
+export type getMyTeamAgentSecretResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getMyTeamAgentSecretResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getMyTeamAgentSecretResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getMyTeamAgentSecretResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getMyTeamAgentSecretResponseSuccess =
+  getMyTeamAgentSecretResponse200 & {
+    headers: Headers;
+  };
+export type getMyTeamAgentSecretResponseError = (
+  | getMyTeamAgentSecretResponse400
+  | getMyTeamAgentSecretResponse401
+  | getMyTeamAgentSecretResponse404
+  | getMyTeamAgentSecretResponse500
+) & {
+  headers: Headers;
+};
+
+export type getMyTeamAgentSecretResponse =
+  | getMyTeamAgentSecretResponseSuccess
+  | getMyTeamAgentSecretResponseError;
+
+export const getGetMyTeamAgentSecretUrl = (name: string) => {
+  return `/team_agents/me/secrets/${name}`;
+};
+
+export const getMyTeamAgentSecret = async (
+  name: string,
+  options?: RequestInit
+): Promise<getMyTeamAgentSecretResponse> => {
+  const res = await fetch(getGetMyTeamAgentSecretUrl(name), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMyTeamAgentSecretResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMyTeamAgentSecretResponse;
+};
+
+/**
+ * @summary Store a secret for the calling team agent, replacing one with that name.
+ */
+export type putMyTeamAgentSecretResponse200 = {
+  data: AgentSecretSummary;
+  status: 200;
+};
+
+export type putMyTeamAgentSecretResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type putMyTeamAgentSecretResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type putMyTeamAgentSecretResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type putMyTeamAgentSecretResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type putMyTeamAgentSecretResponseSuccess =
+  putMyTeamAgentSecretResponse200 & {
+    headers: Headers;
+  };
+export type putMyTeamAgentSecretResponseError = (
+  | putMyTeamAgentSecretResponse400
+  | putMyTeamAgentSecretResponse401
+  | putMyTeamAgentSecretResponse404
+  | putMyTeamAgentSecretResponse500
+) & {
+  headers: Headers;
+};
+
+export type putMyTeamAgentSecretResponse =
+  | putMyTeamAgentSecretResponseSuccess
+  | putMyTeamAgentSecretResponseError;
+
+export const getPutMyTeamAgentSecretUrl = (name: string) => {
+  return `/team_agents/me/secrets/${name}`;
+};
+
+export const putMyTeamAgentSecret = async (
+  name: string,
+  putAgentSecret: PutAgentSecret,
+  options?: RequestInit
+): Promise<putMyTeamAgentSecretResponse> => {
+  const res = await fetch(getPutMyTeamAgentSecretUrl(name), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(putAgentSecret),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putMyTeamAgentSecretResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putMyTeamAgentSecretResponse;
+};
+
+/**
+ * @summary Delete one of the calling team agent's secrets.
+ */
+export type deleteMyTeamAgentSecretResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteMyTeamAgentSecretResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type deleteMyTeamAgentSecretResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteMyTeamAgentSecretResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteMyTeamAgentSecretResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteMyTeamAgentSecretResponseSuccess =
+  deleteMyTeamAgentSecretResponse204 & {
+    headers: Headers;
+  };
+export type deleteMyTeamAgentSecretResponseError = (
+  | deleteMyTeamAgentSecretResponse400
+  | deleteMyTeamAgentSecretResponse401
+  | deleteMyTeamAgentSecretResponse404
+  | deleteMyTeamAgentSecretResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteMyTeamAgentSecretResponse =
+  | deleteMyTeamAgentSecretResponseSuccess
+  | deleteMyTeamAgentSecretResponseError;
+
+export const getDeleteMyTeamAgentSecretUrl = (name: string) => {
+  return `/team_agents/me/secrets/${name}`;
+};
+
+export const deleteMyTeamAgentSecret = async (
+  name: string,
+  options?: RequestInit
+): Promise<deleteMyTeamAgentSecretResponse> => {
+  const res = await fetch(getDeleteMyTeamAgentSecretUrl(name), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteMyTeamAgentSecretResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteMyTeamAgentSecretResponse;
+};
+
+/**
+ * @summary What inviting an agent with a computer of `size` adds to the team's bill.
+Requires a team admin or owner.
+ */
+export type quoteTeamAgentResponse200 = {
+  data: TeamAgentQuote;
+  status: 200;
+};
+
+export type quoteTeamAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type quoteTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type quoteTeamAgentResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type quoteTeamAgentResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type quoteTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type quoteTeamAgentResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type quoteTeamAgentResponseSuccess = quoteTeamAgentResponse200 & {
+  headers: Headers;
+};
+export type quoteTeamAgentResponseError = (
+  | quoteTeamAgentResponse400
+  | quoteTeamAgentResponse401
+  | quoteTeamAgentResponse403
+  | quoteTeamAgentResponse409
+  | quoteTeamAgentResponse500
+  | quoteTeamAgentResponse502
+) & {
+  headers: Headers;
+};
+
+export type quoteTeamAgentResponse =
+  | quoteTeamAgentResponseSuccess
+  | quoteTeamAgentResponseError;
+
+export const getQuoteTeamAgentUrl = (params: QuoteTeamAgentParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/team_agents/quote?${stringifiedParams}`
+    : `/team_agents/quote`;
+};
+
+export const quoteTeamAgent = async (
+  params: QuoteTeamAgentParams,
+  options?: RequestInit
+): Promise<quoteTeamAgentResponse> => {
+  const res = await fetch(getQuoteTeamAgentUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: quoteTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as quoteTeamAgentResponse;
+};
+
+/**
+ * @summary Delete a team agent: release its computer, delete its repo, remove its
+seat, mailbox and account. Requires a team admin or owner. Safe to retry.
+ */
+export type deleteTeamAgentResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteTeamAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type deleteTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteTeamAgentResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type deleteTeamAgentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteTeamAgentResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type deleteTeamAgentResponseSuccess = deleteTeamAgentResponse204 & {
+  headers: Headers;
+};
+export type deleteTeamAgentResponseError = (
+  | deleteTeamAgentResponse400
+  | deleteTeamAgentResponse401
+  | deleteTeamAgentResponse403
+  | deleteTeamAgentResponse404
+  | deleteTeamAgentResponse500
+  | deleteTeamAgentResponse502
+) & {
+  headers: Headers;
+};
+
+export type deleteTeamAgentResponse =
+  | deleteTeamAgentResponseSuccess
+  | deleteTeamAgentResponseError;
+
+export const getDeleteTeamAgentUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}`;
+};
+
+export const deleteTeamAgent = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<deleteTeamAgentResponse> => {
+  const res = await fetch(getDeleteTeamAgentUrl(agentUserId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteTeamAgentResponse;
+};
+
+/**
+ * @summary Retry a failed agent's existing computer and recover its workspace repo.
+Requires a team admin or owner; preserves bootstrap credentials and billing.
+ */
+export type retryTeamAgentResponse200 = {
+  data: TeamAgent;
+  status: 200;
+};
+
+export type retryTeamAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type retryTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type retryTeamAgentResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type retryTeamAgentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type retryTeamAgentResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type retryTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type retryTeamAgentResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type retryTeamAgentResponseSuccess = retryTeamAgentResponse200 & {
+  headers: Headers;
+};
+export type retryTeamAgentResponseError = (
+  | retryTeamAgentResponse400
+  | retryTeamAgentResponse401
+  | retryTeamAgentResponse403
+  | retryTeamAgentResponse404
+  | retryTeamAgentResponse409
+  | retryTeamAgentResponse500
+  | retryTeamAgentResponse502
+) & {
+  headers: Headers;
+};
+
+export type retryTeamAgentResponse =
+  | retryTeamAgentResponseSuccess
+  | retryTeamAgentResponseError;
+
+export const getRetryTeamAgentUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/retry`;
+};
+
+export const retryTeamAgent = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<retryTeamAgentResponse> => {
+  const res = await fetch(getRetryTeamAgentUrl(agentUserId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retryTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retryTeamAgentResponse;
+};
+
+/**
+ * @summary A team admin lists an agent's secrets by name, without values.
+ */
+export type listTeamAgentSecretsResponse200 = {
+  data: AgentSecretSummaries;
+  status: 200;
+};
+
+export type listTeamAgentSecretsResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type listTeamAgentSecretsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listTeamAgentSecretsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listTeamAgentSecretsResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type listTeamAgentSecretsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listTeamAgentSecretsResponseSuccess =
+  listTeamAgentSecretsResponse200 & {
+    headers: Headers;
+  };
+export type listTeamAgentSecretsResponseError = (
+  | listTeamAgentSecretsResponse400
+  | listTeamAgentSecretsResponse401
+  | listTeamAgentSecretsResponse403
+  | listTeamAgentSecretsResponse404
+  | listTeamAgentSecretsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listTeamAgentSecretsResponse =
+  | listTeamAgentSecretsResponseSuccess
+  | listTeamAgentSecretsResponseError;
+
+export const getListTeamAgentSecretsUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/secrets`;
+};
+
+export const listTeamAgentSecrets = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<listTeamAgentSecretsResponse> => {
+  const res = await fetch(getListTeamAgentSecretsUrl(agentUserId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamAgentSecretsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamAgentSecretsResponse;
+};
+
+/**
+ * @summary A team admin deletes one of an agent's secrets.
+ */
+export type deleteTeamAgentSecretResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteTeamAgentSecretResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type deleteTeamAgentSecretResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteTeamAgentSecretResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type deleteTeamAgentSecretResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteTeamAgentSecretResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteTeamAgentSecretResponseSuccess =
+  deleteTeamAgentSecretResponse204 & {
+    headers: Headers;
+  };
+export type deleteTeamAgentSecretResponseError = (
+  | deleteTeamAgentSecretResponse400
+  | deleteTeamAgentSecretResponse401
+  | deleteTeamAgentSecretResponse403
+  | deleteTeamAgentSecretResponse404
+  | deleteTeamAgentSecretResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteTeamAgentSecretResponse =
+  | deleteTeamAgentSecretResponseSuccess
+  | deleteTeamAgentSecretResponseError;
+
+export const getDeleteTeamAgentSecretUrl = (
+  agentUserId: string,
+  name: string
+) => {
+  return `/team_agents/${agentUserId}/secrets/${name}`;
+};
+
+export const deleteTeamAgentSecret = async (
+  agentUserId: string,
+  name: string,
+  options?: RequestInit
+): Promise<deleteTeamAgentSecretResponse> => {
+  const res = await fetch(getDeleteTeamAgentSecretUrl(agentUserId, name), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteTeamAgentSecretResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteTeamAgentSecretResponse;
 };
 
 /**

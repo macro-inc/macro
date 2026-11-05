@@ -160,6 +160,7 @@ export const authExcluded = [
   'removeUserFromTeam',
   'resendFusionauthVerifyUserEmail',
   'resolveGtmInviteLink',
+  'retryTeamAgent', // Agent provisioning recovery belongs to app settings.
   'retryTeamComputer', // Computer provisioning recovery belongs to the app.
   'revokeGtmInviteLink',
   'sendMobileWelcomeEmail',
