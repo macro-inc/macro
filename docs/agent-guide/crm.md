@@ -10,6 +10,7 @@ only when pipelines are enabled; disabled until the team's CRM is enabled). The
 There are no built-in company views or Board/List layout. Companies and People
 are plain soup lists with the shared pagination. Existing personal/team saved
 views stay in the toolbar's Views menu.
+The Companies list starts with the Customers `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows.
 
 Opening a company or contact row in Companies or People clears its blue unread
 dot, including desktop preview activation, keyboard opening, and phone navigation.

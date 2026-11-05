@@ -1,4 +1,5 @@
 import { ViewShell, ViewSidebar } from '@app/components/view-shell';
+import { TutorialRow } from '@app/features/video-tutorials';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
 import { externalChatRoute, externalRoute } from '@app/routes/routes';
 import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
@@ -110,6 +111,8 @@ export function ExternalView() {
         <h1 class="hidden px-4 pt-2 text-lg font-semibold text-ink touch:block">
           WhatsApp
         </h1>
+        {/* Above the chats, so people who haven't linked WhatsApp see it too. */}
+        <TutorialRow tutorial="whatsapp" />
         {/* Touch has no sidebar: the chats in Macro lead the page. */}
         <Show when={isTouchDevice()}>
           <section aria-labelledby="external-chats" class="px-2">
