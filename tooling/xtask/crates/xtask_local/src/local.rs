@@ -931,7 +931,10 @@ fn prepare(
 /// port meanwhile, and finding out at `docker compose up` would waste the build.
 /// If so, regenerate on another window; the second build has nothing to compile.
 /// `pinned_base` is a window that mustn't move, which fails here instead.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "prepare's knobs, passed straight through, plus the pinned window"
+)]
 fn prepare_on_free_window(
     stage: &Stage,
     mode: Mode,

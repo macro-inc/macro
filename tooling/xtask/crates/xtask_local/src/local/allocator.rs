@@ -272,6 +272,11 @@ impl Machine {
             .collect()
     }
 
+    /// One instance's window, as its containers bind it.
+    fn window_of(&self, name: &str) -> Option<u16> {
+        containers_window(self.containers_by_instance().get(name)?)
+    }
+
     /// Whether Docker holds anything of this instance.
     fn has_instance(&self, name: &str) -> bool {
         let project = format!("macro-{name}");
@@ -499,7 +504,7 @@ pub fn resolve(instance: Instance, flagged_base: bool) -> Instance {
 
     let from_containers = Machine::read()
         .ok()
-        .and_then(|machine| machine.windows().remove(instance.name()));
+        .and_then(|machine| machine.window_of(instance.name()));
     let port_base = from_containers
         .or(recorded.map(|allocation| allocation.port_base))
         .unwrap_or(instance.port_base());
