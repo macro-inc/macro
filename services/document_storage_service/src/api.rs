@@ -51,7 +51,15 @@ pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
 pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let sync_sessions = state.sync_sessions.clone();
+    let correlation = agent_correlation::inbound::CorrelationState::new(
+        state.db.clone(),
+        state.jwt_validation_args.clone(),
+    );
     let app = api_router(state.clone())
+        .layer(axum::middleware::from_fn_with_state(
+            correlation,
+            agent_correlation::inbound::propagate,
+        ))
         .layer(
             ServiceBuilder::new()
                 .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())

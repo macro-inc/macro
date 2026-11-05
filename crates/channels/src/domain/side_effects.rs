@@ -334,12 +334,12 @@ where
 {
     fn dispatch(&self, event: ChannelEvent) {
         let handler = self.handler.clone();
-        tokio::spawn(
+        tokio::spawn(agent_correlation::context::capture(
             async move {
                 handler.handle(event).await;
             }
             .instrument(tracing::info_span!("channel.side_effects")),
-        );
+        ));
     }
 }
 

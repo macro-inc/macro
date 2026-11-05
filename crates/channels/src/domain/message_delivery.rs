@@ -230,7 +230,7 @@ where
             .collect();
         if !pending.is_empty() {
             let pending_count = pending.len();
-            tokio::spawn(
+            tokio::spawn(agent_correlation::context::capture(
                 recheck_agent_creations(
                     self.creations.clone(),
                     self.permissions.clone(),
@@ -249,7 +249,7 @@ where
                     shared = tracing::field::Empty,
                     not_permitted = tracing::field::Empty,
                 )),
-            );
+            ));
         }
         if !created.is_empty() {
             let results = self
