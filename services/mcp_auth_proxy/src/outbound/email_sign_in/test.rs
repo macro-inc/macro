@@ -122,6 +122,32 @@ async fn redeeming_a_code_returns_tokens_and_their_remaining_lifetime() {
     );
 }
 
+/// The address is matched as the service filed it, however the user typed it.
+#[tokio::test]
+async fn redeeming_a_code_looks_the_address_up_in_lowercase() {
+    let exp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_secs()
+        + 3600;
+    let payload = URL_SAFE_NO_PAD.encode(serde_json::json!({ "exp": exp }).to_string());
+    let server = answer_redeem(
+        200,
+        serde_json::json!({
+            "access_token": format!("header.{payload}.signature"),
+            "refresh_token": "refresh",
+        }),
+    )
+    .await;
+
+    let redeemed = provider(&server)
+        .await
+        .redeem_code("User+Tag@Example.com", "123456")
+        .await;
+
+    assert!(redeemed.is_ok(), "{redeemed:?}");
+}
+
 #[tokio::test]
 async fn redeeming_a_wrong_code_is_reported_as_such() {
     let server = answer_redeem(401, serde_json::json!({})).await;
