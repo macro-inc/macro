@@ -75,7 +75,7 @@ async fn register<I: InflightAuthStore + 'static>(
         }
         Err(RegisterClientError::ReservedClientName) => (
             axum::http::StatusCode::BAD_REQUEST,
-            "client_name may not name Macro or its staff",
+            "client_name may not be Macro's own name",
         )
             .into_response(),
         Err(RegisterClientError::ClientRegistrationStore(error)) => {

@@ -730,7 +730,7 @@ pub enum RegisterClientError {
         /// The rejected URI, for logging.
         uri: String,
     },
-    /// The client named itself as Macro or its staff.
+    /// The client named itself as Macro.
     #[error("client_name is reserved")]
     ReservedClientName,
     /// The registration could not be persisted.

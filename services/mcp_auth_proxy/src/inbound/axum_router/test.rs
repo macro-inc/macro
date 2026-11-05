@@ -119,10 +119,7 @@ async fn registration_under_a_reserved_name_is_a_bad_request() {
     .await;
 
     assert_eq!(registration.status, StatusCode::BAD_REQUEST);
-    assert_eq!(
-        registration.body,
-        "client_name may not name Macro or its staff"
-    );
+    assert_eq!(registration.body, "client_name may not be Macro's own name");
 }
 
 /// The attack from the report, over HTTP: the attacker cannot register their

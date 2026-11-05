@@ -107,8 +107,10 @@ writes as "<client_name> · Agent". The name is self-reported at `/register`: a
 display label, never an identity or permission. `domain/client_name.rs` bounds
 it: only ASCII letters, digits, spaces and plain punctuation survive (no
 control, bidi, zero-width, lookalike or mention characters), at most 64 of them,
-and a name claiming to be Macro or its staff ("Macro", "Support", "Security
-Team") is refused with a 400. A name with nothing left registers as "MCP
+and a name that is Macro's own ("Macro", "Macro Agent", a first-party Macro
+bot's name or handle; compared ignoring case, spaces and punctuation) is
+refused with a 400. A name that only mentions Macro ("Claude Code (macro)") is
+fine. A name with nothing left registers as "MCP
 client". Reads apply the same rules, so a name stored before they existed is
 shown normalized, or unnamed if reserved. A token issued before its binding was
 recorded carries no name; the client's next refresh records one. Reading the

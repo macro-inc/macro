@@ -7,6 +7,11 @@
 #[cfg(test)]
 mod test;
 
+use bot_id::{
+    MACRO_AI_HANDLE, MACRO_AI_NAME, MACRO_CODER_NAME, MACRO_NEW_HANDLE, MACRO_SYSTEM_HANDLE,
+    MACRO_SYSTEM_NAME,
+};
+
 /// The longest name a client keeps.
 pub(crate) const MAX_CLIENT_NAME_CHARS: usize = 64;
 
@@ -14,25 +19,30 @@ pub(crate) const MAX_CLIENT_NAME_CHARS: usize = 64;
 /// Mention and markup characters (`<>@#[]` and friends) are left out.
 const ALLOWED_PUNCTUATION: &[char] = &['-', '_', '.', ',', ':', '(', ')', '&', '+', '\'', '/', '!'];
 
-/// Words a client may not use on their own, since posts under them would read
-/// as coming from Macro staff.
-const RESERVED_WORDS: &[&str] = &[
-    "admin",
-    "administrator",
-    "helpdesk",
-    "moderator",
-    "official",
-    "security",
-    "staff",
-    "support",
-    "system",
+/// Names that would read as Macro itself: its own personas and the
+/// first-party Macro bots. Matched as a whole name, ignoring case, spaces and
+/// punctuation, so a client may still mention Macro ("Claude Code (macro)").
+/// Cursor and Codex are first-party bots too, but are also the real names of
+/// MCP clients, so they are not reserved.
+const RESERVED_NAMES: &[&str] = &[
+    MACRO_AI_NAME,
+    MACRO_AI_HANDLE,
+    MACRO_NEW_HANDLE,
+    MACRO_CODER_NAME,
+    MACRO_SYSTEM_NAME,
+    MACRO_SYSTEM_HANDLE,
+    "Macro AI",
+    "Macro Agent",
+    "Macro Team",
+    "Macro Support",
+    "Macro Security",
 ];
 
 /// A client name fit to show as a post author.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClientName(String);
 
-/// The name claims to be Macro or its staff.
+/// The name claims to be Macro itself.
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 #[error("client_name is reserved")]
 pub struct ReservedClientName;
@@ -41,8 +51,8 @@ impl ClientName {
     /// Normalizes a self-reported name: keeps printable ASCII letters, digits,
     /// spaces and [`ALLOWED_PUNCTUATION`], so no control, bidi, zero-width or
     /// lookalike character survives; collapses whitespace; and cuts it to
-    /// [`MAX_CLIENT_NAME_CHARS`]. `None` when nothing is left. A name that
-    /// claims to be Macro or its staff is refused.
+    /// [`MAX_CLIENT_NAME_CHARS`]. `None` when nothing is left. A name in
+    /// [`RESERVED_NAMES`] is refused.
     pub fn parse(raw: &str) -> Result<Option<Self>, ReservedClientName> {
         let kept: String = raw
             .chars()
@@ -66,12 +76,18 @@ impl ClientName {
 }
 
 fn is_reserved(name: &str) -> bool {
-    let lower = name.to_ascii_lowercase();
-    let letters: String = lower.chars().filter(char::is_ascii_alphanumeric).collect();
-    letters.contains("macro")
-        || lower
-            .split(|c: char| !c.is_ascii_alphanumeric())
-            .any(|word| RESERVED_WORDS.contains(&word))
+    let key = reserved_name_key(name);
+    RESERVED_NAMES
+        .iter()
+        .any(|reserved| reserved_name_key(reserved) == key)
+}
+
+/// A name lowercased with everything but letters and digits removed.
+fn reserved_name_key(name: &str) -> String {
+    name.chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|c| c.to_ascii_lowercase())
+        .collect()
 }
 
 impl From<ClientName> for String {

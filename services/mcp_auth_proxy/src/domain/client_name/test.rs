@@ -68,19 +68,22 @@ fn a_name_with_nothing_left_is_no_name() {
 }
 
 #[test]
-fn names_claiming_to_be_macro_or_its_staff_are_reserved() {
+fn names_claiming_to_be_macro_itself_are_reserved() {
     for name in [
         "Macro",
-        "macro ai",
-        "MacroBot",
+        "macro",
+        "  MACRO  ",
+        "Macro Agent",
+        "macroagent",
+        "Macro AI",
+        "Macro Coder",
+        "Macro System",
+        "macro-system",
+        "macro-new",
+        "Macro Support",
         "M.A.C.R.O",
-        "Security Team",
-        "Support",
-        "IT admin",
-        "Official Assistant",
-        "System",
-        "Staff notice",
-        "Moderator",
+        "Ma\u{200b}cro",
+        "<Macro>",
     ] {
         assert!(
             matches!(ClientName::parse(name), Err(ReservedClientName)),
@@ -90,20 +93,29 @@ fn names_claiming_to_be_macro_or_its_staff_are_reserved() {
 }
 
 #[test]
-fn a_reserved_word_hidden_by_stripped_characters_is_still_reserved() {
-    assert!(ClientName::parse("Ma\u{200b}cro").is_err());
-    assert!(ClientName::parse("<Support>").is_err());
+fn a_name_that_only_mentions_macro_is_allowed() {
+    assert_eq!(
+        ClientName::parse("Claude Code (macro)"),
+        Ok(Some(ClientName("Claude Code (macro)".to_owned())))
+    );
+    assert_eq!(
+        ClientName::parse("MacroBot"),
+        Ok(Some(ClientName("MacroBot".to_owned())))
+    );
+    assert_eq!(
+        ClientName::parse("Security Team"),
+        Ok(Some(ClientName("Security Team".to_owned())))
+    );
 }
 
 #[test]
-fn a_reserved_word_inside_another_word_is_allowed() {
-    // Only "macro" is matched inside words; the staff words must stand alone.
+fn first_party_bot_names_that_are_real_clients_are_allowed() {
     assert_eq!(
-        ClientName::parse("Systematic Helper"),
-        Ok(Some(ClientName("Systematic Helper".to_owned())))
+        ClientName::parse("Cursor"),
+        Ok(Some(ClientName("Cursor".to_owned())))
     );
     assert_eq!(
-        ClientName::parse("Supportive Bot"),
-        Ok(Some(ClientName("Supportive Bot".to_owned())))
+        ClientName::parse("Codex"),
+        Ok(Some(ClientName("Codex".to_owned())))
     );
 }
