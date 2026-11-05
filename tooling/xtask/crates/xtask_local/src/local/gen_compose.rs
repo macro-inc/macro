@@ -22,6 +22,7 @@ use serde_yaml::Value;
 use serde_yaml::value::{Tag, TaggedValue};
 
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
+use super::computers::{self, Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::inventory::{RustService, services_for_mode};
 use super::{Mode, repo_root};
@@ -77,6 +78,7 @@ pub fn generate(
     binaries: &BinariesDir,
     static_frontend: bool,
     gmail_forwarder: bool,
+    computers: &Computers,
 ) -> Result<PathBuf> {
     super::tls::issue(instance)?;
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
@@ -96,6 +98,7 @@ pub fn generate(
         }
         services.insert(svc.compose_name.to_string(), Some(s));
     }
+    add_computers(&mut services, computers)?;
 
     // The reverse proxy is the frontend's single origin in every mode, and
     // LocalStack runs in every mode (dev's `dev_personal` notification queue
@@ -197,6 +200,70 @@ fn published_ports(mode: Mode, instance: &Instance, service: &RustService) -> Ve
         ports.push(format!("{}:2222", instance.port(Port::PreviewSsh)));
     }
     ports
+}
+
+/// Wire the harness's computer control plane to its fleet (see
+/// [`computers`]).
+fn add_computers(
+    services: &mut IndexMap<String, Option<dct::Service>>,
+    computers: &Computers,
+) -> Result<()> {
+    match computers.fleet() {
+        Fleet::Off => {}
+        Fleet::Docker => {
+            // Same path on both sides: the harness writes enrollments here and
+            // hands the daemon bind sources below it.
+            let dir = computers.enrollment_dir();
+            std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+            let harness = services
+                .get_mut(EGRESS_SERVICE)
+                .and_then(Option::as_mut)
+                .context("the computer control plane runs in agent_harness_service")?;
+            harness
+                .volumes
+                .push(dct::Volumes::Simple(format!("{0}:{0}", dir.display())));
+        }
+        Fleet::Incus => {
+            let dir = computers.incus_relay_dir();
+            std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+            let relay_mount = vec![dct::Volumes::Simple(format!("{}:/relay", dir.display()))];
+            let args = |args: &[String]| Some(dct::Command::Args(args.to_vec()));
+            // Host side: the tunnel listens on this machine's loopback only.
+            services.insert(
+                "computers_incus_uplink".to_string(),
+                Some(dct::Service {
+                    image: Some(computers::SOCAT_IMAGE.to_string()),
+                    network_mode: Some("host".to_string()),
+                    command: args(&[
+                        format!(
+                            "UNIX-LISTEN:{},fork,unlink-early,mode=600",
+                            computers::INCUS_RELAY_SOCKET
+                        ),
+                        format!("TCP:127.0.0.1:{}", computers::INCUS_TUNNEL_PORT),
+                    ]),
+                    volumes: relay_mount.clone(),
+                    restart: Some("unless-stopped".to_string()),
+                    ..Default::default()
+                }),
+            );
+            // Compose side: the harness dials `computers-incus:8443`.
+            services.insert(
+                "computers_incus_relay".to_string(),
+                Some(dct::Service {
+                    image: Some(computers::SOCAT_IMAGE.to_string()),
+                    command: args(&[
+                        format!("TCP-LISTEN:{},fork,reuseaddr", computers::INCUS_RELAY_PORT),
+                        format!("UNIX-CONNECT:{}", computers::INCUS_RELAY_SOCKET),
+                    ]),
+                    volumes: relay_mount,
+                    restart: Some("unless-stopped".to_string()),
+                    networks: net_aliases(&[("services", &[computers::INCUS_RELAY_HOST])]),
+                    ..Default::default()
+                }),
+            );
+        }
+    }
+    Ok(())
 }
 
 fn add_sdk_webhook_relay(

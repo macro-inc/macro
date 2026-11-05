@@ -211,6 +211,12 @@ impl Instance {
         self.suffixed_dash("auth")
     }
 
+    /// The compose `services` network, `<project>_services`: what app
+    /// services, local sandboxes and Docker computers dial each other on.
+    pub fn network_services(&self) -> String {
+        format!("{}_services", self.project_name)
+    }
+
     pub fn volume_postgres(&self) -> String {
         self.suffixed_underscore("macro_postgres_data")
     }

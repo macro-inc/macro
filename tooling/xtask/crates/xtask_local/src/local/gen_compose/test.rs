@@ -74,3 +74,66 @@ fn every_local_harness_publishes_the_api_port_used_by_the_sdk() {
         assert!(ports.contains(&format!("{}:2222", instance.port(Port::PreviewSsh))));
     }
 }
+
+#[test]
+fn docker_computers_share_the_enrollment_dir_with_the_daemon() {
+    let instance = Instance::derive(Some("computers-compose-docker"), None).unwrap();
+    let computers = Computers::new(Mode::Local, Fleet::Docker, &instance);
+    let mut services = IndexMap::new();
+    services.insert(EGRESS_SERVICE.to_string(), Some(dct::Service::default()));
+    add_computers(&mut services, &computers).unwrap();
+
+    let dir = computers.enrollment_dir().display().to_string();
+    let harness = services[EGRESS_SERVICE].as_ref().unwrap();
+    assert_eq!(
+        harness.volumes,
+        vec![dct::Volumes::Simple(format!("{dir}:{dir}"))]
+    );
+    assert_eq!(services.len(), 1);
+    let _ = std::fs::remove_dir_all(instance.artifact_dir());
+}
+
+#[test]
+fn incus_computers_relay_the_tunnel_into_compose() {
+    let instance = Instance::derive(Some("computers-compose-incus"), None).unwrap();
+    let computers = Computers::new(Mode::Local, Fleet::Incus, &instance);
+    let mut services = IndexMap::new();
+    services.insert(EGRESS_SERVICE.to_string(), Some(dct::Service::default()));
+    add_computers(&mut services, &computers).unwrap();
+
+    let relay_mount = format!("{}:/relay", computers.incus_relay_dir().display());
+    let uplink = services["computers_incus_uplink"].as_ref().unwrap();
+    assert_eq!(uplink.network_mode.as_deref(), Some("host"));
+    assert_eq!(
+        uplink.command,
+        Some(dct::Command::Args(vec![
+            "UNIX-LISTEN:/relay/incus.sock,fork,unlink-early,mode=600".to_string(),
+            "TCP:127.0.0.1:18443".to_string(),
+        ]))
+    );
+    assert_eq!(
+        uplink.volumes,
+        vec![dct::Volumes::Simple(relay_mount.clone())]
+    );
+    let relay = services["computers_incus_relay"].as_ref().unwrap();
+    assert_eq!(
+        relay.command,
+        Some(dct::Command::Args(vec![
+            "TCP-LISTEN:8443,fork,reuseaddr".to_string(),
+            "UNIX-CONNECT:/relay/incus.sock".to_string(),
+        ]))
+    );
+    assert_eq!(relay.volumes, vec![dct::Volumes::Simple(relay_mount)]);
+    assert_eq!(
+        relay.networks,
+        net_aliases(&[("services", &["computers-incus"])])
+    );
+    assert!(
+        services[EGRESS_SERVICE]
+            .as_ref()
+            .unwrap()
+            .volumes
+            .is_empty()
+    );
+    let _ = std::fs::remove_dir_all(instance.artifact_dir());
+}

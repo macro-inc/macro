@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::cli::{EnvArgs, InstanceArgs, RunArgs};
+use super::computers::{Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::local_env::Tunnels;
 use super::stage::Stage;
@@ -91,6 +92,16 @@ struct StackState {
     /// Host directory currently bind-mounted at `/app/out`.
     #[serde(default)]
     binaries_dir: Option<PathBuf>,
+    /// The computers fleet `up` ran; absent in stacks recorded before
+    /// computers existed, which ran none.
+    #[serde(default)]
+    computers: Option<Fleet>,
+}
+
+impl StackState {
+    fn computers(&self, mode: Mode, instance: &Instance) -> Computers {
+        Computers::new(mode, self.computers.unwrap_or(Fleet::Off), instance)
+    }
 }
 
 fn state_path(instance: &Instance) -> PathBuf {
@@ -142,6 +153,9 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     if !stage.is_dry_run() {
         clear_state(&instance)?;
     }
+    // Off unless asked: headless stacks serve agents and CI, which should not
+    // pay for building the computer image.
+    let computers = Computers::new(mode, args.run.computers.fleet(Fleet::Off), &instance);
 
     // Same collector/browser bring-up as `run_stack`, and for the same reason:
     // before `prepare` so the env probe wires `OTEL_EXPORTER_OTLP_ENDPOINT`.
@@ -175,6 +189,7 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         // no cloudflared and no @cursor sessions to feed; the egress stays
         // in-network and previews stay reachable on that box only.
         Tunnels::default(),
+        &computers,
     )?;
 
     // Build + stage the frontend bundle in the background: it's pure host-side
@@ -272,6 +287,7 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
                 mode: mode.label().to_string(),
                 frontend: if static_frontend { "static" } else { "none" }.to_string(),
                 binaries_dir: Some(active_binaries),
+                computers: Some(computers.fleet()),
             },
         )?;
         super::build::BinariesDir::release_previous_gc_root(&instance.artifact_dir());
@@ -289,6 +305,7 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     };
     stage.print_timings("bring-up");
     summary::print(mode, &instance, &env, &frontend_url, &mailpit_url, None);
+    computers.print_hint(&stage);
     stage.note(&format!(
         "  headless: `just stack status`, `just stack update`, `just stack down`{}",
         instance_suffix(&instance)
@@ -322,6 +339,8 @@ fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
                 build_aux_services: args.build_aux_services,
                 binaries_dir: args.binaries_dir.clone(),
             },
+            // `up`'s default: no computers.
+            computers: Default::default(),
             no_frontend: false,
             verbose: args.verbose,
             no_snapshot: false,
@@ -356,6 +375,7 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
         // `update` doesn't know the original `--traces` choice; keep the
         // running stack's wiring keyed on the port probe as before.
         true,
+        &state.computers(mode, &instance),
     )?;
     let remounted = if let Some(source) = args.binaries_dir.as_deref() {
         let new = super::build::BinariesDir::classify(source)?;
@@ -426,6 +446,7 @@ fn remount(
         new,
         state.frontend == "static",
         gmail_forwarder,
+        &state.computers(mode, instance),
     )?;
     let mut up = super::compose_cmd(instance, env);
     up.args([
@@ -448,6 +469,7 @@ fn remount(
             mode: state.mode.clone(),
             frontend: state.frontend.clone(),
             binaries_dir: Some(new.host_dir().to_path_buf()),
+            computers: state.computers,
         },
     )?;
     super::build::BinariesDir::release_previous_gc_root(&instance.artifact_dir());

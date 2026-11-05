@@ -22,6 +22,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
+use super::computers::Computers;
 use super::instance::Instance;
 use super::local_env::Tunnels;
 use super::{Mode, local_env};
@@ -49,6 +50,7 @@ pub fn resolve(
     static_frontend: bool,
     tunnels: Tunnels<'_>,
     wire_otel: bool,
+    computers: &Computers,
 ) -> Result<ResolvedEnv> {
     // Base = Doppler (`lcl_personal`/`dev_personal`); it supplies the
     // integration/secret config services require. For local we then overlay the
@@ -77,6 +79,7 @@ pub fn resolve(
         for (k, v) in local.to_env() {
             env.insert(k, v);
         }
+        computers.write_env(&mut env)?;
         // Persistent per-instance SSH host identity; never reuse a production key in local stacks.
         let key_path = instance.ensure_artifact_dir()?.join("preview_ssh_host_key");
         if !key_path.exists() {

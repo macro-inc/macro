@@ -17,6 +17,7 @@ pub mod arch;
 pub mod build;
 pub mod cf_tunnel;
 pub mod cli;
+pub mod computers;
 pub mod db;
 pub mod docker;
 pub mod doctor;
@@ -201,6 +202,11 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     }
     let stage = Stage::from_env_cli(args.verbose);
     let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let computers = computers::Computers::new(
+        mode,
+        args.computers.fleet(computers::Fleet::Docker),
+        &instance,
+    );
     stage.section(&format!(
         "macro {} stack — instance {}",
         mode.label(),
@@ -331,6 +337,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
             egress: egress_tunnel.as_ref().map(|tunnel| tunnel.url.as_str()),
             preview_ssh: preview_ssh_tunnel_host.as_deref(),
         },
+        &computers,
     )?;
 
     // Build + stage the shareable bundle in the background (pure host-side
@@ -446,6 +453,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         &mailpit_url,
         shared_app_url.as_deref(),
     );
+    computers.print_hint(&stage);
 
     match frontend {
         // Interactive terminal: stay attached with a hotkey loop.
@@ -678,6 +686,7 @@ fn prepare(
     pull_app_images: bool,
     infra_only: bool,
     tunnels: local_env::Tunnels<'_>,
+    computers: &computers::Computers,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     let env = env_layer::resolve(
         mode,
@@ -687,9 +696,13 @@ fn prepare(
         static_frontend,
         tunnels,
         args.traces.enabled(),
+        computers,
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
     sandbox_image::ensure(stage, &env.merged, args.build.no_build)?;
+    if !infra_only {
+        computers.ensure_image(stage, args.build.no_build)?;
+    }
 
     // Build the runtime image (idempotent) and the service binaries.
     let target = arch::detect()?;
@@ -717,7 +730,14 @@ fn prepare(
         .merged
         .get("GMAIL_FORWARDER_SA_KEY")
         .is_some_and(|key| !key.trim().is_empty());
-    gen_compose::generate(mode, instance, &binaries, static_frontend, gmail_forwarder)?;
+    gen_compose::generate(
+        mode,
+        instance,
+        &binaries,
+        static_frontend,
+        gmail_forwarder,
+        computers,
+    )?;
     proxy::write_caddyfile(instance, mode, static_frontend)?;
     if mode == Mode::Local {
         portmap::write(instance)?;
@@ -1173,6 +1193,7 @@ fn instance_networks(instance: &Instance) -> [String; 2] {
 /// containers/volumes are ignored.
 fn teardown_commands(instance: &Instance) {
     sdk_webhook::stop(instance);
+    computers::remove_containers(instance);
     // Detach the global trace collector first or `down` can't remove the
     // instance's `services` network (foreign container = active endpoint).
     disconnect_tracing_network(instance);
@@ -1267,11 +1288,16 @@ pub fn runtime_image_only(force: bool) -> Result<()> {
 }
 
 /// `cargo x gen-compose`.
-pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
-    let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+pub fn gen_compose_only(args: &cli::ComposeArgs) -> Result<()> {
+    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let computers = computers::Computers::new(
+        Mode::Local,
+        args.computers.fleet(computers::Fleet::Docker),
+        &instance,
+    );
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
-    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false)?;
+    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false, &computers)?;
     println!("{}", path.display());
     Ok(())
 }

@@ -122,7 +122,7 @@ impl LocalEnv {
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
             mail: MailEnv::local(),
-            agent_harness: AgentHarnessEnv::local(instance.project_name(), tunnels.egress),
+            agent_harness: AgentHarnessEnv::local(instance, tunnels.egress),
             service_auth: ServiceAuthEnv::for_instance(name),
             fusionauth: FusionAuthEnv::for_instance(instance),
             boot_stubs: BootStubEnv,
@@ -511,14 +511,13 @@ struct AgentHarnessEnv {
 }
 
 impl AgentHarnessEnv {
-    fn local(project_name: &str, egress_public_url: Option<&str>) -> Self {
+    fn local(instance: &Instance, egress_public_url: Option<&str>) -> Self {
         AgentHarnessEnv {
             // bot_id::MACRO_CODER_BOT_ID, a first-party bot with no row.
             bot_id: "00000000-0000-0000-0000-00000000a9e7",
             snapshot: "macro-agent-harness",
             image: super::sandbox_image::DEFAULT_LOCAL_TAG,
-            // Compose names a network `<project>_<network>`.
-            network: format!("{project_name}_services"),
+            network: instance.network_services(),
             // With a tunnel, every client - the Cursor cloud, but also local
             // sandboxes - dials the public hostname; one URL both renderings
             // agree on beats a second config knob, and the extra hop only
