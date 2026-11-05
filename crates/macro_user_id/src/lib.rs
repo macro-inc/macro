@@ -12,4 +12,4 @@ pub use cowlike;
 
 /// CI proof salt.
 #[allow(dead_code)]
-pub const CI_PROOF_SALT: &str = "large-8";
+pub const CI_PROOF_SALT: &str = "large-9";
