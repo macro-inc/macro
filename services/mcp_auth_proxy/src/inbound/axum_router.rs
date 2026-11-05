@@ -5,27 +5,38 @@ mod test;
 
 use std::time::Duration;
 
+use askama::Template;
 use axum::{
     Router,
     extract::{Query, RawQuery, State},
-    http::{HeaderName, Method, header},
+    http::{HeaderMap, HeaderName, Method, header},
     middleware as axum_mw,
     response::{Html, IntoResponse, Json, Redirect, Response},
     routing,
 };
+use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use serde::Deserialize;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::domain::{
+    browser_binding::BrowserBinding,
     models::{
-        AuthorizeRequest, CallbackRequest, ClientRegistrationRequest, RevocationRequest,
-        TokenRequest,
+        AuthorizationStart, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
+        ConsentPrompt, RevocationRequest, TokenRequest, UserConsent,
     },
     service::{
         CompleteCallbackError, InflightAuthStore, McpAuthProxyService, McpAuthProxyServiceImpl,
         RegisterClientError, RevokeTokenError, StartAuthorizationError, TokenExchangeError,
     },
 };
+
+/// Fetch metadata header naming how the request's initiator relates to this
+/// origin; browsers set it on every request.
+const SEC_FETCH_SITE: HeaderName = HeaderName::from_static("sec-fetch-site");
+
+const INVALID_REDIRECT_URI: &str =
+    "redirect_uri must be an https URL or an http URL on a loopback address";
 
 /// Health check handler for ALB.
 async fn health() -> &'static str {
@@ -67,11 +78,7 @@ async fn register<I: InflightAuthStore + 'static>(
                 rejected_redirect_uri = %uri,
                 "client registration used a redirect_uri this deployment does not trust"
             );
-            (
-                axum::http::StatusCode::BAD_REQUEST,
-                "redirect_uri must be a loopback address or a trusted MCP client host",
-            )
-                .into_response()
+            (axum::http::StatusCode::BAD_REQUEST, INVALID_REDIRECT_URI).into_response()
         }
         Err(RegisterClientError::ClientRegistrationStore(error)) => {
             tracing::error!(error=?error, "failed to persist client registration");
@@ -82,6 +89,78 @@ async fn register<I: InflightAuthStore + 'static>(
                 .into_response()
         }
     }
+}
+
+/// Cookie carrying the browser's `BrowserBinding`. The `__Host-` prefix makes
+/// browsers refuse it unless it is `Secure`, host-only and on `/`, so no
+/// sibling domain can plant one.
+const BROWSER_BINDING_COOKIE: &str = "__Host-macro_mcp_oauth";
+
+/// The consent screen loads nothing, runs nothing, and cannot be framed, so a
+/// page that overlays it cannot trick a click onto Allow.
+const CONSENT_PAGE_CSP: &str =
+    "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'";
+
+const CONSENT_DECLINED_PAGE: &str = include_str!("../../templates/consent_declined.html");
+
+#[derive(Template)]
+#[template(path = "consent.html")]
+struct ConsentPage<'a> {
+    client_name: &'a str,
+    redirect_host: &'a str,
+    request: &'a AuthorizeRequest,
+    consent_token: &'a str,
+}
+
+/// What the user chose on the consent screen.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum ConsentDecision {
+    Approve,
+    Deny,
+}
+
+/// The consent screen's form: the authorize request it was shown for, the
+/// anti-forgery token, and the user's choice.
+#[derive(Deserialize)]
+struct ConsentSubmission {
+    #[serde(flatten)]
+    request: AuthorizeRequest,
+    consent_token: String,
+    decision: ConsentDecision,
+}
+
+fn browser_binding(jar: &CookieJar) -> Option<BrowserBinding> {
+    jar.get(BROWSER_BINDING_COOKIE)
+        .and_then(|cookie| BrowserBinding::parse(cookie.value()))
+}
+
+fn browser_binding_cookie(browser: &BrowserBinding) -> Cookie<'static> {
+    // `Lax` still reaches the upstream's redirect back to `/oauth/callback`,
+    // a top-level navigation, but not a cross-site form post.
+    Cookie::build((BROWSER_BINDING_COOKIE, browser.as_str().to_owned()))
+        .path("/")
+        .secure(true)
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .build()
+}
+
+/// A broker-rendered page with the headers that keep it from being framed,
+/// cached, or leaking its URL.
+fn html_page(body: String) -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, "text/html; charset=utf-8"),
+            (header::CONTENT_SECURITY_POLICY, CONSENT_PAGE_CSP),
+            (header::X_FRAME_OPTIONS, "DENY"),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+            (header::CACHE_CONTROL, "no-store"),
+            (header::REFERRER_POLICY, "no-referrer"),
+        ],
+        body,
+    )
+        .into_response()
 }
 
 /// Hosts whose users pick how to sign in, rather than going straight to
@@ -129,52 +208,161 @@ fn sign_in_choice(query: Option<String>) -> Response {
         .into_response()
 }
 
+fn consent_page(
+    prompt: &ConsentPrompt,
+    request: &AuthorizeRequest,
+    browser: &BrowserBinding,
+) -> Response {
+    let page = ConsentPage {
+        client_name: &prompt.client_name,
+        redirect_host: &prompt.redirect_host,
+        request,
+        consent_token: &browser.consent_token(),
+    };
+
+    match page.render() {
+        Ok(body) => html_page(body),
+        Err(error) => {
+            tracing::error!(error=?error, "failed to render the consent page");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to render the consent page",
+            )
+                .into_response()
+        }
+    }
+}
+
+/// Answers an authorize request, or an approved consent form, with the
+/// upstream sign-in or the consent screen. `redirect` builds the redirect to
+/// the sign-in: a `307` for `GET /authorize`, a `303` after the form post.
+async fn authorization_response<I: InflightAuthStore + 'static>(
+    auth_proxy: &McpAuthProxyServiceImpl<I>,
+    request: AuthorizeRequest,
+    browser: BrowserBinding,
+    consent: UserConsent,
+    redirect: fn(&str) -> Redirect,
+) -> Response {
+    match auth_proxy
+        .start_authorization(request.clone(), browser.clone(), consent)
+        .await
+    {
+        // The browser carries the MCP client page's Referer across this
+        // redirect, and FusionAuth rejects any Referer outside its first-party
+        // origin list with "Invalid origin uri". The redirect URI policy has
+        // already vetted the client, so the client's origin is withheld.
+        Ok(AuthorizationStart::SignIn(url)) => {
+            ([(header::REFERRER_POLICY, "no-referrer")], redirect(&url)).into_response()
+        }
+        Ok(AuthorizationStart::ConsentRequired(prompt)) => {
+            consent_page(&prompt, &request, &browser)
+        }
+        Err(error) => start_authorization_error_response(error),
+    }
+}
+
 async fn authorize<I: InflightAuthStore + 'static>(
     State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
+    jar: CookieJar,
     RawQuery(query): RawQuery,
     Query(params): Query<AuthorizeRequest>,
 ) -> Response {
     if params.sign_in.is_none() && offers_sign_in_choice(&params.redirect_uri) {
         return sign_in_choice(query);
     }
-    match auth_proxy.start_authorization(params).await {
-        // The browser carries the MCP client page's Referer across this
-        // redirect, and FusionAuth rejects any Referer outside its first-party
-        // origin list with "Invalid origin uri". The redirect URI policy has
-        // already vetted the client, so the client's origin is withheld.
-        Ok(url) => (
-            [(header::REFERRER_POLICY, "no-referrer")],
-            Redirect::temporary(&url),
+
+    let browser = browser_binding(&jar).unwrap_or_else(BrowserBinding::generate);
+    let jar = jar.add(browser_binding_cookie(&browser));
+
+    let response = authorization_response(
+        &auth_proxy,
+        params,
+        browser,
+        UserConsent::NotAsked,
+        Redirect::temporary,
+    )
+    .await;
+    (jar, response).into_response()
+}
+
+/// Receives the consent screen's form.
+///
+/// The form only counts when it was posted by the browser that was shown it:
+/// the browser binding cookie must be present (a cross-site post does not
+/// carry a `SameSite=Lax` cookie) and the form's token must be the one derived
+/// from it, which a page on another origin cannot read.
+async fn submit_consent<I: InflightAuthStore + 'static>(
+    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
+    jar: CookieJar,
+    headers: HeaderMap,
+    axum::Form(submission): axum::Form<ConsentSubmission>,
+) -> Response {
+    let cross_site = headers
+        .get(SEC_FETCH_SITE)
+        .is_some_and(|site| site.as_bytes() != b"same-origin");
+    let browser = browser_binding(&jar)
+        .filter(|browser| browser.accepts_consent_token(&submission.consent_token));
+
+    let Some(browser) = browser.filter(|_| !cross_site) else {
+        tracing::warn!(
+            client_id = %submission.request.client_id,
+            cross_site,
+            "consent form submission could not be verified"
+        );
+        return (
+            axum::http::StatusCode::FORBIDDEN,
+            "This approval could not be verified. Start connecting again from the app you \
+             are connecting.",
         )
-            .into_response(),
-        Err(StartAuthorizationError::UnsupportedResponseType) => (
+            .into_response();
+    };
+
+    match submission.decision {
+        ConsentDecision::Deny => {
+            tracing::info!(client_id = %submission.request.client_id, "user declined an MCP client");
+            html_page(CONSENT_DECLINED_PAGE.to_owned())
+        }
+        ConsentDecision::Approve => {
+            authorization_response(
+                &auth_proxy,
+                submission.request,
+                browser,
+                UserConsent::Approved,
+                Redirect::to,
+            )
+            .await
+        }
+    }
+}
+
+fn start_authorization_error_response(error: StartAuthorizationError) -> Response {
+    match error {
+        StartAuthorizationError::UnsupportedResponseType => (
             axum::http::StatusCode::BAD_REQUEST,
             "unsupported response_type",
         )
             .into_response(),
-        Err(StartAuthorizationError::UnsupportedCodeChallengeMethod) => (
+        StartAuthorizationError::UnsupportedCodeChallengeMethod => (
             axum::http::StatusCode::BAD_REQUEST,
             "unsupported code_challenge_method",
         )
             .into_response(),
-        Err(StartAuthorizationError::InvalidRedirectUri) => (
-            axum::http::StatusCode::BAD_REQUEST,
-            "redirect_uri must be a loopback address or a trusted MCP client host",
-        )
-            .into_response(),
-        Err(StartAuthorizationError::UnregisteredRedirectUri) => (
+        StartAuthorizationError::InvalidRedirectUri => {
+            (axum::http::StatusCode::BAD_REQUEST, INVALID_REDIRECT_URI).into_response()
+        }
+        StartAuthorizationError::UnregisteredRedirectUri => (
             axum::http::StatusCode::BAD_REQUEST,
             "redirect_uri was not registered for this client",
         )
             .into_response(),
-        Err(StartAuthorizationError::UnknownClient) => (
+        StartAuthorizationError::UnknownClient => (
             axum::http::StatusCode::BAD_REQUEST,
             "Your Macro connection needs to be reconnected. In the app you are connecting from, \
              remove the Macro MCP connection, add it again, and sign in to Macro. \
              Signing in again without removing the connection may reuse the old registration.",
         )
             .into_response(),
-        Err(StartAuthorizationError::ClientRegistrationStore(error)) => {
+        StartAuthorizationError::ClientRegistrationStore(error) => {
             tracing::error!(error=?error, "failed to read client registrations");
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -182,7 +370,7 @@ async fn authorize<I: InflightAuthStore + 'static>(
             )
                 .into_response()
         }
-        Err(StartAuthorizationError::InflightStore(error)) => {
+        StartAuthorizationError::InflightStore(error) => {
             tracing::error!(error=?error, "failed to persist inflight auth state");
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -190,7 +378,7 @@ async fn authorize<I: InflightAuthStore + 'static>(
             )
                 .into_response()
         }
-        Err(StartAuthorizationError::ConstructAuthorizeUrl(error)) => {
+        StartAuthorizationError::ConstructAuthorizeUrl(error) => {
             tracing::error!(error=?error, "failed to construct upstream authorize URL");
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -203,9 +391,13 @@ async fn authorize<I: InflightAuthStore + 'static>(
 
 async fn oauth_callback<I: InflightAuthStore + 'static>(
     State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
+    jar: CookieJar,
     Query(params): Query<CallbackRequest>,
 ) -> Response {
-    match auth_proxy.complete_callback(params).await {
+    match auth_proxy
+        .complete_callback(params, browser_binding(&jar))
+        .await
+    {
         Ok(url) => Redirect::temporary(&url).into_response(),
         Err(CompleteCallbackError::MissingState) => {
             tracing::warn!("no state parameter in upstream OAuth callback");
@@ -226,6 +418,12 @@ async fn oauth_callback<I: InflightAuthStore + 'static>(
         Err(CompleteCallbackError::UnknownOrExpiredSession) => (
             axum::http::StatusCode::BAD_REQUEST,
             "unknown or expired session",
+        )
+            .into_response(),
+        Err(CompleteCallbackError::DifferentBrowser) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "This sign-in was started in a different browser. Start connecting again from the \
+             app you are connecting, and finish signing in in the browser it opens.",
         )
             .into_response(),
         Err(CompleteCallbackError::InflightStore(error)) => {
@@ -412,7 +610,7 @@ fn oauth_routes<I: InflightAuthStore + 'static>(auth_proxy: McpAuthProxyServiceI
             "/.well-known/oauth-authorization-server/mcp",
             routing::get(authorization_server_metadata),
         )
-        .route("/authorize", routing::get(authorize))
+        .route("/authorize", routing::get(authorize).post(submit_consent))
         .route("/register", routing::post(register))
         .route("/oauth/callback", routing::get(oauth_callback))
         .route("/token", routing::post(token))
