@@ -25,6 +25,7 @@ SQLX = "//:sqlx_offline_data"
 # Run-time reads the literal scan can't see, because the path is built up in code.
 RUNTIME_DATA = {
     "databases_sql": ["//crates/database_sql:all_files"],
+    "whatsapp_session_service": ["//tooling/xtask/crates/xtask_local:all_files"],
     "local_e2e_test_support": ["//tooling/seed_cli:all_files"],
 }
 ROOT_RUNTIME_DATA = {
