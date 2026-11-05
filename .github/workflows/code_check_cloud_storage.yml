@@ -154,6 +154,11 @@ jobs:
             esac
           done < "$env_file"
           cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
           # Force the next compiler invocation to start a server with the new remote
           # backend even if a setup hook happened to launch one already.
           sccache --stop-server >/dev/null 2>&1 || true
