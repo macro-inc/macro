@@ -9,6 +9,10 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,
+  // Under CPU pressure about 0.3% of these tests miss a deadline (seen at both 4
+  // and 8 workers on 8 CPUs), which fails about one full run in five. A retried
+  // test still shows as flaky in the output.
+  retries: process.env.CI ? 1 : 0,
   workers: Number(process.env.FUNCTIONAL_TEST_WORKERS ?? 1),
   forbidOnly: !!process.env.CI,
   reporter: 'list',
