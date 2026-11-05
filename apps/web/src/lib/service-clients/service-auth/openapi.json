@@ -4582,6 +4582,56 @@
         }
       }
     },
+    "/team/computers/{computer_id}/retry": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Retry a failed computer without changing billing.",
+        "operationId": "retry_team_computer",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/crm": {
       "patch": {
         "tags": ["teams::inbound::axum_router::patch_team_crm_settings"],

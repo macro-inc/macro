@@ -5420,6 +5420,61 @@ export const releaseTeamComputer = async (
 };
 
 /**
+ * @summary Retry a failed computer without changing billing.
+ */
+export type retryTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type retryTeamComputerResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type retryTeamComputerResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type retryTeamComputerResponseSuccess = retryTeamComputerResponse200 & {
+  headers: Headers;
+};
+export type retryTeamComputerResponseError = (
+  | retryTeamComputerResponse404
+  | retryTeamComputerResponse409
+) & {
+  headers: Headers;
+};
+
+export type retryTeamComputerResponse =
+  | retryTeamComputerResponseSuccess
+  | retryTeamComputerResponseError;
+
+export const getRetryTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/retry`;
+};
+
+export const retryTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<retryTeamComputerResponse> => {
+  const res = await fetch(getRetryTeamComputerUrl(computerId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retryTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retryTeamComputerResponse;
+};
+
+/**
  * @summary Enables or disables CRM for the team. On enable with `backfill`
 (the default), kicks off a best-effort backfill that enqueues a
 `PopulateCrmForUser` message per team member (no-op if CRM is
