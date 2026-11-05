@@ -287,6 +287,9 @@ impl Computers for FakeComputers {
         _size: ComputerSize,
     ) -> Result<ComputerQuote, TeamAgentError> {
         Ok(ComputerQuote {
+            vcpus: 8,
+            memory_gb: 16,
+            disk_gb: 200,
             price_id: "price_computer_large".to_string(),
             amount: 5000,
             currency: "usd".to_string(),
@@ -738,6 +741,9 @@ async fn quote_adds_the_seat_and_the_computer() {
     assert_eq!(
         quote,
         TeamAgentQuote {
+            vcpus: 8,
+            memory_gb: 16,
+            disk_gb: 200,
             seat: 4000,
             computer: 5000,
             total: 9000,

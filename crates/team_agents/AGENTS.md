@@ -19,6 +19,9 @@ repo, membership, account and mailbox; after it the agent exists and its
 `status` (`provisioning` → `running` | `failed`) is refreshed from the
 computer on `GET /team_agents` and `GET /team_agents/me`.
 
+`GET /team_agents/quote?size=` includes `vcpus`, `memoryGb`, and `diskGb`
+from the hosted-runtimes size catalog alongside the seat and computer price.
+
 ## Start here
 
 - `src/domain/service.rs`: the create flow, undo, delete, and the persona

@@ -500,6 +500,9 @@ where
         };
 
         Ok(TeamAgentQuote {
+            vcpus: computer.vcpus,
+            memory_gb: computer.memory_gb,
+            disk_gb: computer.disk_gb,
             seat: seat_amount,
             computer: computer.amount,
             total: seat_amount + computer.amount,

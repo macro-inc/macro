@@ -45,7 +45,11 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock> Computers
             .quote(team_id, computer_size(size))
             .await
             .map_err(error)?;
+        let size = quote.size;
         Ok(ComputerQuote {
+            vcpus: size.vcpus(),
+            memory_gb: size.memory_gb(),
+            disk_gb: size.disk_gb(),
             price_id: quote.price_id,
             amount: quote.amount,
             currency: quote.currency,

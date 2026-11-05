@@ -69,6 +69,9 @@ impl TeamAgentService for FakeService {
     ) -> Result<TeamAgentQuote, TeamAgentError> {
         self.record(format!("quote {} {size:?}", receipt.entity().entity_id));
         Ok(TeamAgentQuote {
+            vcpus: 8,
+            memory_gb: 16,
+            disk_gb: 200,
             seat: 4000,
             computer: 5000,
             total: 9000,
@@ -382,7 +385,7 @@ async fn quote_reads_the_size_from_the_query() {
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
         body_text(response).await,
-        r#"{"seat":4000,"computer":5000,"total":9000,"currency":"usd","interval":"month"}"#
+        r#"{"vcpus":8,"memoryGb":16,"diskGb":200,"seat":4000,"computer":5000,"total":9000,"currency":"usd","interval":"month"}"#
     );
     assert_eq!(
         *service.calls.lock().expect("lock"),

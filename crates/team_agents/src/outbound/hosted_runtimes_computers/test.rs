@@ -365,6 +365,14 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
         .await
         .expect("quote");
     assert_eq!(quote.amount, 4000);
+    assert_eq!(
+        (quote.vcpus, quote.memory_gb, quote.disk_gb),
+        (
+            ComputerSize::Large.vcpus(),
+            ComputerSize::Large.memory_gb(),
+            ComputerSize::Large.disk_gb()
+        )
+    );
     assert_eq!(quote.interval, agent::BillingInterval::Month);
     let pending = service.status(TEAM, id).await.expect("status");
     assert_eq!(pending.status, agent::ComputerStatusKind::SettingUp);

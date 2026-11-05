@@ -132,6 +132,12 @@ pub enum BillingInterval {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct TeamAgentQuote {
+    /// Virtual CPUs in the quoted computer size.
+    pub vcpus: u32,
+    /// RAM in GB, from the computer size catalog.
+    pub memory_gb: u32,
+    /// Disk capacity in GB, from the computer size catalog.
+    pub disk_gb: u32,
     /// The agent's seat; 0 when the team does not bill seats.
     pub seat: i64,
     /// The agent's computer.
@@ -158,6 +164,12 @@ pub struct SeatQuote {
 /// What one computer costs (`hosted_runtimes::Quote`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComputerQuote {
+    /// Virtual CPUs in the quoted computer size.
+    pub vcpus: u32,
+    /// RAM in GB, from the computer size catalog.
+    pub memory_gb: u32,
+    /// Disk capacity in GB, from the computer size catalog.
+    pub disk_gb: u32,
     /// The computer's Stripe price.
     pub price_id: String,
     /// Price per interval, in the currency's smallest unit.
