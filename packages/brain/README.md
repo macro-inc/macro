@@ -75,3 +75,24 @@ deno task test      # no network: fetch, the runner and Routines/Tasks are injec
 deno task check
 deno task compile
 ```
+
+## Computer image
+
+`nix build .#macro-brain` compiles the binary offline from a hash-pinned Deno
+cache, using nixpkgs' matching `denort`. Deno compilation is not byte
+reproducible, so the compiled output also has a fixed-output hash. Both `macro-box-incus` and
+`macro-box-docker` include it at `/opt/macro/brain` through their shared rootfs.
+See [`nix/macro-box/AGENTS.md`](../../nix/macro-box/AGENTS.md) for cache hash
+regeneration and the service contract.
+
+Enrollment creates the persona's OS user and writes
+`/etc/macro/personas/<os_user>.env`. The image's `brain@` template drop-in also
+applies to enrollment's concrete units: it enforces hardening and runs
+`start-brain`, which clones `MACRO_REPO_URL` to `BRAIN_WORKSPACE` on first
+start. `BRAIN_WORKSPACE` must be `$HOME/workspace`. Git's name is the persona's
+OS username; its email is the email part of `MACRO_AGENT_USER_ID` (`macro|email`).
+The credential helper supplies `MACRO_REPO_TOKEN` from the git process's
+environment only for the exact repo URL. The brain passes these two repo
+variables to git; Claude turns receive neither. Git config stores the helper
+path, identity and repo URL, never the token. Failed clones clean up their
+temporary directory, and subsequent starts keep the existing workspace.

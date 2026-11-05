@@ -17,7 +17,7 @@ and a Docker image (the dev-only DockerFleet).
   --mount`: unpack the base debs, chroot, then Ubuntu's own dpkg installs
   every deb under Ubuntu's `fakeroot`, which records the ownership one mapped
   uid cannot hold. The Nix closure of `tools` (macrod, claude-code, chromium,
-  node 22, herdr, chrome-devtools-mcp) is copied into the guest's `/nix/store`
+  node 22, herdr, chrome-devtools-mcp, brain) is copied into the guest's `/nix/store`
   and linked from `/usr/local/bin`. `files/` is copied over `/`.
 - `_build.nix` packs `rootfs.tar` into `disk.qcow2` (GPT: ESP with shim →
   signed GRUB → `/boot/vmlinuz`, ext4 root via `mkfs.ext4 -d tar`) plus
@@ -42,6 +42,20 @@ and a Docker image (the dev-only DockerFleet).
 - `macrod.service` runs `macrod service` as `macro` (Claude Code refuses
   permission bypass as root), workspace `/home/macro/work`.
 - Its `--ignore-stdin-eof` keeps systemd's closed stdin from stopping the daemon.
+- `/opt/macro/brain` links to the Nix-built brain binary. `brain@.service`
+  runs as `%i` with `/etc/macro/personas/%i.env`, always restarts, and uses
+  `NoNewPrivileges`, `ProtectSystem=strict`, `ReadWritePaths=/home/%i /tmp`
+  and `PrivateTmp`. Its `image.conf` drop-in also applies to the concrete
+  instance units enrollment writes, replacing ExecStart with `start-brain`.
+  PR A's enrollment owns user creation and unit enable/start; the image adds
+  no separate persona provisioner.
+- `start-brain` clones `MACRO_REPO_URL` into `$HOME/workspace` (which must
+  equal `BRAIN_WORKSPACE`) only when absent, then execs `/opt/macro/brain run`.
+  Failed clones leave no workspace. Git identity uses the persona OS username
+  and the email part of `MACRO_AGENT_USER_ID` (`macro|email`). The exact-repo
+  credential helper reads `MACRO_REPO_TOKEN` from git's environment, never
+  storing it in git config. Git receives the repo URL/token from the brain's
+  otherwise-cleared subprocess environment; Claude turns do not.
 - Persona users get `/etc/skel`: the default skills and the chrome-devtools
   MCP entry in `~/.claude.json`. `/etc/macro/personas/` is root-only (0700).
 - User services for `macro` (lingering): `macro-display` (Xtigervnc `:0`,
@@ -79,6 +93,9 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
   environment in a fresh system service.
 - Inside a running guest, run `python3 tests/display-probes.py`; repeated TCP
   readiness probes must leave the local VNC handshake usable.
+- `nix build .#macro-brain` and `nix build .#checks.x86_64-linux.macro-brain-persona`
+  (systemd validation plus authenticated HTTP clone/push, failed clone retry,
+  restart preservation, identity and credential scoping).
 - After `packages.txt` changes: `nix/macro-box/lock.sh`, then rebuild both outputs.
 - `nix build .#macro-box-incus .#macro-box-docker`, then the Docker smoke
   test above without the enrollment mount: `macrod-enroll` must fail with the
@@ -103,3 +120,30 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
 - No managed `managed-mcp.json`: it takes exclusive control of MCP servers and
   would block the Macro servers macrod forwards; chrome-devtools is
   registered in user scope instead.
+
+## Brain build hashes
+
+`_brain.nix` fetches the frozen `packages/brain/deno.lock` graph into a
+fixed-output dependency cache, then compiles offline with nixpkgs' matching
+`DENORT_BIN`. Deno 2.9.2 produces different binaries on repeated sandboxed
+builds, including with `--no-code-cache`; the compiled binary therefore also
+uses a fixed-output hash, rather than claiming reproducible compilation.
+The FOD name includes the source store-path digest so source changes cannot
+silently reuse the old binary. The final package restores the denort runtime
+closure references, which FODs discard. Both image formats copy that closure.
+
+After any brain/SDK source, lockfile, compile-wrapper or Deno version change:
+
+1. Set `compiled.outputHash` to `lib.fakeHash`. If the dependency graph changed,
+   also set `dependencies.outputHash` to `lib.fakeHash`.
+2. Set `TMPDIR` to a filesystem with enough space, run
+   `nix build .#macro-brain`, and set each hash to its
+   reported `got:` value (dependencies first), then build again. Keep the
+   resulting compiled output in the Nix cache alongside the images.
+3. Run the persona check and build both image outputs. The final package can
+   be checked with `nix build --rebuild .#macro-brain`; dependency fetching with
+   `nix build --rebuild .#macro-brain.dependencies`.
+
+Recompiling the binary FOD from scratch can require a new hash even with
+unchanged source. Regenerate it using step 2; never disable hash verification,
+the sandbox or the frozen lock. The source includes the SDK's generated clients.

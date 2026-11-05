@@ -2,6 +2,7 @@
 import base64
 import http.server
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -66,7 +67,10 @@ class BrainTest(unittest.TestCase):
             try:
                 home = root / 'home'
                 home.mkdir()
-                helper = FILES / 'usr/lib/macro-box/git-credential-brain'
+                helper = root / 'git-credential-brain'
+                helper.write_text((FILES / 'usr/lib/macro-box/git-credential-brain').read_text()
+                                  .replace('#!/bin/bash', '#!' + shutil.which('bash')))
+                helper.chmod(0o755)
                 start = root / 'start'
                 start.write_text((FILES / 'usr/lib/macro-box/start-brain').read_text()
                                  .replace('/usr/lib/macro-box/git-credential-brain', str(helper))
@@ -77,8 +81,7 @@ class BrainTest(unittest.TestCase):
                     'BRAIN_WORKSPACE': str(home / 'workspace'),
                     'MACRO_REPO_URL': f'http://127.0.0.1:{server.server_port}/repo.git',
                     'MACRO_REPO_TOKEN': 'test-token',
-                    'GIT_AUTHOR_NAME': 'Test Agent',
-                    'GIT_AUTHOR_EMAIL': 'agent@example.com',
+                    'MACRO_AGENT_USER_ID': 'macro|agent@example.com',
                     'GIT_CONFIG_NOSYSTEM': '1',
                 }
                 # A failed clone must leave no workspace and be retryable.
@@ -92,7 +95,7 @@ class BrainTest(unittest.TestCase):
                 self.assertTrue((home / 'started').exists())
                 config = (workspace / '.git/config').read_text()
                 self.assertNotIn('test-token', config)
-                self.assertIn('Test Agent', config)
+                self.assertIn(subprocess.check_output(['id', '-un'], text=True).strip(), config)
                 self.assertIn('agent@example.com', config)
                 (workspace / 'memory').write_text('remember this')
                 subprocess.run(['git', '-C', str(workspace), 'add', '.'], env=env, check=True)
@@ -100,7 +103,10 @@ class BrainTest(unittest.TestCase):
                 subprocess.run(['git', '-C', str(workspace), 'push', 'origin', 'HEAD'], env=env, check=True)
                 subprocess.run(['bash', str(start)], env=env, check=True)
                 self.assertEqual((workspace / 'memory').read_text(), 'remember this')
-                self.assertEqual(config, (workspace / '.git/config').read_text())
+                helpers = subprocess.check_output(['git', '-C', str(workspace), 'config',
+                                                   '--get-all', 'credential.helper'], env=env, text=True)
+                self.assertEqual(helpers.splitlines(), ['', str(helper)])
+                self.assertNotIn('test-token', (workspace / '.git/config').read_text())
                 self.assertTrue(any('git-receive-pack' in req for req in requests))
                 # A request for another repo must not get a token.
                 result = subprocess.run(['bash', str(helper), 'get'], env=env,

@@ -33,6 +33,16 @@ Macro computer (PR A image)
     @macro-inc/brain binary  (deno compile; pinned by workspace/brain.lock)
 ```
 
+The shared Incus/Docker rootfs installs the Nix-built binary at
+`/opt/macro/brain`. Enrollment creates the persona OS user and its concrete
+unit; the image's `brain@.service.d/image.conf` applies the same startup wrapper
+and hardening to those units as to the template. Only the persona home and
+private `/tmp` are writable. First start clones the repo to
+`/home/<os_user>/workspace` atomically; retries preserve an existing clone.
+Git identity uses the OS username and the email in `MACRO_AGENT_USER_ID`.
+The exact-repo git credential helper reads `MACRO_REPO_TOKEN` from the git
+process environment; no token is stored in `.git/config` or sent to Claude.
+
 macrod persona mode starts the brain unit, watches its health endpoint
 (`127.0.0.1:<port>/health`), restarts it, and reports health with the harness
 presence so the agent's status reflects it.

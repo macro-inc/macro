@@ -127,7 +127,6 @@ EOF
 
   systemctl enable \
     macrod-enroll.service macrod.service incus-agent.service macro-box-growroot.service \
-    macro-brains.service macro-brains.path \
     systemd-networkd.service systemd-resolved.service docker.service
   ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
 

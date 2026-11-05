@@ -2,7 +2,11 @@
 set -euo pipefail
 umask 077
 : "${HOME:?}" "${BRAIN_WORKSPACE:?}" "${MACRO_REPO_URL:?}" "${MACRO_REPO_TOKEN:?}"
-: "${GIT_AUTHOR_NAME:?}" "${GIT_AUTHOR_EMAIL:?}"
+: "${MACRO_AGENT_USER_ID:?}"
+if [[ "$MACRO_AGENT_USER_ID" != macro\|?*@?* ]] || [[ "$MACRO_AGENT_USER_ID" == *$'\n'* ]]; then
+  echo 'MACRO_AGENT_USER_ID must contain the persona email (macro|email)' >&2
+  exit 1
+fi
 if [[ "$BRAIN_WORKSPACE" != "$HOME/workspace" ]]; then
   echo 'BRAIN_WORKSPACE must be the persona home/workspace' >&2
   exit 1
@@ -26,7 +30,7 @@ fi
 git -C "$BRAIN_WORKSPACE" config --local --replace-all credential.helper ''
 git -C "$BRAIN_WORKSPACE" config --local --add credential.helper "$helper"
 git -C "$BRAIN_WORKSPACE" config --local credential.useHttpPath true
-git -C "$BRAIN_WORKSPACE" config --local user.name "$GIT_AUTHOR_NAME"
-git -C "$BRAIN_WORKSPACE" config --local user.email "$GIT_AUTHOR_EMAIL"
+git -C "$BRAIN_WORKSPACE" config --local user.name "$(id -un)"
+git -C "$BRAIN_WORKSPACE" config --local user.email "${MACRO_AGENT_USER_ID#macro|}"
 cd "$BRAIN_WORKSPACE"
 exec /opt/macro/brain run

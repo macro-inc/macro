@@ -16,6 +16,8 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
 ## Scope
 
 - Owns: the brain process, its CLI, and the persona template.
+- Packaging: `nix/macro-box/_brain.nix` builds the image binary; the image
+  owns its first-start clone script and hardened `brain@` unit.
 - Not here: provisioning, the repo host, secrets storage, macrod's
   supervision of the brain unit.
 
@@ -30,9 +32,11 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
   change can break this build, so run `deno task check` after one.
 - `deno compile` excludes the Agent SDK's bundled Claude binaries (600 MB);
   the brain drives `claude` on `PATH`. Bumping the Agent SDK version means
-  updating both `--exclude` paths in `deno.json`.
+  updating both `--exclude` paths in `compile.sh`. Compiler options passed to
+  `deno task compile` must precede the entrypoint (the wrapper handles this).
 - Subprocesses run with a cleared environment (PATH, HOME, and what a turn
-  needs): Deno's `--allow-run=git,claude` refuses loader variables such as
+  needs; git alone also receives `MACRO_REPO_URL` and `MACRO_REPO_TOKEN`):
+  Deno's `--allow-run=git,claude` refuses loader variables such as
   `LD_LIBRARY_PATH`, and turns must never see `MACRO_API_KEY`.
 - Every workspace write that the brain itself makes goes through
   `GitWriter`; never write persona files directly from new code.
