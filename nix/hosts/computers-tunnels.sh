@@ -27,7 +27,14 @@ if [[ -z $gcloud_bin ]]; then
 fi
 mkdir -p "$state_dir"
 
+# ssh_tunnel [SSH_OPTION...] [-- REMOTE_COMMAND...]
 ssh_tunnel() {
+  local options=()
+  while (($# > 0)) && [[ $1 != -- ]]; do
+    options+=("$1")
+    shift
+  done
+  (($# > 0)) && shift
   ssh \
     -o "ProxyCommand=$gcloud_bin compute start-iap-tunnel $host 22 --listen-on-stdin --project $project --zone $zone --verbosity=warning" \
     -o HostKeyAlias="$host" \
@@ -37,7 +44,7 @@ ssh_tunnel() {
     -o ServerAliveCountMax=3 \
     -o ExitOnForwardFailure=yes \
     -o BatchMode=yes \
-    "$@" "root@$host"
+    "${options[@]}" "root@$host" "$@"
 }
 
 supervise() {
@@ -72,7 +79,7 @@ reverse_tunnel() {
   local refresh="add element inet macro-boxes tunnel_ports { $set_ports }
 delete element inet macro-boxes tunnel_ports { $set_ports }
 add element inet macro-boxes tunnel_ports { $(sed 's/,/ timeout 90s,/g; s/$/ timeout 90s/' <<<"$set_ports") }"
-  ssh_tunnel "${forwards[@]}" \
+  ssh_tunnel "${forwards[@]}" -- \
     "while :; do printf '%s\n' '$refresh' | nft -f - || exit 1; sleep 30; done"
 }
 

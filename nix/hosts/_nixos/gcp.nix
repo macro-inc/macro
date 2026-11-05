@@ -38,6 +38,19 @@
 
   # `gcloud compute ssh --tunnel-through-iap` logs in as the OS Login user.
   security.googleOsLogin.enable = true;
+  # pam_oslogin_login's account check denies every non-OS-Login user, so
+  # root's key login (nixos-rebuild, tunnels) would fail. Skip it for uid 0.
+  security.pam.services.sshd.rules.account.local-root = {
+    order = config.security.pam.services.sshd.rules.account.oslogin_login.order - 1;
+    control = "[success=1 default=ignore]";
+    modulePath = "${config.security.pam.package}/lib/security/pam_succeed_if.so";
+    args = [
+      "uid"
+      "eq"
+      "0"
+      "quiet"
+    ];
+  };
 
   services.udev.packages = [ pkgs.google-guest-configs ];
   services.udev.path = [ pkgs.google-guest-configs ];

@@ -34,17 +34,26 @@ Recovery: `gcloud compute connect-to-serial-port runtime-dev-1 --project macro-4
 ## Rebuild
 
 ```sh
-export NIX_SSHOPTS="-o ProxyCommand='gcloud compute start-iap-tunnel runtime-dev-1 22 --listen-on-stdin --project macro-435922 --zone us-east4-b' -o HostKeyAlias=runtime-dev-1"
+export NIX_SSHOPTS="-o ProxyCommand='gcloud compute start-iap-tunnel runtime-dev-1 22 --listen-on-stdin --project macro-435922 --zone us-east4-b' -o HostKeyAlias=runtime-dev-1 -o UserKnownHostsFile=$HOME/.config/macro-computers/known_hosts"
 nixos-rebuild switch --flake .#runtime-dev-1 --target-host root@runtime-dev-1
 ```
 
-Fresh install (wipes both disks) from a running Linux with root SSH:
+Fresh install (wipes both disks) from a running Linux with root SSH.
+nixos-anywhere splits `--ssh-option` values on spaces, so put the IAP
+command in a wrapper script (`iap-proxy.sh` below just `exec`s
+`gcloud compute start-iap-tunnel runtime-dev-1 22 --listen-on-stdin ...`):
 
 ```sh
 nix run github:nix-community/nixos-anywhere -- --flake .#runtime-dev-1 \
-  --ssh-option "ProxyCommand=gcloud compute start-iap-tunnel runtime-dev-1 22 --listen-on-stdin --project macro-435922 --zone us-east4-b" \
+  --ssh-option ProxyCommand=$PWD/iap-proxy.sh \
+  --ssh-option UserKnownHostsFile=/dev/null --ssh-option StrictHostKeyChecking=no \
   root@runtime-dev-1
 ```
+
+Disks are addressed as `/dev/disk/by-id/scsi-0Google_PersistentDisk_<device-name>`;
+the `google-*` links need GCE udev rules the installer lacks.
+`gcp.nix` exempts uid 0 from `pam_oslogin_login`'s account check, which
+otherwise denies every non-OS-Login user, including root.
 
 ## Tunnels
 
