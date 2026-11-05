@@ -342,6 +342,7 @@ where
         tracing::Span::current().record("agent_user_id", tracing::field::display(&user_id));
 
         let seed = PersonaSeed {
+            creator_id: Some(created_by.as_ref().to_string()),
             name: request.name.clone(),
             job_description: request.job_description,
             personality: request.personality,
@@ -710,7 +711,7 @@ where
         if agent.status != TeamAgentStatus::Failed {
             return Ok(agent);
         }
-        let seed = self
+        let mut seed = self
             .repository
             .persona_seed(agent_user_id)
             .await
@@ -720,6 +721,12 @@ where
                     "the agent predates saved recovery inputs".to_string(),
                 )
             })?;
+        if seed.creator_id.is_none() {
+            seed.creator_id = agent
+                .created_by
+                .as_ref()
+                .map(|creator| creator.as_ref().to_string());
+        }
         let persona = self.computers.persona(agent.team_id, computer_id).await?;
         if persona
             .config

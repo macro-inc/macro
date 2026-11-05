@@ -50,6 +50,7 @@ impl AgentRepos for AgentGitRepos {
                 agent_user_id.clone().into_owned(),
                 team_id,
                 RepoSeed {
+                    creator_id: seed.creator_id.clone(),
                     name: seed.name.clone(),
                     job_description: seed.job_description.clone(),
                     personality: seed.personality.clone(),
@@ -79,6 +80,7 @@ impl AgentRepos for AgentGitRepos {
                 agent_user_id.clone().into_owned(),
                 team_id,
                 RepoSeed {
+                    creator_id: seed.creator_id.clone(),
                     name: seed.name.clone(),
                     job_description: seed.job_description.clone(),
                     personality: seed.personality.clone(),

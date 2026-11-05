@@ -331,6 +331,9 @@ pub struct BrainHealth {
 /// What the agent's workspace repo starts from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersonaSeed {
+    /// Admin the brain should recognize as its creator; absent on older seeds.
+    #[serde(default)]
+    pub creator_id: Option<String>,
     /// Display name.
     pub name: String,
     /// What the agent is responsible for.

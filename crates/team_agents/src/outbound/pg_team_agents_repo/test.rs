@@ -49,6 +49,7 @@ async fn seed(pool: &PgPool) -> Uuid {
 fn account(team_id: Uuid) -> NewAgentAccount {
     NewAgentAccount {
         persona_seed: PersonaSeed {
+            creator_id: Some(ADMIN.to_string()),
             name: "Sam".to_string(),
             job_description: "Help the team".to_string(),
             personality: "Direct".to_string(),
@@ -116,6 +117,28 @@ async fn a_created_agent_reads_back_and_tracks_its_computer(pool: PgPool) {
     assert_eq!(
         repo.list_for_team(Uuid::now_v7()).await.expect("listed"),
         vec![]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn older_saved_persona_seeds_default_to_no_creator(pool: PgPool) {
+    let team_id = seed(&pool).await;
+    let repo = PgTeamAgentsRepo::new(pool.clone());
+    repo.create_account(&account(team_id)).await.unwrap();
+    sqlx::query!(
+        "UPDATE team_agents SET persona_seed = persona_seed - 'creator_id' WHERE user_id = $1",
+        AGENT
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        repo.persona_seed(&user(AGENT))
+            .await
+            .unwrap()
+            .unwrap()
+            .creator_id,
+        None
     );
 }
 

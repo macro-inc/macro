@@ -104,8 +104,10 @@ or computer return 409. Retry errors leave the agent available for another attem
 The outbound adapter calls the shared `ComputerService::retry(team_id, computer_id)`
 in process, maps `NotFailed` to 409 and other-team computers to 404, and returns the
 fresh computer status and setup progress on the agent. Bootstrap credentials remain
-in the existing computer persona; the seed column contains only the original name,
-job and personality.
+in the existing computer persona; the seed column contains the original name,
+job, personality and optional creator user ID. New seeds set `creator_id` from
+the creating admin; older saved JSON defaults it to absent and retry recovers it
+from the account's `created_by` before repo recovery.
 
 An uncertain purchase may leave the computer `Reserved` (setup step `Paying`)
 even after Stripe succeeded. Status refresh preserves the agent's failure reason

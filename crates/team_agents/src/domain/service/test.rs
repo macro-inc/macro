@@ -543,6 +543,7 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
     assert_eq!(
         *service.repos.seeds.lock().expect("lock"),
         vec![PersonaSeed {
+            creator_id: Some(ADMIN.to_string()),
             name: "Sam Rivera".to_string(),
             job_description: "Runs vendor relations.".to_string(),
             personality: "Dry, direct, kind.".to_string(),
@@ -1071,6 +1072,12 @@ async fn retry_reuses_the_seed_computer_and_credentials_without_purchasing() {
         ..Setup::default()
     });
     service.create(receipt(TEAM_ID), request()).await.unwrap();
+    // Older persisted seeds did not contain the creator. Recovery uses the
+    // account's original creator without minting any new credentials.
+    service.repository.agents.lock().unwrap()[0]
+        .account
+        .persona_seed
+        .creator_id = None;
     journal.steps.lock().unwrap().clear();
     let agent = service.retry(receipt(TEAM_ID), &user(AGENT)).await.unwrap();
     assert_eq!(agent.status, TeamAgentStatus::Provisioning);

@@ -26,6 +26,7 @@ async fn advertised_clone_url_uses_the_computer_base_and_preserves_the_repo_toke
             &MacroUserIdStr::parse_from_str("macro|brain@example.com").unwrap(),
             Uuid::from_u128(1),
             &PersonaSeed {
+                creator_id: Some("macro|admin@example.com".to_string()),
                 name: "Brain".into(),
                 job_description: "Help".into(),
                 personality: "Careful".into(),
