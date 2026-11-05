@@ -99,6 +99,9 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
 - Lock accounts before groups, then child rows; lock every group in a batch in UUID order. Pairing expiry locks affected accounts before pairing rows. Media completion takes the group lock before attachment/message writes.
 - Every session-service write takes the account row lock at the caller's
   `lease_epoch`; `ExternalChatError::Fenced` means stop the account now.
+- Adding a chat takes the account row exclusively, against those share-mode
+  fences: a chat-list update and an add running side by side could otherwise
+  each miss the other's write and leave the chat in `waiting_for_message`.
 - `dispatch_started_at` is written before submission. A dispatched send without
   an outcome becomes `unknown` on takeover and is never resent; a later echo
   with its `allocated_source_id` settles it.

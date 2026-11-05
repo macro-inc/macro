@@ -26,7 +26,12 @@ impl AdoptionRepository for PgWhatsAppRepository {
         .execute(&mut *tx)
         .await
         .map_err(failure)?;
-        sqlx::query_scalar!("SELECT id FROM whatsapp_linked_account WHERE id = $1 AND user_id = $2 AND generation = $3 AND state = 'connected' FOR SHARE", account.id,user,account.authorization_generation)
+        // Exclusive against the replica's fence: a chat-list update commits
+        // either before the backfill state below is decided, so it sees the
+        // anchor, or after this chat exists, so the update marks it ready.
+        // In share mode both could miss each other and leave the chat waiting
+        // for a message that had already arrived.
+        sqlx::query_scalar!("SELECT id FROM whatsapp_linked_account WHERE id = $1 AND user_id = $2 AND generation = $3 AND state = 'connected' FOR NO KEY UPDATE", account.id,user,account.authorization_generation)
             .fetch_optional(&mut *tx).await.map_err(failure)?.ok_or(ExternalChatError::Disconnected)?;
         // Taken after the account, in update_chats_in's order.
         super::chats::lock_anchors_in(&mut tx, user).await?;

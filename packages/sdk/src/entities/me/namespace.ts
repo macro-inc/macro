@@ -2,9 +2,6 @@ import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { StaticImage } from '../images/image';
 
-/** The largest profile picture, matching the web app's limit. */
-const MAX_PROFILE_PICTURE_BYTES = 16 * 1000 * 1000;
-
 /** How to store an uploaded profile picture. */
 export interface UploadProfilePictureOptions {
   /** File name, such as `avatar.png`. */
@@ -27,22 +24,19 @@ export class MeNamespace {
 
   /**
    * Upload an image to use as your profile picture. This only stores it; pass
-   * the result to {@link MeNamespace.update} to start using it.
+   * the result to {@link MeNamespace.update} to start using it. Pictures can be
+   * at most 16 MB, and each user can start 20 uploads an hour.
    */
   async uploadProfilePicture(
     data: Blob | Uint8Array<ArrayBuffer>,
     options: UploadProfilePictureOptions,
   ): Promise<StaticImage> {
-    const size = data instanceof Blob ? data.size : data.byteLength;
-    if (size > MAX_PROFILE_PICTURE_BYTES) {
-      throw new MacroError('profile picture is larger than 16 MB');
-    }
-
     const { file_id, upload_url } = unwrap(
       await this.client.auth.createProfilePictureUpload({
         body: {
           file_name: options.fileName,
           content_type: options.contentType,
+          size_bytes: data instanceof Blob ? data.size : data.byteLength,
         },
       }),
     );

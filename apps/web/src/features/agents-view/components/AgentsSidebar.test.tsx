@@ -203,7 +203,16 @@ describe('mixed Agents sidebar', () => {
       screen
         .getAllByRole('heading', { level: 3 })
         .map((heading) => heading.textContent)
-    ).toEqual(['Needs you1', 'Recent1', 'Archived']);
+    ).toEqual(['Needs you1', 'Recent1']);
+    // Archived starts collapsed; its header expands it.
+    const archivedToggle = screen.getByRole('button', { name: /Archived/ });
+    expect(archivedToggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('button', { name: /Old spike/ })).toBeNull();
+    fireEvent.click(archivedToggle);
+    expect(archivedToggle.getAttribute('aria-expanded')).toBe('true');
+    expect(
+      await screen.findByRole('button', { name: /Old spike/ })
+    ).toBeTruthy();
     const chat = screen.getByRole('button', { name: /Plan launch/ });
     expect(chat.getAttribute('data-kind')).toBe('chat');
     expect(chat.getAttribute('aria-current')).toBe('page');
@@ -280,9 +289,10 @@ describe('mixed Agents sidebar', () => {
     expect(clear).toHaveBeenCalledOnce();
   });
 
-  it('toggles hidden routine runs and marks the runs it lists', () => {
+  it('toggles hidden routine runs from the filter menu and marks the runs it lists', async () => {
     const [show, setShow] = createSignal(false);
     const change = vi.fn(setShow);
+    const clear = vi.fn();
     render(() => (
       <AgentsSidebar
         onCreateAgent={vi.fn()}
@@ -290,7 +300,7 @@ describe('mixed Agents sidebar', () => {
         filters={EMPTY_CONVERSATION_FILTERS}
         grouping="none"
         onFilterChange={vi.fn()}
-        onClearFilters={vi.fn()}
+        onClearFilters={clear}
         onGroupingChange={vi.fn()}
         activePage="new"
         onOpenPage={vi.fn()}
@@ -332,16 +342,6 @@ describe('mixed Agents sidebar', () => {
       />
     ));
 
-    const toggle = screen.getByRole('button', {
-      name: 'Show hidden routine runs',
-    });
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
-    fireEvent.click(toggle);
-    expect(change).toHaveBeenLastCalledWith(true);
-    expect(toggle.getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(toggle);
-    expect(change).toHaveBeenLastCalledWith(false);
-
     const run = screen
       .getByRole('button', { name: 'Morning digest' })
       .closest('[data-agent-session-row]');
@@ -350,6 +350,31 @@ describe('mixed Agents sidebar', () => {
       .getByRole('button', { name: 'Plan launch' })
       .closest('[data-agent-session-row]');
     expect(mine?.querySelector('[aria-label="Routine run"]')).toBeNull();
+
+    const filterMenu = screen.getByRole('button', {
+      name: 'Filter conversations',
+    });
+    const badge = () => filterMenu.parentElement?.querySelector('span');
+    const openOption = async (name: string, role = 'menuitem') => {
+      fireEvent.keyDown(filterMenu, { key: 'ArrowDown' });
+      return screen.findByRole(role, { name });
+    };
+
+    expect(badge()).toBeNull();
+    fireEvent.keyDown(
+      await openOption('Show hidden routine runs', 'menuitemcheckbox'),
+      { key: 'Enter' }
+    );
+    await waitFor(() => expect(change).toHaveBeenLastCalledWith(true));
+    expect(badge()?.textContent).toBe('1');
+
+    await waitFor(() =>
+      expect(filterMenu.getAttribute('aria-expanded')).toBe('false')
+    );
+    fireEvent.keyDown(await openOption('Clear filters'), { key: 'Enter' });
+    await waitFor(() => expect(clear).toHaveBeenCalledOnce());
+    expect(change).toHaveBeenLastCalledWith(false);
+    expect(badge()).toBeNull();
   });
 
   it('opens rename and delete on a session or chat right-click', async () => {
