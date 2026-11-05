@@ -546,7 +546,7 @@ jobs:
           POSTGRES_DB: macrodb
         ports:
         - '5432:5432'
-        options: '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5 --shm-size 1g'
+        options: '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5 --shm-size 1g -v /dev/shm/pgdata:/var/lib/postgresql/data'
       redis:
         image: redis:7
         ports:
