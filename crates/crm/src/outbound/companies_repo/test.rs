@@ -33,7 +33,7 @@ mod team_settings;
 
 /// Coordinates teardown after the source mutation without timing assumptions.
 #[derive(Default)]
-pub(super) struct DepopulateSourceGate {
+pub(super) struct ContactWriteGate {
     pub(super) entered: tokio::sync::Notify,
     pub(super) resume: tokio::sync::Notify,
 }

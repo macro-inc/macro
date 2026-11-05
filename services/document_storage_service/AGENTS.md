@@ -84,7 +84,7 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
-- Register contact email/company setters and request schemas in OpenAPI together;
+- Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
   the CRM domain owns authorization, normalization and relation invariants.
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.

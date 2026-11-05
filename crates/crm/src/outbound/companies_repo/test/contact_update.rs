@@ -27,29 +27,39 @@ async fn edits_preserve_contact_identity_history_archive_and_sources(
     let id = insert_contact_with_source(&pool, company, "person@example.com", link).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     repo.set_contact_hidden(&team, &id, true).await?;
+    sqlx::query!("UPDATE crm_contacts SET email = NULL WHERE id = $1", id)
+        .execute(&pool)
+        .await?;
     let before = repo.get_contact_for_team(&team, &id, true).await?.unwrap();
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
     let access = CrmContactReceipt::<EditAccessLevel>::dangerously_internal(id, team);
     let edited = service
-        .set_contact_email(&access, Some(" Changed@Example.org "))
+        .set_contact_email(&access, &format!(" Contact@{} ", "Gmail.com"))
         .await?;
-    assert_eq!(edited.email.as_deref(), Some("changed@example.org"));
+    assert_eq!(edited.email, Some(format!("contact@{}", "gmail.com")));
     assert_eq!(edited.id, before.id);
     assert_eq!(edited.company_id, before.company_id);
     assert_eq!(edited.first_interaction, before.first_interaction);
     assert_eq!(edited.last_interaction, before.last_interaction);
     assert_eq!(edited.created_at, before.created_at);
     assert!(edited.hidden);
-    let moved = service.set_contact_company(&access, Some(other)).await?;
+    let moved = service.set_contact_company(&access, other).await?;
     assert_eq!(moved.company_id, Some(other));
     assert_eq!(moved.id, id);
     assert!(moved.hidden);
-    let unlinked = service.set_contact_company(&access, None).await?;
-    assert_eq!(unlinked.company_id, None);
-    assert!(unlinked.hidden);
-    let cleared = service.set_contact_email(&access, None).await?;
-    assert_eq!(cleared.email, None);
-    assert_eq!(cleared.id, id);
+    assert_eq!(
+        service
+            .set_contact_email(&access, edited.email.as_deref().unwrap())
+            .await?
+            .email,
+        edited.email
+    );
+    assert!(matches!(
+        service
+            .set_contact_email(&access, "changed@example.org")
+            .await,
+        Err(CrmError::InvalidRequest(_))
+    ));
     let row = sqlx::query!(
         "SELECT team_id, manually_created FROM crm_contacts WHERE id = $1",
         id
@@ -79,53 +89,37 @@ async fn edits_reject_duplicate_addresses_without_merging(pool: PgPool) -> anyho
     enable_crm_for_team(&pool, team).await?;
     let company = insert_company(&pool, team, true, &["example.com"]).await?;
     let id = insert_contact(&pool, company, "first@example.com").await?;
-    let duplicate = insert_contact(&pool, company, "second@example.com").await?;
+    let other = insert_company(&pool, team, true, &["example.org"]).await?;
+    let duplicate = insert_contact(&pool, other, "second@example.com").await?;
+    sqlx::query!("UPDATE crm_contacts SET email = NULL WHERE id = $1", id)
+        .execute(&pool)
+        .await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let error = repo
         .update_contact(
             &team,
             &id,
-            &ContactFieldUpdate::Email(Some("second@example.com".into())),
+            &ContactFieldUpdate::Email("second@example.com".into()),
             false,
         )
         .await;
-    assert!(matches!(
-        error,
-        Err(CrmError::ContactAlreadyExistsForCompany)
-    ));
+    assert!(matches!(error, Err(CrmError::ContactAlreadyExistsForTeam)));
     assert_eq!(
         repo.get_contact_for_team(&team, &id, false)
             .await?
             .unwrap()
             .email
             .as_deref(),
-        Some("first@example.com")
+        None
     );
     assert!(
         repo.get_contact_for_team(&team, &duplicate, false)
             .await?
             .is_some()
     );
-    repo.create_contact_for_team(
-        &team,
-        Some("first@example.com"),
-        "Standalone",
-        chrono::Utc::now(),
-    )
-    .await?;
-    let error = repo
-        .update_contact(&team, &id, &ContactFieldUpdate::Company(None), false)
-        .await;
-    assert!(matches!(
-        error,
-        Err(CrmError::ContactAlreadyExistsForCompany)
-    ));
-    assert_eq!(
-        repo.get_contact_for_team(&team, &id, false)
-            .await?
-            .unwrap()
-            .company_id,
-        Some(company)
+    repo.set_contact_hidden(&team, &duplicate, true).await?;
+    assert!(
+        matches!(repo.update_contact(&team, &id, &ContactFieldUpdate::Email("second@example.com".into()), false).await, Err(CrmError::InvalidRequest(message)) if message == "contact change unavailable")
     );
     Ok(())
 }
@@ -140,17 +134,22 @@ async fn edits_enforce_team_visibility_and_disabled_crm(pool: PgPool) -> anyhow:
     enable_crm_for_team(&pool, foreign_team).await?;
     let company = insert_company(&pool, team, true, &["example.com"]).await?;
     let foreign_company = insert_company(&pool, foreign_team, true, &["example.org"]).await?;
-    let id = insert_contact(&pool, company, "person@example.com").await?;
+    let id = insert_contact(&pool, company, &format!("person@{}", "gmail.com")).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let error = repo
-        .update_contact(&foreign_team, &id, &ContactFieldUpdate::Email(None), true)
+        .update_contact(
+            &foreign_team,
+            &id,
+            &ContactFieldUpdate::Email("new@example.com".into()),
+            true,
+        )
         .await;
     assert!(matches!(error, Err(CrmError::ContactNotFoundForTeam)));
     let error = repo
         .update_contact(
             &team,
             &id,
-            &ContactFieldUpdate::Company(Some(foreign_company)),
+            &ContactFieldUpdate::Company(foreign_company),
             true,
         )
         .await;
@@ -163,12 +162,12 @@ async fn edits_enforce_team_visibility_and_disabled_crm(pool: PgPool) -> anyhow:
         TeamRole::Member,
     );
     assert!(matches!(
-        service.set_contact_email(&member, None).await,
+        service.set_contact_email(&member, "new@example.com").await,
         Err(CrmError::ContactNotFoundForTeam)
     ));
     let owner = CrmContactReceipt::<EditAccessLevel>::dangerously_internal(id, team);
     assert!(matches!(
-        service.set_contact_email(&owner, Some("invalid")).await,
+        service.set_contact_email(&owner, "invalid").await,
         Err(CrmError::InvalidRequest(_))
     ));
     sqlx::query!(
@@ -178,7 +177,7 @@ async fn edits_enforce_team_visibility_and_disabled_crm(pool: PgPool) -> anyhow:
     .execute(&pool)
     .await?;
     assert!(matches!(
-        service.set_contact_email(&owner, None).await,
+        service.set_contact_email(&owner, "new@example.com").await,
         Err(CrmError::CrmDisabledForTeam)
     ));
     Ok(())
@@ -193,23 +192,18 @@ async fn moving_cannot_reveal_a_contact_below_an_archived_company(
     enable_crm_for_team(&pool, team).await?;
     let company = insert_company(&pool, team, true, &["example.com"]).await?;
     let destination = insert_company(&pool, team, true, &["example.org"]).await?;
-    let id = insert_contact(&pool, company, "person@example.com").await?;
+    let id = insert_contact(&pool, company, &format!("person@{}", "gmail.com")).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     repo.set_company_hidden(&team, &destination, true).await?;
     assert!(matches!(
-        repo.update_contact(
-            &team,
-            &id,
-            &ContactFieldUpdate::Company(Some(destination)),
-            true
-        )
-        .await,
+        repo.update_contact(&team, &id, &ContactFieldUpdate::Company(destination), true)
+            .await,
         Err(CrmError::CompanyHidden)
     ));
     repo.set_company_hidden(&team, &company, true).await?;
     repo.set_contact_hidden(&team, &id, false).await?;
     assert!(matches!(
-        repo.update_contact(&team, &id, &ContactFieldUpdate::Company(None), true)
+        repo.update_contact(&team, &id, &ContactFieldUpdate::Company(destination), true)
             .await,
         Err(CrmError::CompanyHidden)
     ));
@@ -233,7 +227,7 @@ async fn single_and_bulk_teardown_keep_company_before_source_lock_order(
     let company = insert_company(&pool, team, true, &["example.com"]).await?;
     let link = insert_email_link(&pool, "macro|owner@example.com", "owner@example.com").await?;
     let id = insert_contact_with_source(&pool, company, "person@example.com", link).await?;
-    let gate = std::sync::Arc::new(super::DepopulateSourceGate::default());
+    let gate = std::sync::Arc::new(super::ContactWriteGate::default());
     let mut single_repo = CompaniesRepositoryImpl::new(pool.clone());
     single_repo.after_depopulate_source = Some(gate.clone());
     let single = tokio::spawn(async move {
@@ -270,5 +264,105 @@ async fn single_and_bulk_teardown_keep_company_before_source_lock_order(
         "source deletion must hold its company lock"
     );
     assert!(repo.get_contact_for_team(&team, &id, true).await?.is_none());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn company_edits_require_known_personal_providers(pool: PgPool) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, "macro|owner@example.com").await?;
+    enable_crm_for_team(&pool, team).await?;
+    let company = insert_company(&pool, team, true, &["example.com"]).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    for domain in [
+        None,
+        Some("example.com"),
+        Some("github.com"),
+        Some("mailinator.com"),
+    ] {
+        let email = domain.map(|domain| format!("contact@{domain}"));
+        let contact = repo
+            .create_contact_for_team(&team, email.as_deref(), "Contact", chrono::Utc::now())
+            .await?;
+        assert!(matches!(
+            repo.update_contact(
+                &team,
+                &contact.id,
+                &ContactFieldUpdate::Company(company),
+                true
+            )
+            .await,
+            Err(CrmError::InvalidRequest(_))
+        ));
+    }
+    for domain in ["gmail.com", "outlook.com", "icloud.com"] {
+        let email = format!("contact@{domain}");
+        let contact = repo
+            .create_contact_for_team(&team, Some(&email), "Contact", chrono::Utc::now())
+            .await?;
+        assert_eq!(
+            repo.update_contact(
+                &team,
+                &contact.id,
+                &ContactFieldUpdate::Company(company),
+                true
+            )
+            .await?
+            .company_id,
+            Some(company)
+        );
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn concurrent_additions_reject_duplicates_and_stale_replacements(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, "macro|owner@example.com").await?;
+    enable_crm_for_team(&pool, team).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let first = repo
+        .create_contact_for_team(&team, None, "First", chrono::Utc::now())
+        .await?;
+    let second = repo
+        .create_contact_for_team(&team, None, "Second", chrono::Utc::now())
+        .await?;
+    let edit = ContactFieldUpdate::Email("contact@example.com".into());
+    let (a, b) = tokio::join!(
+        repo.update_contact(&team, &first.id, &edit, true),
+        repo.update_contact(&team, &second.id, &edit, true)
+    );
+    assert_ne!(a.is_ok(), b.is_ok());
+    let winner = a.or(b)?;
+    let (a, b) = tokio::join!(
+        repo.update_contact(&team, &winner.id, &edit, true),
+        repo.update_contact(&team, &winner.id, &edit, true)
+    );
+    assert!(a.is_ok() && b.is_ok());
+    let loser = if winner.id == first.id {
+        second.id
+    } else {
+        first.id
+    };
+    let edit_a = ContactFieldUpdate::Email("a@example.com".into());
+    let edit_b = ContactFieldUpdate::Email("b@example.com".into());
+    let (a, b) = tokio::join!(
+        repo.update_contact(&team, &loser, &edit_a, true),
+        repo.update_contact(&team, &loser, &edit_b, true)
+    );
+    assert_ne!(a.is_ok(), b.is_ok());
+    let foreign = Uuid::now_v7();
+    seed_team(&pool, foreign, "macro|other@example.org").await?;
+    enable_crm_for_team(&pool, foreign).await?;
+    let foreign_contact = repo
+        .create_contact_for_team(&foreign, None, "Other", chrono::Utc::now())
+        .await?;
+    assert!(
+        repo.update_contact(&foreign, &foreign_contact.id, &edit, true)
+            .await
+            .is_ok()
+    );
     Ok(())
 }

@@ -245,3 +245,22 @@ it('applies confirmed fields when an overlapping rename has a later transaction 
   });
   client.clear();
 });
+
+it('publishes personal-provider eligibility with a committed email addition', async () => {
+  const client = new QueryClient();
+  const blank = { ...before, email: null, personalEmail: false };
+  const saved = {
+    ...blank,
+    email: `contact@${'gmail.com'}`,
+    personalEmail: true,
+  };
+  client.setQueryData(crmKeys.contact(blank.id).queryKey, blank);
+  expect(await updateContactEditDetails(client, blank, saved, () => true)).toBe(
+    true
+  );
+  expect(
+    client.getQueryData<CrmContactResponse>(crmKeys.contact(blank.id).queryKey)
+      ?.personalEmail
+  ).toBe(true);
+  client.clear();
+});

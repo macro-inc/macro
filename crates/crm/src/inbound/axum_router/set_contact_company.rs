@@ -1,4 +1,4 @@
-//! Update the optional company field of an authorized CRM contact.
+//! Link or switch the company of an authorized CRM contact.
 
 use super::{CrmRouterState, list_company_contacts::CrmContactResponse};
 use crate::{
@@ -16,12 +16,12 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-/// Replace or clear the contact's company.
+/// Link or switch a contact with a known personal-provider email.
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetContactCompanyRequest {
-    /// New company; null clears the field.
-    pub company_id: Option<Uuid>,
+    /// Destination company in the same team. Unlinking is not supported.
+    pub company_id: Uuid,
 }
 
 /// Update an existing team-owned contact without merging its identity.

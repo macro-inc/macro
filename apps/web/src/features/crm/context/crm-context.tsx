@@ -197,11 +197,11 @@ export type CrmContext = {
     name: string;
   }>;
   editContactEmail(): CrmMutation<
-    { contact: CrmContact; email: string | null },
+    { contact: CrmContact; email: string },
     CrmContact
   >;
   editContactCompany(): CrmMutation<
-    { contact: CrmContact; companyId: string | null },
+    { contact: CrmContact; companyId: string },
     CrmContact
   >;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;

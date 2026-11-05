@@ -6,9 +6,10 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-test('contact field edits use handles, explicit clears and invalidate detail only after success', async () => {
+test('contact additions and company links invalidate detail only after success', async () => {
   const writes: { path: string; body: unknown }[] = [];
-  let email: string | null = 'first@example.com';
+  const address = `contact@${'gmail.com'}`;
+  let email: string | null = null;
   let companyId: string | null = 'company-1';
   let reject = false;
   let reads = 0;
@@ -45,30 +46,24 @@ test('contact field edits use handles, explicit clears and invalidate detail onl
     hosts: { storage: 'https://storage.test' },
   });
   const contact = macro.crm.contactById('contact-1');
-  expect(await contact.email()).toBe('first@example.com');
-  await contact.setEmail('second@example.com');
-  expect(await contact.email()).toBe('second@example.com');
-  await contact.setEmail();
   expect(await contact.email()).toBeUndefined();
+  await contact.setEmail(address);
+  expect(await contact.email()).toBe(address);
   await contact.setCompany(macro.crm.companyById('company-2'));
   expect((await contact.company())?.id).toBe('company-2');
-  await contact.setCompany();
-  expect(await contact.company()).toBeUndefined();
   expect(writes).toEqual([
     {
       path: '/crm/contacts/contact-1/email',
-      body: { email: 'second@example.com' },
+      body: { email: address },
     },
-    { path: '/crm/contacts/contact-1/email', body: { email: null } },
     {
       path: '/crm/contacts/contact-1/company',
       body: { companyId: 'company-2' },
     },
-    { path: '/crm/contacts/contact-1/company', body: { companyId: null } },
   ]);
   const readsBeforeFailure = reads;
   reject = true;
   await expect(contact.setEmail('third@example.com')).rejects.toThrow();
-  expect(await contact.email()).toBeUndefined();
+  expect(await contact.email()).toBe(address);
   expect(reads).toBe(readsBeforeFailure);
 });

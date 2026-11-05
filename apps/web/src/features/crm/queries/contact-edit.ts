@@ -161,7 +161,7 @@ export function useSetContactEmailMutation(deps: CrmRecordDependencies) {
         email,
       }: {
         contact: CrmContact;
-        email: string | null;
+        email: string;
       }) =>
         editContact(deps, contact, 'email', () =>
           deps.storage.setContactEmail({ contactId: contact.id, email })
@@ -179,7 +179,7 @@ export function useSetContactCompanyMutation(deps: CrmRecordDependencies) {
         companyId,
       }: {
         contact: CrmContact;
-        companyId: string | null;
+        companyId: string;
       }) =>
         editContact(deps, contact, 'company', () =>
           deps.storage.setContactCompany({ contactId: contact.id, companyId })

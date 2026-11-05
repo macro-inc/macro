@@ -415,6 +415,9 @@ pub enum CrmError {
     /// The company already has a contact with the requested email.
     #[error("a crm contact with this email already exists for the company")]
     ContactAlreadyExistsForCompany,
+    /// Another visible contact in the owning team already uses this address.
+    #[error("a crm contact with this email already exists for the team")]
+    ContactAlreadyExistsForTeam,
     /// The team-level `team_crm_settings.crm_enabled` killswitch is off.
     #[error("crm is not enabled for this team")]
     CrmDisabledForTeam,

@@ -277,6 +277,12 @@ impl IntoResponse for CrmError {
                     message: "a crm contact with this email already exists for the company".into(),
                 }),
             ),
+            CrmError::ContactAlreadyExistsForTeam => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "a crm contact with this email already exists for the team".into(),
+                }),
+            ),
             CrmError::CrmDisabledForTeam => (
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {

@@ -37,7 +37,9 @@ pub struct CompaniesRepositoryImpl {
     /// The underlying sqlx::PgPool connected to macrodb.
     pool: PgPool,
     #[cfg(test)]
-    after_depopulate_source: Option<std::sync::Arc<test::DepopulateSourceGate>>,
+    after_depopulate_source: Option<std::sync::Arc<test::ContactWriteGate>>,
+    #[cfg(test)]
+    after_personal_company: Option<std::sync::Arc<test::ContactWriteGate>>,
 }
 
 impl CompaniesRepositoryImpl {
@@ -47,6 +49,8 @@ impl CompaniesRepositoryImpl {
             pool,
             #[cfg(test)]
             after_depopulate_source: None,
+            #[cfg(test)]
+            after_personal_company: None,
         }
     }
 
@@ -132,18 +136,21 @@ impl CompaniesRepositoryImpl {
               AND (
                   -- Company-less contacts are the personal-email ones
                   -- email sync files on their own.
-                  ct.company_id IS NULL
+                  $4 OR ct.company_id IS NULL
                   OR EXISTS (
                       SELECT 1 FROM crm_domains d
                       WHERE d.company_id = ct.company_id AND LOWER(d.domain) = $3
                   )
               )
+              AND (NOT $4 OR (SELECT COUNT(*) FROM crm_contacts other
+                   WHERE other.team_id = $1 AND LOWER(other.email) = $2) = 1)
             ORDER BY ct.company_id IS NULL, ct.id
             LIMIT 1
             "#,
             team_id,
             normalized_email,
             normalized_domain,
+            crate::domain::generic_email_domains::is_personal_email_domain(normalized_domain),
         )
         .fetch_optional(&mut **tx)
         .await
@@ -801,52 +808,52 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Merge rules mirror populate_contact: first non-NULL name wins,
-        // last_interaction always GREATEST, first_interaction LEAST only
-        // for sent mail. Received mail only refreshes an existing contact.
-        let contact_id = match (admitted, is_sent) {
-            (false, _) => None,
-            (true, true) => Some(
-                sqlx::query_scalar!(
-                    r#"
-                    INSERT INTO crm_contacts
-                        (team_id, company_id, email, name, first_interaction, last_interaction)
-                    VALUES ($1, NULL, $2, $3, $4, $5)
-                    ON CONFLICT (team_id, LOWER(email)) WHERE company_id IS NULL DO UPDATE
-                        SET name = COALESCE(crm_contacts.name, EXCLUDED.name),
-                            updated_at = now(),
-                            first_interaction = LEAST(crm_contacts.first_interaction, EXCLUDED.first_interaction),
-                            last_interaction = GREATEST(crm_contacts.last_interaction, EXCLUDED.last_interaction)
-                    RETURNING id
-                    "#,
-                    team_id,
-                    normalized_email,
-                    name,
-                    first_at,
-                    last_at,
-                )
-                .fetch_one(&mut *tx)
+        if !admitted {
+            tx.commit()
                 .await
-                .map_err(|e| CrmError::StorageLayerError(e.into()))?,
-            ),
-            (true, false) => sqlx::query_scalar!(
-                r#"
-                UPDATE crm_contacts
-                SET name = COALESCE(name, $3),
-                    last_interaction = GREATEST(last_interaction, $4)
-                WHERE team_id = $1
-                  AND company_id IS NULL
-                  AND LOWER(email) = $2
-                RETURNING id
-                "#,
-                team_id,
-                normalized_email,
-                name,
-                last_at,
-            )
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?,
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            return Ok(());
+        }
+
+        // A personal email identifies a contact independently of its manually
+        // selected company. Count archived matches too; ambiguity never creates
+        // another identity or assigns a source to an arbitrary contact.
+        let matches = sqlx::query!(
+            "SELECT id, company_id FROM crm_contacts WHERE team_id = $1 AND LOWER(email) = $2 LIMIT 2",
+            team_id, normalized_email,
+        ).fetch_all(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let contact_id = match matches.as_slice() {
+            [existing] => {
+                if let Some(company_id) = existing.company_id {
+                    // Match hide, edit and teardown lock order. Sync does not
+                    // change company settings, the relation or archive state.
+                    sqlx::query!("SELECT id FROM crm_companies WHERE id = $1 AND team_id = $2 FOR UPDATE", company_id, team_id)
+                        .fetch_optional(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                }
+                #[cfg(test)]
+                if let Some(gate) = &self.after_personal_company {
+                    gate.entered.notify_one();
+                    gate.resume.notified().await;
+                }
+                sqlx::query_scalar!(
+                    r#"UPDATE crm_contacts SET name = COALESCE(name, $3),
+                        first_interaction = CASE WHEN $6 THEN LEAST(first_interaction, $4) ELSE first_interaction END,
+                        last_interaction = GREATEST(last_interaction, $5)
+                       WHERE id = $1 AND team_id = $2 AND LOWER(email) = $7
+                       RETURNING id"#,
+                    existing.id, team_id, name, first_at, last_at, is_sent, normalized_email,
+                ).fetch_optional(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?
+            }
+            [] if is_sent => Some(sqlx::query_scalar!(
+                r#"INSERT INTO crm_contacts (team_id, company_id, email, name, first_interaction, last_interaction)
+                   VALUES ($1, NULL, $2, $3, $4, $5) RETURNING id"#,
+                team_id, normalized_email, name, first_at, last_at,
+            ).fetch_one(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?),
+            [] => None,
+            _ => {
+                tracing::debug!("Skipping ambiguous personal contact sync");
+                None
+            }
         };
         tracing::Span::current().record("filed", contact_id.is_some());
 
@@ -1051,6 +1058,13 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .begin()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if let Some((_, domain)) = normalized_email
+            .as_deref()
+            .and_then(|email| email.split_once('@'))
+        {
+            Self::lock_team_domain(&mut tx, team_id, domain).await?;
+        }
 
         if !Self::team_crm_enabled(&mut tx, team_id).await? {
             return Err(CrmError::CrmDisabledForTeam);

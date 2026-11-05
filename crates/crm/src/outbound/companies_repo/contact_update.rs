@@ -30,11 +30,11 @@ impl CompaniesRepositoryImpl {
         .ok_or(CrmError::ContactNotFoundForTeam)?;
 
         let company_id = match update {
-            ContactFieldUpdate::Company(id) => *id,
+            ContactFieldUpdate::Company(id) => Some(*id),
             ContactFieldUpdate::Email(_) => before.company_id,
         };
         let email = match update {
-            ContactFieldUpdate::Email(email) => email.as_deref(),
+            ContactFieldUpdate::Email(email) => Some(email.as_str()),
             ContactFieldUpdate::Company(_) => before.email.as_deref(),
         };
         let mut company_ids: Vec<Uuid> = before.company_id.into_iter().chain(company_id).collect();
@@ -84,7 +84,9 @@ impl CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?
         .ok_or(CrmError::ContactNotFoundForTeam)?;
-        if current.company_id != before.company_id || current.email != before.email {
+        if (current.company_id != before.company_id || current.email != before.email)
+            && !(current.company_id == company_id && current.email.as_deref() == email)
+        {
             return Err(CrmError::InvalidRequest(
                 "contact changed; reload and try again".into(),
             ));
@@ -95,6 +97,7 @@ impl CompaniesRepositoryImpl {
         if !include_hidden && (current.hidden || parent_hidden) {
             return Err(CrmError::ContactNotFoundForTeam);
         }
+        update.validate(&current)?;
         if let ContactFieldUpdate::Company(_) = update {
             if parent_hidden && !current.hidden && company_id != current.company_id {
                 return Err(CrmError::CompanyHidden);
@@ -115,6 +118,27 @@ impl CompaniesRepositoryImpl {
                 .map_err(|e| CrmError::StorageLayerError(e.into()))?;
             return Ok(current);
         }
+        // Every email writer takes its domain lock before rows. Count across the
+        // whole team, including archived records, without exposing restricted ones.
+        let duplicates = sqlx::query!(
+            r#"SELECT ct.hidden OR COALESCE(co.hidden, FALSE) AS "hidden!"
+               FROM crm_contacts ct LEFT JOIN crm_companies co ON co.id = ct.company_id
+               WHERE ct.team_id = $1 AND LOWER(ct.email) = $2 AND ct.id <> $3"#,
+            team_id,
+            email,
+            contact_id,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        if !duplicates.is_empty() {
+            if !include_hidden && duplicates.iter().any(|row| row.hidden) {
+                return Err(CrmError::InvalidRequest(
+                    "contact change unavailable".into(),
+                ));
+            }
+            return Err(CrmError::ContactAlreadyExistsForTeam);
+        }
         let contact = sqlx::query_as!(
             CrmContact,
             r#"UPDATE crm_contacts SET email = $3, company_id = $4, manually_created = TRUE
@@ -133,7 +157,7 @@ impl CompaniesRepositoryImpl {
                 .as_database_error()
                 .is_some_and(|error| error.is_unique_violation())
             {
-                CrmError::ContactAlreadyExistsForCompany
+                CrmError::ContactAlreadyExistsForTeam
             } else {
                 CrmError::StorageLayerError(error.into())
             }

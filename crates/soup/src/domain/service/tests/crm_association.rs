@@ -162,7 +162,7 @@ impl CrmService for FakeCrm {
         _access: &crm::domain::auth::CrmContactReceipt<
             entity_access::domain::models::EditAccessLevel,
         >,
-        _email: Option<&str>,
+        _email: &str,
     ) -> Result<crm::domain::model::CrmContact, CrmError> {
         Err(CrmError::ContactNotFoundForTeam)
     }
@@ -172,7 +172,7 @@ impl CrmService for FakeCrm {
         _access: &crm::domain::auth::CrmContactReceipt<
             entity_access::domain::models::EditAccessLevel,
         >,
-        _company_id: Option<uuid::Uuid>,
+        _company_id: uuid::Uuid,
     ) -> Result<crm::domain::model::CrmContact, CrmError> {
         Err(CrmError::ContactNotFoundForTeam)
     }

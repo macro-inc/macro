@@ -4,12 +4,11 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SetContactCompanyRequestCompanyId } from './setContactCompanyRequestCompanyId';
 
 /**
- * Replace or clear the contact's company.
+ * Link or switch a contact with a known personal-provider email.
  */
 export interface SetContactCompanyRequest {
-  /** New company; null clears the field. */
-  companyId?: SetContactCompanyRequestCompanyId;
+  /** Destination company in the same team. Unlinking is not supported. */
+  companyId: string;
 }

@@ -29,7 +29,11 @@ export function ContactEmailField(props: { contact: CrmContact }) {
       {(_id) => (
         <ContactEmailProperty
           email={props.contact.email}
-          errorMessage={editError}
+          errorMessage={(error) =>
+            thrownResultErrorHasCode(error, 'CONFLICT')
+              ? t('crm.contactEmailConflict')
+              : editError(error)
+          }
           save={async (email) => {
             await mutation.mutateAsync({ contact: props.contact, email });
           }}
@@ -51,6 +55,7 @@ export function ContactCompanyField(props: {
     <Show when={props.contact.id} keyed>
       {(_id) => (
         <ContactCompanyProperty
+          editable={props.contact.personalEmail === true}
           companyId={props.contact.companyId}
           companyName={company()?.name}
           errorMessage={editError}

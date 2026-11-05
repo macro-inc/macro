@@ -279,18 +279,18 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         name: &str,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Replace or clear the contact's email without merging it with another record.
+    /// Add a missing email without merging identities; an identical retry is safe.
     fn set_contact_email(
         &self,
         access: &CrmContactReceipt<EditAccessLevel>,
-        email: Option<&str>,
+        email: &str,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
-    /// Link, replace or clear the contact's single company within its owning team.
+    /// Link or switch a personal-email contact's company within its owning team.
     fn set_contact_company(
         &self,
         access: &CrmContactReceipt<EditAccessLevel>,
-        company_id: Option<uuid::Uuid>,
+        company_id: uuid::Uuid,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
     /// Batched authorization probe for a CRM-scoped email query. See
@@ -754,8 +754,9 @@ where
 
         // Personal mail providers (gmail, yahoo, …) never key a company:
         // one would swallow every contact on the provider. They file as
-        // company-less contacts, and only when the team lets personal
-        // emails in (the repository checks).
+        // company-less only when no identity exists, retaining a unique
+        // existing contact and its manual company. The repository still
+        // checks whether the team lets personal emails in.
         if is_personal_email_domain(domain) {
             return self
                 .companies_repository
@@ -991,9 +992,9 @@ where
     async fn set_contact_email(
         &self,
         access: &CrmContactReceipt<EditAccessLevel>,
-        email: Option<&str>,
+        email: &str,
     ) -> Result<CrmContact, CrmError> {
-        let email = email.map(normalize_contact_email).transpose()?;
+        let email = normalize_contact_email(email)?;
         self.companies_repository
             .update_contact(
                 &access.team_id(),
@@ -1008,7 +1009,7 @@ where
     async fn set_contact_company(
         &self,
         access: &CrmContactReceipt<EditAccessLevel>,
-        company_id: Option<uuid::Uuid>,
+        company_id: uuid::Uuid,
     ) -> Result<CrmContact, CrmError> {
         self.companies_repository
             .update_contact(
@@ -1422,7 +1423,7 @@ impl CrmService for NoOpCrmService {
     async fn set_contact_email(
         &self,
         _access: &CrmContactReceipt<EditAccessLevel>,
-        _email: Option<&str>,
+        _email: &str,
     ) -> Result<CrmContact, CrmError> {
         Err(CrmError::CrmDisabledForTeam)
     }
@@ -1430,7 +1431,7 @@ impl CrmService for NoOpCrmService {
     async fn set_contact_company(
         &self,
         _access: &CrmContactReceipt<EditAccessLevel>,
-        _company_id: Option<uuid::Uuid>,
+        _company_id: uuid::Uuid,
     ) -> Result<CrmContact, CrmError> {
         Err(CrmError::CrmDisabledForTeam)
     }

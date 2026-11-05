@@ -1,8 +1,7 @@
 export default {
   email: 'Email',
-  editContactEmail: 'Edit contact email',
+  editContactEmail: 'Add contact email',
   addEmail: 'Add email',
-  removeEmail: 'Remove email',
   contactEmailPlaceholder: 'person@example.com',
   saveContact: 'Save',
   savingContact: 'Saving…',
@@ -16,11 +15,14 @@ export default {
   goToCompany: 'Go to company',
   searchCompanies: 'Search companies…',
   contactEditFailed: 'Could not save this change. Try again.',
+  contactEmailConflict:
+    'This email is already associated with another contact in this team.',
   contactEditConflict:
     'This change conflicts with an existing record or an archived company.',
   contactEditUnavailable:
     'This contact or company is no longer available to edit.',
-  contactEditInvalid: 'Check the email address, then try again.',
+  contactEditInvalid:
+    'This change is unavailable. Reload the contact and try again.',
 
   stageRequirements: 'Stage requirements',
   stageRequirementsDescription:

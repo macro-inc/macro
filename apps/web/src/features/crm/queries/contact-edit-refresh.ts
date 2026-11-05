@@ -67,6 +67,7 @@ export async function updateContactEditDetails(
   const patch = (record: CrmContactResponse) => ({
     ...record,
     email: after.email,
+    personalEmail: after.personalEmail,
     companyId: after.companyId,
     updatedAt: after.updatedAt,
   });

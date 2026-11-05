@@ -5,14 +5,14 @@ import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { propertyPillClasses } from '@property/extractors/property-pill-classes';
 import { useSearchInputFocus } from '@property/utils';
-import { Button, Dialog, Dropdown, Input, Tooltip } from '@ui';
+import { Badge, Button, Dialog, Dropdown, Input, Tooltip } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { contactPropertyTouchTarget } from './contact-property-styles';
 
-/** Edits the contact's existing email; the saved value changes only on success. */
+/** Adds a missing email; populated addresses remain read-only. */
 export function ContactEmailProperty(props: {
   email: string | null | undefined;
-  save(email: string | null): Promise<void>;
+  save(email: string): Promise<void>;
   errorMessage(error: unknown): string;
 }) {
   const [open, setOpen] = createSignal(false);
@@ -28,7 +28,7 @@ export function ContactEmailProperty(props: {
   });
 
   const changeOpen = (next: boolean) => {
-    if (saving()) return;
+    if (saving() || props.email) return;
     if (next) {
       setDraft(props.email ?? '');
       setError(undefined);
@@ -36,8 +36,8 @@ export function ContactEmailProperty(props: {
     setOpen(next);
     if (!next && !isTouchDevice()) triggerElement?.focus();
   };
-  const save = async (value: string | null) => {
-    if (saving()) return;
+  const save = async (value: string) => {
+    if (saving() || props.email) return;
     setSaving(true);
     setError(undefined);
     try {
@@ -58,12 +58,13 @@ export function ContactEmailProperty(props: {
       aria-label={t('crm.editContactEmail')}
       onSubmit={(event) => {
         event.preventDefault();
-        fireAndForget(save(draft().trim() || null), 'crm');
+        fireAndForget(save(draft().trim()), 'crm');
       }}
     >
       <Input
         ref={setEmailInput}
         type="email"
+        required
         aria-label={t('crm.email')}
         placeholder={t('crm.contactEmailPlaceholder')}
         value={draft()}
@@ -85,16 +86,6 @@ export function ContactEmailProperty(props: {
         )}
       </Show>
       <div class="flex flex-wrap items-center justify-end gap-2">
-        <Show when={props.email}>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={saving()}
-            onClick={() => fireAndForget(save(null), 'crm')}
-          >
-            {t('crm.removeEmail')}
-          </Button>
-        </Show>
         <Button
           variant="ghost"
           size="sm"
@@ -130,39 +121,49 @@ export function ContactEmailProperty(props: {
   );
   return (
     <Show
-      when={isTouchDevice()}
+      when={!props.email}
       fallback={
-        <Dropdown
-          open={open()}
-          onOpenChange={changeOpen}
-          getAnchorRect={() => triggerElement?.getBoundingClientRect()}
-          placement="bottom-start"
-          fitViewport
-        >
-          {trigger()}
-          <Show when={open()}>
-            <EditorPopover onClose={() => changeOpen(false)}>
-              {form()}
-            </EditorPopover>
-          </Show>
-        </Dropdown>
+        <Badge variant="ghost" size="sm" class="min-w-0 max-w-full">
+          <EnvelopeIcon class="size-3 shrink-0" />
+          <span class="truncate">{props.email}</span>
+        </Badge>
       }
     >
-      {trigger()}
-      <Show when={open()}>
-        <Dialog
-          open
-          onOpenChange={changeOpen}
-          onEscapeKeyDown={(event) => {
-            event.preventDefault();
-            changeOpen(false);
-          }}
-        >
-          <Dialog.Title class="px-3 pt-3 text-base font-semibold">
-            {t('crm.editContactEmail')}
-          </Dialog.Title>
-          {form()}
-        </Dialog>
+      <Show
+        when={isTouchDevice()}
+        fallback={
+          <Dropdown
+            open={open()}
+            onOpenChange={changeOpen}
+            getAnchorRect={() => triggerElement?.getBoundingClientRect()}
+            placement="bottom-start"
+            fitViewport
+          >
+            {trigger()}
+            <Show when={open()}>
+              <EditorPopover onClose={() => changeOpen(false)}>
+                {form()}
+              </EditorPopover>
+            </Show>
+          </Dropdown>
+        }
+      >
+        {trigger()}
+        <Show when={open()}>
+          <Dialog
+            open
+            onOpenChange={changeOpen}
+            onEscapeKeyDown={(event) => {
+              event.preventDefault();
+              changeOpen(false);
+            }}
+          >
+            <Dialog.Title class="px-3 pt-3 text-base font-semibold">
+              {t('crm.editContactEmail')}
+            </Dialog.Title>
+            {form()}
+          </Dialog>
+        </Show>
       </Show>
     </Show>
   );

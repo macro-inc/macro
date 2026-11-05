@@ -1,4 +1,4 @@
-//! Update the optional email field of an authorized CRM contact.
+//! Add the missing email field of an authorized CRM contact.
 
 use super::{CrmRouterState, list_company_contacts::CrmContactResponse};
 use crate::{
@@ -16,12 +16,12 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-/// Replace or clear the contact's email.
+/// Add a missing contact email. Existing addresses are read-only.
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetContactEmailRequest {
-    /// New email; null clears the field.
-    pub email: Option<String>,
+    /// The address to add. An identical retry is accepted.
+    pub email: String,
 }
 
 /// Update an existing team-owned contact without merging its identity.
@@ -55,7 +55,7 @@ pub async fn handler<
 ) -> Result<Json<CrmContactResponse>, CrmError> {
     let contact = state
         .service
-        .set_contact_email(&access.receipt, req.email.as_deref())
+        .set_contact_email(&access.receipt, &req.email)
         .await?;
     Ok(Json(contact.into()))
 }

@@ -75,8 +75,10 @@ Both information panels start with Record details and References; company-only
 Properties, Lists and Email sharing follow, with no duplicate visibility toggle.
 
 Contact headers and Record details share `ContactEmailField` and
-`ContactCompanyField`. Their Tasks-style pills edit the existing optional email
-and singleton company; the separate Go to button navigates without selecting.
+`ContactCompanyField`. Their Tasks-style pills add an email only when blank and link/switch company
+only for server-classified personal-provider emails. Existing email and
+ineligible company values are read-only; no clear/unlink actions are exposed.
+The separate Go to button navigates without selecting.
 Keep these property controls at a 24px visible face with 12px type/icons;
 reserve separate 44px touch targets with transparent expansion and margins.
 Desktop uses the property popover and entity picker; touch uses the shared dialog

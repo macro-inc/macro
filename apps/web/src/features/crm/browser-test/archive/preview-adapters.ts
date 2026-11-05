@@ -62,9 +62,13 @@ let company: CrmCompanyResponse = {
 let contacts: CrmContactResponse[] = ['Example person', 'Second person'].map(
   (name, index) => ({
     id: `contact-${index + 1}`,
-    companyId: params.has('empty') ? null : company.id,
+    companyId:
+      params.has('empty') || params.has('unlinked') ? null : company.id,
     name,
-    email: params.has('empty') ? null : `person${index + 1}@example.com`,
+    email: params.has('empty')
+      ? null
+      : `person${index + 1}@${params.has('personal') ? 'gmail.com' : 'example.com'}`,
+    personalEmail: !params.has('empty') && params.has('personal'),
     hidden:
       params.has('legacyParent') && index === 0
         ? false
@@ -111,7 +115,8 @@ export const storageServiceClient = {
       contact.id === contactId
         ? {
             ...contact,
-            email: email?.trim().toLowerCase() ?? null,
+            email: email.trim().toLowerCase(),
+            personalEmail: email.toLowerCase().endsWith('@gmail.com'),
             updatedAt: new Date().toISOString(),
           }
         : contact
@@ -125,7 +130,7 @@ export const storageServiceClient = {
       contact.id === contactId
         ? {
             ...contact,
-            companyId: companyId ?? null,
+            companyId,
             updatedAt: new Date().toISOString(),
           }
         : contact

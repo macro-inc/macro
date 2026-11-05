@@ -27793,6 +27793,10 @@
             "type": ["string", "null"],
             "description": "Display name observed for the contact, if any."
           },
+          "personalEmail": {
+            "type": "boolean",
+            "description": "Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only."
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time",
@@ -40862,22 +40866,24 @@
       },
       "SetContactCompanyRequest": {
         "type": "object",
-        "description": "Replace or clear the contact's company.",
+        "description": "Link or switch a contact with a known personal-provider email.",
+        "required": ["companyId"],
         "properties": {
           "companyId": {
-            "type": ["string", "null"],
+            "type": "string",
             "format": "uuid",
-            "description": "New company; null clears the field."
+            "description": "Destination company in the same team. Unlinking is not supported."
           }
         }
       },
       "SetContactEmailRequest": {
         "type": "object",
-        "description": "Replace or clear the contact's email.",
+        "description": "Add a missing contact email. Existing addresses are read-only.",
+        "required": ["email"],
         "properties": {
           "email": {
-            "type": ["string", "null"],
-            "description": "New email; null clears the field."
+            "type": "string",
+            "description": "The address to add. An identical retry is accepted."
           }
         }
       },

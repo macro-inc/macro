@@ -198,27 +198,30 @@ already in the trail (such as the contact's own company from `Companies >
 <company> > <contact>`) returns to it instead of adding a duplicate. Back and
 Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 <record>`. The CRM sidebar stays visible throughout.
-Contact email and company are editable property pills in both the header and
-**Record details**. **Add email** opens an empty email editor; click an existing
-email to replace it, or choose **Remove email** to clear it. Save commits the
-change; Cancel or Escape discards the draft. Invalid email input stays open.
-The company pill opens the Tasks entity picker: choose a company to replace the
-single relation, or **No company** to leave the same contact standalone. On touch,
-select a company then **Done**; Cancel keeps the original relation. The separate
-**Go to company** action opens the saved company without editing, and Shift-click
-opens a separate split on desktop. It disappears when the relation is cleared.
-Pending controls prevent duplicate saves; rejected edits retain the draft and
-show an error for retry. A duplicate address within the target company (or the
-standalone team's contacts) is rejected rather than merged. Companies in another
-team and new links to archived companies are rejected by the server.
+Contact properties use Tasks-style pills in the header and **Record details**.
+**Add email** appears only when the address is absent. Save adds the address;
+Cancel or Escape discards the draft, and invalid input stays open. Populated
+addresses are read-only: no replacement, clearing or additional email identity.
 
-Edits preserve the contact ID, team, discussions, references, interaction dates
-and archive flag. A visible child beneath an archived company must be restored
-through its company before moving or unlinking. Manually edited contacts survive
-mailbox-source cleanup. Email activity uses the current address; replacing or
-clearing it changes that activity filter. The existing sync inference may create
-a separate contact for a former company/email pair; it never moves the edited
-contact back. No extra email identities are stored.
+Only contacts with a known personal-provider email can link or switch company.
+Their company pill opens the Tasks singleton picker; on touch, select a company
+then **Done**. Cancel keeps the original relation. There is no unlink action.
+Company-email and email-less contacts keep a read-only company value. The separate
+**Go to company** action opens an existing company, including for read-only
+contacts; Shift-click opens a separate split on desktop.
+
+Pending controls prevent duplicate saves; rejected edits retain their draft for
+retry. The server enforces add-only email and personal-provider eligibility.
+Another contact with the address in the same team rejects the change without
+merging; restricted matches return generic feedback. Foreign-team destinations
+and new links to archived companies are rejected.
+
+Edits preserve contact ID, team, discussions, references, interaction dates and
+archive state. Restore a visible child through its archived company before
+moving it. Personal-email sync reuses a unique existing contact, preserving its
+chosen company through sent/received refreshes and source cleanup. Ambiguous
+matches are left unchanged. CRM settings and domain admission still apply.
+Existing email replacement and alias/history redesign are outside this version.
 
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.

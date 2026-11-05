@@ -79,9 +79,11 @@ tools/HTTP/GraphQL surfaces over them.
   contact creation accepts any valid email, including personal providers.
   Email population still infers companies by domain. Do not apply manual
   creation rules to capture/consent; see `docs/design/crm-contact-creation.md`.
-- Contact email/company setters mutate the existing ID within its owning team,
-  preserve archive state and sources, and mark changed records manual; sync may
-  recreate a separate inferred tuple, and email activity follows the current address.
+- Contact setters add email only when absent or link/switch company for a known
+  personal-provider email; validate under the contact lock and reject same-team
+  duplicates without disclosing restricted matches. Preserve ID, archive and sources.
+- Personal sync and cleanup resolve one same-team/email contact across all companies,
+  including hidden rows; skip ambiguous identities and preserve manual company choices.
 - Serialize single and bulk source teardown company-before-source/contact, and
   re-read the target after waiting; orphan deletion must not cascade a new manual link.
 - Keep CRM write locks ordered: domain advisory locks, parent team `KEY SHARE`,
@@ -109,7 +111,7 @@ tools/HTTP/GraphQL surfaces over them.
 - Contacts carry their own `team_id`; `company_id` and `email` are optional.
   Scope contact reads by `ct.team_id` and LEFT JOIN the company for its
   `hidden` flag and name. Email sync files personal-provider addresses
-  (`is_personal_email_domain`) as company-less contacts only when the team
+  (`is_personal_email_domain`) as company-less contacts when no identity exists and the team
   turns `exclude_personal_emails` off; `crm_blocked_domains` stops sync per
   domain. CRM-scoped previews still require a company contact. Company-less
   contacts add no thread-access grant, but hidden ones suppress their team's

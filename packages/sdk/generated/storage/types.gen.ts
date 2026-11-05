@@ -4976,6 +4976,11 @@ export type CrmContactResponse = {
      */
     name?: string | null;
     /**
+     * Whether the address uses a known personal provider and permits company edits.
+     * Older servers omit this classification; clients must then keep it read-only.
+     */
+    personalEmail?: boolean;
+    /**
      * When the contact record was last updated.
      */
     updatedAt: string;
@@ -12932,23 +12937,23 @@ export type SetCompanyNameRequest = {
 };
 
 /**
- * Replace or clear the contact's company.
+ * Link or switch a contact with a known personal-provider email.
  */
 export type SetContactCompanyRequest = {
     /**
-     * New company; null clears the field.
+     * Destination company in the same team. Unlinking is not supported.
      */
-    companyId?: string | null;
+    companyId: string;
 };
 
 /**
- * Replace or clear the contact's email.
+ * Add a missing contact email. Existing addresses are read-only.
  */
 export type SetContactEmailRequest = {
     /**
-     * New email; null clears the field.
+     * The address to add. An identical retry is accepted.
      */
-    email?: string | null;
+    email: string;
 };
 
 /**

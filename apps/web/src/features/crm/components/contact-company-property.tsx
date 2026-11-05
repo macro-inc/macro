@@ -7,7 +7,7 @@ import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { propertyPillClasses } from '@property/extractors/property-pill-classes';
-import { Button, Dropdown, Tooltip } from '@ui';
+import { Badge, Button, Dropdown, Tooltip } from '@ui';
 import { createSignal, onCleanup, Show, Suspense } from 'solid-js';
 import {
   contactPropertyIconTouchTarget,
@@ -18,7 +18,8 @@ import {
 export function ContactCompanyProperty(props: {
   companyId: string | null | undefined;
   companyName: string | undefined;
-  save(companyId: string | null): Promise<void>;
+  editable: boolean;
+  save(companyId: string): Promise<void>;
   openCompany(event: MouseEvent): void;
   errorMessage(error: unknown): string;
 }) {
@@ -33,7 +34,7 @@ export function ContactCompanyProperty(props: {
   });
 
   const changeOpen = (next: boolean) => {
-    if (saving()) return;
+    if (saving() || !props.editable) return;
     if (next) {
       setDraft(props.companyId ?? null);
       setError(undefined);
@@ -41,8 +42,8 @@ export function ContactCompanyProperty(props: {
     setOpen(next);
     if (!next && !isTouchDevice()) triggerElement?.focus();
   };
-  const save = async (companyId: string | null) => {
-    if (saving()) return;
+  const save = async (companyId: string) => {
+    if (saving() || !props.editable) return;
     setDraft(companyId);
     setSaving(true);
     setError(undefined);
@@ -60,8 +61,7 @@ export function ContactCompanyProperty(props: {
   };
   const select = (ids: Set<string>) => {
     const selected = ids.values().next().value;
-    // Choosing the current company is not an implicit unlink. Clearing has
-    // its own named action, separate from both selection and navigation.
+    // Choosing the current company is not an implicit unlink.
     if (!selected || saving()) return;
     setDraft(selected);
     setError(undefined);
@@ -105,18 +105,6 @@ export function ContactCompanyProperty(props: {
         class="flex flex-wrap items-center justify-between gap-2 border-t border-edge-muted p-2"
         on:keydown={(event) => event.stopPropagation()}
       >
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={saving()}
-          aria-pressed={draft() === null}
-          onClick={() => {
-            if (isTouchDevice()) setDraft(null);
-            else fireAndForget(save(null), 'crm');
-          }}
-        >
-          {t('crm.noCompany')}
-        </Button>
         <Show when={saving()}>
           <span role="status" class="text-sm text-ink-muted">
             {t('crm.savingContact')}
@@ -127,7 +115,10 @@ export function ContactCompanyProperty(props: {
             variant="primary"
             size="sm"
             disabled={saving()}
-            onClick={() => fireAndForget(save(draft()), 'crm')}
+            onClick={() => {
+              const id = draft();
+              if (id) fireAndForget(save(id), 'crm');
+            }}
           >
             {t('crm.retryContact')}
           </Button>
@@ -173,35 +164,51 @@ export function ContactCompanyProperty(props: {
   return (
     <div class="flex min-w-0 max-w-full items-center gap-1">
       <Show
-        when={isTouchDevice()}
+        when={props.editable}
         fallback={
-          <Dropdown
-            open={open()}
-            onOpenChange={changeOpen}
-            getAnchorRect={() => triggerElement?.getBoundingClientRect()}
-            placement="bottom-start"
-            fitViewport
-          >
-            {trigger()}
-            <Show when={open()}>
-              <EditorPopover onClose={() => changeOpen(false)}>
-                {editor()}
-              </EditorPopover>
-            </Show>
-          </Dropdown>
+          <Badge variant="ghost" size="sm" class="min-w-0 shrink">
+            <BuildingsIcon class="size-3 shrink-0" />
+            <span class="truncate">
+              {props.companyName ??
+                (props.companyId ? t('crm.company') : t('crm.noCompany'))}
+            </span>
+          </Badge>
         }
       >
-        {trigger()}
-        <PickerSheet.Root open={open()} onCancel={() => changeOpen(false)}>
-          <div on:keydown={(event) => event.stopPropagation()}>
-            <PickerSheet.Header
-              title={t('crm.company')}
-              onDone={() => fireAndForget(save(draft()), 'crm')}
-              doneDisabled={saving()}
-            />
-          </div>
-          <PickerSheet.Body>{editor()}</PickerSheet.Body>
-        </PickerSheet.Root>
+        <Show
+          when={isTouchDevice()}
+          fallback={
+            <Dropdown
+              open={open()}
+              onOpenChange={changeOpen}
+              getAnchorRect={() => triggerElement?.getBoundingClientRect()}
+              placement="bottom-start"
+              fitViewport
+            >
+              {trigger()}
+              <Show when={open()}>
+                <EditorPopover onClose={() => changeOpen(false)}>
+                  {editor()}
+                </EditorPopover>
+              </Show>
+            </Dropdown>
+          }
+        >
+          {trigger()}
+          <PickerSheet.Root open={open()} onCancel={() => changeOpen(false)}>
+            <div on:keydown={(event) => event.stopPropagation()}>
+              <PickerSheet.Header
+                title={t('crm.company')}
+                onDone={() => {
+                  const id = draft();
+                  if (id) fireAndForget(save(id), 'crm');
+                }}
+                doneDisabled={saving() || !draft()}
+              />
+            </div>
+            <PickerSheet.Body>{editor()}</PickerSheet.Body>
+          </PickerSheet.Root>
+        </Show>
       </Show>
       <Show when={props.companyId}>
         <Button

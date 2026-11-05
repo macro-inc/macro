@@ -2,18 +2,24 @@ import { expect, test } from '@playwright/test';
 
 // Production controls and mutations with synthetic transport responses;
 // these checks do not establish hosted persistence.
-test('email add, validation, pending, rejection, retry and clear', async ({
+test('email add validates, retains a rejected draft and becomes read-only after commit', async ({
   page,
 }, info) => {
+  const address = `contact@${'gmail.com'}`;
   await page.goto('/?empty');
   await page
     .getByRole('button', { name: 'Add email', exact: true })
     .first()
     .click();
   const input = page.getByRole('textbox', { name: 'Email', exact: true });
-  await expect(input).toBeVisible();
-  await input.fill('first@example.com');
-  await page.evaluate(() => window.archiveFixture.holdNext());
+  await input.fill('invalid');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
+  await input.fill(address);
+  await page.evaluate(() => {
+    window.archiveFixture.holdNext();
+    window.archiveFixture.failNext();
+  });
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Saving…', exact: true })
@@ -28,37 +34,22 @@ test('email add, validation, pending, rejection, retry and clear', async ({
     path: info.outputPath('email-pending.png'),
   });
   await page.evaluate(() => window.archiveFixture.release());
-  await expect(input).toBeHidden();
-  const chip = page
-    .getByRole('button', { name: 'Edit contact email', exact: true })
-    .first();
-  await expect(chip).toContainText('first@example.com');
-  await chip.click();
-  await input.fill('invalid');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(1);
-  await input.fill('changed@example.com');
-  await page.evaluate(() => window.archiveFixture.failNext());
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('alert')).toBeVisible();
-  await expect(input).toHaveValue('changed@example.com');
-  expect(
-    await page.evaluate(
-      () => window.archiveFixture.snapshot().contacts[0].email
-    )
-  ).toBe('first@example.com');
+  await expect(input).toHaveValue(address);
   await page.screenshot({
     animations: 'disabled',
     path: info.outputPath('email-rejected.png'),
   });
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(input).toBeHidden();
-  await expect(chip).toContainText('changed@example.com');
-  await chip.click();
-  await page.getByRole('button', { name: 'Remove email', exact: true }).click();
-  await expect(input).toBeHidden();
   await expect(
-    page.getByRole('button', { name: 'Add email', exact: true }).first()
+    page.getByRole('button', {
+      name: /Add email|Edit contact email|Remove email/,
+    })
+  ).toHaveCount(0);
+  await expect(page.getByText(address, { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Add company', exact: true }).first()
   ).toBeVisible();
   const record = await page.evaluate(
     () => window.archiveFixture.snapshot().contacts[0]
@@ -68,54 +59,24 @@ test('email add, validation, pending, rejection, retry and clear', async ({
   expect(record.hidden).toBe(false);
   await page.screenshot({
     animations: 'disabled',
-    path: info.outputPath('email-cleared.png'),
+    path: info.outputPath('email-added.png'),
   });
 });
 
-test('company replace, clear, add and separate Go to', async ({
+test('personal company link, switch and separate Go to', async ({
   page,
   isMobile,
 }, info) => {
-  await page.goto('/');
-  const chip = page
-    .getByRole('button', { name: 'Change contact company', exact: true })
-    .first();
-  await chip.click();
+  await page.goto('/?personal&unlinked');
+  await page
+    .getByRole('button', { name: 'Add company', exact: true })
+    .first()
+    .click();
   const search = page.getByPlaceholder('Search companies…');
   await expect(search).toBeVisible();
-  await search.fill('Second');
-  await page
-    .locator('[data-entity-index]')
-    .filter({ hasText: 'Second company' })
-    .click();
-  if (isMobile) {
-    expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
-  }
-  await expect(search).toBeHidden();
-  await expect(chip).toContainText('Second company');
-  await page.screenshot({
-    animations: 'disabled',
-    path: info.outputPath('company-replaced.png'),
-  });
-  await chip.click();
-  await expect(search).toBeVisible();
-  await page.getByRole('button', { name: 'No company', exact: true }).click();
-  if (isMobile)
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
-  await expect(search).toBeHidden();
-  const add = page
-    .getByRole('button', { name: 'Add company', exact: true })
-    .first();
-  await expect(add).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Go to company', exact: true })
+    page.getByRole('button', { name: 'No company', exact: true })
   ).toHaveCount(0);
-  expect(
-    await page.evaluate(() => window.archiveFixture.snapshot().contacts[0].id)
-  ).toBe('contact-1');
-  await add.click();
-  await expect(search).toBeVisible();
   await page.screenshot({
     animations: 'disabled',
     path: info.outputPath('company-picker.png'),
@@ -127,19 +88,64 @@ test('company replace, clear, add and separate Go to', async ({
   if (isMobile)
     await page.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(search).toBeHidden();
-  expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(3);
+  const chip = page
+    .getByRole('button', { name: 'Change contact company', exact: true })
+    .first();
+  await expect(chip).toContainText('Example company');
+  await chip.click();
+  await search.fill('Second');
+  await page
+    .locator('[data-entity-index]')
+    .filter({ hasText: 'Second company' })
+    .click();
+  if (isMobile)
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(search).toBeHidden();
+  await expect(chip).toContainText('Second company');
+  await page.screenshot({
+    animations: 'disabled',
+    path: info.outputPath('company-replaced.png'),
+  });
+  expect(
+    await page.evaluate(() => window.archiveFixture.snapshot().contacts[0].id)
+  ).toBe('contact-1');
+  expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(2);
+  await page
+    .getByRole('button', { name: 'Go to company', exact: true })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/opened=company-2/);
+});
+
+test('company-email and blank-email contacts stay read-only with company navigation', async ({
+  page,
+}, info) => {
+  await page.goto('/');
+  await expect(
+    page.getByRole('button', {
+      name: /Change contact company|Add company|Edit contact email/,
+    })
+  ).toHaveCount(0);
   await page
     .getByRole('button', { name: 'Go to company', exact: true })
     .first()
     .click();
   await expect(page).toHaveURL(/opened=company-1/);
+  await page.screenshot({
+    animations: 'disabled',
+    path: info.outputPath('read-only.png'),
+  });
+  await page.goto('/?empty');
+  await expect(
+    page.getByRole('button', { name: 'Add company', exact: true })
+  ).toHaveCount(0);
 });
 
 test('company pending and rejection preserve draft for retry', async ({
   page,
   isMobile,
 }, info) => {
-  await page.goto('/');
+  await page.goto('/?personal');
   await page
     .getByRole('button', { name: 'Change contact company', exact: true })
     .first()
@@ -190,9 +196,9 @@ test('keyboard cancel and Record details editing', async ({
   page,
   isMobile,
 }, info) => {
-  await page.goto('/');
+  await page.goto('/?empty');
   await page
-    .getByRole('button', { name: 'Edit contact email', exact: true })
+    .getByRole('button', { name: 'Add email', exact: true })
     .first()
     .click();
   const input = page.getByRole('textbox', { name: 'Email', exact: true });
@@ -204,22 +210,22 @@ test('keyboard cancel and Record details editing', async ({
   expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
   if (!isMobile)
     await expect(
-      page
-        .getByRole('button', { name: 'Edit contact email', exact: true })
-        .first()
+      page.getByRole('button', { name: 'Add email', exact: true }).first()
     ).toBeFocused();
   await page.getByRole('button', { name: 'Show details', exact: true }).click();
   await expect(page.getByText('Record details', { exact: true })).toBeVisible();
   const edits = page.getByRole('button', {
-    name: 'Edit contact email',
+    name: 'Add email',
     exact: true,
   });
   await edits.last().click();
-  await expect(input).toHaveValue('person1@example.com');
+  await expect(input).toHaveValue('');
   await input.fill('details@example.com');
   await input.press('Enter');
   await expect(input).toBeHidden();
-  await expect(edits.last()).toContainText('details@example.com');
+  await expect(
+    page.getByText('details@example.com', { exact: true }).last()
+  ).toBeVisible();
   await page.screenshot({
     animations: 'disabled',
     path: info.outputPath('record-details.png'),
@@ -229,9 +235,9 @@ test('keyboard cancel and Record details editing', async ({
 test('a pending response stays attached to its original contact after navigation', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/?empty');
   await page
-    .getByRole('button', { name: 'Edit contact email', exact: true })
+    .getByRole('button', { name: 'Add email', exact: true })
     .first()
     .click();
   const input = page.getByRole('textbox', { name: 'Email', exact: true });
@@ -244,21 +250,23 @@ test('a pending response stays attached to its original contact after navigation
   await page.evaluate(() => window.archiveFixture.selectContact('contact-2'));
   await expect(input).toBeHidden();
   const chip = page
-    .getByRole('button', { name: 'Edit contact email', exact: true })
+    .getByRole('button', { name: 'Add email', exact: true })
     .first();
-  await expect(chip).toContainText('person2@example.com');
+  await expect(chip).toContainText('Add email');
   await page.evaluate(() => window.archiveFixture.release());
   await page.evaluate(() => window.archiveFixture.selectContact('contact-1'));
-  await expect(chip).toContainText('edited@example.com');
+  await expect(
+    page.getByText('edited@example.com', { exact: true }).first()
+  ).toBeVisible();
   await page.evaluate(() => window.archiveFixture.selectContact('contact-2'));
-  await expect(chip).toContainText('person2@example.com');
+  await expect(chip).toContainText('Add email');
 });
 
 test('company search keyboard selection and mobile header buttons keep their own Enter action', async ({
   page,
   isMobile,
 }) => {
-  await page.goto('/');
+  await page.goto('/?personal');
   const chip = page
     .getByRole('button', { name: 'Change contact company', exact: true })
     .first();
@@ -296,10 +304,11 @@ test('property controls keep compact faces and distinct expanded touch targets',
 }) => {
   for (const width of isMobile ? [320, 390, 820] : [1280]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/?shortCompany');
+    await page.goto('/?shortCompany&personal');
     const email = page
-      .getByRole('button', { name: 'Edit contact email', exact: true })
-      .first();
+      .getByText(/^person1@/)
+      .first()
+      .locator('..');
     const company = page
       .getByRole('button', { name: 'Change contact company', exact: true })
       .first();
@@ -317,7 +326,7 @@ test('property controls keep compact faces and distinct expanded touch targets',
       )
     ).toBe(true);
     if (!isMobile) continue;
-    for (const control of [email, company, goTo]) {
+    for (const control of [company, goTo]) {
       expect(
         await control.evaluate(
           (element) => getComputedStyle(element, '::before').height
@@ -335,7 +344,7 @@ test('property controls keep compact faces and distinct expanded touch targets',
         })
       ).toBe(true);
     }
-    for (const control of [email, company]) {
+    for (const control of [company]) {
       expect((await control.boundingBox())!.width).toBeGreaterThanOrEqual(44);
       expect(
         await control.evaluate((element) =>
@@ -348,12 +357,6 @@ test('property controls keep compact faces and distinct expanded touch targets',
         (element) => getComputedStyle(element, '::before').width
       )
     ).toBe('44px');
-    const emailBox = (await email.boundingBox())!;
-    await page.touchscreen.tap(emailBox.x + emailBox.width / 2, emailBox.y - 5);
-    await expect(
-      page.getByRole('textbox', { name: 'Email', exact: true })
-    ).toBeVisible();
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     const companyBox = (await company.boundingBox())!;
     const goToBox = (await goTo.boundingBox())!;
     expect(goToBox.x - 10).toBeGreaterThanOrEqual(

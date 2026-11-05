@@ -121,22 +121,22 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     );
   }
 
-  /** Set the single email address, or omit it to clear; never merges contacts. */
-  async setEmail(email?: string): Promise<void> {
+  /** Add an email when absent. Existing addresses cannot be replaced or cleared. */
+  async setEmail(email: string): Promise<void> {
     await this.mutate((c) =>
       c.storage.setCrmContactEmail({
         path: { contact_id: this.id },
-        body: { email: email ?? null },
+        body: { email },
       }),
     );
   }
 
-  /** Link one company, or omit it to unlink while keeping this contact's identity. */
-  async setCompany(company?: Company): Promise<void> {
+  /** Link or switch a personal-provider contact's company. Unlinking is not supported. */
+  async setCompany(company: Company): Promise<void> {
     await this.mutate((c) =>
       c.storage.setCrmContactCompany({
         path: { contact_id: this.id },
-        body: { companyId: company?.id ?? null },
+        body: { companyId: company.id },
       }),
     );
   }

@@ -4,12 +4,11 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SetContactEmailRequestEmail } from './setContactEmailRequestEmail';
 
 /**
- * Replace or clear the contact's email.
+ * Add a missing contact email. Existing addresses are read-only.
  */
 export interface SetContactEmailRequest {
-  /** New email; null clears the field. */
-  email?: SetContactEmailRequestEmail;
+  /** The address to add. An identical retry is accepted. */
+  email: string;
 }

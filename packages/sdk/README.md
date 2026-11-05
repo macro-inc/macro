@@ -487,10 +487,11 @@ returns thread handles alongside reminder snapshots.
 
 ### CRM contact fields
 
-`macro.crm.contactById(id).setEmail(address)` replaces the contact's single
-address; `setEmail()` clears it. `setCompany(company)` takes a Company handle,
-and `setCompany()` unlinks it. Both preserve contact identity and reject
-conflicting records instead of merging them.
+`macro.crm.contactById(id).setEmail(address)` adds an address only when absent;
+an identical retry is safe. Existing addresses cannot be replaced or cleared.
+`setCompany(company)` links or switches a known personal-provider contact to a
+Company handle in the same team. Unlinking is not supported. Both preserve
+identity and reject same-team email conflicts without merging records.
 
 ### CRM pipelines and initiatives
 
