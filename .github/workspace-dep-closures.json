@@ -2364,6 +2364,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/s3_key",
       "crates/workspace-hack"
     ],
     "attachment": [

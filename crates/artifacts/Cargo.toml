@@ -24,6 +24,7 @@ macro_tower_layers = { path = "../macro_tower_layers" }
 model = { path = "../model" }
 model-error-response = { path = "../model-error-response" }
 model_owner = { path = "../model_owner" }
+s3_key = { path = "../s3_key" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

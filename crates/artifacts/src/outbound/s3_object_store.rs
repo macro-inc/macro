@@ -16,7 +16,7 @@ use crate::domain::ports::{ArtifactObjectStore, PresignedUpload};
 const UPLOAD_URL_LIFETIME: Duration = Duration::from_secs(15 * 60);
 
 fn object_key(document_id: &str, sha256: &Sha256) -> String {
-    format!("artifacts/{document_id}/{}", sha256.as_str())
+    s3_key::build_artifact_object_key(document_id, sha256.as_str())
 }
 
 fn base64_digest(sha256: &Sha256) -> anyhow::Result<String> {

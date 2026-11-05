@@ -37,7 +37,12 @@ artifact_versions
 - Versions are immutable. The current version is the highest number. Restoring
   publishes an old manifest again as a new number; history is never rewritten.
 - Bytes are content-addressed at `artifacts/<document_id>/<sha256>` in DSS's
-  document bucket, so unchanged files cost nothing across versions.
+  document bucket (`s3_key::build_artifact_object_key`), so unchanged files
+  cost nothing across versions.
+- Permanent deletion goes through DSS's delete document worker like every
+  document: version rows cascade with the `Document` row, and the worker
+  deletes the whole `artifacts/<document_id>/` prefix, which also holds bytes
+  uploaded for a version that was never published.
 - A publish names `base_version`; a different current version is a 409, and so
   is losing the race for the next number, so two agents can't overwrite each
   other silently.
@@ -154,7 +159,5 @@ never recorded: the content router's request span records `url.path` as
 
 ## Not yet
 
-- Objects are not deleted when an artifact is purged or its creation fails
-  after storing bytes; they are content-addressed under the artifact's prefix.
 - Placing an artifact on a canvas (`POST /artifacts/{id}/place`) is a separate
   layer.
