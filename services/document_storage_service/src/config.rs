@@ -255,3 +255,7 @@ impl Config {
             .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")
     }
 }
+
+#[doc(hidden)]
+#[allow(dead_code)]
+const CI_SEL2_NONCE: &str = "927c2d6c775e4cfd98aaf3a4ce0ff383";
