@@ -4,20 +4,10 @@ name: Regenerate Generated Code
 'on':
   push:
     branches:
-    - main
-    paths:
-    - crates/**/*.rs
-    - services/**/*.rs
-    - Cargo.toml
-    - Cargo.lock
-    - apps/web/scripts/generate-api-schema.ts
-    - apps/web/scripts/services.ts
-    - packages/sdk/**
-    - apps/docs/**
-    - '.github/workflows/regenerate_generated_code.yml'
+    - synoet/ci-regen-exp
 jobs:
   regenerate:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/synoet/ci-regen-exp'
     name: Regenerate and propose
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     permissions:
@@ -103,7 +93,7 @@ jobs:
     - name: Open or update the pull request
       run: |
         set -euo pipefail
-        branch=bot/regenerate-generated-code
+        branch=synoet/ci-regen-bot
         paths=(apps/web/src/lib/service-clients \
           apps/web/src/lib/core/database-sql/generated \
           apps/web/src/features/dynamic-ui/generated \
@@ -126,7 +116,7 @@ jobs:
         git commit -m "chore(generated): regenerate from main at ${GITHUB_SHA:0:10}"
         git push --force origin "$branch"
         if [ -z "$open_pr" ]; then
-          gh pr create --base main --head "$branch"     --title "chore(generated): regenerate code from main"     --body "Generated code on main differs from what its Rust sources produce. Created by the Regenerate Generated Code workflow, which keeps this branch current as main moves and closes the pull request once main matches."
+          gh pr create --base synoet/ci-regen-exp --head "$branch"     --title "[ci-speed] [no preview] bot pull request from the regeneration experiment"     --body "Generated code on main differs from what its Rust sources produce. Created by the Regenerate Generated Code workflow, which keeps this branch current as main moves and closes the pull request once main matches."
         fi
       env:
         GH_TOKEN: ${{ secrets.GENERATED_CODE_BOT_TOKEN || github.token }}

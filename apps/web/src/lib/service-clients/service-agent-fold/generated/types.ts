@@ -4395,3 +4395,5 @@ export type Widget_Serialize =
       source?: never;
       tags?: never;
     });
+
+// Deliberately stale, for the regeneration experiment.
