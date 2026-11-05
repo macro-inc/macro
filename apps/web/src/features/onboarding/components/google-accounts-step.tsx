@@ -81,9 +81,8 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
             // Fixed breaks: each line is shorter than the one above, the last
             // 60–80% of it, and the first no wider than the heading's last line.
             <>
-              Bring your inbox and calendar
-              <br /> into Macro. Your password
-              <br /> always stays private.
+              Sync your inbox and calendar.
+              <br /> Disconnect anytime.
             </>
           ) : personal() ? (
             'Add a personal account for email and calendar in Macro. This is optional; your Macro sign-in stays the same. Agents ask for approval before sending email, and you can disconnect anytime.'
