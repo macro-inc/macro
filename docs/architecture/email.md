@@ -645,24 +645,3 @@ The format-4 browser cache starts a separate physical database. Old nonempty
 general mutation queues are retained but are not imported into it; verify their
 recovery separately during the cache rollout. The email journal is independent
 of these cache files and retains its draft working copies and send attempts.
-
-## Agent program sends
-
-An agent's program (a code-mode run, marked by `x-macro-code-execution`, or a
-token with agent attribution; `macro_authorization::is_agent_run`) never sends
-an email the user has not seen. The REST send (`POST /email/messages`) answers
-it 403. It sends through a session review (`execution.reviews.create({kind:
-'email'})`), whose card the user submits, or, for a prompt from a channel or
-document thread, on the user's quoted approval:
-
-- `macro.email.sendConfirmed` and `EmailMessage.forwardConfirmed` call the
-  harness's `POST /cognition/email/send-confirmed`, which runs the
-  `SendConfirmedEmail` tool with its Markdown rendering, inbox choice, reply
-  threading and document attachments. A forward is a new email quoting the
-  message under the forwarded-message header, with the message's attachments
-  as their Macro documents (`EmailMessage.forwardDraft` builds it, also for a
-  review).
-- `EmailDraft.send` and `EmailDraft.schedule` call the schedule route
-  (`PUT /email/drafts/scheduled/{id}`), which admits a program only with a
-  non-blank `user_confirmation`. `send` schedules a few seconds ahead, so the
-  scheduled sender delivers the saved draft within about a minute.

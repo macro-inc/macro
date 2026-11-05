@@ -2748,11 +2748,6 @@ export type sendMessageResponse400 = {
   status: 400;
 };
 
-export type sendMessageResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
 export type sendMessageResponse404 = {
   data: ErrorResponse;
   status: 404;
@@ -2768,7 +2763,6 @@ export type sendMessageResponseSuccess = sendMessageResponse201 & {
 };
 export type sendMessageResponseError = (
   | sendMessageResponse400
-  | sendMessageResponse403
   | sendMessageResponse404
   | sendMessageResponse500
 ) & {

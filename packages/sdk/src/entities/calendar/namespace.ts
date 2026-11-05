@@ -1,8 +1,4 @@
 import type {
-  CreateCalendarEvent_Deserialize,
-  ToolCalendarEvent,
-} from '../../../generated/agent-reviews';
-import type {
   CalendarAttendeeInputBody,
   ConferenceChange,
   CreateCalendarEventRequest,
@@ -129,12 +125,6 @@ export type CalendarEventRole = 'organizer' | 'guest';
  *   details. For edits preserve unrequested settings, and re-read and reconfirm if the revision
  *   conflicts. Share the saved URL with an `<m-booking-link-mention>` chip (see Mentions), not a
  *   bare URL. If the same proposal is already approved, do not ask again.
- *
- * ## Creating events
- *
- * - Nothing lands on a calendar, and no invitation goes out, without the user seeing the event. A program cannot call `createEvent`; it is refused.
- * - In an agent session, present the event as a review: `execution.reviews.create({kind: 'calendar', title, drafts})`, each draft with the same fields as `createConfirmed` (`calendarId` in place of `calendar`), then return `reviews: [await review.reference()]`. The user creates it from the card.
- * - For a prompt from a channel or document thread, where no card is seen: write the whole event into your reply (title, date and time with its time zone, duration, guests, location, conference or Macro call, recurrence), ask whether to create it, and stop. Only once the user replies approving that event, call `createConfirmed` with their reply quoted in `userConfirmation`. Being asked to schedule something is a request to draft the event, never the approval.
  */
 export class CalendarNamespace {
   /** Calendar availability settings, each referring to a typed calendar. */
@@ -285,11 +275,7 @@ export class CalendarNamespace {
     return new CalendarReplacement(this.client, operationId);
   }
 
-  /**
-   * Create a calendar event and return a handle to its synced record; an
-   * agent's program is refused (403) and creates through a review or
-   * {@link createConfirmed} instead.
-   */
+  /** Create a calendar event and return a handle to its synced record. */
   async createEvent(options: CreateEventOptions): Promise<CalendarEvent> {
     const record = unwrap(
       await this.client.calendar.createCalendarEvent({
@@ -298,58 +284,7 @@ export class CalendarNamespace {
     );
     return CalendarEvent.fromRecord(this.client, record);
   }
-
-  /**
-   * Create a calendar event only after the user replied approving it, quoting that reply in `userConfirmation`; never on the request that asked for the event.
-   *
-   * For a prompt from a channel or document thread: write the event out
-   * there, ask whether to create it, and call this in a later turn on the
-   * user's approving reply. In the agent session view, present a review
-   * (`execution.reviews.create({kind: 'calendar', ...})`) instead; its card
-   * is the confirmation. Takes what the CreateCalendarEvent tool takes:
-   * guests, recurrence, reminders, a provider conference or a Macro call,
-   * out-of-office and guest policy, and the calendar to write to. The event
-   * is written to the provider at once and guests receive invitations; on an
-   * error, look for the event before creating it again.
-   */
-  async createConfirmed(
-    options: ConfirmedEventOptions,
-  ): Promise<CalendarEvent> {
-    const { calendar, ...event } = options;
-    const created = toolCalendarEvent(
-      unwrap(
-        await this.client.cognition.createConfirmedCalendarEvent({
-          body: { ...event, calendarId: calendar?.id },
-        }),
-      ),
-    );
-    return CalendarEvent.byId(this.client, created.eventId);
-  }
 }
-
-// The HTTP schema is opaque: the server serializes the Rust tool response,
-// whose TypeScript contract is generated from the same Rust type.
-function toolCalendarEvent(response: unknown): ToolCalendarEvent {
-  return response as ToolCalendarEvent;
-}
-
-/** An event the user has approved in conversation, for `calendar.createConfirmed`. */
-export type ConfirmedEventOptions =
-  EventFields<CreateCalendarEvent_Deserialize> & {
-    /** The calendar to write to; omit for the user's primary calendar. */
-    calendar?: Calendar;
-    /**
-     * The user's own reply approving this specific event, quoted verbatim, such
-     * as their "yes, go ahead" after you wrote the event out for them. Never the
-     * request that asked you to schedule it, and never your own words.
-     */
-    userConfirmation: string;
-  };
-
-/** The tool's event fields, with the calendar taken as a handle instead. */
-type EventFields<Event> = Event extends unknown
-  ? Omit<Event, 'calendarId'>
-  : never;
 
 function toCreateBody(options: CreateEventOptions): CreateCalendarEventRequest {
   return {

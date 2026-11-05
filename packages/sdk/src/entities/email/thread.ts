@@ -278,12 +278,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     );
   }
 
-  /**
-   * Send a plain-text reply in this thread; an agent's program is refused
-   * (403) and replies through a review or `email.sendConfirmed` with
-   * `replyingTo` instead. Returns a handle when the API reports the created
-   * message's id.
-   */
+  /** Send a reply within this thread. Returns a handle when the API reports the created message's id. */
   async reply(opts: ReplyEmailOptions): Promise<EmailMessage | undefined> {
     const subject = opts.subject ?? (await this.subject()) ?? '';
     const { message } = await this.mutate((c) =>

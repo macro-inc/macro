@@ -12,7 +12,6 @@ use utoipa_swagger_ui::SwaggerUi;
 // Utilities
 mod citations;
 mod completions;
-mod confirmed_actions;
 pub mod context;
 mod decisions;
 mod health;
@@ -118,14 +117,6 @@ fn api_router(api_context: ApiContext) -> Router {
             post(structured_completion::structured_completion),
         )
         .route("/decisions", decisions::route())
-        .route(
-            "/email/send-confirmed",
-            post(confirmed_actions::send_confirmed_email),
-        )
-        .route(
-            "/calendar/events/create-confirmed",
-            post(confirmed_actions::create_confirmed_calendar_event),
-        )
         .route("/chat/completions", post(completions::handler))
         .route(
             "/database-query",

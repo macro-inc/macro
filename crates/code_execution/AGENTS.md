@@ -23,10 +23,7 @@ completed API writes. SDK and Handlebars bundles come from
 Authenticated SDK requests carry `x-macro-code-execution: 1`, the only mark a
 run under a plain user token (public MCP) has. APIs that ask a program to
 confirm what a person picks by opening something read it; the calendar
-mutation routes demand the copy's `inbox` from such requests, the calendar
-create route refuses them, and the email send and schedule routes refuse
-them unless the schedule quotes the user's approval
-(`macro_authorization::is_agent_run`).
+mutation routes demand the copy's `inbox` from such requests.
 
 The bootstrap bans timers before importing `main.mjs`, and the import map points
 node timer and worker modules at `timers.mjs`. The bundled SDK's only timer is
