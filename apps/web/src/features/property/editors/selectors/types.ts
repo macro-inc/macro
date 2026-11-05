@@ -11,9 +11,18 @@ export type OptionSelectorConfig = {
   canAddOption?: (query: string) => boolean;
 };
 
+/** One picker over several entity types, in its own wording. */
+export type EntityPickerOptions = {
+  entityTypes: EntityType[];
+  placeholder: string;
+  emptyMessage: string;
+};
+
 export type EntitySelectorConfig = {
   isMultiSelect: boolean;
   placeholder: string;
+  /** Replaces "No {entity type} found". */
+  emptyMessage?: string;
   specificEntityType?: EntityType | EntityType[] | null;
   selfFilter?: { entityType: EntityType; blockId?: string };
   /** Entities already linked to the destination are not selectable again. */

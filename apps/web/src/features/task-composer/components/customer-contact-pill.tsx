@@ -73,7 +73,14 @@ export function CustomerContactPill(props: {
               <Property.Caret />
             </Property.Pill>
           </Property.Tooltip>
-          <Dynamic component={props.editor} entityTypes={ENTITY_TYPES} />
+          <Dynamic
+            component={props.editor}
+            entityPicker={{
+              entityTypes: ENTITY_TYPES,
+              placeholder: t('crm.searchCustomerContact'),
+              emptyMessage: t('crm.noCustomerContactFound'),
+            }}
+          />
         </>
       )}
     </Property.Root>

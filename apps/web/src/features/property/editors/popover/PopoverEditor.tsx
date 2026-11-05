@@ -1,6 +1,7 @@
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Match, Switch } from 'solid-js';
 import { useProperty } from '../../core/context';
+import type { EntityPickerOptions } from '../selectors/types';
 import { DateEditor, DateSheetEditor } from './DateEditor';
 import { DateRangeEditor } from './DateRangeEditor';
 import { EntityEditor, EntitySheetEditor } from './EntityEditor';
@@ -13,7 +14,7 @@ type PopoverEditorProps = {
    */
   entitySelfFilter?: { entityType: EntityType; blockId?: string };
   /** Forwarded to EntityEditor; has no effect for non-entity properties. */
-  entityTypes?: EntityType[];
+  entityPicker?: EntityPickerOptions;
 };
 
 /**
@@ -39,7 +40,7 @@ export function PopoverEditor(props: PopoverEditorProps) {
       <Match when={type() === 'ENTITY'}>
         <EntityEditor
           selfFilter={props.entitySelfFilter}
-          entityTypes={props.entityTypes}
+          entityPicker={props.entityPicker}
         />
       </Match>
     </Switch>
@@ -59,14 +60,14 @@ export function SheetEditor(props: PopoverEditorProps) {
       fallback={
         <PopoverEditor
           entitySelfFilter={props.entitySelfFilter}
-          entityTypes={props.entityTypes}
+          entityPicker={props.entityPicker}
         />
       }
     >
       <Match when={type() === 'ENTITY'}>
         <EntitySheetEditor
           selfFilter={props.entitySelfFilter}
-          entityTypes={props.entityTypes}
+          entityPicker={props.entityPicker}
         />
       </Match>
       <Match when={type() === 'DATE'}>
