@@ -67,6 +67,9 @@ to the browser via `inbound/wasm`.
 signals and harness recovery from a persisted log. Keep these interpretations
 aligned; recovery must never guess the answer from another turn.
 
+`_macro/review_updated` frames project each review's newest saved revision
+into `SessionMetadata.reviewRevisions`; they never touch messages or the turn.
+
 Notification log frames open system turns without user messages. Their events
 project into `SessionMetadata.notifications`, separate from message search and
 exports. `SessionNotification` flattens the protocol’s tagged event enum into

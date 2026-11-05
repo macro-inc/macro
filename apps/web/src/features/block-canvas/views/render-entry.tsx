@@ -21,7 +21,9 @@ import {
   RectangleView,
   TextView,
 } from '@macro-inc/graphics/solid';
+import { Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import { ArtifactFrame } from './artifact-frame';
 import { CanvasTextContent, createCanvasTextMeasurer } from './text-content';
 
 initializeLexical();
@@ -42,6 +44,8 @@ declare global {
       crop: Bounds;
       scale: number;
       revision: string;
+      /** Whether the requesting user has artifacts; off shows only titles. */
+      artifacts?: boolean;
     }) => Promise<void>;
     measureCanvasSnapshot: (snapshot: {
       document: GraphicsDocument;
@@ -53,6 +57,21 @@ declare global {
       overflow: boolean;
     }[];
   }
+}
+
+/** An artifact that never finishes loading must not hold up the whole render. */
+function artifactFramesLoaded(root: HTMLElement) {
+  const frames = root.querySelectorAll('iframe[data-canvas-artifact-frame]');
+  return Promise.all(
+    Array.from(frames, (frame) =>
+      Promise.race([
+        new Promise((resolve) =>
+          frame.addEventListener('load', resolve, { once: true })
+        ),
+        new Promise((resolve) => setTimeout(resolve, 3_000)),
+      ])
+    )
+  );
 }
 
 /** Browser-owned deadlines survive a lost Worker connection, including local CDP. */
@@ -138,6 +157,25 @@ window.renderCanvasSnapshot = async (snapshot) => {
               text: (props) => (
                 <TextView {...props} contentView={CanvasTextContent} />
               ),
+              artifact: (props) => (
+                <Show
+                  when={snapshot.artifacts}
+                  fallback={
+                    <div class="size-full border border-edge-muted p-2 text-xs">
+                      Artifact: {props.item.geometry.title}
+                    </div>
+                  }
+                >
+                  <ArtifactFrame
+                    html={props.item.geometry.html}
+                    title={props.item.geometry.title}
+                    designWidth={props.item.geometry.designWidth}
+                    designHeight={props.item.geometry.designHeight}
+                    interactive={false}
+                    eager
+                  />
+                </Show>
+              ),
               image: (props) => (
                 <div class="size-full border border-edge-muted p-2 text-xs">
                   Image unavailable: {props.item.geometry.name}
@@ -166,6 +204,7 @@ window.renderCanvasSnapshot = async (snapshot) => {
   };
   await fontsReady;
   await document.fonts.ready;
+  await artifactFramesLoaded(root);
   window.readCanvasTextLayout = () =>
     Array.from(
       root.querySelectorAll<HTMLElement>('[data-graphics-item]')
