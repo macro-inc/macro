@@ -366,7 +366,7 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
   `scoped_bot_resolves_document_access_through_dss` fails, and fails the same way
   on a plain compose stack, so the platform does not cause it.
 
-**CI status (forge, 2026-11-04).** 22 of 26 jobs pass, including the Rust `check`
+**CI status (forge, 2026-11-04).** 21 of 25 jobs pass, including the Rust `check`
 job, web typecheck and generated code, cargo-deny, conventions, and infra. Four
 fail, from two portability gaps in the job image rather than in the code:
 
