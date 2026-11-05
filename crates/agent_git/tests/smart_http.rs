@@ -156,20 +156,12 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
     assert!(first.status.success(), "{first:?}");
     // A fresh HTTP clone must contain every file required before the brain
     // can start; the first turn cannot repair an incomplete seed.
-    for required in [
-        "OPERATING.md",
-        "brain.lock",
-        "config/budget.json",
-        "config/events.json",
-        "config/jev.json",
-        "memory/self.json",
-        "prompts/respond.md",
-        "prompts/heartbeat.md",
-        "prompts/work.md",
-    ] {
-        assert!(
-            work.path().join("first").join(required).is_file(),
-            "{required}"
+    for file in WORKSPACE_TEMPLATE.render(&seed()).unwrap() {
+        assert_eq!(
+            std::fs::read_to_string(work.path().join("first").join(file.path)).unwrap(),
+            file.contents,
+            "{}",
+            file.path
         );
     }
     let charter = std::fs::read_to_string(work.path().join("first/OPERATING.md")).unwrap();
