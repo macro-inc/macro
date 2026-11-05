@@ -178,6 +178,8 @@ external chat replies depend on it. Direct session controls still mint IDs.
 
 - `src/herdr.rs` and its submodule are Unix-only (`#[cfg(unix)]`); don't add
   Windows-breaking code there without a cfg gate.
+- Set the PTY master's close-on-exec flag with `fcntl` on macOS; its
+  `posix_openpt` does not accept `O_CLOEXEC`.
 - The ACP child is killed with its whole tree: a process group on Unix, a Job
   Object on Windows (`src/outbound/acp_process/job.rs`).
 - Every herdr call goes through the `HerdrCli` facade; add a capability to both
