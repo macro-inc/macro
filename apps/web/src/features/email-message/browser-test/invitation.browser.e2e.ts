@@ -16,11 +16,11 @@ test.beforeEach(async ({ page }) => {
 for (const pane of PANES) {
   test(`${pane} description wraps inside the card`, async ({ page }) => {
     const card = page.getByTestId(`pane-${pane}`).locator('section');
-    expect(await overflow(card)).toBe(0);
+    await expect.poll(() => overflow(card)).toBe(0);
 
     await card.getByRole('button', { name: 'Show more' }).click();
     await expect(card.getByRole('button', { name: 'Show less' })).toBeVisible();
-    expect(await overflow(card)).toBe(0);
+    await expect.poll(() => overflow(card)).toBe(0);
   });
 }
 
