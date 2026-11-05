@@ -51,3 +51,20 @@ it('preserves local-stack image references for the local attachment resolver', a
     'https://localhost:27709/static-file/file/test-image'
   );
 });
+
+it.each([
+  { servers: 'ALL', backend: 'same-origin', expected: true },
+  { servers: 'ALL', backend: undefined, expected: false },
+  { servers: '', backend: 'same-origin', expected: false },
+])(
+  'reports a local stack proxy for servers=$servers backend=$backend',
+  async ({ servers, backend, expected }) => {
+    vi.stubEnv('MODE', 'development');
+    vi.stubEnv('VITE_LOCAL_SERVERS', servers);
+    vi.stubEnv('VITE_LOCAL_BACKEND_ORIGIN', backend);
+    vi.stubGlobal('location', new URL('https://localhost:28009/app/login'));
+    vi.resetModules();
+    const { usesLocalStackProxy } = await import('./servers');
+    expect(usesLocalStackProxy()).toBe(expected);
+  }
+);
