@@ -405,12 +405,12 @@ Not built yet:
   applied. Node configuration, ECR pull credentials on k3s, and the AWS image push are
   not wired.
 - Phases 8 and 9: gRPC and service splits, and the prod cutover.
-- convert-service, which the local compose stack does not run either: it needs
-  LibreOffice assets and invokes an AWS Lambda for its responses.
-- Workers and handlers the instance does not run yet: `agent_trigger_service`,
-  `email_focus_worker`, `mcp_auth_proxy`, `slack_import_worker`, `sha_cleanup_worker`,
-  `worker_trigger`, and the S3 and SNS handlers (`docx_unzip_handler`,
-  `search_upload_handler`, `image_optimizer`, `call_recording_preview_handler`,
+- Document conversion, which the local compose stack does not run either, so Word upload
+  does not work on an instance. `convert_service` needs LibreOffice assets, and it and
+  `docx_unzip_handler` invoke an AWS Lambda directly, so this needs Lambda-invoke support
+  plus all of them together.
+- Workers and handlers the instance does not run yet: `mcp_auth_proxy`,
+  `sha_cleanup_worker`, `worker_trigger`, and the S3 and SNS handlers (`search_upload_handler`, `image_optimizer`, `call_recording_preview_handler`,
   `dataloss_prevention_handler`, `email_suppression_handler`,
   `upload_extractor_lambda_trigger`).
 - The rest of phase 7: publishing the images and chart per release, and a
