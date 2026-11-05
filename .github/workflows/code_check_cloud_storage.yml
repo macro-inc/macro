@@ -19,7 +19,7 @@ env:
     - main
 jobs:
   path-check:
-    runs-on: namespace-profile-linux-small;overrides.cache-tag=nextest-filter
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=nextest-filter-exp
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       doppler_candidates: ${{ steps.filter.outputs.doppler_candidates }}
