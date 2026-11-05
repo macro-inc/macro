@@ -770,7 +770,7 @@ export async function refetchSoupEntity(
   if (
     !options?.ownTouch &&
     !options?.created &&
-    !(options?.notified && hasMountedNotifiedList()) &&
+    !(options?.notified && mountedNotifiedLists().length > 0) &&
     isFeatureEnabled(enableGraphqlSoup) &&
     !hasSoupEntity(entityId)
   ) {
@@ -812,16 +812,38 @@ export async function refetchSoupEntity(
       } else {
         invalidateAllSoup();
       }
+      if (options?.notified) {
+        fireAndForget(
+          rereadNotifiedListsAfterFirstRead(),
+          'soup-normalized-cache'
+        );
+      }
     }
   }
 }
 
-/** Whether a list on screen orders by `notified_at`, which only REST serves. */
-function hasMountedNotifiedList(): boolean {
+/** Lists on screen ordered by `notified_at`, which only REST serves. */
+function mountedNotifiedLists() {
   return queryClient
     .getQueryCache()
     .findAll({ queryKey: soupKeys.astItems._def, type: 'active' })
-    .some((query) => JSON.stringify(query.queryKey).includes('notified_at'));
+    .filter((query) => JSON.stringify(query.queryKey).includes('notified_at'));
+}
+
+/**
+ * A list's first read has no pages to insert into, and invalidating reuses it
+ * rather than restarting it, so its response can predate a new notification.
+ * Read those lists again once it settles.
+ */
+async function rereadNotifiedListsAfterFirstRead(): Promise<void> {
+  const firstReads = mountedNotifiedLists().filter(
+    (query) =>
+      query.state.data === undefined && query.state.fetchStatus === 'fetching'
+  );
+  await Promise.allSettled(firstReads.map((query) => query.promise));
+  for (const query of firstReads) {
+    queryClient.invalidateQueries({ queryKey: query.queryKey, exact: true });
+  }
 }
 
 /**

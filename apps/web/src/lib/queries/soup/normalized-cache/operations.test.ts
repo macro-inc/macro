@@ -435,6 +435,51 @@ describe('refetchSoupEntity', () => {
         unmount();
       });
 
+      it('reads a list again when its first read predates the notification', async () => {
+        const pagesOf = (...ids: string[]) => ({
+          pages: [
+            {
+              kind: 'flat',
+              items: ids.map((id) => mockDocumentItem(id)),
+              nextCursor: null,
+            },
+          ],
+          pageParams: [null],
+        });
+        let settleFirstRead = (_data: unknown) => {};
+        const queryFn = vi
+          .fn()
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                settleFirstRead = resolve;
+              })
+          )
+          .mockResolvedValue(pagesOf('doc-new', 'd-1'));
+        testQueryClient.removeQueries({ queryKey: notifiedKey });
+        const unmount = new QueryObserver(testQueryClient, {
+          queryKey: notifiedKey,
+          queryFn,
+          staleTime: Number.POSITIVE_INFINITY,
+        }).subscribe(() => {});
+
+        updateSoupForNotification(notification);
+        await vi.waitFor(() => {
+          expect(getSoupItemsMock).toHaveBeenCalledOnce();
+        });
+        await getSoupItemsMock.mock.results[0]?.value;
+        await new Promise((resolve) => setTimeout(resolve));
+        settleFirstRead(pagesOf('d-1'));
+
+        await vi.waitFor(() => {
+          expect(notifiedPages()?.pages[0].items.map(getSoupItemId)).toEqual([
+            'doc-new',
+            'd-1',
+          ]);
+        });
+        unmount();
+      });
+
       it('fetches nothing when no notified_at list is mounted', async () => {
         await refetchSoupEntity('doc-new', 'document', { notified: true });
 
