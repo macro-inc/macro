@@ -94,7 +94,11 @@ export async function initTelemetry(
   ]) {
     const value = env(variable);
     if (value) {
-      if (!/^[0-9a-f-]{36}$/i.test(value))
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          value
+        )
+      )
         throw new ConfigError(`${variable} must be a UUID`);
       attributes[key] = value;
     }
@@ -165,15 +169,13 @@ export function traceHeaders(): Record<string, string> {
 /** No URL, body, header values or provider error text is captured. */
 export function tracedFetch(send: typeof fetch): typeof fetch {
   return (input, init) => {
-    const span = trace
-      .getTracer('brain')
-      .startSpan('brain.macro.request', {
-        kind: SpanKind.CLIENT,
-        attributes: {
-          'http.request.method':
-            init?.method ?? (input instanceof Request ? input.method : 'GET'),
-        },
-      });
+    const span = trace.getTracer('brain').startSpan('brain.macro.request', {
+      kind: SpanKind.CLIENT,
+      attributes: {
+        'http.request.method':
+          init?.method ?? (input instanceof Request ? input.method : 'GET'),
+      },
+    });
     return context.with(trace.setSpan(context.active(), span), async () => {
       const headers = new Headers(
         init?.headers ?? (input instanceof Request ? input.headers : undefined)

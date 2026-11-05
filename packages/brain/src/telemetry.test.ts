@@ -14,6 +14,7 @@ import {
 import { assertEquals, assertRejects, assertThrows } from '@std/assert';
 import { ConfigError } from './config.ts';
 import { judge } from './jev.ts';
+import { AgentSdkRunner } from './runner.ts';
 import { telemetryConfig, tracedFetch, withSpan } from './telemetry.ts';
 
 const exporter = new InMemorySpanExporter();
@@ -125,4 +126,41 @@ Deno.test('Jev exports decision metadata without message content', async () => {
     'jev.relevant': true,
     'jev.reason': 'mentioned',
   });
+});
+
+Deno.test('a synchronous SDK startup failure closes its span without error text', () => {
+  exporter.reset();
+  const runner = new AgentSdkRunner({
+    query: () => {
+      throw new Error('private startup details');
+    },
+    claudeExecutable: 'claude',
+    anthropicBaseUrl: 'http://127.0.0.1',
+    anthropicAuthToken: 'test-token',
+    claudeConfigDir: '/tmp/brain-test',
+    baseEnv: {},
+  });
+  assertThrows(() =>
+    runner.start({
+      id: 'test-turn',
+      tier: 'respond',
+      lane: 'opaque-lane',
+      prompt: 'private prompt',
+      system: 'private system',
+      cwd: '/tmp/brain-test',
+      model: 'test-model',
+      maxBudgetUsd: 1,
+      env: {},
+    })
+  );
+  const span = exporter.getFinishedSpans().at(-1)!;
+  assertEquals(span.name, 'brain.turn');
+  assertEquals(span.status, { code: SpanStatusCode.ERROR });
+  assertEquals(span.attributes, {
+    'brain.tier': 'respond',
+    'gen_ai.request.model': 'test-model',
+    'turn.id': 'test-turn',
+    'brain.lane': 'opaque-lane',
+  });
+  assertEquals(span.events, []);
 });

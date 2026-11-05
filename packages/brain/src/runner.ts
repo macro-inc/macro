@@ -110,39 +110,46 @@ export class AgentSdkRunner implements Runner {
     };
     send(turn.prompt);
 
-    const messages = context.with(parent, () =>
-      this.options.query({
-        prompt: input,
-        options: {
-          cwd: turn.cwd,
-          model: turn.model,
-          maxBudgetUsd: turn.maxBudgetUsd,
-          abortController,
-          pathToClaudeCodeExecutable: this.options.claudeExecutable,
-          permissionMode: 'bypassPermissions',
-          allowDangerouslySkipPermissions: true,
-          settingSources: ['project'],
-          systemPrompt: {
-            type: 'preset',
-            preset: 'claude_code',
-            append: turn.system,
+    let messages: AsyncIterable<SDKMessage>;
+    try {
+      messages = context.with(parent, () =>
+        this.options.query({
+          prompt: input,
+          options: {
+            cwd: turn.cwd,
+            model: turn.model,
+            maxBudgetUsd: turn.maxBudgetUsd,
+            abortController,
+            pathToClaudeCodeExecutable: this.options.claudeExecutable,
+            permissionMode: 'bypassPermissions',
+            allowDangerouslySkipPermissions: true,
+            settingSources: ['project'],
+            systemPrompt: {
+              type: 'preset',
+              preset: 'claude_code',
+              append: turn.system,
+            },
+            env: {
+              ...this.options.baseEnv,
+              ...turn.env,
+              ANTHROPIC_BASE_URL: this.options.anthropicBaseUrl,
+              ANTHROPIC_AUTH_TOKEN: this.options.anthropicAuthToken,
+              CLAUDE_CONFIG_DIR: this.options.claudeConfigDir,
+              ...(headers.traceparent
+                ? {
+                    ANTHROPIC_CUSTOM_HEADERS: `traceparent: ${headers.traceparent}`,
+                    BRAIN_TURN_TRACEPARENT: headers.traceparent,
+                  }
+                : {}),
+            },
           },
-          env: {
-            ...this.options.baseEnv,
-            ...turn.env,
-            ANTHROPIC_BASE_URL: this.options.anthropicBaseUrl,
-            ANTHROPIC_AUTH_TOKEN: this.options.anthropicAuthToken,
-            CLAUDE_CONFIG_DIR: this.options.claudeConfigDir,
-            ...(headers.traceparent
-              ? {
-                  ANTHROPIC_CUSTOM_HEADERS: `traceparent: ${headers.traceparent}`,
-                  BRAIN_TURN_TRACEPARENT: headers.traceparent,
-                }
-              : {}),
-          },
-        },
-      })
-    );
+        })
+      );
+    } catch (error) {
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      span.end();
+      throw error;
+    }
 
     const done = context.with(parent, async (): Promise<Outcome> => {
       let outcome: Outcome = {
