@@ -1,0 +1,17 @@
+# Experiment only: today's shape. One lock around the whole run. Every job sleeps.
+name: ci-speed queue control
+on:
+  pull_request:
+    paths: ['.github/ci-speed/**']
+permissions: { contents: read }
+concurrency:
+  group: ci-speed-queue-control-${{ github.head_ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    uses: ./.github/workflows/ci_speed_queue_stage.yml
+    with: { stage: build, seconds: 180 }
+  deploy:
+    needs: build
+    uses: ./.github/workflows/ci_speed_queue_stage.yml
+    with: { stage: deploy, seconds: 180 }

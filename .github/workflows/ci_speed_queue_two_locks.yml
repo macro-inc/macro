@@ -1,0 +1,20 @@
+# Experiment only: one lock for building, a second for deploying. Every job sleeps.
+name: ci-speed queue two locks
+on:
+  pull_request:
+    paths: ['.github/ci-speed/**']
+permissions: { contents: read }
+jobs:
+  build:
+    concurrency:
+      group: ci-speed-queue-build-${{ github.head_ref }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/ci_speed_queue_stage.yml
+    with: { stage: build, seconds: 180 }
+  deploy:
+    needs: build
+    concurrency:
+      group: ci-speed-queue-deploy-${{ github.head_ref }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/ci_speed_queue_stage.yml
+    with: { stage: deploy, seconds: 180 }

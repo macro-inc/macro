@@ -1,0 +1,24 @@
+# Experiment only: every job sleeps. Called by the two queue arms.
+name: ci-speed queue stage
+on:
+  workflow_call:
+    inputs:
+      stage: { type: string, required: true }
+      seconds: { type: number, required: true }
+jobs:
+  first:
+    runs-on: namespace-profile-linux-tiny-no-cache
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { persist-credentials: false, sparse-checkout: .github/ci-speed }
+      - run: |
+          echo "EVENT ${{ inputs.stage }} first sha=${{ github.event.pull_request.head.sha }} start=$(date -u +%FT%TZ)"
+          if [ "${{ inputs.stage }}" = build ] && [ -f .github/ci-speed/fail-build ]; then echo "deliberate build failure"; exit 1; fi
+          sleep $(( ${{ inputs.seconds }} / 2 ))
+  second:
+    needs: first
+    runs-on: namespace-profile-linux-tiny-no-cache
+    steps:
+      - run: |
+          echo "EVENT ${{ inputs.stage }} second sha=${{ github.event.pull_request.head.sha }} start=$(date -u +%FT%TZ)"
+          sleep $(( ${{ inputs.seconds }} / 2 ))
