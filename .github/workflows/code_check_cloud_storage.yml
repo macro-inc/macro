@@ -138,6 +138,7 @@ jobs:
       run: |
         set -euo pipefail
 
+        command -v nsc || true; ls /nsc/powertoys /nsc/bin 2>/dev/null || true; nsc version 2>&1 | head -2 || true
         # Writes for the check/test jobs:
         #   rust_packages — all | none | space-separated packages (changed + reverse deps)
         #   skip_tests    — true keeps clippy on rust_packages while the live-Postgres
