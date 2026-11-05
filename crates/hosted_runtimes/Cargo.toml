@@ -7,14 +7,16 @@ version = "0.1.0"
 [features]
 default = ["inbound", "outbound", "ports"]
 inbound = ["dep:axum", "dep:utoipa", "ports"]
-outbound = ["dep:sqlx", "ports"]
+outbound = ["dep:incus_client", "dep:macro_env", "dep:sqlx", "ports", "tokio/fs", "tokio/process", "tokio/time"]
 ports = ["dep:tokio"]
 
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
+incus_client = { path = "../incus_client", optional = true }
 lazy-regex = { workspace = true }
+macro_env = { path = "../macro_env", optional = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -27,5 +29,10 @@ uuid = { workspace = true, features = ["serde", "v7"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+clap = { workspace = true }
 proptest = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[[example]]
+name = "incus_fleet_smoke"
+required-features = ["outbound"]

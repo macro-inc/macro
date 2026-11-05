@@ -1,0 +1,179 @@
+use super::*;
+
+const COMPUTER_ID: Uuid = Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001);
+
+fn config() -> DockerFleetConfig {
+    DockerFleetConfig {
+        image: "macro-box:latest".to_owned(),
+        network: "macro_services".to_owned(),
+        enrollment_dir: PathBuf::from("/var/lib/macro/enrollments"),
+        host_name: "docker-local".to_owned(),
+        memory_gb: 64,
+        reserve_gb: 16,
+        oversell_factor: 4,
+    }
+}
+
+#[test]
+fn create_runs_systemd_with_the_enrollment_directory_mounted_read_only() {
+    let spec = CreateSpec {
+        image: "macro-box:latest".to_owned(),
+        network: "macro_services".to_owned(),
+        computer_id: COMPUTER_ID,
+        memory_gb: 8,
+        vcpus: 4,
+        enrollment_dir: PathBuf::from(
+            "/var/lib/macro/enrollments/01900000-0000-7000-8000-000000000001",
+        ),
+    };
+
+    assert_eq!(
+        create_args(&spec),
+        [
+            "create",
+            "--name",
+            "macro-computer-01900000-0000-7000-8000-000000000001",
+            "--hostname",
+            "macro-computer-01900000-0000-7000-8000-000000000001",
+            "--label",
+            "macro.computer_id=01900000-0000-7000-8000-000000000001",
+            "--network",
+            "macro_services",
+            "--memory",
+            "8g",
+            "--cpus",
+            "4",
+            "--privileged",
+            "--cgroupns=private",
+            "--tmpfs",
+            "/run",
+            "--tmpfs",
+            "/run/lock",
+            "--mount",
+            "type=bind,source=/var/lib/macro/enrollments/01900000-0000-7000-8000-000000000001,target=/run/macro,readonly",
+            "macro-box:latest",
+        ]
+    );
+}
+
+#[test]
+fn verbs_name_the_computer_container() {
+    assert_eq!(
+        verb_args("pause", COMPUTER_ID),
+        [
+            "pause",
+            "macro-computer-01900000-0000-7000-8000-000000000001"
+        ]
+    );
+}
+
+#[test]
+fn remove_forces_so_a_missing_container_is_not_an_error() {
+    assert_eq!(
+        remove_args(COMPUTER_ID),
+        [
+            "rm",
+            "--force",
+            "--volumes",
+            "macro-computer-01900000-0000-7000-8000-000000000001"
+        ]
+    );
+}
+
+#[test]
+fn state_lookup_includes_stopped_containers() {
+    assert_eq!(
+        state_args(COMPUTER_ID),
+        [
+            "ps",
+            "--all",
+            "--filter",
+            "label=macro.computer_id=01900000-0000-7000-8000-000000000001",
+            "--format",
+            "{{.State}}",
+        ]
+    );
+}
+
+#[test]
+fn listing_prints_the_computer_id_label_and_state() {
+    assert_eq!(
+        list_args(),
+        [
+            "ps",
+            "--all",
+            "--filter",
+            "label=macro.computer_id",
+            "--format",
+            "{{.Label \"macro.computer_id\"}} {{.State}}",
+        ]
+    );
+}
+
+#[test]
+fn listing_maps_docker_states_to_instance_statuses() {
+    let output = "01900000-0000-7000-8000-000000000001 running\n\
+                  01900000-0000-7000-8000-000000000002 paused\n\
+                  01900000-0000-7000-8000-000000000003 exited\n\
+                  01900000-0000-7000-8000-000000000004 created\n";
+
+    assert_eq!(
+        parse_instances(output).unwrap(),
+        [
+            (
+                Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001),
+                InstanceStatus::Running
+            ),
+            (
+                Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0002),
+                InstanceStatus::Frozen
+            ),
+            (
+                Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0003),
+                InstanceStatus::Stopped
+            ),
+            (
+                Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0004),
+                InstanceStatus::Stopped
+            ),
+        ]
+    );
+}
+
+#[test]
+fn listing_rejects_an_unknown_state() {
+    let output = "01900000-0000-7000-8000-000000000001 hibernating\n";
+
+    assert!(matches!(
+        parse_instances(output),
+        Err(DockerFleetError::Malformed(_))
+    ));
+}
+
+#[test]
+fn the_fleet_refuses_every_environment_but_local() {
+    assert!(DockerFleet::new(config(), Environment::Local).is_ok());
+    assert!(matches!(
+        DockerFleet::new(config(), Environment::Develop),
+        Err(DockerFleetError::NotLocal(Environment::Develop))
+    ));
+    assert!(matches!(
+        DockerFleet::new(config(), Environment::Production),
+        Err(DockerFleetError::NotLocal(Environment::Production))
+    ));
+}
+
+#[tokio::test]
+async fn the_host_registers_with_its_configured_capacity() {
+    let fleet = DockerFleet::new(config(), Environment::Local).unwrap();
+
+    assert_eq!(
+        fleet.host().await.unwrap(),
+        HostRegistration {
+            name: "docker-local".to_owned(),
+            memory_gb: 64,
+            reserve_gb: 16,
+            oversell_factor: 4,
+        }
+    );
+}
