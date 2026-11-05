@@ -312,7 +312,8 @@ export function EmailSavedViewFields(props: {
           type="button"
           variant="ghost"
           size="sm"
-          class="self-start"
+          // Line the label up with the field labels above it.
+          class="-ml-2 self-start"
           aria-expanded={advancedOpen()}
           aria-controls={advancedId}
           onClick={() => setAdvancedOpen((open) => !open)}
