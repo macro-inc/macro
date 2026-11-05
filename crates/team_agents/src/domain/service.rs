@@ -29,14 +29,21 @@ pub const TEAM_AGENTS_FLAG: &str = "enable-team-agents";
 const BRAIN_UNIT_PREFIX: &str = "brain@";
 
 /// The `@macro-inc/brain` binary on the computer image.
-const BRAIN_EXEC: &str = "/usr/local/bin/macro-brain";
+const BRAIN_EXEC: &str = "/opt/macro/brain run";
+
+/// Loopback health endpoint, shared with the macrod persona supervisor.
+const BRAIN_HEALTH_PORT: &str = "7801";
 
 /// Config drive keys the brain reads from its environment file.
 pub mod config_keys {
     /// The agent's Macro user id.
     pub const AGENT_USER_ID: &str = "MACRO_AGENT_USER_ID";
     /// Public API gateway origin; each service is under its path prefix.
-    pub const GATEWAY_URL: &str = "MACRO_GATEWAY_URL";
+    pub const GATEWAY_URL: &str = "MACRO_GATEWAY";
+    /// Absolute path to the persona workspace.
+    pub const WORKSPACE: &str = "BRAIN_WORKSPACE";
+    /// Loopback port on which the brain serves health.
+    pub const HEALTH_PORT: &str = "BRAIN_HEALTH_PORT";
     /// The workspace repo's clone URL.
     pub const REPO_URL: &str = "MACRO_REPO_URL";
     /// The workspace repo token (HTTP Basic password).
@@ -108,6 +115,10 @@ fn slug(name: &str) -> String {
         slug.insert_str(0, "agent-");
     }
 
+    if matches!(slug.as_str(), "root" | "macro" | "macrod") {
+        slug.insert_str(0, "agent-");
+    }
+
     slug.chars()
         .take(24)
         .collect::<String>()
@@ -166,6 +177,14 @@ fn persona(
         (
             config_keys::GATEWAY_URL.to_string(),
             gateway_url.trim_end_matches('/').to_string(),
+        ),
+        (
+            config_keys::WORKSPACE.to_string(),
+            format!("/home/{os_user}/workspace"),
+        ),
+        (
+            config_keys::HEALTH_PORT.to_string(),
+            BRAIN_HEALTH_PORT.to_string(),
         ),
         (config_keys::REPO_URL.to_string(), repo.url.clone()),
         (
@@ -380,14 +399,16 @@ where
             return Ok(agent);
         };
 
-        if agent.status != TeamAgentStatus::Provisioning {
-            return Ok(agent);
-        }
-
         let computer = self.computers.status(agent.team_id, computer_id).await?;
 
         let (status, reason) = match computer.status {
-            _ if computer.setup.is_some() => (TeamAgentStatus::Provisioning, None),
+            _ if computer
+                .setup
+                .as_ref()
+                .is_some_and(|setup| setup.step != super::models::SetupStep::Ready) =>
+            {
+                (TeamAgentStatus::Provisioning, None)
+            }
             ComputerStatusKind::SettingUp => (TeamAgentStatus::Provisioning, None),
             ComputerStatusKind::Failed => (
                 TeamAgentStatus::Failed,

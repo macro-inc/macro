@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Longest agent name, in characters.
-pub const MAX_NAME_CHARS: usize = 80;
+pub const MAX_NAME_CHARS: usize = 64;
 
 /// Longest job description or personality, in characters.
 pub const MAX_PROFILE_CHARS: usize = 4000;

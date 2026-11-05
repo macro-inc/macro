@@ -492,7 +492,7 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
                 os_user: "sam-rivera".to_string(),
                 extra_service: PersonaService {
                     unit_name: "brain@sam-rivera".to_string(),
-                    exec: "/usr/local/bin/macro-brain".to_string(),
+                    exec: "/opt/macro/brain run".to_string(),
                     env: BTreeMap::new(),
                 },
                 config: BTreeMap::from([
@@ -501,13 +501,18 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
                         "macro|sam@agents.example.com".to_string(),
                     ),
                     (
-                        "MACRO_GATEWAY_URL".to_string(),
+                        "MACRO_GATEWAY".to_string(),
                         "https://dev-gateway.macro.com".to_string(),
                     ),
                     (
                         "MACRO_REPO_URL".to_string(),
                         "https://git.example.com/sam".to_string(),
                     ),
+                    (
+                        "BRAIN_WORKSPACE".to_string(),
+                        "/home/sam-rivera/workspace".to_string()
+                    ),
+                    ("BRAIN_HEALTH_PORT".to_string(), "7801".to_string()),
                     ("MACRO_REPO_TOKEN".to_string(), "mrt_token".to_string()),
                     ("MACRO_API_KEY".to_string(), "mak_secret".to_string()),
                 ]),
@@ -647,6 +652,19 @@ async fn create_rejects_an_empty_personality_before_making_anything() {
     let result = service.create(receipt(TEAM_ID), request).await;
 
     assert!(matches!(result, Err(TeamAgentError::BadRequest(_))));
+    assert_eq!(journal.steps(), Vec::<&str>::new());
+}
+
+#[tokio::test]
+async fn create_rejects_a_name_the_computer_cannot_accept_before_making_anything() {
+    let (service, journal) = build(Setup::default());
+    let mut request = request();
+    request.name = "a".repeat(65);
+
+    assert!(matches!(
+        service.create(receipt(TEAM_ID), request).await,
+        Err(TeamAgentError::BadRequest(_))
+    ));
     assert_eq!(journal.steps(), Vec::<&str>::new());
 }
 
@@ -804,6 +822,37 @@ async fn a_ready_computer_makes_the_agent_running() {
 }
 
 #[tokio::test]
+async fn a_running_agent_reflects_a_later_computer_failure() {
+    let (mut service, _journal) = build(Setup {
+        computer_status: ComputerStatus {
+            status: ComputerStatusKind::Ready,
+            setup: Some(SetupProgress {
+                step: SetupStep::Ready,
+                position: 5,
+                total: 5,
+            }),
+        },
+        ..Setup::default()
+    });
+    service
+        .create(receipt(TEAM_ID), request())
+        .await
+        .expect("create");
+    assert_eq!(
+        service.me(&user(AGENT)).await.expect("ready").status,
+        TeamAgentStatus::Running
+    );
+    service.computers.status = ComputerStatus {
+        status: ComputerStatusKind::Failed,
+        setup: None,
+    };
+    assert_eq!(
+        service.me(&user(AGENT)).await.expect("failed").status,
+        TeamAgentStatus::Failed
+    );
+}
+
+#[tokio::test]
 async fn listing_takes_a_failure_from_the_computer() {
     let (service, _journal) = build(Setup {
         computer_status: ComputerStatus {
@@ -905,6 +954,9 @@ fn slug_is_a_valid_os_user_name() {
     assert_eq!(slug("  Ünïcode!! Bot 2 "), "n-code-bot-2");
     assert_eq!(slug("✨"), "agent");
     assert_eq!(slug("42 Things"), "agent-42-things");
+    assert_eq!(slug("root"), "agent-root");
+    assert_eq!(slug("Macro"), "agent-macro");
+    assert_eq!(slug("macrod"), "agent-macrod");
     assert_eq!(
         slug("Bartholomew Maximilian Montgomery"),
         "bartholomew-maximilian-m"
