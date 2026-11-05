@@ -1,8 +1,7 @@
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
-
-import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import type { CallRecord } from '@service-call/client';
 import { createMemo, For } from 'solid-js';
 import { dedupeCallRecordingParticipants } from './call-recording-utils';
@@ -10,8 +9,7 @@ import { dedupeCallRecordingParticipants } from './call-recording-utils';
 export function CallRecordingParticipantsSection(props: {
   record: CallRecord;
 }) {
-  const { openWithSplit } = useSplitLayout();
-  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
+  const openDm = useOpenDirectMessage();
   const participants = createMemo(() =>
     dedupeCallRecordingParticipants(
       props.record.participants,
@@ -21,16 +19,9 @@ export function CallRecordingParticipantsSection(props: {
   const guests = () => props.record.guests;
 
   const openDirectMessage = (participantId: string, event: MouseEvent) => {
-    getOrCreateDmMutation.mutate(
-      { recipient_id: participantId },
-      {
-        onSuccess: ({ channel_id }) => {
-          openWithSplit(
-            { type: 'channel', id: channel_id },
-            { activate: true, preferNewSplit: event.shiftKey }
-          );
-        },
-      }
+    fireAndForget(
+      openDm(participantId, { activate: true, preferNewSplit: event.shiftKey }),
+      'call-recording-participants'
     );
   };
 
