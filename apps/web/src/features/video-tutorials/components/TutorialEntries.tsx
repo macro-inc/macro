@@ -65,7 +65,9 @@ function DismissButton(props: { onDismiss: () => void }) {
  * (WideLayout and the --soup-row-* geometry in entity/composed/ListEntity.css):
  * a play button in the icon slot, "Watch tutorial" in the sender column, the
  * title and snippet where a row's subject goes, and the length where its date
- * goes, so it lines up with the rows below it.
+ * goes, so it lines up with the rows below it. A list whose rows lead with
+ * more icons (Tasks, Booking links) sets `--tutorial-row-inset` to push the
+ * content over its own, while the row and its hover keep the list's width.
  */
 export function TutorialRowView(props: EntryProps) {
   return (
@@ -77,7 +79,7 @@ export function TutorialRowView(props: EntryProps) {
         type="button"
         onClick={props.onOpen}
         aria-haspopup="dialog"
-        class="grid min-h-[inherit] w-full grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)_auto_8ch] items-center gap-x-(--soup-row-column-gap) rounded-xl pr-2 pl-(--soup-row-padding-l) text-left text-sm outline-none [--title-width:10rem] focus-visible:bg-list-hover"
+        class="grid min-h-[inherit] w-full grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)_auto_8ch] items-center gap-x-(--soup-row-column-gap) rounded-xl pr-2 pl-[calc(var(--soup-row-padding-l)+var(--tutorial-row-inset,0px))] text-left text-sm outline-none [--title-width:10rem] focus-visible:bg-list-hover"
       >
         <span aria-hidden="true" />
         {/* On phones the label takes its own width, and the title truncates

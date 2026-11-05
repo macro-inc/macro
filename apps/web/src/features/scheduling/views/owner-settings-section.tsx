@@ -166,8 +166,9 @@ export function OwnerSettingsSection(props: {
               <EventTypesPanel
                 listStart={
                   // Booking rows lead with their toggle; the inset puts the
-                  // row's play icon and label over each link's icon and title.
-                  <div class="pl-6">
+                  // row's play icon and label over each link's icon and title,
+                  // while the row's hover still spans the list.
+                  <div class="[--tutorial-row-inset:1.5rem]">
                     <TutorialRow tutorial="scheduling" />
                   </div>
                 }

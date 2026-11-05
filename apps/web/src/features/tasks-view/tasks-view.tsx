@@ -132,8 +132,9 @@ function TasksViewRoot() {
               listStart={
                 // Task rows lead with priority and status icons; the inset
                 // puts the play icon over the status icon and the label
-                // over the task titles.
-                <div class="pl-9">
+                // over the task titles, while the row's hover still spans
+                // the list like the task rows'.
+                <div class="[--tutorial-row-inset:2.25rem]">
                   <TutorialRow tutorial="tasks" />
                 </div>
               }
