@@ -74,7 +74,6 @@ function Entry(props: {
         open={state.open()}
         onOpenChange={state.setOpen}
         title={shown().title}
-        block={shown().block}
         length={shown().length}
         videoUrl={shown().videoUrl}
         posterUrl={shown().posterUrl}

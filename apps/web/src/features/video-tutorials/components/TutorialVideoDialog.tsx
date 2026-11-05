@@ -9,27 +9,21 @@ import type { TutorialId } from '../core/tutorial-id';
 import { type ShelfTutorial, TutorialShelf } from './TutorialShelf';
 
 /**
- * The big play button: a solid black disc with a filled white triangle. The
- * triangle's centroid sits on the disc's centre, which is where the eye puts a
- * play glyph's middle, so it reads as centred without nudging.
+ * The pill's play disc: dark grey on the pill's near-black with a solid
+ * white triangle. The triangle's centroid sits on the disc's centre, which is
+ * where the eye puts a play glyph's middle, so it reads as centred without
+ * nudging.
  */
-function PlayButtonGlyph() {
+function PlayDisc() {
   return (
     <svg
       viewBox="0 0 96 96"
       aria-hidden="true"
-      class="size-24 rounded-full drop-shadow-2xl outline-offset-4 outline-[white] group-focus-visible/play:outline-2 transition-transform not-touch:group-hover/play:scale-105 mobile:size-16"
+      class="size-12 shrink-0 transition-transform not-touch:group-hover/play:scale-105 mobile:size-10"
     >
-      <circle
-        cx="48"
-        cy="48"
-        r="47.5"
-        fill="black"
-        stroke="white"
-        stroke-opacity="0.18"
-      />
+      <circle cx="48" cy="48" r="48" fill="white" fill-opacity="0.16" />
       <path
-        d="M37.5 30 L69 48 L37.5 66 Z"
+        d="M39 32 L67 48 L39 64 Z"
         fill="white"
         stroke="white"
         stroke-width="6"
@@ -40,15 +34,14 @@ function PlayButtonGlyph() {
 }
 
 /**
- * The tutorial video at 80% of the window, with a big play button: the video
- * never autoplays. On phones the shared Dialog becomes its bottom sheet.
+ * The tutorial video at 80% of the window, paused behind a play pill (play
+ * disc, then the presenter and the video's length): the video never
+ * autoplays. On phones the shared Dialog becomes its bottom sheet.
  */
 export function TutorialVideoDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  /** The block's name, like "Macro Calls", for "Macro Calls Demo". */
-  block: string;
   /** The video's length, like "1:11". */
   length: string;
   videoUrl: string;
@@ -154,34 +147,46 @@ export function TutorialVideoDialog(props: {
             class="max-h-full w-full object-contain mobile:aspect-video"
           />
           <Show when={!started()}>
+            {/* The dimmed poster also starts the video on a click; the pill
+                is the button keyboards and screen readers use. */}
             <button
-              ref={playButton}
               type="button"
+              tabIndex={-1}
+              aria-hidden="true"
               onClick={play}
-              aria-label={t('tutorials.playVideo')}
-              class="group/play absolute inset-0 grid place-items-center bg-[black]/30 bg-radial from-[black]/45 to-[black]/0 to-75% outline-none"
-            >
-              {/* The title hangs under the button, so the button stays the
-                  centre of the frame. */}
-              <span class="relative">
-                <PlayButtonGlyph />
-                <span class="absolute top-full left-1/2 mt-6 flex w-max max-w-[min(36rem,70vw)] -translate-x-1/2 flex-col items-center gap-2.5 text-center text-[white] [text-shadow:0_1px_12px_rgb(0_0_0/0.55)] mobile:mt-3 mobile:gap-1.5">
-                  <span class="text-2xl font-semibold tracking-tight mobile:text-base">
-                    {t('tutorials.demoTitle', { block: props.block })}
-                  </span>
-                  <span class="flex items-center gap-2 text-sm font-medium text-[white]/85 mobile:gap-1.5 mobile:text-xs">
-                    <img
-                      src={presenterPhoto}
-                      alt=""
-                      class="size-7 rounded-full ring-1 ring-[white]/40 mobile:size-5"
-                    />
+              class="absolute inset-0 bg-[black]/30 bg-radial from-[black]/40 to-[black]/0 to-75%"
+            />
+            <div class="pointer-events-none absolute inset-0 grid place-items-center">
+              <button
+                ref={playButton}
+                type="button"
+                onClick={play}
+                aria-label={t('tutorials.playTutorial', {
+                  title: props.title,
+                  length: props.length,
+                })}
+                class="group/play pointer-events-auto flex h-16 items-center gap-3 rounded-full border border-[white]/12 bg-[rgb(20_20_20/0.85)] py-2 pr-6 pl-2 whitespace-nowrap text-[white] shadow-2xl outline-none transition-colors not-touch:hover:bg-[rgb(38_38_38/0.9)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[white] mobile:h-12 mobile:gap-2 mobile:py-1 mobile:pr-4 mobile:pl-1"
+              >
+                <PlayDisc />
+                <span
+                  aria-hidden="true"
+                  class="h-[60%] w-px shrink-0 bg-[white]/15"
+                />
+                <img
+                  src={presenterPhoto}
+                  alt=""
+                  class="size-11 shrink-0 rounded-full object-cover mobile:size-9"
+                />
+                <span class="flex flex-col items-start text-left leading-tight">
+                  <span class="text-base font-medium mobile:text-sm">
                     {TUTORIAL_PRESENTER}
-                    <span aria-hidden="true">·</span>
-                    <span class="tabular-nums">{props.length}</span>
+                  </span>
+                  <span class="text-sm text-[white]/60 tabular-nums mobile:text-xs">
+                    {t('tutorials.watchDemo')} · {props.length}
                   </span>
                 </span>
-              </span>
-            </button>
+              </button>
+            </div>
           </Show>
           <Show when={ended()}>
             {/* The last frame stays faintly visible under a dark wash; a

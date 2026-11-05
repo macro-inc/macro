@@ -70,6 +70,7 @@ afterEach(() => {
 const row = () =>
   screen.queryByRole('button', { name: /Learn how to use Macro Mail/ });
 const video = () => document.querySelector('video');
+const playButton = () => screen.getByRole('button', { name: /^Play / });
 // jsdom keeps Kobalte's dialog mounted for its exit; it is closed once marked so.
 const dialogClosed = () =>
   screen.queryByRole('dialog')?.hasAttribute('data-closed') ?? true;
@@ -81,15 +82,16 @@ describe('block tutorial row', () => {
     fireEvent.click(row()!);
     await screen.findByRole('dialog');
     expect(play).not.toHaveBeenCalled();
-    // The play button carries the video's title and byline.
-    screen.getByText('Macro Mail Demo');
-    expect(
-      screen.getByRole('button', { name: 'Play video' }).textContent
-    ).toContain('Jacob Beckerman·1:27');
+    // The play pill names the video and shows its presenter and length.
+    const pill = screen.getByRole('button', {
+      name: 'Play Learn how to use Macro Mail, 1:27',
+    });
+    expect(pill.textContent).toContain('Jacob Beckerman');
+    expect(pill.textContent).toContain('Watch demo · 1:27');
     expect(video()?.autoplay).toBe(false);
     expect(video()?.controls).toBe(false);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Play video' }));
+    fireEvent.click(pill);
     expect(play).toHaveBeenCalledTimes(1);
     expect(video()?.controls).toBe(true);
     expect(document.activeElement).toBe(video());
@@ -100,7 +102,7 @@ describe('block tutorial row', () => {
 
     fireEvent.click(row()!);
     await screen.findByRole('dialog');
-    fireEvent.click(screen.getByRole('button', { name: 'Play video' }));
+    fireEvent.click(playButton());
     const played = () =>
       track.mock.calls.filter(([, payload]) => payload.action === 'played');
     expect(played()).toHaveLength(0);
@@ -115,7 +117,7 @@ describe('block tutorial row', () => {
 
     fireEvent.click(row()!);
     await screen.findByRole('dialog');
-    fireEvent.click(screen.getByRole('button', { name: 'Play video' }));
+    fireEvent.click(playButton());
     fireEvent.keyDown(video()!, { key: 'Escape' });
 
     expect(pause).toHaveBeenCalled();
@@ -138,7 +140,7 @@ describe('shelf after a video ends', () => {
     render(() => <TutorialRow tutorial="mail" />);
     fireEvent.click(row()!);
     const dialog = await screen.findByRole('dialog');
-    fireEvent.click(screen.getByRole('button', { name: 'Play video' }));
+    fireEvent.click(playButton());
     fireEvent.play(video()!);
     expect(screen.queryByText('More videos from Macro')).toBeNull();
 
@@ -157,16 +159,14 @@ describe('shelf after a video ends', () => {
     expect(screen.queryByText('More videos from Macro')).toBeNull();
     expect(dialog.textContent).toContain('Learn how to use Macro CRM');
     expect(video()?.getAttribute('src')).toBe(TUTORIALS.crm?.videoUrl);
-    expect(document.activeElement).toBe(
-      screen.getByRole('button', { name: 'Play video' })
-    );
+    expect(document.activeElement).toBe(playButton());
     expect(track).toHaveBeenLastCalledWith('tutorial_video', {
       tutorial: 'macro-crm',
       action: 'opened',
     });
 
     // Plays of the new video count for it.
-    fireEvent.click(screen.getByRole('button', { name: 'Play video' }));
+    fireEvent.click(playButton());
     fireEvent.play(video()!);
     expect(track).toHaveBeenLastCalledWith('tutorial_video', {
       tutorial: 'macro-crm',
@@ -178,7 +178,7 @@ describe('shelf after a video ends', () => {
     render(() => <TutorialRow tutorial="mail" />);
     fireEvent.click(row()!);
     await screen.findByRole('dialog');
-    fireEvent.click(screen.getByRole('button', { name: 'Play video' }));
+    fireEvent.click(playButton());
     fireEvent.ended(video()!);
     video()!.currentTime = 80;
     play.mockClear();
@@ -215,7 +215,7 @@ describe('support link under the video', () => {
 
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Talk to us in your support channel.',
+        name: 'Talk to us in your support channel →',
       })
     );
 
@@ -246,7 +246,7 @@ describe('support link under the video', () => {
     expect(screen.queryByText('Have questions about Macro Mail?')).toBeNull();
     expect(
       screen.queryByRole('button', {
-        name: 'Talk to us in your support channel.',
+        name: 'Talk to us in your support channel →',
       })
     ).toBeNull();
   });
