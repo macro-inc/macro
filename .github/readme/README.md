@@ -18,7 +18,7 @@ Calls hero’s `monterey-dark.jpg` background with `grayscale(1) brightness(1.6)
 contrast(1.05)`, reduced padding of 30 pixels per 1200-pixel frame, and the same
 proportional 16-pixel inner and outer corner radius. Outer corners are transparent
 so they work on both GitHub themes. Screenshot content is unchanged and never
-upscaled; Email and CRM retain their lower source resolution. The header,
+upscaled; CRM retains its lower source resolution. The header,
 security badges, and star-history charts are not part of this treatment.
 
 Unframed sources are retained below for future edits. Editable compositions and
@@ -28,8 +28,13 @@ the rendering recipe are in the local
 The root README uses nine product screenshots. The October 29 final gallery
 supplies Databases, Agents, and Calendar. A subsequent sharpness review replaces
 Chat, Tasks, and Docs with the user's higher-resolution first-pass captures.
-Email and CRM retain Jacob's clean test/demo JPEGs pending equivalent sharp
-recaptures. The CRM pipeline and database contain fictional sample data.
+CRM retains the clean demo JPEG pending an equivalent sharp recapture.
+Email and Chat were recaptured from the desktop app on November 4.
+Chat shows a feature request, agent handoff, and completed session card.
+Email shows the user-selected internal test thread. Both retain navigation,
+exclude the cursor and app tabs, and use the shared narrow background frame.
+Original November 4 captures and editable sources are in the local
+`Macro README screenshots/2026-11-04-refresh/` folder. The CRM pipeline and database contain fictional sample data.
 Calendar retains the real meeting names explicitly selected by the user.
 Calls uses the approved web capture of the internal Tasks & Docs design review
 at 3:45, with the recording and speaker-labelled transcript visible. The
@@ -47,8 +52,8 @@ the README's display width before saving. Use lossless PNG for cropped UI text.
 
 | Unframed source | README asset | View |
 | --- | --- | --- |
-| `email-thread.jpg` | `framed/email.png` | First Macro Outlook Email!, a team test message, with email navigation open |
-| `messages-channel.png` | `framed/chat.png` | Engineers agent result, with links to the created project and task |
+| November 4 desktop capture | `framed/email.png` | Internal team test thread with participants, replies, and email navigation |
+| November 4 desktop capture | `framed/chat.png` | Feature request with an agent mention and completed coding-session card |
 | `tasks-list.png` | `framed/tasks.png` | Search Surface Area project grouped by assignee, higher-resolution desktop capture |
 | `docs-prd.png` | `framed/docs.png` | PRD: Team Channels, compact desktop view with tags, assignees, and document content |
 | `crm-board.jpg` | `framed/crm.png` | Sales Demo pipeline, showing 9 fictional companies in Lead, Demo, and Customer; 2 Churned companies are outside the crop; all deal values are sample data |
@@ -76,7 +81,7 @@ The marketing homepage's separate screenshot copies under
 ## Star history
 
 `star-history.py` embeds a GitHub stargazer timestamp snapshot through
-October 29, 2026 (5,640 stars). It counts current stargazers, so removed stars
+November 4, 2026 (6,144 stars). It counts current stargazers, so removed stars
 are absent from the historical totals.
 
 Refresh the source timestamps with:
