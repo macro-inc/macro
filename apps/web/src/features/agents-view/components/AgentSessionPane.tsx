@@ -22,6 +22,7 @@ import {
   ChangesToggle,
   ReviewNotesDock,
 } from '@app/features/changes/changes';
+import { AgentSessionComputerScreen } from '@app/features/computer-screen/agent-session-computer-screen';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import { SidePanel } from '@components/app/side-panel';
@@ -332,14 +333,16 @@ export function AgentSessionPane(props: {
 }) {
   return (
     <AgentSessionProvider blockId={props.id} onSessionId={props.onSessionId}>
-      <AgentChangesProvider>
-        <ChangesSplit>
-          <SessionContent
-            onDeleted={props.onDeleted}
-            notificationSource={props.notificationSource}
-          />
-        </ChangesSplit>
-      </AgentChangesProvider>
+      <AgentSessionComputerScreen>
+        <AgentChangesProvider>
+          <ChangesSplit>
+            <SessionContent
+              onDeleted={props.onDeleted}
+              notificationSource={props.notificationSource}
+            />
+          </ChangesSplit>
+        </AgentChangesProvider>
+      </AgentSessionComputerScreen>
     </AgentSessionProvider>
   );
 }

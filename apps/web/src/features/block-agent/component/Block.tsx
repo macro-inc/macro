@@ -4,6 +4,7 @@ import {
   ChangesSplit,
   ReviewNotesDock,
 } from '@app/features/changes/changes';
+import { AgentSessionComputerScreen } from '@app/features/computer-screen/agent-session-computer-screen';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SidePanel } from '@components/app/side-panel';
@@ -227,12 +228,14 @@ export default function BlockAgent() {
     <Show when={blockId}>
       {(id) => (
         <AgentSessionProvider blockId={id()} onSessionId={adoptSessionId}>
-          <AgentChangesProvider>
-            <AgentBlockContent
-              active={split?.isPanelActive() ?? false}
-              notificationSource={notificationSource}
-            />
-          </AgentChangesProvider>
+          <AgentSessionComputerScreen>
+            <AgentChangesProvider>
+              <AgentBlockContent
+                active={split?.isPanelActive() ?? false}
+                notificationSource={notificationSource}
+              />
+            </AgentChangesProvider>
+          </AgentSessionComputerScreen>
         </AgentSessionProvider>
       )}
     </Show>
