@@ -430,3 +430,5 @@ impl NotificationTitle for NotifEvent {
         }
     }
 }
+#[doc(hidden)]
+pub const CI_INTEGRATE_NONCE: &str = "open";
