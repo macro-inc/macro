@@ -109,18 +109,32 @@ jobs:
         echo 'unset CARGO_INCREMENTAL; export CARGO_PROFILE_DEV_INCREMENTAL=true' >> "$BASH_ENV"
         env | grep -E '^(CARGO_INCREMENTAL|RUSTC_WRAPPER|SCCACHE_C)' | cut -d= -f1,2 | cut -c 1-60 || true
         case "$mode" in seed|cold) exit 0;; esac
+        url="$SCCACHE_WEBDAV_ENDPOINT/gen-incremental/snapshot.tar.zst"
+        cache_request() {
+          curl --fail --silent --show-error --max-time 300 -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$@"
+        }
         s=$(date +%s)
-        if [ "$mode" = restore-gh ]; then
-          GH_TOKEN="${{ github.token }}" LD_LIBRARY_PATH= gh run download "$(cat .ci-gen-exp-seed-run)" -R "${{ github.repository }}" -n gen-snapshot -D "$RUNNER_TEMP/snap" || exit 0
-          mv "$RUNNER_TEMP/snap/snap.tar.zst" "$RUNNER_TEMP/snap.tar.zst"
-        else
-          nsc artifact download ci-speed/gen-incremental/snapshot.tar.zst "$RUNNER_TEMP/snap.tar.zst" || exit 0
-        fi
-        d=$(date +%s); echo "download_s=$((d-s)) gb=$(( $(stat -c %s "$RUNNER_TEMP/snap.tar.zst")/1000000000 ))"
         mkdir -p target
-        zstd -d -T0 -c "$RUNNER_TEMP/snap.tar.zst" | tar -xf - -C target
-        rm -f "$RUNNER_TEMP/snap.tar.zst"
-        echo "extract_s=$(( $(date +%s)-d )) total_s=$(( $(date +%s)-s ))"
+        case "$mode" in
+          copy-webdav)
+            nsc artifact download ci-speed/gen-incremental/snapshot.tar.zst "$RUNNER_TEMP/snap.tar.zst" || exit 0
+            u=$(date +%s); cache_request --upload-file "$RUNNER_TEMP/snap.tar.zst" "$url" || echo "webdav upload failed"
+            echo "webdav_upload_s=$(( $(date +%s)-u ))"; rm -f "$RUNNER_TEMP/snap.tar.zst"
+            s=$(date +%s)
+            cache_request "$url" | zstd -d -T0 | tar -xf - -C target
+            echo "stream_restore_s=$(( $(date +%s)-s )) rc=${PIPESTATUS[*]}"
+            ;;
+          restore-webdav)
+            cache_request "$url" | zstd -d -T0 | tar -xf - -C target
+            echo "stream_restore_s=$(( $(date +%s)-s )) rc=${PIPESTATUS[*]}"
+            ;;
+          restore-gh)
+            GH_TOKEN="${{ github.token }}" LD_LIBRARY_PATH= gh run download "$(cat .ci-gen-exp-seed-run)" -R "${{ github.repository }}" -n gen-snapshot -D "$RUNNER_TEMP/snap" || exit 0
+            d=$(date +%s); echo "gh_download_s=$((d-s))"
+            zstd -d -T0 -c "$RUNNER_TEMP/snap/snap.tar.zst" | tar -xf - -C target
+            rm -rf "$RUNNER_TEMP/snap"; echo "extract_s=$(( $(date +%s)-d ))"
+            ;;
+        esac
         du -sh target | cut -c 1-20
         echo "snapshot files newer than checkout: $(find target/debug/.fingerprint -type f -newer .git/HEAD | wc -l)"
     - name: Build schema binaries
