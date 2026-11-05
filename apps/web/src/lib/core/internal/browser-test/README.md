@@ -49,6 +49,10 @@ are stand-ins; this fixture does not claim saved-view dialog or live model cover
 cache host and OPFS with 1,001 synthetic authorized contacts. Fresh queries execute
 locally offline; unsupported capability and replacement login cannot become a remote
 SQL fallback. The fixture account is reactive; there is no read-only HTTP endpoint.
+`/?sql-people&joins` also uses the real compiler/controller and local people reader
+with one synthetic ordinary row. It verifies successful ID joins, explicit refusal
+of email/name/virtual-row joins without issuing identity lookups, and recovery
+back to a supported query.
 
 `/?contact-removal` runs the existing two-phase backfill and exact-verification
 adapter over the real worker/WASM/OPFS cache. Only authority data is synthetic,

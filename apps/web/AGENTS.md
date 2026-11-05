@@ -175,6 +175,9 @@ enumerate contacts or fall back to remote SQL execution. Validate result metadat
 fence account/session, storage generation, input transitions and disposal. Require
 complete synchronization before treating local results as directory-wide evidence;
 unsupported/incomplete reads stay explicit failures, not authoritative empty answers.
+Only actual people-ID join hints may enter bounded identity reads; email/name/virtual
+row keys must not masquerade as IDs. The real compiler/controller/Turso browser
+regression is `internal/browser-test/sql-people-joins.browser.e2e.ts`.
 Keep last same-owner results on ordinary failures, but clear them on account or
 authority changes. Preserve explicit post-disposal refreshes used to finish accepted
 database writes only for the original account/session.

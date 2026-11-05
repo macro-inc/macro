@@ -10,6 +10,7 @@ import { createDatabaseSqlQuery } from '@queries/database-sql/create-database-sq
 import { readLocalSql } from '@queries/database-sql/local-read';
 import * as Effect from 'effect/Effect';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { SqlPeopleJoinFixture } from './sql-people-join-fixture';
 import { account, setAccount } from './test-account';
 
 /** Real compiler, controller, worker host, WASM and OPFS. Only hydration data is synthetic. */
@@ -105,7 +106,11 @@ export function SqlPeopleFixture() {
         </output>
       }
     >
-      <SqlQuery host={host} />
+      {new URLSearchParams(location.search).has('joins') ? (
+        <SqlPeopleJoinFixture host={host} />
+      ) : (
+        <SqlQuery host={host} />
+      )}
     </Show>
   );
 }
