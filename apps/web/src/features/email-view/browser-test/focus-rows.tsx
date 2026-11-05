@@ -7,6 +7,7 @@ import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { formatLocalDate } from '@core/util/local-date';
 import {
   EntityProvider,
   ListEntity,
@@ -17,6 +18,7 @@ import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
 import { mapEmailFocus } from '@queries/email/focus';
 import type { EmailFocusQuery } from '@service-storage/graphql/generated/graphql';
+import { addDays } from 'date-fns';
 import { createSignal, For, type JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
@@ -112,10 +114,14 @@ function thread(
       needsReply: false,
       needsFollowUp: false,
       importanceTrend: 'FLAT',
+      dueOn: null,
       ...focus,
     },
   };
 }
+
+/** The local calendar date `days` from today. */
+const dueIn = (days: number) => formatLocalDate(addDays(new Date(), days));
 
 const LONG_SUBJECT =
   'A subject long enough that it has to truncate somewhere on every row width we support';
@@ -169,6 +175,34 @@ const ROWS = mapEmailFocus({
         category: JSON.parse('"NEWLY_ADDED"'),
         importance: 2,
         importanceTrend: JSON.parse('"NEWLY_ADDED"'),
+      }),
+      thread('due-soon', 'Jordan Reed', LONG_SUBJECT, {
+        category: 'CUSTOMER',
+        importance: 90,
+        needsReply: true,
+        dueOn: dueIn(3),
+      }),
+      thread('due-today', 'Kai Lund', 'Signed contract', {
+        category: 'TEAM',
+        importance: 80,
+        needsFollowUp: true,
+        dueOn: dueIn(0),
+      }),
+      thread('due-tomorrow', 'Lane Ortiz', 'Budget sign-off', {
+        category: 'KNOWN',
+        importance: 60,
+        dueOn: dueIn(1),
+      }),
+      thread('overdue', 'Morgan Sato', 'Quarterly numbers', {
+        category: 'CUSTOMER',
+        importance: 88,
+        needsReply: true,
+        dueOn: dueIn(-2),
+      }),
+      thread('due-no-reason', 'Noor Hale', 'A row with no reason pill', {
+        category: 'OTHER',
+        importance: 12,
+        dueOn: dueIn(20),
       }),
     ],
   },

@@ -2408,9 +2408,13 @@ draft before starting any sends/creates, and waits for attachments still
 uploading in the active email.
 Invalid drafts remain editable; navigation opens the first draft needing attention.
 
-The card polls its saved review while it is preparing or has pending drafts, so
-statuses set by the agent or another editor appear in place. A poll that returns
-the card's own in-flight save is not a conflict and leaves the editor focused.
+Each saved change to a review (presentation, edits, decisions, finished sends)
+logs a `_macro/review_updated` frame in its session, so in the session view the
+card refetches only when a newer revision is announced and statuses set by the
+agent or another editor appear in place. Cards shown outside the session view
+(DM and channel activity) still poll while the review is preparing or has
+pending drafts. A fetch that returns the card's own in-flight save is not a
+conflict and leaves the editor focused.
 A revision conflict or uncertain request shows **Reload saved review**. Reload
 reads the saved version and discards the local edit; it never retries an external
 send automatically. If the outcome is unknown, check the inbox/calendar before
@@ -2434,8 +2438,8 @@ navigation and page reload,
 that a single draft has no stack controls, that a batch's picker finds drafts,
 that chat remains usable, and that another account cannot submit. Sending an email or
 creating an event is a real action, including from a local app connected to dev.
-The backend-free browser regression for polling, presentation, and typing during
-a save is `bunx playwright test --config src/features/email-compose/browser-test/playwright.app.config.ts agent-review`
+The backend-free browser regression for polling, announced revisions,
+presentation, and typing during a save is `bunx playwright test --config src/features/email-compose/browser-test/playwright.app.config.ts agent-review`
 (from `apps/web`).
 ## Agent reasoning effort
 

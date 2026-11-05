@@ -76,6 +76,15 @@ tools — hexagonal, heavily feature-gated.
   `NEW_INVITES_STAY_OUT` in `domain/focus/rule.rs` is the switch for new invites.
   `stale_threads` restates `domain/focus/calendar.rs`'s test for a change in SQL;
   change both.
+- A Focus thread's `due_on` is read when new mail is classified, only for a thread
+  with `is_focus` or `awaiting_reply`, and never on the re-decide path: that path
+  keeps the stored date and calls no model, so `save` writes back what
+  `StoredClassification` read. A failed or timed-out read stores no date and never
+  fails the classification. `input.rs` gives the extractor each of the latest
+  messages' own words, never quoted history, so a relative date counts from the
+  message that wrote it. A message's day is its writer's: the owner's own mail in
+  their calendar zone, anyone else's at its `Date` header's offset, each falling back
+  on the other, then UTC. Store no mail text or extracted span.
 - A thread holding only the owner's sent mail stays out of Focus on purpose:
   it has `inbox_visible` false, which the client reads as Done, Mark Done cannot
   change it, and there is no inbound mail for the rule to judge.
@@ -102,6 +111,11 @@ tools — hexagonal, heavily feature-gated.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
+- An attachment links to its document before the bytes reach storage, and a link
+  stops sync from offering it again. `AttachmentReadService::document` stores the
+  bytes again when a linked document is still awaiting its upload, and DSS signs a
+  new upload for that reuse; DOCX is left out because it stays pending while it
+  converts.
 - Forwarded attachments register through `domain/draft_attachments.rs` and resolve
   bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
   source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.
@@ -130,6 +144,10 @@ tools — hexagonal, heavily feature-gated.
   queued goes back through `EmailRepo::revert_staged_label_change`, which
   restores the state an older write still on its way left (or the original),
   never a newer write's change.
+- A reply target outside the caller's inboxes is admitted only through
+  `SharedThreadReplyAccess` (edit access to its thread; wired in
+  `document_storage_service` with `with_shared_thread_replies`). The reply
+  starts a thread in the caller's inbox; other hosts keep `NoSharedThreadReplies`.
 - Sender discovery authorizes the inbox first. Gmail aliases use the sender
   provider; Outlook exposes its verified primary address without a Gmail lookup.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
