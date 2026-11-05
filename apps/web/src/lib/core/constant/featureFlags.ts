@@ -165,6 +165,13 @@ export const macroConnect = defineFlag({
   env: 'ENABLE_MACRO_CONNECT',
 });
 
+/** HTML artifact nodes on Canvas, including running their scripts in a sandbox. */
+export const enableCanvasArtifacts = defineFlag({
+  key: 'enable-canvas-artifacts',
+  env: 'ENABLE_CANVAS_ARTIFACTS',
+  default: onInDev,
+});
+
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',

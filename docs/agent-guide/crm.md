@@ -221,11 +221,13 @@ history; Cancel changes nothing. While saving, duplicate actions and dismissal a
 blocked. A rejected save retains the prior state and an actionable retry. Only team
 admins/owners can archive or restore; other members see a disabled action.
 
-An archived record has a single **Archived** chip and a quiet borderless **Restore**
-action beside its name on desktop, grouped beneath it on phones. Its toolbar keeps
+An archived record has a single **Archived** chip and a compact secondary **Restore**
+button beside its name on desktop, grouped beneath it on phones. Its toolbar keeps
 Copy link and Details. Hover or focus the chip for the explanation; tap on phones.
 Escape dismisses it. Restore is a separate focus target. Verify 320px and 390px phone
-widths, a usable Restore touch target and focus after confirmation or cancellation.
+widths, aligned 24px visible controls and metadata, and separate 44px touch targets.
+Tap above and below the painted Archived, Restore and company controls to verify
+their expanded targets, then check focus after confirmation or cancellation.
 
 Company archive archives all its people and turns off team email sync. Restoring the
 company requires an explicit confirmation: every person is restored, including those
@@ -333,7 +335,10 @@ A contact has the same layout with `Overview`, `Emails`, `Files`, `Tasks`, `Call
 interacted`, followed by the contact's Pipelines cards. Its Files, Tasks, Calls,
 and References show items associated with the contact itself (its `Contacts`
 property or an @mention of it), not everything associated with its company;
-Files also includes attachments of emails with its address. Tasks created from a
+Files also includes attachments of emails with its address. Contacts without an
+email still list their associated non-task files; they send no email-attachment
+participant filter. Verify both an empty list and linked files on desktop and phone.
+Tasks created from a
 contact also reference its company. The side panel contains References, with no
 empty Sharing section.
 

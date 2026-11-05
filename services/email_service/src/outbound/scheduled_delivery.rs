@@ -336,7 +336,7 @@ impl ScheduledDeliveryAdapter {
                 .await
                 .context("failed to load scheduled message")?;
         let (parent_message_id, references) =
-            generate_email_threading_headers(&self.db, message.replying_to_id, data.link_id).await;
+            generate_email_threading_headers(&self.db, message.replying_to_id).await;
         let approved = claim
             .delivery
             .approved_snapshot

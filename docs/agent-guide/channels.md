@@ -950,6 +950,43 @@ brings that row back into the inbox, displays the reaction and channel name, and
 opens the reacted-to message. Marking the row done should clear its reaction
 notifications along with the other notifications for that thread.
 
+## Requests to join
+
+Opening a private or team channel you are not in shows **You don't have access
+to this channel**, the signed-in email, and **Ask to join**. Public channels are
+open to everyone, and direct messages offer no request. Sending shows **Request
+sent** with **Withdraw request**. After withdrawing, asking again waits a
+minute; after a denial it waits 24 hours, and the panel shows when.
+
+The request appears in the channel timeline as "<name> (<account email>) asked
+to join the channel" with **Approve** and **Deny** for any participant. The name
+and full account email wrap at phone widths so reviewers can identify the
+requester before answering. If the display name already is the email, it appears
+only once. Every participant
+also gets a **Requests to join** notification (turn it off under notification
+settings) that opens the channel and marks it unread. The first answer wins: the
+row then shows **Approved by** or **Denied by** for everyone, a withdrawn request
+shows **Request withdrawn**, and the other participants' notifications are marked
+done. Approval adds the requester, who gets the usual "added you" invite
+notification, and the timeline shows the usual added row. A requester waiting on
+the denied view is taken into the channel when the approval arrives.
+
+Verify with two accounts: ask from a non-member, approve or deny from a member
+in another tab, and check the row, the requester's view, and the member's inbox
+update without reloading. Check the panel, full requester email, and the row's
+buttons at phone width.
+Use a copied `/app/channels/<id>` link for a private channel absent from the
+requester's channel list. The Chat workspace must offer **Ask to join** there
+and open the conversation after approval. A transient loading failure still
+offers **Retry** rather than an access request.
+
+Returning to a denied channel waits for that screen's fresh request read, even
+when an earlier request is cached or the read is paused offline. A missing
+channel shows **Conversation unavailable** with **Retry**, without cached request
+controls. Other request-read failures show an inline error and **Retry**. Retry
+and background metadata refreshes keep the current unavailable or denied screen
+in place until the result arrives.
+
 ## Chat navigation rail
 
 Following a channel mention or browser notification for the conversation already
@@ -1032,10 +1069,10 @@ between Threads, All, and Recent preserves an already-open navigation overlay.
 
 With the flag on, desktop Chat has one conversation sidebar, without All, Recent,
 or Threads view tabs. The default order is Favorites, Direct messages, the
-team's channels, then custom sections. There is no All channels section; search
-still finds joined public/private conversations outside these sections. The team
-heading is **[Team name] channels**, with **Team channels** as the fallback while
-its name is unavailable. The team section always shows joined team channels,
+team's channels, custom sections, then **All channels**. All channels lists joined
+public and private channels, including those assigned to manual or smart custom
+sections. The team heading is **[Team name] channels**, with **Team channels** as
+the fallback while its name is unavailable. The team section always shows joined team channels,
 including channels assigned to manual or smart custom sections. Each custom
 section is a top-level heading, independent of the Team channels disclosure. Empty sections
 use padded, bordered cards like saved views, with a subtle background and secondary
@@ -1067,8 +1104,11 @@ Keyboard navigation scrolls immediately, without animation, only when the
 highlighted row enters the viewport's two-row context margin, leaving neighboring
 rows visible above and below. The margin shrinks in short sections.
 Section jumps also reveal the heading with surrounding context.
-Every section scrolls independently. Lists with more than two items have a resize
-grip; drag it to choose a height between two rows (68px) and the end of the list,
+Sections normally scroll independently. When All channels is last and has no
+manually saved height, it expands to its full content height and uses the sidebar's
+scroll area. Moving another section below it restores the usual height cap,
+without discarding a saved manual height. Lists with more than two items have a
+resize grip; drag it to choose a height between two rows (68px) and the end of the list,
 capped by the section's maximum. Shorter lists fit their content and have no
 resize grip. Favorites and Direct messages default to four visible rows;
 other sections default to their maximum height within the pane. Focus the grip
@@ -1127,8 +1167,10 @@ move it to that position; an accent insertion line shows the exact destination
 above or below the target row. The order saves through the shared favorites API
 and survives reloads. Hidden favorites and favorites of other entity types keep
 their positions. **Sort → Custom order** restores dragging after choosing an
-automatic sort. Dropping a favorite does not open its conversation or move it
-into a custom section. Failed saves roll back and show an error toast.
+automatic sort. Releasing over a favorite preserves the drop target through
+scroll updates; releasing outside the list leaves the order unchanged. Dropping
+a favorite does not open its conversation or move it into a custom section.
+Failed saves roll back and show an error toast.
 
 ### Sections
 

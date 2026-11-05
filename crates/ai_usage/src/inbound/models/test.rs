@@ -33,6 +33,7 @@ fn token_usage_keeps_the_existing_http_shape() {
             "cache_read_input_tokens": 0,
             "cache_write_input_tokens": 0,
             "audio_seconds": null,
+            "provider_credits": null,
             "model": "text-model",
             "created_at": "2026-09-18T00:00:00Z",
             "price": {
@@ -41,6 +42,7 @@ fn token_usage_keeps_the_existing_http_shape() {
                 "price_per_million_cache_read": null,
                 "price_per_million_cache_write": null,
                 "price_per_audio_minute": null,
+                "price_per_provider_credit": null,
                 "total": 5.0
             }
         })
@@ -78,6 +80,7 @@ fn cached_token_usage_exposes_cache_tokens_and_rates() {
             "cache_read_input_tokens": 1_000_000,
             "cache_write_input_tokens": 1_000_000,
             "audio_seconds": null,
+            "provider_credits": null,
             "model": "claude-opus-5",
             "created_at": "2026-10-05T00:00:00Z",
             "price": {
@@ -86,6 +89,7 @@ fn cached_token_usage_exposes_cache_tokens_and_rates() {
                 "price_per_million_cache_read": 0.5,
                 "price_per_million_cache_write": 6.25,
                 "price_per_audio_minute": null,
+                "price_per_provider_credit": null,
                 "total": 36.75
             }
         })
@@ -109,4 +113,38 @@ fn audio_usage_exposes_duration_and_rate_without_inventing_tokens() {
     assert_eq!(json["audio_seconds"], 90.5);
     assert!((json["price"]["price_per_audio_minute"].as_f64().unwrap() - 0.006).abs() < 1e-7);
     assert!((json["price"]["total"].as_f64().unwrap() - 0.00905).abs() < 1e-7);
+}
+
+#[test]
+fn credit_usage_exposes_credits_and_rate_without_inventing_tokens() {
+    let created_at = "2026-11-04T00:00:00Z".parse().unwrap();
+    let amount = UsageAmount::ProviderCredits { credits: 2 };
+    let usage = Usage::from(domain::Usage {
+        amount,
+        model: "tavily".into(),
+        price: domain::Price::compute(ModelPricing::ProviderCredits { per_credit: 0.5 }, amount),
+        created_at,
+    });
+    assert_eq!(
+        serde_json::to_value(usage).unwrap(),
+        json!({
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_write_input_tokens": 0,
+            "audio_seconds": null,
+            "provider_credits": 2,
+            "model": "tavily",
+            "created_at": "2026-11-04T00:00:00Z",
+            "price": {
+                "price_per_million_in": 0.0,
+                "price_per_million_out": 0.0,
+                "price_per_million_cache_read": null,
+                "price_per_million_cache_write": null,
+                "price_per_audio_minute": null,
+                "price_per_provider_credit": 0.5,
+                "total": 1.0
+            }
+        })
+    );
 }
