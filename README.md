@@ -173,7 +173,7 @@ Your coding agents can use Macro too. Point Claude Code, Codex, or any MCP clien
 claude mcp add --transport http macro https://mcp-server.macro.com/mcp
 ```
 
-See [MCP setup](https://docs.macro.com/AI/mcp/overview) and [agent recipes](https://docs.macro.com/AI/recipes) for what they can do once connected.
+See [MCP setup](https://docs.macro.com/AI/mcp/overview) for what they can do once connected.
 
 <br />
 
@@ -189,7 +189,7 @@ As we've discussed above, each of the blocks is designed to be best-in-class. We
 
 **One inbox.** Emails, channel messages, task assignments, @mentions, and agent responses all land in one place, split into Signal and Noise. Keyboard-first throughout.
 
-Deeper reading: [key concepts](https://docs.macro.com/concepts/blocks) covers blocks, mentions, properties, and permissions; the [FAQ](https://docs.macro.com/faq) covers comparisons, licensing, and self-hosting.
+Deeper reading: [mentions](https://docs.macro.com/concepts/mentions), [properties](https://docs.macro.com/concepts/properties), and [permissions](https://docs.macro.com/permissions); the [FAQ](https://docs.macro.com/faq) covers comparisons, licensing, and self-hosting.
 
 <br />
 

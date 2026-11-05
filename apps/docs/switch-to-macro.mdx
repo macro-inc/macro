@@ -13,7 +13,7 @@ At a glance, here's what maps to what:
 | Coming from | The Macro equivalent |
 | :-- | :-- |
 | Superhuman | [Email](/product/email) and [Home](/product/home) (both are Gmail and Outlook clients) |
-| Notion | [Docs](/product/docs) and [databases](/product/drive#databases), plus built-in [tasks](/product/tasks) and [CRM](/product/crm) |
+| Notion | [Docs](/product/docs) and [databases](/product/databases), plus built-in [tasks](/product/tasks) and [CRM](/product/crm) |
 | Slack | [Channels](/product/channels) |
 | Linear | [Tasks](/product/tasks) |
 | ClickUp | [Tasks](/product/tasks), with [docs](/product/docs), [CRM](/product/crm), and [channels](/product/channels) replacing the rest of the suite |
@@ -25,16 +25,12 @@ At a glance, here's what maps to what:
 
 The main difference between us and Superhuman is that Macro supports multiple accounts in one inbox. It also adds more intelligent Signal vs. Noise splits, and it fully unifies messaging, tasks, @mentions and more into a single inbox. Another benefit of Macro is that Agents can draft, triage, and send mail for you right from AI chat with an embedded email widget.
 
-<Frame>
-  <img
-    src="/images/switch-from-superhuman.svg"
-    alt="The Superhuman app icon with an arrow pointing to the Macro app icon"
-    width="760"
-    height="270"
-  />
-</Frame>
+<div className="switch-mark" role="img" aria-label="The Superhuman app icon with an arrow pointing to the Macro app icon">
+  <img className="switch-mark-cream" src="/images/switch-from-superhuman-cream.svg" alt="" />
+  <img className="switch-mark-dark" src="/images/switch-from-superhuman.svg" alt="" />
+</div>
 
-Both Macro and Superhuman are clients on top of Gmail and Outlook, so there's no migration in either direction. Your mail stays in Gmail or Microsoft 365.
+Both Macro and Superhuman are clients on top of Gmail and Outlook, so there's no migration in either direction. Your mail stays in Gmail or Outlook / Microsoft 365.
 
 The <kbd>j</kbd> / <kbd>k</kbd> / <kbd>e</kbd> triage shortcuts you already know work unchanged.
 
@@ -59,21 +55,17 @@ That's it. You can run both during the transition, or keep Superhuman around if 
 
 ## From Notion
 
-In Macro, tasks, CRM, email, channels, and files (docs, databases, spreadsheets, canvases, and other files in Drive) are each their own best-in-class, purpose-built [Block](/concepts/blocks), and they all share one data model and one search index. **Each Block works like a real product**, and agents can read all of it as one context vs. paging through a rate-limited API.
+In Macro, tasks, CRM, email, channels, and files (docs, databases, spreadsheets, canvases, and other files in Drive) are each their own best-in-class, purpose-built Block, and they all share one data model and one search index. **Each Block works like a real product**, and agents can read all of it as one context vs. paging through a rate-limited API.
 
-<Frame>
-  <img
-    src="/images/switch-from-notion.svg"
-    alt="The Notion app icon with an arrow pointing to the Macro app icon"
-    width="760"
-    height="270"
-  />
-</Frame>
+<div className="switch-mark" role="img" aria-label="The Notion app icon with an arrow pointing to the Macro app icon">
+  <img className="switch-mark-cream" src="/images/switch-from-notion-cream.svg" alt="" />
+  <img className="switch-mark-dark" src="/images/switch-from-notion.svg" alt="" />
+</div>
 
 |  | Notion | Macro |
 | :-- | :-: | :-: |
 | Markdown-native docs | ✓ | ✓ |
-| [Databases](/product/drive#databases) | ✓ | ✓ |
+| [Databases](/product/databases) | ✓ | ✓ |
 | [Spreadsheets](/product/spreadsheets) | X | ✓ |
 | Tasks | Sort of | Built in |
 | CRM | No | Built in |
@@ -100,14 +92,10 @@ We have a dedicated Notion importer. It reads the connected workspace and shows 
 
 The main thing Macro improves on versus Slack is making channels/DM's less noisy and more focused for technical discussions. The first few replies in a thread show inline, so you don't have to open a thread every time someone replies, and a busy channel looks more like Reddit: organized, and easy to remember where a conversation happened.
 
-<Frame>
-  <img
-    src="/images/switch-from-slack.svg"
-    alt="The Slack app icon with an arrow pointing to the Macro app icon"
-    width="760"
-    height="270"
-  />
-</Frame>
+<div className="switch-mark" role="img" aria-label="The Slack app icon with an arrow pointing to the Macro app icon">
+  <img className="switch-mark-cream" src="/images/switch-from-slack-cream.svg" alt="" />
+  <img className="switch-mark-dark" src="/images/switch-from-slack.svg" alt="" />
+</div>
 
 Channel messages and @mentions appear on [Home](/product/home) with your email.
 
@@ -136,14 +124,10 @@ An admin does this from team settings.
 
 ## From Linear
 
-<Frame>
-  <img
-    src="/images/switch-from-linear.svg"
-    alt="The Linear app icon with an arrow pointing to the Macro app icon"
-    width="760"
-    height="270"
-  />
-</Frame>
+<div className="switch-mark" role="img" aria-label="The Linear app icon with an arrow pointing to the Macro app icon">
+  <img className="switch-mark-cream" src="/images/switch-from-linear-cream.svg" alt="" />
+  <img className="switch-mark-dark" src="/images/switch-from-linear.svg" alt="" />
+</div>
 
 The difference between Macro and Linear is that on Macro, tasks live in the same app as your email, channels, and docs. You can turn an email or a channel message into a task in one click, and non-engineers can see engineering work without a seat in a separate tool. Tasks are also less ceremonious: fields are minimal by default, and story points, effort, etc. are there via [properties](/concepts/properties) if you really want them, but we advise keeping it light.
 
@@ -176,14 +160,10 @@ ClickUp covers tasks, docs, chat, goals, and whiteboards through a deep stack of
 
 There's less setup and fewer knobs because each tool is already built for its job. Tasks keep the essentials (status, priority, assignee, and [properties](/concepts/properties) when you want them), and [agents](/product/agents) can read across all of it as one context.
 
-<Frame>
-  <img
-    src="/images/switch-from-clickup.svg"
-    alt="The ClickUp app icon with an arrow pointing to the Macro app icon"
-    width="760"
-    height="270"
-  />
-</Frame>
+<div className="switch-mark" role="img" aria-label="The ClickUp app icon with an arrow pointing to the Macro app icon">
+  <img className="switch-mark-cream" src="/images/switch-from-clickup-cream.svg" alt="" />
+  <img className="switch-mark-dark" src="/images/switch-from-clickup.svg" alt="" />
+</div>
 
 The biggest day-to-day change is that tasks live in the same app as your email, channels, and docs. You can turn a message or an email into a task in one click, and @mentioning a task in a channel shares it automatically.
 
@@ -233,7 +213,7 @@ Here's the full picture side by side of how Macro compares to the rest of the to
 | [Channels](/product/channels) | ✓ | X | X | ✓ | X | ✓ |
 | [Tasks](/product/tasks) | ✓ | X | Via databases | X | ✓ | ✓ |
 | [Docs](/product/docs) | ✓ | X | ✓ | X | X | ✓ |
-| [Databases](/product/drive#databases) | ✓ | X | ✓ | X | X | X |
+| [Databases](/product/databases) | ✓ | X | ✓ | X | X | X |
 | [Spreadsheets](/product/spreadsheets) | ✓ | X | X | X | X | X |
 | [Canvas](/product/canvas) | ✓ | X | X | X | X | Whiteboards |
 | [CRM](/product/crm) | ✓ | X | Via databases | X | X | Via setup |

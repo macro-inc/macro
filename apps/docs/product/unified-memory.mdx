@@ -4,23 +4,54 @@ icon: "brain"
 description: "Personal and team-level memory across mail, messages, tasks, docs and connectors."
 ---
 
-ChatGPT and Claude create memory over your chats. Macro creates memory over everything you and your team are working on: email, messages, tasks, docs, calls, and anything you've connected via MCP. There's not too much to document here because it all runs in the background with limited configurability.
+ChatGPT and Claude create memory over your chats. Macro creates memory over everything you and your team are working on: email, messages, tasks, docs, calls, and anything you've connected via MCP. It runs in the background.
 
-<Frame>
-  <img
-    src="/images/unified-memory-diagram.svg"
-    alt="Diagram of Macro's Blocks — email, messages, tasks, docs, calls, files, canvas, and pull requests — all feeding one unified memory that agents read and write"
-  />
-</Frame>
+<div className="memory-preview" role="img" aria-label="Memory stays in the background. A search for launch status reads the live checklist, the launch email, and a message from Riley.">
+  <div className="memory-preview-back">
+    <div className="memory-preview-kicker">Memory</div>
+    <p>You lead the launch. You write short updates.</p>
+  </div>
+  <div className="memory-preview-front">
+    <div className="memory-preview-ask">What's the latest on the launch?</div>
+    <div className="memory-preview-call">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M10.6 3.75a6.85 6.85 0 1 1 0 13.7 6.85 6.85 0 0 1 0-13.7Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="m15.6 15.6 4.65 4.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span>Search <strong>launch status</strong></span>
+      <span className="memory-preview-hits">3 hits</span>
+    </div>
+    <ul className="memory-preview-rows">
+      <li>
+        <svg className="search-preview-icon search-preview-icon-doc" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13.5 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-10L13.5 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M13.5 3v3.5a2 2 0 0 0 2 2H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        <span className="memory-preview-title">Launch plan</span>
+        <span className="memory-preview-snippet">The checklist is ready to send</span>
+      </li>
+      <li>
+        <svg className="search-preview-icon search-preview-icon-task" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.25" y="3.25" width="17.5" height="17.5" rx="3.5" stroke="currentColor" strokeWidth="2" /><path d="m7.5 12.1 3 3.15 6-6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        <span className="memory-preview-title">Write the launch email</span>
+        <span className="memory-preview-snippet">In progress</span>
+      </li>
+      <li>
+        <svg className="search-preview-icon search-preview-icon-email" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5.25" width="18" height="13.5" rx="2.75" stroke="currentColor" strokeWidth="2" /><path d="m3.75 6.5 6.8 5.6a2.3 2.3 0 0 0 2.9 0l6.8-5.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        <span className="memory-preview-title">Riley</span>
+        <span className="memory-preview-snippet">Sent the final list this morning</span>
+      </li>
+    </ul>
+    <p className="memory-preview-answer">The checklist is ready to send. The launch email is still in progress.</p>
+  </div>
+</div>
 
-Every night, Macro refreshes this memory from the day's activity. When you ask an agent "what's the latest status of project alamo?", it answers from the most recent emails, messages, tasks, docs, and call transcripts. You don't have to point it at anything.
+Every night, Macro refreshes this memory from the day's activity. It is a background profile of you: your role, what you are working on, and how you like to work. That profile is given to the agent at the start of a conversation.
+
+Memory is the background, and it is the smaller part of how an agent knows your workspace. Search and tool calls are how it finds a current fact. The agent searches email, messages, tasks, docs, and call transcripts, then reads the thing it found. That result is live. The nightly summary is already a day old, and it leaves out anything you would look up on the spot. See [Search](/product/search).
 
 ### Personal vs. team memory
 
 Every Macro user has a personal memory built from their own work. If you're on a team, there's also a shared team-level memory:
 
 - **Tasks** are added to team memory by default, so everyone can see what others are working on.
-- **Calls** are recorded, transcribed, and shared to team memory by default. You can opt out per call (see [Calls](/product/calls)), in which case the call goes to your personal memory only.
+- **Calls** started from a channel are recorded, transcribed, and shared with the team by default. Uncheck **Share with team** to keep one off the team. Standalone calls stay with the people on the call. See [Calls](/product/calls).
 - **Emails** are auto-shared with the team where it makes sense, for example in the CRM module.
 
-This is what makes agents in Macro different from a personal chat assistant: they remember what your whole team has been doing, not just your own chat history.
+On a team, that background includes work the team has shared. When you ask about something specific, the agent still searches and reads the Blocks themselves.
