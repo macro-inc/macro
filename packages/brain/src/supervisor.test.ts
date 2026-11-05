@@ -54,6 +54,7 @@ test('reload waits for in-flight turns before replacing a healthy composition', 
     launch: async (snapshot): Promise<Running> => {
       started.push(snapshot);
       return {
+        activate: async () => {},
         healthy: async () => true,
         exited: () => false,
         stop: async () => {
@@ -75,7 +76,7 @@ test('reload waits for in-flight turns before replacing a healthy composition', 
   head = 'second';
   const reload = supervisor.tick();
   await draining;
-  assert.deepEqual(started, ['first']);
+  assert.deepEqual(started, ['first', 'second']);
   finish();
   await reload;
   assert.deepEqual(started, ['first', 'second']);
@@ -97,6 +98,7 @@ test('broken checks and unhealthy boots revert to persisted last-known-good', as
         started.push(snapshot);
         return {
           stop: async () => {},
+          activate: async () => {},
           healthy: async () => snapshot === 'good',
           exited: () => false,
         };
@@ -174,6 +176,35 @@ test('call adapters dispatch typed lifecycle events to the composition hook', as
       return brain;
     }, root);
     assert.deepEqual(phases, ['incoming']);
+  } finally {
+    await nodeFs.rm(root, { recursive: true });
+  }
+});
+
+test('supervisor conformance rejects a broken health contract independently of own tests', async () => {
+  const root = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-conformance-')
+  );
+  try {
+    await nodeFs.cp(new URL('../template/', import.meta.url), root, {
+      recursive: true,
+    });
+    await assert.rejects(
+      () =>
+        dryRun((deps) => {
+          const brain = new Brain(deps);
+          return {
+            prepare: (signal) => brain.prepare(signal),
+            run: (signal) => brain.run(signal),
+            post: (turn, channel, text) => brain.post(turn, channel, text),
+            health: async () => ({
+              ...(await brain.health()),
+              connected: false,
+            }),
+          };
+        }, root),
+      /health contract/
+    );
   } finally {
     await nodeFs.rm(root, { recursive: true });
   }

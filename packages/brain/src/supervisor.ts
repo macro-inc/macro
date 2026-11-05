@@ -161,9 +161,13 @@ async function launch(snapshot: string, workspace: string): Promise<Running> {
     {
       cwd: workspace,
       env: childEnvironment(workspace, false),
-      stdio: ['pipe', 'pipe', 'inherit'],
+      stdio: ['pipe', 'pipe', 'inherit', 'ipc'],
     }
   );
+  const ready = Promise.withResolvers<void>();
+  child.on('message', (message) => {
+    if (message === 'ready') ready.resolve();
+  });
   let exited = false;
   const status = new Promise<void>((resolve) => {
     child.on('error', () => {
@@ -175,6 +179,7 @@ async function launch(snapshot: string, workspace: string): Promise<Running> {
       resolve();
     });
   });
+  if (!child.stdin || !child.stdout) throw new Error('missing child pipes');
   child.stdin.on('error', () => {});
   child.stdin.end(
     JSON.stringify(
@@ -190,7 +195,35 @@ async function launch(snapshot: string, workspace: string): Promise<Running> {
     process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
   ).catch(() => console.error(JSON.stringify({ telemetry: 'relay_failed' })));
   const port = Number(process.env.BRAIN_HEALTH_PORT);
+  try {
+    await Promise.race([
+      ready.promise,
+      status.then(() => {
+        throw new Error('brain exited before intake ready');
+      }),
+      new Promise<never>((_, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error('intake readiness timed out')),
+          30000
+        );
+        timer.unref();
+        ready.promise.then(
+          () => clearTimeout(timer),
+          () => clearTimeout(timer)
+        );
+      }),
+    ]);
+  } catch (error) {
+    child.kill('SIGTERM');
+    // A process stuck in preparation cannot drain a turn it has not started.
+    child.kill('SIGKILL');
+    await status;
+    throw error;
+  }
   return {
+    async activate() {
+      child.send('activate');
+    },
     exited: () => exited,
     async stop() {
       if (!exited) child.kill('SIGTERM');
@@ -211,6 +244,7 @@ async function launch(snapshot: string, workspace: string): Promise<Running> {
   };
 }
 export type Running = {
+  activate(): Promise<void>;
   stop(): Promise<void>;
   healthy(): Promise<boolean>;
   exited(): boolean;
@@ -225,7 +259,7 @@ export type SupervisorDeps = {
   now(): number;
   probationMs: number;
 };
-/** Serialized state machine: check first, drain, activate, observe, then promote. */
+/** Check, prepare overlapping intake, drain the old generation, activate, then promote. */
 export class Supervisor {
   private readonly deps: SupervisorDeps;
   private good;
@@ -252,17 +286,21 @@ export class Supervisor {
         await this.rollback(commit, 'check failed');
         return;
       }
-      await this.running?.stop();
-      this.running = undefined;
-      this.active = commit;
-      this.since = this.deps.now();
-      this.healthySince = undefined;
+      let next: Running;
       try {
-        this.running = await this.deps.launch(snapshot);
+        next = await this.deps.launch(snapshot);
       } catch {
         await this.rollback(commit, 'boot failed');
         return;
       }
+      // New intake is already connected and buffering: stopping the old intake
+      // cannot create a gap, and only one generation owns workspace queues.
+      await this.running?.stop();
+      this.running = next;
+      this.active = commit;
+      this.since = this.deps.now();
+      this.healthySince = undefined;
+      await next.activate();
     }
     if (!this.running) return;
     const healthy = await this.running.healthy();
@@ -292,9 +330,14 @@ export class Supervisor {
     // Rejection records are durable before the replacement process starts.
     await this.running?.stop();
     this.running = undefined;
-    await this.deps.reject(commit, this.good, reason);
+    try {
+      await this.deps.reject(commit, this.good, reason);
+    } catch (error) {
+      console.error(JSON.stringify({ rewiring_revert_failed: String(error) }));
+    }
     this.active = this.good;
     this.running = await this.deps.launch(await this.deps.snapshot(this.good));
+    await this.running.activate();
     this.since = this.deps.now();
   }
   async stop(): Promise<void> {

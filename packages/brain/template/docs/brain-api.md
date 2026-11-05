@@ -131,3 +131,12 @@ memory. Middleware that calls `next` records the actual transformed text.
 
 See [the complete release-manager composition](examples/release-manager.ts) for
 a checked example combining subscriptions, relevance, tools, tiers and schedules.
+
+The runtime contract is `prepare(signal)`, `run(signal)`, `health()` and
+`post(turn, channel, text)`. `prepare` connects and buffers events without
+mutating workspace queues. The supervisor starts replacement intake alongside
+the old process, then stops old intake and drains its turns before activating
+replacement queue processing. Receipt IDs persist across the handoff to avoid
+duplicate delivery. Every activation independently verifies a fake DM answer,
+the health shape, and draining an admitted turn on abort; workspace tests cannot
+replace these conformance checks.

@@ -22,6 +22,7 @@ import {
   MESSAGE_POSTED,
   type MessagePosted,
   missedMessages,
+  type StreamItem,
 } from './events.ts';
 import {
   HeartbeatStore,
@@ -104,6 +105,55 @@ export class Brain implements Control {
     this.ledger = new SpendLedger(this.workspace.path('cache'));
     this.heartbeatStore = new HeartbeatStore(this.workspace.path('cache'));
   }
+  private intake?: AsyncIterable<StreamItem>;
+  private preparing?: Promise<void>;
+  /** Open intake alongside the old generation, buffering until run takes ownership. */
+  prepare(signal: AbortSignal): Promise<void> {
+    this.preparing ??= this.connectIntake(signal);
+    return this.preparing;
+  }
+  private async connectIntake(signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
+    const persona = await this.workspace.persona();
+    const ready = Promise.withResolvers<void>();
+    const aborted = () =>
+      ready.reject(new Error('intake aborted before readiness'));
+    signal.addEventListener('abort', aborted, { once: true });
+    this.intake = eventStream(
+      {
+        open: (connection) =>
+          this.deps.http.openEventStream(
+            [
+              {
+                events: [
+                  MESSAGE_POSTED,
+                  AGENT_SESSION_OPENED,
+                  ...persona.events.events,
+                  ...(this.wiring.subscriptions ?? []),
+                ],
+              },
+            ],
+            connection
+          ),
+        sleep: abortableSleep,
+        log: (line) => {
+          const state = 'events' in line ? line.events : null;
+          if (state === 'connected') {
+            this.connected = true;
+            ready.resolve();
+          }
+          if (state === 'failed' || state === 'ended') this.connected = false;
+          this.log(line);
+        },
+      },
+      signal
+    );
+    try {
+      await ready.promise;
+    } finally {
+      signal.removeEventListener('abort', aborted);
+    }
+  }
   private previousHealth: string | undefined;
   private log(line: object) {
     this.deps.log(line);
@@ -119,6 +169,22 @@ export class Brain implements Control {
   }
   /** Run until `signal` aborts. Startup fails loudly on a broken persona or an unreachable Macro. */
   async run(signal: AbortSignal): Promise<void> {
+    await this.prepare(signal);
+    // The previous generation saved receipts only after admitting its final events.
+    try {
+      const receipts: string[] = JSON.parse(
+        await nodeFs.readFile(
+          this.workspace.path('cache/event-receipts.json'),
+          'utf8'
+        )
+      );
+      for (const id of receipts) this.seen.add(id);
+    } catch (error) {
+      if (
+        !(error instanceof Error && 'code' in error && error.code === 'ENOENT')
+      )
+        throw error;
+    }
     await this.workspace.enforceGitignore();
     const persona = await this.workspace.persona();
     this.me = (await this.deps.http.me()).user_id;
@@ -247,30 +313,8 @@ export class Brain implements Control {
       .catch((error) =>
         this.log({ schedules_reconcile_failed: String(error) })
       );
-    const filters = [
-      {
-        events: [
-          MESSAGE_POSTED,
-          AGENT_SESSION_OPENED,
-          ...persona.events.events,
-          ...(this.wiring.subscriptions ?? []),
-        ],
-      },
-    ];
-    const stream = eventStream(
-      {
-        open: (connection) =>
-          this.deps.http.openEventStream(filters, connection),
-        sleep: abortableSleep,
-        log: (line) => {
-          const state = 'events' in line ? line.events : null;
-          if (state === 'connected') this.connected = true;
-          if (state === 'failed' || state === 'ended') this.connected = false;
-          this.log(line);
-        },
-      },
-      signal
-    );
+    const stream = this.intake;
+    if (!stream) throw new Error('intake was not prepared');
     try {
       for await (const item of stream) {
         if (item.kind === 'reconnected') {
@@ -281,6 +325,7 @@ export class Brain implements Control {
         }
         this.lastEventAt = new Date().toISOString();
         const { event } = item;
+        if (!this.markSeen(`event:${event.eventId}`)) continue;
         await this.wiring.onEvent?.(event, this);
         if (event.type === MESSAGE_POSTED) {
           await this.onMessage(event.metadata).catch((error) =>
@@ -307,6 +352,10 @@ export class Brain implements Control {
       await this.lanes.shutdown();
       await this.work.drain();
       await Promise.all(heartbeats);
+      await nodeFs.writeFile(
+        this.workspace.path('cache/event-receipts.json'),
+        JSON.stringify([...this.seen])
+      );
       await closeHttp(server);
       this.log({ brain: 'stopped' });
     }

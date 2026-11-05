@@ -22,8 +22,14 @@ export { Work } from './work.ts';
 export { GitWriter, gitCli, Workspace } from './workspace.ts';
 
 import type { BrainDeps } from './brain.ts';
+import type { Health } from './control.ts';
+import type { PostResult } from './wiring.ts';
 /** Abort means stop intake, finish in-flight turns and release resources. */
 export interface BrainRuntime {
+  /** Connect and buffer intake without mutating workspace queues; resolve when connected. */
+  prepare(signal: AbortSignal): Promise<void>;
+  health(): Promise<Health>;
+  post(turn: string | null, channel: string, text: string): Promise<PostResult>;
   run(signal: AbortSignal): Promise<void>;
 }
 /** Export a factory as default from brain.ts. Dependencies contain scoped adapters. */
