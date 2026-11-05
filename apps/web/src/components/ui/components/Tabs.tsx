@@ -232,12 +232,12 @@ function PillOption<T extends string>(props: {
       value={props.option.value}
       disabled={props.option.disabled}
       class={cn(
-        'relative inline-flex min-w-0 shrink-0 rounded-full border text-ink-muted transition-colors duration-120 motion-reduce:transition-none',
+        'relative inline-flex min-w-0 shrink-0 rounded-full border text-ink-unchecked transition-colors duration-120 motion-reduce:transition-none',
         props.joined
           ? 'self-stretch border-transparent data-checked:border-edge-button'
           : 'bg-control border-edge-button',
         'shadow-none not-touch:not-data-checked:hover:overlay-hover not-touch:not-data-checked:hover:text-ink',
-        'data-checked:overlay-active data-checked:text-ink',
+        'data-checked:overlay-control-checked data-checked:text-ink',
         'has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus',
         'data-disabled:pointer-events-none data-disabled:opacity-50',
         !props.joined &&
@@ -467,7 +467,7 @@ function TouchSegmented<T extends string>(props: TabsProps<T>) {
               props.iconOnly && option.icon !== undefined && 'touch:min-w-8',
               option.disabled
                 ? 'opacity-50'
-                : 'text-ink-muted active:overlay-active data-checked:text-ink data-checked:overlay-active',
+                : 'text-ink-unchecked active:overlay-active data-checked:text-ink data-checked:overlay-control-checked',
               props.fullWidth &&
                 !(props.iconOnly && option.icon !== undefined) &&
                 'flex-1'

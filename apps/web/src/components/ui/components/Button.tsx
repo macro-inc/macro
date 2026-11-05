@@ -64,7 +64,7 @@ const buttonStyles = createVariants(
       secondary: cn(
         buttonFrames.secondary,
         buttonMutedTextStyles,
-        'not-data-disabled:hover:bg-button-secondary-hover not-data-disabled:active:bg-button-secondary-pressed aria-pressed:bg-button-secondary-pressed aria-pressed:not-data-disabled:hover:bg-button-secondary-pressed popup-open:bg-button-secondary-pressed popup-open:not-data-disabled:hover:bg-button-secondary-pressed',
+        'not-data-disabled:hover:bg-button-secondary-hover not-data-disabled:active:bg-button-secondary-pressed aria-pressed:bg-button-secondary-checked aria-pressed:not-data-disabled:hover:bg-button-secondary-checked popup-open:bg-button-secondary-pressed popup-open:not-data-disabled:hover:bg-button-secondary-pressed',
         buttonPressedStyles
       ),
       outline: cn(

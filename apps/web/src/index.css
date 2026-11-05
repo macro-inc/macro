@@ -237,6 +237,10 @@ body.tauri-ios {
   --color-inline-code: color-mix(in oklch, var(--color-ink) 5%, transparent);
   --color-hover: color-mix(in oklch, var(--color-content-0) 3%, transparent);
   --color-active: color-mix(in oklch, var(--color-content-0) 6%, transparent);
+  /* A checked selection control's fill and an unchecked one's ink; raised
+     surfaces strengthen both (see glass-input and menu-surface). */
+  --color-control-checked: var(--color-active);
+  --color-ink-unchecked: var(--color-ink-muted);
   --color-chrome: color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0));
 
   --color-ink-extra-muted: var(--color-ink-subtle);
@@ -419,6 +423,10 @@ body.tauri-ios {
   --color-inline-code: color-mix(in oklch, var(--color-ink) 5%, transparent);
   --color-hover: color-mix(in oklch, var(--color-content-0) 3%, transparent);
   --color-active: color-mix(in oklch, var(--color-content-0) 6%, transparent);
+  /* A checked selection control's fill and an unchecked one's ink; raised
+     surfaces strengthen both (see glass-input and menu-surface). */
+  --color-control-checked: var(--color-active);
+  --color-ink-unchecked: var(--color-ink-muted);
   --color-selected: color-mix(in oklch, var(--color-accent) 8%, transparent);
   --color-success: var(--color-green);
   --color-warning: var(--color-amber);
@@ -691,6 +699,8 @@ body.tauri-ios {
   --button-secondary-bg: oklch(from var(--button-secondary-face) l c h / 4%);
   --button-secondary-hover: oklch(from var(--button-secondary-face) l c h / 6%);
   --button-secondary-pressed: oklch(from var(--button-secondary-face) l c h / 8%);
+  /* A toggled-on secondary Button; raised surfaces strengthen it. */
+  --button-secondary-checked: var(--button-secondary-pressed);
   --button-outline-hover: oklch(1 0 0 / 8%);
   --button-outline-pressed: oklch(1 0 0 / 10%);
   --button-tertiary-bg: transparent;
@@ -820,6 +830,7 @@ body.tauri-ios {
   --color-button-secondary-bg: var(--button-secondary-bg);
   --color-button-secondary-hover: var(--button-secondary-hover);
   --color-button-secondary-pressed: var(--button-secondary-pressed);
+  --color-button-secondary-checked: var(--button-secondary-checked);
   --color-button-outline-hover: var(--button-outline-hover);
   --color-button-outline-pressed: var(--button-outline-pressed);
   --color-button-tertiary-bg: var(--button-tertiary-bg);
@@ -1106,6 +1117,11 @@ html:not([data-touch-device='true']) {
     --color-control: var(--color-control-raised);
     --color-input: var(--color-control-raised);
     --color-input-focus: var(--color-control-raised);
+    /* Resting controls sit darker than this surface, so checked and pressed
+       states take a larger step to still read as on. */
+    --color-control-checked: color-mix(in oklch, var(--color-content-0) 12%, transparent);
+    --color-ink-unchecked: var(--color-ink-extra-muted);
+    --button-secondary-checked: color-mix(in oklch, var(--button-secondary-pressed), var(--color-content-0) 8%);
   }
 }
 
@@ -1119,6 +1135,11 @@ html:not([data-touch-device='true']) {
     --color-control: var(--color-control-raised);
     --color-input: var(--color-control-raised);
     --color-input-focus: var(--color-control-raised);
+    /* Resting controls sit darker than this surface, so checked and pressed
+       states take a larger step to still read as on. */
+    --color-control-checked: color-mix(in oklch, var(--color-content-0) 12%, transparent);
+    --color-ink-unchecked: var(--color-ink-extra-muted);
+    --button-secondary-checked: color-mix(in oklch, var(--button-secondary-pressed), var(--color-content-0) 8%);
   }
 }
 
