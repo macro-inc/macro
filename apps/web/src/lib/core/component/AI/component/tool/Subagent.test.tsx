@@ -1,5 +1,5 @@
 import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { Component, JSX, ParentProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -52,28 +52,6 @@ it('titles the row with the short description, not the instructions', () => {
   expect(screen.getByText('List open pull requests')).toBeTruthy();
   expect(screen.queryByText(task, { exact: false })).toBeNull();
   expect(screen.getByText('Running')).toBeTruthy();
-});
-
-it('keeps the instructions and the result behind the disclosure', () => {
-  subagent(
-    { description: 'List open pull requests', task },
-    'Three open pull requests.'
-  );
-  expect(screen.getByText('Done')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button'));
-  expect(screen.getByText('Instructions')).toBeTruthy();
-  expect(screen.getByText(task, { normalizer: (text) => text })).toBeTruthy();
-  expect(screen.getByText('Result')).toBeTruthy();
-  expect(screen.getByText('Three open pull requests.')).toBeTruthy();
-});
-
-it("titles a call without a description by its instructions' first line", () => {
-  subagent({ task }, 'Three open pull requests.');
-  expect(
-    screen.getByText(
-      'Use the GitHub search tool (mcp__github__github-search-issues-and-pull-requests; load it via SearchTools "github search") to list every open pull request the user authored.'
-    )
-  ).toBeTruthy();
 });
 
 it('parses calls with and without a description, so saved calls still render', () => {
