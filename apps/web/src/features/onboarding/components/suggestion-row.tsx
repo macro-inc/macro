@@ -1,6 +1,7 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import GmailIcon from '@icon/gmail-color.svg';
 import OutlookIcon from '@icon/outlook-color.svg';
+import VerifiedIcon from '@icon/system/fill/seal-check-fill.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
@@ -18,13 +19,18 @@ export function SuggestionRow(props: {
   kind: 'native' | 'mcp';
   /** Context after the badge, e.g. the inbox already connected. */
   detail?: string;
+  /** Mark the detail as verified, e.g. an inbox that is connected. */
+  verified?: boolean;
   reason: string;
   /** The row's action, e.g. a ConnectAction. */
   children: JSX.Element;
 }) {
   return (
     <li class="flex items-start gap-3 py-4 sm:items-center sm:gap-4">
-      <span aria-hidden="true" class="relative size-10 shrink-0 sm:size-11">
+      <span
+        aria-hidden="true"
+        class="relative size-10 shrink-0 sm:mr-[15px] sm:size-11"
+      >
         <Show when={props.stacked}>
           <span class="absolute inset-0 translate-x-1.5 -translate-y-1.5 rotate-[8deg] rounded-xl border border-edge-muted bg-surface shadow-[0_3px_12px_-2px_rgb(0_0_0/0.05)]" />
         </Show>
@@ -48,13 +54,18 @@ export function SuggestionRow(props: {
             {props.kind}
           </Badge>
           <Show when={props.detail}>
-            <span class="ph-no-capture min-w-0 truncate text-xs text-ink-extra-muted">
-              {props.detail}
+            <span class="flex min-w-0 items-center gap-1 text-xs text-ink-extra-muted">
+              <span class="ph-no-capture min-w-0 truncate">{props.detail}</span>
+              <Show when={props.verified}>
+                <span role="img" aria-label="Connected" class="flex shrink-0">
+                  <VerifiedIcon class="size-3.5 text-success" />
+                </span>
+              </Show>
             </span>
           </Show>
         </div>
-        {/* Keep descriptions at least 100px clear of the action on wider screens. */}
-        <p class="text-xs leading-relaxed text-ink-muted sm:pr-[84px]">
+        {/* Keep descriptions 85px clear of the action on wider screens. */}
+        <p class="text-xs leading-relaxed text-ink-muted sm:pr-[69px]">
           {props.reason}
         </p>
       </div>
@@ -159,7 +170,7 @@ export function AddInboxMenu(props: {
 export function SuggestionRowSkeleton() {
   return (
     <li aria-hidden="true" class="flex items-center gap-4 py-4">
-      <ListSkeleton.Bar class="size-10 shrink-0 rounded-xl sm:size-11" />
+      <ListSkeleton.Bar class="size-10 shrink-0 rounded-xl sm:mr-[15px] sm:size-11" />
       <div class="flex flex-1 flex-col gap-2">
         <ListSkeleton.Bar class="h-3.5 w-28" />
         <ListSkeleton.Bar class="h-3 w-3/4" />

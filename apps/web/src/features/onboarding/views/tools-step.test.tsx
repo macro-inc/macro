@@ -208,7 +208,8 @@ it('suggests the tools the inbox shows, with why, and always another inbox', asy
       'Import Linear issues into Macro tasks, and let agents create and update issues straight from your email.'
     )
   ).toBeTruthy();
-  expect(within(list).getByText('ada@example.com connected')).toBeTruthy();
+  expect(within(list).getByText('ada@example.com')).toBeTruthy();
+  expect(within(list).getByRole('img', { name: 'Connected' })).toBeTruthy();
   // Suggested tools aren't repeated in the full catalog.
   fireEvent.click(
     screen.getByRole('button', { name: 'Browse all integrations' })

@@ -120,8 +120,8 @@ export function ToolsStep(props: { onContinue: () => void }) {
     const accounts = emailAccounts.accounts();
     if (accounts.t !== 'ready' || accounts.value.length === 0) return undefined;
     return accounts.value.length === 1
-      ? `${accounts.value[0].address} connected`
-      : `${accounts.value.length} inboxes connected`;
+      ? accounts.value[0].address
+      : `${accounts.value.length} inboxes`;
   };
 
   return (
@@ -137,7 +137,7 @@ export function ToolsStep(props: { onContinue: () => void }) {
         <ul
           aria-label="Suggested connections"
           aria-busy={suggestions() === undefined}
-          class="flex flex-col [&>li:not(:first-child)]:border-t [&>li:not(:first-child)]:border-ink/10"
+          class="flex flex-col [&>li:not(:first-child)]:border-t [&>li:not(:first-child)]:border-ink/6"
         >
           <SuggestionRow
             stacked
@@ -145,6 +145,7 @@ export function ToolsStep(props: { onContinue: () => void }) {
             name="Add another inbox"
             kind="native"
             detail={inboxDetail()}
+            verified
             reason="Sync another email account into the same inbox, search and agents, so all of your mail lives in one place."
           >
             <AddInboxMenu
