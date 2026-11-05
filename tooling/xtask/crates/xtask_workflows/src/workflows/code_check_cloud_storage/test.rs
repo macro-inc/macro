@@ -54,7 +54,7 @@ fn filter_binary_cache_is_trusted_only() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|step| step["name"] == "Mount nextest-filter binary cache")
+        .find(|step| step["name"] == "Mount nextest-filter and cargo registry cache")
         .expect("binary cache mount");
     let condition = mount["if"].as_str().unwrap();
     assert!(

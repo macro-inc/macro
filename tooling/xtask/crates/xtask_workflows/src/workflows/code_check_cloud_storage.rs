@@ -55,11 +55,12 @@ const FILTER_CACHE_DIR: RuntimePath<'static> =
     xtask_paths::runtime_path!("/home/runner/.cache/macro-nextest-filter");
 
 /// Decide whether the rest of the workflow runs and compute the nextest
-/// filter. Deliberately light: no Nix, no sccache, and a cached release
-/// binary for the filter.
+/// filter. Deliberately light: no Nix, and a cached release binary for the filter.
+/// The sccache step supplies only that cache's credentials; nothing compiles through
+/// it here.
 fn path_check() -> Job {
     Job::default()
-        .runs_on(runners::Runner::Small.with_cache_tag(vars::NEXTEST_FILTER_CACHE_TAG))
+        .runs_on(runners::Runner::Small.with_cache_tag(vars::CI_CACHE_TAG))
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
             "doppler_candidates",
@@ -87,11 +88,11 @@ fn path_check() -> Job {
                 .if_condition(Expression::new("steps.filter.outputs.should_run == 'true'")),
         )
         .add_step(
-            steps::mount_path_cache_volume("Mount nextest-filter binary cache", FILTER_CACHE_DIR)
-                .if_condition(Expression::new(format!(
-                    "steps.filter.outputs.should_run == 'true' && ({TRUSTED_CONTEXT})"
-                ))),
+            steps::mount_nextest_filter_cache(FILTER_CACHE_DIR).if_condition(Expression::new(
+                format!("steps.filter.outputs.should_run == 'true' && ({TRUSTED_CONTEXT})"),
+            )),
         )
+        .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(compute_nextest_filter())
 }
 
