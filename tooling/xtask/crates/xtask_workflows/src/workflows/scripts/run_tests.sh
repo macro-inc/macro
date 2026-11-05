@@ -15,9 +15,9 @@ set -euo pipefail
 # Unconstrained `-p` still runs that package's tests.
 
 : "${RUST_PACKAGES:?RUST_PACKAGES is required}"
-# Dependencies build without debug info, which cuts compile, link and disk cost.
-# Workspace crates keep CARGO_PROFILE_*_DEBUG=limited, so backtraces still carry
-# line numbers in our own code.
+# Nothing in this build carries debug info: the job sets CARGO_PROFILE_*_DEBUG=0 for
+# workspace crates, and this flag covers dependencies. Panic messages keep their
+# file and line; backtrace frames keep function names only.
 common=(
   --config 'profile.dev.package."*".debug=false'
   --all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS"
