@@ -120,6 +120,10 @@ on completion, disconnect, cancellation, or a caller-owned deadline.
 
 ## Gotchas
 
+- Persist `AcpReady` through the fenced session log before opening or restoring
+  a session on an already-initialized shared runtime; MCP and model-gateway
+  credentials remain revoked while the durable status is disconnected.
+
 - Where a session is shown is `agent_session.visibility` (`listed`,
   `unlisted`, `hidden`), set at creation and changed later only by warm
   claims and the DM-context backfill (`list_visibility.rs`).
