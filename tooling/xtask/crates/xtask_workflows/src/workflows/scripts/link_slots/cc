@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Holds one of CI_LINK_SLOTS slots while linking, so compiles can use every CPU
+# without several multi-GiB links running at once. Compiles pass straight through.
+self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PATH=":$PATH:"; PATH="${PATH//:$self_dir:/:}"; PATH="${PATH#:}"; PATH="${PATH%:}"
+real="$(command -v cc)"
+for arg in "$@"; do
+  case "$arg" in
+    -c|-E|-S|-M|-MM|--version|-v|-dumpversion|-dumpmachine) exec "$real" "$@" ;;
+  esac
+done
+slot=$(( $$ % ${CI_LINK_SLOTS:-2} ))
+exec flock "${CI_LINK_LOCK_DIR:-${RUNNER_TEMP:-/tmp}}/link-slot.$slot" "$real" "$@"

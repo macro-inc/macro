@@ -181,6 +181,7 @@ fn test() -> Job {
         ))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
         .add_env(("CARGO_BUILD_JOBS", vars::RUST_TEST_BUILD_JOBS))
+        .add_env(("CI_LINK_SLOTS", vars::RUST_TEST_LINK_SLOTS))
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
         // The default 10-minute idle timeout can stop the server during long
         // link or test phases, which resets the stats reported at the end.
@@ -191,6 +192,7 @@ fn test() -> Job {
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
+        .add_step(limit_concurrent_links())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
         .add_step(steps::code_mode_assets())
@@ -203,6 +205,14 @@ fn test() -> Job {
         .add_step(report_memory())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+}
+
+/// Put the link-slot `cc` first on PATH, after the dev shell has set its own.
+/// rustc finds the linker through PATH, so its flags and cache keys don't change.
+fn limit_concurrent_links() -> Step<Run> {
+    Step::new("Limit concurrent links").run(
+        r#"echo "$GITHUB_WORKSPACE/tooling/xtask/crates/xtask_workflows/src/workflows/scripts/link_slots" >> "$GITHUB_PATH""#,
+    )
 }
 
 /// Experiment only: sample memory for the rest of the job.

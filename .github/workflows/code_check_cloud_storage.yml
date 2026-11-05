@@ -534,7 +534,8 @@ jobs:
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
       NEXTEST_TEST_THREADS: '32'
-      CARGO_BUILD_JOBS: '2'
+      CARGO_BUILD_JOBS: '8'
+      CI_LINK_SLOTS: '2'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
       SCCACHE_IDLE_TIMEOUT: '0'
     services:
@@ -568,6 +569,8 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
+    - name: Limit concurrent links
+      run: echo "$GITHUB_WORKSPACE/tooling/xtask/crates/xtask_workflows/src/workflows/scripts/link_slots" >> "$GITHUB_PATH"
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
