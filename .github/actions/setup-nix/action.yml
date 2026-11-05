@@ -30,6 +30,13 @@ inputs:
     description: AWS secret access key for reading the private cache bucket.
     required: false
     default: ''
+  seed-cache:
+    description: >-
+      Namespace cache name holding a copy of /nix with the dev shell, restored
+      when the volume is empty. Its writers are PR jobs, so only PR check jobs
+      pass this, never jobs that deploy or hold deploy secrets. Empty disables.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -41,6 +48,8 @@ runs:
         NIX_CACHE_PUBLIC_KEY: ${{ inputs.nix-cache-public-key }}
         NIX_CACHE_AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
         NIX_CACHE_AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
+        NIX_SEED_CACHE: ${{ inputs.seed-cache }}
+        NIX_SEED_KEY: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'rust-toolchain.toml') }}
       run: |
         set -euo pipefail
 
@@ -119,6 +128,10 @@ runs:
             fi
           fi
         }
+
+        if [[ ! -x "$nix_bin" && -n "$NIX_SEED_CACHE" ]]; then
+          "$GITHUB_ACTION_PATH/nix_seed.sh" restore || echo "No Nix seed restored."
+        fi
 
         if [[ -x "$nix_bin" ]]; then
           # Store + profiles persist on the cache volume, but config, build

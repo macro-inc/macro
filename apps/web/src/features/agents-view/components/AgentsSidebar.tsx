@@ -29,6 +29,7 @@ import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlugIcon from '@icon/system/regular/plugs-connected.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import { Key } from '@solid-primitives/keyed';
+import { makePersisted } from '@solid-primitives/storage';
 import { cn, Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createEffect, createSignal, type JSX, Show } from 'solid-js';
@@ -166,7 +167,9 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [openPullRequestsOpen, setOpenPullRequestsOpen] = createSignal(true);
   const [conversationsOpen, setConversationsOpen] = createSignal(true);
-  const [archivedOpen, setArchivedOpen] = createSignal(false);
+  const [archivedOpen, setArchivedOpen] = makePersisted(createSignal(false), {
+    name: 'agents-archived-open',
+  });
   let searchInput: HTMLInputElement | undefined;
   const factsOf = (conversation: AgentConversationEntity) =>
     conversationFacts(
@@ -475,7 +478,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               aria-label="Archived conversations"
               class={cn(
                 'mt-auto flex min-h-0 flex-col border-t border-edge-muted pt-2',
-                archivedOpen() && 'basis-1/4'
+                archivedOpen() ? 'basis-1/4' : 'shrink-0'
               )}
             >
               <CollapsibleSection.Header>

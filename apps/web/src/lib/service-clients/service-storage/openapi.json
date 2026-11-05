@@ -10991,6 +10991,105 @@
         }
       }
     },
+    "/documents/upload": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Upload a file's bytes as a new document, up to 25 MiB.",
+        "description": "The body is the raw file content. Preview generation and indexing may\nfinish after the response.",
+        "operationId": "upload_file",
+        "parameters": [
+          {
+            "name": "fileName",
+            "in": "query",
+            "description": "Filename including its extension, such as `report.pdf`; the extension\nsets the file type. No directory components.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "description": "Destination project. Requires edit access; omit for top-level files.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The file's bytes, at most 25 MiB.",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadFileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filename or content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No edit access to the destination project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller cannot create documents"
+          },
+          "413": {
+            "description": "The file exceeds 25 MiB"
+          },
+          "422": {
+            "description": "Document name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}": {
       "get": {
         "tags": ["document"],
@@ -27486,16 +27585,23 @@
       },
       "CreatePipeline": {
         "type": "object",
-        "description": "Request to create an empty pipeline with the standard CRM columns.",
-        "required": ["name", "recordType"],
+        "description": "Request to create an empty pipeline: the standard CRM columns for a tracked\nrecord, or one Name column, like a new database, for a generic pipeline.",
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
             "description": "Pipeline name."
           },
           "recordType": {
-            "$ref": "#/components/schemas/PipelineRecordType",
-            "description": "Company or contact entries."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Company or contact entries; omitted, a generic pipeline of free-form rows."
+              }
+            ]
           },
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",
@@ -38955,11 +39061,18 @@
           "primaryColumnId": {
             "type": "string",
             "format": "uuid",
-            "description": "Protected primary column."
+            "description": "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
           },
           "recordType": {
-            "$ref": "#/components/schemas/PipelineRecordType",
-            "description": "Kind of the primary reference."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Kind of the primary reference; `None` for a generic pipeline, whose\nprimary column is plain text."
+              }
+            ]
           },
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",
@@ -46347,6 +46460,22 @@
           },
           "sha": {
             "type": "string"
+          }
+        }
+      },
+      "UploadFileResponse": {
+        "type": "object",
+        "description": "The document created from the uploaded bytes.",
+        "required": ["documentId", "sizeBytes"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The new document."
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "description": "Number of bytes stored.",
+            "minimum": 0
           }
         }
       },

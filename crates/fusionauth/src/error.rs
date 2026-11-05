@@ -59,6 +59,32 @@ pub enum FusionAuthClientError {
     /// The grant is invalid - user may have revoked access.
     #[error("Invalid grant - user may have revoked access")]
     InvalidGrant,
+    /// The provider refused to refresh this user's grant by policy, such as a
+    /// Google Workspace admin not approving Macro. Retrying will not help
+    /// until the user's organization allows access.
+    #[error("access blocked by the user's organization: {reason}")]
+    GrantBlocked {
+        /// The provider's OAuth error code.
+        reason: GrantBlockReason,
+    },
+}
+
+/// Google OAuth error codes for a grant the user's organization does not let
+/// Macro use, such as a Workspace admin who has not approved the app. Only
+/// that organization can lift them. `invalid_client` and `unauthorized_client`
+/// are deliberately absent: they mean Macro's own OAuth client is broken.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, strum::EnumString, strum::Display,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum GrantBlockReason {
+    /// A Workspace admin has not reviewed and configured access for Macro.
+    AccessNotConfigured,
+    /// A Workspace admin policy forbids the requested scopes.
+    AdminPolicyEnforced,
+    /// The user or their organization denied access.
+    AccessDenied,
 }
 
 impl FusionAuthClientError {
