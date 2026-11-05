@@ -32,6 +32,9 @@ key issuance, and account merge/link flows.
   purchase item so both charges use one subscription update. The admin-only
   `/team_agents/sizes` catalog does not require a subscription; quote conflicts
   expose `code: "no_subscription"` for the invitation billing prompt.
+  Every team-agent admin operation (including roster, catalog and admin secrets)
+  shares one fail-closed `enable-team-agents` snapshot per authenticated actor.
+  Agent self-service and runtime credentials remain independent of the rollout.
 - Not here: authorization/permission decisions on other entities →
   `crates/macro_authorization`; metered AI credits → `crates/ai_billing`;
   team lifecycle and seats → `crates/teams`; a person's interface language

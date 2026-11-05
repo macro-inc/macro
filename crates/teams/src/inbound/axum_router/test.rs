@@ -993,3 +993,9 @@ async fn get_team_invites_reads_the_named_current_team() {
         }]
     );
 }
+
+#[tokio::test]
+async fn disabled_agent_invites_return_forbidden() {
+    let response = InviteUsersToTeamError::AgentsNotEnabled.into_response();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}

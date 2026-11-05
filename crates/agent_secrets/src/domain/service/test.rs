@@ -152,8 +152,31 @@ impl TeamAgentDirectory for FakeDirectory {
     }
 }
 
-fn service() -> AgentSecretServiceImpl<FakeRepository, FakeCipher, FakeDirectory> {
-    AgentSecretServiceImpl::new(FakeRepository::default(), FakeCipher, FakeDirectory)
+struct FakeRollout {
+    enabled: bool,
+    calls: Mutex<Vec<MacroUserIdStr<'static>>>,
+}
+
+impl crate::domain::admin::AgentAdminRollout for FakeRollout {
+    async fn enabled(&self, caller: &MacroUserIdStr<'_>) -> bool {
+        self.calls
+            .lock()
+            .expect("lock")
+            .push(caller.clone().into_owned());
+        self.enabled
+    }
+}
+
+fn service() -> AgentSecretServiceImpl<FakeRepository, FakeCipher, FakeDirectory, FakeRollout> {
+    AgentSecretServiceImpl::new(
+        FakeRepository::default(),
+        FakeCipher,
+        FakeDirectory,
+        FakeRollout {
+            enabled: true,
+            calls: Mutex::new(vec![]),
+        },
+    )
 }
 
 fn admin_of(team: &str) -> EntityAccessReceipt<AdminTeamRole> {
@@ -277,4 +300,44 @@ async fn an_admin_lists_and_deletes_secrets_only_on_their_team() {
         service.get(&user(AGENT), "github-token").await,
         Err(AgentSecretError::NotFound)
     ));
+}
+
+#[tokio::test]
+async fn disabled_rollout_blocks_only_admin_secrets_and_loads_for_the_admin() {
+    let mut service = service();
+    service.rollout.enabled = false;
+    service
+        .put(&user(AGENT), "api-token", "test-secret".to_owned())
+        .await
+        .expect("self put");
+    assert_eq!(
+        service
+            .get(&user(AGENT), "api-token")
+            .await
+            .expect("self get")
+            .value
+            .expose(),
+        "test-secret"
+    );
+    assert!(service.rollout.calls.lock().expect("lock").is_empty());
+    assert!(matches!(
+        service.list_for_admin(admin_of(TEAM), &user(AGENT)).await,
+        Err(AgentSecretError::NotEnabled)
+    ));
+    assert!(matches!(
+        service
+            .delete_for_admin(admin_of(TEAM), &user(AGENT), "api-token")
+            .await,
+        Err(AgentSecretError::NotEnabled)
+    ));
+    assert_eq!(
+        *service.rollout.calls.lock().expect("lock"),
+        vec![user(HUMAN), user(HUMAN)]
+    );
+    assert!(service.get(&user(AGENT), "api-token").await.is_ok());
+    service
+        .delete(&user(AGENT), "api-token")
+        .await
+        .expect("self delete");
+    assert_eq!(service.rollout.calls.lock().expect("lock").len(), 2);
 }

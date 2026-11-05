@@ -36,6 +36,7 @@ use model_notifications::{InviteToTeamMetadata, InviteePlan};
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
 
 use crate::domain::{
+    agent_invites::{AgentInviteRollout, DisabledAgentInvites},
     contacts_enqueuer::{ContactsEnqueuer, NoOpContactsEnqueuer},
     crm_enqueuer::CrmEnqueuer,
     customer_repo::CustomerRepository,
@@ -171,6 +172,7 @@ pub struct TeamServiceImpl<
     owned_entity_cleanup: OEC,
     /// Rewards whoever brought a new member onto the team.
     invite_rewarder: Arc<dyn InviteRewarder>,
+    agent_invite_rollout: Arc<dyn AgentInviteRollout>,
 }
 
 fn channel_error_to_team_error(error: ChannelMutationErr) -> TeamError {
@@ -208,6 +210,7 @@ where
             open_seat_release: self.open_seat_release.clone(),
             owned_entity_cleanup: self.owned_entity_cleanup.clone(),
             invite_rewarder: self.invite_rewarder.clone(),
+            agent_invite_rollout: self.agent_invite_rollout.clone(),
         }
     }
 }
@@ -313,6 +316,7 @@ where
             open_seat_release: NoOpOpenSeatRelease,
             owned_entity_cleanup: UnwiredOwnedEntityCleanup,
             invite_rewarder: Arc::new(NoOpInviteRewarder),
+            agent_invite_rollout: Arc::new(DisabledAgentInvites),
         }
     }
 }
@@ -719,6 +723,7 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            agent_invite_rollout: self.agent_invite_rollout,
         }
     }
 
@@ -744,6 +749,7 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            agent_invite_rollout: self.agent_invite_rollout,
         }
     }
 
@@ -769,7 +775,14 @@ where
             open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            agent_invite_rollout: self.agent_invite_rollout,
         }
+    }
+
+    /// Wires the shared fail-closed agent invitation rollout policy.
+    pub fn with_agent_invite_rollout(mut self, rollout: Arc<dyn AgentInviteRollout>) -> Self {
+        self.agent_invite_rollout = rollout;
+        self
     }
 
     /// Replaces the rewarder for whoever brought a new member onto a team.
@@ -825,6 +838,7 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            agent_invite_rollout: self.agent_invite_rollout,
         }
     }
 
@@ -1576,6 +1590,15 @@ where
         invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
         is_agent: bool,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
+        if is_agent {
+            let caller = entity_access_receipt
+                .acting_user_id()
+                .ok_or(InviteUsersToTeamError::AgentsNotEnabled)?;
+            if !self.agent_invite_rollout.enabled(caller).await {
+                return Err(InviteUsersToTeamError::AgentsNotEnabled);
+            }
+        }
+
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
 

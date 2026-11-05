@@ -232,7 +232,7 @@ impl IntoResponse for TeamAgentError {
     }
 }
 
-/// Computer specifications for team admins, independent of billing or rollout.
+/// Computer specifications for rollout-enabled team admins, independent of billing.
 #[utoipa::path(
     get, tag = "team-agents", operation_id = "get_team_agent_sizes",
     path = "/team_agents/sizes",

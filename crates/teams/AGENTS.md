@@ -86,6 +86,9 @@ event contract (schema, sanitization, delivery semantics).
   seat item; `crates/team_agents` adds it in the computer purchase's single
   subscription update. Undo an unbilled join with `undo_team_agent_join`,
   never `remove_user_from_team`, which would decrement a seat never added.
+- Legacy `POST /team/invite` with `is_agent: true` loads the same per-caller
+  `enable-team-agents` snapshot through `AgentInviteRollout` and fails closed
+  before any billing or invitation effects. Human invitations do not load flags.
 - `team_invite.is_agent` makes an address with no account sign up as an agent.
   `authentication_service`'s agent setup joins the team, so the seat is added
   without a separate acceptance. Existing accounts accept like any other invite.

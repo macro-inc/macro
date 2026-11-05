@@ -25,8 +25,9 @@ use super::ports::{
 #[cfg(test)]
 mod test;
 
-/// PostHog flag that lets a team admin quote and create team agents.
-pub const TEAM_AGENTS_FLAG: &str = "enable-team-agents";
+/// Shared rollout key for every team-agent administrator operation.
+pub use super::rollout::TEAM_AGENTS_FLAG;
+use super::rollout::TeamAgentRollout;
 
 /// The brain's systemd unit, per persona OS user (`brain@<os_user>`).
 const BRAIN_UNIT_PREFIX: &str = "brain@";
@@ -70,9 +71,8 @@ pub struct TeamAgentServiceImpl<Repository, Membership, ApiKeys, Inboxes, Comput
     mailboxes: Inboxes,
     computers: Computer,
     repos: Repos,
-    /// `None` where no flag provider is configured (local stacks, tests):
-    /// the feature is then open.
-    flags: Option<Flags>,
+    /// One shared fail-closed rollout policy for administrator operations.
+    rollout: TeamAgentRollout<Flags>,
     /// Public API gateway origin the brain reaches Macro through.
     gateway_url: String,
     anthropic_base_url: String,
@@ -103,7 +103,7 @@ impl<Repository, Membership, ApiKeys, Inboxes, Computer, Repos, Flags>
             mailboxes,
             computers,
             repos,
-            flags,
+            rollout: TeamAgentRollout::new(flags),
             gateway_url,
             anthropic_base_url,
             included_email_domain,
@@ -260,25 +260,22 @@ where
     Repos: AgentRepos,
     Flags: FeatureFlags + 'static,
 {
-    /// Whether `caller` may quote and create team agents. Fails closed when
-    /// the flags can't be loaded.
     async fn ensure_enabled(&self, caller: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
-        let Some(flags) = &self.flags else {
-            return Ok(());
-        };
-
-        let enabled = flags
-            .load(caller)
-            .await
-            .inspect_err(|error| tracing::warn!(error = ?error, "could not load feature flags; team agents stay closed"))
-            .is_ok_and(|snapshot| snapshot.is_enabled(TEAM_AGENTS_FLAG));
+        let enabled = self.rollout.enabled(caller).await;
         tracing::Span::current().record("team_agents.flag", enabled);
-
         if enabled {
             Ok(())
         } else {
             Err(TeamAgentError::NotEnabled)
         }
+    }
+
+    async fn ensure_admin_enabled(
+        &self,
+        receipt: &EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<(), TeamAgentError> {
+        let caller = receipt.acting_user_id().ok_or(TeamAgentError::Forbidden)?;
+        self.ensure_enabled(caller).await
     }
 
     async fn is_included(&self, team_id: Uuid) -> Result<bool, TeamAgentError> {
@@ -581,6 +578,7 @@ where
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> Result<TeamAgentSizes, TeamAgentError> {
+        self.ensure_admin_enabled(&receipt).await?;
         team_id(&receipt)?;
         Ok(TeamAgentSizes {
             sizes: self.computers.sizes(),
@@ -726,6 +724,7 @@ where
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> Result<TeamAgents, TeamAgentError> {
+        self.ensure_admin_enabled(&receipt).await?;
         let team_id = team_id(&receipt)?;
         let stored = self
             .repository
@@ -759,6 +758,7 @@ where
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<TeamAgent, TeamAgentError> {
+        self.ensure_admin_enabled(&receipt).await?;
         let agent = self.team_agent(&receipt, agent_user_id).await?;
         let computer_id = agent.computer_id.ok_or_else(|| {
             TeamAgentError::RetryUnavailable("the agent has no saved computer to retry".to_string())
@@ -833,6 +833,7 @@ where
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), TeamAgentError> {
+        self.ensure_admin_enabled(&receipt).await?;
         let agent = self.team_agent(&receipt, agent_user_id).await?;
         let Some(computer_id) = agent.computer_id else {
             return Err(TeamAgentError::RetryUnavailable(

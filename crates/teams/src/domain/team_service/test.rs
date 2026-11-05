@@ -1,3 +1,4 @@
+mod agent_invites;
 use std::{
     collections::{HashMap, HashSet},
     future::Future,

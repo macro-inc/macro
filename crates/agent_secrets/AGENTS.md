@@ -25,6 +25,10 @@ agent, `GET /{agent_user_id}/secrets` (names only) and
   `crates/team_agents`.
 - Used by: `services/authentication_service`.
 
+Only admin secret list/delete consult the shared team-agent rollout port,
+loading for the authenticated administrator. Disabled or unavailable rollout
+returns 403 before accessing secrets. Own-secret operations never call that port.
+
 ## Checks
 
 - `cargo test -p agent_secrets --all-features` (`SQLX_OFFLINE` unset).

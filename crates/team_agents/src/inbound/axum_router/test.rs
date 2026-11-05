@@ -54,6 +54,7 @@ fn agent() -> TeamAgent {
 /// Records what each route asked of the service.
 #[derive(Default)]
 struct FakeService {
+    admin_disabled: bool,
     calls: Mutex<Vec<String>>,
     create_error: Mutex<Option<TeamAgentError>>,
     quote_error: Mutex<Option<TeamAgentError>>,
@@ -71,6 +72,9 @@ impl TeamAgentService for FakeService {
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> Result<TeamAgentSizes, TeamAgentError> {
+        if self.admin_disabled {
+            return Err(TeamAgentError::NotEnabled);
+        }
         self.record(format!("sizes {}", receipt.entity().entity_id));
         Ok(TeamAgentSizes { sizes: vec![] })
     }
@@ -80,6 +84,9 @@ impl TeamAgentService for FakeService {
         receipt: EntityAccessReceipt<AdminTeamRole>,
         size: ComputerSize,
     ) -> Result<TeamAgentQuote, TeamAgentError> {
+        if self.admin_disabled {
+            return Err(TeamAgentError::NotEnabled);
+        }
         self.record(format!("quote {} {size:?}", receipt.entity().entity_id));
         if let Some(error) = self.quote_error.lock().expect("lock").take() {
             return Err(error);
@@ -102,6 +109,9 @@ impl TeamAgentService for FakeService {
         receipt: EntityAccessReceipt<AdminTeamRole>,
         request: CreateTeamAgent,
     ) -> Result<TeamAgent, TeamAgentError> {
+        if self.admin_disabled {
+            return Err(TeamAgentError::NotEnabled);
+        }
         self.record(format!(
             "create {} {} {:?}",
             receipt.entity().entity_id,
@@ -119,6 +129,9 @@ impl TeamAgentService for FakeService {
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> Result<TeamAgents, TeamAgentError> {
+        if self.admin_disabled {
+            return Err(TeamAgentError::NotEnabled);
+        }
         self.record(format!("list {}", receipt.entity().entity_id));
         Ok(TeamAgents {
             agents: vec![agent()],
@@ -130,6 +143,9 @@ impl TeamAgentService for FakeService {
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<TeamAgent, TeamAgentError> {
+        if self.admin_disabled {
+            return Err(TeamAgentError::NotEnabled);
+        }
         self.record(format!(
             "retry {} {agent_user_id}",
             receipt.entity().entity_id
@@ -145,6 +161,9 @@ impl TeamAgentService for FakeService {
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), TeamAgentError> {
+        if self.admin_disabled {
+            return Err(TeamAgentError::NotEnabled);
+        }
         self.record(format!(
             "delete {} {agent_user_id}",
             receipt.entity().entity_id
@@ -631,4 +650,49 @@ async fn repository_creation_failure_preserves_its_safe_pre_purchase_reason() {
         body_text(response).await,
         r#"{"code":"repository_creation_failed","message":"The workspace repository service is missing git. Nothing was charged."}"#
     );
+}
+
+#[tokio::test]
+async fn disabled_admin_service_denials_are_forbidden_on_every_admin_route() {
+    let service = Arc::new(FakeService {
+        admin_disabled: true,
+        ..Default::default()
+    });
+    for (method, uri, body) in [
+        ("GET", "/", ""),
+        ("GET", "/sizes", ""),
+        ("GET", "/quote?size=standard", ""),
+        (
+            "POST",
+            "/",
+            r#"{"name":"Agent","jobDescription":"Help","personality":"Kind","expectedIncluded":false,"size":"standard","avatarUrl":null}"#,
+        ),
+        ("POST", "/macro%7Csam%40agents.example.com/retry", ""),
+        ("DELETE", "/macro%7Csam%40agents.example.com", ""),
+    ] {
+        let response = router(service.clone(), TeamRole::Admin)
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(uri)
+                    .header(header::AUTHORIZATION, "Bearer admin")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(body))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{method} {uri}");
+    }
+    assert!(service.calls.lock().expect("lock").is_empty());
+    let response = router(service, TeamRole::Member)
+        .oneshot(
+            Request::get("/me")
+                .header(header::AUTHORIZATION, "Bearer agent")
+                .body(Body::empty())
+                .expect("request"),
+        )
+        .await
+        .expect("response");
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }

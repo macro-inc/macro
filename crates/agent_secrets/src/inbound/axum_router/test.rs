@@ -29,6 +29,7 @@ const TEAM_ID: Uuid = Uuid::from_u128(42);
 /// Records what each route asked of the service.
 #[derive(Default)]
 struct FakeService {
+    admin_disabled: bool,
     calls: Mutex<Vec<String>>,
 }
 
@@ -81,6 +82,9 @@ impl AgentSecretService for FakeService {
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<AgentSecretSummaries, AgentSecretError> {
+        if self.admin_disabled {
+            return Err(AgentSecretError::NotEnabled);
+        }
         self.record(format!(
             "list {} {agent_user_id}",
             receipt.entity().entity_id
@@ -94,6 +98,9 @@ impl AgentSecretService for FakeService {
         agent_user_id: &MacroUserIdStr<'_>,
         name: &str,
     ) -> Result<(), AgentSecretError> {
+        if self.admin_disabled {
+            return Err(AgentSecretError::NotEnabled);
+        }
         self.record(format!(
             "admin delete {} {agent_user_id} {name}",
             receipt.entity().entity_id
@@ -380,4 +387,43 @@ async fn an_admin_lists_and_deletes_an_agents_secrets() {
                 .to_string(),
         ]
     );
+}
+
+#[tokio::test]
+async fn disabled_admin_secret_operations_stay_forbidden_while_self_access_works() {
+    let service = Arc::new(FakeService {
+        admin_disabled: true,
+        ..Default::default()
+    });
+    for (method, uri) in [
+        ("GET", "/macro%7Csam%40agents.example.com/secrets"),
+        (
+            "DELETE",
+            "/macro%7Csam%40agents.example.com/secrets/api-token",
+        ),
+    ] {
+        let response = router(service.clone(), TeamRole::Admin)
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(uri)
+                    .header(header::AUTHORIZATION, "Bearer admin")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{method} {uri}");
+    }
+    assert!(service.calls.lock().expect("lock").is_empty());
+    let response = router(service, TeamRole::Member)
+        .oneshot(
+            Request::get("/me/secrets/api-token")
+                .header(header::AUTHORIZATION, "Bearer agent")
+                .body(Body::empty())
+                .expect("request"),
+        )
+        .await
+        .expect("response");
+    assert_eq!(response.status(), StatusCode::OK);
 }

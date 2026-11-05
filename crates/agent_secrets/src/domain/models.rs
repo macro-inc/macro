@@ -219,6 +219,9 @@ pub enum AgentSecretError {
     /// No such secret, or no such agent on the caller's team.
     #[error("not found")]
     NotFound,
+    /// The administrative team-agent feature is not enabled for this caller.
+    #[error("team agents aren't available for this account yet")]
+    NotEnabled,
     /// Anything else, KMS included. Opaque on purpose: KMS errors can tell a
     /// wrong encryption context from a missing permission.
     #[error("internal error: {0}")]

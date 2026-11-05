@@ -457,7 +457,12 @@ impl AgentRepos for FakeRepos {
         token: &RepoToken,
     ) -> Result<(), TeamAgentError> {
         self.journal.record("repo.ensure")?;
-        assert_eq!(token.expose(), format!("mrt_{}", "b".repeat(64)));
+        assert_eq!(
+            token.hash(),
+            RepoToken::parse(format!("mrt_{}", "b".repeat(64)))
+                .expect("expected token")
+                .hash()
+        );
         assert_eq!(self.seeds.lock().unwrap().first(), Some(seed));
         Ok(())
     }
@@ -493,7 +498,17 @@ impl Default for Setup {
             owner_verified_email: None,
             admin_verified_email: None,
             fail_at: None,
-            flags: None,
+            flags: Some({
+                let mut flags = FakeFeatureFlags::default();
+                flags.set(
+                    user(ADMIN),
+                    Ok(FlagSnapshot::new([(
+                        TEAM_AGENTS_FLAG.to_owned(),
+                        FlagValue::Boolean(true),
+                    )])),
+                );
+                flags
+            }),
             seat: Some(SeatQuote {
                 amount: 4000,
                 currency: "usd".to_string(),
@@ -867,7 +882,10 @@ async fn create_and_quote_need_the_flag_on_for_the_admin() {
             .await,
         Err(TeamAgentError::NotEnabled)
     ));
-    assert!(service.sizes(receipt(TEAM_ID)).await.is_ok());
+    assert!(matches!(
+        service.sizes(receipt(TEAM_ID)).await,
+        Err(TeamAgentError::NotEnabled)
+    ));
     assert_eq!(journal.steps(), Vec::<&str>::new());
 
     let mut on = FakeFeatureFlags::default();
@@ -1832,3 +1850,5 @@ async fn purchase_status_outage_stays_provisioning_and_recovers() {
         TeamAgentStatus::Running
     );
 }
+
+mod rollout;

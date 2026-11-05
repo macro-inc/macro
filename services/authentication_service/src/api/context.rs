@@ -156,6 +156,9 @@ pub(crate) type AgentSecretsServiceType = agent_secrets::domain::service::AgentS
     team_agents::outbound::agent_secrets_directory::TeamAgentsDirectory<
         team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
     >,
+    team_agents::domain::rollout::TeamAgentRollout<
+        feature_flags::outbound::posthog::PostHogFeatureFlags,
+    >,
 >;
 
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<

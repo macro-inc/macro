@@ -786,6 +786,9 @@ pub enum CreateTeamError {
 /// Errors for inviting users to team
 #[derive(Debug, thiserror::Error)]
 pub enum InviteUsersToTeamError {
+    /// Agent invitations are disabled for the authenticated caller.
+    #[error("team agents are not enabled")]
+    AgentsNotEnabled,
     /// The team has hit its daily limit on new invites
     #[error("the team has sent too many invites today")]
     TooManyEmails,

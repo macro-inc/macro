@@ -42,7 +42,7 @@ returns transient `unhealthy` for a previously running agent, without writing a
 failure. Every refresh recomputes health and clears diagnostics on recovery.
 
 `GET /team_agents/sizes` returns the hosted-runtimes size catalog to any team
-admin, without consulting billing or feature flags. Use it for the size picker.
+admin with the rollout enabled, without consulting billing. Use it for the size picker.
 `GET /team_agents/quote?size=` returns HTTP 409 with `code: "no_subscription"`
 when the team lacks an active subscription; other conflicts have their own
 `computer_unavailable` or `retry_unavailable` codes. The quote includes `vcpus`, `memoryGb`, and `diskGb`
@@ -61,6 +61,13 @@ The hosted adapter passes `PurchaseBilling::Comped` with reason
 `Included for Macro` and no extra items. It never substitutes a billed purchase.
 The authentication service also applies this shared eligibility policy to direct
 team computer purchases through `MacroStaffCompPolicy`.
+
+The `enable-team-agents` rollout gates every administrator operation: roster,
+sizes, quote, create, retry, remove and admin secret list/delete. Load exactly one
+snapshot for the authenticated administrator and read the flag synchronously.
+Missing configuration, a missing key, off or load failure denies with HTTP 403.
+Team authorization remains independent. Agent self profile/mail, own secrets,
+brain gateway and git access never consult this rollout policy.
 
 ## Start here
 
