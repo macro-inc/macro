@@ -12,7 +12,7 @@ impl ConnectionGatewayClient {
     ) -> anyhow::Result<Vec<MessageReceipt>> {
         self.send_message(
             EntityType::User.with_entity_str(user_id),
-            "refresh_calendar_renamed".to_string(),
+            "refresh_calendar".to_string(),
             event,
         )
         .await
