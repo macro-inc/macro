@@ -511,7 +511,9 @@ impl PersonaFiles {
         write_file(&self.unit_path, &self.unit_contents, 0o644)?;
         host.systemctl(&["daemon-reload"])?;
         let unit = format!("{}.service", self.unit_name);
-        host.systemctl(&["enable", "--now", &unit])?;
+        // The persona starts after macrod, which starts after enrollment finishes.
+        // Queue its start without waiting for that ordering dependency.
+        host.systemctl(&["enable", "--now", "--no-block", &unit])?;
         tracing::info!(os_user = %self.os_user, unit = %unit, "persona service installed");
         Ok(())
     }

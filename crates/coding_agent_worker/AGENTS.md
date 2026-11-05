@@ -35,9 +35,10 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   computer-reachable egress URL; macrod.toml stays the one URL source at runtime), claims the
   pre-approved pairing, chowns the config to its directory's owner, installs
   the persona (useradd, `/etc/macro/personas/<os_user>.env` 0600,
-  `/etc/systemd/system/<unit>.service`, `enable --now`), then writes
+  `/etc/systemd/system/<unit>.service`, `enable --now --no-block`), then writes
   `/var/lib/macrod/enrolled`. A stored credential skips the claim, so retries
-  are safe. `--root` (hidden) prefixes system paths for tests.
+  are safe. Queue persona starts without waiting: their units start after macrod,
+  which waits for enrollment to finish. `--root` (hidden) prefixes system paths for tests.
 - `src/capabilities.rs`: on an enrolled Macro computer only (the marker
   exists), reports `HarnessCapabilities` (`screen` = Xvnc on
   `127.0.0.1:5900`) to `PUT /harnesses/me/capabilities` when the serving core

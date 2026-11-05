@@ -169,7 +169,7 @@ fn persona_installs_its_user_environment_and_unit() {
             "ensure_user ada".to_owned(),
             format!("chown {} 1001:1002", env_path.display()),
             "systemctl daemon-reload".to_owned(),
-            "systemctl enable --now macro-brain-ada.service".to_owned(),
+            "systemctl enable --now --no-block macro-brain-ada.service".to_owned(),
         ]
     );
 
