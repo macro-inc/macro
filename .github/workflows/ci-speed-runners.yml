@@ -18,16 +18,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - leg: small-8cpu-j8-t32-d0dn
-          shape: small
-          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
-          jobs: 8
-          threads: 32
-          timeout: 75
-          salt_file: services/notification_service/src/main.rs
-          debug: '0'
-          deno_nextest: true
-          sccache: ci-speed-runners-d0
         - leg: small-16cpu-j16-t32-d0dn
           shape: small
           runner: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-runners-16
@@ -45,16 +35,6 @@ jobs:
           threads: 32
           timeout: 75
           salt_file: services/notification_service/src/main.rs
-          debug: '0'
-          deno_nextest: true
-          sccache: ci-speed-runners-d0
-        - leg: medium-8cpu-j8-t32-d0dn
-          shape: medium
-          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
-          jobs: 8
-          threads: 32
-          timeout: 75
-          salt_file: crates/email/src/lib.rs
           debug: '0'
           deno_nextest: true
           sccache: ci-speed-runners-d0
@@ -78,16 +58,6 @@ jobs:
           debug: '0'
           deno_nextest: true
           sccache: ci-speed-runners-d0
-        - leg: large-8cpu-j8-t32-d0dn
-          shape: large
-          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
-          jobs: 8
-          threads: 32
-          timeout: 40
-          salt_file: crates/macro_user_id/src/lib.rs
-          debug: '0'
-          deno_nextest: true
-          sccache: ci-speed-runners-d0
         - leg: large-16cpu-j16-t32-d0dn
           shape: large
           runner: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-runners-16
@@ -105,6 +75,56 @@ jobs:
           threads: 32
           timeout: 75
           salt_file: crates/macro_user_id/src/lib.rs
+          debug: '0'
+          deno_nextest: true
+          sccache: ci-speed-runners-d0
+        - leg: small-8cpu-j8-t32-d0dn
+          shape: small
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 8
+          threads: 32
+          timeout: 75
+          salt_file: services/notification_service/src/main.rs
+          debug: '0'
+          deno_nextest: true
+          sccache: ci-speed-runners-d0
+        - leg: medium-8cpu-j8-t32-d0dn
+          shape: medium
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 8
+          threads: 32
+          timeout: 75
+          salt_file: crates/email/src/lib.rs
+          debug: '0'
+          deno_nextest: true
+          sccache: ci-speed-runners-d0
+        - leg: large-8cpu-j4-t32-d0dn
+          shape: large
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 4
+          threads: 32
+          timeout: 75
+          salt_file: crates/macro_user_id/src/lib.rs
+          debug: '0'
+          deno_nextest: true
+          sccache: ci-speed-runners-d0
+        - leg: large-32cpu-j32-t64-d0dn
+          shape: large
+          runner: namespace-profile-linux-large-build;overrides.cache-tag=ci-speed-runners-32
+          jobs: 32
+          threads: 64
+          timeout: 75
+          salt_file: crates/macro_user_id/src/lib.rs
+          debug: '0'
+          deno_nextest: true
+          sccache: ci-speed-runners-d0
+        - leg: medium-32cpu-j32-t64-d0dn
+          shape: medium
+          runner: namespace-profile-linux-large-build;overrides.cache-tag=ci-speed-runners-32
+          jobs: 32
+          threads: 64
+          timeout: 75
+          salt_file: crates/email/src/lib.rs
           debug: '0'
           deno_nextest: true
           sccache: ci-speed-runners-d0
