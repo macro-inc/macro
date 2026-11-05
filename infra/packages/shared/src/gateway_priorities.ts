@@ -62,3 +62,6 @@ const assigned = Object.values(GATEWAY_PRIORITIES);
 if (new Set(assigned).size !== assigned.length) {
   throw new Error('GATEWAY_PRIORITIES values must be unique');
 }
+
+// CI gate experiment 2: a deliberate type error.
+export const ciGateExperiment: number = 'not a number';
