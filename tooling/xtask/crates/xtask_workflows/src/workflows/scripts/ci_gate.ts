@@ -6,7 +6,9 @@
 //   start   a requested run begins: remove the label, check the merge commit
 //           holds the PR head, set pending
 //   finish  the run ends: success when every job passed or was path-skipped
-//   fork    after a fork PR's run, whose read-only token could do none of this
+//   fork-request  the label goes on a fork PR: what start does with a write
+//                 token, from a trusted run of `main`'s workflow
+//   fork    after a fork PR's run, whose read-only token could not set the status
 //
 // Statuses go on the PR head commit, so a later push starts without one.
 
@@ -14,6 +16,8 @@ import { readFileSync } from 'node:fs';
 
 const API = 'https://api.github.com';
 const DESCRIPTION_LIMIT = 140;
+// An open request. Only trusted runs set statuses: a fork's token can't.
+const RUNNING = 'Running on';
 // Job names in `PR CI`; the fork step reads them back from the finished run.
 export const START_JOB = 'Start';
 export const GATE_JOB = 'CI gate';
@@ -81,13 +85,7 @@ export function gateOutcome(needs: Needs, head: string): Outcome {
 
 /// A fork run's verdict from its jobs. Null when the run was not a request
 /// (unrelated label) or did not finish (cancelled).
-export function forkOutcome(
-  jobs: RunJob[],
-  head: string,
-  repository: string,
-  pr: string,
-  labelName: string,
-): Outcome {
+export function forkOutcome(jobs: RunJob[], head: string, labelName: string): Outcome {
   const start = jobs.find((job) => job.name === START_JOB);
   const gate = jobs.find((job) => job.name === GATE_JOB);
 
@@ -98,7 +96,7 @@ export function forkOutcome(
   if (start.conclusion !== 'success') {
     return {
       state: 'failure',
-      description: `Could not start on ${head.slice(0, 7)}. Run: ${runCommand(repository, pr, labelName)}`,
+      description: `Could not start on ${head.slice(0, 7)}. Add the ${labelName} label again.`,
     };
   }
 
@@ -123,12 +121,20 @@ async function setStatus(sha: string, state: State, description: string, targetU
   console.log(`${context()} on ${sha.slice(0, 10)}: ${state}: ${description}`);
 }
 
-async function hasGateStatus(sha: string): Promise<boolean> {
-  const statuses: { context: string }[] = await github(
+/// The newest gate status on a commit (GitHub lists statuses newest first).
+async function gateStatus(sha: string): Promise<{ state: string; description: string } | undefined> {
+  const statuses: { context: string; state: string; description: string | null }[] = await github(
     'GET',
     `/repos/${repo()}/commits/${sha}/statuses?per_page=100`,
   );
-  return statuses.some((status) => status.context === context());
+  const status = statuses.find((each) => each.context === context());
+  return status && { state: status.state, description: status.description ?? '' };
+}
+
+/// Whether a trusted step opened a request on this commit that no result has
+/// closed yet.
+export function isOpenRequest(status: { state: string; description: string } | undefined): boolean {
+  return status?.state === 'pending' && status.description.startsWith(RUNNING);
 }
 
 async function removeLabel(pr: string) {
@@ -140,7 +146,7 @@ async function remind() {
   const pr = env('PR_NUMBER');
 
   // A re-open or leaving draft keeps the head, so it may have a result already.
-  if (await hasGateStatus(head)) {
+  if (await gateStatus(head)) {
     console.log(`${head.slice(0, 10)} already has a ${context()} status`);
     return;
   }
@@ -159,7 +165,7 @@ async function start() {
   const runUrl = env('RUN_URL');
   const sameRepo = env('SAME_REPO') === 'true';
 
-  // Fork tokens are read-only; the fork step removes the label after the run.
+  // Fork tokens are read-only; the fork request step did both already.
   if (sameRepo) {
     await removeLabel(pr);
   }
@@ -178,7 +184,7 @@ async function start() {
   }
 
   if (sameRepo) {
-    await setStatus(head, 'pending', `Running on ${head.slice(0, 7)}`, runUrl);
+    await setStatus(head, 'pending', `${RUNNING} ${head.slice(0, 7)}`, runUrl);
   }
 }
 
@@ -202,28 +208,24 @@ async function finish() {
   }
 }
 
+async function forkRequest() {
+  const head = env('HEAD_SHA');
+  const pr = env('PR_NUMBER');
+
+  await removeLabel(pr);
+  await setStatus(head, 'pending', `${RUNNING} ${head.slice(0, 7)}`, env('PR_CHECKS_URL'));
+}
+
 async function fork() {
   const event = JSON.parse(readFileSync(env('GITHUB_EVENT_PATH'), 'utf8'));
   const run = event.workflow_run;
   const head: string = run.head_sha;
-  const owner: string = run.head_repository.owner.login;
 
-  const pulls: { number: number; head: { sha: string }; labels: { name: string }[] }[] =
-    await github(
-      'GET',
-      `/repos/${repo()}/pulls?state=open&head=${encodeURIComponent(`${owner}:${run.head_branch}`)}`,
-    );
-  const pull = pulls.find((candidate) => candidate.head.sha === head);
-
-  if (!pull) {
-    console.log(`No open PR has ${head.slice(0, 10)} as its head; nothing to report.`);
-    return;
-  }
-
-  // Only someone who can label PRs can request a run. A fork that rewrote the
-  // workflow to run on its own pushes would not carry the label.
-  if (!pull.labels.some((each) => each.name === label())) {
-    console.log(`PR #${pull.number} does not carry ${label()}; not a requested run.`);
+  // The request step opened this on the head the label was added at. A run on
+  // any other commit, such as one the fork pushed with a rewritten workflow,
+  // or a run after the result is in, finds no open request.
+  if (!isOpenRequest(await gateStatus(head))) {
+    console.log(`${head.slice(0, 10)} has no open ${context()} request; nothing to report.`);
     return;
   }
 
@@ -239,16 +241,20 @@ async function fork() {
     }
   }
 
-  const outcome = forkOutcome(jobs, head, repo(), String(pull.number), label());
-  await removeLabel(String(pull.number));
-
+  const outcome = forkOutcome(jobs, head, label());
   if (outcome) {
     await setStatus(head, outcome.state, outcome.description, run.html_url);
   }
 }
 
 export async function main() {
-  const modes: Record<string, () => Promise<void>> = { remind, start, finish, fork };
+  const modes: Record<string, () => Promise<void>> = {
+    remind,
+    start,
+    finish,
+    'fork-request': forkRequest,
+    fork,
+  };
   const mode = modes[env('CI_GATE_MODE')];
   if (!mode) {
     throw new Error(`unknown CI_GATE_MODE ${process.env.CI_GATE_MODE}`);

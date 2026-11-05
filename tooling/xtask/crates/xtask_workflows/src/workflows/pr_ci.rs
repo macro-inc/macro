@@ -9,8 +9,8 @@
 //!
 //! Every label fires `labeled`, so runs for any other label skip every job and
 //! take a concurrency group of their own: they can't cancel a requested run or
-//! post a result. Fork PRs get a read-only token, so `ci_gate_fork` removes the
-//! label and posts their result after the run.
+//! post a result. Fork PRs get a read-only token, so `ci_gate_fork` removes
+//! their label and sets their status.
 
 use anyhow::Result;
 use gh_workflow::{

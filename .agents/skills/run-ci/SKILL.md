@@ -8,8 +8,9 @@ description: Run CI on a pull request and wait for its result. Use after opening
 CI runs when someone asks for it, not on every push. Adding the `run-ci` label
 to a PR runs every check on its head commit (the `PR CI` workflow), and the
 label disappears as the run starts. The result is the `CI gate` commit status on
-that commit. `main` requires `CI gate` to pass on the PR's latest commit, so
-every push needs a new run before the PR can merge.
+that commit. The merge gate is `CI gate` passing on the PR's latest commit, so
+every push needs a new run before the PR can merge (see the end of this page
+for the switch-over).
 
 ## Run it
 
@@ -60,9 +61,11 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 
 ## Fork PRs
 
-A maintainer adds the label after reading the diff: the run uses the fork's
-workflow files. The fork's token can't set statuses, so `CI Gate for Forks`
-removes the label and sets `CI gate` after the run finishes.
+A maintainer adds the label after reading the diff, workflow files included:
+the run uses the fork's copies. The fork's token can't set statuses, so
+`CI Gate for Forks` removes the label and sets `CI gate` to `Running on <sha>`
+on the head the label went on, then copies the run's verdict onto that head.
+Re-running a fork's failed jobs doesn't update `CI gate`; add the label again.
 
 ## While the switch is in progress
 

@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { forkOutcome, GATE_JOB, gateOutcome, START_JOB } from './ci_gate.ts';
+import { forkOutcome, GATE_JOB, gateOutcome, isOpenRequest, START_JOB } from './ci_gate.ts';
 
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
 
@@ -61,8 +61,6 @@ describe('forkOutcome', () => {
         { name: GATE_JOB, conclusion: 'skipped' },
       ],
       HEAD,
-      'acme/repo',
-      '12',
       'run-ci',
     );
 
@@ -76,8 +74,6 @@ describe('forkOutcome', () => {
         { name: GATE_JOB, conclusion: 'cancelled' },
       ],
       HEAD,
-      'acme/repo',
-      '12',
       'run-ci',
     );
 
@@ -92,8 +88,6 @@ describe('forkOutcome', () => {
         { name: GATE_JOB, conclusion: 'success' },
       ],
       HEAD,
-      'acme/repo',
-      '12',
       'run-ci',
     );
     const failed = forkOutcome(
@@ -102,8 +96,6 @@ describe('forkOutcome', () => {
         { name: GATE_JOB, conclusion: 'failure' },
       ],
       HEAD,
-      'acme/repo',
-      '12',
       'run-ci',
     );
 
@@ -118,14 +110,24 @@ describe('forkOutcome', () => {
         { name: GATE_JOB, conclusion: 'failure' },
       ],
       HEAD,
-      'acme/repo',
-      '12',
       'run-ci',
     );
 
     assert.deepEqual(outcome, {
       state: 'failure',
-      description: 'Could not start on 0123456. Run: gh api repos/acme/repo/issues/12/labels -f "labels[]=run-ci"',
+      description: 'Could not start on 0123456. Add the run-ci label again.',
     });
+  });
+});
+
+describe('isOpenRequest', () => {
+  test('only a pending request that no result has closed', () => {
+    assert.equal(isOpenRequest({ state: 'pending', description: 'Running on 0123456' }), true);
+    assert.equal(isOpenRequest({ state: 'success', description: 'Passed on 0123456' }), false);
+    assert.equal(
+      isOpenRequest({ state: 'pending', description: 'Not run on this commit. Run: ...' }),
+      false,
+    );
+    assert.equal(isOpenRequest(undefined), false);
   });
 });
