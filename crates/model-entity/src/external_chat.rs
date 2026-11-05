@@ -58,5 +58,7 @@ pub enum ExternalChatKind {
     /// A group chat.
     Group,
     /// A direct chat with one person.
+    #[serde(rename = "one_to_one")]
+    #[strum(serialize = "one_to_one")]
     Direct,
 }

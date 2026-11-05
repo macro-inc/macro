@@ -12,6 +12,7 @@ env:
   push:
     branches:
     - main
+    - synoet/ci-speed-sel-break
     paths:
     - Cargo.toml
     - Cargo.lock
