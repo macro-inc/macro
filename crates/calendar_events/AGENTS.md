@@ -371,6 +371,17 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   as a clean sync. The warning `skipping an Outlook event Macro cannot read`
   and the `calendar.outlook_sync` span carry `calendar_id`,
   `provider_event_id` and `rejected_field`.
+- A calendar's sync error reaches calendar caches only as an `UpsertCalendar`
+  change-log entry, since they read the calendar list once and then follow
+  the log. Google and Outlook log one when the shown error
+  (`visible_calendar_sync_error_tx`, past
+  `CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD` failures) appears or is reworded
+  (`failure_changes_sync_error_badge`) and when the round that clears it
+  commits, never on a routine round (Outlook polls every two minutes).
+  Neither nudges open clients for it, so a tab sees it on its next delta.
+  Outlook logged none before November 2026;
+  `20261105002046_log_outlook_calendars_for_their_sync_error.sql` logs every
+  visible Outlook calendar once so caches that missed a change refetch it.
 - A sync of a `ready`, already synced account stays `ready`, on Google as on
   Outlook, including after a re-grant that kept calendar access, whose sync tokens
   survive. Any other state is catching up and marks it `syncing`: a first import,
