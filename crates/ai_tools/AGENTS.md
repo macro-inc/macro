@@ -14,8 +14,7 @@ execution, display) that don't belong to a single domain.
   and frontend schema set.
 - `ReadAgentSession` is eager across chat, agent sessions, and MCP, and is also
   available to subagents; keep its registration covered by the host tests.
-- `src/subagent.rs`: the `Subagent` delegation tool. Its short `description`
-  titles the row users see; `task` is the full brief, shown only on expanding.
+- `src/subagent.rs`: dispatches `snippet_specs` to parallel subagents.
 - `src/search.rs` / `src/search_tools.rs`: cross-entity search tools.
 - `src/deferred.rs`: tools whose result arrives after the turn (long-running
   work).

@@ -60,7 +60,6 @@ async fn direct_subagent_call_is_gated_and_cancellation_remains_available() {
     };
     let request = RequestContext::new("macro|direct@example.com".to_owned().try_into().unwrap());
     let tool = Subagent {
-        description: Some("Test".into()),
         task: "test".into(),
     };
     let error = tool

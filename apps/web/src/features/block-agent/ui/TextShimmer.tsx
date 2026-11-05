@@ -22,11 +22,6 @@ export interface TextShimmerProps {
    * visible text changes. Defaults to the visible text.
    */
   label?: string;
-  /**
-   * End a line too long for its container with an ellipsis. Text in a grid
-   * container is never ellipsized itself, so each layer truncates instead.
-   */
-  truncate?: boolean;
   class?: string;
 }
 
@@ -59,15 +54,12 @@ export function TextShimmer(props: TextShimmerProps) {
   return (
     <span
       class={`inline-grid whitespace-pre align-baseline ${props.class ?? ''}`}
-      classList={{
-        'min-w-0 max-w-full grid-cols-[minmax(0,1fr)]': props.truncate,
-      }}
       aria-label={props.label ?? props.text}
     >
       <span
         aria-hidden="true"
         class="col-start-1 row-start-1 transition-opacity duration-200 motion-reduce:transition-none"
-        classList={{ 'opacity-0': props.active, truncate: props.truncate }}
+        classList={{ 'opacity-0': props.active }}
       >
         {props.text}
       </span>
@@ -81,7 +73,6 @@ export function TextShimmer(props: TextShimmerProps) {
         classList={{
           'opacity-0': !props.active,
           'magic-chip-shimmer': run(),
-          truncate: props.truncate,
         }}
       >
         {props.text}

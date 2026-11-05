@@ -220,7 +220,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.getByTestId('title').textContent).toBe('ask');
-    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('');
   });
 
   it('reuses a known renderer for calls from the explicit Macro MCP server', () => {
@@ -265,7 +265,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
-    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('');
     expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
     expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
     expect(rendered.getByTestId('body').textContent).toBe('');
@@ -289,7 +289,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('');
     expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
     expect(rendered.getByTestId('body').textContent).toBe('');
   });

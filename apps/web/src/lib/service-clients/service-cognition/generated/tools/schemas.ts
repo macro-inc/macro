@@ -18982,10 +18982,7 @@ export const ShareWithChannelResponse = z.object({
   summary: z.string(),
 });
 
-export const Subagent = z.object({
-  description: z.union([z.string(), z.null()]).optional(),
-  task: z.string(),
-});
+export const Subagent = z.object({ task: z.string() });
 
 export const SubagentResponse = z.object({ result: z.string() });
 
