@@ -1,5 +1,6 @@
 import { SlackImport } from '@app/features/slack-import/slack-import';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import {
   ENABLE_EMAIL,
   enableDialpad,
@@ -412,13 +413,13 @@ export function useDialpadItem(): IntegrationItem {
   const flag = useFeatureFlag(enableDialpad);
   const dialpad = createDialpadConnection(() => flag().enabled);
 
-  function ConnectMenu(props: { label: string }) {
+  function ConnectMenu(props: { label: string; ariaLabel: string }) {
     return (
       <Dropdown>
         <Dropdown.Trigger
           variant="ghost"
           size="sm"
-          aria-label={`${props.label} Dialpad`}
+          aria-label={props.ariaLabel}
           class="text-ink-muted hover:text-ink touch:min-h-11"
           disabled={dialpad.connecting()}
         >
@@ -456,9 +457,9 @@ export function useDialpadItem(): IntegrationItem {
             when={dialpad.connection()?.issue === 'needs_reauth'}
             fallback={
               <ConnectAction
-                label="Disconnect"
+                label={t('dialpad.disconnect')}
                 variant="danger"
-                ariaLabel="Disconnect Dialpad. Imported calls stay, and Macro's access is not revoked in Dialpad."
+                ariaLabel={t('dialpad.disconnectDialpad')}
                 onClick={() =>
                   fireAndForget(dialpad.disconnect(), 'dialpad-settings')
                 }
@@ -466,17 +467,30 @@ export function useDialpadItem(): IntegrationItem {
               />
             }
           >
-            <ConnectMenu label="Reconnect" />
+            <ConnectMenu
+              label={t('dialpad.reconnect')}
+              ariaLabel={t('dialpad.reconnectDialpad')}
+            />
           </Show>
         </Match>
         <Match when={state() === 'connecting'}>
-          <ConnectAction label="Connecting" variant="neutral" loading />
+          <ConnectAction
+            label={t('dialpad.connecting')}
+            variant="neutral"
+            loading
+          />
         </Match>
         <Match when={state() === 'failed'}>
-          <ConnectMenu label="Reconnect" />
+          <ConnectMenu
+            label={t('dialpad.reconnect')}
+            ariaLabel={t('dialpad.reconnectDialpad')}
+          />
         </Match>
         <Match when={state() === 'not_connected'}>
-          <ConnectMenu label="Connect" />
+          <ConnectMenu
+            label={t('dialpad.connect')}
+            ariaLabel={t('dialpad.connectDialpad')}
+          />
         </Match>
       </Switch>
     );
@@ -493,8 +507,9 @@ export function useDialpadItem(): IntegrationItem {
         class="size-5"
       />
     ),
-    description:
-      'Import Dialpad calls into Calls, with transcripts and summaries, linked to your CRM contacts.',
+    get description() {
+      return t('dialpad.description');
+    },
     categories: ['Meetings'],
     get status(): IntegrationStatus {
       const connection = dialpad.connection();
@@ -507,7 +522,7 @@ export function useDialpadItem(): IntegrationItem {
     get statusLabel() {
       const connection = dialpad.connection();
       if (!connection) return undefined;
-      if (connection.state === 'connecting') return 'Connecting';
+      if (connection.state === 'connecting') return t('dialpad.connecting');
       return dialpadIssueLabel(connection);
     },
     get hidden() {

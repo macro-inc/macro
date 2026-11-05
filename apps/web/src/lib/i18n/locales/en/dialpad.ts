@@ -5,4 +5,21 @@ export default {
   backfillQuarter: 'Also import the last 90 days',
   connectFailed: 'Failed to connect Dialpad',
   disconnectFailed: 'Failed to disconnect Dialpad',
+  description:
+    'Import Dialpad calls into Calls, with transcripts and summaries, linked to your CRM contacts.',
+  connect: 'Connect',
+  connectDialpad: 'Connect Dialpad',
+  reconnect: 'Reconnect',
+  reconnectDialpad: 'Reconnect Dialpad',
+  connecting: 'Connecting',
+  disconnect: 'Disconnect',
+  disconnectDialpad:
+    "Disconnect Dialpad. Imported calls stay, and Macro's access is not revoked in Dialpad.",
+  issueNeedsReauth: 'Reconnect needed',
+  issueSetupFailed: 'Setup failed',
+  issueSetupAbandoned: 'Setup could not finish',
+  issueStopped: 'Stopped',
+  issueCallSyncFailed: 'Retrying',
+  issueCallsAbandoned: 'Some calls not imported',
+  issueBackfillFailed: 'Past calls retrying',
 };

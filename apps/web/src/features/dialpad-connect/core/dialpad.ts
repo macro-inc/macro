@@ -44,19 +44,19 @@ export function dialpadIssueLabel(
 ): string | undefined {
   switch (connection.issue) {
     case 'needs_reauth':
-      return 'Reconnect needed';
+      return t('dialpad.issueNeedsReauth');
     case 'setup_failed':
-      return 'Setup failed';
+      return t('dialpad.issueSetupFailed');
     case 'setup_abandoned':
-      return 'Setup could not finish';
+      return t('dialpad.issueSetupAbandoned');
     case 'stopped':
-      return 'Stopped';
+      return t('dialpad.issueStopped');
     case 'call_sync_failed':
-      return 'Retrying';
+      return t('dialpad.issueCallSyncFailed');
     case 'calls_abandoned':
-      return 'Some calls not imported';
+      return t('dialpad.issueCallsAbandoned');
     case 'backfill_failed':
-      return 'Past calls retrying';
+      return t('dialpad.issueBackfillFailed');
     default:
       return undefined;
   }
