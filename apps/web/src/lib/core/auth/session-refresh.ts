@@ -35,6 +35,10 @@ const REFRESH_UNAVAILABLE_TTL_MS = 60_000;
 // suspension. Every 401 waits on the shared refresh, so it must settle.
 const REFRESH_TIMEOUT_MS = 12_000;
 
+// Suspension can pause the deadline timer while the wall clock moves on, so a
+// refresh started before it would hold the first requests after resume.
+let pendingRefresh: { startedAt: number; expire: () => void } | null = null;
+
 // Bumped on every reset. A refresh started before a reset carries the older
 // generation, so once the session has moved on (e.g. a login) it can neither
 // re-latch refreshUnavailable nor clear a newer tokenPromise on completion.
@@ -44,10 +48,21 @@ function clearRefreshLatch() {
   refreshUnavailable = null;
 }
 
+function expireStalledRefresh() {
+  if (
+    pendingRefresh &&
+    Date.now() - pendingRefresh.startedAt >= REFRESH_TIMEOUT_MS
+  ) {
+    pendingRefresh.expire();
+  }
+}
+
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   window.addEventListener('online', clearRefreshLatch);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') clearRefreshLatch();
+    if (document.visibilityState !== 'visible') return;
+    clearRefreshLatch();
+    expireStalledRefresh();
   });
 }
 
@@ -137,13 +152,13 @@ async function requestRefresh(
 ): Promise<TokenResult> {
   const controller = new AbortController();
   const signal = controller.signal;
-  const timer = setTimeout(
-    () =>
-      controller.abort(
-        new DOMException('Refresh deadline expired', 'TimeoutError')
-      ),
-    REFRESH_TIMEOUT_MS
-  );
+  const expire = () =>
+    controller.abort(
+      new DOMException('Refresh deadline expired', 'TimeoutError')
+    );
+  const timer = setTimeout(expire, REFRESH_TIMEOUT_MS);
+  const pending = { startedAt: Date.now(), expire };
+  pendingRefresh = pending;
   let networkSignal: AbortSignal | undefined;
   const abortOffline = () => controller.abort(networkSignal?.reason);
   try {
@@ -179,6 +194,7 @@ async function requestRefresh(
     return ok(undefined);
   } finally {
     clearTimeout(timer);
+    if (pendingRefresh === pending) pendingRefresh = null;
     networkSignal?.removeEventListener('abort', abortOffline);
   }
 }

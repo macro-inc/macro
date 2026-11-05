@@ -445,6 +445,36 @@ describe('fetchWithToken refresh latch', () => {
     expect(refreshCalls()).toBe(2);
   });
 
+  test('regaining visibility expires a refresh older than its deadline', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(100_000);
+    const response = deferred<Response>();
+    mockFetch.mockReturnValueOnce(response.promise);
+    const stalled = fetchToken();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // A recent refresh survives foregrounding.
+    vi.setSystemTime(105_000);
+    document.dispatchEvent(new Event('visibilitychange'));
+    const joined = fetchToken();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refreshCalls()).toBe(1);
+
+    // Suspension paused the deadline timer while the wall clock moved on.
+    vi.setSystemTime(200_000);
+    document.dispatchEvent(new Event('visibilitychange'));
+    const timedOut = [
+      { code: 'NETWORK_ERROR', message: 'Authentication refresh timed out' },
+    ];
+    expect((await stalled)._unsafeUnwrapErr()).toEqual(timedOut);
+    expect((await joined)._unsafeUnwrapErr()).toEqual(timedOut);
+
+    mockFetch.mockResolvedValue(jsonResponse(200));
+    expect((await fetchToken()).isOk()).toBe(true);
+    expect(refreshCalls()).toBe(2);
+    response.resolve(jsonResponse(200));
+  });
+
   test('regaining connectivity clears the latch', async () => {
     mockFetch.mockImplementation((input) =>
       Promise.resolve(

@@ -412,6 +412,8 @@ socket setup shares one refresh, which settles within 12 seconds as a
 retryable network failure, or sooner when the native network path drops.
 Cancelling one view stops only its own wait. After a timeout the next request
 starts a fresh refresh; a timeout never signs the user out or reloads the app.
+Returning to the app expires a refresh that started more than 12 seconds
+earlier, so requests after a resume start a fresh one instead of waiting.
 
 ### Google OAuth through a remote local stack
 

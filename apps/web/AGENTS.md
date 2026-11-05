@@ -505,6 +505,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Bound shared cookie-auth refresh (`core/auth/session-refresh.ts`), including
   proactive socket setup, to 12 seconds and native network availability; let
   each caller cancel its wait independently, and keep refresh timeouts retryable.
+  On foregrounding, expire a pending refresh older than that deadline by wall
+  clock; suspension can pause its timer.
 - Treat a repeated worker-ready frame as a coordinator restart: retire the old
   engine and re-register in place, preserving durable storage and never replaying
   uncertain enqueues. Space failed coordinator registrations with bounded,
