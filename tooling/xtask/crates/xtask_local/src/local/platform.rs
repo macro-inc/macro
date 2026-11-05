@@ -65,6 +65,8 @@ pub enum PlatformCmd {
     Cluster,
     /// Push main and this branch to the forge and open a pull request (runs CI).
     Mirror,
+    /// Build the self-host Helm chart from an instance's last build.
+    Chart(ChartArgs),
     /// Regenerate the checked-in edge Caddyfile from the service inventory.
     Caddyfile,
     /// Seed an instance and run the local E2E suites against it.
@@ -93,6 +95,16 @@ pub struct UpArgs {
     /// Stream subprocess output and show per-step timings.
     #[arg(long, short)]
     pub verbose: bool,
+}
+
+#[derive(Args, Clone)]
+pub struct ChartArgs {
+    /// The instance whose recorded build the chart packages.
+    #[arg(long, default_value = "demo")]
+    pub from: String,
+    /// Where to link the built chart.
+    #[arg(long, default_value = "infra/local/generated/platform-cluster/chart")]
+    pub out: PathBuf,
 }
 
 #[derive(Args, Clone)]
@@ -142,6 +154,7 @@ pub fn run(cmd: PlatformCmd) -> Result<()> {
         PlatformCmd::Down(args) => down(&args),
         PlatformCmd::Cluster => cluster(&Stage::from_env_cli(false)),
         PlatformCmd::Mirror => gitops::mirror(&Stage::from_env_cli(false)),
+        PlatformCmd::Chart(args) => chart(&args),
         PlatformCmd::Caddyfile => {
             let path = repo_root().join(CADDYFILE);
             std::fs::write(&path, caddyfile())?;
@@ -543,6 +556,34 @@ fn down(args: &NameArg) -> Result<()> {
 /// Where an instance's manifests live in the deploy repo.
 fn instance_env(name: &InstanceName) -> String {
     format!("instances/{}", name.as_str())
+}
+
+/// Package an instance's recorded build as the self-host chart, and push its images.
+fn chart(args: &ChartArgs) -> Result<()> {
+    let stage = Stage::from_env_cli(false);
+    let from = InstanceName::parse(&args.from)?;
+    let state = read_state(&from.local_instance()?);
+    ensure!(
+        !state.binaries.is_empty(),
+        "instance {} has no recorded build; run `just platform up {}` first",
+        from.as_str(),
+        from.as_str()
+    );
+    let selfhost = InstanceName::parse("selfhost")?;
+    push_images(&stage, &selfhost, &state, None)?;
+    let expr = format!("(({}).chart {{ }})", instance_expr(&selfhost, &state, "{ }")?);
+    let built = nix_build(&stage, "Building the chart (nix)", &expr)?
+        .into_iter()
+        .next()
+        .context("nix build printed no path")?;
+    let out = repo_root().join(&args.out);
+    if out.exists() {
+        std::fs::remove_file(&out)?;
+    }
+    std::fs::create_dir_all(out.parent().context("chart path has no parent")?)?;
+    std::os::unix::fs::symlink(&built, &out)?;
+    stage.note(&format!("chart: {}", out.display()));
+    Ok(())
 }
 
 /// Bring up the shared services, then hand them to Argo CD.
@@ -1204,10 +1245,16 @@ fn retrying(label: &str, mut step: impl FnMut() -> Result<()>) -> Result<()> {
 }
 
 fn run_checked(cmd: &mut Command) -> Result<()> {
-    let out = cmd.output().with_context(|| format!("running {cmd:?}"))?;
+    // Not `{cmd:?}`: its Debug output includes the environment, which holds keys.
+    let shown = std::iter::once(cmd.get_program())
+        .chain(cmd.get_args())
+        .map(|part| part.to_string_lossy())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let out = cmd.output().with_context(|| format!("running {shown}"))?;
     ensure!(
         out.status.success(),
-        "{cmd:?} failed: {}{}",
+        "{shown} failed: {}{}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Turn a rendered instance into the `macro` Helm chart for self-hosters.
 
-The input is `infra/platform`'s own output, rendered with placeholder host and
-image references, so the chart cannot drift from what our clusters run. Only
-the fields the parity rule lets environments differ on become values: host and
-TLS, image registry and tag, replicas, resources, storage, and whether each
-component runs in-cluster at all.
+The input is `infra/platform`'s own output, the instance named `selfhost`, so the
+chart cannot drift from what our clusters run. Only the fields the parity rule lets
+environments differ on become values: host and TLS, image registry, replicas,
+resources, storage, and whether each component runs in-cluster at all. Image tags
+are content hashes, pinned in the chart's values, so a chart version names exact
+builds.
 """
 
 import copy
@@ -14,10 +15,10 @@ import pathlib
 import re
 import sys
 
-HOST = "__MACRO_HOST__"
-REGISTRY = "__MACRO_REGISTRY__"
-TAG = "__MACRO_TAG__"
 INSTANCE = "selfhost"
+TLS = "__MACRO_TLS__"
+HOST = "selfhost.localhost"
+IMAGE = re.compile(r"[a-z0-9.:-]+/macro/([a-zA-Z0-9_.-]+):([a-z0-9]+)")
 RAW = re.compile(r'"__TPL__(.*?)__LPT__"')
 ALLOWED_KINDS = {
     "ConfigMap",
@@ -93,26 +94,41 @@ def template_item(item):
                     }
     elif kind == "Ingress":
         item["spec"]["ingressClassName"] = "{{ .Values.ingress.className }}"
+        item["spec"]["tls"] = TLS
     return component, item
 
 
 def render_document(component, item):
     text = RAW.sub(lambda m: "{{ " + m.group(1).replace('\\"', '"') + " }}", json.dumps(item, indent=2))
     text = text.replace(HOST, "{{ .Values.host }}")
-    text = re.sub(
-        re.escape(REGISTRY) + r"/macro-([a-zA-Z0-9_.-]+):" + re.escape(TAG),
-        r"{{ .Values.image.registry }}/macro-\1:{{ .Values.image.tag | default .Chart.AppVersion }}",
+    # By component, not image name: `db` and `postgres` share a name but not a build,
+    # as do the celld fleets.
+    text = IMAGE.sub(
+        lambda m: "{{ .Values.image.registry }}/" + m.group(1)
+        + ':{{ index .Values.image.tags "' + component + '" }}',
         text,
     )
-    if item["kind"] == "Ingress":
-        tls = re.compile(r'"tls": \[.*?\n  *\],?\n', re.S)
-        text = tls.sub('{{- if .Values.tls.secretName }}\n"tls": [{"hosts": ["{{ .Values.host }}"], "secretName": "{{ .Values.tls.secretName }}"}],\n{{- end }}\n', text)
+    text = text.replace(
+        f'"{TLS}"',
+        '{{ if .Values.tls.secretName }}[{"hosts": ["{{ .Values.host }}"], '
+        '"secretName": "{{ .Values.tls.secretName }}"}]{{ else }}[]{{ end }}',
+    )
     if component:
         text = (
             f'{{{{- if not (has "{component}" .Values.disabledComponents) }}}}\n'
             f"{text}\n{{{{- end }}}}\n"
         )
     return f"---\n{text}\n"
+
+
+def image_tags(items):
+    """Every workload's image: component -> content tag."""
+    tags = {}
+    for item in items:
+        if item["kind"] in ("Deployment", "Job"):
+            match = IMAGE.search(json.dumps(item))
+            tags[component_of(item)] = match.group(2)
+    return dict(sorted(tags.items()))
 
 
 def default_resources(size):
@@ -123,7 +139,7 @@ def default_resources(size):
 
 
 def main():
-    manifests_path, size_path, out, version = sys.argv[1:5]
+    manifests_path, size_path, out, version, registry = sys.argv[1:6]
     manifests = json.loads(pathlib.Path(manifests_path).read_text())
     size = json.loads(pathlib.Path(size_path).read_text())
     out = pathlib.Path(out)
@@ -153,7 +169,7 @@ def main():
         "host": "macro.example.com",
         "tls": {"secretName": "macro-tls"},
         "ingress": {"className": "traefik", "namespace": "traefik"},
-        "image": {"registry": "ghcr.io/macro-inc", "tag": ""},
+        "image": {"registry": registry, "tags": image_tags(manifests["items"])},
         "disabledComponents": [],
         "replicas": size.get("replicas", {}),
         "resources": default_resources(size),

@@ -164,6 +164,27 @@ in
     {
       inherit manifests namespace components;
       images = lib.mapAttrs (_: w: w.image) components;
+      # The Helm chart for self-hosters, generated from this instance's manifests.
+      # Render it from the instance named `selfhost`.
+      chart =
+        { version ? "0.0.0-dev", chartRegistry ? "${registry}/macro" }:
+        pkgs.runCommand "macro-chart-${version}"
+          {
+            nativeBuildInputs = [
+              pkgs.yq-go
+              pkgs.jq
+              pkgs.python3
+            ];
+            size = builtins.toJSON size;
+            passAsFile = [ "size" ];
+          }
+          ''
+            for f in ${manifests}/${namespace}/*.yaml; do
+              yq -o=json "$f"
+            done | jq -s '{ items: . }' > items.json
+            python3 ${./selfhost/generate_chart.py} items.json "$sizePath" "$out" \
+              ${version} ${chartRegistry}
+          '';
       # Pushes the named workloads' images, or every image.
       push =
         names:

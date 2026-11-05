@@ -25,7 +25,7 @@ def deployment():
                     "containers": [
                         {
                             "name": "email-service",
-                            "image": "__MACRO_REGISTRY__/macro-email_service:__MACRO_TAG__",
+                            "image": "localhost:5000/macro/email_service:abc123",
                             "resources": {},
                         }
                     ]
@@ -47,13 +47,25 @@ class Chart(unittest.TestCase):
         text = self.render(deployment())
         self.assertIn('{{ index .Values.replicas "email-service" | default 1 }}', text)
         self.assertIn(
-            "{{ .Values.image.registry }}/macro-email_service:{{ .Values.image.tag | default .Chart.AppVersion }}",
+            '{{ .Values.image.registry }}/email_service:{{ index .Values.image.tags "email-service" }}',
             text,
         )
         self.assertIn('{{ .Release.Name }}', text)
         self.assertNotIn("argocd", text)
         self.assertNotIn("macro-selfhost", text)
         self.assertTrue(text.startswith('---\n{{- if not (has "email-service"'))
+
+    def test_workloads_sharing_an_image_name_keep_their_own_builds(self):
+        def workload(name, tag):
+            item = deployment()
+            item["metadata"]["labels"]["app.kubernetes.io/name"] = name
+            item["spec"]["template"]["spec"]["containers"][0]["image"] = (
+                f"localhost:5000/macro/postgres:{tag}"
+            )
+            return item
+
+        tags = g.image_tags([workload("db", "aaa"), workload("postgres", "bbb")])
+        self.assertEqual(tags, {"db": "aaa", "postgres": "bbb"})
 
     def test_jobs_get_a_new_name_per_revision(self):
         job = {
@@ -70,8 +82,8 @@ class Chart(unittest.TestCase):
             "metadata": {"name": "edge", "labels": {}},
             "spec": {
                 "ingressClassName": "traefik",
-                "tls": [{"hosts": ["__MACRO_HOST__"], "secretName": "macro-tls"}],
-                "rules": [{"host": "__MACRO_HOST__", "http": {"paths": []}}],
+                "tls": [{"hosts": ["selfhost.localhost"], "secretName": "macro-tls"}],
+                "rules": [{"host": "selfhost.localhost", "http": {"paths": []}}],
             },
         }
         component, rewritten = g.template_item(ingress)
