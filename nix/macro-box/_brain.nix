@@ -47,7 +47,7 @@ let
     dontFixup = true;
     outputHashMode = "recursive";
     outputHashAlgo = "sha256";
-    outputHash = "sha256-sUFL3nHgasJrnokIgo44yfJq/1U3m1srQguGhRdTLiY=";
+    outputHash = "sha256-jLEXoL+TRYPOeWd9aJVsLp/uaEKnGXgo6uGjI8aHd64=";
     # FODs cannot retain store references. The final package below rediscovers
     # the denort runtime closure after copying the hash-verified binary.
     unsafeDiscardReferences.out = true;
