@@ -13,8 +13,15 @@ CREATE TABLE dialpad_sync_connections (
     signing_secret BYTEA,
     backfill_since TIMESTAMPTZ,
     backfill_cursor TEXT,
+    -- A failing backfill backs off and moves behind the others, so it never
+    -- holds up anyone else's import of past calls.
+    backfill_failures INTEGER NOT NULL DEFAULT 0,
+    backfill_due_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     enrolled_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     setup_started_at TIMESTAMPTZ,
+    -- Setup failures in a row; setup stops retrying at a cap until the user
+    -- reconnects.
+    setup_attempts INTEGER NOT NULL DEFAULT 0,
     last_synced_at TIMESTAMPTZ,
     last_error TEXT,
     CHECK ((webhook_id IS NULL) = (subscription_id IS NULL)),
