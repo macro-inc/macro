@@ -4,7 +4,10 @@ use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::{GOOGLE, refresh_google_token_at};
-use crate::{UnauthedClient, error::FusionAuthClientError};
+use crate::{
+    UnauthedClient,
+    error::{FusionAuthClientError, GrantBlockReason},
+};
 
 async fn refresh_answering(response: ResponseTemplate) -> FusionAuthClientError {
     let server = MockServer::start().await;
@@ -58,9 +61,12 @@ async fn an_unapproved_workspace_app_is_a_blocked_grant() {
     })))
     .await;
 
-    assert!(
-        matches!(&error, FusionAuthClientError::GrantBlocked { code } if code == "access_not_configured")
-    );
+    assert!(matches!(
+        error,
+        FusionAuthClientError::GrantBlocked {
+            reason: GrantBlockReason::AccessNotConfigured
+        }
+    ));
 }
 
 #[tokio::test]
@@ -70,9 +76,12 @@ async fn an_enforced_admin_policy_is_a_blocked_grant() {
     )
     .await;
 
-    assert!(
-        matches!(&error, FusionAuthClientError::GrantBlocked { code } if code == "admin_policy_enforced")
-    );
+    assert!(matches!(
+        error,
+        FusionAuthClientError::GrantBlocked {
+            reason: GrantBlockReason::AdminPolicyEnforced
+        }
+    ));
 }
 
 #[tokio::test]

@@ -2,7 +2,7 @@ use std::{collections::HashMap, time::Duration};
 
 use crate::{
     Result, UnauthedClient,
-    error::{FusionAuthClientError, GenericErrorResponse},
+    error::{FusionAuthClientError, GenericErrorResponse, GrantBlockReason},
 };
 use base64::{
     Engine,
@@ -110,10 +110,11 @@ async fn refresh_google_token_at(
                 return Err(FusionAuthClientError::InvalidGrant);
             }
 
-            if let Some(code) = blocked_grant_code(&error_text).filter(|_| status.is_client_error())
+            if let Some(reason) =
+                grant_block_reason(&error_text).filter(|_| status.is_client_error())
             {
                 tracing::warn!(status=?status, error=?error_text, "Google blocked the grant by policy");
-                return Err(FusionAuthClientError::GrantBlocked { code });
+                return Err(FusionAuthClientError::GrantBlocked { reason });
             }
 
             tracing::error!(
@@ -139,27 +140,15 @@ async fn refresh_google_token_at(
     }
 }
 
-/// Google OAuth error codes for a grant the user's organization does not let
-/// Macro use, such as a Workspace admin who has not approved the app. Only
-/// that organization can lift them. `invalid_client` and `unauthorized_client`
-/// are deliberately absent: they mean Macro's own OAuth client is broken.
-const BLOCKED_GRANT_CODES: &[&str] = &[
-    "access_not_configured",
-    "admin_policy_enforced",
-    "access_denied",
-];
-
-/// The `error` code of a Google OAuth error body, when it is a policy block.
-fn blocked_grant_code(body: &str) -> Option<String> {
+/// The reason in a Google OAuth error body, when it is a policy block.
+fn grant_block_reason(body: &str) -> Option<GrantBlockReason> {
     #[derive(serde::Deserialize)]
     struct OAuthError {
         error: String,
     }
 
     let OAuthError { error } = serde_json::from_str(body).ok()?;
-    BLOCKED_GRANT_CODES
-        .contains(&error.as_str())
-        .then_some(error)
+    error.parse().ok()
 }
 
 #[derive(Debug, serde::Deserialize)]

@@ -167,8 +167,8 @@ fn refresh_error_response(
         }
         // The user's organization blocks Macro. Callers treat it like a
         // revoked grant, so they ask for reauthorization instead of retrying.
-        FusionAuthClientError::GrantBlocked { code } => {
-            tracing::warn!(code = %code, "{} grant blocked by policy for userid {}", identity_provider_name, fusionauth_user_id);
+        FusionAuthClientError::GrantBlocked { reason } => {
+            tracing::warn!(reason = %reason, "{} grant blocked by policy for userid {}", identity_provider_name, fusionauth_user_id);
             StatusCode::FORBIDDEN
         }
         _ => {
