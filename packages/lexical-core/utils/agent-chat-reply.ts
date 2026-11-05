@@ -64,6 +64,12 @@ export type AgentChatReply = {
    * messages are the session, and repeat no link. Defaults to true.
    */
   link?: boolean;
+  /**
+   * What the link reads as where the message is shown as text: the
+   * session's name, once it has one. Defaults to
+   * {@link AGENT_SESSION_LINK_LABEL}.
+   */
+  label?: string;
 };
 
 function editor() {
@@ -89,7 +95,7 @@ function chrome(reply: AgentChatReply, pending: boolean): string {
         $createParagraphNode().append(
           $createAgentSessionMentionNode({
             id: reply.sessionId,
-            label: AGENT_SESSION_LINK_LABEL,
+            label: reply.label || AGENT_SESSION_LINK_LABEL,
           })
         )
       );
