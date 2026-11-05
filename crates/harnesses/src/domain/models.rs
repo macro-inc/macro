@@ -61,6 +61,53 @@ pub struct Harness {
     /// machine the user paired themselves.
     #[serde(default)]
     pub computer_id: Option<Uuid>,
+    /// How Claude Code on this machine is paid for. Only meaningful for
+    /// Macro computers.
+    #[serde(default)]
+    pub claude_mode: ClaudeMode,
+}
+
+/// How Claude Code on a Macro computer is paid for.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ClaudeMode {
+    /// Macro credits, through Macro's Anthropic gateway.
+    #[default]
+    MacroCredits,
+    /// A Claude account signed in on the computer.
+    OwnAccount,
+}
+
+impl ClaudeMode {
+    /// Storage representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::MacroCredits => "macro_credits",
+            Self::OwnAccount => "own_account",
+        }
+    }
+}
+
+impl std::str::FromStr for ClaudeMode {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "macro_credits" => Ok(Self::MacroCredits),
+            "own_account" => Ok(Self::OwnAccount),
+            other => Err(format!("unknown claude mode: {other}")),
+        }
+    }
+}
+
+/// What a caller wants to do with a harness.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HarnessAccess {
+    /// See it: its owner, or any member of its owning team.
+    View,
+    /// Change it: the same rule as deleting it.
+    Manage,
 }
 
 /// What a harness's machine can do beyond running agents.

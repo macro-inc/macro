@@ -19,6 +19,7 @@ fn harness(id: HarnessId, connected: bool) -> Harness {
         last_connected_at: None,
         capabilities: Default::default(),
         computer_id: None,
+        claude_mode: Default::default(),
     }
 }
 

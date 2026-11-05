@@ -34,6 +34,10 @@ already authorized the team admin, never for an HTTP route.
 - Depends on: `harness_id`, `harness_token`, `bot_id`, `macro_authorization`.
 - Used by: `coding_agent_worker`.
 
+- `authorize_harness(caller, harness_id, HarnessAccess::{View, Manage})` is
+  the access rule for other services' harness routes: view = owner or team
+  member, manage = the delete rule. `set_claude_mode` (trusted) records
+  `claude_mode` (`macro_credits` | `own_account`) once macrod confirmed it.
 - Harness rows carry `capabilities` (jsonb, `HarnessCapabilities`, e.g.
   `screen`), which macrod reports through `PUT /harnesses/me/capabilities`,
   and `computer_id` (set only for Macro computers; unique among live rows).

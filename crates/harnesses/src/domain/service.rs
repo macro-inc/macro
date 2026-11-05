@@ -12,10 +12,10 @@ use uuid::Uuid;
 
 use super::{
     models::{
-        ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
-        CreateHostedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAgent,
-        HarnessCapabilities, HarnessOwner, HarnessSession, HostedPairing, PairingDetails,
-        PairingStatus, RequestedHarnessScope,
+        ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing, ClaudeMode,
+        CreateHostedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAccess,
+        HarnessAgent, HarnessCapabilities, HarnessOwner, HarnessSession, HostedPairing,
+        PairingDetails, PairingStatus, RequestedHarnessScope,
     },
     ports::{
         HarnessError, HarnessRepo, HarnessService, HostedPairingUpsert, NewHarness, NewPairing,
@@ -474,5 +474,54 @@ where
             .harness_computer(harness_id)
             .await
             .map_err(Into::into)?)
+    }
+
+    #[tracing::instrument(skip(self), fields(caller = %caller), err)]
+    async fn authorize_harness(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        harness_id: HarnessId,
+        access: HarnessAccess,
+    ) -> Result<Harness, HarnessError> {
+        let harness = self
+            .repo
+            .get_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))?;
+        match access {
+            HarnessAccess::Manage => self.ensure_may_manage(&caller, &harness).await?,
+            HarnessAccess::View => {
+                let may_view = match &harness.owner {
+                    HarnessOwner::User { user_id } => user_id == caller.as_ref(),
+                    HarnessOwner::Team { team_id } => self
+                        .repo
+                        .user_has_team(caller.clone(), *team_id)
+                        .await
+                        .map_err(Into::into)?,
+                };
+                if !may_view {
+                    return Err(HarnessError::Unauthorized);
+                }
+            }
+        }
+        Ok(harness)
+    }
+
+    #[tracing::instrument(skip(self), fields(mode = mode.as_str()), err)]
+    async fn set_claude_mode(
+        &self,
+        harness_id: HarnessId,
+        mode: ClaudeMode,
+    ) -> Result<(), HarnessError> {
+        if !self
+            .repo
+            .set_claude_mode(harness_id, mode)
+            .await
+            .map_err(Into::into)?
+        {
+            return Err(HarnessError::NotFound("unknown harness".to_owned()));
+        }
+        Ok(())
     }
 }

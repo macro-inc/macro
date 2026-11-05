@@ -712,6 +712,20 @@ async fn capabilities_replace_the_previous_report(pool: PgPool) {
     );
     let reported = repo.get_harness(harness_id).await.unwrap().unwrap();
     assert_eq!(reported.capabilities, HarnessCapabilities { screen: true });
+    assert_eq!(reported.claude_mode, ClaudeMode::MacroCredits);
+    assert!(
+        repo.set_claude_mode(harness_id, ClaudeMode::OwnAccount)
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        repo.get_harness(harness_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .claude_mode,
+        ClaudeMode::OwnAccount
+    );
 
     assert!(repo.delete_harness(harness_id).await.unwrap());
     assert!(

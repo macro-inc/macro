@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        Harness, HarnessAgent, HarnessCapabilities, HarnessOwner, HarnessSession,
+        ClaudeMode, Harness, HarnessAgent, HarnessCapabilities, HarnessOwner, HarnessSession,
         PairingClaimFacts, PairingDetails, PairingStatus, RequestedHarnessScope,
     },
     ports::{
@@ -48,6 +48,7 @@ struct HarnessRow {
     last_disconnected_at: Option<DateTime<Utc>>,
     capabilities: Json<HarnessCapabilities>,
     computer_id: Option<Uuid>,
+    claude_mode: String,
 }
 
 impl TryFrom<HarnessRow> for Harness {
@@ -78,6 +79,7 @@ impl TryFrom<HarnessRow> for Harness {
             last_connected_at: row.last_connected_at,
             capabilities: row.capabilities.0,
             computer_id: row.computer_id,
+            claude_mode: row.claude_mode.parse().map_err(anyhow::Error::msg)?,
         })
     }
 }
@@ -101,7 +103,7 @@ async fn fetch_harness(
         SELECT
             id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
             created_at, updated_at, last_connected_at, last_disconnected_at,
-            capabilities AS "capabilities: Json<HarnessCapabilities>", computer_id
+            capabilities AS "capabilities: Json<HarnessCapabilities>", computer_id, claude_mode
         FROM harnesses
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -412,6 +414,26 @@ impl HarnessRepo for PgHarnessRepo {
         Ok(updated.rows_affected() == 1)
     }
 
+    async fn set_claude_mode(
+        &self,
+        harness_id: HarnessId,
+        mode: ClaudeMode,
+    ) -> Result<bool, Self::Err> {
+        let updated = sqlx::query!(
+            r#"
+            UPDATE harnesses
+            SET claude_mode = $2, updated_at = now()
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+            harness_id.as_uuid(),
+            mode.as_str(),
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to set harness claude mode")?;
+        Ok(updated.rows_affected() == 1)
+    }
+
     async fn pairing_claim_facts(
         &self,
         pairing_id: Uuid,
@@ -500,7 +522,7 @@ impl HarnessRepo for PgHarnessRepo {
             SELECT
                 id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
                 created_at, updated_at, last_connected_at, last_disconnected_at,
-                capabilities AS "capabilities: Json<HarnessCapabilities>", computer_id
+                capabilities AS "capabilities: Json<HarnessCapabilities>", computer_id, claude_mode
             FROM harnesses
             WHERE deleted_at IS NULL
               AND (

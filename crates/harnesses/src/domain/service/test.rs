@@ -32,6 +32,7 @@ fn harness(owner: HarnessOwner) -> Harness {
         last_connected_at: None,
         capabilities: HarnessCapabilities::default(),
         computer_id: None,
+        claude_mode: ClaudeMode::MacroCredits,
     }
 }
 
@@ -59,6 +60,7 @@ struct Calls {
     team_lookups: Vec<(String, Uuid)>,
     hosted_upserts: Vec<(NewPairing, NewHarness)>,
     capability_reports: Vec<(HarnessId, HarnessCapabilities)>,
+    claude_modes: Vec<(HarnessId, ClaudeMode)>,
 }
 
 #[derive(Clone)]
@@ -176,6 +178,19 @@ impl HarnessRepo for FakeRepo {
             .capability_reports
             .push((harness_id, capabilities));
         Ok(self.set_capabilities_result)
+    }
+
+    async fn set_claude_mode(
+        &self,
+        harness_id: HarnessId,
+        mode: ClaudeMode,
+    ) -> Result<bool, Self::Err> {
+        self.calls
+            .lock()
+            .unwrap()
+            .claude_modes
+            .push((harness_id, mode));
+        Ok(self.harness.is_some())
     }
 
     async fn pairing_claim_facts(
@@ -901,4 +916,54 @@ async fn capability_reports_reach_the_repo_and_unknown_harnesses_are_not_found()
         .report_capabilities(HarnessId::TEST_A, HarnessCapabilities { screen: true })
         .await;
     assert!(matches!(result, Err(HarnessError::NotFound(_))));
+}
+
+#[tokio::test]
+async fn team_members_view_a_team_harness_but_only_managers_manage_it() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        user_has_team: true,
+        ..FakeRepo::default()
+    };
+    service(repo.clone())
+        .authorize_harness(caller(MEMBER_ID), HarnessId::TEST_A, HarnessAccess::View)
+        .await
+        .unwrap();
+    let managed = service(repo.clone())
+        .authorize_harness(caller(MEMBER_ID), HarnessId::TEST_A, HarnessAccess::Manage)
+        .await;
+    assert!(matches!(managed, Err(HarnessError::Unauthorized)));
+    service(repo.clone())
+        .authorize_harness(caller(OWNER_ID), HarnessId::TEST_A, HarnessAccess::Manage)
+        .await
+        .unwrap();
+
+    let outsider = FakeRepo {
+        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        ..FakeRepo::default()
+    };
+    let viewed = service(outsider)
+        .authorize_harness(caller(MEMBER_ID), HarnessId::TEST_A, HarnessAccess::View)
+        .await;
+    assert!(matches!(viewed, Err(HarnessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn claude_mode_reaches_the_repo() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        ..FakeRepo::default()
+    };
+    service(repo.clone())
+        .set_claude_mode(HarnessId::TEST_A, ClaudeMode::OwnAccount)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.calls.lock().unwrap().claude_modes,
+        [(HarnessId::TEST_A, ClaudeMode::OwnAccount)]
+    );
+    let missing = service(FakeRepo::default())
+        .set_claude_mode(HarnessId::TEST_A, ClaudeMode::OwnAccount)
+        .await;
+    assert!(matches!(missing, Err(HarnessError::NotFound(_))));
 }
