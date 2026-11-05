@@ -297,19 +297,10 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
         };
         let (transcript, recap) = tokio::try_join!(
             async {
-                if !needs.transcript {
-                    return Ok(None);
-                }
-                match self.dialpad.transcript(&token, job.call_id).await {
-                    Ok(lines) => Ok(lines),
-                    Err(TranscriptError::Unauthorized) => {
-                        Err(rootcause::report!("Dialpad rejected the access token"))
-                    }
-                    // Any later event for the call (a recap) fetches it again.
-                    Err(TranscriptError::Unavailable(error)) => {
-                        tracing::warn!(error = ?error, "importing a Dialpad call without its transcript");
-                        Ok(None)
-                    }
+                if needs.transcript {
+                    self.dialpad.transcript(&token, job.call_id).await
+                } else {
+                    Ok(None)
                 }
             },
             async {

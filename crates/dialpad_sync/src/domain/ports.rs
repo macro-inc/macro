@@ -128,13 +128,13 @@ pub trait Dialpad: Send + Sync {
     async fn unregister(&self, token: &AccessToken, registration: Registration) -> Result<()>;
     /// Delete a webhook. Already gone, or no longer the token's, is success.
     async fn delete_webhook(&self, token: &AccessToken, webhook: DialpadId) -> Result<()>;
-    /// `None` when the call has no transcript, or transcripts are off for
-    /// the company.
+    /// `None` when the call has no transcript, transcripts are off for the
+    /// company, or Dialpad cannot serve it now. Only a rejected token fails.
     async fn transcript(
         &self,
         token: &AccessToken,
         call: DialpadId,
-    ) -> std::result::Result<Option<Vec<TranscriptLine>>, TranscriptError>;
+    ) -> Result<Option<Vec<TranscriptLine>>>;
     /// `None` when the call has no recap.
     async fn recap(&self, token: &AccessToken, call: DialpadId) -> Result<Option<Recap>>;
     /// The user's concluded calls started at or after `since`, newest first.

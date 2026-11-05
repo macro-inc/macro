@@ -18,6 +18,13 @@ pub struct DialpadApi {
     base_url: String,
 }
 
+/// A transcript Dialpad cannot serve now (an outage, a rate limit, an
+/// unreadable reply): the call imports without it.
+fn transcript_unavailable(error: rootcause::Report) -> Option<Vec<TranscriptLine>> {
+    tracing::warn!(error = ?error, "importing a Dialpad call without its transcript");
+    None
+}
+
 /// The id of a resource Dialpad returned.
 #[derive(Deserialize)]
 struct Id {
@@ -184,13 +191,13 @@ impl Dialpad for DialpadApi {
         &self,
         token: &AccessToken,
         call: DialpadId,
-    ) -> std::result::Result<Option<Vec<TranscriptLine>>, TranscriptError> {
+    ) -> Result<Option<Vec<TranscriptLine>>> {
         #[derive(Deserialize)]
         struct Transcript {
             #[serde(default)]
             lines: Vec<TranscriptLine>,
         }
-        let reply = self
+        let reply = match self
             .send(
                 token,
                 Method::GET,
@@ -199,15 +206,23 @@ impl Dialpad for DialpadApi {
                 None,
             )
             .await
-            .map_err(TranscriptError::Unavailable)?;
+        {
+            Ok(reply) => reply,
+            Err(error) => return Ok(transcript_unavailable(error)),
+        };
         match reply.status {
+            StatusCode::UNAUTHORIZED => {
+                Err(rootcause::report!("Dialpad rejected the access token"))
+            }
             // No transcript, or transcripts are off for the company (as for recaps).
             StatusCode::NOT_FOUND | StatusCode::FORBIDDEN => Ok(None),
-            StatusCode::UNAUTHORIZED => Err(TranscriptError::Unauthorized),
-            status if status.is_success() => serde_json::from_value::<Transcript>(reply.body)
-                .map(|transcript| Some(transcript.lines))
-                .map_err(|error| TranscriptError::Unavailable(error.into())),
-            status => Err(TranscriptError::Unavailable(rootcause::report!(
+            status if status.is_success() => {
+                match serde_json::from_value::<Transcript>(reply.body) {
+                    Ok(transcript) => Ok(Some(transcript.lines)),
+                    Err(error) => Ok(transcript_unavailable(error.into())),
+                }
+            }
+            status => Ok(transcript_unavailable(rootcause::report!(
                 "Dialpad API returned HTTP {status}"
             ))),
         }

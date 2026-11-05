@@ -84,8 +84,6 @@ struct FakeDialpad {
     pages: Mutex<VecDeque<CallPage>>,
     listed_since: Mutex<Option<DateTime<Utc>>>,
     transcript_pause: Mutex<Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>>,
-    /// Transcript fetches fail: `true` as an auth error, `false` as an outage.
-    transcript_fails: Mutex<Option<bool>>,
     /// Calls whose recap fetch fails.
     failing_calls: Mutex<Vec<DialpadId>>,
     fail_listing: Mutex<bool>,
@@ -140,20 +138,11 @@ impl Dialpad for FakeDialpad {
         &self,
         _: &AccessToken,
         _: DialpadId,
-    ) -> std::result::Result<Option<Vec<TranscriptLine>>, TranscriptError> {
+    ) -> Result<Option<Vec<TranscriptLine>>> {
         let pause = self.transcript_pause.lock().unwrap().clone();
         if let Some((started, resume)) = pause {
             started.notify_one();
             resume.notified().await;
-        }
-        match *self.transcript_fails.lock().unwrap() {
-            Some(true) => return Err(TranscriptError::Unauthorized),
-            Some(false) => {
-                return Err(TranscriptError::Unavailable(rootcause::report!(
-                    "Dialpad API returned HTTP 429 Too Many Requests"
-                )));
-            }
-            None => {}
         }
         Ok(Some(vec![
             serde_json::from_value(json!({
@@ -1150,39 +1139,6 @@ async fn a_failing_call_stays_visible_until_it_imports_or_gives_up(pool: PgPool)
     drain(&service).await;
     assert_eq!(calls.0.lock().unwrap().len(), 2);
     assert_eq!(issue(service.status(&user()).await.unwrap()), None);
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("users"))
-)]
-async fn a_transcript_outage_imports_the_call_without_it(pool: PgPool) {
-    let calls = Arc::new(Calls::default());
-    let service = service(pool, GrantState::Active, calls.clone());
-    service.connect(&user(), Backfill::None).await.unwrap();
-    service.complete(&user()).await.unwrap();
-    let id = service.repo.by_user(&user()).await.unwrap().unwrap().id;
-
-    *service.dialpad.transcript_fails.lock().unwrap() = Some(false);
-    let event = serde_json::from_value(call_event(9, "call_transcription", 3)).unwrap();
-    service.repo.enqueue(id, event, None).await.unwrap();
-    drain(&service).await;
-    assert_eq!(
-        calls.0.lock().unwrap().as_slice(),
-        &[("9".to_owned(), None, 0)]
-    );
-    assert_eq!(issue(service.status(&user()).await.unwrap()), None);
-
-    // A rejected token is not an outage: the call waits for a reconnect.
-    *service.dialpad.transcript_fails.lock().unwrap() = Some(true);
-    let event = serde_json::from_value(call_event(10, "call_transcription", 3)).unwrap();
-    service.repo.enqueue(id, event, None).await.unwrap();
-    drain(&service).await;
-    assert_eq!(calls.0.lock().unwrap().len(), 1);
-    assert_eq!(
-        issue(service.status(&user()).await.unwrap()),
-        Some(SyncIssue::CallSyncFailed)
-    );
 }
 
 #[sqlx::test(

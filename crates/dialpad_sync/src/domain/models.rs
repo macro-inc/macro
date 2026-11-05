@@ -471,18 +471,6 @@ pub enum SyncError {
     Internal(rootcause::Report),
 }
 
-/// Why a call's transcript could not be read.
-#[derive(Debug, thiserror::Error)]
-pub enum TranscriptError {
-    /// Dialpad rejected the access token; the import must wait for it.
-    #[error("Dialpad rejected the access token")]
-    Unauthorized,
-    /// Anything else (rate limit, outage, unreadable reply); the call imports
-    /// without its transcript.
-    #[error("Dialpad transcript unavailable: {0}")]
-    Unavailable(rootcause::Report),
-}
-
 impl From<rootcause::Report> for SyncError {
     fn from(error: rootcause::Report) -> Self {
         Self::Internal(error)

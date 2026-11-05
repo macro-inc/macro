@@ -50,28 +50,20 @@ async fn missing_transcripts_and_unavailable_recaps_are_absent_not_errors() {
         .mount(&server)
         .await;
     let api = DialpadApi::new(server.uri()).unwrap();
-    for call in [7, 6] {
+    // No transcript, transcripts off for the company, or a rate limit: the
+    // call imports without one.
+    for call in [7, 6, 8] {
         assert!(
             api.transcript(&token(), DialpadId(call))
                 .await
                 .unwrap()
                 .is_none(),
-            "no transcript, or transcripts are off for the company"
+            "call {call}"
         );
     }
     assert!(api.recap(&token(), DialpadId(7)).await.unwrap().is_none());
     assert!(
-        matches!(
-            api.transcript(&token(), DialpadId(8)).await,
-            Err(TranscriptError::Unavailable(_))
-        ),
-        "a rate limit imports without the transcript"
-    );
-    assert!(
-        matches!(
-            api.transcript(&token(), DialpadId(9)).await,
-            Err(TranscriptError::Unauthorized)
-        ),
+        api.transcript(&token(), DialpadId(9)).await.is_err(),
         "a rejected token waits for a reconnect"
     );
 }
