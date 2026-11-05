@@ -10,6 +10,7 @@ name: conventions code check
     - ready_for_review
     branches:
     - main
+    - 'synoet/ci-int-base*'
 permissions:
   contents: read
 jobs:
