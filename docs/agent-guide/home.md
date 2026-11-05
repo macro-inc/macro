@@ -7,6 +7,10 @@ pill strip with a leading filter drawer (Status and Type), pull-to-refresh,
 and swipe-left to mark done. On touch, Signal is a pure notification feed — the viewer's own
 touched-by-me recents are not merged in; that merge is desktop Home's Signal
 only, so sent mail and AI chats without notifications appear only on desktop.
+On touch, **Unread** shows only currently unread rows: reading an item removes it
+from the filtered list, including when returning from its detail. Marking it unread
+makes it eligible again. **Read** likewise follows the current state; **All** shows
+both. Desktop retains rows read while they are shown to keep the list stable.
 
 On a cold launch, notification transport follows the GraphQL Soup flag reactively:
 if the flag arrives after REST starts, the GraphQL notification query must actually
