@@ -18,8 +18,8 @@ it again can retry. Marking read does not mark the notification done.
 
 **Rollout:** Tasks, Email, Notes and Calls require PostHog `enable-crm-activity`
 (off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
-this flag to decide whether to supply its task-composer preset; the shared
-composer itself is not feature-flagged. With it off, only Companies and People
+this flag to decide whether to supply its task-composer preset, and with
+`enable-crm` to show the Customer / Contact pill when creating any task. With it off, only Companies and People
 appear in Records, activity queries do not run, and activity deep links return to
 Companies after flags finish loading. Global task creation uses the standard
 composer; record-level New task still associates the new task with that record.
@@ -50,8 +50,8 @@ threads with CRM company domains or contact addresses. Lists page as you scroll.
 Empty CRM scope never falls back to all content. Activity loads directly with a
 server-resolved scope; it does not fetch every company and contact first. Hidden
 companies and contacts stay excluded even for admins. A loading failure offers
-**Try again**. Tasks has **New task**, with Companies and Contacts visible in
-place of Status. Choose a CRM association when creating a task from this feed.
+**Try again**. Tasks has **New task**, which opens the task composer. Choose a CRM
+association with its **Customer / Contact** pill when creating a task from this feed.
 Opening Task through the global Create menu while Customers is focused uses the
 same preset. With an embedded company or contact detail open, global Create
 prefills the current breadcrumb record; a contact also includes its company.

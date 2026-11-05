@@ -32,7 +32,9 @@ export type LoadOutcome =
   /** The fetch or the fold failed. */
   | 'failed'
   /** Still unsettled at {@link STALL_THRESHOLD_MS} — reported, not concluded. */
-  | 'stalled';
+  | 'stalled'
+  /** Already loaded when acquired, so nothing was fetched or folded. */
+  | 'reused';
 
 /** Why a load ended `failed`, bounded so failures group. */
 export type LoadFailure =
@@ -350,7 +352,7 @@ export class SessionLoadTrace {
       this.#set('agent.session.load.failure', this.#failure ?? 'unknown');
     }
     // Nothing will paint for a load that did not land.
-    if (outcome !== 'loaded') this.#frames?.stop();
+    if (outcome !== 'loaded' && outcome !== 'reused') this.#frames?.stop();
     try {
       performance.measure('agent.session.load', {
         start: this.#startedAt,

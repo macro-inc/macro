@@ -1165,30 +1165,6 @@ describe('ToolCallPart result summaries', () => {
       output: { success: false, message: 'Denied' },
       reason: 'Denied',
     },
-    {
-      name: 'WebFetch',
-      input: { input: 'https://status.macro.com' },
-      output: {
-        tool_use_id: 'call-1',
-        content: {
-          type: 'web_fetch_tool_result_error',
-          error_code: 'url_not_accessible',
-        },
-      },
-      reason: 'url_not_accessible',
-    },
-    {
-      name: 'WebSearch',
-      input: { input: 'launch checklist' },
-      output: {
-        tool_use_id: 'call-1',
-        content: {
-          type: 'web_search_tool_result_error',
-          error_code: 'unavailable',
-        },
-      },
-      reason: 'unavailable',
-    },
   ])(
     'shows a validated $name response failure even if the call completed',
     ({ name, input, output, reason }) => {

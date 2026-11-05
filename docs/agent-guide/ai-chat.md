@@ -461,7 +461,8 @@ the shimmer.
   tagging the workspace and row nodes and checking they survive the click.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
-  actions. Archived sessions are grouped at the bottom under **Archived**.
+  actions. Archived sessions are grouped at the bottom under **Archived**, a
+  section that starts collapsed; click its header (count and caret) to expand it.
   Runs of routines set to **Hide runs** (the default) are left out until the
   clock button beside the search control (**Show hidden routine runs**) is
   pressed; runs of routines set to **Show runs** are always listed. Every
@@ -2090,20 +2091,19 @@ must stay hidden; subsequent live messages must still appear.
   Several permissions may be pending alongside one question; answering one leaves
   the others available. Controls disappear when their turn ends, is stopped, or
   disconnects, and old transcript requests cannot answer a later turn's request.
-- **Runtime bypass consent.** Settings → Agents → Runtimes → New runtime offers
-  `Allow bypassing permission requests`, off by default. Enabling it warns that
-  agents may run commands and edit files on the machine without approval.
-  Macrod Quickstart and Config also offer `Full Access`, off by
-  default. Quickstart and Config give Full Access a bordered, three-line control
-  labeled `Suggested`, without enabling it. On short terminals, Config scrolls to
-  the selected setting and keeps consent warnings below it; Quickstart keeps its
-  submit button visible. The choice applies at the next pairing:
-  off disables bypass in the pairing page; on preselects bypass with a warning,
-  and the approving user can turn it off. Older daemons leave this choice to the pairing page.
+- **Runtime bypass setting.** Bypass is a setting on the runtime, decided only
+  on the web. Settings → Agents → Runtimes → New runtime offers
+  `Allow bypassing permission requests`, off by default; enabling it warns that
+  agents may run commands and edit files on the machine without approval. Each
+  paired runtime then shows the same switch (enabling asks for confirmation) and
+  a `Rename` action; a change reaches live sessions from their next turn, with
+  no re-pairing. macrod has no Full Access or scope setting; its Config tab shows
+  these values read-only and links to Runtimes.
 - **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`
   and `Always bypass` only for local macrod harnesses. The larger `Always bypass`
   choice is labeled `Suggested`; the label does not select it. Macrod defaults to
-  prompts; bypass requires both harness consent and the agent's explicit choice.
+  prompts; bypass requires both the runtime's setting and the agent's explicit
+  choice; otherwise the form says to allow bypass in the runtime's settings.
   Built-in Macro, in-memory, Cursor, and Codex runtimes always bypass and have no
   permission policy selector. The backend enforces these policies.
 

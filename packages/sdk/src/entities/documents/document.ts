@@ -27,7 +27,7 @@ import {
   timeline,
 } from '../messages/thread';
 import { Project } from '../projects/project';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
 import { User } from '../users/user';
 import {

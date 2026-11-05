@@ -37,7 +37,6 @@ mod deploy_all_services;
 mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
 mod deploy_on_push;
-mod deploy_preview;
 mod deploy_sdk_docs;
 mod deploy_sync_service;
 mod deploy_web_app;
@@ -260,11 +259,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
                 deploy_fusionauth_instance::patch,
             )
         },
-    },
-    WorkflowFile {
-        slug: "deploy_preview",
-        file_name: "deploy_preview.yml",
-        render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
     },
     WorkflowFile {
         slug: "deploy_sync_service",
