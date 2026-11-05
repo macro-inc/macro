@@ -44,3 +44,10 @@ test --test_env=RUST_BACKTRACE=1
 
 # Written by generate.sh: machine paths such as the linker.
 try-import %workspace%/generated.bazelrc
+
+# bazel build --config=clippy <library and binary targets>
+build:clippy --aspects=@rules_rust//rust:defs.bzl%rust_clippy_aspect
+build:clippy --output_groups=clippy_checks
+build:clippy --@rules_rust//rust/settings:clippy.toml=//:clippy.toml
+build:clippy --@rules_rust//rust/settings:clippy_flag=-Dwarnings
+build:clippy --@rules_rust//rust/settings:clippy_flag=-Dclippy::disallowed_methods

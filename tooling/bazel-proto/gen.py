@@ -369,7 +369,7 @@ def main():
         with open(root_build, "w") as f:
             f.write(
                 'package(default_visibility = ["//visibility:public"])\n\n'
-                'exports_files(["Cargo.toml", "Cargo.lock"])\n\n'
+                'exports_files(["Cargo.toml", "Cargo.lock", "clippy.toml"])\n\n'
                 'filegroup(name = "sqlx_offline_data", srcs = glob([".sqlx/**"]))\n\n'
                 + "".join(
                     f'\nfilegroup(name = "{root_target(p)}", srcs = glob(["{p}", "{p}/**"], allow_empty = True))\n'

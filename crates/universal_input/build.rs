@@ -22,7 +22,7 @@ fn sources(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
 }
 
 fn main() -> io::Result<()> {
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
+    let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
     let root = Path::new(&manifest_dir);
     println!("cargo:rerun-if-changed=prompts");
     println!("cargo:rerun-if-changed=src");
