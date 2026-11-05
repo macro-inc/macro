@@ -2,13 +2,13 @@
 
 use std::{collections::HashMap, future::Future};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::models::{FocusInbox, FocusMail, FocusRecord, StaleThread, ThreadFocus};
+use super::models::{DueDateInput, FocusInbox, FocusMail, FocusRecord, StaleThread, ThreadFocus};
 
 /// Focus storage and the thread reads classification needs.
 pub trait FocusStore: Send + Sync + 'static {
@@ -68,11 +68,18 @@ pub trait FocusStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<HashMap<Uuid, ThreadFocus>, Report>> + Send;
 }
 
-/// A short description of the owner that Jev reads as context.
+/// What the system holds about the owner: a short description Jev reads as
+/// context, and the time zone their days run in.
 pub trait ProfileSource: Send + Sync + 'static {
     /// The owner's stored profile, or `None` when there isn't one. Never
     /// generates a profile.
     fn profile(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
+
+    /// The IANA name of the owner's time zone, or `None` when none is stored.
+    fn time_zone(
         &self,
         owner: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
@@ -110,4 +117,16 @@ pub trait FocusClassifier: Send + Sync + 'static {
 
     /// Model identifier stored with each classification.
     fn model(&self) -> &'static str;
+}
+
+/// Reads the day a thread is due out of its mail, metered against its owner.
+pub trait DueDateExtractor: Send + Sync + 'static {
+    /// The day the thread is due, or `None` when its mail names no open deadline.
+    /// Errors carry no mail text.
+    fn due_on(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        input: &DueDateInput,
+    ) -> impl Future<Output = Result<Option<NaiveDate>, Report>> + Send;
 }

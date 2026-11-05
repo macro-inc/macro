@@ -658,6 +658,7 @@ dependencies = [
  "pipedream_mcp",
  "prompt",
  "properties",
+ "rate_limit",
  "rdkafka",
  "readonly_pool",
  "redis",
@@ -700,6 +701,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "web_search",
  "workspace-hack",
 ]
 
@@ -1263,6 +1265,7 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "web_search",
  "workspace-hack",
 ]
 
@@ -1466,7 +1469,6 @@ dependencies = [
  "macro_env_var",
  "macro_user_id",
  "rand 0.9.4",
- "regex",
  "reqwest 0.13.4",
  "schemars 1.2.1",
  "serde",
@@ -7465,6 +7467,7 @@ name = "email_focus_worker"
 version = "0.1.0"
 dependencies = [
  "ai_usage",
+ "calendar_events",
  "chrono",
  "connection_gateway_client",
  "doppler-config",
@@ -7472,6 +7475,7 @@ dependencies = [
  "jev",
  "kafka_util",
  "macro_auth",
+ "macro_authorization",
  "macro_config",
  "macro_db_migrator",
  "macro_entrypoint",
@@ -7479,11 +7483,13 @@ dependencies = [
  "macro_env_var",
  "macro_event_broker",
  "macro_service_urls",
+ "macro_tower_layers",
  "macro_user_id",
  "memory",
  "models_email",
  "opentelemetry",
  "rdkafka",
+ "reqwest 0.13.4",
  "rootcause",
  "serde",
  "serde_json",
@@ -7492,6 +7498,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-opentelemetry",
+ "universal_input",
  "uuid",
  "wiremock",
  "workspace-hack",
@@ -21355,6 +21362,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "utoipa",
+ "uuid",
  "wiremock",
  "workspace-hack",
 ]
@@ -22034,6 +22042,40 @@ dependencies = [
  "phf_codegen 0.13.1",
  "string_cache 0.9.0",
  "string_cache_codegen 0.6.1",
+]
+
+[[package]]
+name = "web_search"
+version = "0.1.0"
+dependencies = [
+ "ai_billing",
+ "ai_toolset",
+ "ai_usage",
+ "anyhow",
+ "async-trait",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "http-body-util",
+ "macro_authorization",
+ "macro_env_var",
+ "macro_user_id",
+ "macro_uuid",
+ "model_user",
+ "rate_limit",
+ "reqwest 0.13.4",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "url",
+ "utoipa",
+ "wiremock",
+ "workspace-hack",
 ]
 
 [[package]]

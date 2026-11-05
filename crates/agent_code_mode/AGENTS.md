@@ -68,6 +68,9 @@ session presentation. Never replay an uncertain submitted action.
 
 Reviews write `review.decided` and `review.settled` through the injected
 transaction-aware notification writer in the same revision-checked transaction.
+After every successful save, `ReviewActions::announce_update` logs a
+`_macro/review_updated` frame (review id and revision, no draft content) in the
+session, best effort, so open session views refetch instead of polling.
 Reviews persist the immutable acting account. Only that account may edit or
 submit.
 ACP presentation uses the session owner's transcript capability, independently

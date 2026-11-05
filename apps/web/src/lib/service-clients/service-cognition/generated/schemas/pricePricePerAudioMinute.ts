@@ -6,6 +6,6 @@
  */
 
 /**
- * Price per audio minute (USD), absent for token billing.
+ * Price per audio minute (USD), absent for token and credit billing.
  */
 export type PricePricePerAudioMinute = number | null;
