@@ -85,6 +85,7 @@ type ViewShellInternal = ViewShellLayout & {
   id: string;
   atLayoutBreakpoint: Accessor<boolean>;
   asideHost: Accessor<'docked' | 'closing' | 'overlay'>;
+  asidePreferenceKey: string | undefined;
 };
 
 const RESIZE_GUTTER = 1;
@@ -134,8 +135,8 @@ export type ViewShellRootProps = Omit<
   /** Set to false when the workspace has no navigation region. */
   aside?: false | Partial<AsideLayout>;
   /**
-   * Sticky navigation visibility, scoped to this app type rather than an entry.
-   * Only the first split uses it; other splits start collapsed.
+   * Sticky navigation visibility and width, scoped to this app type.
+   * Only the first split uses saved visibility; other splits start collapsed.
    */
   asidePreferenceKey?: string;
   /**
@@ -372,6 +373,7 @@ function Root(props: ViewShellRootProps) {
     breakpoints,
     atLayoutBreakpoint,
     asideHost,
+    asidePreferenceKey: local.asidePreferenceKey,
     aside: {
       layout: asideLayout,
       mode: asideMode,
@@ -451,7 +453,7 @@ function Root(props: ViewShellRootProps) {
  * ViewSidebar.Root inside keeps the landmark.
  */
 type ViewShellAsideProps = JSX.HTMLAttributes<HTMLDivElement> & {
-  /** Called with the solved aside width after a drag or keyboard resize. */
+  /** Called after resizing. When supplied, the caller owns width persistence. */
   onWidthChangeEnd?: (width: number) => void;
 };
 
@@ -463,6 +465,13 @@ function Aside(props: ViewShellAsideProps) {
   ]);
   const ws = useViewShellInternal();
   const asideTarget = tourTarget(VIEW_SHELL_TOUR.aside);
+  const [savedWidth, setSavedWidth] =
+    ws.asidePreferenceKey && !local.onWidthChangeEnd
+      ? usePreference<number | null>(
+          `macro:pref:view-sidebar:width:${ws.asidePreferenceKey}`,
+          { default: null }
+        )
+      : createSignal<number | null>(null);
   const [resizedWidth, setResizedWidth] = createSignal<{
     configuredWidth: number;
     width: number;
@@ -475,7 +484,12 @@ function Aside(props: ViewShellAsideProps) {
       : undefined;
   };
   const preferredWidth = () => {
-    return resizePreference()?.width ?? ws.aside.layout().width;
+    const layout = ws.aside.layout();
+    const saved = savedWidth();
+    const width = resizePreference()?.width ?? saved ?? layout.width;
+    if (typeof width !== 'number' || !Number.isFinite(width))
+      return layout.width;
+    return Math.min(layout.max, Math.max(layout.min, width));
   };
   const onWidthChangeEnd = (width: number) => {
     const shellWidth = ws.width();
@@ -487,6 +501,8 @@ function Aside(props: ViewShellAsideProps) {
         : undefined;
     batch(() => {
       local.onWidthChangeEnd?.(width);
+      if (ws.asidePreferenceKey && !local.onWidthChangeEnd)
+        setSavedWidth(width);
       // A consumer may persist the width back into the layout in this callback.
       setResizedWidth({
         configuredWidth: ws.aside.layout().width,

@@ -671,12 +671,15 @@ opens Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
-sidebar layout default to 256px; manually resized Chat widths remain saved.
+sidebar layout default to 256px. Each view remembers its manually resized width
+across navigation and reloads, independently of the other views.
 
 After dragging a view's inner sidebar divider (or using its arrow keys), resizing
 the containing split preserves the chosen sidebar width while space permits.
 Narrow splits may shrink or collapse the sidebar; widening restores its chosen
-width for the mounted view.
+width without overwriting the saved preference. Verify by resizing Home, Tasks,
+Email, Drive, Calendar, and Agents, switching views, then reloading; each must
+restore its own width. Opening and closing a narrow overlay must not change it.
 Widening the sidebar while its split is constrained also reduces the main
 content's soft width preference, so the next split resize keeps that choice
 instead of snapping the sidebar back to its constrained width.
