@@ -15710,6 +15710,59 @@
         }
       }
     },
+    "/harnesses/me/capabilities": {
+      "put": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `PUT /harnesses/me/capabilities`.",
+        "description": "macrod reports what its machine can do after it connects; the body\nreplaces the previous report.",
+        "operationId": "put_self_harness_capabilities",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HarnessCapabilities"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/harnesses/me/sessions": {
       "get": {
         "tags": ["harnesses"],
@@ -25058,6 +25111,11 @@
             "description": "The raw harness bearer token. Shown only here; only its hash is stored."
           }
         }
+      },
+      "ClaudeMode": {
+        "type": "string",
+        "description": "How Claude Code on a Macro computer is paid for.",
+        "enum": ["macro_credits", "own_account"]
       },
       "CloudStorageItemType": {
         "type": "string",
@@ -34652,6 +34710,19 @@
             "type": "boolean",
             "description": "Whether agents may bypass ACP permission requests on this harness."
           },
+          "capabilities": {
+            "$ref": "#/components/schemas/HarnessCapabilities",
+            "description": "What the harness's machine can do, as macrod last reported it."
+          },
+          "claude_mode": {
+            "$ref": "#/components/schemas/ClaudeMode",
+            "description": "How Claude Code on this machine is paid for. Only meaningful for\nMacro computers."
+          },
+          "computer_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The Macro computer (hosted VM) this harness runs on; absent for a\nmachine the user paired themselves."
+          },
           "connected": {
             "type": "boolean",
             "description": "Whether the daemon currently holds a runtime connection."
@@ -34709,6 +34780,17 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          }
+        }
+      },
+      "HarnessCapabilities": {
+        "type": "object",
+        "description": "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain.",
+        "properties": {
+          "screen": {
+            "type": "boolean",
+            "description": "A display Macro can stream (Xvnc on `127.0.0.1:5900`).",
+            "default": false
           }
         }
       },

@@ -409,6 +409,8 @@ export const storageExcluded = [
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',
+  // Daemon capability reports are internal runtime registration plumbing.
+  'putSelfHarnessCapabilities',
   'removeBotFromChannelByBot',
   // Storage for the web app's saved questions, not a user-facing surface.
   'saveDatabaseQuery',
