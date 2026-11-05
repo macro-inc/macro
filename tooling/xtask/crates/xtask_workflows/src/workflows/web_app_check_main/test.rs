@@ -772,3 +772,11 @@ fn preview_steps_follow_the_build_and_cannot_fail_it() {
         assert!(step.contains("head.repo.full_name"), "{name}: {step}");
     }
 }
+
+/// A job that hits its timeout reports `cancelled`, so the required check must
+/// not pass on a generated code job that never finished.
+#[test]
+fn status_check_rejects_a_cancelled_generated_code_job() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    assert!(yaml.contains(r#"[[ "${{ needs.generated-code.result }}" == "cancelled" ]]"#));
+}
