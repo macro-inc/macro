@@ -11,6 +11,9 @@ use std::pin::Pin;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio_util::io::StreamReader;
 
+/// Provider name in `ai provider account unavailable` logs.
+const PROVIDER: &str = "anthropic";
+
 #[derive(Clone, Debug)]
 pub struct Client {
     http_client: RequestClient,
@@ -93,7 +96,7 @@ impl Client {
 
         if !status.is_success() {
             genai_telemetry::provider_account::report_provider_error(
-                "anthropic",
+                PROVIDER,
                 Some(status.as_u16()),
                 &body,
             );
@@ -149,7 +152,7 @@ impl Client {
                     Err(e) => AnthropicError::Reqwest(e),
                     Ok(body) => {
                         genai_telemetry::provider_account::report_provider_error(
-                            "anthropic",
+                            PROVIDER,
                             Some(code.as_u16()),
                             &body,
                         );
