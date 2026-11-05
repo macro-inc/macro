@@ -253,7 +253,7 @@ export class Brain implements Control {
     } finally {
       clearInterval(heartbeat);
       offline();
-      this.work.abortAll();
+      await this.work.stopAll();
       await this.lanes.shutdown();
       await server.finished;
       this.log({ brain: 'stopped' });

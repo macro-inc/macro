@@ -106,14 +106,24 @@ export class Workspace {
 export type GitResult = { code: number; stdout: string; stderr: string };
 export type Git = (args: string[]) => Promise<GitResult>;
 
-/** Run git in `cwd` with the CLI. */
+/**
+ * Run git in `cwd` with the CLI, with only PATH and HOME from the brain's
+ * environment (git config and credentials live under HOME; Deno refuses to
+ * pass loader variables such as LD_LIBRARY_PATH to a permitted subprocess).
+ */
 export function gitCli(cwd: string): Git {
+  const env: Record<string, string> = { GIT_TERMINAL_PROMPT: '0' };
+  for (const name of ['PATH', 'HOME']) {
+    const value = Deno.env.get(name);
+    if (value) env[name] = value;
+  }
   return async (args) => {
     const output = await new Deno.Command('git', {
       args: ['-C', cwd, ...args],
       stdout: 'piped',
       stderr: 'piped',
-      env: { GIT_TERMINAL_PROMPT: '0' },
+      clearEnv: true,
+      env,
     }).output();
     const decoder = new TextDecoder();
     return {

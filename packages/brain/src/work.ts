@@ -54,6 +54,8 @@ export class Work {
   private readonly running = new Map<string, Running>();
   /** Conversations whose hand-off is being set up, so a second one can't race it. */
   private readonly starting = new Set<string>();
+  /** Runs reporting, committing and cleaning up after they end. */
+  private readonly finishing = new Set<Promise<void>>();
 
   constructor(private readonly deps: WorkDeps) {}
 
@@ -164,17 +166,25 @@ export class Work {
     });
     this.deps.log({ work: task.id, started: label, conversation: key });
 
-    handle.done
+    const finished = handle.done
       .then((outcome) => this.finish(key, turnId, outcome, worktree, branch))
       .catch((error) =>
         this.deps.log({ work: task.id, finish_failed: String(error) })
-      );
+      )
+      .finally(() => this.finishing.delete(finished));
+    this.finishing.add(finished);
     return task;
   }
 
-  /** Abort every running work run (shutdown). */
-  abortAll(): void {
+  /** Abort every running work run and wait for them to report and clean up (shutdown). */
+  async stopAll(): Promise<void> {
     for (const run of this.running.values()) run.handle.abort();
+    await this.settled();
+  }
+
+  /** Wait until every ended run has reported, committed and cleaned up. */
+  async settled(): Promise<void> {
+    while (this.finishing.size > 0) await Promise.all(this.finishing);
   }
 
   private async finish(
