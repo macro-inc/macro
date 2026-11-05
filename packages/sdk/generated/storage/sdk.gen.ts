@@ -1461,7 +1461,9 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Save an immutable query. Editing a question saves a new one.
+     * Save a question: a `SELECT` that compiles against the caller's databases,
+     * whose chart columns, when given, are ones it returns. Saved questions
+     * never change; editing one saves a new one.
      */
     public saveDatabaseQuery<ThrowOnError extends boolean = false>(options: Options<SaveDatabaseQueryData, ThrowOnError>): RequestResult<SaveDatabaseQueryResponses, SaveDatabaseQueryErrors, ThrowOnError> {
         return (options.client ?? this.client).post<SaveDatabaseQueryResponses, SaveDatabaseQueryErrors, ThrowOnError>({
