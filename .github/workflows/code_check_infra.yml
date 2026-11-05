@@ -10,6 +10,7 @@ name: infra code check
     - ready_for_review
     branches:
     - main
+    - 'synoet/ci-int-base*'
 jobs:
   path-check:
     runs-on: namespace-profile-linux-small

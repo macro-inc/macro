@@ -5,6 +5,7 @@ name: check tauri lockfiles
   pull_request:
     branches:
     - main
+    - 'synoet/ci-int-base*'
     paths:
     - apps/web/tauri/**
     - crates/**/Cargo.toml

@@ -17,6 +17,7 @@ env:
     - ready_for_review
     branches:
     - main
+    - 'synoet/ci-int-base*'
 jobs:
   path-check:
     runs-on: namespace-profile-linux-small;overrides.cache-tag=sccache-ci
