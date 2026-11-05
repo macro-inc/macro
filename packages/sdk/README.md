@@ -485,6 +485,13 @@ with `setImportant` and `delete`. Omit the inbox to select the caller's primary.
 caller-persisted operation IDs. `email.reminders({ inboxes })` auto-paginates and
 returns thread handles alongside reminder snapshots.
 
+### CRM contact fields
+
+`macro.crm.contactById(id).setEmail(address)` replaces the contact's single
+address; `setEmail()` clears it. `setCompany(company)` takes a Company handle,
+and `setCompany()` unlinks it. Both preserve contact identity and reject
+conflicting records instead of merging them.
+
 ### CRM pipelines and initiatives
 
 `macro.crm.pipelines.create/list/byId` returns pipeline handles. Rename, sharing,

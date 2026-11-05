@@ -19,6 +19,8 @@ enforced by the ordinary backend APIs.
   contact sets are 404, but authorization/service errors must propagate.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
+- `Contact.setEmail()` edits or clears the existing single address; `setCompany()`
+  takes a Company handle or unlinks it without changing contact identity.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type

@@ -560,6 +560,18 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         include_hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
+    /// Replace one contact field in its owning team without merging identities.
+    /// Preserve history, sources and visibility; protect manually edited records
+    /// from sync orphan cleanup. Reject conflicting emails and inaccessible
+    /// destination companies. Serialize with company visibility and email sync.
+    fn update_contact(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        update: &super::contact_update::ContactFieldUpdate,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
     /// Batched authorization probe for a CRM-scoped email query. Returns
     /// per-input status the email service maps into typed `EmailErr`
     /// variants (`CrmDomainNotFound`, `CrmDomainNotPermitted`,

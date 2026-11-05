@@ -121,6 +121,26 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     );
   }
 
+  /** Set the single email address, or omit it to clear; never merges contacts. */
+  async setEmail(email?: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setCrmContactEmail({
+        path: { contact_id: this.id },
+        body: { email: email ?? null },
+      }),
+    );
+  }
+
+  /** Link one company, or omit it to unlink while keeping this contact's identity. */
+  async setCompany(company?: Company): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setCrmContactCompany({
+        path: { contact_id: this.id },
+        body: { companyId: company?.id ?? null },
+      }),
+    );
+  }
+
   /** The CRM record this contact's discussions hang off. */
   private get commentParent(): CrmCommentParent {
     return { type: 'crm_contact', id: this.id };

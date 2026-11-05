@@ -157,6 +157,26 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.set_contact_hidden")
     }
 
+    async fn set_contact_email(
+        &self,
+        _access: &crm::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _email: Option<&str>,
+    ) -> Result<crm::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
+    async fn set_contact_company(
+        &self,
+        _access: &crm::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _company_id: Option<uuid::Uuid>,
+    ) -> Result<crm::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
     async fn set_contact_name(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,

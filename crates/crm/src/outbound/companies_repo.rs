@@ -5,6 +5,7 @@ pub(crate) mod test;
 
 mod association;
 mod contact_listing;
+mod contact_update;
 
 use crate::domain::{
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
@@ -35,12 +36,18 @@ struct DepopulateTarget {
 pub struct CompaniesRepositoryImpl {
     /// The underlying sqlx::PgPool connected to macrodb.
     pool: PgPool,
+    #[cfg(test)]
+    after_depopulate_source: Option<std::sync::Arc<test::DepopulateSourceGate>>,
 }
 
 impl CompaniesRepositoryImpl {
     /// Creates a new instance of CompaniesRepositoryImpl
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            #[cfg(test)]
+            after_depopulate_source: None,
+        }
     }
 
     /// Take per-`(team_id, lower(domain))` advisory locks for every
@@ -100,7 +107,15 @@ impl CompaniesRepositoryImpl {
         normalized_email: &str,
     ) -> Result<Option<DepopulateTarget>, CrmError> {
         Self::lock_team_domain(tx, team_id, normalized_domain).await?;
+        Self::find_depopulate_target(tx, team_id, normalized_domain, normalized_email).await
+    }
 
+    async fn find_depopulate_target(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        team_id: &uuid::Uuid,
+        normalized_domain: &str,
+        normalized_email: &str,
+    ) -> Result<Option<DepopulateTarget>, CrmError> {
         sqlx::query_as!(
             DepopulateTarget,
             r#"
@@ -1142,6 +1157,28 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Ok(outcome);
         };
 
+        // Bulk teardown and field edits lock companies before sources/contacts.
+        // Re-read after waiting so teardown never acts on a stale orphan snapshot.
+        if let Some(company_id) = row.company_id {
+            sqlx::query!(
+                "SELECT id FROM crm_companies WHERE id = $1 AND team_id = $2 FOR UPDATE",
+                company_id,
+                team_id
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        }
+        let Some(row) =
+            Self::find_depopulate_target(&mut tx, team_id, &normalized_domain, &normalized_email)
+                .await?
+        else {
+            tx.commit()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            return Ok(outcome);
+        };
+
         // 1. Drop the per-link source row.
         let source_result = sqlx::query!(
             r#"
@@ -1155,10 +1192,14 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         outcome.source_deleted = source_result.rows_affected() > 0;
+        #[cfg(test)]
+        if let Some(gate) = &self.after_depopulate_source {
+            gate.entered.notify_one();
+            gate.resume.notified().await;
+        }
 
-        // 2. Manually created contacts are user data, not derived —
-        //    never torn down (they have no sources by construction, so
-        //    the orphan check below would always condemn them).
+        // 2. Manually created or edited contacts are user data. Their
+        //    source rows may be removed, but the contact survives teardown.
         if row.contact_manually_created {
             tx.commit()
                 .await
@@ -1187,11 +1228,13 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Ok(outcome);
         }
 
-        let contact_result =
-            sqlx::query!(r#"DELETE FROM crm_contacts WHERE id = $1"#, row.contact_id,)
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let contact_result = sqlx::query!(
+            r#"DELETE FROM crm_contacts WHERE id = $1 AND manually_created = FALSE"#,
+            row.contact_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         outcome.contact_deleted = contact_result.rows_affected() > 0;
 
         // 3. Company-less contacts have nothing more to tear down. Keep
@@ -1318,6 +1361,17 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
+        // Match explicit edits' company-before-contact order. Lock before the
+        // orphan check so a company cannot be deleted from a stale snapshot
+        // after a contact has just been linked to it.
+        sqlx::query!(
+            "SELECT id FROM crm_companies WHERE team_id = $1 ORDER BY id FOR UPDATE",
+            team_id,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
         // 1. Drop the link's source rows scoped to this team.
         sqlx::query!(
             r#"
@@ -1335,8 +1389,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         // 2. Drop every contact in this team that no longer has any
-        //    source. Manually created contacts have no sources by
-        //    construction — they're user data and survive teardown.
+        //    source. Manually created or edited contacts are user data
+        //    and survive teardown even after their last source is removed.
         sqlx::query!(
             r#"
             DELETE FROM crm_contacts ct
@@ -1874,6 +1928,17 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         }
 
         Ok(())
+    }
+
+    async fn update_contact(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        update: &crate::domain::contact_update::ContactFieldUpdate,
+        include_hidden: bool,
+    ) -> Result<CrmContact, CrmError> {
+        self.update_contact_details(team_id, contact_id, update, include_hidden)
+            .await
     }
 
     #[tracing::instrument(skip(self), err)]

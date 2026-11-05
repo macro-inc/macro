@@ -79,6 +79,11 @@ tools/HTTP/GraphQL surfaces over them.
   contact creation accepts any valid email, including personal providers.
   Email population still infers companies by domain. Do not apply manual
   creation rules to capture/consent; see `docs/design/crm-contact-creation.md`.
+- Contact email/company setters mutate the existing ID within its owning team,
+  preserve archive state and sources, and mark changed records manual; sync may
+  recreate a separate inferred tuple, and email activity follows the current address.
+- Serialize single and bulk source teardown company-before-source/contact, and
+  re-read the target after waiting; orphan deletion must not cascade a new manual link.
 - Keep CRM write locks ordered: domain advisory locks, parent team `KEY SHARE`,
   settings `SHARE`, then company/contact rows. Hold them through commit so
   disable/purge and team deletion cannot race creation.

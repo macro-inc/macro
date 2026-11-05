@@ -7,6 +7,7 @@
 pub(crate) mod helpers;
 
 mod blocked_domains;
+mod contact_update;
 mod create_company;
 mod create_contact;
 mod domain_directory;
@@ -29,3 +30,10 @@ mod set_contact_name;
 mod set_email_sync;
 mod team_crm_enabled;
 mod team_settings;
+
+/// Coordinates teardown after the source mutation without timing assumptions.
+#[derive(Default)]
+pub(super) struct DepopulateSourceGate {
+    pub(super) entered: tokio::sync::Notify,
+    pub(super) resume: tokio::sync::Notify,
+}

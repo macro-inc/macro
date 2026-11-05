@@ -345,6 +345,26 @@ impl CrmService for FakeCrmService {
         panic!("unexpected set_company_name call")
     }
 
+    async fn set_contact_email(
+        &self,
+        _access: &crate::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _email: Option<&str>,
+    ) -> Result<crate::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
+    async fn set_contact_company(
+        &self,
+        _access: &crate::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _company_id: Option<uuid::Uuid>,
+    ) -> Result<crate::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
     async fn set_contact_name(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,

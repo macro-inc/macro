@@ -12932,6 +12932,26 @@ export type SetCompanyNameRequest = {
 };
 
 /**
+ * Replace or clear the contact's company.
+ */
+export type SetContactCompanyRequest = {
+    /**
+     * New company; null clears the field.
+     */
+    companyId?: string | null;
+};
+
+/**
+ * Replace or clear the contact's email.
+ */
+export type SetContactEmailRequest = {
+    /**
+     * New email; null clears the field.
+     */
+    email?: string | null;
+};
+
+/**
  * Request body for `PUT /contacts/{contact_id}/hidden`.
  */
 export type SetContactHiddenRequest = {
@@ -19885,6 +19905,64 @@ export type GetContactResponses = {
 };
 
 export type GetContactResponse = GetContactResponses[keyof GetContactResponses];
+
+export type SetCrmContactCompanyData = {
+    body: SetContactCompanyRequest;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/company';
+};
+
+export type SetCrmContactCompanyErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetCrmContactCompanyError = SetCrmContactCompanyErrors[keyof SetCrmContactCompanyErrors];
+
+export type SetCrmContactCompanyResponses = {
+    200: CrmContactResponse;
+};
+
+export type SetCrmContactCompanyResponse = SetCrmContactCompanyResponses[keyof SetCrmContactCompanyResponses];
+
+export type SetCrmContactEmailData = {
+    body: SetContactEmailRequest;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/email';
+};
+
+export type SetCrmContactEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetCrmContactEmailError = SetCrmContactEmailErrors[keyof SetCrmContactEmailErrors];
+
+export type SetCrmContactEmailResponses = {
+    200: CrmContactResponse;
+};
+
+export type SetCrmContactEmailResponse = SetCrmContactEmailResponses[keyof SetCrmContactEmailResponses];
 
 export type SetContactHiddenData = {
     body: SetContactHiddenRequest;
