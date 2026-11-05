@@ -536,8 +536,10 @@ fixture-backed backfill smoke test, and offline Mail filter regression. Use
 On iOS, `layout_plugin` publishes UIKit's current horizontal size class and
 preferred vertical navigation edge to the shared UI. The mobile dock becomes a
 sidebar on iPhone Duo's vertical-bar layouts, follows the outer edge in Split
-View, and returns to the bottom in horizontal-bar layouts. Navigation and
-composer clearance use each safe-area inset independently. The app supports
+View, and returns to the bottom in horizontal-bar layouts. The vertical dock
+uses UIKit's bar layout region within the system column, below its controls;
+content and composers retain their independent safe areas without reserving a
+second navigation column. The app supports
 iPhone landscape as well as portrait; do not infer layout from orientation or
 the main screen. The layout bridge also corrects keyboard frame changes against
 the current webview's bottom edge; floating and off-window keyboard frames do not

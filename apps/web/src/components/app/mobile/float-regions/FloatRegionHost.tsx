@@ -42,8 +42,8 @@ export function FloatRegionHost(props: {
       <div
         ref={setHostRef}
         style={{
-          left: `calc(var(--safe-left, 0px) + ${props.navigationEdge === 'left' ? 'var(--mobile-chrome-button-size) + 2 * var(--mobile-chrome-gutter)' : '0px'})`,
-          right: `calc(var(--safe-right, 0px) + ${props.navigationEdge === 'right' ? 'var(--mobile-chrome-button-size) + 2 * var(--mobile-chrome-gutter)' : '0px'})`,
+          left: `calc(var(--safe-left, 0px) + ${props.navigationEdge === 'left' ? 'var(--native-navigation-content-inset, calc(var(--mobile-chrome-button-size) + 2 * var(--mobile-chrome-gutter)))' : '0px'})`,
+          right: `calc(var(--safe-right, 0px) + ${props.navigationEdge === 'right' ? 'var(--native-navigation-content-inset, calc(var(--mobile-chrome-button-size) + 2 * var(--mobile-chrome-gutter)))' : '0px'})`,
         }}
         class={cn(
           // The stack's own spacing rides the px --mobile-chrome-* vars
@@ -76,16 +76,16 @@ export function FloatRegionHost(props: {
                   props.navigationEdge === 'right')
                   ? {
                       position: 'fixed',
-                      top: 'calc(var(--safe-top, 0px) + var(--mobile-chrome-gutter))',
+                      top: 'var(--native-navigation-top, calc(var(--safe-top, 0px) + var(--mobile-chrome-gutter)))',
                       bottom:
-                        'calc(var(--safe-bottom, 0px) + var(--mobile-chrome-gutter))',
+                        'var(--native-navigation-bottom, calc(var(--safe-bottom, 0px) + var(--mobile-chrome-gutter)))',
                       left:
                         props.navigationEdge === 'left'
-                          ? 'calc(var(--safe-left, 0px) + var(--mobile-chrome-gutter))'
+                          ? 'var(--native-navigation-left, calc(var(--safe-left, 0px) + var(--mobile-chrome-gutter)))'
                           : undefined,
                       right:
                         props.navigationEdge === 'right'
-                          ? 'calc(var(--safe-right, 0px) + var(--mobile-chrome-gutter))'
+                          ? 'var(--native-navigation-right, calc(var(--safe-right, 0px) + var(--mobile-chrome-gutter)))'
                           : undefined,
                       width: 'var(--mobile-chrome-button-size)',
                       'justify-content': 'flex-end',

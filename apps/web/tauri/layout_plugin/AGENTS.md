@@ -5,6 +5,11 @@ attributes. It has no app-data or network access and exposes no commands.
 
 - `ios/Sources/NativeLayoutObserver.swift` observes layout and trait changes.
 - `data-native-navigation-edge` is a physical `left`, `right`, or `bottom` edge.
+- Position custom navigation inside UIKit's `.bar(onEdge:extent:)` layout
+  region, published as `--native-navigation-*`. The content safe area excludes
+  the entire system column; adding a dock outside it creates a second column.
+  Read the bar extent from `--mobile-chrome-button-size` after each document load
+  and reserve only any bar width extending beyond the existing content inset.
 - `data-native-horizontal-size-class` keeps JS and the `mobile:` CSS variant
   aligned with UIKit's compact/regular width, including Duo and Split View.
 - Request current values after every document load. Never infer Duo from its

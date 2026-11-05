@@ -154,6 +154,11 @@ appropriate. Search stays horizontal above the keyboard. More retains hidden
 destinations, Settings, and dock customization; opening or closing the phone
 must retain the current view and navigation order.
 
+The vertical dock must share the outer system column beneath the status controls,
+using UIKit's bar layout region. Verify that there is one column, with no second
+dock or extra blank strip to its left; the content safe-area inset alone is not
+a bar placement guide.
+
 Verify closed/open, both rotations, partial folds, and both Split View sides.
 Check Search focus, More, and a composer with the software keyboard showing.
 Rotate and fold with search focused, including after switching to a hardware

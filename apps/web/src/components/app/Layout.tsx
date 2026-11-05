@@ -265,7 +265,7 @@ export function AppChrome(props: ParentProps) {
     SearchState.isOpen() ? 'bottom' : navigationEdge();
   const navigationInset = (side: 'left' | 'right') =>
     isTouchDevice() && isAuthenticated() && dockEdge() === side
-      ? 'calc(var(--mobile-chrome-button-size) + 2 * var(--mobile-chrome-gutter))'
+      ? 'var(--native-navigation-content-inset, calc(var(--mobile-chrome-button-size) + 2 * var(--mobile-chrome-gutter)))'
       : '0px';
   // A login cookie shows the rail while sign-in is confirmed; a stale one
   // goes through SessionExpiredRedirect instead of leaving the app blank.

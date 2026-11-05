@@ -5,6 +5,7 @@ import WebKit
 final class NativeLayoutObserver: UIView, WKScriptMessageHandler {
     private weak var webview: WKWebView?
     private var lastScript: String?
+    private var barExtent: CGFloat?
     private var keyboardScreenFrame: CGRect?
     private var lastKeyboardHeight: CGFloat?
     private var lastKeyboardVisible: Bool?
@@ -22,7 +23,9 @@ final class NativeLayoutObserver: UIView, WKScriptMessageHandler {
         controller.add(self, name: "macroLayout")
         controller.addUserScript(WKUserScript(source: """
             document.addEventListener('DOMContentLoaded', () => {
-                window.webkit.messageHandlers.macroLayout.postMessage(null);
+                const extent = parseFloat(getComputedStyle(document.documentElement)
+                    .getPropertyValue('--mobile-chrome-button-size'));
+                window.webkit.messageHandlers.macroLayout.postMessage({ barExtent: extent });
             }, { once: true });
             """, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         webview.addSubview(self)
@@ -69,6 +72,10 @@ final class NativeLayoutObserver: UIView, WKScriptMessageHandler {
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.frameInfo.isMainFrame else { return }
+        if let body = message.body as? [String: Any],
+           let extent = body["barExtent"] as? Double, extent.isFinite, extent > 0 {
+            barExtent = CGFloat(extent)
+        }
         lastScript = nil
         lastKeyboardHeight = nil
         publish()
@@ -101,6 +108,7 @@ final class NativeLayoutObserver: UIView, WKScriptMessageHandler {
         guard let webview, webview.window != nil else { return }
         let traits = webview.traitCollection
         var edge = "bottom"
+        var barInsets: UIEdgeInsets?
         if #available(iOS 27.1, *) {
             let rtl = webview.effectiveUserInterfaceLayoutDirection == .rightToLeft
             switch traits.verticalBarEdge {
@@ -108,10 +116,32 @@ final class NativeLayoutObserver: UIView, WKScriptMessageHandler {
             case .trailing: edge = rtl ? "left" : "right"
             default: break
             }
+            if edge != "bottom", let barExtent {
+                // Content safe areas exclude the whole system column. A bar's
+                // layout region instead shares that column below system controls.
+                let physicalEdge: UIRectEdge = edge == "left" ? .left : .right
+                barInsets = webview.edgeInsets(for: .bar(onEdge: physicalEdge, extent: barExtent))
+            }
+        }
+        var barScript = ""
+        if let barInsets, let barExtent {
+            let contentInset = edge == "left"
+                ? max(0, barInsets.left + barExtent - webview.safeAreaInsets.left)
+                : max(0, barInsets.right + barExtent - webview.safeAreaInsets.right)
+            for (name, value) in [("top", barInsets.top), ("bottom", barInsets.bottom),
+                                  ("left", barInsets.left), ("right", barInsets.right),
+                                  ("content-inset", contentInset)] {
+                barScript += "document.documentElement.style.setProperty('--native-navigation-\(name)', '\(value)px');"
+            }
+        } else {
+            for name in ["top", "bottom", "left", "right", "content-inset"] {
+                barScript += "document.documentElement.style.removeProperty('--native-navigation-\(name)');"
+            }
         }
         let sizeClass = traits.horizontalSizeClass == .compact ? "compact" : "regular"
         let script = """
             if (document.documentElement) {
+                \(barScript)
                 document.documentElement.dataset.nativeNavigationEdge = '\(edge)';
                 document.documentElement.dataset.nativeHorizontalSizeClass = '\(sizeClass)';
             }
