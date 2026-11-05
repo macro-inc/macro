@@ -1,4 +1,5 @@
 <div align="center">
+  <h2>The unified workspace for your team</h2>
   <a target="_blank" href="https://macro.com">
     <img width="2400" height="1100" alt="Macro — an agent request in a team channel beside its linked code changes" src=".github/readme/header.png" />
   </a>
@@ -105,7 +106,7 @@ The core problem with traditional issue trackers or project management tools is 
 
 The solution isn't to forgo tracking entirely. We tried that and it was a different form of chaos. **The solution we've found is lightweight issues tightly coupled to your channels and DMs, so that issue tracking naturally occurs where the conversation itself happens.**
 
-![Macro search project tasks grouped by assignee, with statuses, priorities, and project links](.github/readme/framed/tasks.png)
+![Tasks with varied statuses and assignees beside a completed task, linked discussion, and code change](.github/readme/framed/tasks.png)
 
 Creating tasks in Macro is easy. Where possible, tasks created are bidirectionally linked to the creating context (e.g. a customer email) so the full chain is auditable from "why are we doing this" → task → agent → pull request, all in one system.
 
@@ -160,7 +161,7 @@ The problem with standalone CRM is the same as with task trackers: it's not up t
 
 **Macro fixes this by colocating your CRM with your team chat and email, instead of having a separate system.** When you @mention a company record in a message, your team can click that record to see the latest — it's much faster than navigating to your CRM to find the record, going back to Slack and pasting it in, and this speed difference makes all the difference. Secondly, @mentioning a Company/Contact creates a bidirectional link between that message and the record, so from the record later you can trace the conversations that happened. This fixes the core issue we had with Attio/HubSpot/Salesforce: the actual important conversation about a deal happens not in the CRM but over messages. Macro makes this a feature rather than making you feel disorganized about it. It's not your fault, it was the CRM's fault!
 
-![Macro Sales pipeline in table view with company, stage, owner, and revenue columns](.github/readme/framed/crm.png)
+![Macro populated CRM pipeline in table view with company, stage, owner, and revenue columns](.github/readme/framed/crm.png)
 
 - Customizable sales pipelines and deal stages with board and list views.
 - Company and contact records have their own discussions where your team can leave notes and @mention people and work.

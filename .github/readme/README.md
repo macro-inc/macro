@@ -6,7 +6,8 @@
 split view show a team-channel agent request and its linked code changes.
 The panes are offset vertically with thin borders and soft shadows. The supplied
 Frame 10 full logo is unchanged, downscaled to 402 pixels wide, and placed on a
-small dark backing so it remains visible in both GitHub themes. No added slogan.
+small dark backing so it remains visible in both GitHub themes. The native README
+heading introduces Macro as the unified workspace for your team.
 
 ## Feature screenshots
 
@@ -18,10 +19,13 @@ never stretched, rewritten, or generated.
 - Email: recent Signal inbox overview, not the experimental Focus view or a
   third-party invitation. Login-code and address previews are outside the capture.
 - Chat: the November 4 feature-request conversation, distinct from the header.
-- Tasks, Docs, Agents, Calendar: existing captures reframed consistently.
+- Tasks: restored original split capture with mixed statuses, assigned work, and
+  a completed task with its linked discussion and code change.
+- Docs, Agents, Calendar: existing captures reframed consistently.
 - Databases: full original Donations Example capture, preserving all columns.
-- CRM: fresh Sales table capture with company, stage, owner, and revenue. Sorted
-  by revenue descending; real data is preserved, including empty fields.
+- CRM: user-selected populated pipeline table with company, stage, owner, and
+  revenue, sorted by revenue descending. The viewport ends after revenue;
+  private follow-up notes and contact columns are outside the capture.
 - Calls: An internal group recording, paused near 0:35. People are on
   camera without a screen share. Portrait video and black bars are inherent in
   the recording; the transcript was scrolled independently.
