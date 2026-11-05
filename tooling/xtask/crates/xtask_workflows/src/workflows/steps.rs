@@ -257,11 +257,18 @@ pub fn mount_cache_volume() -> Step<Use> {
         .add_with(("path", xtask_paths::runtime_path!("/nix").as_str()))
 }
 
-/// Mount only `path` from the profile's cache volume, without a framework
-/// mode. Unlike [`mount_cache_volume`] (`cache: rust` plus `/nix`, ~11 s on
-/// `linux-rust-ci`), a plain path mounts in under a second.
-pub fn mount_path_cache_volume(name: &str, path: RuntimePath<'_>) -> Step<Use> {
-    nscloud_cache_action(name).add_with(("path", path.as_str()))
+/// Mount a scratch directory for building the nextest filter, plus cargo's registry
+/// and git checkouts. `cargo metadata` fetches every crate in the lockfile, which took
+/// most of the filter's time when `path-check` had no registry to start from.
+pub fn mount_nextest_filter_cache(filter_cache_dir: RuntimePath<'_>) -> Step<Use> {
+    let paths = format!(
+        "{}\n{}\n{}",
+        filter_cache_dir.as_str(),
+        xtask_paths::runtime_path!("/home/runner/.cargo/registry").as_str(),
+        xtask_paths::runtime_path!("/home/runner/.cargo/git").as_str(),
+    );
+
+    nscloud_cache_action("Mount nextest-filter and cargo registry cache").add_with(("path", paths))
 }
 
 /// The pinned `nscloud-cache-action`, shared by every mount helper below.
@@ -326,6 +333,11 @@ if nsc cache sccache setup --cache_name {cache_name} > "$env_file"; then
     esac
   done < "$env_file"
   cat "$env_file" >> "$GITHUB_ENV"
+  # The server checks the WebDAV backend before it reports ready, and the
+  # client's default 10s wait can run out. This limit has no env var.
+  sccache_conf="$RUNNER_TEMP/sccache.toml"
+  echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+  echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
   # Force the next compiler invocation to start a server with the new remote
   # backend even if a setup hook happened to launch one already.
   sccache --stop-server >/dev/null 2>&1 || true
@@ -418,15 +430,13 @@ pub fn setup_reqs_web(name: &str, playwright: bool) -> Step<Use> {
     .when(playwright, |step| step.add_with(("playwright", "true")))
 }
 
-/// Build the code-mode assets (`crates/code_mode_assets`) in Nix and point
-/// later cargo steps at them, so Rust jobs need no bun install. Any job that
-/// compiles that crate or a dependent (DSS, the agent harness) needs this.
+/// Build the code-mode assets (`crates/code_mode_assets`) in Nix, or restore them
+/// from Namespace's remote cache, and point later cargo steps at them, so Rust jobs
+/// need no bun install. Any job that compiles that crate or a dependent (DSS, the
+/// agent harness) needs this. Goes after [`configure_namespace_sccache`], whose
+/// credentials it reuses.
 pub fn code_mode_assets() -> Step<Run> {
-    // A separate assignment, so a failed build fails the step under `bash -e`.
-    Step::new("Build code-mode assets").run(indoc::indoc! {r#"
-        assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
-        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
-    "#})
+    Step::new("Build code-mode assets").run(include_str!("scripts/code_mode_assets.sh"))
 }
 
 /// Start the server before parallel compiler invocations can race to launch it.
