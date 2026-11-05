@@ -2,7 +2,7 @@
 # Each arm has its own cache volume and sccache namespace, so it cannot change
 # what other pull requests see. Each attempt edits one crate, the way a real PR
 # does, so re-runs of a run measure a warm cache with one crate changed.
-name: ci speed compile arms
+name: ci speed compile arms 2
 env:
   CARGO_INCREMENTAL: '0'
   CARGO_TERM_COLOR: always
@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arm: [ctl, lt, dbg0, split, macro3, mtime, profile]
+        arm: [cgu16, checksum, threads, offline, coldtarget, nothinbins]
     name: compile (${{ matrix.arm }})
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-ct-${{ matrix.arm }}
     env:
@@ -110,6 +110,39 @@ jobs:
             macro3)
               echo 'CARGO_PROFILE_DEV_BUILD_OVERRIDE_OPT_LEVEL=3' >> "$GITHUB_ENV"
               ;;
+            cgu16)
+              echo 'CARGO_PROFILE_DEV_CODEGEN_UNITS=16' >> "$GITHUB_ENV"
+              echo 'CARGO_PROFILE_TEST_CODEGEN_UNITS=16' >> "$GITHUB_ENV"
+              ;;
+            checksum)
+              echo 'RUSTC_BOOTSTRAP=1' >> "$GITHUB_ENV"
+              echo 'CARGO_UNSTABLE_CHECKSUM_FRESHNESS=true' >> "$GITHUB_ENV"
+              echo 'CARGO_LOG=cargo::core::compiler::fingerprint=info' >> "$GITHUB_ENV"
+              ;;
+            threads)
+              echo 'RUSTC_BOOTSTRAP=1' >> "$GITHUB_ENV"
+              echo "RUSTFLAGS=$RUSTFLAGS -Zthreads=8" >> "$GITHUB_ENV"
+              ;;
+            offline)
+              echo 'SQLX_OFFLINE=true' >> "$GITHUB_ENV"
+              ;;
+            coldtarget)
+              # What a job sees after a volume reset: empty target/, warm sccache.
+              rm -rf target/debug target/.rustc_info.json target/cargo-timings
+              ;;
+            nothinbins)
+              # No test binary for bins that only wrap a service's own modules.
+              python3 - <<'PY'
+          import pathlib, re
+          n = 0
+          for path in list(pathlib.Path('crates').rglob('Cargo.toml')) + list(pathlib.Path('services').rglob('Cargo.toml')):
+              text = path.read_text()
+              new, c = re.subn(r'(\[\[bin\]\]\nname = "[^"]*(?:_openapi|_doppler_config)"\n)', r'\1test = false\n', text)
+              if c:
+                  path.write_text(new); n += c
+          print(f'CISPEED thin_bins_disabled={n}')
+          PY
+              ;;
             mtime)
               # Old mtime for every tracked file and directory, then "now" only
               # for files whose blob differs from what target/ was built from.
@@ -167,5 +200,5 @@ jobs:
       - uses: './.github/actions/teardown-nix'
         if: always()
 concurrency:
-  group: ci-speed-compile-arms-${{ github.ref }}
+  group: ci-speed-compile-arms2-${{ github.ref }}
   cancel-in-progress: false
