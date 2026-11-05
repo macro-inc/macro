@@ -2,7 +2,9 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use cognition::domain::{DecisionResponse, GenerateObjectRequest, GenerateObjectResponse};
+use cognition::domain::{
+    DecisionRequest, DecisionResponse, GenerateObjectRequest, GenerateObjectResponse,
+};
 use rootcause::Report;
 
 use super::*;
