@@ -9,3 +9,6 @@ pub mod lowercased;
 pub mod user_id;
 
 pub use cowlike;
+
+#[doc(hidden)]
+pub const CI_SEL2_NONCE: &str = "fa914263d66d4c2baa3ec16dd5bdbd76";
