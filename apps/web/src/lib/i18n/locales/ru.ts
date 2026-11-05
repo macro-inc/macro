@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Проект',
     newProject: 'Новый проект',
     contentAlreadyOpen: 'Содержимое уже открыто',
-    unableToOpenConversation: 'Не удалось открыть беседу. Повторите попытку.',
     mobileSearchPlaceholder: 'Поиск…',
     closeSearch: 'Закрыть поиск',
     searchFullTextFor: 'Полнотекстовый поиск «{{query}}»',

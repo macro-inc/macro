@@ -68,6 +68,7 @@ const thread = (timestamps: Partial<FocusThread>) =>
       importance: 70,
       needsReply: false,
       needsFollowUp: true,
+      importanceTrend: 'UP',
     },
     ...timestamps,
   }) as unknown as FocusThread;
@@ -84,6 +85,7 @@ describe('mapEmailFocus', () => {
       importance: 70,
       needsReply: false,
       needsFollowUp: true,
+      importanceTrend: 'UP',
     });
   });
 

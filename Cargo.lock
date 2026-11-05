@@ -658,6 +658,7 @@ dependencies = [
  "pipedream_mcp",
  "prompt",
  "properties",
+ "rate_limit",
  "rdkafka",
  "readonly_pool",
  "redis",
@@ -700,6 +701,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "web_search",
  "workspace-hack",
 ]
 
@@ -1263,6 +1265,7 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "web_search",
  "workspace-hack",
 ]
 
@@ -1466,7 +1469,6 @@ dependencies = [
  "macro_env_var",
  "macro_user_id",
  "rand 0.9.4",
- "regex",
  "reqwest 0.13.4",
  "schemars 1.2.1",
  "serde",
@@ -4864,6 +4866,7 @@ dependencies = [
  "graphql_favorite",
  "graphql_initiative",
  "graphql_notification",
+ "graphql_notification_inbox",
  "graphql_permission",
  "graphql_properties",
  "graphql_scheduled_action",
@@ -4881,6 +4884,7 @@ dependencies = [
  "models_properties",
  "models_soup",
  "notification",
+ "notification_inbox",
  "predicate-index",
  "rootcause",
  "saved_views",
@@ -6718,6 +6722,7 @@ dependencies = [
  "models_properties",
  "models_soup",
  "notification",
+ "notification_inbox",
  "opensearch_client",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -7365,6 +7370,7 @@ dependencies = [
  "sha2 0.10.9",
  "specta",
  "sqlx",
+ "sqs_client",
  "strum 0.27.2",
  "subtle",
  "thiserror 2.0.18",
@@ -7462,6 +7468,7 @@ name = "email_focus_worker"
 version = "0.1.0"
 dependencies = [
  "ai_usage",
+ "calendar_events",
  "chrono",
  "connection_gateway_client",
  "doppler-config",
@@ -7469,6 +7476,7 @@ dependencies = [
  "jev",
  "kafka_util",
  "macro_auth",
+ "macro_authorization",
  "macro_config",
  "macro_db_migrator",
  "macro_entrypoint",
@@ -7476,11 +7484,13 @@ dependencies = [
  "macro_env_var",
  "macro_event_broker",
  "macro_service_urls",
+ "macro_tower_layers",
  "macro_user_id",
  "memory",
  "models_email",
  "opentelemetry",
  "rdkafka",
+ "reqwest 0.13.4",
  "rootcause",
  "serde",
  "serde_json",
@@ -7489,6 +7499,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-opentelemetry",
+ "universal_input",
  "uuid",
  "wiremock",
  "workspace-hack",
@@ -8589,6 +8600,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -9418,6 +9430,24 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_notification_inbox"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-stream",
+ "attention_feed",
+ "futures",
+ "graphql_common",
+ "graphql_notification",
+ "graphql_soup",
+ "macro_user_id",
+ "notification_inbox",
+ "soup",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -12804,8 +12834,10 @@ version = "0.1.0"
 dependencies = [
  "ai_toolset",
  "anyhow",
+ "askama",
  "async-trait",
  "axum",
+ "axum-extra",
  "base64 0.22.1",
  "bot_id",
  "chrono",
@@ -12814,11 +12846,14 @@ dependencies = [
  "macro_auth",
  "macro_db_migrator",
  "macro_user_id",
+ "rand 0.9.4",
  "redis",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "sqlx",
+ "strum 0.27.2",
+ "subtle",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -13959,6 +13994,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "notification_inbox"
+version = "0.1.0"
+dependencies = [
+ "attention_feed",
+ "chrono",
+ "filter_ast",
+ "item_filters",
+ "macro_user_id",
+ "model-entity",
+ "model_notifications",
+ "notification",
+ "rootcause",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "notification_retention_handler"
 version = "0.1.0"
 dependencies = [
@@ -14556,19 +14612,25 @@ name = "opensearch_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "chrono",
+ "h2 0.4.16",
  "hyper 1.9.0",
+ "hyper-util",
  "macro_entrypoint",
  "models_opensearch",
  "models_search_cursor",
  "opensearch",
  "opensearch_query_builder",
  "reqwest 0.13.4",
+ "rustls",
  "serde",
  "serde_json",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-retry",
+ "tokio-rustls",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -19339,7 +19401,6 @@ dependencies = [
  "anyhow",
  "aws-sdk-sqs",
  "chrono",
- "email",
  "futures",
  "model",
  "models_ai_projection",
@@ -21313,6 +21374,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "utoipa",
+ "uuid",
  "wiremock",
  "workspace-hack",
 ]
@@ -21992,6 +22054,40 @@ dependencies = [
  "phf_codegen 0.13.1",
  "string_cache 0.9.0",
  "string_cache_codegen 0.6.1",
+]
+
+[[package]]
+name = "web_search"
+version = "0.1.0"
+dependencies = [
+ "ai_billing",
+ "ai_toolset",
+ "ai_usage",
+ "anyhow",
+ "async-trait",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "http-body-util",
+ "macro_authorization",
+ "macro_env_var",
+ "macro_user_id",
+ "macro_uuid",
+ "model_user",
+ "rate_limit",
+ "reqwest 0.13.4",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "url",
+ "utoipa",
+ "wiremock",
+ "workspace-hack",
 ]
 
 [[package]]

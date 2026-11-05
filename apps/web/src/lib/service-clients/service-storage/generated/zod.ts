@@ -34,7 +34,7 @@ export const listAgentsResponseItem = zod
         has_agent: zod
           .boolean()
           .describe(
-            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
           ),
         id: zod.string(),
         kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -335,7 +335,7 @@ export const updateAgentResponse = zod
         has_agent: zod
           .boolean()
           .describe(
-            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
           ),
         id: zod.string(),
         kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -772,7 +772,7 @@ export const getSelfBotResponse = zod
     has_agent: zod
       .boolean()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
       ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -3899,6 +3899,151 @@ export const patchChannelBody = zod
   .describe('Request to patch a channel.');
 
 /**
+ * @summary Handler for `GET /channels/{channel_id}/access-requests/mine`.
+ */
+export const getMyChannelAccessRequestParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const getMyChannelAccessRequestResponse = zod
+  .object({
+    can_request: zod
+      .boolean()
+      .describe('Whether this channel accepts requests.'),
+    request: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            channel_id: zod
+              .uuid()
+              .describe('Channel the requester asked to join.'),
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the requester asked.'),
+            id: zod.uuid().describe('Attempt id.'),
+            requester_id: zod.string(),
+            resolved_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the attempt stopped being pending.'),
+            resolved_by: zod.union([zod.null(), zod.string()]).optional(),
+            status: zod
+              .enum(['pending', 'approved', 'denied', 'cancelled'])
+              .describe('Outcome of one attempt to join.'),
+          })
+          .describe(
+            'One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.'
+          ),
+      ])
+      .optional(),
+    retry_after: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Earliest time the caller may ask again, while they must wait.'
+      ),
+  })
+  .describe(
+    "A requester's view of their access to a channel they cannot read."
+  );
+
+/**
+ * @summary Handler for `PUT /channels/{channel_id}/access-requests/mine`.
+ */
+export const requestChannelAccessParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const requestChannelAccessResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel the requester asked to join.'),
+    created_at: zod.iso.datetime({}).describe('When the requester asked.'),
+    id: zod.uuid().describe('Attempt id.'),
+    requester_id: zod.string(),
+    resolved_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the attempt stopped being pending.'),
+    resolved_by: zod.union([zod.null(), zod.string()]).optional(),
+    status: zod
+      .enum(['pending', 'approved', 'denied', 'cancelled'])
+      .describe('Outcome of one attempt to join.'),
+  })
+  .describe(
+    'One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.'
+  );
+
+/**
+ * @summary Handler for `DELETE /channels/{channel_id}/access-requests/mine`.
+ */
+export const cancelChannelAccessRequestParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
+ * @summary Handler for `GET /channels/{channel_id}/access-requests/{request_id}`.
+ */
+export const getChannelAccessRequestParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  request_id: zod.uuid().describe('Access request ID'),
+});
+
+export const getChannelAccessRequestResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel the requester asked to join.'),
+    created_at: zod.iso.datetime({}).describe('When the requester asked.'),
+    id: zod.uuid().describe('Attempt id.'),
+    requester_id: zod.string(),
+    resolved_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the attempt stopped being pending.'),
+    resolved_by: zod.union([zod.null(), zod.string()]).optional(),
+    status: zod
+      .enum(['pending', 'approved', 'denied', 'cancelled'])
+      .describe('Outcome of one attempt to join.'),
+  })
+  .describe(
+    'One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.'
+  );
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/access-requests/{request_id}/resolve`.
+ */
+export const resolveChannelAccessRequestParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  request_id: zod.uuid().describe('Access request ID'),
+});
+
+export const resolveChannelAccessRequestBody = zod
+  .object({
+    decision: zod
+      .enum(['approve', 'deny'])
+      .describe("A participant's answer to a pending request."),
+  })
+  .describe("Body of a participant's answer.");
+
+export const resolveChannelAccessRequestResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel the requester asked to join.'),
+    created_at: zod.iso.datetime({}).describe('When the requester asked.'),
+    id: zod.uuid().describe('Attempt id.'),
+    requester_id: zod.string(),
+    resolved_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the attempt stopped being pending.'),
+    resolved_by: zod.union([zod.null(), zod.string()]).optional(),
+    status: zod
+      .enum(['pending', 'approved', 'denied', 'cancelled'])
+      .describe('Outcome of one attempt to join.'),
+  })
+  .describe(
+    'One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.'
+  );
+
+/**
  * @summary Handler for `GET /channels/{channel_id}/attachments`.
  */
 export const getChannelAttachmentsParams = zod.object({
@@ -3972,7 +4117,7 @@ export const createChannelScopedBotBody = zod
       .boolean()
       .nullish()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.'
       ),
     name: zod.string().describe('Display name.'),
     team_id: zod
@@ -5206,12 +5351,19 @@ export const listCrmPipelinesResponseItem = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
-    recordType: zod
-      .enum(['company', 'contact'])
+    primaryColumnId: zod
+      .uuid()
       .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
       ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
     sharing: zod
       .enum(['private', 'team'])
       .describe(
@@ -5251,10 +5403,15 @@ export const createCrmPipelineBody = zod
   .object({
     name: zod.string().describe('Pipeline name.'),
     recordType: zod
-      .enum(['company', 'contact'])
-      .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
-      ),
+      .union([
+        zod.null(),
+        zod
+          .enum(['company', 'contact'])
+          .describe(
+            'Which CRM entity each row references. Fixed when a pipeline is created.'
+          ),
+      ])
+      .optional(),
     sharing: zod
       .enum(['private', 'team'])
       .optional()
@@ -5263,7 +5420,7 @@ export const createCrmPipelineBody = zod
       ),
   })
   .describe(
-    'Request to create an empty pipeline with the standard CRM columns.'
+    'Request to create an empty pipeline: the standard CRM columns for a tracked\nrecord, or one Name column, like a new database, for a generic pipeline.'
   );
 
 export const createCrmPipelineResponse = zod
@@ -5274,12 +5431,19 @@ export const createCrmPipelineResponse = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
-    recordType: zod
-      .enum(['company', 'contact'])
+    primaryColumnId: zod
+      .uuid()
       .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
       ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
     sharing: zod
       .enum(['private', 'team'])
       .describe(
@@ -5326,12 +5490,19 @@ export const getCrmPipelineResponse = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
-    recordType: zod
-      .enum(['company', 'contact'])
+    primaryColumnId: zod
+      .uuid()
       .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
       ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
     sharing: zod
       .enum(['private', 'team'])
       .describe(
@@ -9540,6 +9711,67 @@ export const shareCrmPipelineBody = zod
       ),
   })
   .describe('Sharing input.');
+
+/**
+ * @summary Read requirements by stable stage and field identities.
+ */
+export const getCrmPipelineStageRequirementsParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const getCrmPipelineStageRequirementsResponseItem = zod
+  .object({
+    requiredColumnIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Fields that must be present. Empty removes the rule for this stage.'
+      ),
+    stageColumnId: zod
+      .uuid()
+      .describe(
+        'Single-select column identifying the stage, independent of its name.'
+      ),
+    stageId: zod
+      .uuid()
+      .describe(
+        'Stable option identity; renaming the stage preserves the rule.'
+      ),
+  })
+  .describe(
+    'Fields required when a deal enters a particular option of a stage column.'
+  );
+export const getCrmPipelineStageRequirementsResponse = zod.array(
+  getCrmPipelineStageRequirementsResponseItem
+);
+
+/**
+ * @summary Replace the required fields for one stage. An empty list removes its rule.
+ */
+export const setCrmPipelineStageRequirementParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const setCrmPipelineStageRequirementBody = zod
+  .object({
+    requiredColumnIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Fields that must be present. Empty removes the rule for this stage.'
+      ),
+    stageColumnId: zod
+      .uuid()
+      .describe(
+        'Single-select column identifying the stage, independent of its name.'
+      ),
+    stageId: zod
+      .uuid()
+      .describe(
+        'Stable option identity; renaming the stage preserves the rule.'
+      ),
+  })
+  .describe(
+    'Fields required when a deal enters a particular option of a stage column.'
+  );
 
 /**
  * @summary Read the host-owned table schema.
@@ -18300,6 +18532,37 @@ export const getSystemSkillsHandlerResponse = zod
       .describe('Every system skill, in display order.'),
   })
   .describe('Response listing the built-in system skills.');
+
+/**
+ * The body is the raw file content. Preview generation and indexing may
+finish after the response.
+ * @summary Upload a file's bytes as a new document, up to 25 MiB.
+ */
+export const uploadFileQueryParams = zod.object({
+  fileName: zod
+    .string()
+    .describe(
+      'Filename including its extension, such as `report.pdf`; the extension\nsets the file type. No directory components.'
+    ),
+  projectId: zod
+    .uuid()
+    .optional()
+    .describe(
+      'Destination project. Requires edit access; omit for top-level files.'
+    ),
+});
+
+export const uploadFileResponseSizeBytesMin = 0;
+
+export const uploadFileResponse = zod
+  .object({
+    documentId: zod.string().describe('The new document.'),
+    sizeBytes: zod
+      .number()
+      .min(uploadFileResponseSizeBytesMin)
+      .describe('Number of bytes stored.'),
+  })
+  .describe('The document created from the uploaded bytes.');
 
 /**
  * Returns document metadata, user access level, and view location.
@@ -27875,12 +28138,6 @@ it, and creation is throttled in the domain service.
  */
 export const createHarnessPairingBody = zod
   .object({
-    allow_permission_bypass: zod
-      .boolean()
-      .nullish()
-      .describe(
-        'Daemon operator consent ceiling. Omitted by older clients; web approval decides.'
-      ),
     host: zod
       .string()
       .nullish()
@@ -27892,16 +28149,6 @@ export const createHarnessPairingBody = zod
       .describe(
         "Requested harness display name (typically the machine's hostname)."
       ),
-    scope: zod
-      .union([
-        zod.null(),
-        zod
-          .enum(['private', 'team'])
-          .describe(
-            "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership."
-          ),
-      ])
-      .optional(),
   })
   .describe(
     'Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.'
@@ -27923,25 +28170,9 @@ export const getHarnessPairingResponse = zod
       .string()
       .nullish()
       .describe('Display-only description of the machine.'),
-    requested_allow_permission_bypass: zod
-      .boolean()
-      .nullish()
-      .describe(
-        'Daemon operator consent ceiling; false forbids bypass at approval.'
-      ),
     requested_name: zod
       .string()
       .describe('Harness display name the daemon asked for.'),
-    requested_scope: zod
-      .union([
-        zod.null(),
-        zod
-          .enum(['private', 'team'])
-          .describe(
-            "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership."
-          ),
-      ])
-      .optional(),
   })
   .describe('A pending pairing, as shown to the approving user.');
 
@@ -28230,6 +28461,71 @@ export const listHarnessSessionsResponse = zod.array(
 export const deleteHarnessParams = zod.object({
   harness_id: zod.string().describe('Harness ID'),
 });
+
+/**
+ * @summary Handler for `PATCH /harnesses/{harness_id}`.
+ */
+export const patchHarnessParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
+
+export const patchHarnessBody = zod
+  .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.\nLive sessions pick the change up at their next turn.'
+      ),
+    name: zod.string().nullish().describe('New display name.'),
+  })
+  .describe(
+    'Request to change a registered harness. Omitted fields stay as they are.'
+  );
+
+export const patchHarnessResponse = zod
+  .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('User-owned (private) harness.'),
+        zod
+          .object({
+            team_id: zod.uuid().describe('Owner team id.'),
+            type: zod.enum(['team']),
+          })
+          .describe('Team-owned harness, usable by every team member.'),
+      ])
+      .describe(
+        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Gets the users history

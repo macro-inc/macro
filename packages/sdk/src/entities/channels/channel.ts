@@ -11,6 +11,7 @@ import { type RichMessage, toBody } from '../../mentions';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentConversation } from '../agent-sessions/conversation';
+import type { Document } from '../documents/document';
 import { PropertiedEntity } from '../entity';
 import type { StaticImage } from '../images/image';
 import {
@@ -18,9 +19,10 @@ import {
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
+import { ChannelAccessRequest } from './access-request';
 import { ChannelActivity } from './activity';
 import { Message } from './message';
 import type { ChannelPicture } from './picture';
@@ -167,21 +169,32 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /**
    * Post a message. Plain text, or a rich body composed with `msg`.
    * `images` attaches static images, such as one from
-   * `macro.images.generate()`, below the text.
+   * `macro.images.generate()`, below the text; `documents` attaches Macro
+   * documents as file chips, such as a file from `macro.documents.upload()`.
    *
    * Works with a channel webhook token as well as a normal one — see
    * {@link postToChannel} for which endpoint that picks and what it costs.
-   * The webhook endpoint takes no images.
+   * The webhook endpoint takes no attachments.
+   *
+   * @example Share a generated CSV.
+   * ```js
+   * const file = await macro.documents.upload({ name: 'q3.csv', content: csv });
+   * await channel.send('Q3 numbers attached.', { documents: [file] });
+   * ```
    */
   async send(
     body: string | RichMessage,
-    opts?: { thread?: Thread; images?: StaticImage[] },
+    opts?: {
+      thread?: Thread;
+      images?: StaticImage[];
+      documents?: Document[];
+    },
   ): Promise<Message> {
     const id = await postToChannel(
       this.client,
       opts?.thread ?? this,
       toBody(body),
-      opts?.images,
+      opts,
     );
     return Message.byId(this.client, this.id, id);
   }
@@ -259,6 +272,54 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
       }),
     );
     return join_code;
+  }
+
+  /**
+   * Read the current user's join request, eligibility, and retry time.
+   * Works without channel access. Denial or withdrawal may delay retries.
+   */
+  async myAccessRequest(): Promise<{
+    request?: ChannelAccessRequest;
+    canRequest: boolean;
+    retryAfter?: string;
+  }> {
+    const state = unwrap(
+      await this.client.storage.getMyChannelAccessRequest({
+        path: { channel_id: this.id },
+      }),
+    );
+    return {
+      request: state.request
+        ? ChannelAccessRequest.from(this.client, this, state.request)
+        : undefined,
+      canRequest: state.can_request,
+      retryAfter: state.retry_after ?? undefined,
+    };
+  }
+
+  /**
+   * Ask to join a private or team channel.
+   * Repeated calls return the pending request.
+   */
+  async requestAccess(): Promise<ChannelAccessRequest> {
+    return ChannelAccessRequest.from(
+      this.client,
+      this,
+      unwrap(
+        await this.client.storage.requestChannelAccess({
+          path: { channel_id: this.id },
+        }),
+      ),
+    );
+  }
+
+  /** Withdraw the current user's pending join request. */
+  async cancelAccessRequest(): Promise<void> {
+    unwrap(
+      await this.client.storage.cancelChannelAccessRequest({
+        path: { channel_id: this.id },
+      }),
+    );
   }
 
   /** Leave the channel as the current user. */

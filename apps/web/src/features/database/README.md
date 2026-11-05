@@ -53,10 +53,23 @@ to the host's API/service; UI capabilities only determine which controls appear.
 
 ## Host capabilities
 
+`onComposeRecord` lets a host collect required fields for board and timeline
+creation. It receives the selected lane/group and date-range values before any
+row is written; hosts without a composer retain direct row creation.
+
+`onOpenRecord` takes over opening a record someone clicks (a row's open button,
+a board card, a timeline bar, a saved-record notice), in place of the record
+panel, and returns whether it opened it; when it could not, the panel opens. A
+document's database card opens the full database at that row, and keeps the panel
+where there are no splits (call chat). Records the view opens itself, such as one
+just created, keep the panel.
+
 `editRows` and `editColumns` enable their respective controls. Optional record-view
 props supply persisted board positions, conversion previews, relationships,
 presence, and stored-view changes. Omit an unsupported action. A board can render
 without a position writer; it cannot offer card moves that pretend to persist.
+Pending card moves use the board overlay; update saved positions only after a
+successful response so refusals preserve the prior order and other pending moves.
 Hosts load saved positions for the selected view before enabling moves and keep
 the position cache scoped to that view. Hosts that switch boards supply a stable
 `BoardPositions.viewId` so pending visual moves and sort prompts retire when the

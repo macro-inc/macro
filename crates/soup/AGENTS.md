@@ -49,7 +49,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   collaborator is needed.
 - Add a filter/sort option: `item_filters`/`filter_ast` (the filter language) →
   `src/domain/models.rs` → the matching `src/outbound/pg_soup_repo/*` query.
-- Change which candidates attention feeds (Home's work feed) page:
+- Change which candidates attention feeds (Home's work feed, the
+  notifications inbox) page:
   `src/domain/service/tests/attention.rs` → `src/outbound/pg_soup_repo/attention.rs`
   (`attention/query.sql`). Channel-thread keying applies only to
   `AttentionKeying::ThreadScoped`; keep it in step with `attention_feed`'s
@@ -83,6 +84,11 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   the caller's mailbox. Keep browser requests bounded; never expand every CRM
   record into client-side filters or raise ingress limits to fit them.
 
+- A `crm_domains` (`ecd`) scope that email rejects as not found or not
+  permitted (archived company, email sync off) leaves email threads out of the
+  page instead of failing it; `handle_email_request` matches those two errors
+  only. Email's precheck is the only gate on the team-wide widening, so never
+  drop just the failing domains and keep the scope.
 - Agent sessions named by id (an `Id` literal in `cursor_soup`, which GraphQL
   `agentSession` and its log use, and `by_ids`) also accept a grant on the
   document or call whose live thread the session runs in, matching

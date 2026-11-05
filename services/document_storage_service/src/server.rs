@@ -58,9 +58,10 @@ use channels::{
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::NotificationChannelSender,
+        notification_sender::{NotificationChannelSender, NotificationReaderCompletion},
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
+        pg_channels_repo::PgChannelsRepo,
+        pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
 use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
@@ -208,7 +209,12 @@ maybe_env_vars! {
 }
 
 /// Build the service from the environment and serve until shutdown.
-pub async fn run() -> anyhow::Result<()> {
+// Not a `pub async fn`: see CS-73.
+pub fn run() -> impl Future<Output = anyhow::Result<()>> {
+    run_server()
+}
+
+async fn run_server() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -407,6 +413,12 @@ pub async fn run() -> anyhow::Result<()> {
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
+    let entity_access_service = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(db.clone()),
+        ),
+    );
+
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
         frecency_service.clone(),
@@ -429,6 +441,10 @@ pub async fn run() -> anyhow::Result<()> {
                 macro_service_urls::AuthServiceUrl::new()?.to_string(),
             )),
         ),
+    ))
+    .with_shared_thread_replies(email::outbound::EntityAccessSharedThreadReplies::new(
+        db.clone(),
+        (*entity_access_service).clone(),
     ))
     .with_macro_event_broker(macro_event_broker.clone());
     let readonly_email_service = ReadonlyEmailPreviewAdapter(
@@ -468,12 +484,6 @@ pub async fn run() -> anyhow::Result<()> {
             realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
         });
     tracing::trace!("initialized notification ingress service");
-
-    let entity_access_service = Arc::new(
-        entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(db.clone()),
-        ),
-    );
 
     let permission_checker = PermissionServiceImpl::new(db.clone(), entity_access_service.clone());
     let notification_service = NotificationServiceImpl::new(
@@ -1220,7 +1230,12 @@ pub async fn run() -> anyhow::Result<()> {
     let channel_side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(db.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(conn_gateway_client.clone()),
-        NotificationChannelSender::new(notification_ingress_service.clone()),
+        NotificationChannelSender::new(notification_ingress_service.clone()).with_completion(
+            NotificationReaderCompletion::new(
+                graphql_notification_reader.clone(),
+                Arc::new(notification::outbound::withdrawal::PgNotificationWithdrawal(db.clone())),
+            ),
+        ),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
     .with_macro_event_broker(macro_event_broker.clone());
@@ -2129,7 +2144,8 @@ pub async fn run() -> anyhow::Result<()> {
         entity_access_service.clone(),
     ));
 
-    // Attention feeds (Home's work feed) share one feed layer: Soup
+    // Attention feeds (Home's work feed and the notifications inbox) share
+    // one feed layer and these adapters: Soup
     // candidates over the replica, notification acknowledgement on the
     // primary, and live updates recomputed from the viewer's notification,
     // activity and Soup streams. Done publishes a viewer-addressed Soup patch
@@ -2159,6 +2175,23 @@ pub async fn run() -> anyhow::Result<()> {
                 KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
             ),
         ),
+        feed_triggers.clone(),
+        feed_viewers.clone(),
+    );
+    let graphql_notification_inbox_context = complete_graph::NotificationInboxGraphqlContext::new(
+        notification_inbox::domain::service::NotificationInboxServiceImpl::new(
+            attention_feed::outbound::soup::SoupCandidateSource::new(
+                soup_service.clone(),
+                Arc::new(email_service.clone()),
+            ),
+            attention_feed::outbound::notifications::ReaderFeedNotifications::new(
+                graphql_notification_reader.clone(),
+            ),
+            attention_feed::outbound::mail::EmailFeedMail::new(Arc::new(email_service.clone())),
+            attention_feed::outbound::signals::SoupRealtimeFeedSignals::new(
+                KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
+            ),
+        ),
         feed_triggers,
         feed_viewers,
     );
@@ -2169,6 +2202,7 @@ pub async fn run() -> anyhow::Result<()> {
         sync_sessions,
         dictation_state,
         graphql_work_feed_context,
+        graphql_notification_inbox_context,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),

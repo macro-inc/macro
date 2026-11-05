@@ -269,10 +269,9 @@ export function createSummarySource(
 }
 
 export function createTallySource(
-  formId: Accessor<string>,
-  enabled: Accessor<boolean>
+  formId: Accessor<string>
 ): ReadSource<QuestionTally[]> {
-  const query = useTallyQuery(() => formId() || undefined, enabled);
+  const query = useTallyQuery(() => formId() || undefined);
   return {
     value: () =>
       query.isSuccess

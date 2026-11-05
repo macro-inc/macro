@@ -105,6 +105,23 @@ Outlook (Microsoft Graph) outbound adapters.
 - `domain::request_count::counted` counts the Graph requests one unit of work
   sends (the transport calls `record_sent`); Outlook token failures surface
   as `EmailApiError::CredentialsUnavailable`, apart from Graph failures.
+- The Outlook calendar normalizer (`outlook/calendar/normalize.rs`,
+  `recurrence.rs`) fails with `Rejected`, which names the Graph property
+  path (`recurrence.range.endDate`, `instances.start.dateTime`), built only
+  from literals so its log carries no event content, so the sync can skip and
+  log that one event. Give a new check a `Rejected`, not `invalid()`. Graph names UTC `tzone://Microsoft/Utc` on meetings Exchange
+  imported from another system's invitation, which `zones::zone` maps; a
+  series end date in a legacy custom zone (`tzone://Microsoft/Custom`) is
+  read in the zone the event's time is kept in. Calendar discovery reads the
+  mailbox's `mailboxSettings.timeZone` (Windows or IANA) through the same
+  table; a name it cannot map leaves the calendars without a zone and is
+  reported as `OutlookDiscovery::unmapped_time_zone` rather than failing the
+  account. `zones.rs` is CLDR's `windowsZones.xml` (territory `001`, in file
+  order) with its `LICENSE` beside it; regenerate both from a new CLDR
+  release when Windows adds zones. Keep out a zone whose IANA rules the
+  bundled chrono-tz lacks: Outlook writes send local times computed with
+  them, so stale rules move an event. British Columbia, Alberta and Manitoba
+  Standard Time are held out that way until current tz data ships.
 - Same-mailbox Outlook replies use `createReply`. When Graph refuses it with
   400 `ErrorInvalidOperation`, `create_draft` creates a standalone draft that
   carries the same correlation and RFC reply headers.

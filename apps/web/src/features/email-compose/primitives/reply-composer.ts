@@ -202,10 +202,14 @@ export function createReplyComposer(
   const userEmail = props.viewerEmail;
 
   const primaryInboxId = props.accounts.primaryId;
+  // A thread shared with the viewer sits in its owner's inbox; reply from one
+  // of the viewer's own instead.
+  const threadInboxId = () =>
+    ctx.ownsThreadInbox() ? thread()?.link_id : undefined;
   // Capture this domain inbox ID for each asynchronous operation.
   const activeInboxId = () =>
     form.selectedInboxId() ??
-    thread()?.link_id ??
+    threadInboxId() ??
     draftSeed?.link_id ??
     primaryInboxId() ??
     props.accounts.inboxes()[0]?.id;

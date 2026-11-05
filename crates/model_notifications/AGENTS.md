@@ -31,7 +31,8 @@ types.
   `calendar_events`, `channels`, `complete_graph`, `document_cognition_service`,
   `document_storage_service`, `email_formatting`, `email_service`, `github`,
   `graphql_notification`, `graphql_work_feed`, `messages`, `notification_db_client`,
-  `notification_service`, `properties`, `reminders`, `teams`, `work_feed`.
+  `notification_inbox`, `notification_service`, `properties`, `reminders`, `teams`,
+  `work_feed`.
 
 ## Recipes
 

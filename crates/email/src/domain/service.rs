@@ -69,6 +69,8 @@ pub struct EmailServiceImpl<T, U, E, CS, Eam, B = NoopMacroEventBroker> {
     pub(crate) macro_event_broker: B,
     pub(crate) sent_undo_delay_secs: u32,
     pub(crate) sender_provider: std::sync::Arc<dyn crate::domain::senders::EmailSenderProvider>,
+    pub(crate) shared_thread_replies:
+        std::sync::Arc<dyn crate::domain::shared_thread_replies::SharedThreadReplyAccess>,
 }
 
 impl<T, U, E, CS, Eam> EmailServiceImpl<T, U, E, CS, Eam>
@@ -98,6 +100,9 @@ where
             sender_provider: std::sync::Arc::new(
                 crate::domain::senders::UnavailableEmailSenderProvider,
             ),
+            shared_thread_replies: std::sync::Arc::new(
+                crate::domain::shared_thread_replies::NoSharedThreadReplies,
+            ),
         }
     }
 }
@@ -109,6 +114,15 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
         provider: impl crate::domain::senders::EmailSenderProvider,
     ) -> Self {
         self.sender_provider = std::sync::Arc::new(provider);
+        self
+    }
+
+    /// Let callers reply to threads shared with them at edit access.
+    pub fn with_shared_thread_replies(
+        mut self,
+        access: impl crate::domain::shared_thread_replies::SharedThreadReplyAccess,
+    ) -> Self {
+        self.shared_thread_replies = std::sync::Arc::new(access);
         self
     }
 
@@ -127,6 +141,7 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
             macro_event_broker,
             sent_undo_delay_secs: self.sent_undo_delay_secs,
             sender_provider: self.sender_provider,
+            shared_thread_replies: self.shared_thread_replies,
         }
     }
 

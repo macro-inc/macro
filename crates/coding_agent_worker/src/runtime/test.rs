@@ -1,5 +1,4 @@
 use super::*;
-use crate::config::HarnessScope;
 use futures::StreamExt as _;
 use harness_id::HarnessId;
 use tokio::net::TcpListener;
@@ -15,7 +14,6 @@ fn start_runtime(listener: &TcpListener) -> Runtime {
         &HarnessCredentials {
             harness_id: HarnessId::TEST_A,
             token: "mhns_test".to_owned(),
-            scope: HarnessScope::User,
         },
         Harness {
             command: "cat".to_owned(),
