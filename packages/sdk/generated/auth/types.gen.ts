@@ -328,6 +328,11 @@ export type CodexLoginStart = {
 export type CodexLoginState = 'pending' | 'connected' | 'expired' | 'failed';
 
 /**
+ * Durable payment outcome supplied by hosted runtimes.
+ */
+export type ComputerPayment = 'pending' | 'paid' | 'unbilled';
+
+/**
  * The size of a Macro computer, from the computers catalog.
  */
 export type ComputerSize = 'standard' | 'large' | 'xl';
@@ -2300,6 +2305,11 @@ export type TeamAgent = {
      * Display name.
      */
     name: string;
+    payment?: null | ComputerPayment;
+    /**
+     * Whether failed computer provisioning can be retried without purchasing.
+     */
+    retryable: boolean;
     setup?: null | SetupProgress;
     /**
      * Where the computer is in coming up.

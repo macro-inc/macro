@@ -7,6 +7,7 @@
 import type { TeamAgentComputerId } from './teamAgentComputerId';
 import type { TeamAgentCreatedBy } from './teamAgentCreatedBy';
 import type { TeamAgentLastTurnAt } from './teamAgentLastTurnAt';
+import type { TeamAgentPayment } from './teamAgentPayment';
 import type { TeamAgentSetup } from './teamAgentSetup';
 import type { TeamAgentStatus } from './teamAgentStatus';
 import type { TeamAgentStatusReason } from './teamAgentStatusReason';
@@ -27,6 +28,9 @@ export interface TeamAgent {
   lastTurnAt?: TeamAgentLastTurnAt;
   /** Display name. */
   name: string;
+  payment?: TeamAgentPayment;
+  /** Whether failed computer provisioning can be retried without purchasing. */
+  retryable: boolean;
   setup?: TeamAgentSetup;
   /** Where the computer is in coming up. */
   status: TeamAgentStatus;

@@ -8439,6 +8439,11 @@
         "description": "Device authorization state visible to its initiating user.",
         "enum": ["pending", "connected", "expired", "failed"]
       },
+      "ComputerPayment": {
+        "type": "string",
+        "description": "Durable payment outcome supplied by hosted runtimes.",
+        "enum": ["pending", "paid", "unbilled"]
+      },
       "ComputerSize": {
         "type": "string",
         "description": "The size of a Macro computer, from the computers catalog.",
@@ -11100,6 +11105,7 @@
           "name",
           "email",
           "status",
+          "retryable",
           "createdAt"
         ],
         "properties": {
@@ -11129,6 +11135,21 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          },
+          "payment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerPayment",
+                "description": "Durable billing outcome, absent only when no computer can be read."
+              }
+            ]
+          },
+          "retryable": {
+            "type": "boolean",
+            "description": "Whether failed computer provisioning can be retried without purchasing."
           },
           "setup": {
             "oneOf": [
