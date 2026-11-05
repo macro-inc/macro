@@ -1086,6 +1086,11 @@ test('an independent group reads, replies, reacts and pages through channel rows
   await expect(
     page.getByText('Ben Okafor and +5550002 reacted with')
   ).toBeVisible();
+  await page.screenshot({
+    path: process.env.WHATSAPP_SCREENSHOT_DIR
+      ? join(process.env.WHATSAPP_SCREENSHOT_DIR, 'whatsapp-reactors.png')
+      : test.info().outputPath('whatsapp-reactors.png'),
+  });
   await page.locator('[data-message-id="message-1"]').hover();
   await page.getByRole('button', { name: 'Reply', exact: true }).click();
   await expect(page.getByText('Replying to Ana Ruiz')).toBeVisible();
