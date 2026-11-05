@@ -1,4 +1,6 @@
 import { t } from '@app/lib/i18n';
+import callsVideo from './assets/calls.mp4';
+import callsPoster from './assets/calls-poster.jpg';
 import chatVideo from './assets/chat.mp4';
 import chatPoster from './assets/chat-poster.jpg';
 import crmVideo from './assets/crm.mp4';
@@ -114,5 +116,19 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     },
     videoUrl: chatVideo,
     posterUrl: chatPoster,
+  },
+  calls: {
+    id: 'calls',
+    get title() {
+      return t('tutorials.callsTitle');
+    },
+    get snippet() {
+      return t('tutorials.callsSnippet');
+    },
+    get length() {
+      return t('tutorials.callsLength');
+    },
+    videoUrl: callsVideo,
+    posterUrl: callsPoster,
   },
 };

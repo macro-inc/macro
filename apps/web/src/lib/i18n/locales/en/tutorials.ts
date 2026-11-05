@@ -27,4 +27,8 @@ export default {
   chatSnippet:
     'Mention anything, turn messages into tasks, inline replies and a real inbox',
   chatLength: '1:33',
+  callsTitle: 'Learn how to use Macro Calls',
+  callsSnippet:
+    'Calls with transcripts and summaries, shared with your team and its agents',
+  callsLength: '1:11',
 };
