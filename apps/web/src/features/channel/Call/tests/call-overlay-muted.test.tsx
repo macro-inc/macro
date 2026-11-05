@@ -20,6 +20,10 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => undefined,
 }));
 
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false }),
+}));
+
 vi.mock('@core/mobile/isMobile', () => ({
   isMobile: () => mocks.mobile,
 }));
