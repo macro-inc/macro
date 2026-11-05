@@ -911,7 +911,7 @@ jobs:
         fi
 
         if [ "$RUST_PACKAGES" = "all" ]; then
-          cargo nextest run --workspace --exclude sync_service --lib --bins --tests "${common[@]}"
+          cargo nextest run --workspace --exclude sync_service --tests "${common[@]}"
           exit 0
         fi
 
