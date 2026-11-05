@@ -412,7 +412,9 @@ fn update_running(stage: &Stage, args: &UpdateArgs) -> Result<Vec<String>> {
 
 /// Rewrite the instance's Caddyfile and recreate only the proxy when it changed,
 /// so a stack started by an older xtask gets current routing and cookie rules
-/// with its data intact. `stack up` would wipe it.
+/// with its data intact. `stack up` would wipe it. The new file stays on disk
+/// only once the proxy runs it: a dry run or a failed recreation leaves the
+/// old one, so the next update tries again.
 fn adopt_proxy_config(
     stage: &Stage,
     instance: &Instance,
@@ -422,16 +424,27 @@ fn adopt_proxy_config(
 ) -> Result<()> {
     let path = super::gen_compose::caddyfile_path(instance);
     let previous = std::fs::read_to_string(&path).ok();
-
-    proxy::write_caddyfile(instance, mode, state.serves_bundle())?;
-
-    if previous == std::fs::read_to_string(&path).ok() {
+    let current = proxy::caddyfile(instance, mode, state.serves_bundle());
+    if previous.as_deref() == Some(current.as_str()) {
         return Ok(());
     }
 
     let mut up = super::compose_cmd(instance, env);
     up.args(["up", "-d", "--force-recreate", "--no-deps", "proxy"]);
-    stage.run("Recreating proxy (configuration changed)", &mut up)
+    let label = "Recreating proxy (configuration changed)";
+    if stage.is_dry_run() {
+        return stage.run(label, &mut up);
+    }
+
+    proxy::write_caddyfile(instance, mode, state.frontend == "static")?;
+    stage.run(label, &mut up).inspect_err(|_| match &previous {
+        Some(previous) => {
+            let _ = std::fs::write(&path, previous);
+        }
+        None => {
+            let _ = std::fs::remove_file(&path);
+        }
+    })
 }
 
 fn remount(
