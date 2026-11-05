@@ -24,11 +24,35 @@ pkgs.buildNpmPackage {
   inherit version;
   src = source;
   nodejs = pkgs.nodejs_24;
-  npmDepsHash = "sha256-h3+XUQ/ChGlX1Ufj6U0Njll8uRUXWRcPHvmdZ3CAhQ0=";
+  npmDepsHash = "sha256-bfiH+zXuA7NSt7+CfqX0CYuvodEWZYOOuAp/jTQ6TFU=";
   npmFlags = [ "--ignore-scripts" ];
   dontNpmBuild = true;
   nativeBuildInputs = [ pkgs.makeWrapper pkgs.esbuild pkgs.autoPatchelfHook ];
   buildInputs = [ pkgs.stdenv.cc.cc.lib ];
+  # patchelf #639 corrupts libvips' low-address .init when expanding its RPATH.
+  # Leave that bundled library intact; patch its addon and the other native files.
+  dontAutoPatchelf = true;
+  postFixup = ''
+    for library in "$out/lib/brain/${version}/node_modules/@img/"sharp-libvips-*/lib; do
+      addAutoPatchelfSearchPath "$library"
+    done
+    while IFS= read -r -d "" native; do
+      autoPatchelf -- "$native"
+    done < <(find "$out" -type f \( -name '*.node' -o -name ffmpeg \) -print0)
+  '';
+  doInstallCheck = true;
+  installCheckPhase = ''
+    ${pkgs.nodejs_24}/bin/node --input-type=module -e '
+      const root = "'"$out"'/lib/brain/${version}/node_modules/@livekit/";
+      const { inference } = await import(root + "agents/dist/index.js");
+      const rtc = await import(root + "rtc-node/dist/index.js");
+      if (!inference.STT || !inference.TTS) throw new Error("missing inference SDK");
+      const source = new rtc.AudioSource(24000, 1);
+      source.close();
+      await rtc.dispose();
+    '
+  '';
+
   buildPhase = ''
     runHook preBuild
     # Vendor the fixed SDK at image build time. Workspace brain.ts runs directly.
