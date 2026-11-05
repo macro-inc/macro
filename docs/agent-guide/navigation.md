@@ -890,6 +890,11 @@ otherwise. Cached pictures remain visible when a background picture query
 rejects with an error; an omitted or unavailable channel preview uses the
 fallback icon.
 
+Favorites in Chat, Tasks, Drive, and Reviews show an accent dot while their entity
+has unread notifications. Chat favorites use the same unread state as the regular
+channel rows in both sidebar designs. Reading or completing those notifications
+clears the dot; a failed read restores it.
+
 With the GraphQL local cache enabled, cached favorites remain visible when offline
 or when a background refresh fails. Toggle and reorder success while offline means
 the change was accepted into the durable queue, not yet confirmed by the server.
