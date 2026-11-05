@@ -55,12 +55,15 @@ vi.mock('../use-navigation-unread', () => ({
   useNavigationUnread: () => (id: string) => unreadIds().includes(id),
 }));
 const [islandWidth, setIslandWidth] = createSignal(80);
+const [islandHeight, setIslandHeight] = createSignal(40);
 vi.mock('@solid-primitives/resize-observer', () => ({
   createElementSize: () => ({
     get width() {
       return islandWidth();
     },
-    height: 40,
+    get height() {
+      return islandHeight();
+    },
   }),
 }));
 vi.mock('./use-mobile-nav', () => ({
@@ -115,6 +118,7 @@ beforeEach(() => {
   setUnreadIds([]);
   localStorage.clear();
   setIslandWidth(80);
+  setIslandHeight(40);
   drawerStyles = document.createElement('style');
   drawerStyles.textContent =
     '[data-corvu-drawer-content], [data-corvu-drawer-overlay] { transition-duration: 0s; animation-name: none; }';
@@ -141,6 +145,42 @@ it('mounts and focuses search during the tap before navigating once', () => {
   render(() => <MobileDockRow />);
   fireEvent.click(screen.getByRole('button', { name: 'Search' }));
   expect(document.activeElement).toBe(screen.getByPlaceholderText('Search…'));
+  expect(navigate).toHaveBeenCalledExactlyOnceWith('search');
+});
+
+it('keeps navigation and overflow usable when the dock changes axis', async () => {
+  const [vertical, setVertical] = createSignal(false);
+  render(() => <MobileDockRow vertical={vertical()} />);
+  setIslandWidth(40);
+  setIslandHeight(120);
+  setVertical(true);
+  expect(screen.getByRole('button', { name: 'Calendar' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Files' }));
+  expect(navigate).toHaveBeenLastCalledWith('documents');
+  fireEvent.click(screen.getByRole('button', { name: 'More views' }));
+  const drawer = within(screen.getByRole('dialog', { name: 'More views' }));
+  fireEvent.click(drawer.getByRole('button', { name: 'Tasks' }));
+  expect(navigate).toHaveBeenLastCalledWith('tasks');
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  setVertical(false);
+  setIslandWidth(80);
+  setIslandHeight(40);
+  fireEvent.click(screen.getByRole('button', { name: 'More views' }));
+  fireEvent.click(
+    within(screen.getByRole('dialog')).getByRole('button', { name: 'Files' })
+  );
+  expect(navigate).toHaveBeenLastCalledWith('documents');
+});
+
+it('retains a focused search input while the device changes navigation edge', () => {
+  const [vertical, setVertical] = createSignal(true);
+  render(() => <MobileDockRow vertical={vertical()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+  const input = screen.getByPlaceholderText('Search…');
+  fireEvent.input(input, { target: { value: 'Duo layout' } });
+  setVertical(false);
+  expect(document.activeElement).toBe(input);
+  expect(screen.getByDisplayValue('Duo layout')).toBe(input);
   expect(navigate).toHaveBeenCalledExactlyOnceWith('search');
 });
 
