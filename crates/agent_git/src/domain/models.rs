@@ -202,19 +202,30 @@ pub struct GitResponse {
 pub struct AuthorizedRepo {
     agent_user_id: MacroUserIdStr<'static>,
     access: GitAccess,
+    max_input_size: Option<u64>,
 }
 
 impl AuthorizedRepo {
-    pub(crate) fn new(agent_user_id: MacroUserIdStr<'static>, access: GitAccess) -> Self {
+    pub(crate) fn new(
+        agent_user_id: MacroUserIdStr<'static>,
+        access: GitAccess,
+        max_input_size: Option<u64>,
+    ) -> Self {
         Self {
             agent_user_id,
             access,
+            max_input_size,
         }
     }
 
     /// The repo.
     pub fn agent_user_id(&self) -> &MacroUserIdStr<'static> {
         &self.agent_user_id
+    }
+
+    /// Remaining push bytes, enforced again by git after unpacking the stream.
+    pub fn max_input_size(&self) -> Option<u64> {
+        self.max_input_size
     }
 
     /// The granted access.
@@ -254,6 +265,9 @@ pub enum AgentGitError {
         /// The cap.
         limit_bytes: u64,
     },
+    /// Receive-pack does not accept content encodings.
+    #[error("content encoding is not supported for pushes")]
+    EncodedPush,
     /// Too many pushes in the current window.
     #[error("too many pushes; retry in a minute")]
     PushRateLimited,

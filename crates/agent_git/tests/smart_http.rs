@@ -352,3 +352,89 @@ fn seed() -> agent_git::domain::template::PersonaSeed {
         creator_id: Some("macro|admin@example.com".to_owned()),
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn compressed_push_is_rejected_without_writing_the_repository(pool: PgPool) {
+    use agent_git::domain::ports::RepoStore;
+    use std::io::{Read, Write};
+
+    insert_fixtures(&pool).await;
+    let storage = tempfile::tempdir().unwrap();
+    let base = start_server(pool, storage.path(), 1024 * 1024).await;
+    let client = AgentGitClient::new(base.clone(), INTERNAL_API_KEY.to_owned()).unwrap();
+    let agent = MacroUserIdStr::try_from("macro|agent-a@example.com".to_owned()).unwrap();
+    let repo = client
+        .create_repo(agent.clone(), TEAM_ID, seed())
+        .await
+        .unwrap();
+    let store = BareRepoStore::new(RepoDirectories::new(storage.path().to_path_buf()));
+    let before = store.repo_size_bytes(&agent).await.unwrap();
+
+    // A small, valid gzip request with a 5 MiB inflated body and optional header.
+    let mut gzip = flate2::GzBuilder::new()
+        .extra(vec![0; 6000])
+        .write(Vec::new(), flate2::Compression::default());
+    gzip.write_all(&vec![0; 5 * 1024 * 1024]).unwrap();
+    let compressed = gzip.finish().unwrap();
+    assert!((10_000..12_000).contains(&compressed.len()));
+    let mut expanded = Vec::new();
+    flate2::read::GzDecoder::new(compressed.as_slice())
+        .read_to_end(&mut expanded)
+        .unwrap();
+    assert_eq!(expanded.len(), 5 * 1024 * 1024);
+
+    for encoding in ["gzip", "identity", ""] {
+        let response = reqwest::Client::new()
+            .post(format!("{}/git-receive-pack", repo.clone_url))
+            .basic_auth("agent", Some(&repo.token))
+            .header("Content-Encoding", encoding)
+            .header("Content-Type", "application/x-git-receive-pack-request")
+            .body(compressed.clone())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            reqwest::StatusCode::UNSUPPORTED_MEDIA_TYPE
+        );
+        assert_eq!(store.repo_size_bytes(&agent).await.unwrap(), before);
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn missing_repo_and_bad_token_have_the_same_authentication_response(pool: PgPool) {
+    insert_fixtures(&pool).await;
+    let storage = tempfile::tempdir().unwrap();
+    let base = start_server(pool, storage.path(), 1024 * 1024).await;
+    let client = AgentGitClient::new(base.clone(), INTERNAL_API_KEY.to_owned()).unwrap();
+    let agent = MacroUserIdStr::try_from("macro|agent-a@example.com".to_owned()).unwrap();
+    let repo = client.create_repo(agent, TEAM_ID, seed()).await.unwrap();
+    let http = reqwest::Client::new();
+    let existing = http
+        .get(format!(
+            "{}/info/refs?service=git-upload-pack",
+            repo.clone_url
+        ))
+        .basic_auth("agent", Some("bad-token"))
+        .send()
+        .await
+        .unwrap();
+    let missing = http
+        .get(format!(
+            "{base}/macro%7Cmissing%40example.com.git/info/refs?service=git-upload-pack"
+        ))
+        .basic_auth("agent", Some("bad-token"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(existing.status(), reqwest::StatusCode::UNAUTHORIZED);
+    assert_eq!(missing.status(), existing.status());
+    assert_eq!(
+        missing.headers().get("www-authenticate"),
+        existing.headers().get("www-authenticate")
+    );
+    assert_eq!(
+        missing.bytes().await.unwrap(),
+        existing.bytes().await.unwrap()
+    );
+}

@@ -137,6 +137,7 @@ impl IntoResponse for AgentGitHttpError {
             )
                 .into_response(),
             AgentGitError::NotFound => text(StatusCode::NOT_FOUND, message),
+            AgentGitError::EncodedPush => text(StatusCode::UNSUPPORTED_MEDIA_TYPE, message),
             AgentGitError::Forbidden(_) => text(StatusCode::FORBIDDEN, message),
             AgentGitError::TeamMismatch => text(StatusCode::CONFLICT, message),
             AgentGitError::RepoTooLarge { .. } => text(StatusCode::PAYLOAD_TOO_LARGE, message),
@@ -203,7 +204,9 @@ async fn serve<Service: AgentGitService>(
     let request = GitRequest {
         endpoint,
         content_type: header_string(headers, header::CONTENT_TYPE),
-        content_encoding: header_string(headers, header::CONTENT_ENCODING),
+        content_encoding: headers
+            .get(header::CONTENT_ENCODING)
+            .map(|value| value.to_str().unwrap_or("invalid").to_owned()),
         git_protocol: header_string(headers, GIT_PROTOCOL_HEADER),
         body: Box::pin(body.into_data_stream().map_err(std::io::Error::other)),
     };

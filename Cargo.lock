@@ -440,6 +440,7 @@ dependencies = [
  "bytes",
  "chrono",
  "constant_time_eq 0.3.1",
+ "flate2",
  "futures",
  "hex",
  "httparse",
