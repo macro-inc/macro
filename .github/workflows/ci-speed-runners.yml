@@ -108,26 +108,6 @@ jobs:
           debug: '0'
           deno_nextest: true
           sccache: ci-speed-runners-d0
-        - leg: large-32cpu-j32-t64-d0dn
-          shape: large
-          runner: namespace-profile-linux-large-build;overrides.cache-tag=ci-speed-runners-32
-          jobs: 32
-          threads: 64
-          timeout: 75
-          salt_file: crates/macro_user_id/src/lib.rs
-          debug: '0'
-          deno_nextest: true
-          sccache: ci-speed-runners-d0
-        - leg: medium-32cpu-j32-t64-d0dn
-          shape: medium
-          runner: namespace-profile-linux-large-build;overrides.cache-tag=ci-speed-runners-32
-          jobs: 32
-          threads: 64
-          timeout: 75
-          salt_file: crates/email/src/lib.rs
-          debug: '0'
-          deno_nextest: true
-          sccache: ci-speed-runners-d0
     runs-on: ${{ matrix.runner }}
     env:
       NEXTEST_TEST_THREADS: ${{ matrix.threads }}
