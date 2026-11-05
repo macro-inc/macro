@@ -1,0 +1,719 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/pr_ci.rs
+name: PR CI
+on:
+  pull_request:
+    types:
+    - labeled
+    branches:
+    - main
+jobs:
+  start:
+    if: github.event.label.name == 'run-ci'
+    name: Start
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      statuses: write
+    outputs:
+      cargo_deny: ${{ steps.filter.outputs.cargo_deny }}
+      workspace_dependencies: ${{ steps.filter.outputs.workspace_dependencies }}
+      generated_workflows: ${{ steps.filter.outputs.generated_workflows }}
+      node_modules_nix: ${{ steps.filter.outputs.node_modules_nix }}
+      tauri_lockfiles: ${{ steps.filter.outputs.tauri_lockfiles }}
+      sdk: ${{ steps.filter.outputs.sdk }}
+      macrod_update: ${{ steps.filter.outputs.macrod_update }}
+    timeout-minutes: 5
+    steps:
+    - name: Take the request
+      run: |
+        node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
+        // Sets the commit status `main` requires before a merge: it is green only on a
+        // commit that a requested `PR CI` run passed. `CI_GATE_MODE` picks the step:
+        //
+        //   remind  a new commit: pending "not run" with the command to run it, unless
+        //           the commit already has a gate status
+        //   start   a requested run begins: remove the label, check the merge commit
+        //           holds the PR head, set pending
+        //   finish  the run ends: success when every job passed or was path-skipped
+        //   fork    after a fork PR's run, whose read-only token could do none of this
+        //
+        // Statuses go on the PR head commit, so a later push starts without one.
+
+        import { readFileSync } from 'node:fs';
+
+        const API = 'https://api.github.com';
+        const DESCRIPTION_LIMIT = 140;
+        // Job names in `PR CI`; the fork step reads them back from the finished run.
+        export const START_JOB = 'Start';
+        export const GATE_JOB = 'CI gate';
+
+        type State = 'pending' | 'success' | 'failure' | 'error';
+        export type Needs = Record<string, { result: string }>;
+        export type RunJob = { name: string; conclusion: string | null };
+        type Outcome = { state: State; description: string } | null;
+
+        function env(name: string): string {
+          const value = process.env[name];
+          if (!value) {
+            throw new Error(`${name} is not set`);
+          }
+          return value;
+        }
+
+        async function github(method: string, path: string, body?: unknown): Promise<any> {
+          const response = await fetch(`${API}${path}`, {
+            method,
+            headers: {
+              accept: 'application/vnd.github+json',
+              authorization: `Bearer ${env('GH_TOKEN')}`,
+              'x-github-api-version': '2022-11-28',
+            },
+            body: body === undefined ? undefined : JSON.stringify(body),
+          });
+          // Removing a label that is already gone is the outcome we wanted.
+          if (method === 'DELETE' && response.status === 404) {
+            return null;
+          }
+          if (!response.ok) {
+            throw new Error(`${method} ${path}: HTTP ${response.status} ${await response.text()}`);
+          }
+          return response.status === 204 ? null : response.json();
+        }
+
+        const repo = () => env('GITHUB_REPOSITORY');
+        const context = () => env('CI_GATE_CONTEXT');
+        const label = () => env('CI_GATE_LABEL');
+
+        export function runCommand(pr: string, labelName: string): string {
+          return `gh pr edit ${pr} --add-label ${labelName}`;
+        }
+
+        /// The finished run's verdict from `toJSON(needs)`. Start must have succeeded;
+        /// a called workflow may be skipped, because its path filter did not match.
+        /// Null when start failed: it already set a status that says why.
+        export function gateOutcome(needs: Needs, head: string): Outcome {
+          if (needs.start?.result !== 'success') {
+            return null;
+          }
+
+          const failed = Object.entries(needs)
+            .filter(([, need]) => need.result !== 'success' && need.result !== 'skipped')
+            .map(([job]) => job);
+
+          if (failed.length > 0) {
+            return { state: 'failure', description: `Failed: ${failed.join(', ')}` };
+          }
+
+          return { state: 'success', description: `Passed on ${head.slice(0, 7)}` };
+        }
+
+        /// A fork run's verdict from its jobs. Null when the run was not a request
+        /// (unrelated label) or did not finish (cancelled).
+        export function forkOutcome(jobs: RunJob[], head: string, pr: string, labelName: string): Outcome {
+          const start = jobs.find((job) => job.name === START_JOB);
+          const gate = jobs.find((job) => job.name === GATE_JOB);
+
+          if (!start || start.conclusion === 'skipped' || start.conclusion === 'cancelled') {
+            return null;
+          }
+
+          if (start.conclusion !== 'success') {
+            return {
+              state: 'failure',
+              description: `Could not start on ${head.slice(0, 7)}. Run: ${runCommand(pr, labelName)}`,
+            };
+          }
+
+          if (gate?.conclusion === 'success') {
+            return { state: 'success', description: `Passed on ${head.slice(0, 7)}` };
+          }
+
+          if (gate?.conclusion === 'failure') {
+            return { state: 'failure', description: 'Failed: see the PR CI run' };
+          }
+
+          return null;
+        }
+
+        async function setStatus(sha: string, state: State, description: string, targetUrl: string) {
+          await github('POST', `/repos/${repo()}/statuses/${sha}`, {
+            state,
+            context: context(),
+            description: description.slice(0, DESCRIPTION_LIMIT),
+            target_url: targetUrl,
+          });
+          console.log(`${context()} on ${sha.slice(0, 10)}: ${state}: ${description}`);
+        }
+
+        async function hasGateStatus(sha: string): Promise<boolean> {
+          const statuses: { context: string }[] = await github(
+            'GET',
+            `/repos/${repo()}/commits/${sha}/statuses?per_page=100`,
+          );
+          return statuses.some((status) => status.context === context());
+        }
+
+        async function removeLabel(pr: string) {
+          await github('DELETE', `/repos/${repo()}/issues/${pr}/labels/${encodeURIComponent(label())}`);
+        }
+
+        async function remind() {
+          const head = env('HEAD_SHA');
+          const pr = env('PR_NUMBER');
+
+          // A re-open or leaving draft keeps the head, so it may have a result already.
+          if (await hasGateStatus(head)) {
+            console.log(`${head.slice(0, 10)} already has a ${context()} status`);
+            return;
+          }
+
+          await setStatus(
+            head,
+            'pending',
+            `Not run on this commit. Run: ${runCommand(pr, label())}`,
+            env('CI_GATE_DOCS_URL'),
+          );
+        }
+
+        async function start() {
+          const head = env('HEAD_SHA');
+          const pr = env('PR_NUMBER');
+          const runUrl = env('RUN_URL');
+          const sameRepo = env('SAME_REPO') === 'true';
+
+          // Fork tokens are read-only; the fork step removes the label after the run.
+          if (sameRepo) {
+            await removeLabel(pr);
+          }
+
+          // A label added right after a push can see a merge commit GitHub has not
+          // rebuilt yet, which would test the previous head.
+          const merge = await github('GET', `/repos/${repo()}/commits/${env('MERGE_SHA')}`);
+          const parents: string[] = merge.parents.map((parent: { sha: string }) => parent.sha);
+
+          if (!parents.includes(head)) {
+            const description = `The merge commit did not include ${head.slice(0, 7)} yet. Run again: ${runCommand(pr, label())}`;
+            if (sameRepo) {
+              await setStatus(head, 'failure', description, runUrl);
+            }
+            throw new Error(description);
+          }
+
+          if (sameRepo) {
+            await setStatus(head, 'pending', `Running on ${head.slice(0, 7)}`, runUrl);
+          }
+        }
+
+        async function finish() {
+          const head = env('HEAD_SHA');
+          const outcome = gateOutcome(JSON.parse(env('NEEDS')), head);
+
+          if (!outcome) {
+            console.log('Start did not succeed; its status stands.');
+            process.exitCode = 1;
+            return;
+          }
+
+          if (env('SAME_REPO') === 'true') {
+            await setStatus(head, outcome.state, outcome.description, env('RUN_URL'));
+          }
+
+          if (outcome.state !== 'success') {
+            console.log(outcome.description);
+            process.exitCode = 1;
+          }
+        }
+
+        async function fork() {
+          const event = JSON.parse(readFileSync(env('GITHUB_EVENT_PATH'), 'utf8'));
+          const run = event.workflow_run;
+          const head: string = run.head_sha;
+          const owner: string = run.head_repository.owner.login;
+
+          const pulls: { number: number; head: { sha: string }; labels: { name: string }[] }[] =
+            await github(
+              'GET',
+              `/repos/${repo()}/pulls?state=open&head=${encodeURIComponent(`${owner}:${run.head_branch}`)}`,
+            );
+          const pull = pulls.find((candidate) => candidate.head.sha === head);
+
+          if (!pull) {
+            console.log(`No open PR has ${head.slice(0, 10)} as its head; nothing to report.`);
+            return;
+          }
+
+          // Only someone who can label PRs can request a run. A fork that rewrote the
+          // workflow to run on its own pushes would not carry the label.
+          if (!pull.labels.some((each) => each.name === label())) {
+            console.log(`PR #${pull.number} does not carry ${label()}; not a requested run.`);
+            return;
+          }
+
+          const jobs: RunJob[] = [];
+          for (let page = 1; ; page++) {
+            const { jobs: batch } = await github(
+              'GET',
+              `/repos/${repo()}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100&page=${page}`,
+            );
+            jobs.push(...batch);
+            if (batch.length < 100) {
+              break;
+            }
+          }
+
+          const outcome = forkOutcome(jobs, head, String(pull.number), label());
+          await removeLabel(String(pull.number));
+
+          if (outcome) {
+            await setStatus(head, outcome.state, outcome.description, run.html_url);
+          }
+        }
+
+        export async function main() {
+          const modes: Record<string, () => Promise<void>> = { remind, start, finish, fork };
+          const mode = modes[env('CI_GATE_MODE')];
+          if (!mode) {
+            throw new Error(`unknown CI_GATE_MODE ${process.env.CI_GATE_MODE}`);
+          }
+          await mode();
+        }
+
+        await main();
+        NODE_SCRIPT
+      shell: bash
+      env:
+        CI_GATE_MODE: start
+        CI_GATE_CONTEXT: CI gate
+        CI_GATE_LABEL: run-ci
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        MERGE_SHA: ${{ github.sha }}
+    - id: filter
+      name: Filter changed paths
+      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
+      with:
+        filters: |
+          cargo_deny:
+            - 'Cargo.toml'
+            - 'crates/**/Cargo.toml'
+            - 'services/**/Cargo.toml'
+            - 'tooling/xtask/**/Cargo.toml'
+            - 'Cargo.lock'
+            - 'deny.toml'
+            - '.github/workflows/cargo_deny.yml'
+          workspace_dependencies:
+            - 'Cargo.toml'
+            - 'crates/**/Cargo.toml'
+            - 'services/**/Cargo.toml'
+            - 'tooling/xtask/**/Cargo.toml'
+            - 'Cargo.lock'
+            - '.config/hakari.toml'
+            - 'crates/workspace-hack/**'
+            - 'tooling/xtask/src/**'
+            - 'tooling/xtask/crates/xtask_deps/**'
+            - 'tooling/xtask/crates/xtask_graph/**'
+            - '.github/workspace-dep-closures.json'
+          generated_workflows:
+            - 'tooling/xtask/**'
+            - 'crates/macro_event_topics/**'
+            - '.github/workflows/**'
+            - '.github/kafka-cluster-topics.json'
+          node_modules_nix:
+            - 'bun.lock'
+            - 'packages/sdk/bun.lock'
+            - 'package.json'
+            - 'apps/**/package.json'
+            - 'packages/**/package.json'
+            - 'services/**/package.json'
+            - 'apps/web/patches/**'
+            - 'nix-support/node_modules.nix'
+            - 'nix-support/node_modules-hashes.json'
+            - 'nix/tauri-desktop.nix'
+            - 'tooling/scripts/update-node-modules-hash.sh'
+            - 'flake.nix'
+            - 'flake.lock'
+            - '.github/workflows/check_node_modules_nix.yml'
+          tauri_lockfiles:
+            - 'apps/web/tauri/**'
+            - 'crates/**/Cargo.toml'
+            - 'Cargo.toml'
+            - 'nix/tauri-desktop.nix'
+            - 'flake.nix'
+            - 'flake.lock'
+            - '.github/workflows/check_tauri_lockfiles.yml'
+          sdk:
+            - 'packages/sdk/**'
+            - '.github/workflows/sdk-check.yml'
+          macrod_update:
+            - 'crates/coding_agent_worker/**'
+            - '.github/workflows/test_macrod_update.yml'
+  cloud-storage:
+    needs:
+    - start
+    name: Cloud Storage
+    uses: ./.github/workflows/code_check_cloud_storage.yml
+    secrets: inherit
+  web-app:
+    needs:
+    - start
+    name: Web App
+    uses: ./.github/workflows/web-app-check-main.yml
+    secrets: inherit
+  infra:
+    needs:
+    - start
+    name: Infra
+    uses: ./.github/workflows/code_check_infra.yml
+    secrets: inherit
+  conventions:
+    needs:
+    - start
+    name: Conventions
+    uses: ./.github/workflows/code_check_conventions.yml
+    secrets: inherit
+  cargo-deny:
+    needs:
+    - start
+    if: needs.start.outputs.cargo_deny == 'true'
+    name: cargo deny
+    uses: ./.github/workflows/cargo_deny.yml
+    secrets: inherit
+  workspace-dependencies:
+    needs:
+    - start
+    if: needs.start.outputs.workspace_dependencies == 'true'
+    name: Workspace dependencies
+    uses: ./.github/workflows/cargo_workspace_dependency_check.yml
+    secrets: inherit
+  generated-workflows:
+    needs:
+    - start
+    if: needs.start.outputs.generated_workflows == 'true'
+    name: Generated workflows
+    uses: ./.github/workflows/check_generated.yml
+    secrets: inherit
+  node-modules-nix:
+    needs:
+    - start
+    if: needs.start.outputs.node_modules_nix == 'true'
+    name: node_modules nix
+    uses: ./.github/workflows/check_node_modules_nix.yml
+    secrets: inherit
+  tauri-lockfiles:
+    needs:
+    - start
+    if: needs.start.outputs.tauri_lockfiles == 'true'
+    name: Tauri lockfiles
+    uses: ./.github/workflows/check_tauri_lockfiles.yml
+    secrets: inherit
+  sdk:
+    needs:
+    - start
+    if: needs.start.outputs.sdk == 'true'
+    name: SDK
+    uses: ./.github/workflows/sdk-check.yml
+    secrets: inherit
+  macrod-update:
+    needs:
+    - start
+    if: needs.start.outputs.macrod_update == 'true'
+    name: macrod update
+    uses: ./.github/workflows/test_macrod_update.yml
+    secrets: inherit
+  gate:
+    needs:
+    - start
+    - cloud-storage
+    - web-app
+    - infra
+    - conventions
+    - cargo-deny
+    - workspace-dependencies
+    - generated-workflows
+    - node-modules-nix
+    - tauri-lockfiles
+    - sdk
+    - macrod-update
+    if: '!cancelled() && needs.start.result != ''skipped'''
+    name: CI gate
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    timeout-minutes: 5
+    steps:
+    - name: Set the CI gate status
+      run: |
+        node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
+        // Sets the commit status `main` requires before a merge: it is green only on a
+        // commit that a requested `PR CI` run passed. `CI_GATE_MODE` picks the step:
+        //
+        //   remind  a new commit: pending "not run" with the command to run it, unless
+        //           the commit already has a gate status
+        //   start   a requested run begins: remove the label, check the merge commit
+        //           holds the PR head, set pending
+        //   finish  the run ends: success when every job passed or was path-skipped
+        //   fork    after a fork PR's run, whose read-only token could do none of this
+        //
+        // Statuses go on the PR head commit, so a later push starts without one.
+
+        import { readFileSync } from 'node:fs';
+
+        const API = 'https://api.github.com';
+        const DESCRIPTION_LIMIT = 140;
+        // Job names in `PR CI`; the fork step reads them back from the finished run.
+        export const START_JOB = 'Start';
+        export const GATE_JOB = 'CI gate';
+
+        type State = 'pending' | 'success' | 'failure' | 'error';
+        export type Needs = Record<string, { result: string }>;
+        export type RunJob = { name: string; conclusion: string | null };
+        type Outcome = { state: State; description: string } | null;
+
+        function env(name: string): string {
+          const value = process.env[name];
+          if (!value) {
+            throw new Error(`${name} is not set`);
+          }
+          return value;
+        }
+
+        async function github(method: string, path: string, body?: unknown): Promise<any> {
+          const response = await fetch(`${API}${path}`, {
+            method,
+            headers: {
+              accept: 'application/vnd.github+json',
+              authorization: `Bearer ${env('GH_TOKEN')}`,
+              'x-github-api-version': '2022-11-28',
+            },
+            body: body === undefined ? undefined : JSON.stringify(body),
+          });
+          // Removing a label that is already gone is the outcome we wanted.
+          if (method === 'DELETE' && response.status === 404) {
+            return null;
+          }
+          if (!response.ok) {
+            throw new Error(`${method} ${path}: HTTP ${response.status} ${await response.text()}`);
+          }
+          return response.status === 204 ? null : response.json();
+        }
+
+        const repo = () => env('GITHUB_REPOSITORY');
+        const context = () => env('CI_GATE_CONTEXT');
+        const label = () => env('CI_GATE_LABEL');
+
+        export function runCommand(pr: string, labelName: string): string {
+          return `gh pr edit ${pr} --add-label ${labelName}`;
+        }
+
+        /// The finished run's verdict from `toJSON(needs)`. Start must have succeeded;
+        /// a called workflow may be skipped, because its path filter did not match.
+        /// Null when start failed: it already set a status that says why.
+        export function gateOutcome(needs: Needs, head: string): Outcome {
+          if (needs.start?.result !== 'success') {
+            return null;
+          }
+
+          const failed = Object.entries(needs)
+            .filter(([, need]) => need.result !== 'success' && need.result !== 'skipped')
+            .map(([job]) => job);
+
+          if (failed.length > 0) {
+            return { state: 'failure', description: `Failed: ${failed.join(', ')}` };
+          }
+
+          return { state: 'success', description: `Passed on ${head.slice(0, 7)}` };
+        }
+
+        /// A fork run's verdict from its jobs. Null when the run was not a request
+        /// (unrelated label) or did not finish (cancelled).
+        export function forkOutcome(jobs: RunJob[], head: string, pr: string, labelName: string): Outcome {
+          const start = jobs.find((job) => job.name === START_JOB);
+          const gate = jobs.find((job) => job.name === GATE_JOB);
+
+          if (!start || start.conclusion === 'skipped' || start.conclusion === 'cancelled') {
+            return null;
+          }
+
+          if (start.conclusion !== 'success') {
+            return {
+              state: 'failure',
+              description: `Could not start on ${head.slice(0, 7)}. Run: ${runCommand(pr, labelName)}`,
+            };
+          }
+
+          if (gate?.conclusion === 'success') {
+            return { state: 'success', description: `Passed on ${head.slice(0, 7)}` };
+          }
+
+          if (gate?.conclusion === 'failure') {
+            return { state: 'failure', description: 'Failed: see the PR CI run' };
+          }
+
+          return null;
+        }
+
+        async function setStatus(sha: string, state: State, description: string, targetUrl: string) {
+          await github('POST', `/repos/${repo()}/statuses/${sha}`, {
+            state,
+            context: context(),
+            description: description.slice(0, DESCRIPTION_LIMIT),
+            target_url: targetUrl,
+          });
+          console.log(`${context()} on ${sha.slice(0, 10)}: ${state}: ${description}`);
+        }
+
+        async function hasGateStatus(sha: string): Promise<boolean> {
+          const statuses: { context: string }[] = await github(
+            'GET',
+            `/repos/${repo()}/commits/${sha}/statuses?per_page=100`,
+          );
+          return statuses.some((status) => status.context === context());
+        }
+
+        async function removeLabel(pr: string) {
+          await github('DELETE', `/repos/${repo()}/issues/${pr}/labels/${encodeURIComponent(label())}`);
+        }
+
+        async function remind() {
+          const head = env('HEAD_SHA');
+          const pr = env('PR_NUMBER');
+
+          // A re-open or leaving draft keeps the head, so it may have a result already.
+          if (await hasGateStatus(head)) {
+            console.log(`${head.slice(0, 10)} already has a ${context()} status`);
+            return;
+          }
+
+          await setStatus(
+            head,
+            'pending',
+            `Not run on this commit. Run: ${runCommand(pr, label())}`,
+            env('CI_GATE_DOCS_URL'),
+          );
+        }
+
+        async function start() {
+          const head = env('HEAD_SHA');
+          const pr = env('PR_NUMBER');
+          const runUrl = env('RUN_URL');
+          const sameRepo = env('SAME_REPO') === 'true';
+
+          // Fork tokens are read-only; the fork step removes the label after the run.
+          if (sameRepo) {
+            await removeLabel(pr);
+          }
+
+          // A label added right after a push can see a merge commit GitHub has not
+          // rebuilt yet, which would test the previous head.
+          const merge = await github('GET', `/repos/${repo()}/commits/${env('MERGE_SHA')}`);
+          const parents: string[] = merge.parents.map((parent: { sha: string }) => parent.sha);
+
+          if (!parents.includes(head)) {
+            const description = `The merge commit did not include ${head.slice(0, 7)} yet. Run again: ${runCommand(pr, label())}`;
+            if (sameRepo) {
+              await setStatus(head, 'failure', description, runUrl);
+            }
+            throw new Error(description);
+          }
+
+          if (sameRepo) {
+            await setStatus(head, 'pending', `Running on ${head.slice(0, 7)}`, runUrl);
+          }
+        }
+
+        async function finish() {
+          const head = env('HEAD_SHA');
+          const outcome = gateOutcome(JSON.parse(env('NEEDS')), head);
+
+          if (!outcome) {
+            console.log('Start did not succeed; its status stands.');
+            process.exitCode = 1;
+            return;
+          }
+
+          if (env('SAME_REPO') === 'true') {
+            await setStatus(head, outcome.state, outcome.description, env('RUN_URL'));
+          }
+
+          if (outcome.state !== 'success') {
+            console.log(outcome.description);
+            process.exitCode = 1;
+          }
+        }
+
+        async function fork() {
+          const event = JSON.parse(readFileSync(env('GITHUB_EVENT_PATH'), 'utf8'));
+          const run = event.workflow_run;
+          const head: string = run.head_sha;
+          const owner: string = run.head_repository.owner.login;
+
+          const pulls: { number: number; head: { sha: string }; labels: { name: string }[] }[] =
+            await github(
+              'GET',
+              `/repos/${repo()}/pulls?state=open&head=${encodeURIComponent(`${owner}:${run.head_branch}`)}`,
+            );
+          const pull = pulls.find((candidate) => candidate.head.sha === head);
+
+          if (!pull) {
+            console.log(`No open PR has ${head.slice(0, 10)} as its head; nothing to report.`);
+            return;
+          }
+
+          // Only someone who can label PRs can request a run. A fork that rewrote the
+          // workflow to run on its own pushes would not carry the label.
+          if (!pull.labels.some((each) => each.name === label())) {
+            console.log(`PR #${pull.number} does not carry ${label()}; not a requested run.`);
+            return;
+          }
+
+          const jobs: RunJob[] = [];
+          for (let page = 1; ; page++) {
+            const { jobs: batch } = await github(
+              'GET',
+              `/repos/${repo()}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100&page=${page}`,
+            );
+            jobs.push(...batch);
+            if (batch.length < 100) {
+              break;
+            }
+          }
+
+          const outcome = forkOutcome(jobs, head, String(pull.number), label());
+          await removeLabel(String(pull.number));
+
+          if (outcome) {
+            await setStatus(head, outcome.state, outcome.description, run.html_url);
+          }
+        }
+
+        export async function main() {
+          const modes: Record<string, () => Promise<void>> = { remind, start, finish, fork };
+          const mode = modes[env('CI_GATE_MODE')];
+          if (!mode) {
+            throw new Error(`unknown CI_GATE_MODE ${process.env.CI_GATE_MODE}`);
+          }
+          await mode();
+        }
+
+        await main();
+        NODE_SCRIPT
+      shell: bash
+      env:
+        CI_GATE_MODE: finish
+        CI_GATE_CONTEXT: CI gate
+        CI_GATE_LABEL: run-ci
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        NEEDS: ${{ toJSON(needs) }}
+concurrency:
+  group: pr-ci-${{ github.event.pull_request.number }}-${{ github.event.label.name == 'run-ci' && 'requested' || github.run_id }}
+  cancel-in-progress: true

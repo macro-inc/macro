@@ -22,6 +22,7 @@ name: cargo workspace dependency check
     - tooling/xtask/crates/xtask_deps/**
     - tooling/xtask/crates/xtask_graph/**
     - '.github/workspace-dep-closures.json'
+  workflow_call: {}
 jobs:
   dependency-check:
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
@@ -147,5 +148,5 @@ jobs:
       if: always()
       uses: './.github/actions/teardown-nix'
 concurrency:
-  group: cargo-workspace-dependency-check-${{ github.ref }}
+  group: cargo-workspace-dependency-check-${{ github.event.action == 'labeled' && github.run_id || github.ref }}
   cancel-in-progress: true

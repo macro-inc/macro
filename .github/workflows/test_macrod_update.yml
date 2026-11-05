@@ -8,6 +8,7 @@ name: Test macrod update
     paths:
     - crates/coding_agent_worker/**
     - '.github/workflows/test_macrod_update.yml'
+  workflow_call: {}
   workflow_dispatch: {}
 permissions:
   contents: read
