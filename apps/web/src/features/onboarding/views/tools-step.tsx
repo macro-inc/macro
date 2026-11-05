@@ -1,6 +1,6 @@
+import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { canonicalPipedreamSlug } from '@core/pipedream/slugs';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope-simple.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
