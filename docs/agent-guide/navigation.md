@@ -825,7 +825,9 @@ while inference is pending. Email and message modes show their outgoing body
 and resolved recipients. Email uses the Email Composer's inbox picker, recipient
 chips with address completion, separate Cc/Bcc controls, subject control, rich Markdown editor, and HTML
 preparation for delivery. Task creation uses the task composer's rich title,
-Markdown description, and editable property pills, including Due date.
+Markdown description, and editable property pills, including Due date, and the
+same **Customer / Contact** pill as the task composer when its flags are on (see
+[tasks](tasks.md)). Extraction never fills that pill.
 Calendar uses the event composer's date/time popovers and calendar, guest, and
 location and recurrence pills, including the shared custom recurrence builder.
 Manual recurrence choices, including Does not repeat, survive later predictions.
@@ -1130,7 +1132,8 @@ fields hide their keyboard hint on touch devices.
 Open the routine and use its **Run History** tab to see past runs. Each run is its
 own agent session. The routine's **Runs hidden** / **Runs shown** chip decides
 where its runs appear. **Hide runs** (the default) keeps them off Home and out of
-the Agents sidebar until **Show hidden routine runs** is pressed. **Show runs**
+the Agents sidebar until **Show hidden routine runs** is checked in its filter
+menu. **Show runs**
 lists them on Home and in Agents like the owner's own sessions. The setting
 applies to runs that start after it changes. A run that finishes normally sends
 no notification; a failed or cut-short run, a question the agent asks, a held tool
