@@ -405,6 +405,14 @@ survives page reloads but not a browser-profile restart — if the shared Chromi
 with a fresh profile you must log in again. Workspace data (docs, channels, tasks) persists on
 the backend across logins for the same email.
 
+### Stalled session refresh
+
+When an expired session triggers cookie-auth refresh, every waiting request and
+socket setup shares one refresh, which settles within 12 seconds as a
+retryable network failure, or sooner when the native network path drops.
+Cancelling one view stops only its own wait. After a timeout the next request
+starts a fresh refresh; a timeout never signs the user out or reloads the app.
+
 ### Google OAuth through a remote local stack
 
 Use the stack's configured HTTPS frontend origin for Google account linking.
