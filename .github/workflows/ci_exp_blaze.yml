@@ -75,7 +75,7 @@ jobs:
         SQLX_OFFLINE: 'true'
       run: |
         unset RUSTC_WRAPPER
-        time timeout 600 blaze check --workspace 2>&1 | grep -vE '^\s*(Compiling|Building)' | tail -15 | cut -c1-1500
+        time timeout 1200 blaze check --workspace 2>&1 | grep -vE '^\s*(Compiling|Building)' | tail -15 | cut -c1-3000
         exit "${PIPESTATUS[0]}"
     - name: 'arm 2: unmodified workspace, native proc macros'
       continue-on-error: true
@@ -85,7 +85,7 @@ jobs:
       run: |
         unset RUSTC_WRAPPER
         blaze stop || true
-        time timeout 600 blaze check --workspace 2>&1 | grep -vE '^\s*(Compiling|Building)' | tail -15 | cut -c1-1500
+        time timeout 1200 blaze check --workspace 2>&1 | grep -vE '^\s*(Compiling|Building)' | tail -15 | cut -c1-3000
         exit "${PIPESTATUS[0]}"
     - name: reduce workspace to what blaze can load
       run: |
@@ -99,7 +99,7 @@ jobs:
         BLAZE_PROC_MACRO_WASM: '0'
       run: |
         unset RUSTC_WRAPPER
-        time timeout 900 blaze check --workspace 2>&1 | grep -vE '^\s*(Compiling|Building)' | tail -40 | cut -c1-300
+        time timeout 900 blaze check --workspace 2>&1 | grep -vE '^\s*(Compiling|Building)' | tail -40 | cut -c1-2000
         exit "${PIPESTATUS[0]}"
     - name: 'arm 4: blaze test on the crates it passed locally'
       continue-on-error: true
@@ -108,8 +108,8 @@ jobs:
       run: |
         unset RUSTC_WRAPPER
         args=(); for p in $(cat tooling/blaze-proto/pass-list.txt); do args+=(-p "$p"); done
-        time timeout 1200 blaze test "${args[@]}" > /tmp/blaze-test.log 2>&1
-        code=$?
+        code=0
+        time timeout 1200 blaze test "${args[@]}" > /tmp/blaze-test.log 2>&1 || code=$?
         grep -vE '^\s*(Compiling|Building)|^test .* ok$' /tmp/blaze-test.log | tail -30 | cut -c1-300
         grep -E '^test result' /tmp/blaze-test.log | awk '{p+=$4; f+=$6; i+=$8} END {print "passed",p,"failed",f,"ignored",i}'
         exit $code
