@@ -5121,7 +5121,7 @@ export interface ToolEventAttendee {
   isOptional: boolean;
 }
 /**
- * Add companies or contacts to a CRM pipeline as new deals (entries), optionally setting their stage, owner, revenue or other fields. A company pipeline takes companies and a contact pipeline takes contacts (see ListPipelines' `tracks`). A record already in the pipeline is not added again unless allowDuplicates is true (for a second, separate deal); its existing entry is returned in alreadyPresent instead. Returns the new entries with their entryIds and fields as saved.
+ * Add companies or contacts to a CRM pipeline as new deals (entries), optionally setting their stage, owner, revenue or other fields. A company pipeline takes companies and a contact pipeline takes contacts (see ListPipelines' `tracks`); a generic pipeline, with no `tracks`, takes rows that name only their fields. A record already in the pipeline is not added again unless allowDuplicates is true (for a second, separate deal); its existing entry is returned in alreadyPresent instead. Returns the new entries with their entryIds and fields as saved.
  */
 export interface AddToPipeline {
   /**
@@ -5129,7 +5129,7 @@ export interface AddToPipeline {
    */
   pipelineId: string;
   /**
-   * The companies or contacts to add, each with its starting fields.
+   * The companies or contacts to add, each with its starting fields, or a generic pipeline's new rows.
    */
   entries: ToolNewEntry[];
   /**
@@ -5138,11 +5138,11 @@ export interface AddToPipeline {
   allowDuplicates?: boolean | null;
 }
 /**
- * One company or contact to add.
+ * One company or contact to add, or one row of a generic pipeline.
  */
 export interface ToolNewEntry {
   /**
-   * The CRM company or contact id to add (company ids come from ListCompanies). Give this or email.
+   * The CRM company or contact id to add (company ids come from ListCompanies). Give this or email; leave both out in a generic pipeline, which tracks no records.
    */
   recordId?: string | null;
   /**
@@ -5150,7 +5150,7 @@ export interface ToolNewEntry {
    */
   email?: string | null;
   /**
-   * Fields to fill in on the new entry, e.g. [{"field": "Stage", "value": "Lead"}, {"field": "Owner", "value": "me"}].
+   * Fields to fill in on the new entry, e.g. [{"field": "Stage", "value": "Lead"}, {"field": "Owner", "value": "me"}]. In a generic pipeline, e.g. [{"field": "Name", "value": "Launch site"}].
    */
   set?: ToolFieldValue[];
 }
@@ -5200,7 +5200,10 @@ export interface ToolEntry {
    * Pass as `entryId`.
    */
   entryId: string;
-  record: ToolRecord;
+  /**
+   * The company or contact it tracks; missing in a generic pipeline.
+   */
+  record?: ToolRecord | null;
   /**
    * Its filled-in fields by name: text, a number, true/false, a date, or a
    * list when a field holds several values. People are macro| user ids.
@@ -8247,14 +8250,17 @@ export interface ProjectChannelShare {
   access: string;
 }
 /**
- * Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks either a company or a contact. Every pipeline starts with the tracked record, Stage, Owner and Revenue fields; Stage starts with the team's default stages unless `stages` gives others. Only when the user asked for a new pipeline: check ListPipelines first so you do not create a duplicate. Returns the pipeline with its id and fields.
+ * Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks a company or a contact, and the pipeline starts with the tracked record, Stage, Owner and Revenue fields; Stage starts with the team's default stages unless `stages` gives others. Leave out `tracks` for a generic pipeline: a free-form table of entries that needs no company or contact, starting with only a Name field, plus a Stage field when `stages` is given. Only when the user asked for a new pipeline: check ListPipelines first so you do not create a duplicate. Returns the pipeline with its id and fields.
  */
 export interface CreatePipeline {
   /**
    * The pipeline's name, e.g. "Q4 Renewals".
    */
   name: string;
-  tracks: ToolRecordType;
+  /**
+   * "company" for deals with organizations, "contact" for deals with individual people (candidates, investors, partners). Leave out for a generic pipeline whose entries need no company or contact.
+   */
+  tracks?: ToolRecordType | null;
   /**
    * Let the user's team see and edit it. Defaults to false: only the user can see it.
    */
@@ -8264,7 +8270,7 @@ export interface CreatePipeline {
    */
   stages?: string[];
   /**
-   * Fields to add after Company/Contact, Stage, Owner and Revenue.
+   * Fields to add after Company/Contact, Stage, Owner and Revenue, or after a generic pipeline's Name.
    */
   fields?: ToolNewField[];
 }
@@ -8304,14 +8310,19 @@ export interface ToolPipeline {
    * Its name.
    */
   name: string;
-  tracks: ToolRecordType;
+  /**
+   * What each entry tracks: `company` or `contact`. Missing for a generic
+   * pipeline, whose entries are free-form rows that track no CRM record.
+   */
+  tracks?: ToolRecordType | null;
   access: ToolPipelineAccess;
   /**
    * Whether the owner's team may edit it; otherwise it is private.
    */
   sharedWithTeam: boolean;
   /**
-   * Its fields in column order; the first names the tracked record.
+   * Its fields in column order; the first names the tracked record, or in a
+   * generic pipeline the entry itself.
    */
   fields: ToolField[];
   /**
@@ -10020,7 +10031,7 @@ export interface ExportPipelineCsvResponse {
   summary: string;
 }
 /**
- * Find deals (entries) in a CRM pipeline: which companies or contacts are in which stage, who owns them, their revenue and other fields. Filter by field values (e.g. Stage is Demo or Trial, Owner is me), by company or contact name/domain/email with `search`, or by record id; sort by any field (Stage sorts in pipeline order). Returns each entry's entryId, the record it tracks (id and name) and its filled-in fields, plus, over every match, the count per stage (and per option of each single-select field) and the total of each number field such as Revenue: use these for questions like "how many deals are in Negotiation" or "what is the pipeline worth". To find where a company or contact is across all pipelines ("what stage is Acme in?"), leave out pipelineId and pass its name as `search` (or its recordIds). Get pipeline ids and field names from ListPipelines.
+ * Find deals (entries) in a CRM pipeline: which companies or contacts are in which stage, who owns them, their revenue and other fields. Filter by field values (e.g. Stage is Demo or Trial, Owner is me), by company or contact name/domain/email with `search` (in a generic pipeline, by any text field), or by record id; sort by any field (Stage sorts in pipeline order). Returns each entry's entryId, the record it tracks (id and name) and its filled-in fields, plus, over every match, the count per stage (and per option of each single-select field) and the total of each number field such as Revenue: use these for questions like "how many deals are in Negotiation" or "what is the pipeline worth". To find where a company or contact is across all pipelines ("what stage is Acme in?"), leave out pipelineId and pass its name as `search` (or its recordIds). Get pipeline ids and field names from ListPipelines.
  */
 export interface FindPipelineEntries {
   /**
@@ -12499,7 +12510,7 @@ export interface NotificationItem {
   senderId?: string | null;
 }
 /**
- * List the user's CRM pipelines (deal pipelines, sales pipelines, hiring or partner pipelines) with their stages and fields. A pipeline holds entries (deals); each entry tracks one CRM company or contact and has its own fields, such as Stage, Owner and Revenue. Each pipeline lists its id, whether it tracks companies or contacts, the user's access, and its fields in order with their types; a select field lists its options, so Stage lists the pipeline's stages from first to last. Call this first whenever the user talks about deals, a pipeline, a stage, or moving a company or contact along, then use FindPipelineEntries, AddToPipeline and UpdatePipelineEntries with the returned pipelineId and field names. When the user names no pipeline and there is exactly one, use it; when several could match, ask which one.
+ * List the user's CRM pipelines (deal pipelines, sales pipelines, hiring or partner pipelines) with their stages and fields. A pipeline holds entries (deals); each entry tracks one CRM company or contact and has its own fields, such as Stage, Owner and Revenue. A generic pipeline has no `tracks`: its entries are free-form rows of fields, with no company or contact. Each pipeline lists its id, whether it tracks companies or contacts, the user's access, and its fields in order with their types; a select field lists its options, so Stage lists the pipeline's stages from first to last. Call this first whenever the user talks about deals, a pipeline, a stage, or moving a company or contact along, then use FindPipelineEntries, AddToPipeline and UpdatePipelineEntries with the returned pipelineId and field names. When the user names no pipeline and there is exactly one, use it; when several could match, ask which one.
  */
 export type ListPipelines = {};
 /**
@@ -16106,7 +16117,10 @@ export interface ToolUpdatedEntry {
    * The entry.
    */
   entryId: string;
-  record: ToolRecord;
+  /**
+   * The company or contact it tracks; missing in a generic pipeline.
+   */
+  record?: ToolRecord | null;
   /**
    * The fields set.
    */

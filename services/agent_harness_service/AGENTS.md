@@ -30,6 +30,8 @@ Pulumi stacks; they do not host extra agent processes.
   `ai-code-mode` get only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on
   `tools/list` (`tool_service.rs`); hidden native tools stay callable. The flag
   is cached per user (`tool_mode_cache.rs`).
+  `src/code_mode/connected_apps.rs` serves a running execution's
+  `macro.connectedApps` through the in-process egress service.
   Code execution's destination list in `src/code_mode.rs` also includes the
   configured editing worker, whose comment-mark endpoint requires a scoped
   document token; this does not grant permission to edit document content.
