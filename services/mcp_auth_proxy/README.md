@@ -157,8 +157,8 @@ who has to act:
   broker refused it (unbound, another client's, revoked grant) or FusionAuth
   did (for example `refresh_token_not_found`). Retrying cannot help; the client
   must authorize again.
-- `503 temporarily_unavailable`, with `Retry-After` when FusionAuth sent one:
-  FusionAuth is down or throttling.
+- `503 temporarily_unavailable`: FusionAuth is down or throttling. A `Retry-After`
+  from a throttling response (429) is passed on; one on a 5xx is not.
 - `502 server_error`: FusionAuth answered with something else.
 
 FusionAuth's error and reason are logged with the client and grant ids,

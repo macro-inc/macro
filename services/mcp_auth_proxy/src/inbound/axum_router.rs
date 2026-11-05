@@ -8,7 +8,7 @@ use std::time::Duration;
 use askama::Template;
 use axum::{
     Router,
-    extract::{Query, RawQuery, State},
+    extract::{Query, RawQuery, State, rejection::FormRejection},
     http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header},
     middleware as axum_mw,
     response::{Html, IntoResponse, Json, Redirect, Response},
@@ -483,8 +483,15 @@ fn oauth_error(status: StatusCode, error: &str, description: &str) -> Response {
 /// worth retrying (5xx).
 async fn token<I: InflightAuthStore + 'static>(
     State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
-    axum::Form(params): axum::Form<TokenRequest>,
+    params: Result<axum::Form<TokenRequest>, FormRejection>,
 ) -> Response {
+    let Ok(axum::Form(params)) = params else {
+        return oauth_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "the request must be a form with a grant_type",
+        );
+    };
     let (status, error, description) = match auth_proxy.exchange_token(params).await {
         Ok(response) => return Json(response).into_response(),
         Err(TokenExchangeError::UnsupportedGrantType) => (

@@ -923,6 +923,11 @@ async fn token_endpoint_names_missing_parameters_as_invalid_request() {
     let unsupported = send(&harness, token_request("grant_type=password")).await;
     assert_eq!(unsupported.status, StatusCode::BAD_REQUEST);
     assert_eq!(unsupported.json()["error"], "unsupported_grant_type");
+
+    let no_grant_type = send(&harness, token_request("client_id=some-client")).await;
+    assert_eq!(no_grant_type.status, StatusCode::BAD_REQUEST);
+    assert_eq!(no_grant_type.json()["error"], "invalid_request");
+    assert_eq!(no_grant_type.cache_control.as_deref(), Some("no-store"));
 }
 
 async fn callback_with_failing_code_exchange(failure: fn() -> UpstreamGrantError) -> Response {
