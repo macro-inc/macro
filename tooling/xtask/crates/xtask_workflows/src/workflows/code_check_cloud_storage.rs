@@ -175,6 +175,8 @@ fn test() -> Job {
             "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
         ))
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
+        // Experiment only: a thrashing job fails here instead of holding a runner.
+        .timeout_minutes(35u32)
         .add_env((
             "RUST_PACKAGES",
             "${{ needs.path-check.outputs.rust_packages }}",
@@ -219,11 +221,18 @@ fn limit_concurrent_links() -> Step<Run> {
 fn start_memory_sampler() -> Step<Run> {
     Step::new("Start memory sampler").run(indoc::indoc! {r#"
         cat > "$RUNNER_TEMP/memsample.sh" <<'SAMPLER'
+        read -r _ u n s i w _ < /proc/stat; prev_busy=$((u+n+s)); prev_idle=$i; prev_wait=$w
         while :; do
+          read -r _ u n s i w _ < /proc/stat
+          busy=$((u+n+s)); total_d=$(( (busy-prev_busy) + (i-prev_idle) + (w-prev_wait) ))
+          iowait=$(( total_d > 0 ? 100*(w-prev_wait)/total_d : 0 ))
+          cpu=$(( total_d > 0 ? 100*(busy-prev_busy)/total_d : 0 ))
+          prev_busy=$busy; prev_idle=$i; prev_wait=$w
+          disk=$(df -BG --output=used "$GITHUB_WORKSPACE" 2>/dev/null | tail -1 | tr -d ' G')
           avail=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
           total=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)
           psi=$(awk '/^full/{print $2}' /proc/pressure/memory 2>/dev/null)
-          echo "MEMSAMPLE $(date -u +%H:%M:%S) avail=$avail total=$total load=$(cut -d' ' -f1 /proc/loadavg) rustc=$(pgrep -c rustc) ld=$(pgrep -c mold) psi_full=$psi"
+          echo "MEMSAMPLE $(date -u +%H:%M:%S) avail=$avail total=$total load=$(cut -d' ' -f1 /proc/loadavg) rustc=$(pgrep -c rustc) ld=$(pgrep -c mold) psi_full=$psi cpu=$cpu iowait=$iowait disk_gb=$disk"
           sleep 2
         done
         SAMPLER
