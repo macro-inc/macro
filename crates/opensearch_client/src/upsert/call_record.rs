@@ -48,7 +48,7 @@ fn resolve_destination(index_override: Option<&str>) -> &str {
     index_override.unwrap_or(SearchIndex::CallRecords.as_ref())
 }
 
-#[tracing::instrument(skip(client), err)]
+#[tracing::instrument(skip(client))]
 pub(crate) async fn upsert_call_record_segment(
     client: &opensearch::OpenSearch,
     args: &UpsertCallRecordSegmentArgs,
@@ -60,7 +60,7 @@ pub(crate) async fn upsert_call_record_segment(
         .map(|_| ())
 }
 
-#[tracing::instrument(skip(client, segments), err)]
+#[tracing::instrument(skip(client, segments))]
 pub(crate) async fn bulk_upsert_call_record_segments(
     client: &opensearch::OpenSearch,
     segments: &[UpsertCallRecordSegmentArgs],

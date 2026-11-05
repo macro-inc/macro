@@ -4,11 +4,12 @@ set -euo pipefail
 # Keep a copy of /nix with the dev shell in Namespace's HTTP cache. A job on an empty
 # volume restores it instead of installing Nix and downloading the shell, which takes
 # about a minute longer and depends on cache.nixos.org. It is split into shards because
-# one stream from the cache varies between 70 and 190 MB/s, and because unpacking
-# in parallel is faster.
+# one stream from the cache varies between 70 and 190 MB/s. About one transfer in three
+# stalls partway, so a restore that runs over restore_limit falls back to the install.
 
 action="$1"
 shards=8
+restore_limit=40
 
 credentials="$(mktemp "$RUNNER_TEMP/nix-seed.XXXXXX")"
 work="$(mktemp -d "$RUNNER_TEMP/nix-seed-shards.XXXXXX")"
@@ -40,7 +41,7 @@ wait_all() {
 restore() {
   local pids=() shard
   for shard in $(seq 0 $((shards - 1))); do
-    (cache_request "$base/$shard" | zstd -d -T2 | sudo tar -xf - -C /) &
+    (cache_request --max-time "$restore_limit" "$base/$shard" | zstd -d -T2 | sudo tar -xf - -C /) &
     pids+=("$!")
   done
 
@@ -75,19 +76,23 @@ save() {
 
 case "$action" in
   restore)
+    # No seed yet: the job installs from scratch and saves one once its dev shell is ready.
+    if ! cache_request --head --output /dev/null "$base/0"; then
+      {
+        echo "NIX_SEED_SAVE=true"
+        echo "NIX_SEED_CACHE=$NIX_SEED_CACHE"
+        echo "NIX_SEED_KEY=$NIX_SEED_KEY"
+      } >> "$GITHUB_ENV"
+      exit 1
+    fi
+
     if restore; then
       echo "Restored /nix from the seed"
       exit 0
     fi
 
-    # An interrupted restore leaves a store that looks installed. The job installs
-    # from scratch and saves a new seed once its dev shell is ready.
+    # An interrupted restore leaves a store that looks installed.
     sudo find /nix -mindepth 1 -delete
-    {
-      echo "NIX_SEED_SAVE=true"
-      echo "NIX_SEED_CACHE=$NIX_SEED_CACHE"
-      echo "NIX_SEED_KEY=$NIX_SEED_KEY"
-    } >> "$GITHUB_ENV"
     exit 1
     ;;
   save)

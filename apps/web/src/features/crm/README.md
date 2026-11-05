@@ -116,9 +116,9 @@ the dependent query refreshes before the mutation stops being pending.
 `crm.people_visibility` measures the display choice through the next paint;
 Soup retains its existing query/loading instrumentation.
 
-`task-composer.ts` owns the CRM task preset: Companies/Contacts are visible,
-Status remains a task default but is not initially shown. CRM registers live
-`{ task: TaskComposerContext }` values with the provider in
+`task-composer.ts` owns the CRM task preset: the records a new task starts
+associated with. The Customer / Contact pill belongs to the shared task composer,
+not this preset. CRM registers live `{ task: TaskComposerContext }` values with the provider in
 `command/context/create-context.tsx`, scoped to its pane. The app shell owns the
 provider and supplies the layout's focus accessor; no global registry or manager
 key is involved. The workspace registers the unassociated preset; nested record
@@ -129,13 +129,15 @@ The selected-record fallback survives detail query errors until the record close
 Global task creation snapshots the focused pane's getter before opening, without
 fetching details or capturing navigation history. Record contexts isolate drafts.
 
-`enable-crm-activity` gates workspace activity tabs and whether CRM supplies its
-composer context. It defaults off everywhere and can be overridden locally with
+`enable-crm-activity` gates workspace activity tabs, whether CRM supplies its
+composer context, and, with `enable-crm`, the Customer / Contact pill in the task
+composer and Universal Input's task mode. Those two read both flags through
+`customerContactEnabled`. It defaults off everywhere and can be overridden locally with
 `VITE_ENABLE_CRM_ACTIVITY=true`. Off hides activity navigation and skips activity
 queries; saved activity links wait for flag loading, then fall back to Companies.
 The standard record task action still associates the task with its record.
-The shared composer, registry and launcher never read this flag. With no supplied
-context, the standard composer opens immediately. Each opening snapshots its
+The registry and launcher never read this flag. With no supplied context, the
+standard composer opens immediately. Each opening snapshots its
 context; later flag, focus or record changes leave the open draft unchanged.
 The Soup and email SQL optimizations are independent of this frontend gate.
 
