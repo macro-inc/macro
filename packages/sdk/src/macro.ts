@@ -301,6 +301,14 @@ export { ToolApproval } from './entities/agent-sessions/tool-approval';
 export type { SessionView } from './entities/agent-sessions/view';
 export { Agent, type AgentOptions } from './entities/agents/agent';
 export { UserApiKey } from './entities/api-keys/api-key';
+export {
+  Bot,
+  type BotOwner,
+  type BotWebhook,
+  type CreateBotOptions,
+  type UpdateBotOptions,
+} from './entities/bots/bot';
+export { BotToken } from './entities/bots/token';
 export { ChannelAccessRequest } from './entities/channels/access-request';
 export { ChannelActivity } from './entities/channels/activity';
 export { ChannelPicture } from './entities/channels/picture';
