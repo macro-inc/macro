@@ -39,14 +39,17 @@ export class SourceSpeaker implements Speaker {
   readonly source: AudioSource;
   readonly rate: number;
   private onPlayed?: (pcm: Int16Array) => void;
+  private onError: (error: unknown) => void;
   constructor(
     source: AudioSource,
     rate: number,
+    onError: (error: unknown) => void,
     onPlayed?: (pcm: Int16Array) => void
   ) {
     this.source = source;
     this.rate = rate;
     this.onPlayed = onPlayed;
+    this.onError = onError;
   }
   play(pcm: Int16Array) {
     const n = this.rate / 100;
@@ -60,15 +63,23 @@ export class SourceSpeaker implements Speaker {
   private async pump() {
     this.pumping = true;
     const gen = this.gen;
-    while (this.queue.length && gen === this.gen) {
-      let f = this.queue.shift()!;
-      if (this.gain !== 1) f = f.map((v) => Math.round(v * this.gain));
-      await this.source.captureFrame(new AudioFrame(f, this.rate, 1, f.length));
-      this.onPlayed?.(f);
+    try {
+      while (this.queue.length && gen === this.gen) {
+        let f = this.queue.shift()!;
+        if (this.gain !== 1) f = f.map((v) => Math.round(v * this.gain));
+        await this.source.captureFrame(
+          new AudioFrame(f, this.rate, 1, f.length)
+        );
+        this.onPlayed?.(f);
+      }
+    } catch (error) {
+      this.queue = [];
+      this.onError(error);
+    } finally {
+      this.pumping = false;
+      if (this.queue.length) void this.pump();
+      else for (const resolve of this.waiters.splice(0)) resolve();
     }
-    this.pumping = false;
-    if (this.queue.length) void this.pump();
-    else for (const resolve of this.waiters.splice(0)) resolve();
   }
   duck(on: boolean) {
     this.gain = on ? SourceSpeaker.DUCK_GAIN : 1;
@@ -226,7 +237,15 @@ export class CallRoom {
   }
   speaker(rate: number, onPlayed?: (pcm: Int16Array) => void): SourceSpeaker {
     this.source = new AudioSource(rate, 1, 200); // short queue: a duck or stop is heard at once
-    return new SourceSpeaker(this.source, rate, onPlayed);
+    return new SourceSpeaker(
+      this.source,
+      rate,
+      (error) => {
+        this.emit('room.playback_error', { error: String(error) });
+        this.h.disconnected('playback_error');
+      },
+      onPlayed
+    );
   }
   async publish(name: string) {
     if (!this.source) throw new Error('speaker() first');
@@ -240,7 +259,10 @@ export class CallRoom {
     return [...this.room.remoteParticipants.values()].filter(human).map(label);
   }
   async leave() {
-    await this.room.disconnect();
-    this.source?.close();
+    try {
+      await this.room.disconnect();
+    } finally {
+      this.source?.close();
+    }
   }
 }

@@ -19,6 +19,7 @@ export class Call {
   private tts: Tts;
   private current = 0;
   private playing = false;
+  private stopped = false;
   private sayTurn = -1;
   private ended = new Set<number>();
   private flushed = new Set<number>();
@@ -66,6 +67,7 @@ export class Call {
     );
   }
   stop() {
+    this.stopped = true;
     if (this.timer) clearInterval(this.timer);
     this.current = 0;
     this.brain.interrupt();
@@ -85,9 +87,11 @@ export class Call {
     this.run([{ type: 'say', text }]);
   }
   private feed(e: TurnEvent) {
+    if (this.stopped) return;
     this.run(this.turns.handle(e, this.now()));
   }
   private run(actions: Action[]) {
+    if (this.stopped) return;
     for (const a of actions) {
       const { type, ...rest } = a;
       this.emit(`turn.${type}`, rest);

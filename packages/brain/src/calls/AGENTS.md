@@ -7,9 +7,9 @@ selects calls through the agent's own Macro access.
 
 ## Checks
 
-Run `deno task test` and `deno task check` from `packages/brain`. Tests use
+Run `npm test` and `npm run check` from `packages/brain`. Tests use
 synthetic quiet-mic WAVs and injected speech, never provider credentials.
-Native media requires the compiled runner's scoped Node-API permission.
+LiveKit runs natively on Node 24; the image ships the platform addon offline.
 
 ## Contracts
 

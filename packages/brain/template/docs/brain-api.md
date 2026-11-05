@@ -115,8 +115,8 @@ outbound: [async (message, next) => {
 ```
 
 ```ts
-// Transport adapters dispatch brain.onCall(call). No call transport is installed
-// by this hook; the calls integration provides it separately.
+// Runtime call transports dispatch brain.onCall(call). A custom hook replaces
+// the default join policy; join explicitly for incoming calls.
 async onCall(call, brain) {
   if (call.phase === 'ended') await brain.remember('calls', call.id);
 }
@@ -140,3 +140,38 @@ replacement queue processing. Receipt IDs persist across the handoff to avoid
 duplicate delivery. Every activation independently verifies a fake DM answer,
 the health shape, and draining an admitted turn on abort; workspace tests cannot
 replace these conformance checks.
+
+## Voice calls
+
+The Node 24 runner installs the `calls` transport by default. `Brain.onCall`
+receives `{ id, phase, metadata }`; without a hook, an incoming call joins and
+speaks. A hook replaces that default and can call `brain.joinCall` explicitly:
+
+```ts
+async onCall(call, brain) {
+  if (call.phase !== 'incoming') return;
+  await brain.joinCall(call, {
+    answer: (_who, text) => !text.startsWith('Private aside:'),
+    allowHandOff: true,
+  });
+}
+```
+
+`CallPolicy.voice` can select another provider model when the creator requests
+it; otherwise calls read the server-committed `config/voice.json`. Preserve the
+user's voice choice. `config/calls.json` holds channel opt-ins, excluded channels,
+and call IDs to skip. Rings, live DMs and invited meetings also qualify. Customer
+channel exclusions always win; a hung-up call stays excluded after restart.
+
+Call sessions read the same OPERATING.md and memory as message turns. The
+`hand_off` tool schedules the normal work tier, which continues after hang-up.
+A call summary is remembered and posted to its conversation; standalone meetings
+use a DM with their host. LiveKit uses `@livekit/rtc-node` directly on Node 24.
+STT and Aura-2 TTS use the Macro computer gateway and team credits; provider keys
+never enter the agent's process. `calls` exports the media, turn-taking, discovery,
+replay and transport modules for custom compositions and injected tests.
+
+Private `log/calls/<opaque-call-id>/` diagnostics include events.jsonl and WAVs.
+They expire after seven days and only fifty call directories are retained. Calls
+have a one-hour recording limit. Do not commit or upload these diagnostics;
+telemetry carries only IDs, event categories, counts and timing.

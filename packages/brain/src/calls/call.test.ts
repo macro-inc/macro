@@ -90,3 +90,60 @@ test('streams sentences, rejects stale audio after barge-in, and finishes the re
   assert.equal(call.turns.state, 'idle');
   call.stop();
 });
+
+test('late transcripts and generator completion cannot restart a stopped call', async () => {
+  const released = Promise.withResolvers<void>();
+  const drained = Promise.withResolvers<void>();
+  let asks = 0;
+  let spoken = 0;
+  const brain: Brain = {
+    async start() {},
+    async *ask() {
+      asks++;
+      try {
+        await released.promise;
+        yield 'Late sentence.';
+      } finally {
+        drained.resolve();
+      }
+    },
+    interrupt() {
+      released.resolve();
+    },
+    async close() {},
+  };
+  const call = new Call(
+    brain,
+    () => ({
+      speak() {
+        spoken++;
+      },
+      flush() {},
+      clear() {},
+      close() {},
+    }),
+    { play() {}, clear() {}, duck() {}, async drained() {} },
+    () => {},
+    () => 0,
+    { names: ['Agent'] }
+  );
+  call.joined('caller', 'Caller');
+  call.heard('caller', {
+    kind: 'final',
+    text: 'First question.',
+    speechFinal: true,
+  });
+  call.heard('caller', { kind: 'utterance_end' });
+  assert.equal(asks, 1);
+  call.stop();
+  call.heard('caller', {
+    kind: 'final',
+    text: 'Late final during STT close.',
+    speechFinal: true,
+  });
+  call.heard('caller', { kind: 'utterance_end' });
+  call.say('Already closed.');
+  await drained.promise;
+  assert.equal(asks, 1);
+  assert.equal(spoken, 0);
+});

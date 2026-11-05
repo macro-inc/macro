@@ -11,7 +11,7 @@
   },
   "scripts": {
     "check": "tsc --noEmit",
-    "test": "node --test src/*.test.ts",
+    "test": "node --test src/*.test.ts src/calls/*.test.ts",
     "vendor:sdk": "esbuild ../sdk/src/macro.ts --bundle --format=esm --platform=node --packages=external --outfile=vendor/macro-sdk.js"
   },
   "dependencies": {
@@ -25,7 +25,8 @@
     "ts-pattern": "5.9.2",
     "uuid": "11.1.1",
     "ws": "8.22.1",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "@livekit/rtc-node": "1.2.1"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

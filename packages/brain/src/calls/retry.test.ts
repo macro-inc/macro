@@ -24,7 +24,7 @@ test('call recorded failure regression: a hung token request times out per attem
     attempts.map((a) => !!a.error),
     [true, false]
   );
-  assert(attempts[0]!.error.includes('timed out'));
+  assert(attempts[0]?.error?.includes('timed out'));
   assert(performance.now() - t0 < 500);
 });
 test('ConnectionRefused is retried with backoff, then the last error is thrown', async () => {

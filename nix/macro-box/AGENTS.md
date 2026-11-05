@@ -141,3 +141,7 @@ workspace brain.ts executes directly with Node type stripping.
 The first clone forwards `BRAIN_PROVISION_TRACEPARENT` as an ephemeral git HTTP
 header; later brain git calls inject their active turn context through process
 configuration. Never persist trace headers in the workspace's git config.
+
+The brain's LiveKit dependency includes the host-platform rtc-ffi npm addon.
+Keep npm optional dependencies enabled and patch its ELF dependencies with
+`autoPatchelfHook`; Node 24 loads it directly without a bridge process.

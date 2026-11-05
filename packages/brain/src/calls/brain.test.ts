@@ -23,3 +23,40 @@ test('streams sentences without splitting a model version or quoted punctuation'
     }).includes('Caller [caller] says to you: What now?')
   );
 });
+
+test('SDK process failure rejects warm-up and every later queued turn', async () => {
+  const { claudeBrain } = await import('./brain.ts');
+  const brain = claudeBrain({
+    callId: 'call',
+    channel: 'channel',
+    operating: 'Agent',
+    options: {},
+    emit() {},
+    onHangUp() {},
+    async handOff() {
+      return 'task';
+    },
+    async briefing() {
+      return 'Briefing';
+    },
+    session() {
+      return {
+        [Symbol.asyncIterator]() {
+          return { async next() { throw new Error('SDK process exited'); } };
+        },
+        async interrupt() {},
+        close() {},
+      };
+    },
+  });
+  await assert.rejects(brain.start(), /SDK process exited/);
+  const ask = async (turn: number) => {
+    for await (const _ of brain.ask(turn, 'Question?')) {
+    }
+  };
+  await Promise.all([
+    assert.rejects(ask(1), /SDK process exited/),
+    assert.rejects(ask(2), /SDK process exited/),
+  ]);
+  await brain.close();
+});

@@ -24,10 +24,11 @@ pkgs.buildNpmPackage {
   inherit version;
   src = source;
   nodejs = pkgs.nodejs_24;
-  npmDepsHash = "sha256-8Fzro9n+ADQ+l5jCrrs2NZNza7Trh/L9I/y++kCk4zI=";
-  npmFlags = [ "--ignore-scripts" "--omit=optional" ];
+  npmDepsHash = "sha256-h3+XUQ/ChGlX1Ufj6U0Njll8uRUXWRcPHvmdZ3CAhQ0=";
+  npmFlags = [ "--ignore-scripts" ];
   dontNpmBuild = true;
-  nativeBuildInputs = [ pkgs.makeWrapper pkgs.esbuild ];
+  nativeBuildInputs = [ pkgs.makeWrapper pkgs.esbuild pkgs.autoPatchelfHook ];
+  buildInputs = [ pkgs.stdenv.cc.cc.lib ];
   buildPhase = ''
     runHook preBuild
     # Vendor the fixed SDK at image build time. Workspace brain.ts runs directly.

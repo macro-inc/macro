@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { opaqueId, withSpan } from '../telemetry.ts';
 import type { Brain } from './brain.ts';
@@ -50,7 +51,7 @@ export async function joinCall(options: CallOptions): Promise<void> {
   if (options.signal.aborted) return;
   const dir = join(
     options.directory,
-    await opaqueId(options.invitation.callId)
+    `${await opaqueId(options.invitation.callId)}-${randomUUID()}`
   );
   const log = new EventLog(dir);
   const transcript: string[] = [];
@@ -63,20 +64,21 @@ export async function joinCall(options: CallOptions): Promise<void> {
   const ears = new Map<string, Ear>();
   let channel = options.invitation.channel;
   const stop = new AbortController();
-  const signal = AbortSignal.any([options.signal, stop.signal]);
-  const brain = options.brain(
-    emit,
-    () => {
-      void options
-        .hungUp(options.invitation.callId)
-        .then(() => stop.abort('hang_up'))
-        .catch((error: unknown) => {
-          emit('hang_up.error', { error: String(error) });
-          stop.abort('hang_up');
-        });
-    },
-    channel
-  );
+  const signal = AbortSignal.any([
+    options.signal,
+    stop.signal,
+    AbortSignal.timeout(3600000),
+  ]);
+  const hangUp = () => {
+    void options
+      .hungUp(options.invitation.callId)
+      .then(() => stop.abort('hang_up'))
+      .catch((error: unknown) => {
+        emit('hang_up.error', { error: String(error) });
+        stop.abort('hang_up');
+      });
+  };
+  const brain = options.brain(emit, hangUp, channel);
   const recorder = (who: string, rate: number) => {
     let value = recorders.get(who);
     if (!value) {
@@ -133,7 +135,10 @@ export async function joinCall(options: CallOptions): Promise<void> {
     log.now,
     { names: options.names, answer: options.answer }
   );
-  call.onLeave = (why) => stop.abort(why);
+  call.onLeave = (why) => {
+    emit('call.leave_requested', { why });
+    hangUp();
+  };
   try {
     emit('join.start');
     const conn = await withSpan(
@@ -146,7 +151,7 @@ export async function joinCall(options: CallOptions): Promise<void> {
           options.invitation.id,
           emit
         );
-        channel = conn.channel;
+        channel = conn.channel ?? channel;
         await retry(() => room.connect(conn), {
           attempts: 1,
           timeoutMs: 10000,
@@ -171,15 +176,23 @@ export async function joinCall(options: CallOptions): Promise<void> {
     emit('call.leave', { why: String(signal.reason ?? 'error') });
     call.stop();
     try {
-      await room.leave();
-      await Promise.all([...ears.values()].map((ear) => ear.close()));
+      try {
+        await room.leave();
+      } finally {
+        await Promise.all([...ears.values()].map((ear) => ear.close()));
+      }
       if (transcript.length) {
         let summary = '';
-        for await (const sentence of brain.ask(
-          Number.MAX_SAFE_INTEGER,
-          'The call has ended. Write a brief factual summary for memory and the conversation, including decisions and handed-off work. Do not use tools.'
-        ))
-          summary += `${sentence} `;
+        const deadline = setTimeout(() => brain.interrupt(), 15000);
+        try {
+          for await (const sentence of brain.ask(
+            Number.MAX_SAFE_INTEGER,
+            'The call has ended. Write a brief factual summary for memory and the conversation, including decisions and handed-off work. Do not use tools.'
+          ))
+            summary += `${sentence} `;
+        } finally {
+          clearTimeout(deadline);
+        }
         if (summary.trim())
           await options.finished(
             options.invitation.callId,
@@ -188,10 +201,13 @@ export async function joinCall(options: CallOptions): Promise<void> {
           );
       }
     } finally {
-      await brain.close();
-      for (const recorder of recorders.values()) recorder.close();
-      log.close();
-      await options.lifecycle?.('ended');
+      try {
+        await brain.close();
+      } finally {
+        for (const recorder of recorders.values()) recorder.close();
+        log.close();
+        await options.lifecycle?.('ended');
+      }
     }
   }
 }

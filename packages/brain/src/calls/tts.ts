@@ -54,6 +54,7 @@ export function deepgramTts(
           type: string;
         };
         if (j.type === 'Flushed') {
+          if (dropping) return;
           const turn = flushes.shift();
           if (turn !== undefined && !dropping) h.onDone(turn);
           current = flushes[0] ?? null;
@@ -75,6 +76,7 @@ export function deepgramTts(
         carry = bytes.slice(-1);
         bytes = bytes.slice(0, -1);
       }
+      if (!bytes.length) return;
       if (!firstAudio.has(current)) {
         firstAudio.add(current);
         emit('tts.first_audio', { turn: current });
@@ -89,6 +91,10 @@ export function deepgramTts(
       emit('tts.close', { code: e.code, reason: e.reason });
       for (const t of flushes) h.onDone(t);
       flushes = [];
+      outbox = [];
+      firstAudio.clear();
+      dropping = false;
+      carry = null;
       current = null;
       if (!closing) reconnect = setTimeout(connect, 300);
     };

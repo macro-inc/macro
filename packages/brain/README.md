@@ -170,3 +170,25 @@ replacement queue processing. Receipt IDs persist across the handoff to avoid
 duplicate delivery. Every activation independently verifies a fake DM answer,
 the health shape, and draining an admitted turn on abort; workspace tests cannot
 replace these conformance checks.
+
+## Calls
+
+`src/calls/` ports the per-participant gain, local endpointing and prerecorded
+rescue pipeline, turn-taking, barge-in/ducking and sentence-streamed speech.
+The runner installs its Macro API watcher through `BrainDeps.calls`; a custom
+`Wiring.onCall` can choose whether to invoke `brain.joinCall(call, policy)`.
+See `template/docs/brain-api.md` for policies and shared memory/work behavior.
+
+Voice selection lives in server-committed `config/voice.json`; channel opt-ins
+and exclusions live in `config/calls.json`. LiveKit runs natively on Node 24.
+The offline Nix package includes its platform addon and required shared libraries.
+Speech passes through `/brain/deepgram/v1/listen` (WS or WAV POST) and
+`/brain/deepgram/v1/speak` (WS), authenticated with the existing agent key.
+The gateway checks team/computer eligibility and admission, meters STT seconds
+and Aura-2 characters to team credits, and retains the provider credential.
+
+`npm test` includes call regressions. `calls.replayWav` runs captured audio
+through the same injected ear and turn machine without a live room or model.
+Diagnostics in ignored `log/calls/` are private, expire after seven days and
+retain at most fifty calls, with a one-hour session limit. Transcripts and WAVs
+stay out of telemetry and source control.

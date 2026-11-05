@@ -222,11 +222,10 @@ export class Ear {
     const before = this.covered;
     const t0 = performance.now();
     const text = (
-      await this.rescue(pcm).catch(
-        (e) => (
-          this.emit('ear.rescue_error', { who: this.who, error: String(e) }), ''
-        )
-      )
+      await this.rescue(pcm).catch((e) => {
+        this.emit('ear.rescue_error', { who: this.who, error: String(e) });
+        return '';
+      })
     ).trim();
     this.emit('ear.rescue', {
       who: this.who,

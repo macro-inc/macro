@@ -144,7 +144,7 @@ test('when streaming hears the words, no rescue call is made', async () => {
   let segments = 0;
   const r = await replayWav(normalWav, {
     stt: hearing,
-    rescue: async () => (rescues++, 'x'),
+    rescue: async () => { rescues++; return 'x'; },
     emit: (t) => t === 'ear.segment' && segments++,
   });
   assert(segments > 0); // the ear did notice speech
@@ -343,7 +343,7 @@ test('probe recorded failure regression: a pause between sentences does not spli
       .replace(/Stop\. Sorry\. Quick one\. /, '')
       .includes('Stop.')
   );
-  assert(r.asks.at(-1).includes('What is two plus two?'));
+  assert(r.asks.at(-1)?.includes('What is two plus two?'));
 });
 test('probe recorded failure regression: a re-sent interim for words already delivered is dropped, not a new line', async () => {
   const resend: SttFactory = (_who, on) => {
@@ -403,7 +403,10 @@ test('live probe recorded failure regression: Deepgram VAD + empty final with no
   let rescued = 0;
   const r = await replayPcm(pcm, 16000, {
     stt: vadOnly,
-    rescue: async () => (rescued++, ''),
+    rescue: async () => {
+      rescued++;
+      return '';
+    },
     emit: noop,
   });
   assert.strictEqual(rescued, 1);

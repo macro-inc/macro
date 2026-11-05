@@ -35,7 +35,8 @@ export type CallSelf = {
 export interface CallTransport {
   watch(
     dispatch: (call: BrainCall) => Promise<void>,
-    signal: AbortSignal
+    signal: AbortSignal,
+    me: string
   ): Promise<void>;
   join(call: BrainCall, self: CallSelf, policy?: CallPolicy): Promise<void>;
 }
@@ -50,19 +51,29 @@ export function callTransport(options: {
   const active = new Map<string, AbortSignal>();
   let dispatch: (call: BrainCall) => Promise<void> = async () => {};
   const directory = join(options.workspace, 'log', 'calls');
+  let nextPrune = Date.now() + 3600000;
   const config = async () => {
+    if (Date.now() >= nextPrune) {
+      await pruneCalls(directory);
+      nextPrune = Date.now() + 3600000;
+    }
     const config = parseCallsConfig(
       JSON.parse(
         await readFile(join(options.workspace, 'config/calls.json'), 'utf8')
       )
     );
     try {
-      config.hungUp = JSON.parse(
-        await readFile(
-          join(options.workspace, 'cache/call-hungup.json'),
-          'utf8'
-        )
-      );
+      const cached = parseCallsConfig({
+        channels: [],
+        blockedChannels: [],
+        hungUp: JSON.parse(
+          await readFile(
+            join(options.workspace, 'cache/call-hungup.json'),
+            'utf8'
+          )
+        ),
+      });
+      config.hungUp = [...new Set([...config.hungUp, ...cached.hungUp])];
     } catch (error) {
       if (
         !(error instanceof Error && 'code' in error && error.code === 'ENOENT')
@@ -72,10 +83,9 @@ export function callTransport(options: {
     return config;
   };
   return {
-    async watch(handler, signal) {
+    async watch(handler, signal, me) {
       dispatch = handler;
       await pruneCalls(directory);
-      const me = (await options.http.me()).user_id;
       try {
         await watchCalls({
           api: macroCalls(options.http),
@@ -94,6 +104,7 @@ export function callTransport(options: {
                   kind: invitation.kind,
                   destination: invitation.id,
                   channel: invitation.channel,
+                  host: invitation.host,
                 },
               });
             } finally {
@@ -109,21 +120,30 @@ export function callTransport(options: {
       if (call.phase !== 'incoming') return;
       const signal = active.get(call.id);
       if (!signal) throw new Error('call invitation is no longer active');
-      const { kind, destination, channel } = call.metadata;
+      const { kind, destination, channel, host } = call.metadata;
       if (
         (kind !== 'channel' && kind !== 'meeting') ||
         typeof destination !== 'string' ||
-        (channel !== null && typeof channel !== 'string')
+        (channel !== null && typeof channel !== 'string') ||
+        typeof host !== 'string'
       )
         throw new Error('invalid call invitation');
       const context = await self.context();
       if (context.budgetUsd <= 0)
         throw new Error('daily call budget exhausted');
+      const reportingChannel =
+        channel ?? (await options.http.openDirectMessage(host));
       const costs: Promise<void>[] = [];
       try {
         await withSpan('brain.call', { 'call.id': call.id }, () =>
           joinCall({
-            invitation: { callId: call.id, kind, id: destination, channel },
+            invitation: {
+              callId: call.id,
+              kind,
+              id: destination,
+              channel: reportingChannel,
+              host,
+            },
             api: macroCalls(options.http),
             gateway: options.gateway.forName(context.name),
             names: [context.name],
@@ -134,7 +154,7 @@ export function callTransport(options: {
             brain: (emit, onHangUp) =>
               claudeBrain({
                 callId: call.id,
-                channel: channel ?? '',
+                channel: reportingChannel,
                 emit: (type, data) => {
                   emit(type, data);
                   if (type === 'brain.result' && typeof data?.cost === 'number')
@@ -152,11 +172,7 @@ export function callTransport(options: {
                 handOff: async (task) => {
                   if (policy.allowHandOff === false)
                     throw new Error('hand-offs are disabled for this call');
-                  if (!channel)
-                    throw new Error(
-                      'this call has no conversation for reporting work'
-                    );
-                  return self.handOff(channel, task);
+                  return self.handOff(reportingChannel, task);
                 },
               }),
             hungUp: self.hungUp,
@@ -165,7 +181,11 @@ export function callTransport(options: {
           })
         );
       } finally {
-        await Promise.all(costs);
+        try {
+          await Promise.all(costs);
+        } finally {
+          await pruneCalls(directory);
+        }
       }
     },
   };

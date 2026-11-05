@@ -12,6 +12,7 @@ export class EventLog {
   private fd: number | null;
   readonly dir: string | null;
   private echo;
+  private askedAt = new Map<number, number>();
   constructor(dir: string | null, echo = false) {
     this.dir = dir;
     this.echo = echo;
@@ -20,7 +21,17 @@ export class EventLog {
   }
   now = () => Math.round(performance.now() - this.t0);
   emit: Emit = (type, data = {}) => {
-    const line = JSON.stringify({ t: this.now(), type, ...data });
+    const now = this.now();
+    if (type === 'turn.ask' && typeof data.turn === 'number')
+      this.askedAt.set(data.turn, now);
+    if (type === 'tts.first_audio' && typeof data.turn === 'number') {
+      const started = this.askedAt.get(data.turn);
+      this.askedAt.delete(data.turn);
+      if (started !== undefined) data = { ...data, ms: now - started };
+    }
+    if (type === 'turn.completed' && typeof data.turn === 'number')
+      this.askedAt.delete(data.turn);
+    const line = JSON.stringify({ t: now, type, ...data });
     if (this.fd !== null) writeSync(this.fd, line + '\n');
     if (this.echo) console.log(line);
     if (

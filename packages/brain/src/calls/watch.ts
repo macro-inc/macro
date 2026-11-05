@@ -7,6 +7,7 @@ export type Invitation = {
   kind: 'channel' | 'meeting';
   id: string;
   channel: string | null;
+  host: string;
 };
 export type CallsConfig = {
   channels: string[];
@@ -44,6 +45,7 @@ export function wanted(world: World): Invitation[] {
           kind: 'channel',
           id: call.channelId,
           channel: call.channelId,
+          host: call.createdBy,
         })
       ),
     ...world.meetings
@@ -59,6 +61,7 @@ export function wanted(world: World): Invitation[] {
           kind: 'meeting',
           id: meeting.shareToken,
           channel: meeting.channelId ?? null,
+          host: meeting.createdBy,
         })
       ),
   ];

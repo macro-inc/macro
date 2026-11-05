@@ -51,6 +51,7 @@ type LedgerFile = {
 export class SpendLedger {
   private readonly dir: string;
   private readonly today: () => string;
+  private writing: Promise<number> = Promise.resolve(0);
   constructor(
     dir: string,
     today: () => string = () => new Date().toISOString().slice(0, 10)
@@ -73,11 +74,16 @@ export class SpendLedger {
       throw error;
     }
   }
-  async record(usd: number): Promise<number> {
-    const spentUsd = (await this.spentToday()) + usd;
-    await nodeFs.mkdir(this.dir, { recursive: true });
-    const ledger: LedgerFile = { day: this.today(), spentUsd };
-    await nodeFs.writeFile(this.file, JSON.stringify(ledger));
-    return spentUsd;
+  record(usd: number): Promise<number> {
+    const next = this.writing.then(async () => {
+      const spentUsd = (await this.spentToday()) + usd;
+      await nodeFs.mkdir(this.dir, { recursive: true });
+      const ledger: LedgerFile = { day: this.today(), spentUsd };
+      await nodeFs.writeFile(`${this.file}.tmp`, JSON.stringify(ledger));
+      await nodeFs.rename(`${this.file}.tmp`, this.file);
+      return spentUsd;
+    });
+    this.writing = next.catch(() => 0);
+    return next;
   }
 }

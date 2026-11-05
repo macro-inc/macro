@@ -2,6 +2,7 @@ import {
   createSdkMcpServer,
   type Options,
   query,
+  type SDKMessage,
   type SDKUserMessage,
   tool,
 } from '@anthropic-ai/claude-agent-sdk';
@@ -74,7 +75,15 @@ export type CallBrainOptions = {
   briefing(): Promise<string>;
   operating: string;
   options: Options;
+  session?(
+    prompt: AsyncIterable<SDKUserMessage>,
+    options: Options
+  ): CallModelSession;
 };
+export interface CallModelSession extends AsyncIterable<SDKMessage> {
+  interrupt(): Promise<unknown>;
+  close(): void;
+}
 class Inbox implements AsyncIterable<SDKUserMessage> {
   private q: SDKUserMessage[] = [];
   private wake: (() => void) | null = null;
@@ -108,6 +117,7 @@ type Out =
     }
   | {
       kind: 'end';
+      error?: Error;
     };
 export function claudeBrain(opts: CallBrainOptions): Brain {
   const { emit } = opts;
@@ -115,7 +125,14 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
   let sink: ((o: Out) => void) | null = null; // the running turn's consumer
   let chain: Promise<void> = Promise.resolve();
   let warming = false;
-  let q: ReturnType<typeof query> | null = null;
+  let q: CallModelSession | null = null;
+  let terminal: Error | null = null;
+  const terminate = (error: Error) => {
+    terminal = error;
+    ready();
+    sink?.({ kind: 'end', error });
+    inbox.end();
+  };
   let ready!: () => void;
   const started = new Promise<void>((r) => (ready = r));
   const tools = createSdkMcpServer({
@@ -203,12 +220,14 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
       }
     }
     emit('brain.exit');
-    sink?.({ kind: 'end' });
+    terminate(new Error('call model session exited'));
   }
   function runTurn(content: string, turnNo: number) {
+    if (terminal) throw terminal;
     const queue: string[] = [];
     let wake: (() => void) | null = null;
     let ended = false;
+    let failure: Error | undefined;
     let finish!: () => void;
     const done = new Promise<void>((r) => (finish = r));
     const t0 = performance.now();
@@ -216,6 +235,7 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
     sink = (o) => {
       if (o.kind === 'end') {
         ended = true;
+        failure = o.error;
         sink = null;
         finish();
       } else {
@@ -233,7 +253,10 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
     async function* texts(): AsyncGenerator<string> {
       for (;;) {
         while (queue.length) yield queue.shift()!;
-        if (ended) return;
+        if (ended) {
+          if (failure) throw failure;
+          return;
+        }
         await new Promise<void>((r) => (wake = r));
         wake = null;
       }
@@ -248,6 +271,10 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
     const prev = chain;
     chain = new Promise<void>((r) => (release = r));
     await prev;
+    if (terminal) {
+      release();
+      throw terminal;
+    }
     const t = runTurn(content, turnNo);
     t.done.then(release);
     yield* t.texts;
@@ -255,9 +282,9 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
   return {
     async start() {
       const brief = opts.briefing();
-      q = query({
-        prompt: inbox,
-        options: {
+      q = (opts.session ?? ((prompt, options) => query({ prompt, options })))(
+        inbox,
+        {
           ...opts.options,
           includePartialMessages: true,
           settingSources: ['project'],
@@ -269,11 +296,11 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
           mcpServers: { call: tools },
           stderr: (s: string) =>
             emit('brain.stderr', { text: s.slice(0, 500) }),
-        },
-      });
+        }
+      );
       void pump().catch((e) => {
         emit('brain.error', { error: String(e) });
-        sink?.({ kind: 'end' });
+        terminate(e instanceof Error ? e : new Error(String(e)));
       });
       const t0 = performance.now();
       const warm = serial(
@@ -300,7 +327,7 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
       );
     },
     async close() {
-      inbox.end();
+      terminate(new Error('call model session closed'));
       try {
         q?.close?.();
       } catch (error) {
