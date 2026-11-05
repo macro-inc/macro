@@ -686,14 +686,17 @@ pub async fn run() -> anyhow::Result<()> {
     .with_owned_entity_cleanup(team_owned_entity_cleanup)
     .with_invite_rewarder(Arc::new(invite_rewards));
     let computer_prices = config.computer_prices();
-    let computer_service = Arc::new(hosted_runtimes::domain::service::ComputerService::new(
-        hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone()),
-        crate::outbound::computer_billing::TeamComputerBilling::new(
-            teams_service_impl.clone(),
-            computer_prices.clone(),
-        ),
-        hosted_runtimes::domain::service::SystemClock,
-    ));
+    let computer_service = Arc::new(
+        hosted_runtimes::domain::service::ComputerService::new(
+            hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone()),
+            crate::outbound::computer_billing::TeamComputerBilling::new(
+                teams_service_impl.clone(),
+                computer_prices.clone(),
+            ),
+            hosted_runtimes::domain::service::SystemClock,
+        )
+        .with_comp_policy(hosted_runtimes::domain::ports::NoComps),
+    );
     let teams_service = Arc::new(teams_service_impl);
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(

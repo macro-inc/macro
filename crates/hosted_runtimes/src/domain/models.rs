@@ -10,7 +10,7 @@ use crate::domain::enrollment::Persona;
 use crate::domain::lifecycle::{Billing, ComputerState, HostId, PaymentOutcome, Phase, Power};
 use crate::domain::size::ComputerSize;
 
-/// One computer a team pays for.
+/// One computer allocated to a team.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Computer {
     pub id: Uuid,
@@ -30,6 +30,7 @@ pub struct Computer {
 /// A computer to reserve units for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewComputer {
+    pub billing: PurchaseBilling,
     /// Persisted in the payment confirmation outbox for exact purchase replay.
     pub extra_items: Vec<SubscriptionItem>,
     pub id: Uuid,
@@ -40,10 +41,11 @@ pub struct NewComputer {
     pub created_by: String,
 }
 
-/// A buy request. `extra_items` join the computer's item in the same
-/// subscription update, e.g. the seat of an agent teammate invited with it.
+/// A buy request. For Stripe purchases, `extra_items` join the computer's
+/// item in the same subscription update. Comped purchases require no extra items.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PurchaseRequest {
+    pub billing: PurchaseBilling,
     pub team_id: Uuid,
     /// The admin or owner buying it.
     pub created_by: String,
@@ -52,6 +54,15 @@ pub struct PurchaseRequest {
     pub name: Option<String>,
     pub persona: Option<Persona>,
     pub extra_items: Vec<SubscriptionItem>,
+}
+
+/// Server-selected purchase funding. Team clients cannot select this value.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PurchaseBilling {
+    Stripe,
+    Comped { reason: String },
 }
 
 /// A Stripe price and how many of it to add to the team subscription.
@@ -79,6 +90,7 @@ pub enum BillingInterval {
 #[serde(rename_all = "camelCase")]
 pub struct Quote {
     pub size: ComputerSize,
+    /// Empty for a comped team without a subscription.
     pub price_id: String,
     /// In the currency's smallest unit.
     pub amount: i64,
@@ -180,6 +192,8 @@ pub struct ComputerStatus {
     pub size: ComputerSize,
     pub status: ComputerStatusKind,
     pub payment: PaymentOutcome,
+    /// Present for a comped purchase, including after release.
+    pub comp_reason: Option<String>,
     /// Present until the computer first connects.
     pub setup: Option<SetupProgress>,
     pub powered_on: bool,
@@ -237,6 +251,7 @@ impl Computer {
             size: self.size,
             status,
             payment: self.state.payment,
+            comp_reason: self.state.comp_reason.clone(),
             setup,
             powered_on: self.state.power == Power::On,
             cancels_at,

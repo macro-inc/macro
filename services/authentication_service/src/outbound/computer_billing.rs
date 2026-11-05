@@ -158,11 +158,12 @@ fn billing_error(error: TeamSubscriptionItemsError) -> BillingError {
 }
 
 #[async_trait::async_trait]
-impl<Repo, Bill, Time> ComputerBillingObserver for ComputerService<Repo, Bill, Time>
+impl<Repo, Bill, Time, Policy> ComputerBillingObserver for ComputerService<Repo, Bill, Time, Policy>
 where
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
+    Policy: hosted_runtimes::domain::ports::CompPolicy,
 {
     async fn billed_count(
         &self,

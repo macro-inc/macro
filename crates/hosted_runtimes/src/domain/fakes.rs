@@ -75,12 +75,16 @@ impl ComputerRepo for FakeRepo {
         if sold + computer.size.units() > self.sold_units {
             return Err(ReserveError::SoldOut);
         }
+        let mut state = ComputerState::reserved(HOST, now);
+        if let crate::domain::models::PurchaseBilling::Comped { reason } = &computer.billing {
+            state.comp_reason = Some(reason.clone());
+        }
         let reserved = Computer {
             id: computer.id,
             team_id: computer.team_id,
             name: computer.name,
             size: computer.size,
-            state: ComputerState::reserved(HOST, now),
+            state,
             harness_id: None,
             persona: computer.persona,
             created_by: computer.created_by,

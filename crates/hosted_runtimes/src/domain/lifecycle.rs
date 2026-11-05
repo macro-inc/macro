@@ -44,7 +44,7 @@ pub enum Phase {
     },
     /// Payment was definitely refused; no capacity or billing item is held.
     PaymentFailed,
-    /// Paid; the instance is being created on `host`, started when `start`
+    /// Purchase confirmed; the instance is created on `host`, started when `start`
     /// (a full host creates it stopped and wakes it later).
     Provisioning {
         host: HostId,
@@ -106,7 +106,7 @@ pub enum Billing {
     },
 }
 
-/// Whether the computer's purchase has ever been paid.
+/// The purchase outcome, latched after payment or comp confirmation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
@@ -117,6 +117,8 @@ pub enum PaymentOutcome {
     Paid,
     /// The purchase was refused without billing.
     Unbilled,
+    /// Provided without a charge; the reason is stored separately.
+    Comped,
 }
 
 /// Everything the lifecycle knows about one computer.
@@ -126,6 +128,9 @@ pub struct ComputerState {
     pub power: Power,
     pub billing: Billing,
     pub payment: PaymentOutcome,
+    /// Absent on older Stripe purchases; persisted at reservation for crash recovery.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comp_reason: Option<String>,
     pub macrod_connected: bool,
     /// Crash times inside the current [`CRASH_WINDOW`].
     pub recent_crashes: Vec<DateTime<Utc>>,
@@ -141,6 +146,7 @@ impl ComputerState {
             power: Power::On,
             billing: Billing::Active,
             payment: PaymentOutcome::Pending,
+            comp_reason: None,
             macrod_connected: false,
             recent_crashes: Vec::new(),
             wake_requested: false,
@@ -187,6 +193,10 @@ impl ComputerState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum Event {
+    /// The server granted a computer without a subscription charge.
+    Comped {
+        reason: String,
+    },
     PaymentConfirmed,
     /// The purchase was definitely refused by billing.
     PurchaseFailed,
@@ -384,8 +394,13 @@ pub fn transition(
 
     if let Phase::PendingPayment { .. } = state.phase {
         match event {
-            Event::PaymentConfirmed => {
-                next.payment = PaymentOutcome::Paid;
+            Event::PaymentConfirmed | Event::Comped { .. } => {
+                if let Event::Comped { reason } = event {
+                    next.payment = PaymentOutcome::Comped;
+                    next.comp_reason = Some(reason.clone());
+                } else {
+                    next.payment = PaymentOutcome::Paid;
+                }
                 let start = state.power == Power::On && context.host_has_room;
                 next.phase = Phase::Provisioning { host, start };
                 next.wake_requested = state.power == Power::On && !start;
@@ -401,7 +416,7 @@ pub fn transition(
     }
 
     match event {
-        Event::PaymentConfirmed | Event::PurchaseFailed => {}
+        Event::PaymentConfirmed | Event::Comped { .. } | Event::PurchaseFailed => {}
 
         Event::InstanceLost => {
             next.macrod_connected = false;
@@ -603,6 +618,10 @@ pub fn transition(
 
         Event::CancelAtPeriodEnd { at } => {
             if state.billing == Billing::Active {
+                if state.payment == PaymentOutcome::Comped {
+                    cancel(&mut next, &mut effects, host, now);
+                    return (next, effects);
+                }
                 next.billing = Billing::CancelAtPeriodEnd { at: *at };
                 effects.push(Effect::ScheduleTimer {
                     kind: TimerKind::PeriodEnded,
@@ -619,19 +638,25 @@ pub fn transition(
 
         Event::PeriodEnded => {
             if let Billing::CancelAtPeriodEnd { .. } = state.billing {
-                effects.push(Effect::RemoveBillingItem);
+                if state.payment == PaymentOutcome::Paid {
+                    effects.push(Effect::RemoveBillingItem);
+                }
                 cancel(&mut next, &mut effects, host, now);
             }
         }
 
         Event::SubscriptionCanceled => {
-            if !matches!(state.billing, Billing::Canceled { .. }) {
+            if state.payment != PaymentOutcome::Comped
+                && !matches!(state.billing, Billing::Canceled { .. })
+            {
                 cancel(&mut next, &mut effects, host, now);
             }
         }
 
         Event::ReleaseNow => {
-            if !matches!(state.billing, Billing::Canceled { .. }) {
+            if state.payment == PaymentOutcome::Paid
+                && !matches!(state.billing, Billing::Canceled { .. })
+            {
                 effects.push(Effect::RemoveBillingItem);
             }
             destroy(&mut next, &mut effects, host);
