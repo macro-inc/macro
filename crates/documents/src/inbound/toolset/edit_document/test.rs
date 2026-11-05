@@ -583,6 +583,15 @@ impl EditingWorkerService for FakeEditingWorker {
         panic!("unexpected canvas call")
     }
 
+    async fn embed_canvas_document(
+        &self,
+        _: &str,
+        _: &DocumentPermissionToken,
+        _: &crate::domain::canvas::CanvasDocumentEmbed,
+    ) -> anyhow::Result<String> {
+        panic!("unexpected canvas embed call")
+    }
+
     async fn spreadsheet(
         &self,
         _document_id: &str,

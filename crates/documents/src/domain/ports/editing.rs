@@ -85,6 +85,16 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         artifacts: bool,
     ) -> impl Future<Output = anyhow::Result<crate::domain::canvas::CanvasResult>> + Send;
 
+    /// Commit a document node to the live Canvas CRDT through the worker's
+    /// internal-only embed request. Returns the new item id.
+    #[cfg(feature = "ai_tools")]
+    fn embed_canvas_document(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        embed: &crate::domain::canvas::CanvasDocumentEmbed,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
     /// Run a deterministic spreadsheet operation with a scoped document token.
     #[cfg(feature = "ai_tools")]
     fn spreadsheet(

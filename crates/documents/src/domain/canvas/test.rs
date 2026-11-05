@@ -443,3 +443,56 @@ async fn the_artifacts_rollout_reaches_the_worker_only_when_set() {
             .unwrap();
     }
 }
+
+#[tokio::test]
+async fn embeds_mint_an_edit_token_for_the_user_and_actor_of_a_canvas() {
+    let mut worker = MockEditingWorkerService::new();
+    worker
+        .expect_embed_canvas_document()
+        .times(1)
+        .returning(|id, token, embed| {
+            assert_eq!(id, DOCUMENT);
+            let claims: serde_json::Value =
+                macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
+            assert_eq!(claims["access_level"], "edit");
+            assert_eq!(claims["actor"], "bot-1");
+            assert_eq!(embed.file_type, "artifact");
+            Box::pin(async { Ok("item-1".to_owned()) })
+        });
+    let embedder = CanvasEmbedder::new(
+        Arc::new(documents("canvas")),
+        Arc::new(worker),
+        SECRET.into(),
+    );
+    let embed = CanvasDocumentEmbed {
+        document_id: "artifact".into(),
+        name: "Onboarding".into(),
+        file_type: "artifact".into(),
+        subpath: None,
+        x: 0.0,
+        y: 0.0,
+        width: 640.0,
+        height: 480.0,
+        mention_id: "mention".into(),
+    };
+
+    let item_id = embedder
+        .embed_document(
+            receipt(AccessLevel::Edit),
+            &user(),
+            Some("bot-1"),
+            embed.clone(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(item_id, "item-1");
+
+    let refused = CanvasEmbedder::new(
+        Arc::new(documents("md")),
+        Arc::new(MockEditingWorkerService::new()),
+        SECRET.into(),
+    )
+    .embed_document(receipt(AccessLevel::Edit), &user(), None, embed)
+    .await;
+    assert!(refused.is_err());
+}
