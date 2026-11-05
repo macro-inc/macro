@@ -72,8 +72,8 @@ fn filters(yaml: &str) -> (&str, &str) {
         .and_then(|rest| rest.split("id: filter").next())
         .expect("path-check filters");
     filters
-        .split_once("codegen_changed:")
-        .expect("should_run block, then codegen_changed block")
+        .split_once("codegen_inputs:")
+        .expect("should_run block, then the code generation inputs")
 }
 
 /// A job's rendered YAML, from its id up to the next job's id. Slicing by id
@@ -268,10 +268,6 @@ fn codegen_filter_covers_every_input_of_the_generated_code_job() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let (_, codegen) = filters(&yaml);
     for path in [
-        "'crates/**/*.rs'",
-        "'services/**/*.rs'",
-        "'Cargo.toml'",
-        "'Cargo.lock'",
         "'apps/web/scripts/generate-api-schema.ts'",
         "'apps/web/scripts/services.ts'",
         "'packages/sdk/**'",
@@ -279,9 +275,22 @@ fn codegen_filter_covers_every_input_of_the_generated_code_job() {
     ] {
         assert!(
             codegen.contains(path),
-            "codegen_changed must include {path}: {codegen}"
+            "the code generation filters must include {path}: {codegen}"
         );
     }
+    let path_check = job(&yaml, "path-check", "android-native-check");
+    for needle in [
+        "utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema",
+        "-- Cargo.toml Cargo.lock",
+        "for revision in HEAD \"$base\"",
+        "-- 'crates/*.rs' 'services/*.rs'",
+    ] {
+        assert!(path_check.contains(needle), "{needle}: {path_check}");
+    }
+    assert!(
+        !path_check.contains("grep -q"),
+        "grep -q closes the pipe early, and pipefail reads that as no match: {path_check}"
+    );
     let generated = job(&yaml, "generated-code", "biome-check");
     assert!(generated.contains("needs.path-check.outputs.codegen_changed == 'true'"));
 }
@@ -782,4 +791,60 @@ fn preview_steps_follow_the_build_and_cannot_fail_it() {
 fn status_check_rejects_a_cancelled_generated_code_job() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     assert!(yaml.contains(r#"[[ "$result" != "success" && "$result" != "skipped" ]]"#));
+}
+
+/// Run `Detect schema changes` on a commit that changes a Rust file naming no schema
+/// item, and return what it decides.
+fn schema_step_decides(event: &str, changed_file: &str) -> String {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let git = |args: &[&str]| {
+        let status = std::process::Command::new("git")
+            .args(["-c", "user.name=test", "-c", "user.email=test@example.com"])
+            .args(args)
+            .current_dir(dir.path())
+            .output()
+            .expect("git");
+        assert!(status.status.success(), "{args:?}: {status:?}");
+    };
+    git(&["init", "-q"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "base"]);
+    git(&["branch", "base"]);
+    let path = dir.path().join(changed_file);
+    std::fs::create_dir_all(path.parent().expect("parent")).expect("dirs");
+    std::fs::write(&path, "pub fn f() {}\n").expect("file");
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "change"]);
+    git(&["remote", "add", "origin", "."]);
+
+    let output = dir.path().join("output");
+    let step = serde_json::to_value(detect_schema_changes().value).expect("step");
+    let status = std::process::Command::new("bash")
+        .args(["-c", step["run"].as_str().expect("script")])
+        .current_dir(dir.path())
+        .env("GITHUB_EVENT_NAME", event)
+        .env("GITHUB_OUTPUT", &output)
+        .env("CODEGEN_INPUTS", "false")
+        .output()
+        .expect("bash");
+    assert!(status.status.success(), "{status:?}");
+    std::fs::read_to_string(&output).expect("output")
+}
+
+/// A pull request can skip regenerating. The merge queue, the last check before
+/// `main`, can't.
+#[test]
+fn only_the_merge_queue_regenerates_for_any_rust_change() {
+    let rust = "crates/a/src/lib.rs";
+    assert_eq!(
+        schema_step_decides("pull_request", rust),
+        "codegen_changed=false\n"
+    );
+    assert_eq!(
+        schema_step_decides("merge_group", rust),
+        "codegen_changed=true\n"
+    );
+    assert_eq!(
+        schema_step_decides("merge_group", "docs/a.md"),
+        "codegen_changed=false\n"
+    );
 }
