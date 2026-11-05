@@ -12,6 +12,7 @@ import type { ComputerStatusKind } from './computerStatusKind';
 import type { ComputerStatusPersonaName } from './computerStatusPersonaName';
 import type { ComputerStatusRetainedUntil } from './computerStatusRetainedUntil';
 import type { ComputerStatusSetup } from './computerStatusSetup';
+import type { PaymentOutcome } from './paymentOutcome';
 
 /**
  * A computer as its team sees it.
@@ -23,6 +24,7 @@ export interface ComputerStatus {
   harnessId?: ComputerStatusHarnessId;
   id: string;
   name: string;
+  payment: PaymentOutcome;
   personaName?: ComputerStatusPersonaName;
   poweredOn: boolean;
   /** When the disk is destroyed, for a canceled computer. */

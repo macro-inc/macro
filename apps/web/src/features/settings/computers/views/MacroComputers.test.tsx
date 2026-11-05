@@ -183,6 +183,7 @@ it('removes a failed payment with the stored confirmation name and allows retry 
       name: 'Build machine',
       size: 'standard',
       status: 'payment_failed',
+      payment: 'unbilled',
       poweredOn: false,
       createdAt: '2026-01-01T00:00:00Z',
     },

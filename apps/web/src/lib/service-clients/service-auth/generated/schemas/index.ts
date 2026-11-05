@@ -201,6 +201,7 @@ export * from './patchTeamUserRole';
 export * from './patchUserGroupRequest';
 export * from './patchUserOnboardingRequest';
 export * from './patchUserTutorialRequest';
+export * from './paymentOutcome';
 export * from './permission';
 export * from './persona';
 export * from './personaConfig';

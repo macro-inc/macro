@@ -7342,7 +7342,15 @@
       "ComputerStatus": {
         "type": "object",
         "description": "A computer as its team sees it.",
-        "required": ["id", "name", "size", "status", "poweredOn", "createdAt"],
+        "required": [
+          "id",
+          "name",
+          "size",
+          "status",
+          "payment",
+          "poweredOn",
+          "createdAt"
+        ],
         "properties": {
           "cancelsAt": {
             "type": ["string", "null"],
@@ -7363,6 +7371,9 @@
           },
           "name": {
             "type": "string"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/PaymentOutcome"
           },
           "personaName": {
             "type": ["string", "null"]
@@ -9009,6 +9020,11 @@
             "description": "If the user has completed the tutorial"
           }
         }
+      },
+      "PaymentOutcome": {
+        "type": "string",
+        "description": "Whether the computer's purchase has ever been paid.",
+        "enum": ["pending", "paid", "unbilled"]
       },
       "Permission": {
         "type": "object",
