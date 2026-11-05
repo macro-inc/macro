@@ -137,3 +137,5 @@ export interface MacroOpts {
    * than directly. */
   requestedAs?: string;
 }
+
+export const CI_INTEGRATE_NONCE = 'om2';
