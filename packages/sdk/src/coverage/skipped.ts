@@ -62,12 +62,17 @@ export const authExcluded = [
   'createMergeRequest',
   'createPortalSession',
   'createTeam',
+  // Team agents: the brain and the app's agent settings call these directly.
+  'createTeamAgent',
   'createTeamInviteLink',
   // An agent's own API key is a credential managed in the app's agent settings.
   'deleteAgentApiKey',
   'deleteCursorApiKey',
   'deleteGithubLink',
+  'deleteMyTeamAgentSecret',
   'deleteTeam',
+  'deleteTeamAgent',
+  'deleteTeamAgentSecret',
   'deleteTeamInviteLink',
   'deleteUser',
   'disconnectCodex',
@@ -81,6 +86,9 @@ export const authExcluded = [
   'getGithubPullRequestMergeability',
   'getGtmInviteOffer',
   'getLegacyUserPermissions',
+  'getMyTeamAgent',
+  'getMyTeamAgentEmail',
+  'getMyTeamAgentSecret',
   'getPermissions',
   // Renewal and scheduled-plan details are part of the app's billing settings.
   'getSubscriptionStatus',
@@ -111,7 +119,10 @@ export const authExcluded = [
   'listCodexEnvironments',
   'listCursorModels',
   'listGtmInviteLinks',
+  'listMyTeamAgentEmail',
   'listSystemStatusHistory',
+  'listTeamAgentSecrets',
+  'listTeamAgents',
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
   'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
   'logout',
@@ -135,10 +146,12 @@ export const authExcluded = [
   'putAgentApiKey',
   'putCursorApiKey',
   'putCursorDefaultModel',
+  'putMyTeamAgentSecret',
   'putProfilePicture',
   // Internal to the web app's agent signup; the token is shown in its modal.
   'agentSetup',
   'putUserLanguage',
+  'quoteTeamAgent',
   'quoteTeamComputer', // Computer checkout belongs to the app.
   'redeemGtmInviteLink',
   'refresh',
@@ -150,6 +163,7 @@ export const authExcluded = [
   'retryTeamComputer', // Computer provisioning recovery belongs to the app.
   'revokeGtmInviteLink',
   'sendMobileWelcomeEmail',
+  'sendTeamAgentEmail',
   'sendTeamDomainNotice',
   'sessionCreation',
   'sessionLogin',
