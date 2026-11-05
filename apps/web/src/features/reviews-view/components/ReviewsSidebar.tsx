@@ -5,6 +5,7 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { ViewCreateMenu } from '@app/features/command/view-create-menu';
+import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { PrOriginIcon } from '@block-pr/component/PrLinks';
@@ -84,6 +85,7 @@ function ReviewFavoriteRow(props: {
             />
           </ViewSidebar.Icon>
           <span class="truncate">{name()}</span>
+          <FavoriteUnreadIndicator favorite={props.favorite} />
         </ViewSidebar.Item>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>

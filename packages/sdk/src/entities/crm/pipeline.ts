@@ -267,12 +267,13 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
 
   /**
    * Add companies or contacts as entries (deals), filling fields by name: a
-   * stage by its label, a person as `'me'` or an email. A record already in
-   * the pipeline is not added again unless `allowDuplicates` (a separate second
-   * deal); its entry comes back in `alreadyPresent`.
+   * stage by its label, a person as `'me'` or an email. A generic pipeline's
+   * entries name no record, only fields. A record already in the pipeline is
+   * not added again unless `allowDuplicates` (a separate second deal); its
+   * entry comes back in `alreadyPresent`.
    */
   async addRecords(
-    entries: { record: PipelineRecordInput; set?: PipelineFieldInputs }[],
+    entries: { record?: PipelineRecordInput; set?: PipelineFieldInputs }[],
     options: { allowDuplicates?: boolean } = {},
   ): Promise<{
     added: PipelineEntry[];
@@ -281,7 +282,7 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
   }> {
     const body = {
       entries: entries.map(({ record, set }) => ({
-        ...recordTarget(record),
+        ...(record && recordTarget(record)),
         set: fieldInputs(set ?? {}),
       })),
       allowDuplicates: options.allowDuplicates ?? false,
@@ -509,9 +510,11 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
     };
   }
 
-  /** @internal Whether entries track companies or contacts. */
-  private async trackedRecordType(): Promise<'company' | 'contact'> {
-    return (await this.detail.get()).recordType;
+  /** @internal Whether entries track companies or contacts; `undefined` for a generic pipeline. */
+  private async trackedRecordType(): Promise<
+    'company' | 'contact' | undefined
+  > {
+    return (await this.detail.get()).recordType ?? undefined;
   }
 
   /** Apply an atomic generated database operation batch through this pipeline.

@@ -10,8 +10,6 @@ export type { PinnedItem, ReorderPinRequest };
 
 /**
  * The user's pins: items pinned to fixed slots in the home view.
- *
- * @routing Use when pinning or unpinning items; not favorites.
  */
 export class PinsNamespace {
   constructor(private readonly client: MacroClient) {}

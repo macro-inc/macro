@@ -244,9 +244,9 @@ pub async fn search_entries<
     Ok(Json(found.iter().map(PipelineEntries::from).collect()))
 }
 
-/// Add companies or contacts as entries, filling fields by name. A record
-/// already in the pipeline is returned in `alreadyPresent` instead, unless
-/// `allowDuplicates`.
+/// Add entries, filling fields by name: companies or contacts in a tracked
+/// pipeline, free-form rows in a generic one. A record already in the
+/// pipeline is returned in `alreadyPresent` instead, unless `allowDuplicates`.
 #[utoipa::path(post, path = "/crm/pipelines/{id}/entries", operation_id = "add_crm_pipeline_entries",
     request_body = AddEntriesRequest, params(("id" = Uuid, Path)),
     responses((status = 200, body = AddEntriesResponse), (status = 400, body = ErrorResponse)))]
@@ -266,11 +266,12 @@ pub async fn add_entries<
         .into_iter()
         .map(|entry| {
             let record = match (entry.record_id, entry.email) {
-                (Some(id), None) => RecordTarget::Id(id),
-                (None, Some(email)) => RecordTarget::Email(email.trim().to_owned()),
-                _ => {
+                (Some(id), None) => Some(RecordTarget::Id(id)),
+                (None, Some(email)) => Some(RecordTarget::Email(email.trim().to_owned())),
+                (None, None) => None,
+                (Some(_), Some(_)) => {
                     return Err(WorkflowError::Invalid(
-                        "Give each entry exactly one of recordId or email.".into(),
+                        "Give each entry at most one of recordId or email.".into(),
                     ));
                 }
             };

@@ -73,8 +73,9 @@ External runtimes bind sessions lazily. On each dial `RuntimeRegistry` has the
 connection run `initialize` (shared with every session through its handshake)
 and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
 `HarnessCommand::Reattach` for the listed sessions bound to that harness,
-restoring each (`session/load` or `session/resume`) without a prompt; attached,
-archived and managed sessions are skipped. macrod's herdr-acp lists native
+restoring each (`session/load` or `session/resume`) without a prompt, then
+dispatching whatever its durable queue still holds when no turn is running;
+attached, archived and managed sessions are skipped. macrod's herdr-acp lists native
 sessions whose Herdr agent still runs.
 
 Durable system events use the `agent_session` outbox, distinct from the user

@@ -118,8 +118,8 @@ impl From<&PipelineRecord> for EntryRecord {
 pub struct PipelineEntry {
     /// The entry: a row of the pipeline's table.
     pub entry_id: Uuid,
-    /// The company or contact it tracks.
-    pub record: EntryRecord,
+    /// The company or contact it tracks; missing in a generic pipeline.
+    pub record: Option<EntryRecord>,
     /// Its other fields that hold a value, by name.
     pub fields: BTreeMap<String, EntryFieldValue>,
 }
@@ -128,7 +128,7 @@ impl From<&PipelineEntryView> for PipelineEntry {
     fn from(entry: &PipelineEntryView) -> Self {
         Self {
             entry_id: entry.entry_id.into_uuid(),
-            record: (&entry.record).into(),
+            record: entry.record.as_ref().map(EntryRecord::from),
             fields: entry
                 .fields
                 .iter()
@@ -237,7 +237,7 @@ pub struct PipelineFields {
     /// The pipeline and the caller's grant on it.
     #[serde(flatten)]
     pub pipeline: AccessiblePipeline,
-    /// Its fields in column order; the first names the tracked record.
+    /// Its fields in column order; a tracked pipeline's first names its record.
     pub fields: Vec<PipelineFieldSummary>,
     /// Its table's version when read.
     pub version: i64,
@@ -408,7 +408,8 @@ impl From<&RecordEntries> for PipelineEntries {
     }
 }
 
-/// One entry to add: exactly one of `recordId` or `email`.
+/// One entry to add: at most one of `recordId` or `email`. A tracked
+/// pipeline's entry names its record; a generic pipeline's names none.
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NewEntry {
@@ -499,8 +500,8 @@ impl From<&FieldChange> for EntryFieldChange {
 pub struct UpdatedPipelineEntry {
     /// The entry.
     pub entry_id: Uuid,
-    /// The company or contact it tracks.
-    pub record: EntryRecord,
+    /// The company or contact it tracks; missing in a generic pipeline.
+    pub record: Option<EntryRecord>,
     /// The fields set, as they were and are.
     pub changes: Vec<EntryFieldChange>,
 }
@@ -509,7 +510,7 @@ impl From<&UpdatedEntry> for UpdatedPipelineEntry {
     fn from(entry: &UpdatedEntry) -> Self {
         Self {
             entry_id: entry.entry_id.into_uuid(),
-            record: (&entry.record).into(),
+            record: entry.record.as_ref().map(EntryRecord::from),
             changes: entry.changes.iter().map(EntryFieldChange::from).collect(),
         }
     }

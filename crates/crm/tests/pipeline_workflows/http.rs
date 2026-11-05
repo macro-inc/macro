@@ -180,7 +180,7 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(
         refused["message"],
-        "Give each entry exactly one of recordId or email."
+        "Give each entry at most one of recordId or email."
     );
 
     let (status, found) = call(
@@ -373,6 +373,29 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
         .unwrap();
     assert_eq!(priority["type"], "select");
     assert_eq!(priority["options"], json!(["High", "Low"]));
+
+    let (status, generic) = call(
+        &app,
+        "POST",
+        "/crm/pipelines",
+        Some(json!({"name": "Launch"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{generic}");
+    let generic_id = generic["id"].as_str().unwrap();
+    let (status, rows) = call(
+        &app,
+        "POST",
+        &format!("/crm/pipelines/{generic_id}/entries"),
+        Some(json!({"entries": [{"set": [{"field": "Name", "value": "Site"}]}]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{rows}");
+    assert_eq!(rows["added"][0]["record"], Value::Null);
+    assert_eq!(
+        rows["added"][0]["fields"]["Name"],
+        json!({"type": "text", "value": "Site"})
+    );
 
     // The pipeline routes still answer beside the workflow routes.
     let (status, read) = call(&app, "GET", &format!("/crm/pipelines/{id}"), None).await;

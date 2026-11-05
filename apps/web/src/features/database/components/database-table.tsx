@@ -1071,9 +1071,12 @@ export function DatabaseTable(props: DatabaseTableProps) {
                           data-grid-row-id={row().rowId}
                           data-highlighted={highlighted() ? '' : undefined}
                           aria-rowindex={index() + 2}
-                          class="group absolute inset-x-0 top-0 grid min-h-10 border-b border-edge-muted/60 hover:bg-hover/50"
+                          // Opaque, with its tints layered on top: a row taller
+                          // than the row lines beneath it would show them through.
+                          class="group absolute inset-x-0 top-0 grid min-h-10 border-b border-edge-muted/60 bg-panel hover:bg-linear-to-b hover:from-hover/50 hover:to-hover/50"
                           classList={{
-                            'bg-accent/15': highlighted(),
+                            'bg-linear-to-b from-accent/15 to-accent/15':
+                              highlighted(),
                             // Its presence labels paint over the sticky header
                             // while the row's top edge is in view.
                             'z-2': hostsLabels() && topInView(),

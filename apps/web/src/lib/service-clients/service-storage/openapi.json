@@ -433,6 +433,105 @@
         }
       }
     },
+    "/bots": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots`: the bots the caller can manage.",
+        "operationId": "list_bots",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Bot"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /bots`.",
+        "operationId": "create_bot",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/bots/me": {
       "get": {
         "tags": ["bots"],
@@ -561,6 +660,195 @@
         }
       }
     },
+    "/bots/{bot_id}": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/{bot_id}`.",
+        "operationId": "get_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["bots"],
+        "summary": "Handler for `DELETE /bots/{bot_id}`.",
+        "operationId": "delete_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["bots"],
+        "summary": "Handler for `PATCH /bots/{bot_id}`.",
+        "operationId": "patch_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/bots/{bot_id}/channels": {
       "get": {
         "tags": ["bots"],
@@ -643,6 +931,210 @@
             "name": "channel_id",
             "in": "path",
             "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bots/{bot_id}/tokens": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/{bot_id}/tokens`.",
+        "operationId": "list_bot_tokens",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BotToken"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /bots/{bot_id}/tokens`.",
+        "operationId": "create_bot_token",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBotTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateBotTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bots/{bot_id}/tokens/{token_id}": {
+      "delete": {
+        "tags": ["bots"],
+        "summary": "Handler for `DELETE /bots/{bot_id}/tokens/{token_id}`.",
+        "operationId": "revoke_bot_token",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Token ID",
             "required": true,
             "schema": {
               "type": "string",
@@ -4867,6 +5359,132 @@
         }
       }
     },
+    "/channels/{channel_id}/bots": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /channels/{channel_id}/bots`.",
+        "operationId": "list_channel_bots",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Bot"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /channels/{channel_id}/bots`.",
+        "operationId": "add_channel_bot",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddChannelBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/bots/scoped": {
       "post": {
         "tags": ["bots"],
@@ -6242,45 +6860,6 @@
         }
       }
     },
-    "/crm/companies/import": {
-      "post": {
-        "tags": ["crm::inbound::pipeline_workflows"],
-        "summary": "Create the companies a CSV lists, and put its Stage, Owner and Revenue\nvalues on entries of a company pipeline.",
-        "operationId": "import_crm_companies_csv",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImportCompaniesCsvRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CompanyImportResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/crm/companies/{company_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_company"],
@@ -7163,101 +7742,6 @@
         }
       }
     },
-    "/crm/pipelines/entry-search": {
-      "get": {
-        "tags": ["crm::inbound::pipeline_workflows"],
-        "summary": "Entries whose company or contact matches the search, across the caller's\npipelines; pipelines without a match are left out.",
-        "operationId": "search_crm_pipeline_entries",
-        "parameters": [
-          {
-            "name": "search",
-            "in": "query",
-            "description": "Text the record's name, domain or email must contain.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Most entries per pipeline, 1 to 5000; defaults to 50.",
-            "required": false,
-            "schema": {
-              "type": ["integer", "null"],
-              "minimum": 0
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/PipelineEntries"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/crm/pipelines/record-entries": {
-      "post": {
-        "tags": ["crm::inbound::pipeline_workflows"],
-        "summary": "Every entry tracking one of the records, across the caller's pipelines;\npipelines without one are left out.",
-        "operationId": "list_crm_record_pipeline_entries",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RecordEntriesRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/PipelineEntries"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/crm/pipelines/{id}": {
       "get": {
         "tags": ["crm::inbound::pipelines"],
@@ -7281,394 +7765,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AccessiblePipeline"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/crm/pipelines/{id}/csv": {
-      "get": {
-        "tags": ["crm::inbound::pipeline_workflows"],
-        "summary": "Every entry as CSV text: Company and Domain (or Contact and Email), then\none column per field, people as emails. An import reads the same layout.",
-        "operationId": "get_crm_pipeline_csv",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipelineCsvResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/crm/pipelines/{id}/edit": {
-      "post": {
-        "tags": ["crm::inbound::pipeline_workflows"],
-        "summary": "Rename or share a pipeline, and add, rename or delete its fields and\noptions by name, in one change.",
-        "operationId": "edit_crm_pipeline",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EditPipelineRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipelineFields"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/crm/pipelines/{id}/entries": {
-      "post": {
-        "tags": ["crm::inbound::pipeline_workflows"],
-        "summary": "Add companies or contacts as entries, filling fields by name. A record\nalready in the pipeline is returned in `alreadyPresent` instead, unless\n`allowDuplicates`.",
-        "operationId": "add_crm_pipeline_entries",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddEntriesRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AddEntriesResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": ["crm::inbound::pipeline_workflows"],
-        "summary": "Set fields of entries by name, all or nothing; a stage takes its label.",
-        "operationId": "update_crm_pipeline_entries",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateEntriesRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UpdateEntriesResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/crm/pipelines/{id}/entries/find": {
-      "post": {
-        "tags": ["crm::inbound::pipeline_workflows"],
-        "summary": "Entries of one pipeline matching filters, records or a search, with\nper-option counts and number totals over every match.",
-        "operationId": "find_crm_pipeline_entries",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FindEntriesRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FoundEntriesResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/crm/pipelines/{id}/entries/remove": {
-      "post": {
-        "tags": ["crm::inbound::pipeline_workflows"],
-        "summary": "Delete entries by id, or every entry of the records; the companies and\ncontacts stay in the CRM.",
-        "operationId": "remove_crm_pipeline_entries",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RemoveEntriesRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RemoveEntriesResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/crm/pipelines/{id}/export": {
-      "post": {
-        "tags": ["crm::inbound::pipeline_workflows"],
-        "summary": "Save every entry as a CSV file in the caller's files, laid out as\n`/csv` returns it.",
-        "operationId": "export_crm_pipeline_csv",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipelineExportResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/crm/pipelines/{id}/import": {
-      "post": {
-        "tags": ["crm::inbound::pipeline_workflows"],
-        "summary": "Add a CSV's rows as entries, matching its columns to fields by name and\ncreating the companies or contacts the team lacks. Records already in the\npipeline are not added again.",
-        "operationId": "import_crm_pipeline_csv",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImportPipelineCsvRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipelineImportResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -11501,6 +11597,105 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/upload": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Upload a file's bytes as a new document, up to 25 MiB.",
+        "description": "The body is the raw file content. Preview generation and indexing may\nfinish after the response.",
+        "operationId": "upload_file",
+        "parameters": [
+          {
+            "name": "fileName",
+            "in": "query",
+            "description": "Filename including its extension, such as `report.pdf`; the extension\nsets the file type. No directory components.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "description": "Destination project. Requires edit access; omit for top-level files.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The file's bytes, at most 25 MiB.",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadFileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filename or content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No edit access to the destination project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller cannot create documents"
+          },
+          "413": {
+            "description": "The file exceeds 25 MiB"
+          },
+          "422": {
+            "description": "Document name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
             "description": "",
             "content": {
               "application/json": {
@@ -21593,48 +21788,14 @@
         "description": "The kind of activity a user performs in a channel.",
         "enum": ["view", "interact"]
       },
-      "AddEntriesRequest": {
+      "AddChannelBotRequest": {
         "type": "object",
-        "description": "Entries to add.",
-        "required": ["entries"],
+        "description": "Request to add a bot to a channel.",
+        "required": ["bot_id"],
         "properties": {
-          "allowDuplicates": {
-            "type": "boolean",
-            "description": "Add a record again although it already has an entry here."
-          },
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NewEntry"
-            },
-            "description": "The records to add, each with its starting fields."
-          }
-        },
-        "additionalProperties": false
-      },
-      "AddEntriesResponse": {
-        "type": "object",
-        "description": "The entries added.",
-        "required": ["added", "alreadyPresent"],
-        "properties": {
-          "added": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PipelineEntry"
-            },
-            "description": "The new entries, as saved."
-          },
-          "alreadyPresent": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PipelineEntry"
-            },
-            "description": "Existing entries of requested records that were not added again."
-          },
-          "version": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "The table's version after the write; missing when nothing was written."
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Bot id."
           }
         }
       },
@@ -23499,7 +23660,7 @@
           },
           "has_agent": {
             "type": "boolean",
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session."
           },
           "id": {
             "$ref": "#/components/schemas/BotId",
@@ -26995,46 +27156,6 @@
           }
         }
       },
-      "CompanyImportResponse": {
-        "type": "object",
-        "description": "What a companies import did.",
-        "required": ["created", "existing", "skippedRows", "failed"],
-        "properties": {
-          "created": {
-            "type": "integer",
-            "description": "Companies created.",
-            "minimum": 0
-          },
-          "existing": {
-            "type": "integer",
-            "description": "Companies the team already had.",
-            "minimum": 0
-          },
-          "failed": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SkippedImportRecord"
-            },
-            "description": "Companies that could not be created."
-          },
-          "pipeline": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/PipelineImportResponse",
-                "description": "The entries made from Stage, Owner and Revenue, when the CSV had any."
-              }
-            ]
-          },
-          "skippedRows": {
-            "type": "integer",
-            "description": "Rows without a domain like acme.com.",
-            "minimum": 0
-          }
-        }
-      },
       "CompleteUploads": {
         "type": "object",
         "description": "Explicit upload completion; a seal can be submitted separately with an empty list.",
@@ -27454,7 +27575,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false."
           },
           "name": {
             "type": "string",
@@ -27464,6 +27585,36 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot."
+          }
+        }
+      },
+      "CreateBotTokenRequest": {
+        "type": "object",
+        "description": "Request to create a bot token.",
+        "properties": {
+          "expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Optional expiration timestamp."
+          },
+          "label": {
+            "type": ["string", "null"],
+            "description": "Token label."
+          }
+        }
+      },
+      "CreateBotTokenResponse": {
+        "type": "object",
+        "description": "Response containing a newly minted token.",
+        "required": ["token", "bearer_token"],
+        "properties": {
+          "bearer_token": {
+            "type": "string",
+            "description": "Raw bearer token."
+          },
+          "token": {
+            "$ref": "#/components/schemas/BotToken",
+            "description": "Token metadata."
           }
         }
       },
@@ -27644,7 +27795,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false."
           },
           "name": {
             "type": "string",
@@ -28093,16 +28244,23 @@
       },
       "CreatePipeline": {
         "type": "object",
-        "description": "Request to create an empty pipeline with the standard CRM columns.",
-        "required": ["name", "recordType"],
+        "description": "Request to create an empty pipeline: the standard CRM columns for a tracked\nrecord, or one Name column, like a new database, for a generic pipeline.",
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
             "description": "Pipeline name."
           },
           "recordType": {
-            "$ref": "#/components/schemas/PipelineRecordType",
-            "description": "Company or contact entries."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Company or contact entries; omitted, a generic pipeline of free-form rows."
+              }
+            ]
           },
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",
@@ -30805,70 +30963,6 @@
           }
         }
       },
-      "EditPipelineRequest": {
-        "type": "object",
-        "description": "Changes to a pipeline's name, sharing, fields and options, applied\ntogether.",
-        "properties": {
-          "addFields": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NewFieldRequest"
-            },
-            "description": "Fields to add."
-          },
-          "addOptions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/FieldOptions"
-            },
-            "description": "Labels to add to select fields; for Stage, new stages go last."
-          },
-          "name": {
-            "type": ["string", "null"],
-            "description": "A new name."
-          },
-          "removeFields": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Fields to delete with their values."
-          },
-          "removeOptions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OptionRemoval"
-            },
-            "description": "Options to delete."
-          },
-          "renameFields": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/FieldRename"
-            },
-            "description": "Fields to rename."
-          },
-          "renameOptions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OptionRename"
-            },
-            "description": "Options to relabel."
-          },
-          "sharing": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/PipelineSharing",
-                "description": "New team sharing; only the owner may change it."
-              }
-            ]
-          }
-        },
-        "additionalProperties": false
-      },
       "EmailFilters": {
         "type": "object",
         "description": "The email filters used to filter down what emails you search over.",
@@ -31424,220 +31518,6 @@
           "THREAD",
           "USER"
         ]
-      },
-      "EntryChanges": {
-        "type": "object",
-        "description": "The changes to one entry: exactly one of `entryId` or `recordId`.",
-        "required": ["set"],
-        "properties": {
-          "entryId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "The entry."
-          },
-          "recordId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "The record whose single entry in the pipeline to change."
-          },
-          "set": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/FieldValueInput"
-            },
-            "description": "Fields to set."
-          }
-        },
-        "additionalProperties": false
-      },
-      "EntryFieldChange": {
-        "type": "object",
-        "description": "One field's value before and after an update.",
-        "required": ["field"],
-        "properties": {
-          "after": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/EntryFieldValue",
-                "description": "Its value now; missing when it is empty."
-              }
-            ]
-          },
-          "before": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/EntryFieldValue",
-                "description": "Its value before; missing when it was empty."
-              }
-            ]
-          },
-          "field": {
-            "type": "string",
-            "description": "The field."
-          }
-        }
-      },
-      "EntryFieldValue": {
-        "oneOf": [
-          {
-            "type": "object",
-            "description": "Free text.",
-            "required": ["value", "type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["text"]
-              },
-              "value": {
-                "type": "string",
-                "description": "Free text."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A number.",
-            "required": ["value", "type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["number"]
-              },
-              "value": {
-                "type": "number",
-                "format": "double",
-                "description": "A number."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "True or false.",
-            "required": ["value", "type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["checkbox"]
-              },
-              "value": {
-                "type": "boolean",
-                "description": "True or false."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A date-time.",
-            "required": ["value", "type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["date"]
-              },
-              "value": {
-                "type": "string",
-                "format": "date-time",
-                "description": "A date-time."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A span of time, written start/end: 2026-10-12/2026-10-16.",
-            "required": ["value", "type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["date_range"]
-              },
-              "value": {
-                "type": "string",
-                "description": "A span of time, written start/end: 2026-10-12/2026-10-16."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Option labels, in the cell's order.",
-            "required": ["value", "type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["labels"]
-              },
-              "value": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "Option labels, in the cell's order."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "URLs.",
-            "required": ["value", "type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["links"]
-              },
-              "value": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "URLs."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Macro ids: people as macro| user ids, records or other items.",
-            "required": ["value", "type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["references"]
-              },
-              "value": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "Macro ids: people as macro| user ids, records or other items."
-              }
-            }
-          }
-        ],
-        "description": "A stored value in its field's own terms."
-      },
-      "EntryRecord": {
-        "type": "object",
-        "description": "The company or contact an entry tracks.",
-        "required": ["id"],
-        "properties": {
-          "detail": {
-            "type": ["string", "null"],
-            "description": "A company's domain or a contact's email."
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The CRM company or contact id."
-          },
-          "name": {
-            "type": ["string", "null"],
-            "description": "Its name; missing when the caller cannot see the record."
-          }
-        }
       },
       "ErrorResponse": {
         "type": "object",
@@ -33117,103 +32997,6 @@
           }
         }
       },
-      "FieldOptionCounts": {
-        "type": "object",
-        "description": "Matched entries per option of one single-select field, such as Stage.",
-        "required": ["field", "counts", "empty"],
-        "properties": {
-          "counts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OptionCount"
-            },
-            "description": "Every option in order, with its count."
-          },
-          "empty": {
-            "type": "integer",
-            "description": "Matched entries with the field empty.",
-            "minimum": 0
-          },
-          "field": {
-            "type": "string",
-            "description": "The field."
-          }
-        }
-      },
-      "FieldOptions": {
-        "type": "object",
-        "description": "Labels to add to a select field.",
-        "required": ["field", "labels"],
-        "properties": {
-          "field": {
-            "type": "string",
-            "description": "The field."
-          },
-          "labels": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The labels."
-          }
-        },
-        "additionalProperties": false
-      },
-      "FieldRename": {
-        "type": "object",
-        "description": "A field to rename.",
-        "required": ["from", "to"],
-        "properties": {
-          "from": {
-            "type": "string",
-            "description": "Its current name."
-          },
-          "to": {
-            "type": "string",
-            "description": "Its new name."
-          }
-        },
-        "additionalProperties": false
-      },
-      "FieldTotal": {
-        "type": "object",
-        "description": "The sum of a number field over the matched entries.",
-        "required": ["field", "sum"],
-        "properties": {
-          "field": {
-            "type": "string",
-            "description": "The field."
-          },
-          "sum": {
-            "type": "number",
-            "format": "double",
-            "description": "The sum."
-          }
-        }
-      },
-      "FieldValueInput": {
-        "type": "object",
-        "description": "A field and the text to write into it or match it against. Leave out both\n`value` and `values` to empty the field, or in a filter to match an empty\nfield.",
-        "required": ["field"],
-        "properties": {
-          "field": {
-            "type": "string",
-            "description": "The field's name, ignoring case."
-          },
-          "value": {
-            "type": ["string", "null"],
-            "description": "One value: an option label, a person as \"me\", an email or a macro|\nuser id, a number, true/false, or a date."
-          },
-          "values": {
-            "type": ["array", "null"],
-            "items": {
-              "type": "string"
-            },
-            "description": "Several values, for a field holding several. A filter matches an entry\nholding any of them."
-          }
-        },
-        "additionalProperties": false
-      },
       "FileChangeKindDto": {
         "type": "string",
         "description": "What happened to a file, on the wire.",
@@ -33951,45 +33734,6 @@
           }
         ],
         "description": "What a column's cell must be, by the kind of value the column holds."
-      },
-      "FindEntriesRequest": {
-        "type": "object",
-        "description": "Which entries to read, and how to order them.",
-        "properties": {
-          "descending": {
-            "type": "boolean",
-            "description": "Put the largest first."
-          },
-          "filters": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/FieldValueInput"
-            },
-            "description": "Every filter must match."
-          },
-          "limit": {
-            "type": ["integer", "null"],
-            "description": "Most entries to return, 1 to 5000; defaults to 50. Counts and totals\ncover every match regardless.",
-            "minimum": 0
-          },
-          "recordIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Only entries tracking one of these companies or contacts."
-          },
-          "search": {
-            "type": ["string", "null"],
-            "description": "Text the record's name, domain or email must contain."
-          },
-          "sortBy": {
-            "type": ["string", "null"],
-            "description": "The field to order by; number, date and select fields order by value\nand stage order."
-          }
-        },
-        "additionalProperties": false
       },
       "FolderItem": {
         "type": "object",
@@ -34915,54 +34659,6 @@
           }
         ],
         "description": "An expression over one row's cells."
-      },
-      "FoundEntriesResponse": {
-        "type": "object",
-        "description": "The entries a query matched.",
-        "required": [
-          "pipeline",
-          "entries",
-          "matched",
-          "complete",
-          "counts",
-          "totals"
-        ],
-        "properties": {
-          "complete": {
-            "type": "boolean",
-            "description": "Whether every entry was read; a pipeline beyond 5000 entries is not,\nso counts and totals cover only the entries read."
-          },
-          "counts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/FieldOptionCounts"
-            },
-            "description": "Matched entries per option of each single-select field."
-          },
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PipelineEntry"
-            },
-            "description": "The first `limit` matches, in the requested order."
-          },
-          "matched": {
-            "type": "integer",
-            "description": "How many entries matched in all.",
-            "minimum": 0
-          },
-          "pipeline": {
-            "$ref": "#/components/schemas/PipelineFields",
-            "description": "The pipeline read, with its fields and version."
-          },
-          "totals": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/FieldTotal"
-            },
-            "description": "The sum of each number field over the matched entries."
-          }
-        }
       },
       "GenericErrorResponse": {
         "type": "object",
@@ -36471,38 +36167,6 @@
         "type": "integer",
         "enum": [1, 2, 3]
       },
-      "ImportCompaniesCsvRequest": {
-        "type": "object",
-        "description": "A companies CSV to import: exactly one of its text or a CSV file in\nMacro, and at most one of `pipelineId` or `newPipeline` for its Stage,\nOwner and Revenue values (a new private pipeline when neither is given).",
-        "properties": {
-          "csv": {
-            "type": ["string", "null"],
-            "description": "The CSV text."
-          },
-          "documentId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "A CSV document the caller can open."
-          },
-          "newPipeline": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/NewImportPipeline",
-                "description": "A new company pipeline."
-              }
-            ]
-          },
-          "pipelineId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "An existing company pipeline the caller can edit."
-          }
-        },
-        "additionalProperties": false
-      },
       "ImportCounters": {
         "type": "object",
         "description": "Committed counters, never optimistic browser or uncommitted worker counts.",
@@ -36673,22 +36337,6 @@
             "description": "Binding summary used by the picker confirmation."
           }
         }
-      },
-      "ImportPipelineCsvRequest": {
-        "type": "object",
-        "description": "A CSV to import: exactly one of its text or a CSV file in Macro.",
-        "properties": {
-          "csv": {
-            "type": ["string", "null"],
-            "description": "The CSV text."
-          },
-          "documentId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "A CSV document the caller can open."
-          }
-        },
-        "additionalProperties": false
       },
       "ImportProgress": {
         "type": "object",
@@ -38984,82 +38632,6 @@
         ],
         "description": "What a new column holds."
       },
-      "NewEntry": {
-        "type": "object",
-        "description": "One entry to add: exactly one of `recordId` or `email`.",
-        "properties": {
-          "email": {
-            "type": ["string", "null"],
-            "description": "A contact's email: that contact, or in a company pipeline its company."
-          },
-          "recordId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "A CRM company or contact id."
-          },
-          "set": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/FieldValueInput"
-            },
-            "description": "Fields to fill in."
-          }
-        },
-        "additionalProperties": false
-      },
-      "NewFieldRequest": {
-        "type": "object",
-        "description": "A field to add.",
-        "required": ["name", "type"],
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Its name, unique in the pipeline ignoring case."
-          },
-          "options": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "A select field's labels, in order."
-          },
-          "type": {
-            "$ref": "#/components/schemas/NewFieldType",
-            "description": "Its type."
-          }
-        },
-        "additionalProperties": false
-      },
-      "NewFieldType": {
-        "type": "string",
-        "description": "The type of a field to add.",
-        "enum": [
-          "text",
-          "number",
-          "checkbox",
-          "date",
-          "link",
-          "select",
-          "multi_select",
-          "person",
-          "people"
-        ]
-      },
-      "NewImportPipeline": {
-        "type": "object",
-        "description": "A new company pipeline for a companies import.",
-        "properties": {
-          "name": {
-            "type": ["string", "null"],
-            "description": "Its name; defaults to the file's name."
-          },
-          "sharing": {
-            "$ref": "#/components/schemas/PipelineSharing",
-            "description": "Whether the team may edit it; private by default."
-          }
-        },
-        "additionalProperties": false
-      },
       "NewOption": {
         "type": "object",
         "description": "A select or tag option to create.",
@@ -39463,22 +39035,6 @@
         "description": "An arithmetic operator.",
         "enum": ["add", "subtract", "multiply", "divide"]
       },
-      "OptionCount": {
-        "type": "object",
-        "description": "How many matched entries hold one option.",
-        "required": ["label", "count"],
-        "properties": {
-          "count": {
-            "type": "integer",
-            "description": "Matched entries holding it.",
-            "minimum": 0
-          },
-          "label": {
-            "type": "string",
-            "description": "The option's label."
-          }
-        }
-      },
       "OptionId": {
         "type": "string",
         "format": "uuid",
@@ -39511,42 +39067,6 @@
           }
         ],
         "description": "A select option, by its id or by its label."
-      },
-      "OptionRemoval": {
-        "type": "object",
-        "description": "An option to delete, emptying the entries holding it.",
-        "required": ["field", "label"],
-        "properties": {
-          "field": {
-            "type": "string",
-            "description": "The field."
-          },
-          "label": {
-            "type": "string",
-            "description": "The label."
-          }
-        },
-        "additionalProperties": false
-      },
-      "OptionRename": {
-        "type": "object",
-        "description": "An option to relabel.",
-        "required": ["field", "from", "to"],
-        "properties": {
-          "field": {
-            "type": "string",
-            "description": "The field."
-          },
-          "from": {
-            "type": "string",
-            "description": "The current label."
-          },
-          "to": {
-            "type": "string",
-            "description": "The new label."
-          }
-        },
-        "additionalProperties": false
       },
       "PairingDetails": {
         "type": "object",
@@ -39643,7 +39163,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged."
           },
           "name": {
             "type": ["string", "null"],
@@ -40200,11 +39720,18 @@
           "primaryColumnId": {
             "type": "string",
             "format": "uuid",
-            "description": "Protected primary column."
+            "description": "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
           },
           "recordType": {
-            "$ref": "#/components/schemas/PipelineRecordType",
-            "description": "Kind of the primary reference."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Kind of the primary reference; `None` for a generic pipeline, whose\nprimary column is plain text."
+              }
+            ]
           },
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",
@@ -40228,270 +39755,6 @@
           "userId": {
             "type": "string",
             "description": "Owning user; sharing never changes ownership."
-          }
-        }
-      },
-      "PipelineCsvResponse": {
-        "type": "object",
-        "description": "A pipeline's entries as CSV text: Company and Domain (or Contact and\nEmail), then one column per field, people as emails.",
-        "required": ["name", "csv", "rows", "complete"],
-        "properties": {
-          "complete": {
-            "type": "boolean",
-            "description": "Whether every entry was written; a pipeline beyond 5000 entries is cut."
-          },
-          "csv": {
-            "type": "string",
-            "description": "The CSV."
-          },
-          "name": {
-            "type": "string",
-            "description": "The pipeline's name."
-          },
-          "rows": {
-            "type": "integer",
-            "description": "Entries written.",
-            "minimum": 0
-          }
-        }
-      },
-      "PipelineEntries": {
-        "type": "object",
-        "description": "A pipeline's entries among those asked for.",
-        "required": ["pipeline", "entries"],
-        "properties": {
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PipelineEntry"
-            },
-            "description": "Its matching entries."
-          },
-          "pipeline": {
-            "$ref": "#/components/schemas/AccessiblePipeline",
-            "description": "The pipeline."
-          }
-        }
-      },
-      "PipelineEntry": {
-        "type": "object",
-        "description": "One pipeline entry.",
-        "required": ["entryId", "record", "fields"],
-        "properties": {
-          "entryId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The entry: a row of the pipeline's table."
-          },
-          "fields": {
-            "type": "object",
-            "description": "Its other fields that hold a value, by name.",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/EntryFieldValue"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "record": {
-            "$ref": "#/components/schemas/EntryRecord",
-            "description": "The company or contact it tracks."
-          }
-        }
-      },
-      "PipelineExportResponse": {
-        "type": "object",
-        "description": "A pipeline saved as a CSV file in the caller's files.",
-        "required": ["documentId", "fileName", "rows", "complete"],
-        "properties": {
-          "complete": {
-            "type": "boolean",
-            "description": "Whether every entry was written; a pipeline beyond 5000 entries is cut."
-          },
-          "documentId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The CSV document."
-          },
-          "fileName": {
-            "type": "string",
-            "description": "Its name."
-          },
-          "rows": {
-            "type": "integer",
-            "description": "Entries written.",
-            "minimum": 0
-          }
-        }
-      },
-      "PipelineFieldSummary": {
-        "type": "object",
-        "description": "One field of a pipeline, named as people see it.",
-        "required": [
-          "name",
-          "type",
-          "multiple",
-          "options",
-          "required",
-          "readOnly"
-        ],
-        "properties": {
-          "multiple": {
-            "type": "boolean",
-            "description": "Whether it holds several values."
-          },
-          "name": {
-            "type": "string",
-            "description": "The name entries and filters use."
-          },
-          "options": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "A select or tags field's labels in order: for Stage, the stages from\nfirst to last."
-          },
-          "readOnly": {
-            "type": "boolean",
-            "description": "Whether the caller cannot write it."
-          },
-          "required": {
-            "type": "boolean",
-            "description": "Whether every entry must have a value."
-          },
-          "type": {
-            "$ref": "#/components/schemas/PipelineFieldType",
-            "description": "What it holds."
-          }
-        }
-      },
-      "PipelineFieldType": {
-        "type": "string",
-        "description": "What a field holds.",
-        "enum": [
-          "company",
-          "contact",
-          "text",
-          "number",
-          "checkbox",
-          "date",
-          "date_range",
-          "link",
-          "select",
-          "tags",
-          "person",
-          "item",
-          "relation",
-          "formula"
-        ]
-      },
-      "PipelineFields": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/AccessiblePipeline",
-            "description": "The pipeline and the caller's grant on it."
-          },
-          {
-            "type": "object",
-            "required": ["fields", "version"],
-            "properties": {
-              "fields": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/PipelineFieldSummary"
-                },
-                "description": "Its fields in column order; the first names the tracked record."
-              },
-              "version": {
-                "type": "integer",
-                "format": "int64",
-                "description": "Its table's version when read."
-              }
-            }
-          }
-        ],
-        "description": "A pipeline with its fields."
-      },
-      "PipelineImportResponse": {
-        "type": "object",
-        "description": "What a pipeline import did.",
-        "required": [
-          "pipelineId",
-          "pipelineName",
-          "added",
-          "alreadyPresent",
-          "createdRecords",
-          "unresolved",
-          "invalid",
-          "skippedRows",
-          "filledFields",
-          "ignoredColumns",
-          "addedOptions"
-        ],
-        "properties": {
-          "added": {
-            "type": "integer",
-            "description": "Entries added.",
-            "minimum": 0
-          },
-          "addedOptions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/FieldOptions"
-            },
-            "description": "Labels added to select fields so the CSV's values fit."
-          },
-          "alreadyPresent": {
-            "type": "integer",
-            "description": "Rows whose record the pipeline already had.",
-            "minimum": 0
-          },
-          "createdRecords": {
-            "type": "integer",
-            "description": "Companies or contacts the import created.",
-            "minimum": 0
-          },
-          "filledFields": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Pipeline fields the CSV filled."
-          },
-          "ignoredColumns": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "CSV columns matching no field the import can fill."
-          },
-          "invalid": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SkippedImportRecord"
-            },
-            "description": "Rows refused for a value their field cannot hold."
-          },
-          "pipelineId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The pipeline filled."
-          },
-          "pipelineName": {
-            "type": "string",
-            "description": "Its name."
-          },
-          "skippedRows": {
-            "type": "integer",
-            "description": "Rows without a domain or email.",
-            "minimum": 0
-          },
-          "unresolved": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SkippedImportRecord"
-            },
-            "description": "Records that could not be found or created."
           }
         }
       },
@@ -41547,22 +40810,6 @@
           }
         }
       },
-      "RecordEntriesRequest": {
-        "type": "object",
-        "description": "The companies or contacts to find entries for, across pipelines.",
-        "required": ["recordIds"],
-        "properties": {
-          "recordIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "CRM company or contact ids."
-          }
-        },
-        "additionalProperties": false
-      },
       "RegisterUploads": {
         "type": "object",
         "description": "Batched registration, also used to renew an unchanged descriptor's grant.",
@@ -41578,48 +40825,6 @@
           }
         },
         "additionalProperties": false
-      },
-      "RemoveEntriesRequest": {
-        "type": "object",
-        "description": "Entries to delete; their companies and contacts stay in the CRM.",
-        "properties": {
-          "entryIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Entries to delete."
-          },
-          "recordIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Records whose every entry in the pipeline to delete."
-          }
-        },
-        "additionalProperties": false
-      },
-      "RemoveEntriesResponse": {
-        "type": "object",
-        "description": "The entries deleted.",
-        "required": ["removed"],
-        "properties": {
-          "removed": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PipelineEntry"
-            },
-            "description": "Each entry as it was."
-          },
-          "version": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "The table's version after the write; missing when nothing was written."
-          }
-        }
       },
       "RemoveParticipantsRequest": {
         "type": "object",
@@ -43201,21 +42406,6 @@
             "type": "string",
             "format": "uuid",
             "description": "The row."
-          }
-        }
-      },
-      "SkippedImportRecord": {
-        "type": "object",
-        "description": "A record an import could not add, and why.",
-        "required": ["key", "reason"],
-        "properties": {
-          "key": {
-            "type": "string",
-            "description": "The company's domain or the contact's email."
-          },
-          "reason": {
-            "type": "string",
-            "description": "What went wrong."
           }
         }
       },
@@ -47729,45 +46919,6 @@
           }
         }
       },
-      "UpdateEntriesRequest": {
-        "type": "object",
-        "description": "Entries to change.",
-        "required": ["updates"],
-        "properties": {
-          "baseVersion": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "Refuse the change if the pipeline's table moved past this version."
-          },
-          "updates": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EntryChanges"
-            },
-            "description": "Each entry's changes."
-          }
-        },
-        "additionalProperties": false
-      },
-      "UpdateEntriesResponse": {
-        "type": "object",
-        "description": "The entries an update wrote.",
-        "required": ["updated"],
-        "properties": {
-          "updated": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/UpdatedPipelineEntry"
-            },
-            "description": "Each entry, in request order."
-          },
-          "version": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "The table's version after the write; missing when nothing was written."
-          }
-        }
-      },
       "UpdateForm": {
         "type": "object",
         "description": "A change to a form's facts; what is left out stays. The description,\nconfirmation message and branding take edit, the rest owner. A form is renamed\nthrough the entity mutation router.",
@@ -47923,29 +47074,6 @@
           }
         }
       },
-      "UpdatedPipelineEntry": {
-        "type": "object",
-        "description": "An updated entry.",
-        "required": ["entryId", "record", "changes"],
-        "properties": {
-          "changes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EntryFieldChange"
-            },
-            "description": "The fields set, as they were and are."
-          },
-          "entryId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The entry."
-          },
-          "record": {
-            "$ref": "#/components/schemas/EntryRecord",
-            "description": "The company or contact it tracks."
-          }
-        }
-      },
       "UploadDescriptor": {
         "type": "object",
         "description": "Immutable expected object properties, registered before signing an upload.",
@@ -47991,6 +47119,22 @@
           },
           "sha": {
             "type": "string"
+          }
+        }
+      },
+      "UploadFileResponse": {
+        "type": "object",
+        "description": "The document created from the uploaded bytes.",
+        "required": ["documentId", "sizeBytes"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The new document."
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "description": "Number of bytes stored.",
+            "minimum": 0
           }
         }
       },

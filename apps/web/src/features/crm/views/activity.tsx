@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
 import EmptyStateDocGraphic from '@design/empty-state-doc.svg';
 import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
@@ -7,28 +8,42 @@ import { type JSX, Show } from 'solid-js';
 import { ActivityControls } from '../components/activity-controls';
 import { CrmListEmpty } from '../components/list-state';
 import { useCrmContext } from '../context/crm-context';
-import type { CrmActivityTab, CrmSoupActivityTab } from '../core/navigation';
+import type { CrmActivityTab } from '../core/navigation';
 import { ActivitySection } from './activity-section';
-import { CrmDatabasesView } from './databases';
 import { RecordItemList } from './record-item-list';
 
 const CONTENT = {
   email: {
-    title: 'Email',
+    get title() {
+      return t('crm.salesEmail');
+    },
+    get searchLabel() {
+      return t('crm.searchSalesEmail');
+    },
     graphic: EmptyStateEmailGraphic,
     action: 'New email',
     description:
       'Email your CRM companies and people to see those conversations here.',
   },
   notes: {
-    title: 'Notes',
+    get title() {
+      return t('crm.salesNotes');
+    },
+    get searchLabel() {
+      return t('crm.searchSalesNotes');
+    },
     graphic: EmptyStateDocGraphic,
     action: 'New note',
     description:
       'Create a note and link a company or person through its Companies or Contacts property.',
   },
   calls: {
-    title: 'Calls',
+    get title() {
+      return t('crm.salesCalls');
+    },
+    get searchLabel() {
+      return t('crm.searchSalesCalls');
+    },
     graphic: EmptyStateCallsGraphic,
     action: 'New call',
     description:
@@ -42,32 +57,23 @@ export function CrmActivityView(props: {
   title?: JSX.Element;
 }) {
   const crm = useCrmContext();
-  const tab = () => (props.tab === 'databases' ? undefined : props.tab);
   return (
     <Show
-      when={tab()}
+      when={props.tab !== 'tasks' ? props.tab : undefined}
       keyed
-      fallback={<CrmDatabasesView title={props.title} />}
+      fallback={<crm.ActivityTasks title={props.title} />}
     >
-      {(current) => (
-        <Show
-          when={current !== 'tasks' ? current : undefined}
-          keyed
-          fallback={<crm.ActivityTasks title={props.title} />}
-        >
-          {(activity) => (
-            <TagSetsQueryProvider>
-              <ActivityList tab={activity} title={props.title} />
-            </TagSetsQueryProvider>
-          )}
-        </Show>
+      {(activity) => (
+        <TagSetsQueryProvider>
+          <ActivityList tab={activity} title={props.title} />
+        </TagSetsQueryProvider>
       )}
     </Show>
   );
 }
 
 function ActivityList(props: {
-  tab: Exclude<CrmSoupActivityTab, 'tasks'>;
+  tab: Exclude<CrmActivityTab, 'tasks'>;
   title?: JSX.Element;
 }) {
   const crm = useCrmContext();
@@ -85,6 +91,7 @@ function ActivityList(props: {
   return (
     <ActivitySection
       label={content().title}
+      searchLabel={content().searchLabel}
       title={props.title}
       search={state.search}
       onSearchChange={(search) => setState('search', search)}

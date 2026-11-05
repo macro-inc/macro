@@ -1,5 +1,6 @@
 import type { RoutineEntity } from '@entity/types/entity';
 import type { Accessor } from 'solid-js';
+import type { CodeReview } from '../core/code-review';
 import type { ScheduleDraft } from '../core/draft';
 import type { HistoryRecord } from '../core/history';
 import type { RoutineSnapshot } from '../core/routine';
@@ -20,6 +21,11 @@ export type RoutineDetailSource = {
   historyLoading: Accessor<boolean>;
   historyError: Accessor<boolean>;
   refreshHistory(): Promise<unknown>;
+  /** The routine is paused until its owner reviews its code for a new SDK. */
+  codeReview: Accessor<CodeReview | undefined>;
+  /** Save the proposed code update and resume the routine. */
+  approveCodeUpdate(): Promise<void>;
+  codeUpdatePending: Accessor<boolean>;
 };
 export type RoutineCreatorSource = {
   pending: Accessor<boolean>;

@@ -86,8 +86,8 @@ export function pipelineImport(
 }
 
 /**
- * One entry of a CRM pipeline (a deal): the company or contact it tracks and
- * its fields by name. Change it with {@link PipelineEntry.update} or take it
+ * One entry of a CRM pipeline (a deal): the company or contact it tracks
+ * (none in a generic pipeline of free-form rows) and its fields by name. Change it with {@link PipelineEntry.update} or take it
  * out with {@link PipelineEntry.remove}.
  */
 export class PipelineEntry {
@@ -96,9 +96,9 @@ export class PipelineEntry {
     readonly pipeline: CrmPipeline,
     /** Entry identity within the pipeline. */
     readonly id: string,
-    /** The company or contact it tracks. */
-    readonly record: Company | Contact,
-    /** The record's name; `undefined` when the caller cannot see it. */
+    /** The company or contact it tracks; `undefined` in a generic pipeline. */
+    readonly record: Company | Contact | undefined,
+    /** The record's name; `undefined` when the caller cannot see it or there is none. */
     readonly recordName: string | undefined,
     /** A company's domain or a contact's email. */
     readonly recordDetail: string | undefined,
@@ -106,25 +106,21 @@ export class PipelineEntry {
     readonly fields: Record<string, PipelineFieldValue>,
   ) {}
 
-  /** @internal Seed from a workflow response of a pipeline tracking `recordType`. */
+  /** @internal Seed from a workflow response of a pipeline tracking `recordType`, or nothing. */
   static from(
     client: MacroClient,
     pipeline: CrmPipeline,
-    recordType: 'company' | 'contact',
+    recordType: 'company' | 'contact' | null | undefined,
     entry: Pick<PipelineEntryRecord, 'entryId' | 'record'> & {
       fields?: PipelineEntryRecord['fields'];
     },
   ): PipelineEntry {
-    const record =
-      recordType === 'company'
-        ? Company.byId(client, entry.record.id)
-        : Contact.byId(client, entry.record.id);
     return new PipelineEntry(
       pipeline,
       entry.entryId,
-      record,
-      entry.record.name ?? undefined,
-      entry.record.detail ?? undefined,
+      trackedRecord(client, recordType, entry.record?.id),
+      entry.record?.name ?? undefined,
+      entry.record?.detail ?? undefined,
       entry.fields ?? {},
     );
   }
@@ -161,7 +157,7 @@ export class PipelineEntry {
     return {
       id: this.id,
       pipelineId: this.pipeline.id,
-      record: {
+      record: this.record && {
         id: this.record.id,
         name: this.recordName,
         detail: this.recordDetail,
@@ -169,6 +165,18 @@ export class PipelineEntry {
       fields: this.fields,
     };
   }
+}
+
+/** The handle of an entry's tracked record, if the pipeline tracks one. */
+function trackedRecord(
+  client: MacroClient,
+  recordType: 'company' | 'contact' | null | undefined,
+  id: string | undefined,
+): Company | Contact | undefined {
+  if (id === undefined || !recordType) return undefined;
+  return recordType === 'company'
+    ? Company.byId(client, id)
+    : Contact.byId(client, id);
 }
 
 /** @internal A field change with absent values as `undefined`. */
