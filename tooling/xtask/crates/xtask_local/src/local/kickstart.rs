@@ -167,7 +167,6 @@ pub fn build(
     let lambda_id = identity::POPULATE_JWT_LAMBDA_ID;
     let template_id = identity::PASSWORDLESS_EMAIL_TEMPLATE_ID;
 
-
     // Kickstart executes these in order, so each request must come after the
     // entities it references. Dependency chain:
     //   key + email template -> tenant

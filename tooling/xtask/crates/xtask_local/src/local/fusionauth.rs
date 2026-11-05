@@ -127,15 +127,29 @@ fn curl_json(
     body: Option<&serde_json::Value>,
 ) -> Result<serde_json::Value> {
     let mut cmd = Command::new("curl");
-    cmd.args(["--fail-with-body", "--silent", "--show-error", "--max-time", "10"])
-        .args(["-X", method])
-        .args(["-H", &format!("Authorization: {}", identity::FUSIONAUTH_API_KEY)])
-        .arg(url)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+    cmd.args([
+        "--fail-with-body",
+        "--silent",
+        "--show-error",
+        "--max-time",
+        "10",
+    ])
+    .args(["-X", method])
+    .args([
+        "-H",
+        &format!("Authorization: {}", identity::FUSIONAUTH_API_KEY),
+    ])
+    .arg(url)
+    .stdin(std::process::Stdio::piped())
+    .stdout(std::process::Stdio::piped())
+    .stderr(std::process::Stdio::piped());
     if body.is_some() {
-        cmd.args(["-H", "Content-Type: application/json", "--data-binary", "@-"]);
+        cmd.args([
+            "-H",
+            "Content-Type: application/json",
+            "--data-binary",
+            "@-",
+        ]);
     }
     let mut child = cmd.spawn().context("running curl")?;
     if let Some(body) = body {

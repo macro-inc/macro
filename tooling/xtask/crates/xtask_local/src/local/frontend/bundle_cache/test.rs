@@ -7,16 +7,35 @@ fn repo(name: &str) -> PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("apps/web/src/wasm")).unwrap();
     std::fs::create_dir_all(dir.join("apps/web/node_modules/dep")).unwrap();
-    std::fs::write(dir.join("apps/web/.gitignore"), "wasm/\nnode_modules/\ndist/\n").unwrap();
+    std::fs::write(
+        dir.join("apps/web/.gitignore"),
+        "wasm/\nnode_modules/\ndist/\n",
+    )
+    .unwrap();
     std::fs::write(dir.join("apps/web/src/app.ts"), "export const a = 1;\n").unwrap();
     std::fs::write(dir.join("apps/web/src/wasm/engine_bg.wasm"), "v1").unwrap();
     std::fs::write(dir.join("apps/web/node_modules/dep/index.js"), "1").unwrap();
     for args in [
         &["init", "-q"][..],
         &["add", "-A"],
-        &["-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-qm", "init"],
+        &[
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-qm",
+            "init",
+        ],
     ] {
-        assert!(Command::new("git").current_dir(&dir).args(args).status().unwrap().success());
+        assert!(
+            Command::new("git")
+                .current_dir(&dir)
+                .args(args)
+                .status()
+                .unwrap()
+                .success()
+        );
     }
     dir
 }
@@ -39,7 +58,11 @@ fn key_follows_sources_wasm_and_env_on_disk() {
     std::fs::write(dir.join("apps/web/node_modules/dep/index.js"), "2").unwrap();
     std::fs::create_dir_all(dir.join("apps/web/dist")).unwrap();
     std::fs::write(dir.join("apps/web/dist/index.html"), "<html>").unwrap();
-    assert_eq!(base, key(&dir, &build()).unwrap(), "node_modules and dist are not inputs");
+    assert_eq!(
+        base,
+        key(&dir, &build()).unwrap(),
+        "node_modules and dist are not inputs"
+    );
 
     std::fs::write(dir.join("apps/web/src/app.ts"), "export const a = 2;\n").unwrap();
     let edited = key(&dir, &build()).unwrap();
@@ -57,7 +80,11 @@ fn key_follows_sources_wasm_and_env_on_disk() {
     other_env.env("VITE_ENABLE_SOMETHING", "true");
     assert_ne!(rebuilt, key(&dir, &other_env).unwrap(), "a VITE_ variable");
 
-    let status = Command::new("git").current_dir(&dir).args(["status", "--porcelain"]).output().unwrap();
+    let status = Command::new("git")
+        .current_dir(&dir)
+        .args(["status", "--porcelain"])
+        .output()
+        .unwrap();
     assert_eq!(
         String::from_utf8_lossy(&status.stdout),
         " M apps/web/src/app.ts\n?? apps/web/src/new.ts\n",

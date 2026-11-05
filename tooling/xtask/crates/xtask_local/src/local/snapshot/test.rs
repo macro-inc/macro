@@ -18,7 +18,10 @@ fn key_is_deterministic_and_port_free() {
     crate::local::fusionauth::write_kickstart(&other, None, None).unwrap();
     let c = Plan::compute(&other).unwrap();
     let _ = std::fs::remove_dir_all(other.artifact_dir());
-    assert_eq!(a.key, c.key, "a different port window must share the snapshot");
+    assert_eq!(
+        a.key, c.key,
+        "a different port window must share the snapshot"
+    );
 }
 
 /// Any kickstart change other than the redirect URLs is a different init, so
@@ -37,12 +40,24 @@ fn kickstart_without_redirect_urls_keeps_everything_else() {
     let strip = crate::local::kickstart::without_redirect_urls;
 
     assert_eq!(
-        strip(doc(&["http://localhost:3000/app"], "function populate() {}")),
-        strip(doc(&["http://localhost:20110/app"], "function populate() {}")),
+        strip(doc(
+            &["http://localhost:3000/app"],
+            "function populate() {}"
+        )),
+        strip(doc(
+            &["http://localhost:20110/app"],
+            "function populate() {}"
+        )),
     );
     assert_ne!(
-        strip(doc(&["http://localhost:3000/app"], "function populate() {}")),
-        strip(doc(&["http://localhost:3000/app"], "function populate() { changed }")),
+        strip(doc(
+            &["http://localhost:3000/app"],
+            "function populate() {}"
+        )),
+        strip(doc(
+            &["http://localhost:3000/app"],
+            "function populate() { changed }"
+        )),
     );
 }
 

@@ -74,8 +74,7 @@ pub fn key(repo: &Path, build: &Command) -> Result<String> {
     }
     h.update(tracked_inputs(repo)?);
     for path in ignored_inputs(repo)? {
-        let bytes =
-            std::fs::read(repo.join(&path)).with_context(|| format!("reading {path}"))?;
+        let bytes = std::fs::read(repo.join(&path)).with_context(|| format!("reading {path}"))?;
         h.update(format!("\0{path}\0{}\0", bytes.len()).as_bytes());
         h.update(&bytes);
     }
@@ -116,12 +115,25 @@ fn tracked_inputs(repo: &Path) -> Result<Vec<u8>> {
 /// `.env` files. `node_modules` (pinned by `bun.lock`) and the build's own
 /// output are left out.
 fn ignored_inputs(repo: &Path) -> Result<Vec<String>> {
-    let mut args = vec!["ls-files", "-z", "-o", "-i", "--exclude-standard", "--directory", "--"];
+    let mut args = vec![
+        "ls-files",
+        "-z",
+        "-o",
+        "-i",
+        "--exclude-standard",
+        "--directory",
+        "--",
+    ];
     args.extend(INPUTS);
     let listed = git(repo, &args, None)?;
     let mut files = Vec::new();
-    for entry in listed.split(|byte| *byte == 0).filter(|entry| !entry.is_empty()) {
-        let entry = String::from_utf8_lossy(entry).trim_end_matches('/').to_string();
+    for entry in listed
+        .split(|byte| *byte == 0)
+        .filter(|entry| !entry.is_empty())
+    {
+        let entry = String::from_utf8_lossy(entry)
+            .trim_end_matches('/')
+            .to_string();
         let skipped = entry.split('/').any(|part| part == "node_modules")
             || entry == "apps/web/dist"
             || entry.starts_with("apps/web/dist/");
@@ -164,7 +176,11 @@ fn git(repo: &Path, args: &[&str], index: Option<&Path>) -> Result<Vec<u8>> {
 }
 
 fn tempfile_dir() -> Result<PathBuf> {
-    let dir = root_dir()?.join(format!(".index-{}-{:?}", std::process::id(), std::thread::current().id()));
+    let dir = root_dir()?.join(format!(
+        ".index-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
     std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
     Ok(dir)
 }

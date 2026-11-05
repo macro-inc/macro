@@ -256,13 +256,20 @@ pub fn save(
         write,
     )?;
 
-    // Bring the quiesced infra back to ready before the app services start.
-    let mut up = super::compose_cmd(instance, env);
-    up.args(["up", "-d", "--wait", "postgres", "search", "kafka"]);
-    stage.run("Restarting infra after snapshot", &mut up)?;
+    // Bring the quiesced infra back to ready before the app services start,
+    // FusionAuth alongside the rest (it needs only its own database).
     let mut fa = super::compose_cmd(instance, env);
     fa.args(["up", "-d", "fusionauth"]);
-    stage.run("Restarting FusionAuth", &mut fa)?;
+    let fa_stage = stage.background();
+    let fa_start = std::thread::spawn(move || fa_stage.run("Restarting FusionAuth", &mut fa));
+    let mut up = super::compose_cmd(instance, env);
+    up.args(["up", "-d", "--wait", "postgres", "search", "kafka"]);
+    let infra = stage.run("Restarting infra after snapshot", &mut up);
+    let fa_started = fa_start
+        .join()
+        .map_err(|_| anyhow::anyhow!("restarting FusionAuth panicked"))?;
+    infra?;
+    fa_started?;
     fusionauth::wait_ready(stage, instance)
 }
 
