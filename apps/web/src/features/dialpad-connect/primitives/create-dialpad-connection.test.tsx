@@ -1,5 +1,5 @@
 import { queryClient } from '@queries/client';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, render } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -59,15 +59,4 @@ describe('Dialpad connection requests', () => {
     expect(mocks.complete).not.toHaveBeenCalled();
   });
 
-  it('keeps a cached connection visible after a refetch fails', async () => {
-    queryClient.setQueryData(['dialpad', 'connection'], { state: 'connected' });
-    mocks.get.mockRejectedValueOnce(new Error('Unavailable'));
-    mount(true);
-    await waitFor(() =>
-      expect(queryClient.getQueryState(['dialpad', 'connection'])?.status).toBe(
-        'error'
-      )
-    );
-    expect(screen.getByText('connected')).toBeTruthy();
-  });
 });

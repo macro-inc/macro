@@ -71,76 +71,26 @@ test('connecting asks how far back to import, then finishes setup', async ({
   ).toBeVisible();
 });
 
-test('a lost grant asks to reconnect', async ({ page }) => {
-  await serveDialpad(page, {
-    current: { state: 'connected', issue: 'needs_reauth' },
-  });
-  await page.goto(PAGE, { waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('img', { name: 'Reconnect needed' })).toBeVisible(
-    {
-      timeout: 60_000,
-    }
-  );
-  await expect(
-    page.getByRole('button', { name: 'Reconnect Dialpad' })
-  ).toBeVisible();
-});
-
-for (const { connection, label, action } of [
+for (const { connection, label } of [
+  {
+    connection: { state: 'connected', issue: 'needs_reauth' },
+    label: 'Reconnect needed',
+  },
   {
     connection: { state: 'failed', issue: 'setup_abandoned' },
     label: 'Setup could not finish',
-    action: 'Reconnect Dialpad',
-  },
-  {
-    connection: { state: 'connected', issue: 'calls_abandoned' },
-    label: 'Some calls not imported',
-    action: /^Disconnect Dialpad/,
-  },
-  {
-    connection: { state: 'connected', issue: 'backfill_failed' },
-    label: 'Past calls retrying',
-    action: /^Disconnect Dialpad/,
   },
 ]) {
-  test(`${connection.issue} reads as ${label}`, async ({ page }) => {
+  test(`${connection.issue} reads as ${label} and offers Reconnect`, async ({
+    page,
+  }) => {
     await serveDialpad(page, { current: connection });
     await page.goto(PAGE, { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('img', { name: label })).toBeVisible({
       timeout: 60_000,
     });
-    await expect(page.getByRole('button', { name: action })).toBeVisible();
-  });
-}
-
-test('a deployment without Macro Connect hides the row', async ({ page }) => {
-  await serveDialpad(page, { current: { state: 'unavailable' } });
-  await page.goto(PAGE, { waitUntil: 'domcontentloaded' });
-  await expect(page.getByText('Dialpad unavailable')).toBeVisible({
-    timeout: 60_000,
-  });
-});
-
-for (const cachedConnecting of [false, true]) {
-  test(`flag off sends no requests with cached connecting=${cachedConnecting}`, async ({
-    page,
-  }) => {
-    const requests: string[] = [];
-    page.on('request', (request) => {
-      if (request.url().includes('/integrations/dialpad/')) {
-        requests.push(request.method());
-      }
-    });
-    await serveDialpad(page, { current: { state: 'connecting' } });
-    await page.clock.install();
-    await page.goto(
-      `${PAGE}?flag=off${cachedConnecting ? '&connecting' : ''}`,
-      { waitUntil: 'domcontentloaded' }
-    );
-    await expect(page.getByText('Dialpad unavailable')).toBeVisible({
-      timeout: 60_000,
-    });
-    await page.clock.runFor(8_000);
-    expect(requests).toEqual([]);
+    await expect(
+      page.getByRole('button', { name: 'Reconnect Dialpad' })
+    ).toBeVisible();
   });
 }

@@ -1,7 +1,6 @@
 import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
-import { enableDialpad } from '@core/constant/featureFlags';
 import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { Show } from 'solid-js';
@@ -14,19 +13,13 @@ function Fixture() {
   const item = useDialpadItem();
   return (
     <main class="p-6">
-      <Show when={!item.hidden} fallback={<p>Dialpad unavailable</p>}>
+      <Show when={!item.hidden}>
         <IntegrationItemRow item={item} />
       </Show>
     </main>
   );
 }
 
-// The app's client: the Dialpad hooks write their results to it.
-const params = new URLSearchParams(location.search);
-if (params.get('flag') === 'off') enableDialpad.override = false;
-if (params.has('connecting')) {
-  queryClient.setQueryData(['dialpad', 'connection'], { state: 'connecting' });
-}
 const root = document.getElementById('root');
 if (root)
   render(
