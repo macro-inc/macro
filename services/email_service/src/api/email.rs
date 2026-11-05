@@ -13,6 +13,7 @@ pub(crate) mod labels;
 pub(crate) mod links;
 pub(crate) mod messages;
 pub(crate) mod provider_error;
+pub(crate) mod senders;
 pub(crate) mod settings;
 pub(crate) mod sync;
 pub(crate) mod threads;
@@ -31,6 +32,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .nest("/links", links::router())
         .nest("/contacts", contacts::router(state.clone()))
         .nest("/filters", filters::router())
+        .nest("/senders", senders::router())
         .nest("/backfill", backfill::router(state.clone()))
         .nest("/settings", settings::router(state.clone()))
         .nest("/sync", sync::router(state.clone()))

@@ -20,6 +20,7 @@ use crate::api::email::labels::create::CreateLabelResponse;
 use crate::api::email::links::list::ListLinksResponse;
 use crate::api::email::links::resync::ResyncResponse;
 use crate::api::email::messages::labels::{UpdateLabelBatchRequest, UpdateLabelBatchResponse};
+use crate::api::email::senders::{SenderDomainCountsRequest, SenderDomainCountsResponse};
 use crate::api::email::settings::patch::{PatchSettingsRequest, PatchSettingsResponse};
 use crate::api::email::threads::archived::{
     ArchiveThreadRequest, ArchiveThreadsRequest, ArchiveThreadsResponse,
@@ -120,6 +121,7 @@ use utoipa::OpenApi;
         email::contacts::block_sender::handler,
         email::contacts::unblock_sender::handler,
         email::contacts::list_blocked::handler,
+        email::senders::domain_counts_handler,
         email::sync::disable::disable_handler,
         email::settings::patch::patch_settings_handler,
         email::settings::operations::handler,
@@ -191,6 +193,10 @@ use utoipa::OpenApi;
             BlockSenderRequest,
             UnblockSenderRequest,
             ListBlockedResponse,
+            // Sender types
+            SenderDomainCountsRequest,
+            SenderDomainCountsResponse,
+            ::email::domain::sender_domain_counts::SenderDomainCount,
             // Email filter types
             UpsertEmailFilterRequest,
             UpsertEmailFilterResponse,

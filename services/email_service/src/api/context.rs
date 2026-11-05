@@ -112,6 +112,16 @@ pub(crate) type MessageSourceSvc = email::domain::message_source::MessageSourceS
     EmailEntityAccessService,
 >;
 
+pub(crate) type SenderDomainCountSvc =
+    email::domain::sender_domain_counts::SenderDomainCountService<
+        crate::outbound::sender_domain_counts::PgSenderMailboxes,
+        crate::outbound::sender_domain_counts::ProviderSenderDomainCounter<
+            email_api_client::OutlookApiClientRepository,
+            MicrosoftTokens,
+            email_api_client::domain::ports::AlwaysAllowRateLimiter,
+        >,
+    >;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub mailbox_notifications: Arc<
@@ -140,6 +150,7 @@ pub(crate) struct ApiContext {
     pub inbox_health: Arc<crate::composition::InboxHealth>,
     pub attachment_reads: Arc<AttachmentReadSvc>,
     pub message_sources: Arc<MessageSourceSvc>,
+    pub sender_domain_counts: Arc<SenderDomainCountSvc>,
     pub draft_attachments: Arc<DraftAttachmentSvc>,
     pub event_forward_sender: Arc<EventForwardSender>,
     pub draft_transfers: Arc<

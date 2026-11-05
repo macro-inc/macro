@@ -341,6 +341,15 @@ async fn run_server() -> anyhow::Result<()> {
             },
             access: entity_access_service.as_ref().clone(),
         }),
+        sender_domain_counts: Arc::new(
+            email::domain::sender_domain_counts::SenderDomainCountService::new(
+                crate::outbound::sender_domain_counts::PgSenderMailboxes(db.clone()),
+                crate::outbound::sender_domain_counts::ProviderSenderDomainCounter {
+                    gmail: email_api.clone(),
+                    outlook: outlook_api.clone(),
+                },
+            ),
+        ),
         attachment_reads: Arc::new(email::domain::attachment_access::AttachmentReadService {
             repository: EmailPgRepo::new(db.clone()),
             provider: crate::outbound::attachment_access::ProviderAttachmentBytes {

@@ -12,6 +12,39 @@ use models_email::service::{
 };
 use uuid::Uuid;
 
+/// A link with its current credential and sync generations.
+pub(crate) async fn link_binding(
+    db: &sqlx::PgPool,
+    link_id: Uuid,
+) -> Result<Option<InboxHealthBinding>, MailboxError> {
+    let Some(row) = sqlx::query!(r#"SELECT id,macro_id,fusionauth_user_id,email_address,provider::text AS "provider!",
+            is_sync_active,is_primary,needs_reauth,last_sync_error_at,created_at,updated_at,sync_generation,grant_generation
+            FROM email_links WHERE id=$1"#,link_id).fetch_optional(db).await.map_err(|_|MailboxError::Persistence)? else {return Ok(None)};
+    let link = Link {
+        id: row.id,
+        macro_id: MacroUserIdStr::try_from(row.macro_id).map_err(|_| MailboxError::Persistence)?,
+        fusionauth_user_id: row.fusionauth_user_id,
+        email_address: macro_user_id::email::EmailStr::try_from(row.email_address)
+            .map_err(|_| MailboxError::Persistence)?,
+        provider: match row.provider.as_str() {
+            "GMAIL" => UserProvider::Gmail,
+            "OUTLOOK" => UserProvider::Outlook,
+            _ => return Err(MailboxError::Persistence),
+        },
+        is_sync_active: row.is_sync_active,
+        is_primary: row.is_primary,
+        needs_reauth: row.needs_reauth,
+        last_sync_error_at: row.last_sync_error_at,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    };
+    Ok(Some(InboxHealthBinding {
+        link,
+        grant_generation: row.grant_generation,
+        sync_generation: row.sync_generation,
+    }))
+}
+
 pub struct PgInboxHealth {
     pub db: sqlx::PgPool,
     pub redis: crate::util::redis::RedisClient,
@@ -24,33 +57,7 @@ impl InboxHealthRepository for PgInboxHealth {
             .map_err(|_| MailboxError::Persistence)
     }
     async fn binding(&self, link_id: Uuid) -> Result<Option<InboxHealthBinding>, MailboxError> {
-        let Some(row) = sqlx::query!(r#"SELECT id,macro_id,fusionauth_user_id,email_address,provider::text AS "provider!",
-            is_sync_active,is_primary,needs_reauth,last_sync_error_at,created_at,updated_at,sync_generation,grant_generation
-            FROM email_links WHERE id=$1"#,link_id).fetch_optional(&self.db).await.map_err(|_|MailboxError::Persistence)? else {return Ok(None)};
-        let link = Link {
-            id: row.id,
-            macro_id: MacroUserIdStr::try_from(row.macro_id)
-                .map_err(|_| MailboxError::Persistence)?,
-            fusionauth_user_id: row.fusionauth_user_id,
-            email_address: macro_user_id::email::EmailStr::try_from(row.email_address)
-                .map_err(|_| MailboxError::Persistence)?,
-            provider: match row.provider.as_str() {
-                "GMAIL" => UserProvider::Gmail,
-                "OUTLOOK" => UserProvider::Outlook,
-                _ => return Err(MailboxError::Persistence),
-            },
-            is_sync_active: row.is_sync_active,
-            is_primary: row.is_primary,
-            needs_reauth: row.needs_reauth,
-            last_sync_error_at: row.last_sync_error_at,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-        };
-        Ok(Some(InboxHealthBinding {
-            link,
-            grant_generation: row.grant_generation,
-            sync_generation: row.sync_generation,
-        }))
+        link_binding(&self.db, link_id).await
     }
     async fn begin_probe(&self, link: Uuid) -> bool {
         self.redis
