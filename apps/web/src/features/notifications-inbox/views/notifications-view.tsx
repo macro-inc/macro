@@ -28,6 +28,7 @@ import {
 } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -863,104 +864,110 @@ export function NotificationsView(props: NotificationsViewProps) {
     </ViewShell.Root>
   );
 
+  // One editor renders every card's text; without it each line of each card
+  // builds its own.
   return (
-    <SplitPanel.Root>
-      <SplitPanel.Body>
-        <Show when={!isTouchDevice()} fallback={touchLayout()}>
-          <div class="size-full min-h-0 bg-panel">
-            <ViewShell.Root
-              asidePreferenceKey="notifications"
-              // Rows read as sentences, so the list starts wider than a nav rail.
-              aside={{ width: 360, max: 480, preserveDuringResize: false }}
-              main={{ preferredWidth: 640 }}
-              resizable
-            >
-              <ViewShell.Aside class="flex flex-col bg-panel">
-                <ListHeader
-                  actions={
-                    <>
-                      <div class="relative">
-                        <InboxFilterMenu
-                          open={filterOpen()}
-                          onOpenChange={setFilterOpen}
-                          {...filterControls}
-                        />
-                      </div>
-                      <Button
-                        size="icon-md"
-                        variant="ghost"
-                        aria-label={t('notificationsInbox.settings')}
-                        tooltip={t('notificationsInbox.settings')}
-                        onClick={() => props.onOpenSettings()}
-                      >
-                        <GearSixIcon class="size-4" />
-                      </Button>
-                    </>
-                  }
-                />
-                <div class="shrink-0 px-3 pb-1">
-                  <InboxStatusTabs
-                    status={filters.filters().status}
-                    onChange={filters.setStatus}
+    <StaticMarkdownContext>
+      <SplitPanel.Root>
+        <SplitPanel.Body>
+          <Show when={!isTouchDevice()} fallback={touchLayout()}>
+            <div class="size-full min-h-0 bg-panel">
+              <ViewShell.Root
+                asidePreferenceKey="notifications"
+                // Rows read as sentences, so the list starts wider than a nav rail.
+                aside={{ width: 360, max: 480, preserveDuringResize: false }}
+                main={{ preferredWidth: 640 }}
+                resizable
+              >
+                <ViewShell.Aside class="flex flex-col bg-panel">
+                  <ListHeader
+                    actions={
+                      <>
+                        <div class="relative">
+                          <InboxFilterMenu
+                            open={filterOpen()}
+                            onOpenChange={setFilterOpen}
+                            {...filterControls}
+                          />
+                        </div>
+                        <Button
+                          size="icon-md"
+                          variant="ghost"
+                          aria-label={t('notificationsInbox.settings')}
+                          tooltip={t('notificationsInbox.settings')}
+                          onClick={() => props.onOpenSettings()}
+                        >
+                          <GearSixIcon class="size-4" />
+                        </Button>
+                      </>
+                    }
                   />
-                </div>
-                <div
-                  role="grid"
-                  aria-label={t('nav.notifications')}
-                  aria-activedescendant={list.focus.key()}
-                  tabIndex={0}
-                  class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none"
-                >
-                  {listBody()}
-                </div>
-              </ViewShell.Aside>
-              <ViewShell.Main class="overflow-hidden">
-                <NotificationsCalendarPaneProvider
-                  value={{
-                    refocus: props.calendarPreview.refocus,
-                    onReturn: closePreview,
-                  }}
-                >
-                  {/* A calendar event shows under the view's calendar route,
+                  <div class="shrink-0 px-3 pb-1">
+                    <InboxStatusTabs
+                      status={filters.filters().status}
+                      onChange={filters.setStatus}
+                    />
+                  </div>
+                  <div
+                    role="grid"
+                    aria-label={t('nav.notifications')}
+                    aria-activedescendant={list.focus.key()}
+                    tabIndex={0}
+                    class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none"
+                  >
+                    {listBody()}
+                  </div>
+                </ViewShell.Aside>
+                <ViewShell.Main class="overflow-hidden">
+                  <NotificationsCalendarPaneProvider
+                    value={{
+                      refocus: props.calendarPreview.refocus,
+                      onReturn: closePreview,
+                    }}
+                  >
+                    {/* A calendar event shows under the view's calendar route,
                       which loads lazily: suspend only this pane, so the list
                       keeps its place. */}
-                  <Suspense>
-                    <SplitRouter.Outlet
-                      fallback={() => (
-                        <Show
-                          when={previewTarget()}
-                          fallback={
-                            <EmptyStatePanel
-                              centered
-                              graphic={EmptyStateInboxTrayGraphic}
-                              title={t('notificationsInbox.noneSelectedTitle')}
-                              description={t(
-                                'notificationsInbox.noneSelectedDescription'
-                              )}
-                            />
-                          }
-                        >
-                          <PreviewPanel
-                            target={previewTarget()}
-                            navigationRequest={selection.navigationRequest()}
-                            orchestrator={orchestrator}
-                            splitPanelContext={panel}
-                            headerLeading={
-                              <NotificationsBreadcrumb
-                                onReturn={closePreview}
+                    <Suspense>
+                      <SplitRouter.Outlet
+                        fallback={() => (
+                          <Show
+                            when={previewTarget()}
+                            fallback={
+                              <EmptyStatePanel
+                                centered
+                                graphic={EmptyStateInboxTrayGraphic}
+                                title={t(
+                                  'notificationsInbox.noneSelectedTitle'
+                                )}
+                                description={t(
+                                  'notificationsInbox.noneSelectedDescription'
+                                )}
                               />
                             }
-                          />
-                        </Show>
-                      )}
-                    />
-                  </Suspense>
-                </NotificationsCalendarPaneProvider>
-              </ViewShell.Main>
-            </ViewShell.Root>
-          </div>
-        </Show>
-      </SplitPanel.Body>
-    </SplitPanel.Root>
+                          >
+                            <PreviewPanel
+                              target={previewTarget()}
+                              navigationRequest={selection.navigationRequest()}
+                              orchestrator={orchestrator}
+                              splitPanelContext={panel}
+                              headerLeading={
+                                <NotificationsBreadcrumb
+                                  onReturn={closePreview}
+                                />
+                              }
+                            />
+                          </Show>
+                        )}
+                      />
+                    </Suspense>
+                  </NotificationsCalendarPaneProvider>
+                </ViewShell.Main>
+              </ViewShell.Root>
+            </div>
+          </Show>
+        </SplitPanel.Body>
+      </SplitPanel.Root>
+    </StaticMarkdownContext>
   );
 }

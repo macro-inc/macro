@@ -132,11 +132,30 @@ function rowEntity(
     : { ...entity, notifications: read };
 }
 
-/** Rows decoded by an earlier read, with the wire data each came from. */
+/** Rows decoded by an earlier read, with a fingerprint of their wire data. */
 export type InboxRowMemo = {
-  previous: ReadonlyMap<string, { wire: string; row: NotificationInboxRow }>;
-  next: Map<string, { wire: string; row: NotificationInboxRow }>;
+  previous: ReadonlyMap<string, { wire: number; row: NotificationInboxRow }>;
+  next: Map<string, { wire: number; row: NotificationInboxRow }>;
 };
+
+/**
+ * A 53-bit fingerprint of wire data (cyrb53). The memo keeps it rather than
+ * the JSON, which cost about as much again as the rows themselves.
+ */
+function fingerprint(text: string): number {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ code, 2654435761);
+    h2 = Math.imul(h2 ^ code, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
 
 /**
  * Project one inbox entry into rows. Each row's entity carries only that
@@ -160,7 +179,9 @@ export function toInboxGroup(
     rows: entry.rows.flatMap((row) => {
       const latestAt = Date.parse(row.latestAt);
       if (Number.isNaN(latestAt)) return [];
-      const wire = memo ? `${entityWire}${JSON.stringify(row)}` : '';
+      const wire = memo
+        ? fingerprint(`${entityWire}${JSON.stringify(row)}`)
+        : 0;
       const known = memo?.previous.get(row.id);
       if (memo && known?.wire === wire) {
         memo.next.set(row.id, known);
