@@ -42,3 +42,26 @@ test('participants line up with their icon', async ({ page }) => {
   expect(offsets).toHaveLength(3);
   for (const offset of offsets) expect(Math.abs(offset)).toBeLessThanOrEqual(1);
 });
+
+test('the guest toggle keeps a full tap target on touch', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Touch devices only');
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-touch-device',
+    'true'
+  );
+  const toggle = page
+    .getByTestId('pane-google')
+    .getByRole('button', { name: '+3 more' });
+  const hits = await toggle.evaluate((button) => {
+    const box = button.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    return [-20, 20].map((dy) =>
+      button.contains(document.elementFromPoint(x, y + dy))
+    );
+  });
+  expect(hits).toEqual([true, true]);
+});

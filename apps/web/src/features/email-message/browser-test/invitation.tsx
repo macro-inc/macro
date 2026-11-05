@@ -1,4 +1,5 @@
 import '@app/index.css';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { For } from 'solid-js';
 import { render } from 'solid-js/web';
 import { CalendarInviteCard } from '../components/calendar-invite-card';
@@ -43,4 +44,5 @@ function Fixture() {
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 render(() => <Fixture />, root);

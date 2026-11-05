@@ -281,10 +281,11 @@ export function CalendarInviteCard(props: {
               {visibleAttendees().map(participantName).join(', ')}
               <Show when={invite().attendees.length > 3}>
                 {' '}
-                {/* Inline in the names, so it keeps their line height beside the icon. */}
+                {/* Inline in the names, so it keeps their line height beside the
+                    icon; on touch an overlay restores the 44px tap target. */}
                 <Button
                   variant="ghost"
-                  class="h-auto min-h-0 border-0 p-0 align-baseline text-sm font-medium text-accent touch:min-h-0 touch:min-w-0"
+                  class="h-auto min-h-0 border-0 p-0 align-baseline text-sm font-medium text-accent touch:min-h-0 touch:min-w-0 touch:before:absolute touch:before:inset-x-0 touch:before:top-1/2 touch:before:h-11 touch:before:-translate-y-1/2 touch:before:content-['']"
                   aria-expanded={attendeesExpanded()}
                   onClick={() => setAttendeesExpanded((value) => !value)}
                 >

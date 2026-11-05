@@ -1397,7 +1397,8 @@ Plain-text line breaks and literal angle brackets (such as `<bob@example.com>`)
 remain readable. Use `Show more` / `Show less` to expand or collapse the description;
 description links use the host's normal link-opening behavior. Long unbroken text
 (Google's Meet separator, long links, forwarded mail) wraps inside the card in a narrow
-pane, and the guest names stay level with their icon beside `+N more`.
+pane, and the guest names stay level with their icon beside `+N more`, which
+keeps a 44px tap target on touch.
 
 A published event file (`METHOD:PUBLISH`, what `Forward by email` and, for a Google
 organizer, `Forward invitation` attach) is a shared
