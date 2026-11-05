@@ -512,7 +512,7 @@ fn seed() -> PersonaSeed {
 
 #[test]
 fn the_charter_carries_the_persona() {
-    let files = WORKSPACE_TEMPLATE.render(&seed());
+    let files = WORKSPACE_TEMPLATE.render(&seed()).unwrap();
     let charter = files
         .iter()
         .find(|file| file.path == "OPERATING.md")
@@ -530,7 +530,7 @@ fn the_charter_carries_the_persona() {
 fn older_seeds_use_the_team_owner_without_unresolved_placeholders() {
     let mut persona = seed();
     persona.creator_id = None;
-    let files = WORKSPACE_TEMPLATE.render(&persona);
+    let files = WORKSPACE_TEMPLATE.render(&persona).unwrap();
     let charter = files
         .iter()
         .find(|file| file.path == "OPERATING.md")
@@ -542,6 +542,37 @@ fn older_seeds_use_the_team_owner_without_unresolved_placeholders() {
             .contains("Only the team owner changes my rules")
     );
     assert!(!charter.contents.contains("{{"));
+}
+
+#[test]
+fn relevance_questions_render_json_text_and_bound_long_personas() {
+    let mut persona = seed();
+    persona.name = "Sam \"S\"\n😀".to_owned();
+    persona.job_description = "Review \"quoted\" code\nand paths\\files".to_owned();
+    for long in [false, true] {
+        if long {
+            persona.name = persona.name.repeat(100);
+            persona.job_description = persona.job_description.repeat(100);
+        }
+        let files = WORKSPACE_TEMPLATE.render(&persona).unwrap();
+        let config = files
+            .iter()
+            .find(|file| file.path == "config/jev.json")
+            .unwrap();
+        let config: serde_json::Value = serde_json::from_str(&config.contents).unwrap();
+        let questions = config["questions"].as_object().unwrap();
+        for question in questions.values() {
+            let question = question.as_str().unwrap();
+            assert!(!question.contains("{{"));
+            assert!(question.encode_utf16().count() <= 500);
+        }
+        let job = questions["about_my_job"].as_str().unwrap();
+        assert!(job.ends_with('?'));
+        if !long {
+            assert!(job.contains(&persona.name));
+            assert!(job.contains(&persona.job_description));
+        }
+    }
 }
 
 #[tokio::test]

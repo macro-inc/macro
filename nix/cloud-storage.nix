@@ -67,6 +67,11 @@
       # Rust local HTTP clients embed only the public proxy CA, never its keys.
       localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
+      # agent_git embeds the canonical template across the crate boundary,
+      # including brain.lock, which is not a Cargo source or a generic asset.
+      brainTemplateFilter =
+        path: _type:
+        pkgs.lib.hasPrefix ((toString ../packages/brain/template) + "/") (toString path);
       srcFilter =
         path: type:
         (sqlxFilter path type)
@@ -74,6 +79,7 @@
         || (pdfiumFilter path type)
         || (assetFilter path type)
         || (binFilter path type)
+        || (brainTemplateFilter path type)
         || (craneLib.filterCargoSources path type);
       cloudStorageSrc = pkgs.lib.cleanSourceWith {
         src = ../.;
@@ -169,6 +175,12 @@
           chmod -R +w $out
           cp -rfT ${rootDepsSrc} $out
           chmod -R +w $out
+          ${pkgs.lib.optionalString (builtins.elem "crates/agent_git" dirs) ''
+            mkdir -p $out/packages/brain
+            rm -rf $out/packages/brain/template
+            cp -rT ${../packages/brain/template} $out/packages/brain/template
+            chmod -R +w $out/packages/brain/template
+          ''}
           ${overlays}
         '';
 
@@ -1103,6 +1115,15 @@
             ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
           touch $out
         '';
+        pruned-deploy-src-brain-template =
+          pkgs.runCommand "cloud-storage-pruned-brain-template"
+            { nativeBuildInputs = [ pkgs.diffutils ]; }
+            ''
+              diff -r ${../packages/brain/template} ${src}/packages/brain/template
+              diff -r ${../packages/brain/template} \
+                ${prunedDeploySrc "service-agent-git-service" "agent_git_service"}/packages/brain/template
+              touch $out
+            '';
         fmt = craneLib.cargoFmt {
           inherit src;
           pname = "cloud-storage";

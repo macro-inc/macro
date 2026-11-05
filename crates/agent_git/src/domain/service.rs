@@ -105,7 +105,10 @@ where
 
         self.adapters
             .store
-            .create_repo(&agent_user_id, &self.template.render(seed))
+            .create_repo(
+                &agent_user_id,
+                &self.template.render(seed).map_err(internal)?,
+            )
             .await
             .map_err(internal)?;
 
@@ -159,7 +162,10 @@ where
         }
         self.adapters
             .store
-            .create_repo(&agent_user_id, &self.template.render(seed))
+            .create_repo(
+                &agent_user_id,
+                &self.template.render(seed).map_err(internal)?,
+            )
             .await
             .map_err(internal)?;
         Ok(CreatedRepo {

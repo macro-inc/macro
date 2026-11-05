@@ -20,6 +20,9 @@ streamed).
 Embed every file the brain reads before starting: its charter, prompts, JSON
 configuration, lock and initial self memory. `creator_id` records the creating
 admin's Macro user ID; older saved seeds may omit it and use the team owner.
+Render relevance questions through JSON values, bounding persona substitutions
+to the brain's 500 UTF-16-unit question limit. Keep the canonical template in
+both full and per-service filtered Nix sources, including `brain.lock`.
 
 ## Start here
 
@@ -42,6 +45,8 @@ admin's Macro user ID; older saved seeds may omit it and use the team owner.
 
 - `TMPDIR=/home/wolf/tmp cargo test -p agent_git` (`SQLX_OFFLINE` unset; needs
   `git` on `PATH`). `tests/smart_http.rs` runs real `git clone`/`push`.
+- `nix build .#checks.x86_64-linux.pruned-deploy-src-brain-template` verifies
+  that full and pruned service sources preserve every canonical template file.
 
 ## Gotchas
 

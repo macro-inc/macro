@@ -93,7 +93,7 @@ const CHARTER_PATH: &str = "OPERATING.md";
 
 impl WorkspaceTemplate {
     /// The template's files with the persona substituted into the charter.
-    pub fn render(&self, seed: &PersonaSeed) -> Vec<RenderedFile> {
+    pub fn render(&self, seed: &PersonaSeed) -> Result<Vec<RenderedFile>, serde_json::Error> {
         self.files
             .iter()
             .map(|file| {
@@ -106,15 +106,64 @@ impl WorkspaceTemplate {
                             "{{creator}}",
                             seed.creator_id.as_deref().unwrap_or("the team owner"),
                         )
+                } else if file.path == "config/jev.json" {
+                    let mut config = serde_json::from_str(file.contents)?;
+                    render_jev(&mut config, seed);
+                    format!("{}\n", serde_json::to_string_pretty(&config)?)
                 } else {
                     file.contents.to_string()
                 };
 
-                RenderedFile {
+                Ok(RenderedFile {
                     path: file.path,
                     contents,
-                }
+                })
             })
             .collect()
     }
+}
+
+// Match the brain and relevance endpoint's 500 UTF-16-unit question limit.
+// Bound substitutions, preserving the question around the persona context.
+fn render_jev(config: &mut serde_json::Value, seed: &PersonaSeed) {
+    match config {
+        serde_json::Value::String(question) => {
+            let fixed = question
+                .replace("{{name}}", "")
+                .replace("{{job_description}}", "");
+            let room = 500_usize.saturating_sub(fixed.encode_utf16().count());
+            let name_limit = room / question.matches("{{name}}").count().max(1);
+            let named = question.replace("{{name}}", &truncate_utf16(&seed.name, name_limit));
+            let job_count = named.matches("{{job_description}}").count();
+            let fixed = named.replace("{{job_description}}", "");
+            let job_limit =
+                500_usize.saturating_sub(fixed.encode_utf16().count()) / job_count.max(1);
+            *question = named.replace(
+                "{{job_description}}",
+                &truncate_utf16(&seed.job_description, job_limit),
+            );
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                render_jev(value, seed);
+            }
+        }
+        serde_json::Value::Object(values) => {
+            for value in values.values_mut() {
+                render_jev(value, seed);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn truncate_utf16(value: &str, limit: usize) -> String {
+    let mut used = 0;
+    value
+        .chars()
+        .take_while(|character| {
+            used += character.len_utf16();
+            used <= limit
+        })
+        .collect()
 }
