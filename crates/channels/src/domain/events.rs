@@ -1,7 +1,10 @@
 //! Domain events emitted by channel mutation workflows.
 
-use crate::domain::models::{
-    ChannelMetadata, ChannelParticipant, ChannelType, EntityMention, MutatedMessage, Sender,
+use crate::domain::{
+    access_requests::ChannelAccessRequest,
+    models::{
+        ChannelMetadata, ChannelParticipant, ChannelType, EntityMention, MutatedMessage, Sender,
+    },
 };
 use channel_sender::ChannelSender;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -135,6 +138,22 @@ pub enum ChannelEvent {
         actor: MacroUserIdStr<'static>,
         /// Users removed by this mutation.
         removed_user_ids: Vec<MacroUserIdStr<'static>>,
+    },
+    /// Someone outside a channel asked to join it.
+    AccessRequested {
+        /// The new attempt.
+        request: ChannelAccessRequest,
+        /// Active participants, any of whom may answer it.
+        participant_user_ids: Vec<MacroUserIdStr<'static>>,
+        /// Resolved channel metadata for notification copy.
+        metadata: ChannelMetadata,
+    },
+    /// A request to join was approved, denied, or withdrawn.
+    AccessRequestResolved {
+        /// The attempt after resolution.
+        request: ChannelAccessRequest,
+        /// Active participants, whose notifications about it are now done.
+        participant_user_ids: Vec<MacroUserIdStr<'static>>,
     },
     /// A generic entity mention (e.g. a doc mentioning another entity) was recorded.
     EntityMentionCreated {
