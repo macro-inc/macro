@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { importedCallProviderName } from '@entity/components/Badges';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import type { CallRecordSource } from '@service-storage/generated/schemas/callRecordSource';
@@ -23,7 +24,7 @@ export function CallSourceBadge(props: { source: CallRecordSource }) {
               href={url()}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={`Open in ${name()}`}
+              aria-label={t('calls.openInProvider', { provider: name() })}
               class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
             >
               {name()}
