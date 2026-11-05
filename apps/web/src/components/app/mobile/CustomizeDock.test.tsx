@@ -120,12 +120,12 @@ it.each(['touchcancel', 'escape', 'blur', 'multitouch'])(
 it('supports mouse dragging and cancels it with Escape', () => {
   const { handle, onMove } = mount();
   fireEvent.mouseDown(handle, { button: 0, clientX: 320, clientY: 248 });
-  fireEvent.mouseMove(document, { clientX: 320, clientY: 128 });
+  fireEvent.mouseMove(document, { buttons: 1, clientX: 320, clientY: 128 });
   fireEvent.keyDown(document, { key: 'Escape' });
   fireEvent.mouseUp(document, { clientX: 320, clientY: 128 });
   expect(onMove).not.toHaveBeenCalled();
   fireEvent.mouseDown(handle, { button: 0, clientX: 320, clientY: 248 });
-  fireEvent.mouseMove(document, { clientX: 320, clientY: 128 });
+  fireEvent.mouseMove(document, { buttons: 1, clientX: 320, clientY: 128 });
   fireEvent.mouseUp(document, { clientX: 320, clientY: 128 });
   expect(onMove).toHaveBeenCalledExactlyOnceWith(2, 0);
 });
