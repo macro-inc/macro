@@ -92,6 +92,11 @@ meter only under its sort, with the direction in its label while importance move
 The fixture has its own sort buttons: the real touch layouts have no sort menu, so
 that coverage proves the meter's layout there, not that touch users can reach it.
 
+Channel history keeps the message being read in place when a split opens or
+closes beside the channel (the pane rewraps every message); the backend-free
+regression over the production `ThreadList` is
+`bunx playwright test --config src/features/channel/Channel/browser-test/playwright.config.ts`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 

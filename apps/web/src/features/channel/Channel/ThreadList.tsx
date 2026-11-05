@@ -160,8 +160,12 @@ export function ThreadList(props: ThreadListProps) {
   let releaseNavigation: void | (() => void);
   // Rows that mounted or moved in the current tick, measured together.
   const pendingRows = new Set<HTMLDivElement>();
-  // Heights read for the batch being applied; see flushRowMeasurements.
-  const batchHeights = new Map<Element, number>();
+  // Sizes read for the batch being applied; see flushRowMeasurements.
+  const batchSizes = new Map<Element, { height: number; width: number }>();
+  // Each row's width when it was last measured. A row measured at another
+  // width rewrapped because the pane resized (a split opened beside it).
+  const measuredWidths = new Map<string, number>();
+  let measuringRewrap = false;
   let applyingBatch = false;
   let deferredScroll: Parameters<ScrollToFn> | undefined;
   // Rows shift by the gesture adjustment. The sizer's end moves with them, so
@@ -301,10 +305,23 @@ export function ThreadList(props: ThreadListProps) {
     // A restored snapshot or a newly remounted message can have a different
     // height. The default sync path returns cached sizes, exposing the old
     // layout until ResizeObserver fires. Read mounted rows before first paint.
-    measureElement: (element, entry, instance) =>
-      entry
-        ? measureElement(element, entry, instance)
-        : (batchHeights.get(element) ?? element.offsetHeight),
+    measureElement: (element, entry, instance) => {
+      const batched = batchSizes.get(element);
+      // Like the core's measureElement, read the element without a box size.
+      const width =
+        entry?.borderBoxSize?.[0]?.inlineSize ??
+        batched?.width ??
+        element.offsetWidth;
+      const key = String(
+        instance.options.getItemKey(instance.indexFromElement(element))
+      );
+      const previousWidth = measuredWidths.get(key);
+      measuringRewrap =
+        previousWidth !== undefined && Math.abs(previousWidth - width) >= 1;
+      measuredWidths.set(key, width);
+      if (entry) return measureElement(element, entry, instance);
+      return batched?.height ?? element.offsetHeight;
+    },
     // Apply row and composer measurements before paint. Deferring them to the
     // next frame exposes stale geometry and can lose the end anchor on send.
     useAnimationFrameWithResizeObserver: false,
@@ -479,13 +496,18 @@ export function ThreadList(props: ThreadListProps) {
   function flushRowMeasurements() {
     const rows = [...pendingRows].filter((row) => row.isConnected);
     pendingRows.clear();
-    for (const row of rows) batchHeights.set(row, row.offsetHeight);
+    for (const row of rows) {
+      batchSizes.set(row, {
+        height: row.offsetHeight,
+        width: row.offsetWidth,
+      });
+    }
     applyingBatch = true;
     try {
       for (const row of rows) virtualizer.measureElement(row);
     } finally {
       applyingBatch = false;
-      batchHeights.clear();
+      batchSizes.clear();
     }
     const scroll = deferredScroll;
     deferredScroll = undefined;
@@ -499,21 +521,26 @@ export function ThreadList(props: ThreadListProps) {
     if (pendingRows.size === 1) queueMicrotask(flushRowMeasurements);
   };
 
-  if (scrollCompensation) {
-    virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (
-      item,
-      _delta,
-      instance
-    ) => {
-      const offset = (instance.scrollOffset ?? 0) + instance.scrollAdjustments;
-      // The core skips remeasurement corrections while scrolling backward.
-      // Our counter-translation makes these safe: a late-loading image above
-      // the viewport must preserve the reading anchor in either direction.
-      return instance.itemSizeCache.has(item.key)
-        ? item.end <= offset
-        : item.start < offset;
-    };
-  }
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (
+    item,
+    _delta,
+    instance
+  ) => {
+    const offset = (instance.scrollOffset ?? 0) + instance.scrollAdjustments;
+    // A first measurement or a rewrap also resizes the row spanning the top
+    // edge. Compensate it too, so the first message starting in view stays
+    // where it is when a split opens beside the channel.
+    if (measuringRewrap || !instance.itemSizeCache.has(item.key))
+      return item.start < offset;
+    // The core skips remeasurement corrections while scrolling backward.
+    // WebKit's counter-translation makes these safe: a late-loading image
+    // above the viewport must preserve the reading anchor in either direction.
+    return (
+      item.end <= offset &&
+      (scrollCompensation !== undefined ||
+        instance.scrollDirection !== 'backward')
+    );
+  };
 
   const shortListOffset = () =>
     props.shortListAlign === 'start'
