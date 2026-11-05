@@ -384,13 +384,13 @@ After:
 
 These insert the same @-mention chips the user inserts from the `@` menu. Use the ids and details supplied in the task -- do not invent entity ids. Date/time chips do not need a looked-up id.
 
-Existing chips in the document XML look like `<user-mention>`, `<date-mention>`, `<document-mention>`, `<agent-session-mention>`, `<contact-mention>`, `<group-mention>`, `<pr-mention>`, `<booking-link-mention>`, `<tag-mention>`. Leave them intact unless the task asks to change them.
+Existing chips in the document XML look like `<user-mention>`, `<date-mention>`, `<document-mention>`, `<agent-session-mention>`, `<contact-mention>`, `<group-mention>`, `<pr-mention>`, `<booking-link-mention>`, `<tag-mention>`. Leave them intact unless the task asks to change them. `<contact-mention>` is a legacy chip; mention a CRM contact with `mentionDocument` instead.
 
 - `insertDate(blockId, at, isoDate, displayFormat?)` · `mentionDate(...)` — time chip. `isoDate` is ISO 8601; `displayFormat` is the label on the chip (e.g. `'Mon, Dec 1, 2025'`, `'Today'`, `'3:00 PM'`).
 - `insertMention(blockId, at, mention)`
 - `mentionUser(blockId, at, { userId, email })`
 - `mentionGroup(blockId, at, { groupAlias })`
-- `mentionDocument(blockId, at, { documentId, documentName, blockName, blockParams? })` — documents, channels, chats, folders, projects, tasks, emails, calendar events, skills, calls, automations, CRM companies and contacts (`blockName` is `md`/`channel`/`chat`/`project`/`initiative`/`task`/`email`/`calendar`/`skill`/`call`/`automation`/`company`/`contact`/…). A project (initiative) is `blockName: 'initiative'` with the initiative id as `documentId`; `project` is a folder. A CRM contact is `blockName: 'contact'` with the contact's id, never an email; do not use the legacy `mentionContact`. `blockParams` is for channel messages (`channel_message_id`) and calendar occurrences (`occurrenceKey`).
+- `mentionDocument(blockId, at, { documentId, documentName, blockName, blockParams? })` — documents, channels, chats, folders, projects, tasks, emails, calendar events, skills, calls, automations, CRM companies and contacts (`blockName` is `md`/`channel`/`chat`/`project`/`initiative`/`task`/`email`/`calendar`/`skill`/`call`/`automation`/`company`/`contact`/…). A project (initiative) is `blockName: 'initiative'` with the initiative id as `documentId`; `project` is a folder. A CRM contact is `blockName: 'contact'` with the contact's id, never an email. `blockParams` is for channel messages (`channel_message_id`) and calendar occurrences (`occurrenceKey`).
 - `mentionAgentSession(blockId, at, { id, label?, expanded? })` — existing agent session. `expanded: true` inserts the card that follows the session's latest turn.
 - `mentionPullRequest(blockId, at, { id, label? })`
 - `mentionBookingLink(blockId, at, { profileId, url, slug?, label? })` — Macro booking page (`/app/book/{profileId}/{slug?}`). Prefer the shareable URL from a booking-link tool.

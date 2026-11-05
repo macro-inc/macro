@@ -33,7 +33,6 @@ import {
 } from '@lexical/table';
 import { $createAgentSessionMentionNode } from '@macro-inc/lexical-core/nodes/AgentSessionMentionNode';
 import { $createBookingLinkMentionNode } from '@macro-inc/lexical-core/nodes/BookingLinkMentionNode';
-import { $createContactMentionNode } from '@macro-inc/lexical-core/nodes/ContactMentionNode';
 import {
   $createDateMentionNode,
   $isDateMentionNode,
@@ -1041,14 +1040,6 @@ export function buildNode(spec: NodeSpec): LexicalNode {
       match(session.mention)
         .with({ kind: 'user' }, (m) =>
           $createUserMentionNode({ userId: m.userId, email: m.email })
-        )
-        .with({ kind: 'contact' }, (m) =>
-          $createContactMentionNode({
-            contactId: m.contactId,
-            name: m.name,
-            emailOrDomain: m.emailOrDomain,
-            isCompany: m.isCompany,
-          })
         )
         .with({ kind: 'group' }, (m) =>
           $createGroupMentionNode({ groupAlias: m.groupAlias })
