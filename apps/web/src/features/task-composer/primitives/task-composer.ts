@@ -434,18 +434,12 @@ export function createTaskComposer(
         new Set(available.map((definition) => definition.id)),
         new Set([
           SYSTEM_PROPERTY_IDS.SOURCE,
-          ...(props.initialProjectId ||
-          props.composerContext?.initialPropertyValues?.[
-            SYSTEM_PROPERTY_IDS.PROJECT
-          ]
-            ? [SYSTEM_PROPERTY_IDS.PROJECT]
+          ...Object.keys(props.composerContext?.initialPropertyValues ?? {}),
+          ...(props.initialAssigneeIds?.length
+            ? [SYSTEM_PROPERTY_IDS.ASSIGNEES]
             : []),
-          ...(props.initialDueDate ||
-          props.composerContext?.initialPropertyValues?.[
-            SYSTEM_PROPERTY_IDS.DUE_DATE
-          ]
-            ? [SYSTEM_PROPERTY_IDS.DUE_DATE]
-            : []),
+          ...(props.initialProjectId ? [SYSTEM_PROPERTY_IDS.PROJECT] : []),
+          ...(props.initialDueDate ? [SYSTEM_PROPERTY_IDS.DUE_DATE] : []),
         ])
       );
       setPropertyValues(reconcile(fresh.propertyDefaults));

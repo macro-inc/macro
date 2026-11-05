@@ -22,7 +22,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Wait for property definitions before applying, editing, or saving templates; apply only definitions available to the viewer.
 - Preserve settings for unavailable fields when editing a template.
 - Keep No template as the default, and retain the selected template across Create More.
-- Reapply the saved template to each fresh task instead of copying task-specific edits.
+- Reapply saved defaults to fresh tasks while preserving launch-context property presets, not task-specific edits.
 - Use New template to save composer fields alone, or a task and template when a task title exists.
 - Edit templates in the same composer, confirm replacing an unsaved draft, and confirm deletion.
 

@@ -8,7 +8,7 @@ The secondary template selector opens a searchable desktop dropdown or a touch p
 
 New template uses the composer's fields, defaults, and description with inline name and ownership metadata. Without a task title, Create template saves only the template, including empty selected fields. With a title, Create task & template saves the template before creating the task. Keep the confirmed template identity if task creation needs recovery, so recovery does not save a second template. Source values remain contextual and are not captured as reusable defaults.
 
-Create More retains the selection and starts each fresh task from the saved template, not edits specific to the submitted task. Its normal action reads Create & add another; the first combined save reads Create task & template, then another. After saving a new template, reuse that saved template for subsequent tasks.
+Create More retains the selection and starts each fresh task from the saved template, not edits specific to the submitted task. Launch-context property presets, including grouped-view values and explicit assignees, remain authoritative. Its normal action reads Create & add another; the first combined save reads Create task & template, then another. After saving a new template, reuse that saved template for subsequent tasks.
 
 Editing loads the template into the same composer, confirms replacement of an unsaved draft, and saves template changes without creating a task. Ownership stays immutable. Deletion always asks for confirmation. Desktop places expansion immediately left of Close.
 
