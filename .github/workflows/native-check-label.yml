@@ -8,6 +8,7 @@ name: Native Check Label
     - unlabeled
     branches:
     - main
+    - 'synoet/ci-int-base*'
 jobs:
   rerun:
     if: (github.event.label.name == 'skip-ios-update' || github.event.label.name == 'skip-android-update') && github.event.pull_request.head.repo.full_name == github.repository
