@@ -81,6 +81,11 @@ describe('block tutorial row', () => {
     fireEvent.click(row()!);
     await screen.findByRole('dialog');
     expect(play).not.toHaveBeenCalled();
+    // The play button carries the video's title and byline.
+    screen.getByText('Macro Mail Demo');
+    expect(
+      screen.getByRole('button', { name: 'Play video' }).textContent
+    ).toContain('Jacob Beckerman·1:27');
     expect(video()?.autoplay).toBe(false);
     expect(video()?.controls).toBe(false);
 

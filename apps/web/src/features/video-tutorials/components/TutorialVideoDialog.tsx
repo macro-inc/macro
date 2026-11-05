@@ -3,6 +3,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
+import presenterPhoto from '../assets/presenter.jpg';
+import { TUTORIAL_PRESENTER } from '../core/presenter';
 import type { TutorialId } from '../core/tutorial-id';
 import { type ShelfTutorial, TutorialShelf } from './TutorialShelf';
 
@@ -45,6 +47,10 @@ export function TutorialVideoDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  /** The block's name, like "Macro Calls", for "Macro Calls Demo". */
+  block: string;
+  /** The video's length, like "1:11". */
+  length: string;
   videoUrl: string;
   posterUrl: string;
   /** Called once per opening, when playback really starts. */
@@ -153,9 +159,28 @@ export function TutorialVideoDialog(props: {
               type="button"
               onClick={play}
               aria-label={t('tutorials.playVideo')}
-              class="group/play absolute inset-0 grid place-items-center bg-[black]/30 outline-none"
+              class="group/play absolute inset-0 grid place-items-center bg-[black]/30 bg-radial from-[black]/45 to-[black]/0 to-75% outline-none"
             >
-              <PlayButtonGlyph />
+              {/* The title hangs under the button, so the button stays the
+                  centre of the frame. */}
+              <span class="relative">
+                <PlayButtonGlyph />
+                <span class="absolute top-full left-1/2 mt-6 flex w-max max-w-[min(36rem,70vw)] -translate-x-1/2 flex-col items-center gap-2.5 text-center text-[white] [text-shadow:0_1px_12px_rgb(0_0_0/0.55)] mobile:mt-3 mobile:gap-1.5">
+                  <span class="text-2xl font-semibold tracking-tight mobile:text-base">
+                    {t('tutorials.demoTitle', { block: props.block })}
+                  </span>
+                  <span class="flex items-center gap-2 text-sm font-medium text-[white]/85 mobile:gap-1.5 mobile:text-xs">
+                    <img
+                      src={presenterPhoto}
+                      alt=""
+                      class="size-7 rounded-full ring-1 ring-[white]/40 mobile:size-5"
+                    />
+                    {TUTORIAL_PRESENTER}
+                    <span aria-hidden="true">·</span>
+                    <span class="tabular-nums">{props.length}</span>
+                  </span>
+                </span>
+              </span>
             </button>
           </Show>
           <Show when={ended()}>

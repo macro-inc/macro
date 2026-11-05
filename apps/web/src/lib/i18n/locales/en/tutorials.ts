@@ -3,6 +3,7 @@ export default {
   dismiss: 'Dismiss',
   playVideo: 'Play video',
   closeVideo: 'Close video',
+  demoTitle: '{{block}} Demo',
   supportQuestion: 'Have questions about {{block}}?',
   supportChannel: 'Talk to us in your support channel.',
   moreVideos: 'More videos from Macro',
