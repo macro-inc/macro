@@ -27,7 +27,10 @@ do not see it.
 **Connect your tools.** lists **Add another inbox** first (its **Add** menu
 chooses Google, or Outlook when the account may connect one), then four
 suggested tools, each with its `native`/`mcp` badge and what connecting it does in Macro. The
-tools are ranked by mail from their sender domains in the last six months,
+suggestions aim at what the business runs on: at most one tool per category,
+a detected CRM or store always shown, and fewer than three messages ignored.
+Tools are ranked by mail from their sender domains in the last six months
+(Gmail leaves out Promotions),
 searched live at Gmail or Outlook (`POST /email/senders/domain-counts`)
 because the inbox backfill hasn't run yet. The flow starts that search as soon
 as an inbox is connected, so the step usually finds it done; with no such mail, or if the search
