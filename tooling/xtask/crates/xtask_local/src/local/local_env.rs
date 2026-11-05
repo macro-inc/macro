@@ -707,10 +707,8 @@ impl BootStubEnv {
         // connection_gateway config reads `REDIS_HOST` (a Redis URL, not a
         // hostname — see `redis::Client::open`).
         env.insert("REDIS_HOST".into(), "redis://redis:6379".into());
-        env.insert(
-            "TEAM_AGENTS_INCLUDED_EMAIL_DOMAIN".into(),
-            "macro.com".into(),
-        );
+        // No implicit staff domain locally; opt in through the instance env file.
+        env.insert("TEAM_AGENTS_INCLUDED_EMAIL_DOMAIN".into(), String::new());
         // agent-git-service's bare repositories, on the compose volume mounted
         // at the same path as the ECS EFS mount.
         env.insert("REPO_STORAGE_ROOT".into(), "/data/agent-git".into());

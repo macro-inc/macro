@@ -67,12 +67,18 @@ impl ComputerRepo for FakeRepo {
         if sold + computer.size.units() > self.sold_units {
             return Err(ReserveError::SoldOut);
         }
+        let mut state = ComputerState::reserved(HOST, now);
+        if let hosted_runtimes::domain::models::PurchaseBilling::Comped { reason } =
+            computer.billing
+        {
+            state.comp_reason = Some(reason);
+        }
         let reserved = Computer {
             id: computer.id,
             team_id: computer.team_id,
             name: computer.name,
             size: computer.size,
-            state: ComputerState::reserved(HOST, now),
+            state,
             harness_id: None,
             persona: computer.persona,
             created_by: computer.created_by,
@@ -253,6 +259,7 @@ impl ComputerRepo for FakeRepo {
 /// Records subscription updates; fails them when `decline` is set.
 #[derive(Default)]
 struct FakeBilling {
+    calls: Arc<std::sync::atomic::AtomicUsize>,
     decline: bool,
     provider_fails: bool,
     no_subscription: bool,
@@ -262,6 +269,7 @@ struct FakeBilling {
 
 impl Billing for FakeBilling {
     async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if self.no_subscription {
             return Err(BillingError::NoSubscription);
         }
@@ -286,6 +294,7 @@ impl Billing for FakeBilling {
         extra_items: &[SubscriptionItem],
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if self.decline {
             return Err(BillingError::PaymentFailed);
         }
@@ -307,6 +316,7 @@ impl Billing for FakeBilling {
         size: ComputerSize,
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.removals
             .lock()
             .unwrap()
@@ -315,6 +325,7 @@ impl Billing for FakeBilling {
     }
 
     async fn period_end(&self, _team_id: Uuid) -> Result<DateTime<Utc>, BillingError> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(now() + chrono::Duration::days(20))
     }
 }
@@ -660,6 +671,7 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
             let mut computer = repo
                 .reserve(
                     NewComputer {
+                        billing: hosted_runtimes::domain::models::PurchaseBilling::Stripe,
                         extra_items: vec![],
                         id,
                         team_id: TEAM,
@@ -770,4 +782,48 @@ async fn catalog_is_available_without_billing_and_quote_preserves_no_subscriptio
         service.quote(TEAM, agent::ComputerSize::Standard).await,
         Err(agent::TeamAgentError::NoSubscription)
     ));
+}
+
+#[tokio::test]
+async fn comped_purchase_and_release_never_consult_billing() {
+    let repo = FakeRepo {
+        sold_units: 4,
+        ..Default::default()
+    };
+    let billing = FakeBilling {
+        provider_fails: true,
+        ..Default::default()
+    };
+    let calls = billing.calls.clone();
+    let saved = repo.computers.clone();
+    let adapter = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(repo.clone(), billing, FixedClock)),
+        repo,
+        harnesses::domain::ports::MockHarnessRepo::new(),
+    );
+    let id = adapter
+        .provision_comped(agent::ComputerPurchase {
+            team_id: TEAM,
+            created_by: "macro|admin@example.com".to_owned(),
+            size: agent::ComputerSize::Standard,
+            name: Some("Agent".to_owned()),
+            persona: None,
+            extra_items: vec![],
+        })
+        .await
+        .expect("complimentary provision succeeds even with unavailable billing");
+    {
+        let computers = saved.lock().unwrap();
+        let state = &computers[&id].state;
+        assert_eq!(
+            state.payment,
+            hosted_runtimes::domain::lifecycle::PaymentOutcome::Comped
+        );
+        assert_eq!(state.comp_reason.as_deref(), Some("Included for Macro"));
+    }
+    adapter
+        .release(TEAM, id)
+        .await
+        .expect("release comped computer");
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
 }

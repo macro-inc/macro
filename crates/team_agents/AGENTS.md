@@ -21,7 +21,7 @@ saved agent persona. Its payment outbox resolves unknown outcomes idempotently;
 the agent remains `provisioning` at setup step `paying` ("Confirming payment").
 A definite `payment_failed` computer retains its agent as `failed` with reason
 `payment failed`. The response exposes durable `payment` (`pending`, `paid`,
-`unbilled`), or null when its computer cannot be read. The agent exists and its
+`unbilled`, `comped`), or null when its computer cannot be read. The agent exists and its
 `status` (`provisioning` → `running` | `failed`) is refreshed from the
 computer on `GET /team_agents` and `GET /team_agents/me`.
 
@@ -43,17 +43,19 @@ when the team lacks an active subscription; other conflicts have their own
 `computer_unavailable` or `retry_unavailable` codes. The quote includes `vcpus`, `memoryGb`, and `diskGb`
 from the hosted-runtimes size catalog alongside the seat and computer price.
 
-The team owner’s current verified primary email is checked against the configured
-`TEAM_AGENTS_INCLUDED_EMAIL_DOMAIN` (default `macro.com`, empty disables; exact,
-case-insensitive domain match). Matching teams get an `included: true` quote with
+The current verified primary emails of the team owner and administrators are
+checked against `TEAM_AGENTS_INCLUDED_EMAIL_DOMAIN` (explicit configuration;
+empty disables; exact, case-insensitive domain match). Matching teams get an `included: true` quote with
 zero seat and computer totals, without a subscription lookup. Create joins the
 agent without a seat item and uses `Computers::provision_comped`; deletion uses
 the computer’s durable Comped payment outcome to remove membership without a
 Stripe decrement. Eligibility never uses the actor’s address or team name. The required create field
 `expectedIncluded` carries the reviewed quote’s mode; a changed mode returns
 409 `quote_changed` before any resource or charge is attempted.
-The hosted adapter currently fails closed pending PR A’s comped provisioning API;
-it must never substitute a normal billed purchase for this port.
+The hosted adapter passes `PurchaseBilling::Comped` with reason
+`Included for Macro` and no extra items. It never substitutes a billed purchase.
+The authentication service also applies this shared eligibility policy to direct
+team computer purchases through `MacroStaffCompPolicy`.
 
 ## Start here
 

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use entity_access::domain::models::{AdminTeamRole, EntityAccessReceipt};
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use teams::domain::model::RemoveUserFromTeamError;
 use teams::domain::team_repo::{TeamRepository, TeamService};
 use uuid::Uuid;
@@ -27,11 +27,26 @@ impl<Teams, Repository> TeamsMembership<Teams, Repository> {
 impl<Teams: TeamService, Repository: TeamRepository> TeamMembership
     for TeamsMembership<Teams, Repository>
 {
-    async fn team_owner(&self, team_id: Uuid) -> Result<MacroUserIdStr<'static>, TeamAgentError> {
-        self.repository
-            .get_team_owner(&team_id)
-            .await
-            .map_err(TeamAgentError::internal)
+    async fn team_admins(
+        &self,
+        team_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, TeamAgentError> {
+        let mut admins = vec![
+            self.repository
+                .get_team_owner(&team_id)
+                .await
+                .map_err(TeamAgentError::internal)?,
+        ];
+        admins.extend(
+            self.repository
+                .get_team_members(&team_id)
+                .await
+                .map_err(TeamAgentError::internal)?
+                .into_iter()
+                .filter(|member| member.role == teams::domain::model::TeamRole::Admin)
+                .map(|member| member.user_id.into_owned()),
+        );
+        Ok(admins)
     }
 
     async fn add_agent(

@@ -11,7 +11,7 @@ use hosted_runtimes::domain::{
     enrollment,
     lifecycle::PaymentOutcome,
     models,
-    ports::{Billing, BillingError, ComputerRepo},
+    ports::{Billing, BillingError, CompPolicy, ComputerRepo, NoComps},
     service::{Clock, ComputerError, ComputerService},
     size,
 };
@@ -28,17 +28,17 @@ use crate::domain::ports::Computers;
 mod test;
 
 /// Buys and manages computers using the same service as the team computers API.
-pub struct HostedRuntimesComputers<Repo, Bill, Time, Harness> {
-    service: Arc<ComputerService<Repo, Bill, Time>>,
+pub struct HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy = NoComps> {
+    service: Arc<ComputerService<Repo, Bill, Time, Policy>>,
     repo: Repo,
     harnesses: Harness,
 }
 
-impl<Repo, Bill, Time, Harness> HostedRuntimesComputers<Repo, Bill, Time, Harness> {
+impl<Repo, Bill, Time, Harness, Policy> HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy> {
     /// Shares the computer service and a clone of its repository.
     /// The repository supplies saved bootstrap personas for recovery.
     pub fn new(
-        service: Arc<ComputerService<Repo, Bill, Time>>,
+        service: Arc<ComputerService<Repo, Bill, Time, Policy>>,
         repo: Repo,
         harnesses: Harness,
     ) -> Self {
@@ -50,8 +50,8 @@ impl<Repo, Bill, Time, Harness> HostedRuntimesComputers<Repo, Bill, Time, Harnes
     }
 }
 
-impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo> Computers
-    for HostedRuntimesComputers<Repo, Bill, Time, Harness>
+impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Policy: CompPolicy>
+    Computers for HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy>
 {
     fn sizes(&self) -> Vec<ComputerSizeSpec> {
         size::ComputerSize::ALL
@@ -77,7 +77,11 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo> Compu
     ) -> Result<ComputerQuote, TeamAgentError> {
         let quote = self
             .service
-            .quote(team_id, computer_size(size))
+            .quote(
+                team_id,
+                computer_size(size),
+                &models::PurchaseBilling::Stripe,
+            )
             .await
             .map_err(error)?;
         let size = quote.size;
@@ -97,88 +101,18 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo> Compu
 
     #[tracing::instrument(skip_all, fields(team_id = %purchase.team_id), err)]
     async fn purchase(&self, purchase: ComputerPurchase) -> Result<Uuid, TeamAgentError> {
-        let team_id = purchase.team_id;
-        let agent_user_id = purchase.persona.as_ref().and_then(|persona| {
-            persona
-                .config
-                .get(crate::domain::service::config_keys::AGENT_USER_ID)
-                .cloned()
-        });
-        let result = self
-            .service
-            .purchase(models::PurchaseRequest {
-                team_id: purchase.team_id,
-                created_by: purchase.created_by,
-                size: computer_size(purchase.size),
-                name: purchase.name,
-                persona: purchase.persona.map(|persona| enrollment::Persona {
-                    name: persona.name,
-                    os_user: persona.os_user,
-                    extra_service: enrollment::PersonaService {
-                        unit_name: persona.extra_service.unit_name,
-                        exec: persona.extra_service.exec,
-                        env: persona.extra_service.env,
-                    },
-                    config: persona.config,
-                }),
-                extra_items: purchase
-                    .extra_items
-                    .into_iter()
-                    .map(|item| models::SubscriptionItem {
-                        price_id: item.price_id,
-                        quantity: item.quantity,
-                    })
-                    .collect(),
-            })
-            .await;
-        match result {
-            Err(source @ (ComputerError::Internal(_) | ComputerError::Billing(_))) => {
-                // The durable row and payment effect precede Stripe. A pending
-                // payment is replayed by hosted runtimes with its original key;
-                // a definite refusal remains visible as PaymentFailed.
-                tracing::warn!(error = ?source, %team_id, "recovering saved computer purchase");
-                let computer_id = match self.repo.list_for_team(team_id).await {
-                    Ok(computers) => computers
-                        .into_iter()
-                        .find(|computer| {
-                            computer.team_id == team_id
-                                && agent_user_id.as_ref().is_some_and(|agent| {
-                                    computer.persona.as_ref().and_then(|persona| {
-                                        persona
-                                            .config
-                                            .get(crate::domain::service::config_keys::AGENT_USER_ID)
-                                    }) == Some(agent)
-                                })
-                        })
-                        .map(|computer| computer.id),
-                    Err(source) => {
-                        tracing::error!(error = ?source, %team_id, "could not recover the saved computer identity");
-                        None
-                    }
-                };
-                match computer_id {
-                    Some(id) => Ok(id),
-                    None if matches!(
-                        source,
-                        ComputerError::Internal(_)
-                            | ComputerError::Billing(BillingError::Provider(_))
-                    ) =>
-                    {
-                        Err(TeamAgentError::ComputerIdentityUnavailable)
-                    }
-                    None => Err(error(source)),
-                }
-            }
-            other => other.map_err(error),
-        }
+        self.purchase_with_billing(purchase, models::PurchaseBilling::Stripe)
+            .await
     }
 
-    async fn provision_comped(&self, _purchase: ComputerPurchase) -> Result<Uuid, TeamAgentError> {
-        // TODO(PR A): call ComputerService::provision_comped once it lands, with
-        // durable PaymentOutcome::Comped and no billing or extra seat items.
-        Err(TeamAgentError::ComputerUnavailable(
-            "included computer provisioning is not available yet; nothing was charged".to_string(),
-        ))
+    async fn provision_comped(&self, purchase: ComputerPurchase) -> Result<Uuid, TeamAgentError> {
+        self.purchase_with_billing(
+            purchase,
+            models::PurchaseBilling::Comped {
+                reason: crate::domain::included::INCLUDED_REASON.to_owned(),
+            },
+        )
+        .await
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
@@ -262,8 +196,8 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo> Compu
     }
 }
 
-impl<Repo: ComputerRepo, Bill, Time, Harness: HarnessRepo>
-    HostedRuntimesComputers<Repo, Bill, Time, Harness>
+impl<Repo: ComputerRepo, Bill, Time, Harness: HarnessRepo, Policy>
+    HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy>
 {
     #[tracing::instrument(skip(self), fields(%team_id, %computer_id), err)]
     async fn brain_health(
@@ -329,6 +263,7 @@ fn computer_status(status: models::ComputerStatus) -> ComputerStatus {
         payment: match status.payment {
             PaymentOutcome::Pending => ComputerPayment::Pending,
             PaymentOutcome::Paid => ComputerPayment::Paid,
+            PaymentOutcome::Comped => ComputerPayment::Comped,
             PaymentOutcome::Unbilled => ComputerPayment::Unbilled,
         },
         brain: None,
@@ -380,5 +315,91 @@ fn error(source: ComputerError) -> TeamAgentError {
             TeamAgentError::ComputerProvider(report)
         }
         other => TeamAgentError::internal(other),
+    }
+}
+
+impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Policy: CompPolicy>
+    HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy>
+{
+    async fn purchase_with_billing(
+        &self,
+        purchase: ComputerPurchase,
+        billing: models::PurchaseBilling,
+    ) -> Result<Uuid, TeamAgentError> {
+        let team_id = purchase.team_id;
+        let agent_user_id = purchase.persona.as_ref().and_then(|persona| {
+            persona
+                .config
+                .get(crate::domain::service::config_keys::AGENT_USER_ID)
+                .cloned()
+        });
+        let result = self
+            .service
+            .purchase(models::PurchaseRequest {
+                billing,
+                team_id: purchase.team_id,
+                created_by: purchase.created_by,
+                size: computer_size(purchase.size),
+                name: purchase.name,
+                persona: purchase.persona.map(|persona| enrollment::Persona {
+                    name: persona.name,
+                    os_user: persona.os_user,
+                    extra_service: enrollment::PersonaService {
+                        unit_name: persona.extra_service.unit_name,
+                        exec: persona.extra_service.exec,
+                        env: persona.extra_service.env,
+                    },
+                    config: persona.config,
+                }),
+                extra_items: purchase
+                    .extra_items
+                    .into_iter()
+                    .map(|item| models::SubscriptionItem {
+                        price_id: item.price_id,
+                        quantity: item.quantity,
+                    })
+                    .collect(),
+            })
+            .await;
+        match result {
+            Err(source @ (ComputerError::Internal(_) | ComputerError::Billing(_))) => {
+                // The durable row and payment effect precede Stripe. A pending
+                // payment is replayed by hosted runtimes with its original key;
+                // a definite refusal remains visible as PaymentFailed.
+                tracing::warn!(error = ?source, %team_id, "recovering saved computer purchase");
+                let computer_id = match self.repo.list_for_team(team_id).await {
+                    Ok(computers) => computers
+                        .into_iter()
+                        .find(|computer| {
+                            computer.team_id == team_id
+                                && agent_user_id.as_ref().is_some_and(|agent| {
+                                    computer.persona.as_ref().and_then(|persona| {
+                                        persona
+                                            .config
+                                            .get(crate::domain::service::config_keys::AGENT_USER_ID)
+                                    }) == Some(agent)
+                                })
+                        })
+                        .map(|computer| computer.id),
+                    Err(source) => {
+                        tracing::error!(error = ?source, %team_id, "could not recover the saved computer identity");
+                        None
+                    }
+                };
+                match computer_id {
+                    Some(id) => Ok(id),
+                    None if matches!(
+                        source,
+                        ComputerError::Internal(_)
+                            | ComputerError::Billing(BillingError::Provider(_))
+                    ) =>
+                    {
+                        Err(TeamAgentError::ComputerIdentityUnavailable)
+                    }
+                    None => Err(error(source)),
+                }
+            }
+            other => other.map_err(error),
+        }
     }
 }

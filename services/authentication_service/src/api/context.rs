@@ -137,6 +137,7 @@ pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentS
         crate::outbound::computer_billing::TeamComputerBilling<TeamsServiceType>,
         hosted_runtimes::domain::service::SystemClock,
         harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+        StaffCompPolicyType,
     >,
     team_agents::outbound::agent_git_repos::AgentGitRepos,
     feature_flags::outbound::posthog::PostHogFeatureFlags,
@@ -204,11 +205,20 @@ pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
 
 pub(crate) type EntityAccessServiceType = EntityAccessServiceImpl<PgAccessRepository>;
 
+pub(crate) type StaffCompPolicyType = crate::outbound::staff_comp_policy::MacroStaffCompPolicy<
+    team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
+    team_agents::outbound::team_membership::TeamsMembership<
+        TeamsServiceType,
+        teams::outbound::team_repo::TeamRepositoryImpl,
+    >,
+>;
+
 /// Buys and manages Macro computers on team subscriptions.
 pub(crate) type ComputerServiceType = hosted_runtimes::domain::service::ComputerService<
     hosted_runtimes::outbound::pg::PgComputerRepo,
     crate::outbound::computer_billing::TeamComputerBilling<TeamsServiceType>,
     hosted_runtimes::domain::service::SystemClock,
+    StaffCompPolicyType,
 >;
 
 pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServiceImpl<

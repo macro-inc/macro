@@ -59,6 +59,7 @@ struct StoredAgent {
 
 struct FakeRepository {
     owner_verified_email: Option<String>,
+    admin_verified_email: Option<String>,
     journal: Arc<Journal>,
     agents: Mutex<Vec<StoredAgent>>,
 }
@@ -76,9 +77,13 @@ impl TeamAgentRepository for FakeRepository {
 
     async fn verified_email(
         &self,
-        _user_id: &MacroUserIdStr<'_>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> Result<Option<String>, Self::Err> {
-        Ok(self.owner_verified_email.clone())
+        if user_id.as_ref() == "macro|admin@example.com" {
+            Ok(self.admin_verified_email.clone())
+        } else {
+            Ok(self.owner_verified_email.clone())
+        }
     }
 
     async fn create_account(&self, account: &NewAgentAccount) -> Result<(), Self::Err> {
@@ -202,8 +207,14 @@ struct FakeMembership {
 }
 
 impl TeamMembership for FakeMembership {
-    async fn team_owner(&self, _team_id: Uuid) -> Result<MacroUserIdStr<'static>, TeamAgentError> {
-        Ok(user("macro|owner@example.com"))
+    async fn team_admins(
+        &self,
+        _team_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, TeamAgentError> {
+        Ok(vec![
+            user("macro|owner@example.com"),
+            user("macro|admin@example.com"),
+        ])
     }
 
     async fn add_agent(
@@ -450,6 +461,7 @@ type Service = TeamAgentServiceImpl<
 
 struct Setup {
     owner_verified_email: Option<String>,
+    admin_verified_email: Option<String>,
     fail_at: Option<&'static str>,
     flags: Option<FakeFeatureFlags>,
     seat: Option<SeatQuote>,
@@ -461,6 +473,7 @@ impl Default for Setup {
     fn default() -> Self {
         Self {
             owner_verified_email: None,
+            admin_verified_email: None,
             fail_at: None,
             flags: None,
             seat: Some(SeatQuote {
@@ -492,6 +505,7 @@ fn build(setup: Setup) -> (Service, Arc<Journal>) {
     let service = TeamAgentServiceImpl::new(
         FakeRepository {
             owner_verified_email: setup.owner_verified_email,
+            admin_verified_email: setup.admin_verified_email,
             journal: journal.clone(),
             agents: Mutex::new(vec![]),
         },
@@ -1684,5 +1698,25 @@ async fn a_failed_comped_agent_retries_without_a_billed_purchase() {
     assert_eq!(retried.computer_id, agent.computer_id);
     assert_eq!(retried.payment, Some(ComputerPayment::Comped));
     assert!(journal.steps().contains(&"computer.retry"));
+    assert!(!journal.steps().contains(&"computer.purchase"));
+}
+
+#[tokio::test]
+async fn a_verified_team_admin_qualifies_without_a_verified_owner() {
+    let (service, journal) = build(Setup {
+        admin_verified_email: Some("admin@staff.example.com".to_owned()),
+        ..Setup::default()
+    });
+    assert!(
+        service
+            .quote(receipt(TEAM_ID), ComputerSize::Large)
+            .await
+            .unwrap()
+            .included
+    );
+    let mut create = request();
+    create.expected_included = true;
+    service.create(receipt(TEAM_ID), create).await.unwrap();
+    assert!(journal.steps().contains(&"computer.comped"));
     assert!(!journal.steps().contains(&"computer.purchase"));
 }

@@ -278,20 +278,14 @@ where
         }
     }
 
-    /// An exact verified owner-domain match qualifies the team, never the actor.
     async fn is_included(&self, team_id: Uuid) -> Result<bool, TeamAgentError> {
-        if self.included_email_domain.is_empty() {
-            return Ok(false);
-        }
-        let owner = self.membership.team_owner(team_id).await?;
-        let email = self
-            .repository
-            .verified_email(&owner)
-            .await
-            .map_err(TeamAgentError::internal)?;
-        Ok(email
-            .and_then(|email| email.rsplit_once('@').map(|(_, domain)| domain.to_owned()))
-            .is_some_and(|domain| domain.eq_ignore_ascii_case(&self.included_email_domain)))
+        super::included::is_included_team(
+            &self.repository,
+            &self.membership,
+            team_id,
+            &self.included_email_domain,
+        )
+        .await
     }
 
     /// Takes back what a failed create made, newest first. Each step logs

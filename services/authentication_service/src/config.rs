@@ -102,8 +102,7 @@ maybe_env_vars! {
 // #[macro_config::from_ref_all]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
-    /// Exact verified team-owner email domain whose agents are included. Empty disables it.
-    #[macro_config_default("macro.com".to_string())]
+    /// Exact verified owner/admin email domain whose agents are included. Required; empty disables it.
     pub team_agents_included_email_domain: String,
     /// Admit new Outlook accounts only after the deployment is ready. Reconnect is separate.
     #[macro_config_default(false)]

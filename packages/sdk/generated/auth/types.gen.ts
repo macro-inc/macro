@@ -367,6 +367,10 @@ export type ComputerStatus = {
      * When billing stops, for a computer canceled at period end.
      */
     cancelsAt?: string | null;
+    /**
+     * Present for a comped purchase, including after release.
+     */
+    compReason?: string | null;
     createdAt: string;
     harnessId?: string | null;
     id: string;
@@ -1414,6 +1418,7 @@ export type InitOutlookLinkResponse = {
  * Body of an internal purchase.
  */
 export type InternalPurchaseBody = {
+    billing: PurchaseBilling;
     /**
      * The team admin or owner the caller authorized.
      */
@@ -1689,9 +1694,9 @@ export type PatchUserTutorialRequest = {
 };
 
 /**
- * Whether the computer's purchase has ever been paid.
+ * The purchase outcome, latched after payment or comp confirmation.
  */
-export type PaymentOutcome = 'pending' | 'paid' | 'unbilled';
+export type PaymentOutcome = 'pending' | 'paid' | 'unbilled' | 'comped';
 
 export type Permission = {
     /**
@@ -1861,6 +1866,16 @@ export type PublicGtmInviteLink = {
 };
 
 /**
+ * Server-selected purchase funding. Team clients cannot select this value.
+ */
+export type PurchaseBilling = {
+    kind: 'stripe';
+} | {
+    kind: 'comped';
+    reason: string;
+};
+
+/**
  * Body of a team purchase.
  */
 export type PurchaseBody = {
@@ -1945,6 +1960,9 @@ export type Quote = {
     amount: number;
     currency: string;
     interval: BillingInterval;
+    /**
+     * Empty for a comped team without a subscription.
+     */
     priceId: string;
     size: ComputerSize;
 };

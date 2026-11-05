@@ -79,11 +79,11 @@ pub trait TeamAgentRepository: Send + Sync + 'static {
 
 /// The agent's membership and seat on its team.
 pub trait TeamMembership: Send + Sync + 'static {
-    /// Current owner, read through the teams domain boundary.
-    fn team_owner(
+    /// Current owners and administrators, read through the teams boundary.
+    fn team_admins(
         &self,
         team_id: Uuid,
-    ) -> impl Future<Output = Result<MacroUserIdStr<'static>, TeamAgentError>> + Send;
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, TeamAgentError>> + Send;
 
     /// Adds the account to the receipt's team without touching the team
     /// subscription. Returns the seat to add in the computer purchase's

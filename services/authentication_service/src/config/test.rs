@@ -3,7 +3,8 @@ use crate::service::signup_policy::SignupPolicyDenial;
 use super::*;
 
 fn config_values() -> serde_json::Value {
-    let mut values = serde_json::json!({ "ENVIRONMENT": "local" });
+    let mut values =
+        serde_json::json!({ "ENVIRONMENT": "local", "TEAM_AGENTS_INCLUDED_EMAIL_DOMAIN": "" });
     for key in [
         "BASE_URL",
         "DATABASE_URL",
@@ -457,4 +458,16 @@ fn cursor_kms_key_required_when_both_absent() {
     let configured = CursorApiKeyKmsKeyId::new_unset();
     let error = resolve_cursor_api_key_kms_key_id(&configured, None).unwrap_err();
     assert!(error.to_string().contains("CURSOR_API_KEY_KMS_KEY_ID"));
+}
+
+#[test]
+fn staff_domain_has_no_implicit_local_default() {
+    let mut values = config_values();
+    values
+        .as_object_mut()
+        .unwrap()
+        .remove("TEAM_AGENTS_INCLUDED_EMAIL_DOMAIN");
+    assert!(serde_json::from_value::<Config>(values).is_err());
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert!(config.team_agents_included_email_domain.is_empty());
 }

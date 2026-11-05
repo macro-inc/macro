@@ -113,6 +113,7 @@ fn computer_router_state(
     hosted_runtimes::domain::service::SystemClock,
     crate::api::context::EntityAccessServiceType,
     crate::api::context::AuthorizationService,
+    crate::api::context::StaffCompPolicyType,
 > {
     hosted_runtimes::inbound::axum_router::ComputerRouterState {
         service: state.computer_service.clone(),

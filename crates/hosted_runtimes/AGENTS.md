@@ -52,7 +52,8 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 - **Comped computers**: `PurchaseBilling::{Stripe, Comped { reason: String }}`
   selects funding on `PurchaseRequest` and `NewComputer`. `CompPolicy::comp_reason(team_id)`
   returns `Result<Option<String>, Self::Err>`; inject it with `with_comp_policy`.
-  authentication_service explicitly wires `NoComps`. Team purchase calls
+  authentication_service wires `MacroStaffCompPolicy`: a verified owner/admin
+  email at its explicitly configured domain qualifies the team. Team purchase calls
   `purchase_for_team(PurchaseRequest)` and overwrites billing from policy; its
   JSON body only accepts `size` and `name` (no client billing flag). Team quotes
   and offers also use policy (`quote_for_team`). Internal-key-only

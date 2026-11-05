@@ -687,17 +687,29 @@ pub async fn run() -> anyhow::Result<()> {
     .with_invite_rewarder(Arc::new(invite_rewards));
     let computer_prices = config.computer_prices();
     let computer_repo = hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone());
-    let computer_service = Arc::new(hosted_runtimes::domain::service::ComputerService::new(
-        computer_repo.clone(),
-        crate::outbound::computer_billing::TeamComputerBilling::new(
-            teams_service_impl.clone(),
-            computer_prices.clone(),
-        ),
-        hosted_runtimes::domain::service::SystemClock,
-    ).with_comp_policy(hosted_runtimes::domain::ports::NoComps));
     let teams_service = Arc::new(teams_service_impl);
     let team_agents_repository =
         team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone());
+    let computer_service = Arc::new(
+        hosted_runtimes::domain::service::ComputerService::new(
+            computer_repo.clone(),
+            crate::outbound::computer_billing::TeamComputerBilling::new(
+                (*teams_service).clone(),
+                computer_prices.clone(),
+            ),
+            hosted_runtimes::domain::service::SystemClock,
+        )
+        .with_comp_policy(
+            crate::outbound::staff_comp_policy::MacroStaffCompPolicy::new(
+                team_agents_repository.clone(),
+                team_agents::outbound::team_membership::TeamsMembership::new(
+                    teams_service.clone(),
+                    teams_repo_impl.clone(),
+                ),
+                config.team_agents_included_email_domain.clone(),
+            ),
+        ),
+    );
     let computer_urls = crate::outbound::computer_urls::ComputerUrls::new(
         config.environment,
         config.computers_fleet.is_some(),
