@@ -24,7 +24,7 @@ import { registerClient } from '@core/util/mockClient';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import type { ResultError } from '@core/util/result';
-import type { SafeFetchInit } from '@core/util/safeFetch';
+import { type SafeFetchInit, statusError } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
@@ -269,6 +269,16 @@ async function calendarJoinRequestErrorHandler(response: Response) {
     code: 'HTTP_ERROR' as const,
     message: `HTTP error! status: ${response.status}`,
   };
+}
+
+async function contactEditErrorHandler(response: Response) {
+  if (response.status === 400) {
+    return {
+      code: 'BAD_REQUEST' as const,
+      message: 'Contact change unavailable',
+    };
+  }
+  return statusError(response.status);
 }
 
 export async function getDocumentPermissionToken(
@@ -2881,11 +2891,12 @@ export const storageServiceClient = {
     contactId,
     ...body
   }: { contactId: string } & SetContactEmailRequest) {
-    return await dssFetch<CrmContactResponse>(
-      `/crm/contacts/${contactId}/email`,
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/email`,
       {
         method: 'PUT',
         body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
       }
     );
   },
@@ -2893,11 +2904,12 @@ export const storageServiceClient = {
     contactId,
     ...body
   }: { contactId: string } & SetContactCompanyRequest) {
-    return await dssFetch<CrmContactResponse>(
-      `/crm/contacts/${contactId}/company`,
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/company`,
       {
         method: 'PUT',
         body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
       }
     );
   },

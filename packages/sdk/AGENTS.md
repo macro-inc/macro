@@ -107,6 +107,7 @@ the existing gateway prefixes.
 - Async iterators are lazy; `limit` is page size. Preserve filters on every page
   and do not fetch another page after the caller breaks the loop.
 - Handles must serialize identity or loaded detail, never authenticated clients.
+- Lazy detail invalidation fences in-flight reads so a pre-write response cannot restore stale cached fields.
 - Draft writes must select the draft's inbox with `X-Email-Link-Id`; callers
   supply plain HTML and the SDK encodes it for the draft wire contract.
 - Read many task or initiative names with `tasks.summaries` (`/documents/preview`)
