@@ -26,6 +26,7 @@ export default {
   cardUnavailable: 'This request isn’t available',
   cardWaiting: 'Waiting for a response',
   cardFullAccess: 'Full access until revoked',
+  cardExpires: 'Expires {{date}} unless the token is revealed',
 
   approve: 'Approve',
   decline: 'Decline',

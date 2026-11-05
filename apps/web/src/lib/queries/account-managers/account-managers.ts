@@ -32,6 +32,9 @@ function accountManagerGrantOptions(id: string) {
     queryFn: () =>
       throwOnErr(() => storageServiceClient.getAccountManagerGrant({ id })),
     retry: false,
+    // The other account changes this grant, so a cached status can be wrong
+    // when a card or the approval link opens.
+    staleTime: 0,
   };
 }
 

@@ -75,10 +75,15 @@ An agent account can manage a person's account: either side asks in their DM, an
 the other side approves. An agent account can't be managed.
 
 ```ts
-const grant = await macro.accountManagers.askToManage(user); // or askToBeManagedBy(agent)
-// Once the other side approves, the manager gets the token, once:
+// As the agent, ask to manage a person's account:
+const grant = await macro.accountManagers.askToManage(person);
+// Once the person approves, the agent gets the token, once:
 const token = await grant.claimToken();
 ```
+
+A person can ask instead, with `macro.accountManagers.askToBeManagedBy(agent)`. Only the
+manager can claim, so the agent approves and claims with its own client, using the grant id
+from the card in the DM: `macro.accountManagers.byId(id)`.
 
 The token is an API key for the managed account, with full access except its
 managers, API keys and other credentials, sign-in, and deleting the account. It

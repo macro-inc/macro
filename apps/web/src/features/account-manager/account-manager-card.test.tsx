@@ -44,7 +44,7 @@ function grant(status: string, requestedBy: 'managed' | 'manager') {
     managerUserId: MANAGER,
     requestedBy,
     status,
-    expiresAt: null,
+    expiresAt: status === 'approved' ? '2026-11-11T00:00:00Z' : null,
     createdAt: '2026-11-04T00:00:00Z',
     claimedAt: null,
     lastUsedAt: null,
@@ -100,7 +100,7 @@ describe('AccountManagerCard', () => {
   it('only the manager is offered the token', async () => {
     await showCard(MANAGED, grant('approved', 'manager'));
 
-    await screen.findByText('Full access until revoked');
+    await screen.findByText(/^Expires .* unless the token is revealed$/);
 
     expect(screen.queryByRole('button', { name: 'Reveal token' })).toBeNull();
   });
@@ -130,6 +130,12 @@ describe('AccountManagerCard', () => {
       expect(screen.queryAllByRole('button')).toEqual([]);
     }
   );
+
+  it('shows the unavailable label for a status it does not know', async () => {
+    await showCard(MANAGER, grant('suspended', 'manager'));
+
+    await screen.findByText('This request isn’t available');
+  });
 
   it('says so when the viewer may not see the request', async () => {
     mocks.viewer = MANAGER;

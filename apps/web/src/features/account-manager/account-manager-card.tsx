@@ -1,4 +1,4 @@
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import { CredentialField } from '@channel/Bots/CredentialField';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
@@ -11,32 +11,35 @@ import {
 } from '@queries/account-managers/account-managers';
 import type { AccountManagerGrant } from '@service-storage/generated/schemas/accountManagerGrant';
 import { Button, Dialog, Panel } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, Suspense } from 'solid-js';
 import { match, P } from 'ts-pattern';
+import { AccountManagerCardFrame } from './account-manager-card-frame';
 
 /**
  * The card for one account manager request: what happened to it, and what the
- * viewer can do next. Holds the same height in every state, because channels
- * are a virtualized list and a growing message would jump the scroll position.
+ * viewer can do next. Its own Suspense keeps the frame on screen while the grant
+ * loads; without it, reading the query suspends the whole message.
  */
 export function AccountManagerCard(props: { grantId: string }) {
   const grantQuery = useAccountManagerGrantQuery(() => props.grantId);
 
   return (
-    <span class="my-1 flex h-[4.5rem] max-w-md flex-col justify-center gap-1.5 rounded-lg border border-edge-muted bg-panel px-3">
-      <Show
-        when={grantQuery.data}
-        fallback={
-          <Show when={grantQuery.isError}>
-            <span class="text-sm text-ink-muted">
-              {t('accountManager.cardUnavailable')}
-            </span>
-          </Show>
-        }
-      >
-        {(grant) => <GrantContent grant={grant()} />}
-      </Show>
-    </span>
+    <AccountManagerCardFrame>
+      <Suspense>
+        <Show
+          when={grantQuery.data}
+          fallback={
+            <Show when={grantQuery.isError}>
+              <span class="text-sm text-ink-muted">
+                {t('accountManager.cardUnavailable')}
+              </span>
+            </Show>
+          }
+        >
+          {(grant) => <GrantContent grant={grant()} />}
+        </Show>
+      </Suspense>
+    </AccountManagerCardFrame>
   );
 }
 
@@ -58,6 +61,14 @@ function GrantContent(props: { grant: AccountManagerGrant }) {
   };
   const askedByViewer = () =>
     props.grant.requestedBy === (isManager() ? 'manager' : 'managed');
+  const expiryDate = () => {
+    const expiresAt = props.grant.expiresAt;
+    if (!expiresAt) return undefined;
+
+    return new Intl.DateTimeFormat(formatLocale(), {
+      dateStyle: 'medium',
+    }).format(new Date(expiresAt));
+  };
   const busy = () => respond.isPending || claim.isPending || revoke.isPending;
 
   const title = () => {
@@ -90,7 +101,7 @@ function GrantContent(props: { grant: AccountManagerGrant }) {
       .with(['declined', P._, P._], () => t('accountManager.cardDeclined'))
       .with(['revoked', P._, P._], () => t('accountManager.cardRevoked'))
       .with(['expired', P._, P._], () => t('accountManager.cardExpired'))
-      .exhaustive();
+      .exhaustive(() => t('accountManager.cardUnavailable'));
   };
 
   const run = async (action: () => Promise<unknown>) => {
@@ -176,15 +187,17 @@ function GrantContent(props: { grant: AccountManagerGrant }) {
             {t('accountManager.revealToken')}
           </Button>
         </Show>
-        <Show
-          when={
-            props.grant.status === 'active' ||
-            (props.grant.status === 'approved' && !isManager())
-          }
-        >
+        <Show when={props.grant.status === 'active'}>
           <span class="text-xs text-ink-muted">
             {t('accountManager.cardFullAccess')}
           </span>
+        </Show>
+        <Show when={props.grant.status === 'approved' && expiryDate()}>
+          {(date) => (
+            <span class="truncate text-xs text-ink-muted">
+              {t('accountManager.cardExpires', { date: date() })}
+            </span>
+          )}
         </Show>
       </span>
 

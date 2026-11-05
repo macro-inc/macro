@@ -158,6 +158,33 @@ async fn a_claim_works_once_and_replaces_the_pairs_earlier_credential(pool: PgPo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn racing_claims_issue_exactly_one_credential(pool: PgPool) {
+    seed_users(&pool).await;
+    let repo = PgAccountManagerRepo::new(pool.clone());
+    let grant = open(&repo, Utc::now() + Duration::days(7)).await.grant;
+    approve(&repo, grant.id).await;
+
+    let now = Utc::now();
+    let (first, second) = tokio::join!(
+        repo.claim(grant.id, &[5; 32], now),
+        repo.claim(grant.id, &[6; 32], now),
+    );
+    let first = first.unwrap();
+    let second = second.unwrap();
+
+    assert!(first.is_some() != second.is_some());
+    let expected: &[u8] = if first.is_some() { &[5; 32] } else { &[6; 32] };
+    let stored = sqlx::query_scalar!(
+        "SELECT key_hash FROM account_manager_grants WHERE id = $1",
+        grant.id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stored.as_deref(), Some(expected));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn revoking_clears_the_credential_hash_and_list_hides_it(pool: PgPool) {
     seed_users(&pool).await;
     let repo = PgAccountManagerRepo::new(pool.clone());

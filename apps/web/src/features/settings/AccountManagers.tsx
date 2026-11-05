@@ -1,8 +1,7 @@
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
 import { getDisplayName, tryMacroId } from '@core/user';
-import { formatRelativeTimestamp } from '@entity';
 import XIcon from '@icon/system/regular/x.svg';
 import {
   useAccountManagersQuery,
@@ -143,6 +142,13 @@ export function AccountManagers() {
   );
 }
 
+function formatTime(timestamp: string) {
+  return new Intl.DateTimeFormat(formatLocale(), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(timestamp));
+}
+
 function grantDetail(grant: AccountManagerGrant) {
   if (grant.status === 'approved') {
     return t('accountManager.settingsAwaitingClaim');
@@ -150,13 +156,13 @@ function grantDetail(grant: AccountManagerGrant) {
 
   if (grant.lastUsedAt) {
     return t('accountManager.settingsLastUsed', {
-      time: formatRelativeTimestamp(grant.lastUsedAt),
+      time: formatTime(grant.lastUsedAt),
     });
   }
 
   if (grant.claimedAt) {
     return t('accountManager.settingsGranted', {
-      time: formatRelativeTimestamp(grant.claimedAt),
+      time: formatTime(grant.claimedAt),
     });
   }
 
