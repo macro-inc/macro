@@ -426,7 +426,8 @@ fn build_schema_binaries() -> Step<Run> {
     Step::new("Build schema binaries").run(indoc::indoc! {r#"
         set -euo pipefail
         read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
-        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas
+        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas \
+          --bin agent_fold_types --bin export_review_types
     "#})
 }
 
@@ -452,6 +453,12 @@ fn check_specta_types() -> Step<Run> {
             fi
         "#})
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+        // Two of the four exporters come from the build step, built with the same
+        // feature resolution as the schema binaries. `cargo run -p` resolves the
+        // features of one package's dependencies, which recompiled 101 and 131
+        // crates for them. The other two need a `cli` feature that would change
+        // the libraries every schema binary links, so they keep `cargo run -p`.
+        .add_env(("SPECTA_BIN_DIR", "${{ github.workspace }}/target/debug"))
 }
 
 /// The tail of `just update-generated` in `packages/sdk`: its first line reruns

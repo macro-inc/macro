@@ -482,7 +482,8 @@ jobs:
       run: |
         set -euo pipefail
         read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
-        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas
+        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas \
+          --bin agent_fold_types --bin export_review_types
     - name: Generate API Types
       run: bun run gen-api -- --check
       working-directory: apps/web
@@ -521,6 +522,8 @@ jobs:
           echo "Generated specta types are stale. Run 'just gen-agent-fold-types', 'just gen-database-sql-types', 'just gen-dynamic-ui-types' and 'just gen-agent-review-types' in apps/web and commit the result."
           exit 1
         fi
+      env:
+        SPECTA_BIN_DIR: ${{ github.workspace }}/target/debug
       working-directory: apps/web
     - name: show sccache stats
       if: always()
