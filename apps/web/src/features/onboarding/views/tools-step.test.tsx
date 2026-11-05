@@ -185,7 +185,7 @@ it('suggests the tools the inbox shows, with why, and always another inbox', asy
     () => <ToolsStep onContinue={vi.fn()} />,
     {
       emailAccounts: [
-        { address: 'ada@acme.com', isPrimary: true, ownerId: 'macro|ada' },
+        { address: 'ada@example.com', isPrimary: true, ownerId: 'macro|ada' },
       ],
       senderDomainCounts: { 'stripe.com': 31, 'posthog.com': 4 },
     }
@@ -208,7 +208,7 @@ it('suggests the tools the inbox shows, with why, and always another inbox', asy
       'Import Linear issues into Macro tasks, and let agents create and update issues.'
     )
   ).toBeTruthy();
-  expect(within(list).getByText('ada@acme.com connected')).toBeTruthy();
+  expect(within(list).getByText('ada@example.com connected')).toBeTruthy();
   // Suggested tools aren't repeated in the full catalog.
   fireEvent.click(
     screen.getByRole('button', { name: 'Browse all integrations' })

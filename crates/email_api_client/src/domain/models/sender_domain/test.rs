@@ -26,7 +26,7 @@ fn rejects_values_that_could_change_a_provider_query() {
         "linear app.com",
         "\"linear.app\"",
         "linear.app OR from:x.com",
-        "user@linear.app",
+        "user@example.com",
         ".linear.app",
         "linear.app.",
         "linear..app",
