@@ -28,7 +28,7 @@ use hosted_runtimes::outbound::configured_fleet::ConfiguredFleet;
 use hosted_runtimes::outbound::docker_fleet::{DockerFleet, DockerFleetConfig};
 use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig};
 use hosted_runtimes::outbound::pg::PgComputerRepo;
-use incus_client::IncusEndpoint;
+use incus_client::{ImageReference, ImageSource, IncusEndpoint};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
@@ -124,26 +124,32 @@ pub async fn operator(
 
     let fleet = match kind {
         "incus" => ConfiguredFleet::Incus(
-            IncusFleet::new(IncusFleetConfig::macro_box(
-                IncusEndpoint {
-                    url: required(&config.computers_incus_url, "COMPUTERS_INCUS_URL")?,
-                    client_cert_pem: required(
-                        &config.computers_incus_client_cert,
-                        "COMPUTERS_INCUS_CLIENT_CERT",
-                    )?,
-                    client_key_pem: required(
-                        &config.computers_incus_client_key,
-                        "COMPUTERS_INCUS_CLIENT_KEY",
-                    )?,
-                    server_cert_pem: required(
-                        &config.computers_incus_server_cert,
-                        "COMPUTERS_INCUS_SERVER_CERT",
-                    )?,
+            IncusFleet::new(IncusFleetConfig {
+                image: ImageSource {
+                    reference: ImageReference::Alias(config.computers_image.clone()),
+                    remote: None,
                 },
-                host_name,
-                config.computers_host_reserve_gb,
-                config.computers_oversell_factor,
-            ))
+                ..IncusFleetConfig::macro_box(
+                    IncusEndpoint {
+                        url: required(&config.computers_incus_url, "COMPUTERS_INCUS_URL")?,
+                        client_cert_pem: required(
+                            &config.computers_incus_client_cert,
+                            "COMPUTERS_INCUS_CLIENT_CERT",
+                        )?,
+                        client_key_pem: required(
+                            &config.computers_incus_client_key,
+                            "COMPUTERS_INCUS_CLIENT_KEY",
+                        )?,
+                        server_cert_pem: required(
+                            &config.computers_incus_server_cert,
+                            "COMPUTERS_INCUS_SERVER_CERT",
+                        )?,
+                    },
+                    host_name,
+                    config.computers_host_reserve_gb,
+                    config.computers_oversell_factor,
+                )
+            })
             .context("could not build the Incus fleet")?,
         ),
         "docker" => ConfiguredFleet::Docker(

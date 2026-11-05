@@ -44,6 +44,8 @@ Pulumi stacks; they do not host extra agent processes.
   timers, reconciliation and idle sleep, reports macrod presence, and wakes
   sleeping computers before forwarding prompts. `COMPUTERS_FLEET` selects
   `incus` or local-only `docker`; unset disables the control plane.
+  `COMPUTERS_IMAGE` selects the local Incus image alias or Docker image;
+  an Incus override must not silently use the shared `macro-box` alias.
 - `src/brain_gateway.rs` supplies computer facts and the same prompt-wake path
   to the standalone-brain Anthropic gateway authorization boundary in
   `team_agents::domain::gateway`. `/brain/anthropic/v1/messages` and
