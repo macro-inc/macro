@@ -25,7 +25,7 @@ attachment = [
 ]
 ai_schema = ["dep:schemars"]
 # The Apollo.io adapter for person profile lookups.
-apollo = ["dep:reqwest", "ports"]
+apollo = ["dep:reqwest", "dep:url", "ports"]
 ai_tools = [
   "dep:ai_toolset",
   "dep:async-trait",

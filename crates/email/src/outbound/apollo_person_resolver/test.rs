@@ -22,7 +22,8 @@ async fn maps_matches_positionally_and_drops_unmatched_or_unsure_people() {
             "details": [
                 { "email": "ada@example.org" },
                 { "email": "nobody@example.org" },
-                { "email": "maybe@example.org" }
+                { "email": "maybe@example.org" },
+                { "email": "unrated@example.org" }
             ]
         })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -42,6 +43,10 @@ async fn maps_matches_positionally_and_drops_unmatched_or_unsure_people() {
                     "headline": "Someone else entirely",
                     "linkedin_url": "https://www.linkedin.com/in/someone-else",
                     "match_confidence": "low"
+                },
+                {
+                    "headline": "No confidence given",
+                    "linkedin_url": "https://www.linkedin.com/in/unrated"
                 }
             ]
         })))
@@ -55,6 +60,7 @@ async fn maps_matches_positionally_and_drops_unmatched_or_unsure_people() {
             "ada@example.org",
             "nobody@example.org",
             "maybe@example.org",
+            "unrated@example.org",
         ]))
         .await;
 
@@ -71,6 +77,7 @@ async fn maps_matches_positionally_and_drops_unmatched_or_unsure_people() {
             },
             PersonProfile::unmatched("nobody@example.org".into()),
             PersonProfile::unmatched("maybe@example.org".into()),
+            PersonProfile::unmatched("unrated@example.org".into()),
         ])
     );
 }
@@ -133,4 +140,26 @@ fn only_linkedin_hosts_survive_as_https_links() {
         linkedin_profile_url("javascript:alert(1)//linkedin.com"),
         None
     );
+    assert_eq!(
+        linkedin_profile_url("https://attacker.example\\.linkedin.com/in/ada"),
+        None
+    );
+    assert_eq!(
+        linkedin_profile_url("https://attacker.example\\@www.linkedin.com/in/ada"),
+        None
+    );
+}
+
+#[test]
+fn photos_must_be_https_urls_without_credentials() {
+    assert_eq!(
+        photo_url("https://media.example.com/ada.jpg").as_deref(),
+        Some("https://media.example.com/ada.jpg")
+    );
+    assert_eq!(photo_url("http://media.example.com/ada.jpg"), None);
+    assert_eq!(
+        photo_url("https://user:pass@media.example.com/ada.jpg"),
+        None
+    );
+    assert_eq!(photo_url("data:image/png;base64,AAAA"), None);
 }

@@ -5,8 +5,8 @@
 //! phone numbers are never requested. Apollo answers positionally: `matches`
 //! has one entry per detail, `null` when unmatched.
 //!
-//! Only `high` and `medium` confidence matches are kept; a lower-confidence
-//! match may be someone else, so it is stored as a miss. A missing API key,
+//! Only matches Apollo marks `high` or `medium` confidence are kept; a
+//! lower or missing confidence may be someone else, so it is stored as a miss. A missing API key,
 //! network error, non-2xx status (including rate limits), or malformed body is
 //! logged and surfaced as [`PersonResolution::Unavailable`], so nothing is
 //! cached and a later read retries.
@@ -129,9 +129,9 @@ impl PersonProfileResolver for ApolloPersonProfileResolver {
 fn map_person(address: &str, person: &Value) -> PersonProfile {
     let confident = matches!(
         person.get("match_confidence").and_then(Value::as_str),
-        None | Some("high" | "medium")
+        Some("high" | "medium")
     );
-    if !person.is_object() || !confident {
+    if !confident {
         return PersonProfile::unmatched(address.to_string());
     }
     PersonProfile {
@@ -142,18 +142,37 @@ fn map_person(address: &str, person: &Value) -> PersonProfile {
         organization_name: person
             .get("organization")
             .and_then(|organization| str_field(organization, "name")),
-        photo_url: str_field(person, "photo_url").filter(|url| url.starts_with("https://")),
+        photo_url: str_field(person, "photo_url").and_then(|url| photo_url(&url)),
     }
 }
 
-/// A LinkedIn URL rewritten to HTTPS; anything not on linkedin.com is dropped
-/// so the link the client renders always goes to LinkedIn.
-fn linkedin_profile_url(url: &str) -> Option<String> {
-    let rest = url
-        .strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))?;
-    let host = rest.split(['/', '?', '#']).next()?.to_ascii_lowercase();
-    (host == "linkedin.com" || host.ends_with(".linkedin.com")).then(|| format!("https://{rest}"))
+/// An HTTP(S) URL as browsers parse it, without credentials.
+fn web_url(raw: &str) -> Option<url::Url> {
+    let url = url::Url::parse(raw).ok()?;
+    (matches!(url.scheme(), "http" | "https")
+        && url.host_str().is_some()
+        && url.username().is_empty()
+        && url.password().is_none())
+    .then_some(url)
+}
+
+/// A LinkedIn URL rewritten to HTTPS; anything whose host is not linkedin.com
+/// is dropped so the link the client renders always goes to LinkedIn.
+fn linkedin_profile_url(raw: &str) -> Option<String> {
+    let mut url = web_url(raw)?;
+    let host = url.host_str()?;
+    if host != "linkedin.com" && !host.ends_with(".linkedin.com") {
+        return None;
+    }
+    url.set_scheme("https").ok()?;
+    Some(url.into())
+}
+
+/// Photos load through the image proxy, which fetches only HTTPS.
+fn photo_url(raw: &str) -> Option<String> {
+    web_url(raw)
+        .filter(|url| url.scheme() == "https")
+        .map(Into::into)
 }
 
 /// Read a string field; `None` when absent, null, non-string, or blank.
