@@ -1,0 +1,130 @@
+name: ci-exp-blaze
+"on":
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+concurrency:
+  group: ci-exp-blaze-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  DATABASE_URL: postgres://user:password@localhost:5432/macrodb
+  REDIS_URL: redis://localhost:6379
+  BLAZE_VERSION: 0.20261030.1
+  BLAZE_HOME: /home/runner/.cache/blaze/home
+  CI: '1'
+jobs:
+  blaze:
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-exp-blaze
+    services:
+      postgres:
+        image: pgvector/pgvector:pg14
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: macrodb
+        ports: ['5432:5432']
+        options: '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5 --shm-size 1g'
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: '--health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: |
+          /nix
+          /home/runner/.cache/blaze
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Build code-mode assets
+      run: |
+        assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+    - name: Install blaze
+      run: |
+        curl -fsSL https://ix.dev/blaze | CARGO_HOME=/home/runner/.cache/blaze/bin-home BLAZE_NO_TOOLCHAIN=1 sh
+        echo /home/runner/.cache/blaze/bin-home/bin >> "$GITHUB_PATH"
+    - name: configure postgres
+      run: |
+        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
+        docker exec -i "$postgres_container" psql -U user -d macrodb <<'SQL'
+        ALTER SYSTEM SET fsync = off;
+        ALTER SYSTEM SET synchronous_commit = off;
+        ALTER SYSTEM SET full_page_writes = off;
+        ALTER SYSTEM SET max_locks_per_transaction = 8192;
+        SQL
+        docker restart "$postgres_container"
+        until docker exec "$postgres_container" pg_isready -U user -d macrodb; do sleep 1; done
+    - name: prepare tests
+      run: just setup_test_envs && just initialize_dbs && just setup_test_template
+    - name: 'arm 1: unmodified workspace, blaze defaults'
+      continue-on-error: true
+      env:
+        SQLX_OFFLINE: 'true'
+      run: |
+        unset RUSTC_WRAPPER
+        time timeout 600 blaze check --workspace 2>&1 | grep -vE '^\s*(Compiling|Building)' | tail -15 | cut -c1-1500
+        exit "${PIPESTATUS[0]}"
+    - name: 'arm 2: unmodified workspace, native proc macros'
+      continue-on-error: true
+      env:
+        SQLX_OFFLINE: 'true'
+        BLAZE_PROC_MACRO_WASM: '0'
+      run: |
+        unset RUSTC_WRAPPER
+        blaze stop || true
+        time timeout 600 blaze check --workspace 2>&1 | grep -vE '^\s*(Compiling|Building)' | tail -15 | cut -c1-1500
+        exit "${PIPESTATUS[0]}"
+    - name: reduce workspace to what blaze can load
+      run: |
+        blaze stop || true
+        python3 tooling/blaze-proto/subset.py rmcp-macros,utoipa-gen
+        grep -c '^  "' Cargo.toml
+    - name: 'arm 3: reduced workspace, blaze check'
+      continue-on-error: true
+      env:
+        SQLX_OFFLINE: 'true'
+        BLAZE_PROC_MACRO_WASM: '0'
+      run: |
+        unset RUSTC_WRAPPER
+        time timeout 900 blaze check --workspace 2>&1 | grep -vE '^\s*(Compiling|Building)' | tail -40 | cut -c1-300
+        exit "${PIPESTATUS[0]}"
+    - name: 'arm 4: blaze test on the crates it passed locally'
+      continue-on-error: true
+      env:
+        BLAZE_PROC_MACRO_WASM: '0'
+      run: |
+        unset RUSTC_WRAPPER
+        args=(); for p in $(cat tooling/blaze-proto/pass-list.txt); do args+=(-p "$p"); done
+        time timeout 1200 blaze test "${args[@]}" > /tmp/blaze-test.log 2>&1
+        code=$?
+        grep -vE '^\s*(Compiling|Building)|^test .* ok$' /tmp/blaze-test.log | tail -30 | cut -c1-300
+        grep -E '^test result' /tmp/blaze-test.log | awk '{p+=$4; f+=$6; i+=$8} END {print "passed",p,"failed",f,"ignored",i}'
+        exit $code
+    - name: 'arm 5: cargo nextest on the same crates'
+      continue-on-error: true
+      env:
+        CARGO_TARGET_DIR: /home/runner/.cache/blaze/cargo-target
+        CARGO_INCREMENTAL: '0'
+        RUSTFLAGS: '-C link-arg=-fuse-ld=mold'
+      run: |
+        unset RUSTC_WRAPPER
+        args=(); for p in $(cat tooling/blaze-proto/pass-list.txt); do args+=(-p "$p"); done
+        time timeout 1500 cargo nextest run --config 'profile.dev.package."*".debug=false' --no-tests=pass --test-threads 32 "${args[@]}" 2>&1 | grep -vE '^\s*(PASS|Compiling|Checking|Downloaded)' | tail -12 | cut -c1-240
+        exit "${PIPESTATUS[0]}"
+    - name: disk and memory
+      if: always()
+      run: du -sh /home/runner/.cache/blaze 2>/dev/null; df -h /home/runner | tail -1; free -g | head -2
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
