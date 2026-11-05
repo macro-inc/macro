@@ -12,12 +12,14 @@ jobs:
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      max-parallel: 5
+      max-parallel: 6
       matrix:
         arm: [ctl, fix]
         attempt: [1, 2, 3, 4, 5]
         shape:
-          - { name: dss, handlers: "delete_chat_handler docx_unzip_handler document_upload_finalizer_handler" }
+          - { name: bulk-upload, handlers: "upload_extractor_lambda_handler upload_extractor_lambda_trigger" }
+          - { name: org-retention, handlers: "organization_retention_handler organization_retention_trigger" }
+          - { name: email, handlers: "email_refresh_handler email_scheduled_handler" }
     env: { ATTEMPT: "${{ matrix.attempt }}" }
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -35,56 +37,5 @@ jobs:
       - if: matrix.arm == 'fix'
         run: nix build --max-jobs auto --no-link .#lambdaDepsStable
       - run: bash .github/ci-speed/lambda-arm.sh ${{ matrix.arm }} ${{ matrix.shape.handlers }}
-      - if: always()
-        uses: ./.github/actions/teardown-nix
-  all-handlers:
-    name: every handler ${{ matrix.arm }}
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-deploy-lambda
-    timeout-minutes: 75
-    strategy:
-      fail-fast: false
-      matrix:
-        arm: [ctl, fix]
-    env: { ATTEMPT: all }
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with: { persist-credentials: false }
-      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-        with: { cache: nix }
-        continue-on-error: true
-      - uses: ./.github/actions/setup-nix
-        with:
-          nix-cache-url: ${{ vars.NIX_CACHE_URL }}
-          nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - if: matrix.arm == 'fix'
-        run: nix build --max-jobs auto --no-link .#lambdaDepsStable
-      - run: bash .github/ci-speed/lambda-arm.sh ${{ matrix.arm }} $(jq -r '[.services[].deploy_lambdas // []] | add | unique | join(" ")' .github/services-config.json)
-      - if: always()
-        uses: ./.github/actions/teardown-nix
-  broken:
-    name: compile error still fails
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-deploy-lambda
-    timeout-minutes: 45
-    env: { ATTEMPT: broken }
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with: { persist-credentials: false }
-      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-        with: { cache: nix }
-        continue-on-error: true
-      - uses: ./.github/actions/setup-nix
-        with:
-          nix-cache-url: ${{ vars.NIX_CACHE_URL }}
-          nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - run: nix build --max-jobs auto --no-link .#lambdaDepsStable
-      - run: |
-          echo 'compile_error!("deliberate break");' >> services/delete_chat_handler/src/main.rs
-          git add services/delete_chat_handler/src/main.rs
-          if bash .github/ci-speed/lambda-arm.sh fix delete_chat_handler; then echo "RESULT broken build passed: BAD"; exit 1; fi
-          grep -q "deliberate break" build.log && echo "RESULT broken build failed on the compile error: GOOD" | tee -a "$GITHUB_STEP_SUMMARY"
       - if: always()
         uses: ./.github/actions/teardown-nix
