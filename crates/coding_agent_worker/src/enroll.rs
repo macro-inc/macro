@@ -13,7 +13,9 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use hosted_runtimes::domain::enrollment::{Enrollment, INCUS_ENROLLMENT_KEY, Persona};
+use hosted_runtimes::domain::enrollment::{
+    Enrollment, INCUS_ENROLLMENT_KEY, Persona, PersonaOsUser, SystemdUnitName,
+};
 use macro_service_urls::{
     AgentHarnessEgressUrl, AgentHarnessServiceUrl, AppServiceUrl, DocumentStorageServiceUrl,
 };
@@ -103,7 +105,7 @@ pub struct Ownership {
 /// The privileged side effects enrolling has on the machine.
 pub trait Host {
     /// Create the OS user (with a home) when absent; return its ids.
-    fn ensure_user(&self, os_user: &str) -> rootcause::Result<Ownership>;
+    fn ensure_user(&self, os_user: &PersonaOsUser) -> rootcause::Result<Ownership>;
     /// Change a path's owner.
     fn chown(&self, path: &Path, owner: Ownership) -> rootcause::Result<()>;
     /// Run `systemctl` with these arguments.
@@ -114,7 +116,8 @@ pub trait Host {
 pub struct SystemHost;
 
 impl Host for SystemHost {
-    fn ensure_user(&self, os_user: &str) -> rootcause::Result<Ownership> {
+    fn ensure_user(&self, os_user: &PersonaOsUser) -> rootcause::Result<Ownership> {
+        let os_user = os_user.as_str();
         if id(os_user, "-u")?.is_none() {
             run(
                 "useradd",
@@ -441,10 +444,9 @@ fn own_like_parent(path: &Path, host: &impl Host) -> rootcause::Result<()> {
 }
 
 /// A persona's validated, rendered files.
-#[derive(Debug)]
 struct PersonaFiles {
-    os_user: String,
-    unit_name: String,
+    os_user: PersonaOsUser,
+    unit_name: SystemdUnitName,
     env_path: PathBuf,
     env_contents: String,
     unit_path: PathBuf,
@@ -454,17 +456,8 @@ struct PersonaFiles {
 impl PersonaFiles {
     fn render(persona: &Persona, paths: &SystemPaths) -> rootcause::Result<Self> {
         let os_user = &persona.os_user;
-        if !lazy_regex::regex_is_match!(r"^agent-[a-z0-9][a-z0-9_-]{0,24}$", os_user) {
-            rootcause::bail!(
-                "persona os_user `{os_user}` must start with agent- and be a valid Linux user name; re-invite local preview agents with old names"
-            );
-        }
+
         let unit_name = &persona.extra_service.unit_name;
-        if !lazy_regex::regex_is_match!(r"^[a-zA-Z0-9_.@-]+$", unit_name)
-            || unit_name.starts_with("macrod")
-        {
-            rootcause::bail!("persona unit_name `{unit_name}` is not a valid persona unit name");
-        }
         for (field, value) in [
             ("name", persona.name.as_str()),
             ("extra_service.exec", persona.extra_service.exec.as_str()),
@@ -477,20 +470,12 @@ impl PersonaFiles {
         let env_system_path = format!("{PERSONA_ENV_DIR}/{os_user}.env");
         let mut env_contents = String::new();
         for (key, value) in &persona.config {
-            env_contents.push_str(&format!(
-                "{}=\"{}\"\n",
-                env_key(key)?,
-                env_file_value(value)?
-            ));
+            env_contents.push_str(&format!("{}=\"{}\"\n", key, env_file_value(value)?));
         }
 
         let mut environment = String::new();
         for (key, value) in &persona.extra_service.env {
-            environment.push_str(&format!(
-                "Environment=\"{}={}\"\n",
-                env_key(key)?,
-                unit_value(value)?
-            ));
+            environment.push_str(&format!("Environment=\"{}={}\"\n", key, unit_value(value)?));
         }
         let unit_contents = format!(
             "# Written by macrod enroll.\n\
@@ -537,13 +522,6 @@ impl PersonaFiles {
         tracing::info!(os_user = %self.os_user, unit = %unit, "persona service installed");
         Ok(())
     }
-}
-
-fn env_key(key: &str) -> rootcause::Result<&str> {
-    if !lazy_regex::regex_is_match!(r"^[A-Za-z_][A-Za-z0-9_]*$", key) {
-        rootcause::bail!("`{key}` is not a valid environment variable name");
-    }
-    Ok(key)
 }
 
 /// A double-quoted `EnvironmentFile` value.

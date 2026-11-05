@@ -1,6 +1,6 @@
 # Incus host for Macro computers: ZFS-backed VMs on an isolated bridge.
 # Boxes get outbound internet only; the host and internal ranges are closed
-# to them except DNS/DHCP, the control plane, and fallback tunnel ports.
+# to them except DNS/DHCP and the control plane.
 {
   config,
   lib,
@@ -47,8 +47,8 @@ in
       enable = true;
       ui.enable = false;
       preseed = {
-        # The input chain admits 8443 only on loopback and tailscale0.
-        config."core.https_address" = if tailnetEnabled then "0.0.0.0:8443" else "127.0.0.1:8443";
+        # Start locally; incus-tailnet binds the enrolled address, never a WAN wildcard.
+        config."core.https_address" = "127.0.0.1:8443";
         networks = [
           {
             name = bridge;
@@ -131,23 +131,46 @@ in
       '';
     };
 
-    # Box -> local stack reverse tunnels bind on the bridge address.
-    services.openssh.settings = {
-      GatewayPorts = "clientspecified";
-      AllowTcpForwarding = "yes";
-      ClientAliveInterval = 15;
-      ClientAliveCountMax = 4;
+    # The address is assigned at enrollment, so it cannot be baked into preseed.
+    systemd.services.incus-tailnet = lib.mkIf tailnetEnabled {
+      description = "Bind Incus to the runtime host's Tailscale IPv4 address";
+      after = [
+        "incus-preseed.service"
+        "tailscaled.service"
+        "tailscaled-autoconnect.service"
+      ];
+      requires = [
+        "incus.service"
+        "tailscaled.service"
+      ];
+      wantedBy = [ "multi-user.target" ];
+      partOf = [
+        "incus.service"
+        "incus-preseed.service"
+      ];
+      restartTriggers = [
+        ((pkgs.formats.yaml { }).generate "incus-preseed.yaml" config.virtualisation.incus.preseed)
+      ];
+      path = [
+        config.virtualisation.incus.clientPackage
+        config.services.tailscale.package
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        Restart = "on-failure";
+        RestartSec = 5;
+      };
+      script = ''
+        address=$(tailscale ip -4)
+        test -n "$address"
+        incus config set core.https_address "$address:8443"
+      '';
     };
 
     networking.nftables.tables.macro-boxes = {
       family = "inet";
       content = ''
-        # Filled by the tunnel supervisor; elements expire if it stops refreshing them.
-        set tunnel_ports {
-          type inet_service
-          flags timeout
-        }
-
         set blocked_ipv4 {
           type ipv4_addr
           flags interval
@@ -171,7 +194,7 @@ in
         chain tailnet_to_host {
           ct state established,related accept
           ip protocol icmp accept
-          tcp dport 8443 accept
+          tcp dport { 22, 8443 } accept
           counter drop
         }
 
@@ -182,16 +205,14 @@ in
           ip protocol icmp accept
           udp dport { 53, 67 } accept
           tcp dport 53 accept
-          ip daddr ${bridgeAddress} tcp dport @tunnel_ports accept
           counter drop
         }
 
-        # GCP's firewall already only admits IAP on tcp/22; this is the second wall.
+        # No SSH or Incus API on the GCE NIC.
         chain wan_to_host {
           ct state established,related accept
           ip protocol icmp accept
-          tcp dport 22 accept
-          udp dport 68 accept
+          udp dport ${toString config.services.tailscale.port} accept
           counter drop
         }
 

@@ -294,7 +294,7 @@ async fn reserve_atomically_schedules_confirmation_and_failed_payment_frees_capa
         .unwrap();
     let mut purchase = standard(1);
     purchase.extra_items = vec![crate::domain::models::SubscriptionItem {
-        price_id: "price_seat".to_owned(),
+        price_id: crate::domain::models::StripePriceId::parse("price_seat").unwrap(),
         quantity: 1,
     }];
     let computer = repo.reserve(purchase, now()).await.unwrap();
@@ -337,7 +337,7 @@ async fn reserve_atomically_schedules_confirmation_and_failed_payment_frees_capa
         effects[0].effect,
         Effect::ConfirmPayment {
             extra_items: vec![crate::domain::models::SubscriptionItem {
-                price_id: "price_seat".to_owned(),
+                price_id: crate::domain::models::StripePriceId::parse("price_seat").unwrap(),
                 quantity: 1
             }]
         }

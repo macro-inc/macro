@@ -131,7 +131,7 @@ async fn comped_reservation_recovers_without_charging_and_release_skips_billing(
 }
 
 #[tokio::test]
-async fn comped_quote_preserves_stripe_terms_or_uses_monthly_usd_without_subscription() {
+async fn comped_quote_preserves_stripe_terms_and_requires_a_subscription() {
     for (no_subscription, yearly) in [(false, false), (false, true), (true, false)] {
         let service = ComputerService::new(
             FakeRepo::default(),
@@ -143,10 +143,15 @@ async fn comped_quote_preserves_stripe_terms_or_uses_monthly_usd_without_subscri
             FixedClock,
         )
         .with_comp_policy(TeamCompPolicy);
-        let quote = service
-            .quote_for_team(TEAM, ComputerSize::Standard)
-            .await
-            .unwrap();
+        let quote = service.quote_for_team(TEAM, ComputerSize::Standard).await;
+        if no_subscription {
+            assert!(matches!(
+                quote,
+                Err(ComputerError::Billing(BillingError::NoSubscription))
+            ));
+            continue;
+        }
+        let quote = quote.unwrap();
         assert_eq!(quote.amount, 0);
         assert_eq!(quote.currency, "usd");
         assert_eq!(
@@ -157,22 +162,7 @@ async fn comped_quote_preserves_stripe_terms_or_uses_monthly_usd_without_subscri
                 BillingInterval::Month
             }
         );
-        assert_eq!(
-            quote.price_id,
-            if no_subscription {
-                ""
-            } else {
-                "price_standard"
-            }
-        );
-        if no_subscription {
-            assert!(matches!(
-                service
-                    .quote(TEAM, ComputerSize::Standard, &PurchaseBilling::Stripe)
-                    .await,
-                Err(ComputerError::Billing(BillingError::NoSubscription))
-            ));
-        }
+        assert_eq!(quote.price_id.as_str(), "price_standard");
     }
 }
 
@@ -190,7 +180,7 @@ async fn comped_purchase_rejects_subscription_items_before_reserving() {
             name: None,
             persona: None,
             extra_items: vec![SubscriptionItem {
-                price_id: "price_seat".to_owned(),
+                price_id: crate::domain::models::StripePriceId::parse("price_seat").unwrap(),
                 quantity: 1,
             }],
         })

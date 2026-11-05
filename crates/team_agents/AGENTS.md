@@ -89,6 +89,12 @@ brain gateway and git access never consult this rollout policy.
 
 ## Gotchas
 
+- Reuse `hosted_runtimes::domain::enrollment::{Persona, PersonaService,
+  PersonaOsUser, SystemdUnitName, PersonaConfigKey}` and
+  `stripe_price_id::StripePriceId` at domain/adapter boundaries. Construct
+  generated `agent-` usernames before provisioning effects; stored old names
+  fail deserialization and local preview agents require re-inviting.
+
 - API keys and repository credentials use distinct validated `AgentApiKey` and
   `RepoToken` types from `agent_credentials`; never wrap arbitrary strings or
   log their contents. Saved credentials are parsed again before recovery.

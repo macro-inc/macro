@@ -1205,3 +1205,25 @@ async fn subscription_terms_and_prices_are_read_from_stripe(pool: sqlx::PgPool) 
         }
     );
 }
+
+#[tokio::test]
+async fn malformed_agent_seat_price_is_rejected_before_any_provider_request() {
+    let server = MockServer::start().await;
+    let repository = CustomerRepositoryImpl::new(
+        stripe::Client::from_url(server.uri().as_str(), "sk_test"),
+        SeatPrices {
+            premium: "price_bad/route".to_owned(),
+            max: Some("price_max".to_owned()),
+        },
+        sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgres://unused:unused@localhost/unused")
+            .unwrap(),
+    );
+    assert!(repository.seat_price_id(SeatPlan::Premium).is_err());
+    assert!(repository.seat_quote(SeatPlan::Premium).await.is_err());
+    assert_eq!(
+        repository.seat_price_id(SeatPlan::Max).unwrap().as_str(),
+        "price_max"
+    );
+    assert!(server.received_requests().await.unwrap().is_empty());
+}

@@ -10377,7 +10377,8 @@
               "type": "string"
             },
             "propertyNames": {
-              "type": "string"
+              "type": "string",
+              "description": "A validated environment variable name for persona config or service env."
             }
           },
           "extra_service": {
@@ -10404,7 +10405,8 @@
               "type": "string"
             },
             "propertyNames": {
-              "type": "string"
+              "type": "string",
+              "description": "A validated environment variable name for persona config or service env."
             }
           },
           "exec": {
@@ -10720,8 +10722,7 @@
             "$ref": "#/components/schemas/BillingInterval"
           },
           "priceId": {
-            "type": "string",
-            "description": "Empty for a comped team without a subscription."
+            "type": "string"
           },
           "size": {
             "$ref": "#/components/schemas/ComputerSize"

@@ -1,3 +1,4 @@
+use crate::domain::models::{PersonaConfigKey, PersonaOsUser, StripePriceId, SystemdUnitName};
 use agent_credentials::RepoToken;
 
 use crate::domain::mail::{MailMessageId, MailboxId};
@@ -234,7 +235,7 @@ impl TeamMembership for FakeMembership {
             return Ok(None);
         }
         Ok(self.seat.as_ref().map(|_| SubscriptionItem {
-            price_id: "price_seat".to_string(),
+            price_id: StripePriceId::parse("price_seat").expect("price"),
             quantity: 1,
         }))
     }
@@ -359,7 +360,7 @@ impl Computers for FakeComputers {
             vcpus: 8,
             memory_gb: 16,
             disk_gb: 200,
-            price_id: "price_computer_large".to_string(),
+            price_id: StripePriceId::parse("price_computer_large").expect("price"),
             amount: 5000,
             currency: "usd".to_string(),
             interval: self.interval,
@@ -653,51 +654,54 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
             name: Some("Sam Rivera".to_string()),
             persona: Some(Persona {
                 name: "Sam Rivera".to_string(),
-                os_user: "agent-sam-rivera".to_string(),
+                os_user: PersonaOsUser::parse("agent-sam-rivera").expect("OS user"),
                 extra_service: PersonaService {
-                    unit_name: "brain@agent-sam-rivera".to_string(),
+                    unit_name: SystemdUnitName::parse("brain@agent-sam-rivera").expect("unit"),
                     exec: "/opt/macro/brain run".to_string(),
                     env: BTreeMap::new(),
                 },
                 config: BTreeMap::from([
                     (
-                        "ANTHROPIC_BASE_URL".to_string(),
+                        PersonaConfigKey::parse("ANTHROPIC_BASE_URL").expect("config key"),
                         "https://dev-gateway.macro.com/agent-harness-egress/brain/anthropic"
                             .to_string()
                     ),
                     (
-                        "ANTHROPIC_AUTH_TOKEN".to_string(),
+                        PersonaConfigKey::parse("ANTHROPIC_AUTH_TOKEN").expect("config key"),
                         format!("mak_{}", "a".repeat(64))
                     ),
                     (
-                        "MACRO_AGENT_USER_ID".to_string(),
+                        PersonaConfigKey::parse("MACRO_AGENT_USER_ID").expect("config key"),
                         "macro|sam@agents.example.com".to_string(),
                     ),
                     (
-                        "MACRO_GATEWAY".to_string(),
+                        PersonaConfigKey::parse("MACRO_GATEWAY").expect("config key"),
                         "https://dev-gateway.macro.com".to_string(),
                     ),
                     (
-                        "MACRO_REPO_URL".to_string(),
+                        PersonaConfigKey::parse("MACRO_REPO_URL").expect("config key"),
                         "https://git.example.com/sam".to_string(),
                     ),
                     (
-                        "BRAIN_WORKSPACE".to_string(),
+                        PersonaConfigKey::parse("BRAIN_WORKSPACE").expect("config key"),
                         "/home/agent-sam-rivera/workspace".to_string()
                     ),
-                    ("BRAIN_HEALTH_PORT".to_string(), "7801".to_string()),
                     (
-                        "MACRO_REPO_TOKEN".to_string(),
+                        PersonaConfigKey::parse("BRAIN_HEALTH_PORT").expect("config key"),
+                        "7801".to_string()
+                    ),
+                    (
+                        PersonaConfigKey::parse("MACRO_REPO_TOKEN").expect("config key"),
                         format!("mrt_{}", "b".repeat(64))
                     ),
                     (
-                        "MACRO_API_KEY".to_string(),
+                        PersonaConfigKey::parse("MACRO_API_KEY").expect("config key"),
                         format!("mak_{}", "a".repeat(64))
                     ),
                 ]),
             }),
             extra_items: vec![SubscriptionItem {
-                price_id: "price_seat".to_string(),
+                price_id: StripePriceId::parse("price_seat").expect("price"),
                 quantity: 1,
             }],
         }]

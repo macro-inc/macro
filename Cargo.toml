@@ -101,6 +101,7 @@ members = [
   "crates/harness_token",
   "crates/harnesses",
   "crates/hosted_runtimes",
+  "crates/stripe_price_id",
   "crates/incus_client",
   "crates/import",
   "crates/import_notion",

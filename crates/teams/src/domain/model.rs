@@ -1,5 +1,7 @@
 //! Contains the models for teams
 
+pub use stripe_price_id::StripePriceId;
+
 use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
@@ -303,7 +305,7 @@ pub struct PriceInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SeatSubscriptionItem {
     /// The seat's Stripe price.
-    pub price_id: String,
+    pub price_id: StripePriceId,
     /// Seats to add on that price.
     pub quantity: u64,
 }
@@ -321,7 +323,7 @@ pub enum BillingInterval {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SeatQuote {
     /// The seat's Stripe price.
-    pub price_id: String,
+    pub price_id: StripePriceId,
     /// Price per interval, in the currency's minor unit (cents).
     pub amount: i64,
     /// ISO currency code, lowercase.

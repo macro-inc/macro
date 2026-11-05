@@ -574,14 +574,19 @@ impl CustomerRepository for CustomerRepositoryImpl {
         Ok(changes)
     }
 
-    fn seat_price_id(&self, plan: SeatPlan) -> Result<String, CustomerError> {
-        Ok(self.seat_prices.price_id(plan)?.to_string())
+    fn seat_price_id(
+        &self,
+        plan: SeatPlan,
+    ) -> Result<stripe_price_id::StripePriceId, CustomerError> {
+        stripe_price_id::StripePriceId::parse(self.seat_prices.price_id(plan)?)
+            .map_err(|_| anyhow::anyhow!("configured seat price id is malformed").into())
     }
 
     #[tracing::instrument(skip(self), err)]
     async fn seat_quote(&self, plan: SeatPlan) -> Result<SeatQuote, CustomerError> {
-        let price_id = self.seat_prices.price_id(plan)?;
+        let price_id = self.seat_price_id(plan)?;
         let parsed_price_id: stripe::PriceId = price_id
+            .as_str()
             .parse()
             .context("configured seat price id is malformed")?;
         let price = stripe::Price::retrieve(&self.client, &parsed_price_id, &[])
@@ -612,7 +617,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
             .to_string();
 
         Ok(SeatQuote {
-            price_id: price_id.to_string(),
+            price_id,
             amount,
             currency,
             interval,

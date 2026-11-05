@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+pub use stripe_price_id::StripePriceId;
 use uuid::Uuid;
 
 use crate::domain::enrollment::Persona;
@@ -98,7 +99,8 @@ pub enum PurchaseBilling {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SubscriptionItem {
-    pub price_id: String,
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub price_id: StripePriceId,
     /// Added to the item's current quantity.
     pub quantity: u32,
 }
@@ -118,8 +120,8 @@ pub enum BillingInterval {
 #[serde(rename_all = "camelCase")]
 pub struct Quote {
     pub size: ComputerSize,
-    /// Empty for a comped team without a subscription.
-    pub price_id: String,
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub price_id: StripePriceId,
     /// In the currency's smallest unit.
     pub amount: i64,
     pub currency: String,

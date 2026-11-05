@@ -1,3 +1,4 @@
+use crate::domain::model::StripePriceId;
 mod agent_invites;
 use std::{
     collections::{HashMap, HashSet},
@@ -1197,8 +1198,8 @@ impl CustomerRepository for MockCustomerRepository {
         }
     }
 
-    fn seat_price_id(&self, plan: SeatPlan) -> Result<String, CustomerError> {
-        Ok(format!("price_{plan}"))
+    fn seat_price_id(&self, plan: SeatPlan) -> Result<StripePriceId, CustomerError> {
+        Ok(StripePriceId::parse(&format!("price_{plan}")).unwrap())
     }
 
     fn seat_quote(
@@ -1207,7 +1208,7 @@ impl CustomerRepository for MockCustomerRepository {
     ) -> impl Future<Output = Result<SeatQuote, CustomerError>> + Send {
         async move {
             Ok(SeatQuote {
-                price_id: format!("price_{plan}"),
+                price_id: StripePriceId::parse(&format!("price_{plan}")).unwrap(),
                 amount: 4000,
                 currency: "usd".to_string(),
                 interval: BillingInterval::Month,

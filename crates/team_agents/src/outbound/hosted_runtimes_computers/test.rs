@@ -1,3 +1,4 @@
+use crate::domain::models::{PersonaConfigKey, PersonaOsUser, StripePriceId, SystemdUnitName};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -282,7 +283,7 @@ impl Billing for FakeBilling {
         }
         Ok(Quote {
             size,
-            price_id: format!("price_{}", size.as_ref()),
+            price_id: StripePriceId::parse(&format!("price_{}", size.as_ref())).expect("price"),
             amount: 2000 * i64::from(size.units()),
             currency: "usd".to_owned(),
             interval: BillingInterval::Month,
@@ -348,14 +349,14 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
     );
     let persona = agent::Persona {
         name: "Agent".to_string(),
-        os_user: "agent".to_string(),
+        os_user: PersonaOsUser::parse("agent-example").expect("OS user"),
         extra_service: agent::PersonaService {
-            unit_name: "brain@agent".to_string(),
+            unit_name: SystemdUnitName::parse("brain@agent-example").expect("unit"),
             exec: "/opt/macro/brain run".to_string(),
             env: Default::default(),
         },
         config: std::collections::BTreeMap::from([(
-            "MACRO_API_KEY".to_string(),
+            PersonaConfigKey::parse("MACRO_API_KEY").expect("config key"),
             "test-bootstrap".to_string(),
         )]),
     };
@@ -371,7 +372,7 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
             name: Some("Agent".to_string()),
             persona: Some(persona.clone()),
             extra_items: vec![agent::SubscriptionItem {
-                price_id: "price_seat".to_string(),
+                price_id: StripePriceId::parse("price_seat").expect("price"),
                 quantity: 1,
             }],
         })
@@ -384,7 +385,7 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
         assert_eq!(
             updates[0].1,
             vec![SubscriptionItem {
-                price_id: "price_seat".to_string(),
+                price_id: StripePriceId::parse("price_seat").expect("price"),
                 quantity: 1
             }]
         );
@@ -577,19 +578,19 @@ async fn payment_errors_recover_the_durable_computer_and_its_payment_status() {
                 name: Some("Agent".to_string()),
                 persona: Some(agent::Persona {
                     name: "Agent".to_string(),
-                    os_user: "agent".to_string(),
+                    os_user: PersonaOsUser::parse("agent-example").expect("OS user"),
                     extra_service: agent::PersonaService {
-                        unit_name: "brain@agent".to_string(),
+                        unit_name: SystemdUnitName::parse("brain@agent-example").expect("unit"),
                         exec: "/opt/macro/brain run".to_string(),
                         env: Default::default(),
                     },
                     config: std::collections::BTreeMap::from([(
-                        "MACRO_AGENT_USER_ID".to_string(),
+                        PersonaConfigKey::parse("MACRO_AGENT_USER_ID").expect("config key"),
                         "macro|agent@example.com".to_string(),
                     )]),
                 }),
                 extra_items: vec![agent::SubscriptionItem {
-                    price_id: "price_seat".to_string(),
+                    price_id: StripePriceId::parse("price_seat").expect("price"),
                     quantity: 1,
                 }],
             })
@@ -694,9 +695,10 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
                         created_by: "macro|admin@example.com".to_string(),
                         persona: Some(enrollment::Persona {
                             name: "Agent".to_string(),
-                            os_user: "agent-slug".to_string(),
+                            os_user: PersonaOsUser::parse("agent-slug").expect("OS user"),
                             extra_service: enrollment::PersonaService {
-                                unit_name: "brain@agent-slug".to_string(),
+                                unit_name: SystemdUnitName::parse("brain@agent-slug")
+                                    .expect("unit"),
                                 exec: "/opt/macro/brain run".to_string(),
                                 env: Default::default(),
                             },

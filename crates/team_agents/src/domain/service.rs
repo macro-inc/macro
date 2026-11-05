@@ -14,8 +14,9 @@ use uuid::Uuid;
 use super::models::{
     AgentApiKey, AgentRepo, ComputerPayment, ComputerPurchase, ComputerSize, ComputerStatus,
     ComputerStatusKind, CreateTeamAgent, EmailMessage, EmailMessages, MAX_NAME_CHARS,
-    MAX_PROFILE_CHARS, NewAgentAccount, Persona, PersonaSeed, PersonaService, SendEmail, SentEmail,
-    TeamAgent, TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
+    MAX_PROFILE_CHARS, NewAgentAccount, Persona, PersonaConfigKey, PersonaOsUser, PersonaSeed,
+    PersonaService, SendEmail, SentEmail, SystemdUnitName, TeamAgent, TeamAgentError,
+    TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
     AgentApiKeys, AgentRepos, Computers, Mailboxes, TeamAgentRepository, TeamAgentService,
@@ -180,13 +181,13 @@ fn validate(request: CreateTeamAgent) -> Result<CreateTeamAgent, TeamAgentError>
 /// config drive carrying what it needs to reach Macro and its repo.
 fn persona(
     name: &str,
-    os_user: &str,
+    os_user: &PersonaOsUser,
     agent_user_id: &MacroUserIdStr<'_>,
     gateway_url: &str,
     anthropic_base_url: &str,
     repo: &AgentRepo,
     api_key: &AgentApiKey,
-) -> Persona {
+) -> Result<Persona, TeamAgentError> {
     let config = BTreeMap::from([
         (
             config_keys::ANTHROPIC_BASE_URL.to_string(),
@@ -221,18 +222,26 @@ fn persona(
             config_keys::API_KEY.to_string(),
             api_key.expose().to_string(),
         ),
-    ]);
+    ])
+    .into_iter()
+    .map(|(key, value)| {
+        PersonaConfigKey::parse(&key)
+            .map(|key| (key, value))
+            .map_err(TeamAgentError::internal)
+    })
+    .collect::<Result<BTreeMap<_, _>, _>>()?;
 
-    Persona {
+    Ok(Persona {
         name: name.to_string(),
-        os_user: os_user.to_string(),
+        os_user: os_user.clone(),
         extra_service: PersonaService {
-            unit_name: format!("{BRAIN_UNIT_PREFIX}{os_user}"),
+            unit_name: SystemdUnitName::parse(&format!("{BRAIN_UNIT_PREFIX}{os_user}"))
+                .map_err(TeamAgentError::internal)?,
             exec: BRAIN_EXEC.to_string(),
             env: BTreeMap::new(),
         },
         config,
-    }
+    })
 }
 
 fn team_id(receipt: &EntityAccessReceipt<AdminTeamRole>) -> Result<Uuid, TeamAgentError> {
@@ -340,7 +349,8 @@ where
             return Err(TeamAgentError::QuoteChanged);
         }
         let name_slug = slug(&request.name);
-        let os_user = format!("agent-{name_slug}");
+        let os_user = PersonaOsUser::parse(&format!("agent-{name_slug}"))
+            .map_err(TeamAgentError::internal)?;
 
         // A short suffix keeps two agents with the same name apart.
         let suffix: String = Uuid::now_v7()
@@ -409,7 +419,7 @@ where
                 &self.anthropic_base_url,
                 &repo,
                 &api_key,
-            )),
+            )?),
             extra_items: seat.into_iter().collect(),
         };
         let computer_id = if included {

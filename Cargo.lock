@@ -10301,6 +10301,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "stripe_price_id",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
@@ -19952,6 +19953,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "stripe_price_id"
+version = "0.1.0"
+dependencies = [
+ "lazy-regex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -20458,6 +20471,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "stripe_price_id",
  "strum 0.27.2",
  "teams",
  "thiserror 2.0.18",
@@ -20513,6 +20527,7 @@ dependencies = [
  "shared_entity_registry",
  "sqlx",
  "sqs_client",
+ "stripe_price_id",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",

@@ -8,7 +8,6 @@ use harnesses::domain::{
 };
 
 use hosted_runtimes::domain::{
-    enrollment,
     lifecycle::PaymentOutcome,
     models,
     ports::{Billing, BillingError, CompPolicy, ComputerRepo, NoComps},
@@ -19,8 +18,8 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     BillingInterval, BrainHealth, ComputerPayment, ComputerPurchase, ComputerQuote, ComputerSize,
-    ComputerSizeSpec, ComputerStatus, ComputerStatusKind, Persona, PersonaService, SetupProgress,
-    SetupStep, TeamAgentError,
+    ComputerSizeSpec, ComputerStatus, ComputerStatusKind, Persona, SetupProgress, SetupStep,
+    TeamAgentError,
 };
 use crate::domain::ports::Computers;
 
@@ -150,16 +149,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
         let persona = computer.persona.ok_or_else(|| {
             TeamAgentError::RetryUnavailable("the computer has no saved persona".to_string())
         })?;
-        Ok(Persona {
-            name: persona.name,
-            os_user: persona.os_user,
-            extra_service: PersonaService {
-                unit_name: persona.extra_service.unit_name,
-                exec: persona.extra_service.exec,
-                env: persona.extra_service.env,
-            },
-            config: persona.config,
-        })
+        Ok(persona)
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
@@ -229,7 +219,7 @@ impl<Repo: ComputerRepo, Bill, Time, Harness: HarnessRepo, Policy>
         else {
             return Ok(None);
         };
-        let Some(health) = harness.capabilities.personas.get(&persona.os_user) else {
+        let Some(health) = harness.capabilities.personas.get(persona.os_user.as_str()) else {
             return Ok(None);
         };
         let (checked_at, last_turn_at, healthy, last_error) = match health {
@@ -341,16 +331,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
                 created_by: purchase.created_by.as_ref().to_owned(),
                 size: computer_size(purchase.size),
                 name: purchase.name,
-                persona: purchase.persona.map(|persona| enrollment::Persona {
-                    name: persona.name,
-                    os_user: persona.os_user,
-                    extra_service: enrollment::PersonaService {
-                        unit_name: persona.extra_service.unit_name,
-                        exec: persona.extra_service.exec,
-                        env: persona.extra_service.env,
-                    },
-                    config: persona.config,
-                }),
+                persona: purchase.persona,
                 extra_items: purchase
                     .extra_items
                     .into_iter()

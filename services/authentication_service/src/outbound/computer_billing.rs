@@ -3,7 +3,7 @@
 
 use chrono::{DateTime, Utc};
 use hosted_runtimes::domain::{
-    models::{BillingInterval, Quote, SubscriptionItem},
+    models::{BillingInterval, Quote, StripePriceId, SubscriptionItem},
     ports::{Billing, BillingError, ComputerRepo},
     service::{Clock, ComputerService},
     size::ComputerSize,
@@ -68,7 +68,9 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
         let price = self.teams.price(&price_id).await.map_err(billing_error)?;
         Ok(Quote {
             size,
-            price_id,
+            price_id: StripePriceId::parse(&price_id).map_err(|error| {
+                BillingError::Provider(rootcause::Report::new(error).into_dynamic())
+            })?,
             amount: price.amount,
             currency: price.currency,
             interval,
@@ -94,7 +96,7 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
         let (price_id, _) = self.computer_price(team_id, size).await?;
         let changes = std::iter::once(ItemQuantityChange { price_id, delta: 1 })
             .chain(extra_items.iter().map(|item| ItemQuantityChange {
-                price_id: item.price_id.clone(),
+                price_id: item.price_id.as_str().to_owned(),
                 delta: i64::from(item.quantity),
             }))
             .collect();

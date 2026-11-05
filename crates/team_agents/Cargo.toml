@@ -18,7 +18,7 @@ outbound = [
   "dep:macro_authorization",
   "dep:agent_git",
   "dep:agent_secrets",
-  "dep:hosted_runtimes",
+  "hosted_runtimes/ports",
   "dep:harnesses",
   "dep:harness_id",
   "dep:reqwest",
@@ -28,6 +28,7 @@ outbound = [
 ]
 
 [dependencies]
+stripe_price_id = { path = "../stripe_price_id" }
 agent_credentials = { path = "../agent_credentials" }
 agent_git = { path = "../agent_git", optional = true, default-features = false, features = ["client"] }
 agent_secrets = { path = "../agent_secrets", optional = true }
@@ -36,7 +37,7 @@ chrono = { workspace = true, features = ["serde"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 lazy-regex = { workspace = true }
 feature_flags = { path = "../feature_flags" }
-hosted_runtimes = { path = "../hosted_runtimes", optional = true, default-features = false, features = ["ports"] }
+hosted_runtimes = { path = "../hosted_runtimes", default-features = false }
 harnesses = { path = "../harnesses", optional = true, default-features = false, features = ["ports"] }
 harness_id = { path = "../harness_id", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }

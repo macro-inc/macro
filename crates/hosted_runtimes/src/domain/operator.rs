@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Duration, Utc};
 use uuid::Uuid;
 
-use crate::domain::enrollment::Enrollment;
+use crate::domain::enrollment::{Enrollment, PersonaConfigKey};
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, Phase};
 use crate::domain::models::{Computer, EnrollmentDefaults};
 use crate::domain::ports::{
@@ -243,20 +243,28 @@ where
                     device_secret: pairing.device_secret,
                     name: computer.name.clone(),
                     service_url_overrides: self.defaults.service_url_overrides.clone(),
-                    persona: computer.persona.clone().map(|mut persona| {
-                        if let Some(parent) = super::telemetry::traceparent() {
-                            persona
-                                .config
-                                .insert("BRAIN_PROVISION_TRACEPARENT".to_owned(), parent);
-                        }
-                        persona
-                            .config
-                            .insert("MACRO_COMPUTER_ID".to_owned(), computer.id.to_string());
-                        persona
-                            .config
-                            .insert("MACRO_TEAM_ID".to_owned(), computer.team_id.to_string());
-                        persona
-                    }),
+                    persona: computer
+                        .persona
+                        .clone()
+                        .map(|mut persona| {
+                            if let Some(parent) = super::telemetry::traceparent() {
+                                persona.config.insert(
+                                    PersonaConfigKey::parse("BRAIN_PROVISION_TRACEPARENT")
+                                        .map_err(internal)?,
+                                    parent,
+                                );
+                            }
+                            persona.config.insert(
+                                PersonaConfigKey::parse("MACRO_COMPUTER_ID").map_err(internal)?,
+                                computer.id.to_string(),
+                            );
+                            persona.config.insert(
+                                PersonaConfigKey::parse("MACRO_TEAM_ID").map_err(internal)?,
+                                computer.team_id.to_string(),
+                            );
+                            Ok::<_, ComputerError>(persona)
+                        })
+                        .transpose()?,
                 };
                 self.fleet
                     .create(&computer, &enrollment, *start)
