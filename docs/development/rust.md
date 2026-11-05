@@ -72,6 +72,13 @@ CI runs `test` and `check` on a 32 vCPU, 64 GiB runner with no build job limit.
 Don't lift the job limit on the 8 vCPU, 16 GiB runner by itself: linking many
 large test binaries exhausts its memory and can lose the runner.
 
+On a pull request, CI tests the changed packages, their direct dependents, and
+crates whose own third-party dependencies changed, and lints every package the
+change can reach. It doesn't compile or run the tests of indirect dependents, so
+after a change to a widely used crate, also test the indirect dependents you expect
+it to affect. The `cloud storage main check` workflow lints and tests the whole
+workspace on `main` after merge, and alerts on failure. It doesn't block deploys.
+
 Keep tests in a sibling `test.rs` (CS-49). For example, `src/user.rs` declares:
 
 ```rust
