@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::{HarnessCredentials, HarnessScope, MacroApi};
+use crate::config::{HarnessCredentials, MacroApi};
 use harness_id::HarnessId;
 use webhook::domain::models::WebhookFilter;
 
@@ -13,16 +13,16 @@ fn test_client(storage_url: &str) -> EventStreamClient {
         &HarnessCredentials {
             harness_id: HarnessId::TEST_A,
             token: "mhns_test".to_owned(),
-            scope: HarnessScope::User,
         },
     )
 }
 
-#[test]
-fn stream_scope_maps_harness_ownership() {
-    assert_eq!(stream_scope(HarnessScope::User), WebhookScope::User);
-    assert_eq!(stream_scope(HarnessScope::Team), WebhookScope::Team);
-}
+const TEAM_HARNESS: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+     {\"allow_permission_bypass\":false,\"id\":\"00000000-0000-0000-0000-00000000000a\",\
+      \"kind\":\"macrod\",\"name\":\"desk\",\
+      \"owner\":{\"type\":\"team\",\"team_id\":\"00000000-0000-0000-0000-000000000007\"},\
+      \"created_by\":\"macro|owner@example.com\",\"created_at\":\"2026-11-01T00:00:00Z\",\
+      \"updated_at\":\"2026-11-01T00:00:00Z\",\"connected\":true,\"last_connected_at\":null}";
 
 #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
 struct Envelope {
@@ -31,7 +31,8 @@ struct Envelope {
 
 #[tokio::test]
 async fn connect_yields_typed_envelopes_and_skips_keep_alives_and_junk() {
-    let url = serve_once(
+    let (url, requests) = serve(vec![
+        TEAM_HARNESS,
         "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n\
          : keep-alive\n\n\
          id: evt-1\n\
@@ -40,7 +41,7 @@ async fn connect_yields_typed_envelopes_and_skips_keep_alives_and_junk() {
          data: not json\n\n\
          data: {\"other\":true}\n\n\
          data: {\"n\":\r\ndata: 2}\r\n\r\n",
-    )
+    ])
     .await;
     let client = test_client(&url);
     let mut stream = client
@@ -56,13 +57,25 @@ async fn connect_yields_typed_envelopes_and_skips_keep_alives_and_junk() {
     let second = stream.next_event().await.expect("read").expect("second");
     assert_eq!(second, Envelope { n: 2 });
     assert!(stream.next_event().await.expect("closed").is_none());
+
+    // The owner comes from the server, so the stream is scoped to the team.
+    let requests = requests.lock().unwrap();
+    assert!(
+        requests[0].starts_with("GET /harnesses/me "),
+        "{requests:?}"
+    );
+    assert!(
+        requests[1].starts_with("GET /webhook/events/stream?scope=team&"),
+        "{requests:?}"
+    );
 }
 
 #[tokio::test]
 async fn connect_refuses_a_non_2xx_answer() {
-    let url = serve_once(
+    let (url, _) = serve(vec![
+        TEAM_HARNESS,
         "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"message\":\"nope\"}",
-    )
+    ])
     .await;
     let client = test_client(&url);
 
@@ -76,12 +89,12 @@ async fn connect_refuses_a_non_2xx_answer() {
 
 #[tokio::test]
 async fn bound_bot_ids_are_sorted_and_unique() {
-    let url = serve_once(
+    let (url, _) = serve(vec![
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
          [{\"bot_id\":\"00000000-0000-0000-0000-000000000002\",\"name\":\"b\",\"handle\":\"b\"},\
           {\"bot_id\":\"00000000-0000-0000-0000-000000000001\",\"name\":\"a\",\"handle\":\"a\"},\
           {\"bot_id\":\"00000000-0000-0000-0000-000000000002\",\"name\":\"b2\",\"handle\":\"b2\"}]",
-    )
+    ])
     .await;
     let client = test_client(&url);
     let ids = client.bound_bot_ids().await.expect("list agents");
@@ -94,19 +107,31 @@ async fn bound_bot_ids_are_sorted_and_unique() {
     );
 }
 
-async fn serve_once(response: &'static str) -> String {
+/// Answer one connection per response, in order, recording each request line.
+async fn serve(
+    responses: Vec<&'static str>,
+) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
     use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind test listener");
     let addr = listener.local_addr().expect("listener address");
+    let requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let recorded = requests.clone();
     tokio::spawn(async move {
-        let (mut socket, _) = listener.accept().await.expect("accept");
-        let mut buf = vec![0u8; 4096];
-        let _ = socket.read(&mut buf).await;
-        let _ = socket.write_all(response.as_bytes()).await;
-        let _ = socket.shutdown().await;
+        for response in responses {
+            let (mut socket, _) = listener.accept().await.expect("accept");
+            let mut buf = vec![0u8; 4096];
+            let read = socket.read(&mut buf).await.unwrap_or(0);
+            let request = String::from_utf8_lossy(&buf[..read]);
+            recorded
+                .lock()
+                .unwrap()
+                .push(request.lines().next().unwrap_or_default().to_owned());
+            let _ = socket.write_all(response.as_bytes()).await;
+            let _ = socket.shutdown().await;
+        }
     });
-    format!("http://{addr}")
+    (format!("http://{addr}"), requests)
 }
