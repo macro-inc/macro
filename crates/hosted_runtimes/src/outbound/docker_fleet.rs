@@ -250,7 +250,7 @@ impl Fleet for DockerFleet {
 
     #[tracing::instrument(name = "docker_fleet.instances", skip(self), err)]
     async fn instances(&self) -> Result<Vec<(Uuid, InstanceStatus)>, DockerFleetError> {
-        let output = docker("ps", &list_args()).await?;
+        let output = docker("ps", &list_args(&self.config.network)).await?;
         parse_instances(&output)
     }
 
@@ -375,12 +375,14 @@ fn state_args(computer_id: Uuid) -> Vec<String> {
     ]
 }
 
-fn list_args() -> Vec<String> {
+fn list_args(network: &str) -> Vec<String> {
     vec![
         "ps".to_owned(),
         "--all".to_owned(),
         "--filter".to_owned(),
         format!("label={COMPUTER_ID_LABEL}"),
+        "--filter".to_owned(),
+        format!("network={network}"),
         "--format".to_owned(),
         format!("{{{{.Label \"{COMPUTER_ID_LABEL}\"}}}} {{{{.State}}}}"),
     ]

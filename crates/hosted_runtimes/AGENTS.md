@@ -62,10 +62,14 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 ## Checks
 
 - `cargo test -p hosted_runtimes` (`SQLX_OFFLINE` unset for DB tests).
+- With `macro-box:latest` loaded, run the Docker isolation regression with
+  `cargo test -p hosted_runtimes listing_cannot_expose_another_fleets_containers_to_reconciliation -- --ignored`.
 
 ## Gotchas
 
 - V1 runs one fleet (one host) per control plane; an effect for another host fails.
+- Scope Docker fleet listing to its configured network so reconciliation never
+  treats another local stack's computers as orphans.
 - `PageOperator` is the log event `computer needs an operator` (error level);
   alerts key on it.
 - Each computer's effects run strictly in outbox order (`lease_effects` leases

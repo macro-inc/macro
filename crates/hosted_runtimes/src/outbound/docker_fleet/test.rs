@@ -98,16 +98,73 @@ fn state_lookup_includes_stopped_containers() {
 #[test]
 fn listing_prints_the_computer_id_label_and_state() {
     assert_eq!(
-        list_args(),
+        list_args("macro_services"),
         [
             "ps",
             "--all",
             "--filter",
             "label=macro.computer_id",
+            "--filter",
+            "network=macro_services",
             "--format",
             "{{.Label \"macro.computer_id\"}} {{.State}}",
         ]
     );
+}
+
+struct DockerFixtures(Vec<String>);
+
+impl Drop for DockerFixtures {
+    fn drop(&mut self) {
+        for name in &self.0 {
+            let result = std::process::Command::new("docker")
+                .args(["rm", "--force", name])
+                .output();
+            if !result.is_ok_and(|output| output.status.success()) {
+                eprintln!("could not remove Docker fixture {name}");
+            }
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires a local Docker daemon with macro-box:latest loaded"]
+async fn listing_cannot_expose_another_fleets_containers_to_reconciliation() {
+    let own = Uuid::now_v7();
+    let other = Uuid::now_v7();
+    let mut fixtures = DockerFixtures(Vec::new());
+    for (id, network) in [(own, "none"), (other, "host")] {
+        let name = format!("fleet-isolation-test-{id}");
+        fixtures.0.push(name.clone());
+        docker(
+            "create",
+            &[
+                "create".to_owned(),
+                "--name".to_owned(),
+                name,
+                "--network".to_owned(),
+                network.to_owned(),
+                "--label".to_owned(),
+                format!("{COMPUTER_ID_LABEL}={id}"),
+                "macro-box:latest".to_owned(),
+            ],
+        )
+        .await
+        .unwrap();
+    }
+
+    let fleet = DockerFleet::new(
+        DockerFleetConfig {
+            network: "none".to_owned(),
+            ..config()
+        },
+        Environment::Local,
+    )
+    .unwrap();
+    let listed = fleet.instances().await.unwrap();
+
+    assert!(listed.contains(&(own, InstanceStatus::Stopped)));
+    assert!(!listed.iter().any(|(id, _)| *id == other));
 }
 
 #[test]
