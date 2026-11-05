@@ -35,6 +35,14 @@ Canvas Next is the Macro host for a reusable graphics engine. The host owns
 product UI and services; `@macro-inc/graphics` owns the portable scene and editing
 model.
 
+## Artifacts
+
+An `artifact` node holds a self-contained HTML document, running behind
+`enable-canvas-artifacts`. Graphics stores it as opaque content; the Canvas host
+runs it in an opaque-origin sandboxed iframe, without a separate domain. See the
+[Canvas Next README](../../apps/web/src/features/block-canvas/README.md#artifacts)
+for the security model and its limits.
+
 ## Layers
 
 | Layer | Responsibility |

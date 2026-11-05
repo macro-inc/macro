@@ -107,7 +107,12 @@ export function itemContent(
     return meta.content.messageContent;
   }
 
-  if (meta?.tag === 'call_started') {
+  // The action line says who asked to join; the channel's latest message
+  // would read as the request's content.
+  if (
+    meta?.tag === 'call_started' ||
+    meta?.tag === 'channel_access_requested'
+  ) {
     return;
   }
 
