@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
 import EmptyStateDocGraphic from '@design/empty-state-doc.svg';
 import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
@@ -13,21 +14,36 @@ import { RecordItemList } from './record-item-list';
 
 const CONTENT = {
   email: {
-    title: 'Email',
+    get title() {
+      return t('crm.salesEmail');
+    },
+    get searchLabel() {
+      return t('crm.searchSalesEmail');
+    },
     graphic: EmptyStateEmailGraphic,
     action: 'New email',
     description:
       'Email your CRM companies and people to see those conversations here.',
   },
   notes: {
-    title: 'Notes',
+    get title() {
+      return t('crm.salesNotes');
+    },
+    get searchLabel() {
+      return t('crm.searchSalesNotes');
+    },
     graphic: EmptyStateDocGraphic,
     action: 'New note',
     description:
       'Create a note and link a company or person through its Companies or Contacts property.',
   },
   calls: {
-    title: 'Calls',
+    get title() {
+      return t('crm.salesCalls');
+    },
+    get searchLabel() {
+      return t('crm.searchSalesCalls');
+    },
     graphic: EmptyStateCallsGraphic,
     action: 'New call',
     description:
@@ -75,6 +91,7 @@ function ActivityList(props: {
   return (
     <ActivitySection
       label={content().title}
+      searchLabel={content().searchLabel}
       title={props.title}
       search={state.search}
       onSearchChange={(search) => setState('search', search)}
