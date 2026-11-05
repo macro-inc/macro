@@ -69,11 +69,14 @@ test.afterEach(async ({ page }) => {
 });
 
 for (const size of WIDTHS) {
+  // The `mobile:` variant: touch and under 640px.
+  const phone = size.touch && size.width < 640;
+
   test.describe(size.name, () => {
     test.use({
       viewport: { width: size.width, height: size.height },
       hasTouch: size.touch,
-      isMobile: size.touch && size.width < 640,
+      isMobile: phone,
     });
 
     test('every row shows its one reason, on one line', async ({ page }) => {
@@ -166,9 +169,21 @@ for (const size of WIDTHS) {
       );
     });
 
+    test('phones leave out the meter, number and bars', async ({ page }) => {
+      test.skip(!phone);
+      await open(page);
+      await expect(page.getByRole('img', { name: /^Importance/ })).toHaveCount(
+        0
+      );
+      await expect(
+        page.getByTestId('row-reply').getByText('92', { exact: true })
+      ).toBeHidden();
+    });
+
     test('the meter shows on every row, in its band color', async ({
       page,
     }) => {
+      test.skip(phone);
       await open(page);
       const meters = page.getByRole('img', {
         name: /^Importance \d+ of 100(, (rising|falling))?$/,
@@ -197,6 +212,7 @@ for (const size of WIDTHS) {
     test('the label says which way importance is moving, with no icon', async ({
       page,
     }) => {
+      test.skip(phone);
       await open(page);
       const labels: Record<string, string> = {
         reply: 'Importance 92 of 100, rising',

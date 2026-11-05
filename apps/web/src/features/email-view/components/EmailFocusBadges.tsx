@@ -41,7 +41,8 @@ const importanceDirection = (trend: EmailFocus['importanceTrend']) =>
 
 /**
  * The 0-100 importance score as a number and a five-bar meter, with which way it
- * is moving, if it is, in the label.
+ * is moving, if it is, in the label. Phones leave it out: beside a reason and a
+ * due date it pushes the due date past the row's edge.
  */
 function ImportanceMeter(props: { focus: EmailFocus }) {
   const direction = () => importanceDirection(props.focus.importanceTrend);
@@ -53,7 +54,11 @@ function ImportanceMeter(props: { focus: EmailFocus }) {
     IMPORTANCE_LEVELS.find((band) => props.focus.importance >= band.from) ??
     IMPORTANCE_LEVELS[IMPORTANCE_LEVELS.length - 1];
   return (
-    <Tooltip as="span" label={label()} class="inline-flex shrink-0">
+    <Tooltip
+      as="span"
+      label={label()}
+      class="inline-flex shrink-0 mobile:hidden"
+    >
       <span role="img" aria-label={label()} class="flex items-center gap-2">
         <span class="w-[3ch] text-right text-xs font-medium tabular-nums text-ink-muted">
           {props.focus.importance}
@@ -75,7 +80,7 @@ function ImportanceMeter(props: { focus: EmailFocus }) {
   );
 }
 
-/** A Focus row's importance meter, shown on every sort. */
+/** A Focus row's importance meter, on every sort. */
 export function EmailFocusScore(props: { entity: EntityData }) {
   return (
     <Show when={emailFocusOf(props.entity)}>
