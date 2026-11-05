@@ -101,6 +101,10 @@ where
             post(power::<Repo, Bill, Time, Eas, Auth>),
         )
         .route(
+            "/team/computers/{computer_id}/retry",
+            post(retry::<Repo, Bill, Time, Eas, Auth>),
+        )
+        .route(
             "/team/computers/{computer_id}/cancel",
             post(cancel::<Repo, Bill, Time, Eas, Auth>)
                 .delete(undo_cancel::<Repo, Bill, Time, Eas, Auth>),
@@ -361,6 +365,34 @@ pub async fn power<
     ))
 }
 
+/// Retry a failed computer without changing billing.
+#[utoipa::path(
+    post,
+    path = "/team/computers/{computer_id}/retry",
+    operation_id = "retry_team_computer",
+    params(("computer_id" = Uuid, Path)),
+    responses(
+        (status = 200, body = ComputerStatus),
+        (status = 404, body = ErrorResponse),
+        (status = 409, body = ErrorResponse),
+    ),
+)]
+#[tracing::instrument(skip_all, fields(computer_id = %computer_id), err)]
+pub async fn retry<
+    Repo: ComputerRepo,
+    Bill: Billing,
+    Time: Clock,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth>>,
+    Path(computer_id): Path<Uuid>,
+) -> Result<Json<ComputerStatus>, ComputersHttpError> {
+    let team_id = team_id(&access.entity_access_receipt)?;
+    Ok(Json(state.service.retry(team_id, computer_id).await?))
+}
+
 /// Stop billing at the end of the current period.
 #[utoipa::path(
     post,
@@ -618,7 +650,7 @@ impl IntoResponse for ComputersHttpError {
     fn into_response(self) -> Response {
         let status = match &self.0 {
             ComputerError::NotFound => StatusCode::NOT_FOUND,
-            ComputerError::SoldOut => StatusCode::CONFLICT,
+            ComputerError::SoldOut | ComputerError::NotFailed => StatusCode::CONFLICT,
             ComputerError::BadRequest(_) | ComputerError::ConfirmationMismatch => {
                 StatusCode::BAD_REQUEST
             }

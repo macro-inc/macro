@@ -19,7 +19,7 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 ## Start here
 
 - `src/domain/lifecycle.rs` + `lifecycle/test.rs`: states, events, effects, invariants.
-- `src/domain/service.rs`: the team-facing `ComputerService` (purchase, quote, status, power, cancel, release).
+- `src/domain/service.rs`: the team-facing `ComputerService` (purchase, quote, status, power, retry, cancel, release).
 - `src/domain/enrollment.rs`: the first-boot contract with `macrod enroll`.
 - `src/domain/operator.rs`: the control plane (fleet effects, timers, reconcile,
   idle sleep, macrod presence, wake on prompt); wired in
@@ -41,6 +41,10 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →
   `ComputerStatus` with `setup: Option<SetupProgress>` (Paying → Creating → Booting →
   Connecting → Ready) until macrod first connects. Readable by any team member.
+- **Retry**: `ComputerService::retry(team_id, computer_id)` → `ComputerStatus`,
+  exposed to team admins at `POST /team/computers/{computer_id}/retry`. Only
+  `Failed` computers can be retried; other phases return `NotFailed` (409).
+  Applies `OperatorRetry` and never touches billing or purchases.
 - **Persona**: `Persona { name, os_user, extra_service: { unit_name, exec, env }, config }`.
   `macrod enroll` creates `os_user`, writes `config` to `/etc/macro/personas/<os_user>.env`
   (the unit's `EnvironmentFile`), and installs + starts `/etc/systemd/system/<unit_name>.service`

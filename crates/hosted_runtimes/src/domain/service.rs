@@ -1,4 +1,4 @@
-//! The team-facing computer service: buy, quote, read, power, cancel and
+//! The team-facing computer service: buy, quote, read, power, retry, cancel and
 //! release. It runs where Stripe lives (authentication_service), so it also
 //! carries out billing effects.
 
@@ -26,6 +26,8 @@ const BILLING_BATCH: u32 = 16;
 pub enum ComputerError {
     #[error("computer not found")]
     NotFound,
+    #[error("only a failed computer can be retried")]
+    NotFailed,
     #[error("this size is sold out")]
     SoldOut,
     #[error("{0}")]
@@ -206,6 +208,26 @@ where
     ) -> Result<ComputerStatus, ComputerError> {
         let event = if on { Event::PowerOn } else { Event::PowerOff };
         self.apply_for_team(team_id, computer_id, event).await
+    }
+
+    /// Retry a failed computer without changing its purchase or billing.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn retry(
+        &self,
+        team_id: Uuid,
+        computer_id: Uuid,
+    ) -> Result<ComputerStatus, ComputerError> {
+        let computer = self.team_computer(team_id, computer_id).await?;
+        if !matches!(computer.state.phase, Phase::Failed { .. }) {
+            return Err(ComputerError::NotFailed);
+        }
+        let computer = self
+            .repo
+            .apply(computer_id, Event::OperatorRetry, self.clock.now())
+            .await
+            .map_err(internal)?
+            .ok_or(ComputerError::NotFound)?;
+        Ok(computer.status())
     }
 
     /// Stop billing at the end of the current period; undo is allowed until then.

@@ -14,12 +14,14 @@ use crate::domain::models::{BillingInterval, SubscriptionItem};
 #[derive(Default)]
 struct FakeBilling {
     decline: bool,
+    calls: Mutex<Vec<&'static str>>,
     updates: Mutex<Vec<(ComputerSize, Vec<SubscriptionItem>, String)>>,
     removals: Mutex<Vec<(ComputerSize, String)>>,
 }
 
 impl Billing for FakeBilling {
     async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
+        self.calls.lock().unwrap().push("quote");
         Ok(Quote {
             size,
             price_id: format!("price_{}", size.as_ref()),
@@ -36,6 +38,7 @@ impl Billing for FakeBilling {
         extra_items: &[SubscriptionItem],
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
+        self.calls.lock().unwrap().push("add_computer");
         if self.decline {
             return Err(BillingError::PaymentFailed);
         }
@@ -52,6 +55,7 @@ impl Billing for FakeBilling {
         size: ComputerSize,
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
+        self.calls.lock().unwrap().push("remove_computer");
         self.removals
             .lock()
             .unwrap()
@@ -60,6 +64,7 @@ impl Billing for FakeBilling {
     }
 
     async fn period_end(&self, _team_id: Uuid) -> Result<DateTime<Utc>, BillingError> {
+        self.calls.lock().unwrap().push("period_end");
         Ok(now() + chrono::Duration::days(20))
     }
 }
@@ -353,4 +358,134 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
         newest.state.billing,
         BillingState::Canceled { .. }
     ));
+}
+
+#[tokio::test]
+async fn retry_failed_computer_restarts_without_billing() {
+    let computer_id = Uuid::from_u128(1);
+    let repo = FakeRepo::default();
+    repo.computers.lock().unwrap().insert(
+        computer_id,
+        Computer {
+            id: computer_id,
+            team_id: TEAM,
+            name: "Build box".to_owned(),
+            size: ComputerSize::Standard,
+            state: ComputerState {
+                phase: Phase::Failed { host: HOST },
+                power: Power::On,
+                billing: BillingState::Active,
+                macrod_connected: false,
+                recent_crashes: vec![],
+                wake_requested: false,
+            },
+            harness_id: None,
+            persona: None,
+            created_by: "macro|admin@example.com".to_owned(),
+            created_at: now(),
+            enrolled_at: Some(now()),
+        },
+    );
+    let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);
+
+    let result = service.retry(TEAM, computer_id).await;
+
+    let status = result.unwrap();
+    assert_eq!(status, service.status(TEAM, computer_id).await.unwrap());
+    let computer = service.repo.get(computer_id).await.unwrap().unwrap();
+    assert_eq!(computer.state.phase, Phase::Booting { host: HOST });
+    assert_eq!(
+        *service.repo.events.lock().unwrap(),
+        vec![(computer_id, Event::OperatorRetry)]
+    );
+    assert_eq!(
+        service
+            .repo
+            .effects
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|pending| pending.effect.clone())
+            .collect::<Vec<_>>(),
+        vec![
+            Effect::Restart { host: HOST },
+            Effect::ScheduleTimer {
+                kind: crate::domain::lifecycle::TimerKind::MacrodMissing,
+                at: now() + crate::domain::lifecycle::MACROD_GRACE,
+            },
+        ]
+    );
+    assert!(service.billing.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn retry_running_computer_is_rejected_without_applying_events() {
+    let computer_id = Uuid::from_u128(1);
+    let repo = FakeRepo::default();
+    repo.computers.lock().unwrap().insert(
+        computer_id,
+        Computer {
+            id: computer_id,
+            team_id: TEAM,
+            name: "Build box".to_owned(),
+            size: ComputerSize::Standard,
+            state: ComputerState {
+                phase: Phase::Running { host: HOST },
+                power: Power::On,
+                billing: BillingState::Active,
+                macrod_connected: false,
+                recent_crashes: vec![],
+                wake_requested: false,
+            },
+            harness_id: None,
+            persona: None,
+            created_by: "macro|admin@example.com".to_owned(),
+            created_at: now(),
+            enrolled_at: Some(now()),
+        },
+    );
+    let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);
+
+    let result = service.retry(TEAM, computer_id).await;
+
+    assert!(matches!(result, Err(ComputerError::NotFailed)));
+    assert!(service.repo.events.lock().unwrap().is_empty());
+    assert!(service.repo.effects.lock().unwrap().is_empty());
+    assert!(service.billing.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn retry_another_teams_computer_is_not_found() {
+    let computer_id = Uuid::from_u128(1);
+    let repo = FakeRepo::default();
+    repo.computers.lock().unwrap().insert(
+        computer_id,
+        Computer {
+            id: computer_id,
+            team_id: TEAM,
+            name: "Build box".to_owned(),
+            size: ComputerSize::Standard,
+            state: ComputerState {
+                phase: Phase::Failed { host: HOST },
+                power: Power::On,
+                billing: BillingState::Active,
+                macrod_connected: false,
+                recent_crashes: vec![],
+                wake_requested: false,
+            },
+            harness_id: None,
+            persona: None,
+            created_by: "macro|admin@example.com".to_owned(),
+            created_at: now(),
+            enrolled_at: Some(now()),
+        },
+    );
+    let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);
+
+    let result = service.retry(Uuid::from_u128(2), computer_id).await;
+
+    assert!(matches!(result, Err(ComputerError::NotFound)));
+    assert!(service.repo.events.lock().unwrap().is_empty());
+    assert!(service.repo.effects.lock().unwrap().is_empty());
+    assert!(service.billing.calls.lock().unwrap().is_empty());
 }
