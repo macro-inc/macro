@@ -72,6 +72,10 @@ pub const CI_SCCACHE_NAME: &str = "sccache-ci";
 /// `linux-mid` volume.
 pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 
+/// Nix-only PR checks. They read a Nix store back, so they stay off the small
+/// profile's default volume, where other jobs would overwrite that store.
+pub const NIX_CHECKS_CACHE_TAG: &str = "nix-checks";
+
 /// Namespace remote sccache used when the web checks compile Rust API schema
 /// generators. Kept separate from [`CI_SCCACHE_NAME`] because these jobs have
 /// a different workload and runner profile.
