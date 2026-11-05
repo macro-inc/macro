@@ -310,7 +310,7 @@ pub struct ComputerStatus {
 }
 
 /// What the agent's workspace repo starts from.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersonaSeed {
     /// Display name.
     pub name: String,
@@ -356,6 +356,8 @@ pub struct AgentRepo {
 /// A new agent account to store.
 #[derive(Debug, Clone)]
 pub struct NewAgentAccount {
+    /// Original non-secret workspace seed, retained for provisioning recovery.
+    pub persona_seed: PersonaSeed,
     /// The agent's Macro user id.
     pub user_id: MacroUserIdStr<'static>,
     /// The agent's email address (lowercase).
@@ -464,6 +466,9 @@ pub enum TeamAgentError {
     /// The computer billing provider failed.
     #[error("the computer billing provider failed: {0}")]
     ComputerProvider(rootcause::Report),
+    /// The workspace repo provider failed.
+    #[error("the repo provider failed: {0}")]
+    RepoProvider(rootcause::Report),
     /// The email provider failed.
     #[error("the email provider failed: {0}")]
     EmailProvider(rootcause::Report),

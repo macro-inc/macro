@@ -41,7 +41,9 @@ impl AgentRepos for AgentGitRepos {
                 },
             )
             .await
-            .map_err(TeamAgentError::internal)?;
+            .map_err(|error| {
+                TeamAgentError::RepoProvider(rootcause::Report::new(error).into_dynamic())
+            })?;
 
         Ok(AgentRepo {
             url: created.clone_url,
@@ -49,11 +51,39 @@ impl AgentRepos for AgentGitRepos {
         })
     }
 
+    #[tracing::instrument(name = "team_agents.repo.ensure", skip_all, fields(%agent_user_id, %team_id), err)]
+    async fn ensure(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        seed: &PersonaSeed,
+        token: &Credential,
+    ) -> Result<(), TeamAgentError> {
+        self.client
+            .ensure_repo(
+                agent_user_id.clone().into_owned(),
+                team_id,
+                RepoSeed {
+                    name: seed.name.clone(),
+                    job_description: seed.job_description.clone(),
+                    personality: seed.personality.clone(),
+                },
+                token.expose(),
+            )
+            .await
+            .map_err(|error| {
+                TeamAgentError::RepoProvider(rootcause::Report::new(error).into_dynamic())
+            })?;
+        Ok(())
+    }
+
     #[tracing::instrument(name = "team_agents.repo.delete", skip(self), err)]
     async fn delete(&self, agent_user_id: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
         self.client
             .delete_repo(agent_user_id)
             .await
-            .map_err(TeamAgentError::internal)
+            .map_err(|error| {
+                TeamAgentError::RepoProvider(rootcause::Report::new(error).into_dynamic())
+            })
     }
 }

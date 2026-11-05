@@ -93,6 +93,10 @@ where
             "/{agent_user_id}",
             delete(delete_team_agent_handler::<S, Eas, Auth>),
         )
+        .route(
+            "/{agent_user_id}/retry",
+            post(retry_team_agent_handler::<S, Eas, Auth>),
+        )
         .route("/me", get(get_my_team_agent_handler::<S, Eas, Auth>))
         .route(
             "/me/email/messages",
@@ -117,9 +121,9 @@ impl IntoResponse for TeamAgentError {
             TeamAgentError::EmailUnavailable => StatusCode::SERVICE_UNAVAILABLE,
             TeamAgentError::Forbidden | TeamAgentError::NotEnabled => StatusCode::FORBIDDEN,
             TeamAgentError::ComputerUnavailable(_) => StatusCode::CONFLICT,
-            TeamAgentError::EmailProvider(_) | TeamAgentError::ComputerProvider(_) => {
-                StatusCode::BAD_GATEWAY
-            }
+            TeamAgentError::EmailProvider(_)
+            | TeamAgentError::ComputerProvider(_)
+            | TeamAgentError::RepoProvider(_) => StatusCode::BAD_GATEWAY,
             TeamAgentError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -131,6 +135,10 @@ impl IntoResponse for TeamAgentError {
             TeamAgentError::ComputerProvider(error) => {
                 tracing::error!(error = ?error, "the computer billing provider failed");
                 "the computer billing provider failed".to_string()
+            }
+            TeamAgentError::RepoProvider(error) => {
+                tracing::error!(error = ?error, "the repo provider failed");
+                "the repo provider failed".to_string()
             }
             TeamAgentError::EmailProvider(error) => {
                 tracing::error!(error = ?error, "the email provider failed");
@@ -268,6 +276,44 @@ pub struct AgentPath {
     pub agent_user_id: String,
 }
 
+/// Retry a failed agent's existing computer and recover its workspace repo.
+/// Requires a team admin or owner; preserves bootstrap credentials and billing.
+#[utoipa::path(
+    post, tag = "team-agents", operation_id = "retry_team_agent",
+    path = "/team_agents/{agent_user_id}/retry", params(AgentPath),
+    responses(
+        (status = 200, body = TeamAgent),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 409, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+        (status = 502, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn retry_team_agent_handler<S, Eas, Auth>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+    Path(path): Path<AgentPath>,
+) -> Result<Json<TeamAgent>, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let agent_user_id = MacroUserIdStr::parse_from_str(&path.agent_user_id)
+        .map(MacroUserIdStr::into_owned)
+        .map_err(|_| TeamAgentError::BadRequest("invalid agent user id".to_string()))?;
+    Ok(Json(
+        state
+            .service
+            .retry(access.entity_access_receipt, &agent_user_id)
+            .await?,
+    ))
+}
+
 /// Delete a team agent: release its computer, delete its repo, remove its
 /// seat, mailbox and account. Requires a team admin or owner. Safe to retry.
 #[utoipa::path(
@@ -283,6 +329,7 @@ pub struct AgentPath {
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 502, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]

@@ -9,10 +9,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    AgentRepo, ComputerPurchase, ComputerSize, ComputerStatusKind, CreateTeamAgent, Credential,
-    EmailMessage, EmailMessages, MAX_NAME_CHARS, MAX_PROFILE_CHARS, NewAgentAccount, Persona,
-    PersonaSeed, PersonaService, SendEmail, SentEmail, TeamAgent, TeamAgentError, TeamAgentQuote,
-    TeamAgentStatus, TeamAgents,
+    AgentRepo, ComputerPurchase, ComputerSize, ComputerStatus, ComputerStatusKind, CreateTeamAgent,
+    Credential, EmailMessage, EmailMessages, MAX_NAME_CHARS, MAX_PROFILE_CHARS, NewAgentAccount,
+    Persona, PersonaSeed, PersonaService, SendEmail, SentEmail, TeamAgent, TeamAgentError,
+    TeamAgentQuote, TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
     AgentApiKeys, AgentRepos, Computers, Mailboxes, TeamAgentRepository, TeamAgentService,
@@ -321,9 +321,16 @@ where
             .into_owned();
         tracing::Span::current().record("agent_user_id", tracing::field::display(&user_id));
 
+        let seed = PersonaSeed {
+            name: request.name.clone(),
+            job_description: request.job_description,
+            personality: request.personality,
+        };
+
         self.repository
             .create_account(&NewAgentAccount {
                 user_id: user_id.clone(),
+                persona_seed: seed.clone(),
                 email,
                 team_id,
                 created_by: created_by.clone(),
@@ -340,18 +347,7 @@ where
 
         let api_key = self.api_keys.mint(&user_id).await?;
 
-        let repo = self
-            .repos
-            .create(
-                &user_id,
-                team_id,
-                &PersonaSeed {
-                    name: request.name.clone(),
-                    job_description: request.job_description,
-                    personality: request.personality,
-                },
-            )
-            .await?;
+        let repo = self.repos.create(&user_id, team_id, &seed).await?;
         undo.repo = true;
 
         let computer_id = self
@@ -401,11 +397,21 @@ where
 
         let computer = self.computers.status(agent.team_id, computer_id).await?;
 
+        self.apply_computer_status(agent, computer).await
+    }
+
+    async fn apply_computer_status(
+        &self,
+        agent: TeamAgent,
+        computer: ComputerStatus,
+    ) -> Result<TeamAgent, TeamAgentError> {
         let (status, reason) = match computer.status {
-            _ if computer
-                .setup
-                .as_ref()
-                .is_some_and(|setup| setup.step != super::models::SetupStep::Ready) =>
+            _ if computer.status != ComputerStatusKind::Failed
+                && computer.status != ComputerStatusKind::Released
+                && computer
+                    .setup
+                    .as_ref()
+                    .is_some_and(|setup| setup.step != super::models::SetupStep::Ready) =>
             {
                 (TeamAgentStatus::Provisioning, None)
             }
@@ -573,6 +579,73 @@ where
         }
 
         Ok(TeamAgents { agents })
+    }
+
+    #[tracing::instrument(skip(self, receipt), err)]
+    async fn retry(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<TeamAgent, TeamAgentError> {
+        let agent = self.team_agent(&receipt, agent_user_id).await?;
+        let computer_id = agent.computer_id.ok_or_else(|| {
+            TeamAgentError::ComputerUnavailable(
+                "the agent has no saved computer to retry".to_string(),
+            )
+        })?;
+        let computer = self.computers.status(agent.team_id, computer_id).await?;
+        if computer.status == ComputerStatusKind::Released {
+            return Err(TeamAgentError::ComputerUnavailable(
+                "a released computer cannot be retried".to_string(),
+            ));
+        }
+        let agent = self.apply_computer_status(agent, computer).await?;
+        if agent.status != TeamAgentStatus::Failed {
+            return Ok(agent);
+        }
+        let seed = self
+            .repository
+            .persona_seed(agent_user_id)
+            .await
+            .map_err(TeamAgentError::internal)?
+            .ok_or_else(|| {
+                TeamAgentError::ComputerUnavailable(
+                    "the agent predates saved recovery inputs".to_string(),
+                )
+            })?;
+        let persona = self.computers.persona(agent.team_id, computer_id).await?;
+        if persona
+            .config
+            .get(config_keys::AGENT_USER_ID)
+            .map(String::as_str)
+            != Some(agent_user_id.as_ref())
+        {
+            return Err(TeamAgentError::internal_message(
+                "the saved persona belongs to another agent",
+            ));
+        }
+        let token = persona.config.get(config_keys::REPO_TOKEN).ok_or_else(|| {
+            TeamAgentError::ComputerUnavailable("the saved repo credential is missing".to_string())
+        })?;
+        self.repos
+            .ensure(
+                agent_user_id,
+                agent.team_id,
+                &seed,
+                &Credential::new(token.clone()),
+            )
+            .await?;
+        self.computers.retry(agent.team_id, computer_id).await?;
+        self.repository
+            .set_status(agent_user_id, TeamAgentStatus::Provisioning, None)
+            .await
+            .map_err(TeamAgentError::internal)?;
+        Ok(TeamAgent {
+            status: TeamAgentStatus::Provisioning,
+            status_reason: None,
+            setup: None,
+            ..agent
+        })
     }
 
     #[tracing::instrument(skip(self, receipt), err)]

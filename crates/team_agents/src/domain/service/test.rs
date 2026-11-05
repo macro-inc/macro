@@ -131,6 +131,19 @@ impl TeamAgentRepository for FakeRepository {
         Ok(agents)
     }
 
+    async fn persona_seed(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<PersonaSeed>, Self::Err> {
+        Ok(self
+            .agents
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|agent| agent.account.user_id.as_ref() == user_id.as_ref())
+            .map(|agent| agent.account.persona_seed.clone()))
+    }
+
     async fn mailbox_id(&self, user_id: &MacroUserIdStr<'_>) -> Result<Option<String>, Self::Err> {
         Ok(self
             .agents
@@ -311,6 +324,23 @@ impl Computers for FakeComputers {
         Ok(self.status.clone())
     }
 
+    async fn persona(&self, _team_id: Uuid, _computer_id: Uuid) -> Result<Persona, TeamAgentError> {
+        self.journal.record("computer.persona")?;
+        Ok(self
+            .purchases
+            .lock()
+            .unwrap()
+            .first()
+            .unwrap()
+            .persona
+            .clone()
+            .unwrap())
+    }
+
+    async fn retry(&self, _team_id: Uuid, _computer_id: Uuid) -> Result<(), TeamAgentError> {
+        self.journal.record("computer.retry")
+    }
+
     async fn release(&self, _team_id: Uuid, _computer_id: Uuid) -> Result<(), TeamAgentError> {
         self.journal.record("computer.release")
     }
@@ -334,6 +364,19 @@ impl AgentRepos for FakeRepos {
             url: "https://git.example.com/sam".to_string(),
             token: Credential::new("mrt_token".to_string()),
         })
+    }
+
+    async fn ensure(
+        &self,
+        _agent_user_id: &MacroUserIdStr<'_>,
+        _team_id: Uuid,
+        seed: &PersonaSeed,
+        token: &Credential,
+    ) -> Result<(), TeamAgentError> {
+        self.journal.record("repo.ensure")?;
+        assert_eq!(token.expose(), "mrt_token");
+        assert_eq!(self.seeds.lock().unwrap().first(), Some(seed));
+        Ok(())
     }
 
     async fn delete(&self, _agent_user_id: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
@@ -967,4 +1010,129 @@ fn slug_is_a_valid_os_user_name() {
         slug("Bartholomew Maximilian Montgomery"),
         "bartholomew-maximilian-m"
     );
+}
+
+#[tokio::test]
+async fn retry_reuses_the_seed_computer_and_credentials_without_purchasing() {
+    let (service, journal) = build(Setup {
+        computer_status: ComputerStatus {
+            status: ComputerStatusKind::Failed,
+            // Failures must override stale setup progress.
+            setup: Some(SetupProgress {
+                step: SetupStep::Booting,
+                position: 3,
+                total: 5,
+            }),
+        },
+        ..Setup::default()
+    });
+    service.create(receipt(TEAM_ID), request()).await.unwrap();
+    journal.steps.lock().unwrap().clear();
+    let agent = service.retry(receipt(TEAM_ID), &user(AGENT)).await.unwrap();
+    assert_eq!(agent.status, TeamAgentStatus::Provisioning);
+    assert_eq!(
+        agent.computer_id,
+        Some(Uuid::parse_str(COMPUTER_ID).unwrap())
+    );
+    assert_eq!(
+        journal.steps(),
+        vec![
+            "account.set_status",
+            "computer.persona",
+            "repo.ensure",
+            "computer.retry",
+            "account.set_status"
+        ]
+    );
+    assert_eq!(service.computers.purchases.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn retry_checks_team_ownership_and_leaves_a_running_agent_alone() {
+    let (service, journal) = build(Setup {
+        computer_status: ComputerStatus {
+            status: ComputerStatusKind::Ready,
+            setup: None,
+        },
+        ..Setup::default()
+    });
+    service.create(receipt(TEAM_ID), request()).await.unwrap();
+    journal.steps.lock().unwrap().clear();
+    assert!(matches!(
+        service.retry(receipt(OTHER_TEAM_ID), &user(AGENT)).await,
+        Err(TeamAgentError::NotFound)
+    ));
+    assert!(journal.steps().is_empty());
+    let agent = service.retry(receipt(TEAM_ID), &user(AGENT)).await.unwrap();
+    assert_eq!(agent.status, TeamAgentStatus::Running);
+    assert_eq!(journal.steps(), vec!["account.set_status"]);
+}
+
+#[tokio::test]
+async fn failed_computer_retry_preserves_the_agent_for_another_attempt() {
+    let (service, journal) = build(Setup {
+        fail_at: Some("computer.retry"),
+        computer_status: ComputerStatus {
+            status: ComputerStatusKind::Failed,
+            setup: None,
+        },
+        ..Setup::default()
+    });
+    service.create(receipt(TEAM_ID), request()).await.unwrap();
+    journal.steps.lock().unwrap().clear();
+    assert!(service.retry(receipt(TEAM_ID), &user(AGENT)).await.is_err());
+    assert_eq!(
+        service.agent(&user(AGENT)).await.unwrap().status,
+        TeamAgentStatus::Failed
+    );
+    assert_eq!(
+        journal.steps(),
+        vec![
+            "account.set_status",
+            "computer.persona",
+            "repo.ensure",
+            "computer.retry"
+        ]
+    );
+    journal.steps.lock().unwrap().clear();
+    assert!(service.retry(receipt(TEAM_ID), &user(AGENT)).await.is_err());
+    assert_eq!(
+        journal.steps(),
+        vec!["computer.persona", "repo.ensure", "computer.retry"]
+    );
+}
+
+#[tokio::test]
+async fn retry_does_not_purchase_a_missing_computer() {
+    let (service, journal) = build(Setup::default());
+    service.create(receipt(TEAM_ID), request()).await.unwrap();
+    {
+        let mut rows = service.repository.agents.lock().unwrap();
+        rows[0].computer_id = None;
+        rows[0].status = TeamAgentStatus::Failed;
+    }
+    journal.steps.lock().unwrap().clear();
+    assert!(matches!(
+        service.retry(receipt(TEAM_ID), &user(AGENT)).await,
+        Err(TeamAgentError::ComputerUnavailable(_))
+    ));
+    assert!(journal.steps().is_empty());
+}
+
+#[tokio::test]
+async fn retry_rejects_released_computers_before_repo_recovery() {
+    let (service, journal) = build(Setup {
+        computer_status: ComputerStatus {
+            status: ComputerStatusKind::Released,
+            setup: None,
+        },
+        ..Setup::default()
+    });
+    service.create(receipt(TEAM_ID), request()).await.unwrap();
+    journal.steps.lock().unwrap().clear();
+    assert!(matches!(
+        service.retry(receipt(TEAM_ID), &user(AGENT)).await,
+        Err(TeamAgentError::ComputerUnavailable(_))
+    ));
+    assert!(journal.steps().is_empty());
 }

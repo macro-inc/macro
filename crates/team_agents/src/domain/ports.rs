@@ -8,8 +8,8 @@ use uuid::Uuid;
 
 use super::models::{
     AgentRepo, ComputerPurchase, ComputerQuote, ComputerSize, ComputerStatus, CreateTeamAgent,
-    Credential, EmailMessage, EmailMessages, Mailbox, NewAgentAccount, PersonaSeed, SeatQuote,
-    SendEmail, SentEmail, SubscriptionItem, TeamAgent, TeamAgentError, TeamAgentQuote,
+    Credential, EmailMessage, EmailMessages, Mailbox, NewAgentAccount, Persona, PersonaSeed,
+    SeatQuote, SendEmail, SentEmail, SubscriptionItem, TeamAgent, TeamAgentError, TeamAgentQuote,
     TeamAgentStatus, TeamAgents,
 };
 
@@ -42,6 +42,12 @@ pub trait TeamAgentRepository: Send + Sync + 'static {
         &self,
         team_id: Uuid,
     ) -> impl Future<Output = Result<Vec<TeamAgent>, Self::Err>> + Send;
+
+    /// Original workspace seed, absent on accounts created before recovery.
+    fn persona_seed(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<PersonaSeed>, Self::Err>> + Send;
 
     /// The agent's mailbox id, if it has one.
     fn mailbox_id(
@@ -166,6 +172,20 @@ pub trait Computers: Send + Sync + 'static {
         computer_id: Uuid,
     ) -> impl Future<Output = Result<ComputerStatus, TeamAgentError>> + Send;
 
+    /// Original bootstrap persona, scoped to the owning team.
+    fn persona(
+        &self,
+        team_id: Uuid,
+        computer_id: Uuid,
+    ) -> impl Future<Output = Result<Persona, TeamAgentError>> + Send;
+
+    /// Re-drive provisioning on the existing paid computer without a purchase.
+    fn retry(
+        &self,
+        team_id: Uuid,
+        computer_id: Uuid,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+
     /// Releases the computer now and stops billing it. Releasing one already
     /// gone succeeds.
     fn release(
@@ -184,6 +204,16 @@ pub trait AgentRepos: Send + Sync + 'static {
         team_id: Uuid,
         seed: &PersonaSeed,
     ) -> impl Future<Output = Result<AgentRepo, TeamAgentError>> + Send;
+
+    /// Recreate a missing repo or return its original credential without
+    /// rotating a live one. The token comes from the saved computer persona.
+    fn ensure(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        seed: &PersonaSeed,
+        token: &Credential,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 
     /// Deletes the agent's repo. A missing repo counts as deleted.
     fn delete(
@@ -213,6 +243,13 @@ pub trait TeamAgentService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> impl Future<Output = Result<TeamAgents, TeamAgentError>> + Send;
+
+    /// Re-drive a failed agent from its saved persona and existing computer.
+    fn retry(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<TeamAgent, TeamAgentError>> + Send;
 
     /// Deletes an agent: its computer, repo, seat, mailbox and account.
     fn delete(

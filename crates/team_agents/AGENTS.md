@@ -66,3 +66,20 @@ from the hosted-runtimes size catalog alongside the seat and computer price.
 ## Related
 
 - Rules: `.agents/rules/rust/security.md` · Docs: `docs/design/agent-brains.md`
+
+## Provisioning recovery
+
+`POST /team_agents/{agent_user_id}/retry` requires a team admin receipt and checks
+that the agent belongs to that team. Non-failed computers return their current
+agent unchanged. Failed computers reuse the saved computer ID, persona bootstrap
+credentials, and `team_agents.persona_seed`; recovery never buys another computer,
+adds a seat, creates an account, or mints an API key. Repo recovery calls the git
+service's `ensure` API, which preserves live tokens and repo contents. A missing
+repo is reseeded, not restored from deleted history. Older rows with no saved seed
+or computer return 409. Retry errors leave the agent available for another attempt.
+
+The outbound adapter currently has an explicit TODO until the owning computer
+service exposes `ComputerService::retry(team_id, computer_id)`; it returns 409
+instead of silently purchasing again. Bootstrap credentials remain in the existing
+computer persona; the new seed column contains only the original name, job and
+personality.

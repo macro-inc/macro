@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     BillingInterval, ComputerPurchase, ComputerQuote, ComputerSize, ComputerStatus,
-    ComputerStatusKind, SetupProgress, SetupStep, TeamAgentError,
+    ComputerStatusKind, Persona, PersonaService, SetupProgress, SetupStep, TeamAgentError,
 };
 use crate::domain::ports::Computers;
 
@@ -22,12 +22,13 @@ mod test;
 /// Buys and manages computers using the same service as the team computers API.
 pub struct HostedRuntimesComputers<Repo, Bill, Time> {
     service: Arc<ComputerService<Repo, Bill, Time>>,
+    repo: Repo,
 }
 
 impl<Repo, Bill, Time> HostedRuntimesComputers<Repo, Bill, Time> {
     /// Shares the computer service built by the authentication service.
-    pub fn new(service: Arc<ComputerService<Repo, Bill, Time>>) -> Self {
-        Self { service }
+    pub fn new(service: Arc<ComputerService<Repo, Bill, Time>>, repo: Repo) -> Self {
+        Self { service, repo }
     }
 }
 
@@ -125,6 +126,43 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock> Computers
                 total: setup.total,
             }),
         })
+    }
+
+    #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
+    async fn persona(&self, team_id: Uuid, computer_id: Uuid) -> Result<Persona, TeamAgentError> {
+        let computer = self
+            .repo
+            .get(computer_id)
+            .await
+            .map_err(TeamAgentError::internal)?
+            .filter(|computer| computer.team_id == team_id)
+            .ok_or(TeamAgentError::NotFound)?;
+        let persona = computer.persona.ok_or_else(|| {
+            TeamAgentError::ComputerUnavailable("the computer has no saved persona".to_string())
+        })?;
+        Ok(Persona {
+            name: persona.name,
+            os_user: persona.os_user,
+            extra_service: PersonaService {
+                unit_name: persona.extra_service.unit_name,
+                exec: persona.extra_service.exec,
+                env: persona.extra_service.env,
+            },
+            config: persona.config,
+        })
+    }
+
+    #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
+    async fn retry(&self, team_id: Uuid, computer_id: Uuid) -> Result<(), TeamAgentError> {
+        // TODO: replace with self.service.retry(team_id, computer_id).await.map_err(error)
+        // once the owning hosted_runtimes service exposes OperatorRetry.
+        self.service
+            .status(team_id, computer_id)
+            .await
+            .map_err(error)?;
+        Err(TeamAgentError::ComputerUnavailable(
+            "computer retry is not available yet".to_string(),
+        ))
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]

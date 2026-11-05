@@ -686,8 +686,9 @@ pub async fn run() -> anyhow::Result<()> {
     .with_owned_entity_cleanup(team_owned_entity_cleanup)
     .with_invite_rewarder(Arc::new(invite_rewards));
     let computer_prices = config.computer_prices();
+    let computer_repo = hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone());
     let computer_service = Arc::new(hosted_runtimes::domain::service::ComputerService::new(
-        hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone()),
+        computer_repo.clone(),
         crate::outbound::computer_billing::TeamComputerBilling::new(
             teams_service_impl.clone(),
             computer_prices.clone(),
@@ -711,6 +712,7 @@ pub async fn run() -> anyhow::Result<()> {
         .map_err(|error| anyhow::anyhow!("{error:?}"))?,
         team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers::new(
             computer_service.clone(),
+            computer_repo,
         ),
         team_agents::outbound::agent_git_repos::AgentGitRepos::new(
             agent_git::client::AgentGitClient::new(

@@ -36,12 +36,12 @@ impl Clock for FixedClock {
 struct FakeError;
 
 /// One host with `sold_units` of sold capacity; every computer awake fits.
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct FakeRepo {
     sold_units: u32,
     computers: Arc<Mutex<HashMap<Uuid, Computer>>>,
-    effects: Mutex<Vec<PendingEffect>>,
-    events: Mutex<Vec<(Uuid, Event)>>,
+    effects: Arc<Mutex<Vec<PendingEffect>>>,
+    events: Arc<Mutex<Vec<(Uuid, Event)>>>,
 }
 
 impl ComputerRepo for FakeRepo {
@@ -310,8 +310,10 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
     let computers = repo.computers.clone();
     let billing = FakeBilling::default();
     let updates = billing.updates.clone();
-    let service =
-        HostedRuntimesComputers::new(Arc::new(ComputerService::new(repo, billing, FixedClock)));
+    let service = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(repo.clone(), billing, FixedClock)),
+        repo,
+    );
     let persona = agent::Persona {
         name: "Agent".to_string(),
         os_user: "agent".to_string(),
@@ -350,6 +352,11 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
         }]
     );
     drop(updates);
+    assert_eq!(service.persona(TEAM, id).await.unwrap(), persona);
+    assert!(matches!(
+        service.persona(Uuid::now_v7(), id).await,
+        Err(agent::TeamAgentError::NotFound)
+    ));
     let installed = computers
         .lock()
         .unwrap()
@@ -413,14 +420,17 @@ async fn declined_purchase_reports_unavailable_and_releases_reserved_capacity() 
         ..Default::default()
     };
     let computers = repo.computers.clone();
-    let service = HostedRuntimesComputers::new(Arc::new(ComputerService::new(
+    let service = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            FakeBilling {
+                decline: true,
+                ..Default::default()
+            },
+            FixedClock,
+        )),
         repo,
-        FakeBilling {
-            decline: true,
-            ..Default::default()
-        },
-        FixedClock,
-    )));
+    );
     assert!(matches!(
         service
             .purchase(agent::ComputerPurchase {
@@ -445,14 +455,18 @@ async fn declined_purchase_reports_unavailable_and_releases_reserved_capacity() 
 
 #[tokio::test]
 async fn billing_provider_failures_remain_upstream_errors() {
-    let service = HostedRuntimesComputers::new(Arc::new(ComputerService::new(
-        FakeRepo::default(),
-        FakeBilling {
-            provider_fails: true,
-            ..Default::default()
-        },
-        FixedClock,
-    )));
+    let repo = FakeRepo::default();
+    let service = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            FakeBilling {
+                provider_fails: true,
+                ..Default::default()
+            },
+            FixedClock,
+        )),
+        repo,
+    );
     assert!(matches!(
         service.quote(TEAM, agent::ComputerSize::Standard).await,
         Err(agent::TeamAgentError::ComputerProvider(_))

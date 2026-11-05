@@ -8,7 +8,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::models::{NewAgentAccount, TeamAgent, TeamAgentStatus};
+use crate::domain::models::{NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentStatus};
 use crate::domain::ports::TeamAgentRepository;
 
 #[cfg(test)]
@@ -159,13 +159,14 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
 
         sqlx::query!(
             r#"
-            INSERT INTO team_agents (user_id, team_id, created_by, mailbox_id)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO team_agents (user_id, team_id, created_by, mailbox_id, persona_seed)
+            VALUES ($1, $2, $3, $4, $5)
             "#,
             account.user_id.as_ref(),
             account.team_id,
             account.created_by.as_ref(),
             account.mailbox_id,
+            sqlx::types::Json(&account.persona_seed) as _,
         )
         .execute(&mut *transaction)
         .await?;
@@ -247,6 +248,22 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         .await?;
 
         rows.into_iter().map(TeamAgent::try_from).collect()
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn persona_seed(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<PersonaSeed>, Self::Err> {
+        let seed = sqlx::query_scalar!(
+            r#"SELECT persona_seed AS "persona_seed: sqlx::types::Json<PersonaSeed>"
+               FROM team_agents WHERE user_id = $1"#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .flatten();
+        Ok(seed.map(|seed| seed.0))
     }
 
     #[tracing::instrument(skip(self), err)]

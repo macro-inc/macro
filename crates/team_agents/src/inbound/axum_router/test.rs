@@ -108,6 +108,18 @@ impl TeamAgentService for FakeService {
         })
     }
 
+    async fn retry(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<TeamAgent, TeamAgentError> {
+        self.record(format!(
+            "retry {} {agent_user_id}",
+            receipt.entity().entity_id
+        ));
+        Ok(agent())
+    }
+
     async fn delete(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -492,5 +504,29 @@ async fn a_billing_provider_failure_answers_bad_gateway_without_provider_details
         !body_text(response)
             .await
             .contains("private provider details")
+    );
+}
+
+#[tokio::test]
+async fn retry_requires_an_admin_and_uses_the_agent_path() {
+    let service = Arc::new(FakeService::default());
+    for (role, expected) in [
+        (TeamRole::Member, StatusCode::UNAUTHORIZED),
+        (TeamRole::Admin, StatusCode::OK),
+    ] {
+        let response = router(service.clone(), role)
+            .oneshot(
+                Request::post("/macro%7Csam%40agents.example.com/retry")
+                    .header(header::AUTHORIZATION, "Bearer admin")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+    }
+    assert_eq!(
+        *service.calls.lock().unwrap(),
+        vec!["retry 00000000-0000-0000-0000-00000000002a macro|sam@agents.example.com"]
     );
 }

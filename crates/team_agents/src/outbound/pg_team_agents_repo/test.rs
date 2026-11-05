@@ -5,7 +5,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::PgTeamAgentsRepo;
-use crate::domain::models::{NewAgentAccount, TeamAgentStatus};
+use crate::domain::models::{NewAgentAccount, PersonaSeed, TeamAgentStatus};
 use crate::domain::ports::TeamAgentRepository;
 
 const ADMIN: &str = "macro|admin@example.com";
@@ -48,6 +48,11 @@ async fn seed(pool: &PgPool) -> Uuid {
 
 fn account(team_id: Uuid) -> NewAgentAccount {
     NewAgentAccount {
+        persona_seed: PersonaSeed {
+            name: "Sam".to_string(),
+            job_description: "Help the team".to_string(),
+            personality: "Direct".to_string(),
+        },
         user_id: user(AGENT),
         email: "sam-1a2b3c@example.com".to_string(),
         team_id,
@@ -68,6 +73,10 @@ async fn a_created_agent_reads_back_and_tracks_its_computer(pool: PgPool) {
         .await
         .expect("account should be created");
 
+    assert_eq!(
+        repo.persona_seed(&user(AGENT)).await.unwrap(),
+        Some(account(team_id).persona_seed)
+    );
     let agent = repo
         .get(&user(AGENT))
         .await
@@ -135,4 +144,18 @@ async fn deleting_the_account_removes_every_row(pool: PgPool) {
             .expect("count macro users");
     assert_eq!((users, macro_users), (0, 0));
     assert_eq!(repo.get(&user(AGENT)).await.expect("get"), None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn legacy_agents_have_no_recovery_seed(pool: PgPool) {
+    let team_id = seed(&pool).await;
+    let repo = PgTeamAgentsRepo::new(pool.clone());
+    repo.create_account(&account(team_id)).await.unwrap();
+    sqlx::query("UPDATE team_agents SET persona_seed = NULL WHERE user_id = $1")
+        .bind(AGENT)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(repo.persona_seed(&user(AGENT)).await.unwrap(), None);
+    assert!(repo.get(&user(AGENT)).await.unwrap().is_some());
 }
