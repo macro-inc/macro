@@ -7421,6 +7421,7 @@ definitions:
         x-go-package: github.com/lxc/incus/v7/shared/api
 info:
     contact:
+        email: lxc-devel@lists.linuxcontainers.org
         name: Incus upstream
         url: https://github.com/lxc/incus
     description: |-

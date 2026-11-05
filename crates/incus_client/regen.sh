@@ -6,20 +6,30 @@ set -euo pipefail
 INCUS_VERSION="7.0.1"
 PROGENITOR_VERSION="0.15.1"
 
-crate_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -z "${IN_NIX_SHELL:-}" ]]; then
+  echo "Run inside the pinned dev shell: nix develop --command crates/incus_client/regen.sh $*" >&2
+  exit 1
+fi
+
+for tool in swagger2openapi cargo rustfmt python3 curl; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "Missing $tool; re-enter the pinned dev shell with nix develop." >&2
+    exit 1
+  fi
+done
+
+crate_dir="$(\cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 work_dir="$(mktemp -d "${TMPDIR:-/tmp}/incus-client-regen.XXXXXX")"
 trap 'rm -rf "$work_dir"' EXIT
 
 if [[ "${1:-}" == "--fetch" ]]; then
   curl -fsSL -o "$crate_dir/spec/rest-api.yaml" \
     "https://raw.githubusercontent.com/lxc/incus/v${INCUS_VERSION}/doc/rest-api.yaml"
-  # The committed copy drops the upstream contact email (the PII hook rejects it).
-  sed -i '/^    contact:$/,/^        url:/{/^        email: /d}' "$crate_dir/spec/rest-api.yaml"
 fi
 
 # --warnOnly tolerates operations Swagger 2 declares with two body parameters
 # (a JSON request or a raw upload); the patch keeps only the JSON one.
-npx -y swagger2openapi@7.0.8 --patch --warnOnly -o "$work_dir/converted.json" \
+swagger2openapi --patch --warnOnly -o "$work_dir/converted.json" \
   "$crate_dir/spec/rest-api.yaml"
 python3 "$crate_dir/spec/patch.py" "$work_dir/converted.json" "$crate_dir/spec/openapi.json"
 

@@ -55,6 +55,9 @@ export class Pool {
   private readonly deps: PoolDeps;
   private readonly tiers: Record<Tier, Semaphore>;
   private readonly speaking = new Semaphore(1);
+  private readonly admission = new Semaphore(1);
+  private reservedUsd = 0;
+  private accountingFailed = false;
   private lastCompletedAt: string | null = null;
   private readonly running = new Map<
     string,
@@ -108,12 +111,20 @@ export class Pool {
       releaseTier();
       this.running.delete(turn.id);
     };
+    const unlockAdmission = await this.admission.acquire();
+    let reservation = 0;
     let handle: RunHandle;
     let admitted: Turn;
     try {
+      if (this.accountingFailed)
+        throw new BudgetExceeded(
+          'budget accounting unavailable; refusing further spend'
+        );
       const budget = await this.deps.budget();
       const remaining =
-        budget.perDayUsd - (await this.deps.ledger.spentToday());
+        budget.perDayUsd -
+        (await this.deps.ledger.spentToday()) -
+        this.reservedUsd;
       if (remaining <= 0) {
         throw new BudgetExceeded(
           `daily budget of $${budget.perDayUsd} is spent`
@@ -130,9 +141,13 @@ export class Pool {
       const maxBudgetUsd = Math.min(cap, remaining, turn.maxBudgetUsd ?? cap);
       admitted = { ...turn, maxBudgetUsd };
       handle = this.deps.runner.start(admitted);
+      reservation = maxBudgetUsd;
+      this.reservedUsd += reservation;
     } catch (error) {
       release();
       throw error;
+    } finally {
+      unlockAdmission();
     }
     this.running.set(turn.id, {
       tier: turn.tier,
@@ -141,7 +156,18 @@ export class Pool {
     const done = handle.done.then(
       async (outcome) => {
         try {
-          const spent = await this.deps.ledger.record(outcome.costUsd);
+          const unlock = await this.admission.acquire();
+          let spent: number;
+          try {
+            spent = await this.deps.ledger.record(outcome.costUsd);
+            this.reservedUsd -= reservation;
+            reservation = 0;
+          } catch (error) {
+            this.accountingFailed = true;
+            throw error;
+          } finally {
+            unlock();
+          }
           this.deps.log({
             turn: turn.id,
             tier: turn.tier,
@@ -152,6 +178,8 @@ export class Pool {
           await this.deps.afterTurn?.(admitted, outcome);
           return outcome;
         } finally {
+          this.reservedUsd -= reservation;
+          reservation = 0;
           this.lastCompletedAt = new Date().toISOString();
           release();
         }
@@ -165,6 +193,8 @@ export class Pool {
             sessionId: null,
           });
         } finally {
+          this.reservedUsd -= reservation;
+          reservation = 0;
           this.lastCompletedAt = new Date().toISOString();
           release();
         }

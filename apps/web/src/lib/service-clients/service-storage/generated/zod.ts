@@ -28524,6 +28524,7 @@ export const approveHarnessPairingBody = zod
   })
   .describe('Request to approve a pairing and register the harness.');
 
+export const approveHarnessPairingResponseCapabilitiesPersonasDefault = {};
 export const approveHarnessPairingResponseCapabilitiesScreenDefault = false;
 
 export const approveHarnessPairingResponse = zod
@@ -28536,6 +28537,74 @@ export const approveHarnessPairingResponse = zod
       ),
     capabilities: zod
       .object({
+        personas: zod
+          .record(
+            zod.string(),
+            zod
+              .union([
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['healthy']),
+                  })
+                  .describe(
+                    'The brain is serving health and reports no problems.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe(
+                        'A bounded diagnostic, never an environment file or response body.'
+                      ),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['unhealthy']),
+                  })
+                  .describe(
+                    'The unit, its configuration or its health response has a problem.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe('Why the brain could not be found.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['missing']),
+                  })
+                  .describe('The unit or brain health listener is absent.'),
+              ])
+              .describe(
+                'A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live.'
+              )
+          )
+          .default(approveHarnessPairingResponseCapabilitiesPersonasDefault)
+          .describe(
+            "Latest brain health, keyed by the enrolled persona's OS username."
+          ),
         screen: zod
           .boolean()
           .optional()
@@ -28611,6 +28680,7 @@ export const claimHarnessPairingBody = zod
     "Request to claim an approved pairing's credential.\n\nThe daemon serializes this, so both derives are used."
   );
 
+export const claimHarnessPairingResponseHarnessCapabilitiesPersonasDefault = {};
 export const claimHarnessPairingResponseHarnessCapabilitiesScreenDefault = false;
 
 export const claimHarnessPairingResponse = zod
@@ -28625,6 +28695,76 @@ export const claimHarnessPairingResponse = zod
           ),
         capabilities: zod
           .object({
+            personas: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        checked_at: zod.iso
+                          .datetime({})
+                          .describe('Time of this observation.'),
+                        last_turn_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe(
+                            'Most recent completed turn, retained across unavailable probes.'
+                          ),
+                        status: zod.enum(['healthy']),
+                      })
+                      .describe(
+                        'The brain is serving health and reports no problems.'
+                      ),
+                    zod
+                      .object({
+                        checked_at: zod.iso
+                          .datetime({})
+                          .describe('Time of this observation.'),
+                        last_error: zod
+                          .string()
+                          .describe(
+                            'A bounded diagnostic, never an environment file or response body.'
+                          ),
+                        last_turn_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe(
+                            'Most recent completed turn, retained across unavailable probes.'
+                          ),
+                        status: zod.enum(['unhealthy']),
+                      })
+                      .describe(
+                        'The unit, its configuration or its health response has a problem.'
+                      ),
+                    zod
+                      .object({
+                        checked_at: zod.iso
+                          .datetime({})
+                          .describe('Time of this observation.'),
+                        last_error: zod
+                          .string()
+                          .describe('Why the brain could not be found.'),
+                        last_turn_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe(
+                            'Most recent completed turn, retained across unavailable probes.'
+                          ),
+                        status: zod.enum(['missing']),
+                      })
+                      .describe('The unit or brain health listener is absent.'),
+                  ])
+                  .describe(
+                    'A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live.'
+                  )
+              )
+              .default(
+                claimHarnessPairingResponseHarnessCapabilitiesPersonasDefault
+              )
+              .describe(
+                "Latest brain health, keyed by the enrolled persona's OS username."
+              ),
             screen: zod
               .boolean()
               .optional()
@@ -28692,6 +28832,7 @@ export const claimHarnessPairingResponse = zod
 /**
  * @summary Handler for `GET /harnesses`.
  */
+export const listHarnessesResponseCapabilitiesPersonasDefault = {};
 export const listHarnessesResponseCapabilitiesScreenDefault = false;
 
 export const listHarnessesResponseItem = zod
@@ -28704,6 +28845,74 @@ export const listHarnessesResponseItem = zod
       ),
     capabilities: zod
       .object({
+        personas: zod
+          .record(
+            zod.string(),
+            zod
+              .union([
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['healthy']),
+                  })
+                  .describe(
+                    'The brain is serving health and reports no problems.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe(
+                        'A bounded diagnostic, never an environment file or response body.'
+                      ),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['unhealthy']),
+                  })
+                  .describe(
+                    'The unit, its configuration or its health response has a problem.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe('Why the brain could not be found.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['missing']),
+                  })
+                  .describe('The unit or brain health listener is absent.'),
+              ])
+              .describe(
+                'A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live.'
+              )
+          )
+          .default(listHarnessesResponseCapabilitiesPersonasDefault)
+          .describe(
+            "Latest brain health, keyed by the enrolled persona's OS username."
+          ),
         screen: zod
           .boolean()
           .optional()
@@ -28763,6 +28972,7 @@ export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
 /**
  * @summary Handler for `GET /harnesses/me`.
  */
+export const getSelfHarnessResponseCapabilitiesPersonasDefault = {};
 export const getSelfHarnessResponseCapabilitiesScreenDefault = false;
 
 export const getSelfHarnessResponse = zod
@@ -28775,6 +28985,74 @@ export const getSelfHarnessResponse = zod
       ),
     capabilities: zod
       .object({
+        personas: zod
+          .record(
+            zod.string(),
+            zod
+              .union([
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['healthy']),
+                  })
+                  .describe(
+                    'The brain is serving health and reports no problems.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe(
+                        'A bounded diagnostic, never an environment file or response body.'
+                      ),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['unhealthy']),
+                  })
+                  .describe(
+                    'The unit, its configuration or its health response has a problem.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe('Why the brain could not be found.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['missing']),
+                  })
+                  .describe('The unit or brain health listener is absent.'),
+              ])
+              .describe(
+                'A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live.'
+              )
+          )
+          .default(getSelfHarnessResponseCapabilitiesPersonasDefault)
+          .describe(
+            "Latest brain health, keyed by the enrolled persona's OS username."
+          ),
         screen: zod
           .boolean()
           .optional()
@@ -28849,10 +29127,77 @@ export const listHarnessAgentsResponse = zod.array(
 replaces the previous report.
  * @summary Handler for `PUT /harnesses/me/capabilities`.
  */
+export const putSelfHarnessCapabilitiesBodyPersonasDefault = {};
 export const putSelfHarnessCapabilitiesBodyScreenDefault = false;
 
 export const putSelfHarnessCapabilitiesBody = zod
   .object({
+    personas: zod
+      .record(
+        zod.string(),
+        zod
+          .union([
+            zod
+              .object({
+                checked_at: zod.iso
+                  .datetime({})
+                  .describe('Time of this observation.'),
+                last_turn_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'Most recent completed turn, retained across unavailable probes.'
+                  ),
+                status: zod.enum(['healthy']),
+              })
+              .describe('The brain is serving health and reports no problems.'),
+            zod
+              .object({
+                checked_at: zod.iso
+                  .datetime({})
+                  .describe('Time of this observation.'),
+                last_error: zod
+                  .string()
+                  .describe(
+                    'A bounded diagnostic, never an environment file or response body.'
+                  ),
+                last_turn_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'Most recent completed turn, retained across unavailable probes.'
+                  ),
+                status: zod.enum(['unhealthy']),
+              })
+              .describe(
+                'The unit, its configuration or its health response has a problem.'
+              ),
+            zod
+              .object({
+                checked_at: zod.iso
+                  .datetime({})
+                  .describe('Time of this observation.'),
+                last_error: zod
+                  .string()
+                  .describe('Why the brain could not be found.'),
+                last_turn_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'Most recent completed turn, retained across unavailable probes.'
+                  ),
+                status: zod.enum(['missing']),
+              })
+              .describe('The unit or brain health listener is absent.'),
+          ])
+          .describe(
+            'A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live.'
+          )
+      )
+      .default(putSelfHarnessCapabilitiesBodyPersonasDefault)
+      .describe(
+        "Latest brain health, keyed by the enrolled persona's OS username."
+      ),
     screen: zod
       .boolean()
       .optional()
@@ -28915,6 +29260,7 @@ export const patchHarnessBody = zod
     'Request to change a registered harness. Omitted fields stay as they are.'
   );
 
+export const patchHarnessResponseCapabilitiesPersonasDefault = {};
 export const patchHarnessResponseCapabilitiesScreenDefault = false;
 
 export const patchHarnessResponse = zod
@@ -28927,6 +29273,74 @@ export const patchHarnessResponse = zod
       ),
     capabilities: zod
       .object({
+        personas: zod
+          .record(
+            zod.string(),
+            zod
+              .union([
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['healthy']),
+                  })
+                  .describe(
+                    'The brain is serving health and reports no problems.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe(
+                        'A bounded diagnostic, never an environment file or response body.'
+                      ),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['unhealthy']),
+                  })
+                  .describe(
+                    'The unit, its configuration or its health response has a problem.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe('Why the brain could not be found.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['missing']),
+                  })
+                  .describe('The unit or brain health listener is absent.'),
+              ])
+              .describe(
+                'A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live.'
+              )
+          )
+          .default(patchHarnessResponseCapabilitiesPersonasDefault)
+          .describe(
+            "Latest brain health, keyed by the enrolled persona's OS username."
+          ),
         screen: zod
           .boolean()
           .optional()

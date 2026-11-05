@@ -19,6 +19,7 @@ export const IGNORED = [
   'secrets',
   'secrets.*',
   '*.secret',
+  '*.brain-tmp',
   'node_modules/',
 ];
 export type Persona = {
@@ -36,8 +37,13 @@ export type Persona = {
 export class WorkspaceError extends Error {}
 export class Workspace {
   readonly root: string;
-  constructor(root: string) {
+  private readonly configurationRoot: string;
+  constructor(root: string, configurationRoot = root) {
     this.root = root;
+    this.configurationRoot = configurationRoot;
+  }
+  private readConfiguration(relative: string): Promise<string> {
+    return nodeFs.readFile(join(this.configurationRoot, relative), 'utf8');
   }
   path(...parts: string[]): string {
     return join(this.root, ...parts);
@@ -52,7 +58,7 @@ export class Workspace {
   /** Every persona file, parsed and validated. A broken file fails the turn that needs it. */
   async persona(): Promise<Persona> {
     const json = async (relative: string) => {
-      const text = await this.read(relative);
+      const text = await this.readConfiguration(relative);
       try {
         return JSON.parse(text) as unknown;
       } catch (error) {
@@ -81,12 +87,12 @@ export class Workspace {
       jev: parseJevConfig(await json('config/jev.json')),
       events: parseEventsConfig(await json('config/events.json')),
       budget: parseBudget(await json('config/budget.json')),
-      brainLock: (await this.read('brain.lock')).trim(),
+      brainLock: (await this.readConfiguration('brain.lock')).trim(),
     };
   }
-  /** Just config/jev.json, re-read for every message so the agent's edits apply at once. */
+  /** Jev policy from the supervisor's checked configuration snapshot. */
   async jev(): Promise<JevConfig> {
-    const text = await this.read('config/jev.json');
+    const text = await this.readConfiguration('config/jev.json');
     try {
       return parseJevConfig(JSON.parse(text));
     } catch (error) {
@@ -198,7 +204,13 @@ export class GitWriter {
     return this.serial(async () => {
       const file = this.workspace.path(relative);
       await nodeFs.mkdir(join(file, '..'), { recursive: true });
-      await nodeFs.writeFile(file, content);
+      const temporary = `${file}.${crypto.randomUUID()}.brain-tmp`;
+      try {
+        await nodeFs.writeFile(temporary, content, { flag: 'wx' });
+        await nodeFs.rename(temporary, file);
+      } finally {
+        await nodeFs.rm(temporary, { force: true });
+      }
     });
   }
   /** Delete a workspace file; deleting a missing file is a no-op. */

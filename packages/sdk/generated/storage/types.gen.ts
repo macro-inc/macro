@@ -9521,6 +9521,12 @@ export type HarnessAgent = {
  */
 export type HarnessCapabilities = {
     /**
+     * Latest brain health, keyed by the enrolled persona's OS username.
+     */
+    personas?: {
+        [key: string]: PersonaHealth;
+    };
+    /**
      * A display Macro can stream (Xvnc on `127.0.0.1:5900`).
      */
     screen?: boolean;
@@ -11691,6 +11697,50 @@ export type PendingClaimResponse = {
      * Always `pending`.
      */
     status: string;
+};
+
+/**
+ * A brain observation. Consumers combine harness connection presence with
+ * `checked_at` freshness when deciding whether the observation is still live.
+ */
+export type PersonaHealth = {
+    /**
+     * Time of this observation.
+     */
+    checked_at: string;
+    /**
+     * Most recent completed turn, retained across unavailable probes.
+     */
+    last_turn_at?: string | null;
+    status: 'healthy';
+} | {
+    /**
+     * Time of this observation.
+     */
+    checked_at: string;
+    /**
+     * A bounded diagnostic, never an environment file or response body.
+     */
+    last_error: string;
+    /**
+     * Most recent completed turn, retained across unavailable probes.
+     */
+    last_turn_at?: string | null;
+    status: 'unhealthy';
+} | {
+    /**
+     * Time of this observation.
+     */
+    checked_at: string;
+    /**
+     * Why the brain could not be found.
+     */
+    last_error: string;
+    /**
+     * Most recent completed turn, retained across unavailable probes.
+     */
+    last_turn_at?: string | null;
+    status: 'missing';
 };
 
 export type PinRequest = {

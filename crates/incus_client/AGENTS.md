@@ -29,11 +29,12 @@ and operation waiting.
 ## Recipes
 
 - Add an endpoint: add it to `KEPT_OPERATIONS` in `spec/patch.py` →
-  `TMPDIR=/home/wolf/tmp ./regen.sh` (needs `npx`, `python3`, network) → a
+  `nix develop --command crates/incus_client/regen.sh` from the repo root → a
   method in `src/client.rs`.
 - Bump Incus: set `INCUS_VERSION` in `regen.sh` to
   `nix eval --raw --inputs-from . nixpkgs#incus-lts.version`, then
-  `./regen.sh --fetch`.
+  `nix develop --command crates/incus_client/regen.sh --fetch` from the repo root.
+  The dev shell pins swagger2openapi 7.0.8 and the repository Rust toolchain.
 
 ## Checks
 
@@ -45,6 +46,8 @@ and operation waiting.
 
 - Never edit `src/generated.rs` or `spec/openapi.json` by hand; change
   `spec/patch.py` for spec changes or `regen.sh` for generator formatting.
+- Keep `spec/rest-api.yaml` verbatim from the pinned upstream release; its
+  contact has a path-scoped exception in `tooling/pii/exceptions`.
 - Emit generated docs as line comments in `regen.sh`; indented multiline block
   comments turn prose into Rust doctests.
 - Incus's `?recursion=1` variants are separate path strings upstream; the patch

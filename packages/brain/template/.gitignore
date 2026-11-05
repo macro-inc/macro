@@ -6,3 +6,4 @@ secrets
 secrets.*
 *.secret
 node_modules/
+*.brain-tmp

@@ -9,7 +9,14 @@ import { relayTelemetry } from './telemetry-relay.ts';
 import { type Git, gitCli } from './workspace.ts';
 
 const PACKAGE = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const WIRING = ['brain.ts', 'brain', 'brain.lock'];
+const WIRING = [
+  'brain.ts',
+  ':(glob)brain/**/*.ts',
+  'brain.lock',
+  'config/jev.json',
+  'config/events.json',
+  'config/budget.json',
+];
 const ENV = [
   'PATH',
   'HOME',
@@ -120,7 +127,10 @@ async function runCheck(workspace: string, args: string[]): Promise<void> {
 }
 
 /** Trusted typecheck and fake boot run independently of the workspace's own tests. */
-export async function checkWorkspace(workspace: string): Promise<void> {
+export async function checkWorkspace(
+  workspace: string,
+  regressionRoot = workspace
+): Promise<void> {
   await withSpan('brain.wiring.check', {}, async () => {
     const installed = await installation(workspace);
     const config = await configuration(workspace, installed);
@@ -143,6 +153,7 @@ export async function checkWorkspace(workspace: string): Promise<void> {
       'check',
       join(workspace, 'brain.ts'),
       workspace,
+      regressionRoot,
     ]);
   });
 }
@@ -327,18 +338,28 @@ export class Supervisor {
     this.rejected.add(commit);
     if (!this.good)
       throw new Error(`initial brain ${reason}; no last-known-good commit`);
-    // Rejection records are durable before the replacement process starts.
-    await this.running?.stop();
-    this.running = undefined;
+    // A failed check or preparation never interrupts the healthy generation.
+    const keepRunning =
+      commit !== this.active &&
+      this.active === this.good &&
+      this.running &&
+      !this.running.exited();
+    const replacement = keepRunning
+      ? undefined
+      : await this.deps.launch(await this.deps.snapshot(this.good));
+    if (replacement) await this.running?.stop();
     try {
       await this.deps.reject(commit, this.good, reason);
     } catch (error) {
       console.error(JSON.stringify({ rewiring_revert_failed: String(error) }));
     }
-    this.active = this.good;
-    this.running = await this.deps.launch(await this.deps.snapshot(this.good));
-    await this.running.activate();
-    this.since = this.deps.now();
+    if (replacement) {
+      this.running = replacement;
+      this.active = this.good;
+      await replacement.activate();
+      this.since = this.deps.now();
+      this.healthySince = undefined;
+    }
   }
   async stop(): Promise<void> {
     await this.running?.stop();
@@ -399,7 +420,7 @@ export async function workspaceSupervisor(
         }
         return path;
       },
-      check: checkWorkspace,
+      check: (snapshot) => checkWorkspace(snapshot, workspace),
       launch: (snapshot) => start(snapshot, workspace),
       reject: async (commit, lastGood, reason) => {
         await withSpan(

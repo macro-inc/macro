@@ -18,6 +18,10 @@ before changing ingestion or delivery behavior.
 - `src/inbound/worker.rs`: the SQS delivery worker.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.
 
+Live SSE streams accept `events: ["*"]` for all event names while retaining
+per-event entity/workspace authorization and optional `ids` restrictions.
+Persisted webhook matching remains exact-name only.
+
 ## Scope
 
 - Owns: webhook CRUD/validation, event ingestion matching, and delivery.

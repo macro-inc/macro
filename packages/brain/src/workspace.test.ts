@@ -32,10 +32,9 @@ async function clonedWorkspace(): Promise<{
 test('the persona template parses as a workspace', async () => {
   const persona = await new Workspace(TEMPLATE).persona();
   assert.deepEqual(persona.brainLock, '0.2.0');
-  assert.deepEqual(persona.jev.wakeIf, [
-    ['addressed_to_me'],
-    ['about_my_job', 'needs_response'],
-  ]);
+  assert.equal(persona.jev.mode, 'all');
+  assert.deepEqual(persona.jev.questions, {});
+  assert.deepEqual(persona.events.events, ['*']);
   assert.deepEqual(persona.events.concurrency, {
     respond: 1,
     heartbeat: 1,

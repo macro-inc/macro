@@ -1,5 +1,6 @@
 // Node child entrypoint. The supervisor supplies an exact installed library and cleared env.
 
+import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { dryRun } from './dry-run.ts';
 import type { Composition } from './mod.ts';
@@ -8,7 +9,7 @@ import { stdinText } from './subprocess.ts';
 import { shutdownTelemetry } from './telemetry.ts';
 import { stdioExporter } from './telemetry-relay.ts';
 
-const [mode, entry, workspace] = process.argv.slice(2);
+const [mode, entry, workspace, regressionRoot] = process.argv.slice(2);
 if (!entry || !workspace)
   throw new Error('host needs mode, entry and workspace');
 const credentials: Record<string, string> =
@@ -28,14 +29,20 @@ const module: {
 if (typeof module.default !== 'function')
   throw new Error('brain.ts must default-export a Composition');
 if (mode === 'check') {
-  await dryRun(module.default, workspace);
+  await dryRun(
+    module.default,
+    workspace,
+    [],
+    true,
+    regressionRoot ?? workspace
+  );
 } else {
   const stop = new AbortController();
   for (const signal of ['SIGINT', 'SIGTERM'] as const)
     process.on(signal, () => stop.abort());
   try {
     if (!deps) throw new Error('missing runtime adapters');
-    const brain = await module.default(deps);
+    const brain = await module.default({ ...deps, wiringRoot: dirname(entry) });
     await brain.prepare(stop.signal);
     if (process.send) {
       const activated = Promise.withResolvers<void>();

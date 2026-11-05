@@ -25,6 +25,8 @@ export type Health = {
     startedAt: string;
   }[];
   spentTodayUsd: number;
+  filterSize?: number;
+  wakeRate?: number;
   problems: string[];
 };
 export type Conversation = {
@@ -34,6 +36,12 @@ export type Conversation = {
 /** What the control routes do; the brain implements it. */
 export interface Control {
   health(): Promise<Health>;
+  react?(
+    turn: string | null,
+    channel: string,
+    message: string,
+    emoji: string
+  ): Promise<void>;
   post(turn: string | null, channel: string, text: string): Promise<PostResult>;
   reply(
     turn: string | null,
@@ -157,6 +165,19 @@ export function controlHandler(
               )
             )
           )
+          .with('POST /talk/react', async () => {
+            if (!control.react)
+              throw new RequestError(
+                'react is not supported by this composition'
+              );
+            await control.react(
+              turn,
+              text(body.channel, 'channel'),
+              text(body.message, 'message'),
+              text(body.emoji, 'emoji')
+            );
+            return json({ ok: true });
+          })
           .with('POST /handoff', async () => {
             const conversation = {
               channel: text(body.channel, 'channel'),

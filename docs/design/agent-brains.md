@@ -79,7 +79,7 @@ a docker volume in run_local).
 workspace/
   OPERATING.md        charter, voice, who may change what
   brain.ts            agent-owned composition
-  brain/              agent-owned handlers, modules and tests
+  brain/              agent-owned handlers, triage.ts, modules, tests and fixtures/
   brain.lock          exact installed library version
   docs/brain-api.md    typed library reference
   prompts/            respond.md heartbeat.md work.md
@@ -100,7 +100,7 @@ A versioned Node 24 TypeScript library with a stable `src/mod.ts` public API, us
 `@macro-inc/sdk` and the Claude Agent SDK. The agent owns its composition in
 `brain.ts`, imports `@macro-inc/brain` at the exact version in `brain.lock`, and
 can add handlers, subscriptions, relevance, tiers, schedules and tools in
-`brain/*.ts`. The template composes the existing default wiring unchanged.
+`brain/*.ts`. The template starts permissively: every accessible event, Jev all mode and cheap triage per conversation, then learns to narrow.
 
 The trusted supervisor runs the committed wiring snapshot from `main` in a
 separate Node process, using native TypeScript stripping. The image vendors npm
@@ -111,9 +111,10 @@ Persona OS identity and systemd hardening provide the outer process boundary.
 
 `brain check` runs trusted `tsc --noEmit`, workspace `node:test` files and dry-boots a fake direct message
 through a completed turn. Agents edit on a work-tier branch/worktree, run checks,
-and merge to main. The supervisor repeats checks before activation, stops intake,
-drains in-flight turns with their control server still available, and replaces
-the process. Ordinary memory/prompt commits do not reload wiring. A candidate must
+and merge to main. The supervisor repeats checks, connects replacement intake
+and buffers its events, then stops old intake and drains in-flight turns with
+their control server still available before activating replacement processing.
+Ordinary memory, fixture, style and prompt commits do not reload wiring. A candidate must
 remain healthy for `BRAIN_HEALTH_MINUTES` (default five) before last-known-good is
 persisted. Check, boot or health failure restores the last-known-good composition,
 restores only wiring paths in git when safe, records the reason in memory, and
@@ -171,3 +172,26 @@ replacement queue processing. Receipt IDs persist across the handoff to avoid
 duplicate delivery. Every activation independently verifies a fake DM answer,
 the health shape, and draining an admitted turn on abort; workspace tests cannot
 replace these conformance checks.
+
+New agents subscribe to the live stream's additive `events: ["*"]` filter;
+per-event entity/workspace authorization is unchanged, and persisted webhook
+matching remains exact. Jev starts as `{ "mode": "all" }`, without questions or
+threshold. Creator messages, DMs and mentions always wake; ordinary event
+batches use a cheap tool-free triage tier before a full turn, sharing the daily
+cap through concurrency-safe reservations.
+
+The local decisions log joins filter decisions with wakes, posts, reactions,
+ignored outcomes and human corrections. Reaction feedback is polled on the
+agent's own posts because the message broker has no reaction fact. Telemetry
+contains only categories/counts/rates; `/health` adds `filterSize` and `wakeRate`
+without changing existing supervisor fields. The template's daily tune
+`onSchedule` and every 100 wakes create a normal work-tier maintenance task on a
+branch/worktree. It reviews evidence, narrows subscriptions/deterministic triage/
+Jev step by step, runs `brain check`, then commits and merges to main.
+
+The growing `brain/fixtures/` set protects creator messages, DMs, mentions,
+successful actions and reported misses. Every activation replays the union of
+tracked fixtures and an independent local regression registry, so deleting a
+fixture in a proposal cannot weaken checks. Filtering config and composition
+are frozen to the checked snapshot; both use the same activation/revert path.
+Style guides, prompts and persona text stay fresh on every turn.

@@ -345,3 +345,12 @@ transport failures that survived 20 receives.
   in `signing_secret`, matching the existing bot secret storage approach.
 - Custom headers are stored as JSON in the `headers` column; persisted delivery
   snapshots and response headers redact their values.
+
+## All-event streams
+
+Live SSE stream filters accept `[{"events":["*"]}]` to select every event type,
+including future types. Optional `ids` still restrict entities. This wildcard
+only broadens stream event-name matching: every delivered event still passes
+the current entity-access or workspace-membership check for the authenticated
+subscriber. It grants no additional visibility. Persisted webhook matching is
+unchanged; use explicit event names for persisted subscriptions.

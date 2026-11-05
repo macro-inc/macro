@@ -34,6 +34,9 @@ export type Turn = {
   maxBudgetUsd: number;
   /** TypeScript handlers exposed as a per-turn in-process MCP server. */
   tools?: BrainTool[];
+  /** Claude built-in tools; [] disables them for a classification-only turn. */
+  builtinTools?: Options['tools'];
+  strictMcpConfig?: boolean;
   /** Environment for the agent's tools (talk commands reach the brain through it). */
   env: Record<string, string>;
 };
@@ -91,9 +94,9 @@ const userMessage = (text: string): SDKUserMessage => ({
   origin: { kind: 'human' },
 });
 export class AgentSdkRunner implements Runner {
-  private readonly options: AgentSdkRunnerOptions;
+  readonly #options: AgentSdkRunnerOptions;
   constructor(options: AgentSdkRunnerOptions) {
-    this.options = options;
+    this.#options = options;
   }
   start(turn: Turn): RunHandle {
     const span = startSpan('brain.turn', {
@@ -121,10 +124,11 @@ export class AgentSdkRunner implements Runner {
     let messages: AsyncIterable<SDKMessage>;
     try {
       messages = context.with(parent, () =>
-        this.options.query({
+        this.#options.query({
           prompt: input,
           options: {
-            tools: this.options.tools,
+            tools: turn.builtinTools ?? this.#options.tools,
+            strictMcpConfig: turn.strictMcpConfig,
             mcpServers: turn.tools?.length
               ? {
                   brain: createSdkMcpServer({
@@ -137,7 +141,7 @@ export class AgentSdkRunner implements Runner {
             model: turn.model,
             maxBudgetUsd: turn.maxBudgetUsd,
             abortController,
-            pathToClaudeCodeExecutable: this.options.claudeExecutable,
+            pathToClaudeCodeExecutable: this.#options.claudeExecutable,
             permissionMode: 'bypassPermissions',
             allowDangerouslySkipPermissions: true,
             settingSources: ['project'],
@@ -147,11 +151,11 @@ export class AgentSdkRunner implements Runner {
               append: turn.system,
             },
             env: {
-              ...this.options.baseEnv,
+              ...this.#options.baseEnv,
               ...turn.env,
-              ANTHROPIC_BASE_URL: this.options.anthropicBaseUrl,
-              ANTHROPIC_AUTH_TOKEN: this.options.anthropicAuthToken,
-              CLAUDE_CONFIG_DIR: this.options.claudeConfigDir,
+              ANTHROPIC_BASE_URL: this.#options.anthropicBaseUrl,
+              ANTHROPIC_AUTH_TOKEN: this.#options.anthropicAuthToken,
+              CLAUDE_CONFIG_DIR: this.#options.claudeConfigDir,
               ...(headers.traceparent
                 ? {
                     ANTHROPIC_CUSTOM_HEADERS: `traceparent: ${headers.traceparent}`,

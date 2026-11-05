@@ -36094,6 +36094,17 @@
         "type": "object",
         "description": "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain.",
         "properties": {
+          "personas": {
+            "type": "object",
+            "description": "Latest brain health, keyed by the enrolled persona's OS username.",
+            "default": {},
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PersonaHealth"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
           "screen": {
             "type": "boolean",
             "description": "A display Macro can stream (Xvnc on `127.0.0.1:5900`).",
@@ -39733,6 +39744,82 @@
             "description": "Always `pending`."
           }
         }
+      },
+      "PersonaHealth": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The brain is serving health and reports no problems.",
+            "required": ["checked_at", "status"],
+            "properties": {
+              "checked_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Time of this observation."
+              },
+              "last_turn_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "Most recent completed turn, retained across unavailable probes."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["healthy"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The unit, its configuration or its health response has a problem.",
+            "required": ["checked_at", "last_error", "status"],
+            "properties": {
+              "checked_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Time of this observation."
+              },
+              "last_error": {
+                "type": "string",
+                "description": "A bounded diagnostic, never an environment file or response body."
+              },
+              "last_turn_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "Most recent completed turn, retained across unavailable probes."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["unhealthy"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The unit or brain health listener is absent.",
+            "required": ["checked_at", "last_error", "status"],
+            "properties": {
+              "checked_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Time of this observation."
+              },
+              "last_error": {
+                "type": "string",
+                "description": "Why the brain could not be found."
+              },
+              "last_turn_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "Most recent completed turn, retained across unavailable probes."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["missing"]
+              }
+            }
+          }
+        ],
+        "description": "A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live."
       },
       "PinRequest": {
         "type": "object",

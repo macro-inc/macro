@@ -7,6 +7,7 @@ import { stdinText } from './subprocess.ts';
 const USAGE = `usage: brain <command>
   run                                      run the brain (env: MACRO_API_KEY, MACRO_GATEWAY, BRAIN_WORKSPACE,
                                            BRAIN_HEALTH_PORT, ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN)
+  react <channel> <message> <emoji>          react to a message
   check                                    typecheck, tests, fake-event boot of this workspace
   health                                   print the running brain's health; exit 1 unless ok
 inside a turn:
@@ -94,6 +95,15 @@ async function command(args: string[]): Promise<number> {
           channel: required(rest[0], 'channel'),
           root: required(rest[1], 'root'),
           text: await textArgument(rest[2]),
+        })
+      )
+    )
+    .with('react', async () =>
+      print(
+        await brain('POST', '/talk/react', {
+          channel: required(rest[0], 'channel'),
+          message: required(rest[1], 'message'),
+          emoji: required(rest[2], 'emoji'),
         })
       )
     )

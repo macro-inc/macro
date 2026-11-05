@@ -24,12 +24,14 @@ export { GitWriter, gitCli, Workspace } from './workspace.ts';
 
 import type { BrainDeps } from './brain.ts';
 import type { Health } from './control.ts';
+import type { MustWakeFixture } from './learning.ts';
 import type { PostResult } from './wiring.ts';
 /** Abort means stop intake, finish in-flight turns and release resources. */
 export interface BrainRuntime {
   /** Connect and buffer intake without mutating workspace queues; resolve when connected. */
   prepare(signal: AbortSignal): Promise<void>;
   health(): Promise<Health>;
+  checkFixture(fixture: MustWakeFixture): Promise<boolean>;
   post(turn: string | null, channel: string, text: string): Promise<PostResult>;
   run(signal: AbortSignal): Promise<void>;
 }
@@ -39,6 +41,8 @@ export type Composition = (
 ) => BrainRuntime | Promise<BrainRuntime>;
 export { tool } from '@anthropic-ai/claude-agent-sdk';
 export { z } from 'zod';
+export type { Candidate, Decision } from './jev.ts';
+export type { LearningConfig, MustWakeFixture } from './learning.ts';
 export type { BrainTool, TurnRequest } from './runner.ts';
 export type {
   BrainCall,

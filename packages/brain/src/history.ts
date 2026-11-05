@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { laneKey, readJsonl } from './lanes.ts';
 /** One message as the brain records, judges, and shows it to turns. */
 export type Entry = {
+  eventType?: string;
   id: string;
   channelId: string;
   channel: string;

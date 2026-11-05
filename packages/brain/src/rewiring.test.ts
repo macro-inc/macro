@@ -202,7 +202,7 @@ const compose: Composition = (deps) => {
     return { events: (async function* () {})(), inject() {}, abort() { throw new Error('turn was aborted'); },
       done: fetch(deps.config.gateway + '/hold').then(() => ({ status: 'success' as const, result: 'finished', costUsd: 0, sessionId: null })) };
   } } });
-  return { prepare: (signal) => brain.prepare(signal), health: () => brain.health(), post: (turn, channel, text) => brain.post(turn, channel, text), async run(signal) {
+  return { prepare: (signal) => brain.prepare(signal), health: () => brain.health(), checkFixture: (fixture) => brain.checkFixture(fixture), post: (turn, channel, text) => brain.post(turn, channel, text), async run(signal) {
     signal.addEventListener('abort', () => { void fetch(deps.config.gateway + '/draining'); }, { once: true });
     await brain.run(signal);
   } };
