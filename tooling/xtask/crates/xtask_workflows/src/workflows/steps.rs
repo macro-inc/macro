@@ -252,9 +252,21 @@ pub fn setup_dev_shell_named(name: &str) -> Step<Use> {
 /// `continue-on-error` because the volume is a pure optimization — a failure
 /// just means cold Cargo/Nix state, never a wrong build.
 pub fn mount_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume")
-        .add_with(("cache", "rust"))
-        .add_with(("path", xtask_paths::runtime_path!("/nix").as_str()))
+    nscloud_cache_action("Mount Namespace cache volume").add_with((
+        "path",
+        "/nix\n./target\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n/home/runner/.cargo/.global-cache",
+    ))
+}
+
+/// Checkout from the runner's git mirror on its cache volume.
+pub fn checkout_from_mirror() -> Step<Use> {
+    Step::new("Checkout")
+        .uses(
+            "namespacelabs",
+            "nscloud-checkout-action",
+            "66f2dc6f6c42a8ac6c4e53473c4840006822831e",
+        ) // v9.0.1
+        .add_with(("persist-credentials", false))
 }
 
 /// Mount only `path` from the profile's cache volume, without a framework

@@ -60,7 +60,7 @@ pub const NEXTEST_TEST_THREADS: u32 = 32;
 /// Cargo/Nix volume global across all branches — see
 /// [`crate::workflows::runners::Runner::with_cache_tag`]. The legacy tag name is
 /// retained so the existing warm volume is not invalidated.
-pub const CI_CACHE_TAG: &str = "sccache-ci";
+pub const CI_CACHE_TAG: &str = "ci-setup-exp";
 
 /// Namespace remote sccache shared by the cloud-storage compile/test jobs and
 /// the workspace dependency checks.

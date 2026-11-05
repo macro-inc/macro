@@ -24,15 +24,19 @@ name: cargo workspace dependency check
     - '.github/workspace-dep-closures.json'
 jobs:
   dependency-check:
-    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-setup-exp
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: rust
-        path: /nix
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -80,15 +84,19 @@ jobs:
       if: always()
       uses: './.github/actions/teardown-nix'
   hakari-and-dep-closures:
-    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-setup-exp
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: rust
-        path: /nix
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'

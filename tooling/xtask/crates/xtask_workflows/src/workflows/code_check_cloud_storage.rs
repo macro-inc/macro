@@ -79,7 +79,7 @@ fn path_check() -> Job {
         )
         // PR merge commits need both parents for `git merge-base`; fetching
         // the entire repo (every branch) is not required.
-        .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
+        .add_step(steps::checkout_from_mirror().add_with(("fetch-depth", 2)))
         .add_step(steps::setup_rust_light())
         .add_step(paths_filter())
         .add_step(
@@ -100,7 +100,7 @@ fn check() -> Job {
     steps::gated_job()
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
-        .add_step(steps::checkout(false, false))
+        .add_step(steps::checkout_from_mirror())
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
@@ -187,7 +187,7 @@ fn test() -> Job {
         .add_env(("SCCACHE_IDLE_TIMEOUT", "0"))
         .add_service("postgres", postgres_service())
         .add_service("redis", redis_service())
-        .add_step(steps::checkout(false, false))
+        .add_step(steps::checkout_from_mirror())
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
@@ -379,8 +379,8 @@ fn postgres_service() -> Container {
         )
         .ports(vec![Port::Name("5432:5432".to_string())])
         .options(
-            "--health-cmd pg_isready --health-interval 10s --health-timeout 5s \
-             --health-retries 5 --shm-size 1g",
+            "--health-cmd pg_isready --health-interval 1s --health-timeout 5s \
+             --health-retries 30 --shm-size 1g",
         )
 }
 
@@ -390,8 +390,8 @@ fn redis_service() -> Container {
         .image("redis:7")
         .ports(vec![Port::Name("6379:6379".to_string())])
         .options(
-            "--health-cmd \"redis-cli ping\" --health-interval 10s \
-             --health-timeout 5s --health-retries 5",
+            "--health-cmd \"redis-cli ping\" --health-interval 1s \
+             --health-timeout 5s --health-retries 30",
         )
 }
 
