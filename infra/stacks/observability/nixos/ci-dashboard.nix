@@ -1,20 +1,234 @@
-{ pkgs, ... }:
+{ lib, pkgs, ... }:
 let
   tempo = {
     type = "tempo";
     uid = "tempo";
   };
-  selector = ''resource.service.name="github-actions" && resource.deployment.environment="ci"'';
+  loki = {
+    type = "loki";
+    uid = "loki";
+  };
+  # Shared with scripts/ci-report.ts, so the daily report and these panels agree.
+  report = builtins.fromJSON (builtins.readFile ./ci-report.json);
+  # Longest names first, as the script does, so no name replaces part of another.
+  filterNames = lib.sort (a: b: lib.stringLength a > lib.stringLength b) (
+    builtins.attrNames report.filters
+  );
+  expand =
+    range:
+    builtins.replaceStrings ([ "$RANGE" ] ++ map (name: "$" + name) filterNames) (
+      [ range ] ++ map (name: report.filters.${name}) filterNames
+    );
+  table =
+    id: lib.findFirst (entry: entry.id == id) (throw "ci-report.json has no table ${id}") report.tables;
+  refId = index: builtins.elemAt (lib.stringToCharacters "ABCDEFGHIJ") index;
+  grid = x: y: w: h: {
+    inherit
+      x
+      y
+      w
+      h
+      ;
+  };
+  unitOverride = name: unit: {
+    matcher = {
+      id = "byName";
+      options = name;
+    };
+    properties = [
+      {
+        id = "unit";
+        value = unit;
+      }
+    ];
+  };
+  # Green under three minutes, red from five: the CI target.
+  wallThresholds = {
+    mode = "absolute";
+    steps = [
+      {
+        color = "green";
+        value = null;
+      }
+      {
+        color = "orange";
+        value = 180;
+      }
+      {
+        color = "red";
+        value = 300;
+      }
+    ];
+  };
+  # One instant query per column over the dashboard's range, merged on the labels.
+  instantTargets =
+    entry:
+    lib.imap0 (index: column: {
+      refId = refId index;
+      datasource = loki;
+      expr = expand "$__range" column.expr;
+      queryType = "instant";
+      legendFormat = column.name;
+    }) entry.columns;
+
+  lokiTable =
+    id: tableId: gridPos:
+    let
+      entry = table tableId;
+    in
+    {
+      inherit id gridPos;
+      inherit (entry) title description;
+      type = "table";
+      datasource = loki;
+      targets = instantTargets entry;
+      transformations = [
+        {
+          id = "merge";
+          options = { };
+        }
+        {
+          id = "organize";
+          options = {
+            excludeByName.Time = true;
+            renameByName = lib.listToAttrs (
+              lib.imap0 (index: column: lib.nameValuePair "Value #${refId index}" column.name) entry.columns
+            );
+            indexByName = lib.listToAttrs (lib.imap0 (index: label: lib.nameValuePair label index) entry.by);
+          };
+        }
+      ]
+      ++ lib.optional (entry ? sort) {
+        id = "sortBy";
+        options.sort = [
+          {
+            field = entry.sort;
+            desc = true;
+          }
+        ];
+      }
+      ++ lib.optional (entry ? limit) {
+        id = "limit";
+        options.limitField = entry.limit;
+      };
+      fieldConfig = {
+        defaults = { };
+        overrides = map (column: unitOverride column.name column.unit) entry.columns;
+      };
+      options = {
+        showHeader = true;
+        cellHeight = "sm";
+      };
+    };
+
+  lokiStat =
+    id: tableId: gridPos:
+    let
+      entry = table tableId;
+    in
+    {
+      inherit id gridPos;
+      inherit (entry) title description;
+      type = "stat";
+      datasource = loki;
+      targets = instantTargets entry;
+      fieldConfig = {
+        defaults = {
+          color = {
+            mode = "fixed";
+            fixedColor = "text";
+          };
+        };
+        overrides = map (
+          column:
+          let
+            override = unitOverride column.name column.unit;
+          in
+          override
+          // {
+            properties =
+              override.properties
+              ++ lib.optionals (column.unit == "s") [
+                {
+                  id = "thresholds";
+                  value = wallThresholds;
+                }
+                {
+                  id = "color";
+                  value.mode = "thresholds";
+                }
+              ];
+          }
+        ) entry.columns;
+      };
+      options = {
+        reduceOptions = {
+          calcs = [ "lastNotNull" ];
+          fields = "";
+          values = false;
+        };
+        colorMode = "value";
+        graphMode = "none";
+        textMode = "value_and_name";
+        justifyMode = "center";
+        orientation = "vertical";
+      };
+    };
+
+  lokiSeries =
+    id: gridPos: title: description: unit: interval: targets: extra:
+    lib.recursiveUpdate {
+      inherit
+        id
+        gridPos
+        title
+        description
+        interval
+        ;
+      type = "timeseries";
+      datasource = loki;
+      maxDataPoints = 200;
+      targets = lib.imap0 (
+        index: target:
+        target
+        // {
+          refId = refId index;
+          datasource = loki;
+          queryType = "range";
+        }
+      ) targets;
+      fieldConfig.defaults = {
+        inherit unit;
+        custom = {
+          spanNulls = true;
+          showPoints = "never";
+        };
+      };
+      options.legend = {
+        displayMode = "list";
+        placement = "bottom";
+      };
+    } extra;
+
+  wallTarget = quantile: by: legendFormat: {
+    inherit legendFormat;
+    expr = expand "1d" "quantile_over_time(${quantile}, $PUSH | unwrap wall_seconds | __error__=\"\" [$RANGE]) by (${by})";
+  };
+
+  row = id: y: title: {
+    inherit id title;
+    type = "row";
+    collapsed = false;
+    gridPos = grid 0 y 24 1;
+    panels = [ ];
+  };
+
+  tracesTop = 47;
   panel = id: title: description: filter: fields: {
     inherit id title description;
     type = "table";
     datasource = tempo;
-    gridPos = {
-      x = 0;
-      y = (id - 1) * 10;
-      w = 24;
-      h = 10;
-    };
+    gridPos = grid 0 (tracesTop + (id - 1) * 10) 24 10;
     targets = [
       {
         refId = "A";
@@ -52,24 +266,90 @@ let
     ];
     options.showHeader = true;
   };
+  selector = ''resource.service.name="github-actions" && resource.deployment.environment="ci"'';
+
   dashboard = {
     uid = "macro-ci";
     title = "Macro CI";
-    description = "GitHub Actions workflow, job and step traces exported after completion. Select a trace to open its execution waterfall. Tables are bounded search results, not complete counts or percentile summaries. Narrow the time range when there are many runs.";
+    description = "Where CI time goes. The top section reads the exporter's push, job and step events in Loki, kept 30 days, over the selected range; set it to a day or more for percentiles. The bottom section searches the run traces in Tempo, kept 7 days: open a trace for its execution waterfall. Trace tables are bounded search results, not complete counts.";
     schemaVersion = 39;
-    version = 2;
+    version = 3;
     editable = false;
     tags = [
       "macro"
       "ci"
     ];
     timezone = "browser";
-    refresh = "1m";
+    refresh = "5m";
     time = {
       from = "now-24h";
       to = "now";
     };
     panels = [
+      (row 100 0 "Wall time and where it goes, from Loki events")
+      (lokiStat 5 "summary" (grid 0 1 24 4))
+      (lokiTable 6 "wall" (grid 0 5 12 8))
+      (lokiSeries 7 (grid 12 5 12 8) "Real PR wall time, rolling 24 h"
+        "Each point covers the 24 hours before it. Red line: the 5 minute target."
+        "s"
+        "15m"
+        [
+          (wallTarget "0.5" "" "p50")
+          (wallTarget "0.9" "" "p90")
+        ]
+        {
+          fieldConfig.defaults = {
+            thresholds = {
+              mode = "absolute";
+              steps = [
+                {
+                  color = "transparent";
+                  value = null;
+                }
+                {
+                  color = "red";
+                  value = 300;
+                }
+              ];
+            };
+            custom.thresholdsStyle.mode = "line";
+          };
+        }
+      )
+      (lokiSeries 8 (grid 0 13 12 8) "p90 wall time by PR type, rolling 24 h"
+        "Real PR pushes only; a type with few pushes moves in steps."
+        "s"
+        "15m"
+        [ (wallTarget "0.9" "pr_type" "{{pr_type}}") ]
+        { }
+      )
+      (lokiTable 9 "last" (grid 12 13 12 8))
+      (lokiTable 10 "jobs" (grid 0 21 12 10))
+      (lokiTable 11 "steps" (grid 12 21 12 10))
+      (lokiTable 12 "queue_runner" (grid 0 31 8 8))
+      (lokiTable 13 "queue_job" (grid 8 31 8 8))
+      (lokiTable 14 "volumes" (grid 16 31 8 8))
+      (lokiSeries 15 (grid 0 39 12 8) "CI hours by trigger"
+        "Job run time summed per interval, queue excluded. Compare days to measure a change such as running CI only on labelled PRs."
+        "h"
+        "1h"
+        [
+          {
+            legendFormat = "{{event_name}}";
+            expr = expand "$__interval" "sum by (event_name) (sum_over_time($JOB | unwrap run_seconds | __error__=\"\" [$RANGE])) / 3600";
+          }
+        ]
+        {
+          fieldConfig.defaults.custom = {
+            drawStyle = "bars";
+            fillOpacity = 80;
+            stacking.mode = "normal";
+          };
+        }
+      )
+      (lokiTable 16 "hours" (grid 12 39 6 8))
+      (lokiStat 17 "exporter" (grid 18 39 6 8))
+      (row 101 (tracesTop - 1) "Run traces, from Tempo")
       (panel 1 "Workflow runs — open a trace for jobs and steps"
         "Workflow duration includes waiting; for reruns the upstream exporter starts the root span at the original run creation. Use job durations for execution timing. The url attribute links to GitHub."
         "span.workflow_run_id != nil"
