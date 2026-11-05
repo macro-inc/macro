@@ -435,3 +435,4 @@ fn check_job_results() -> Step<Run> {
         echo "✅ All jobs passed or were skipped"
     "#})
 }
+// ci-bench-token control footprint
