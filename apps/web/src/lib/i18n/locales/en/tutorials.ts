@@ -31,4 +31,8 @@ export default {
   callsSnippet:
     'Calls with transcripts and summaries, shared with your team and its agents',
   callsLength: '1:11',
+  schedulingTitle: 'Learn how to use Macro Scheduling',
+  schedulingSnippet:
+    'Booking links built into your calendar, created by an agent',
+  schedulingLength: '0:45',
 };

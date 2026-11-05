@@ -11,6 +11,8 @@ import githubVideo from './assets/github.mp4';
 import githubPoster from './assets/github-poster.jpg';
 import mailVideo from './assets/mail.mp4';
 import mailPoster from './assets/mail-poster.jpg';
+import schedulingVideo from './assets/scheduling.mp4';
+import schedulingPoster from './assets/scheduling-poster.jpg';
 import tasksVideo from './assets/tasks.mp4';
 import tasksPoster from './assets/tasks-poster.jpg';
 import type { TutorialId } from './core/tutorial-id';
@@ -130,5 +132,19 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     },
     videoUrl: callsVideo,
     posterUrl: callsPoster,
+  },
+  scheduling: {
+    id: 'scheduling',
+    get title() {
+      return t('tutorials.schedulingTitle');
+    },
+    get snippet() {
+      return t('tutorials.schedulingSnippet');
+    },
+    get length() {
+      return t('tutorials.schedulingLength');
+    },
+    videoUrl: schedulingVideo,
+    posterUrl: schedulingPoster,
   },
 };
