@@ -25,8 +25,10 @@ align trailing controls by their outer edges or offset an individual icon.
   the sidebar breakpoint; the last remaining list split still has no close action.
 - `ViewShell.Root`'s `asidePreferenceKey` scopes saved visibility and width per view.
   `ViewShell.Aside` saves the sidebar width and Main's reduced soft width after
-  user-completed resizes, not automatic layout changes, so constrained layouts
-  restore the user's sizing choice after remounting.
+  user-completed sidebar-divider resizes, not automatic layout changes or
+  redistribution from another divider, so remounting restores the sizing choice.
+  `Resize.Panel` reports `isDirect` for panels beside the moved divider; Aside
+  uses this flag to leave its preference unchanged during incidental resizing.
   Supplying `onWidthChangeEnd` leaves width persistence to the caller, preserving
   Chat's account-scoped preference without a competing shared width setting.
 - `ViewSidebar.Toolbar` aligns its final `Control` with the right rail.

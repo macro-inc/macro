@@ -16,6 +16,7 @@ import type {
   PanelConfig,
   PanelId,
   PanelSizeSpec,
+  ResizeEndHandler,
   ResizeZoneCtx,
 } from './types';
 
@@ -128,8 +129,13 @@ function Zone(props: ParentProps<ZoneProps>) {
     return layouts().filter((layout) => !solver.isHidden(layout.id));
   });
 
-  const sizeChangeEndHandlers = new Map<PanelId, (size: number) => void>();
-  let sizesBeforeChange: ReadonlyMap<PanelId, number> | undefined;
+  const sizeChangeEndHandlers = new Map<PanelId, ResizeEndHandler>();
+  let resizeStart:
+    | {
+        sizes: ReadonlyMap<PanelId, number>;
+        directPanels: readonly PanelId[];
+      }
+    | undefined;
 
   const registerSizeChangeEndHandler: ResizeZoneCtx['registerSizeChangeEndHandler'] =
     (id, handler) => {
@@ -141,25 +147,28 @@ function Zone(props: ParentProps<ZoneProps>) {
       };
     };
 
-  const beginResizeChange = () => {
-    sizesBeforeChange = new Map(solver.solve().sizes);
+  const beginResizeChange = (left: PanelId, right: PanelId) => {
+    resizeStart = {
+      sizes: new Map(solver.solve().sizes),
+      directPanels: [left, right],
+    };
   };
 
   const endResizeChange = () => {
-    const before = sizesBeforeChange;
-    sizesBeforeChange = undefined;
+    const before = resizeStart;
+    resizeStart = undefined;
     if (!before) return;
 
     const after = solver.solve().sizes;
     for (const [id, handler] of sizeChangeEndHandlers) {
-      const previousSize = before.get(id);
+      const previousSize = before.sizes.get(id);
       const size = after.get(id);
       if (
         previousSize !== undefined &&
         size !== undefined &&
         previousSize !== size
       ) {
-        handler(size);
+        handler(size, { isDirect: before.directPanels.includes(id) });
       }
     }
   };
@@ -224,7 +233,12 @@ function Zone(props: ParentProps<ZoneProps>) {
                     resizable={gutterEnabled()}
                     showDivider={props.showDividers ?? true}
                     nudge={solver.moveHandle}
-                    onChangeStart={beginResizeChange}
+                    onChangeStart={() =>
+                      beginResizeChange(
+                        panel().id,
+                        visibleLayouts()[visibleIndex + 1].id
+                      )
+                    }
                     onChangeEnd={endResizeChange}
                     root={root}
                   />
@@ -274,8 +288,11 @@ type PanelProps = {
   /** The index position for this panel in the layout order */
   index?: number;
   persistent?: boolean;
-  /** Called with the solved panel size after a drag or keyboard resize. */
-  onSizeChangeEnd?: (size: number) => void;
+  /**
+   * Called for every changed panel after a drag or keyboard resize.
+   * `isDirect` identifies panels bordering the divider the user moved.
+   */
+  onSizeChangeEnd?: ResizeEndHandler;
 };
 
 /**

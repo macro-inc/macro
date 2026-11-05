@@ -7,7 +7,7 @@ import {
 import { SplitHeaderContextMenu } from '@components/app/split-layout/components/SplitHeaderContextMenu';
 import { SplitPanelContext } from '@components/app/split-layout/context';
 import { SplitPanel } from '@components/app/split-panel';
-import { Resize } from '@core/component/Resize';
+import { Resize, type ResizeEndHandler } from '@core/component/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
@@ -494,7 +494,9 @@ function Aside(props: ViewShellAsideProps) {
       return layout.width;
     return Math.min(layout.max, Math.max(layout.min, width));
   };
-  const onWidthChangeEnd = (width: number) => {
+  const onWidthChangeEnd: ResizeEndHandler = (width, { isDirect }) => {
+    if (!isDirect) return;
+
     const shellWidth = ws.width();
     // A drag also chooses how much space Main gives up. Keeping its old soft
     // preference would immediately undo a drag made in a constrained shell.

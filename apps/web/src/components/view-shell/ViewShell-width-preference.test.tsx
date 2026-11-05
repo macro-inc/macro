@@ -38,6 +38,7 @@ function Workspace(props: {
   app?: string;
   aside?: Partial<AsideLayout>;
   onWidthChangeEnd?: (width: number) => void;
+  detailOpen?: boolean;
 }) {
   function Controls() {
     const shell = useViewShell();
@@ -57,6 +58,7 @@ function Workspace(props: {
       asidePreferenceKey={props.app}
       aside={{ preserveDuringResize: false, ...props.aside }}
       main={{ preferredWidth: 640 }}
+      detailOpen={props.detailOpen}
       resizable
     >
       <ViewShell.Aside onWidthChangeEnd={props.onWidthChangeEnd}>
@@ -65,6 +67,7 @@ function Workspace(props: {
       <ViewShell.Main>
         <Controls />
       </ViewShell.Main>
+      <ViewShell.Detail>Details</ViewShell.Detail>
     </ViewShell.Root>
   );
 }
@@ -181,6 +184,47 @@ describe('ViewShell persisted sidebar width', () => {
       second.container.querySelector('[data-view-shell-aside]')?.parentElement
         ?.style.width
     ).toBe('300px');
+  });
+
+  it('does not replace the saved sidebar width when another divider redistributes space', async () => {
+    const [detailOpen, setDetailOpen] = createSignal(false);
+    const first = render(() => (
+      <Workspace app="tasks" detailOpen={detailOpen()} />
+    ));
+    fireEvent.keyDown(first.getByRole('separator'), { key: 'ArrowRight' });
+    await Promise.resolve();
+    expect(
+      first.container.querySelector('[data-view-shell-aside]')?.parentElement
+        ?.style.width
+    ).toBe('276px');
+
+    setDetailOpen(true);
+    fireEvent(
+      first.getByRole('separator', { name: 'resize at 1' }),
+      new MouseEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        clientX: 800,
+      })
+    );
+    fireEvent(window, new MouseEvent('pointermove', { clientX: 500 }));
+    fireEvent(window, new MouseEvent('pointerup', { clientX: 500 }));
+    expect(
+      first.container.querySelector('[data-view-shell-aside]')?.parentElement
+        ?.style.width
+    ).toBe('238px');
+    setDetailOpen(false);
+    expect(
+      first.container.querySelector('[data-view-shell-aside]')?.parentElement
+        ?.style.width
+    ).toBe('276px');
+    first.unmount();
+
+    const second = render(() => <Workspace app="tasks" />);
+    expect(
+      second.container.querySelector('[data-view-shell-aside]')?.parentElement
+        ?.style.width
+    ).toBe('276px');
   });
 
   it('leaves caller-owned width persistence authoritative', async () => {

@@ -36,6 +36,11 @@ export type LayoutResult = {
   shares: Map<PanelId, number>;
 };
 
+export type ResizeEndHandler = (
+  size: number,
+  details: { isDirect: boolean }
+) => void;
+
 export type ResizeZoneCtx = {
   direction: Accessor<'horizontal' | 'vertical'>;
   register: (panel: PanelConfig, index?: number) => void;
@@ -54,7 +59,7 @@ export type ResizeZoneCtx = {
   offsetOf: (id: PanelId) => () => number;
   registerSizeChangeEndHandler: (
     id: PanelId,
-    handler: (size: number) => void
+    handler: ResizeEndHandler
   ) => () => void;
   canFit: (panel: Partial<PanelConfig>) => boolean;
   /** Swap two registered panels without changing their sizing intent. */

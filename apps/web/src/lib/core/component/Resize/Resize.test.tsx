@@ -73,7 +73,7 @@ describe('split resize interactions', () => {
     view.setGutter(0);
     expect(view.queryByRole('separator')).toBeNull();
     expect(view.onSizeChangeEnd).toHaveBeenCalledOnce();
-    expect(view.onSizeChangeEnd).toHaveBeenCalledWith(556);
+    expect(view.onSizeChangeEnd).toHaveBeenCalledWith(556, { isDirect: true });
     pointer(window, 'pointerup', 600);
     vi.advanceTimersToNextFrame();
     expect(view.onSizeChangeEnd).toHaveBeenCalledOnce();
@@ -96,7 +96,9 @@ describe('split resize interactions', () => {
     pointer(window, 'pointermove', 580);
     pointer(window, 'pointerup', 590);
     expect(view.panel.style.width).toBe('586px');
-    expect(view.onSizeChangeEnd).toHaveBeenCalledExactlyOnceWith(586);
+    expect(view.onSizeChangeEnd).toHaveBeenCalledExactlyOnceWith(586, {
+      isDirect: true,
+    });
     vi.advanceTimersToNextFrame();
     pointer(window, 'pointermove', 700);
     vi.advanceTimersToNextFrame();
@@ -131,7 +133,9 @@ describe('split resize interactions', () => {
       pointer(window, 'pointermove', 520);
       pointer(type === 'lostpointercapture' ? view.handle : window, type, 0);
       expect(view.panel.style.width).toBe('516px');
-      expect(view.onSizeChangeEnd).toHaveBeenCalledExactlyOnceWith(516);
+      expect(view.onSizeChangeEnd).toHaveBeenCalledExactlyOnceWith(516, {
+        isDirect: true,
+      });
       pointer(window, 'pointermove', 600);
       vi.advanceTimersToNextFrame();
       expect(view.panel.style.width).toBe('516px');
@@ -151,12 +155,61 @@ describe('split resize interactions', () => {
     expect(view.onSizeChangeEnd).not.toHaveBeenCalled();
   });
 
+  it.each(['pointer', 'keyboard'])(
+    'distinguishes direct %s resizing from incidental redistribution',
+    async (input) => {
+      const firstResize = vi.fn();
+      const secondResize = vi.fn();
+      const thirdResize = vi.fn();
+      const view = render(() => (
+        <Resize.Zone direction="horizontal" gutter={8}>
+          <Resize.Panel
+            id="first"
+            minSize={200}
+            target={{ kind: 'px', px: 300 }}
+            redistributionPreferredSize={300}
+            onSizeChangeEnd={firstResize}
+          >
+            First
+          </Resize.Panel>
+          <Resize.Panel
+            id="second"
+            minSize={300}
+            target={{ kind: 'px', px: 400 }}
+            redistributionPreferredSize={400}
+            onSizeChangeEnd={secondResize}
+          >
+            Second
+          </Resize.Panel>
+          <Resize.Panel id="third" minSize={100} onSizeChangeEnd={thirdResize}>
+            Third
+          </Resize.Panel>
+        </Resize.Zone>
+      ));
+      const handle = view.getAllByRole('separator')[1];
+      if (input === 'pointer') {
+        pointer(handle, 'pointerdown', 700);
+        pointer(window, 'pointermove', 500);
+        pointer(window, 'pointerup', 500);
+      } else {
+        fireEvent.keyDown(handle, { key: 'ArrowLeft', shiftKey: true });
+        await Promise.resolve();
+        fireEvent.keyDown(handle, { key: 'ArrowLeft', shiftKey: true });
+        await Promise.resolve();
+      }
+      expect(firstResize).toHaveBeenLastCalledWith(200, { isDirect: false });
+      expect(secondResize).toHaveBeenLastCalledWith(300, { isDirect: true });
+      expect(thirdResize).toHaveBeenLastCalledWith(484, { isDirect: true });
+      view.unmount();
+    }
+  );
+
   it('keeps keyboard resizing immediate and clamps at panel minimums', async () => {
     const view = setup();
     fireEvent.keyDown(view.handle, { key: 'ArrowRight' });
     expect(view.panel.style.width).toBe('516px');
     await Promise.resolve();
-    expect(view.onSizeChangeEnd).toHaveBeenCalledWith(516);
+    expect(view.onSizeChangeEnd).toHaveBeenCalledWith(516, { isDirect: true });
     pointer(view.handle, 'pointerdown', 520);
     pointer(window, 'pointermove', 0);
     vi.advanceTimersToNextFrame();

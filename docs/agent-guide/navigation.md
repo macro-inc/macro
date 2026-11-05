@@ -680,6 +680,9 @@ Narrow splits may shrink or collapse the sidebar; widening restores its chosen
 width without overwriting the saved preference. Verify by resizing Home, Tasks,
 Email, Drive, Calendar, and Agents, switching views, then reloading; each must
 restore its own width. Opening and closing a narrow overlay must not change it.
+Dragging a Main/Detail divider may temporarily shrink the sidebar when space
+runs out, but must not replace its saved width; verify after closing the detail
+panel and after navigating away and back.
 Widening the sidebar while its split is constrained also reduces the main
 content's soft width preference, so the next split resize keeps that choice
 instead of snapping the sidebar back to its constrained width.
