@@ -16,9 +16,12 @@ every push needs a new run before the PR can merge.
 Push first, then ask for the run:
 
 ```sh
-gh pr create --title "..." --body-file body.md --label run-ci   # a new PR
-gh pr edit <pr> --add-label run-ci                              # after a push
+gh pr create --title "..." --body-file body.md --label run-ci         # a new PR
+gh api repos/macro-inc/macro/issues/<pr>/labels -f "labels[]=run-ci"  # after a push
 ```
+
+`gh pr edit <pr> --add-label run-ci` does the same on a recent gh; older
+releases fail on a Projects (classic) error before adding the label.
 
 - Run CI once the commits you want tested are pushed. While you are still
   iterating, push several fixes and run once; every run costs CI compute.
