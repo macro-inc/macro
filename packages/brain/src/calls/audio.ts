@@ -1,5 +1,7 @@
-export type Pcm = { rate: number; samples: Int16Array };
-
+export type Pcm = {
+  rate: number;
+  samples: Int16Array;
+};
 export function parseWav(bytes: Uint8Array): Pcm {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (String.fromCharCode(...bytes.subarray(0, 4)) !== 'RIFF')
@@ -28,7 +30,6 @@ export function parseWav(bytes: Uint8Array): Pcm {
   }
   throw new Error('WAV has no data chunk');
 }
-
 export function wavHeader(
   rate: number,
   dataBytes: number
@@ -51,7 +52,6 @@ export function wavHeader(
   dv.setUint32(40, dataBytes, true);
   return h;
 }
-
 export function encodeWav({ rate, samples }: Pcm): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(44 + samples.byteLength);
   out.set(wavHeader(rate, samples.byteLength));
@@ -61,9 +61,11 @@ export function encodeWav({ rate, samples }: Pcm): Uint8Array<ArrayBuffer> {
   );
   return out;
 }
-
-export type Level = { peak: number; rms: number; dbfs: number };
-
+export type Level = {
+  peak: number;
+  rms: number;
+  dbfs: number;
+};
 export function level(s: Int16Array): Level {
   let peak = 0;
   let sum = 0;
@@ -79,7 +81,6 @@ export function level(s: Int16Array): Level {
     dbfs: rms > 0 ? Math.round(20 * Math.log10(rms / 32768)) : -120,
   };
 }
-
 export function resample(s: Int16Array, from: number, to: number): Int16Array {
   if (from === to) return s;
   const n = Math.floor((s.length * to) / from);
@@ -94,7 +95,6 @@ export function resample(s: Int16Array, from: number, to: number): Int16Array {
   }
   return out;
 }
-
 export function* frames(s: Int16Array, size: number): Generator<Int16Array> {
   for (let i = 0; i < s.length; i += size) {
     const f = s.subarray(i, i + size);
@@ -106,18 +106,15 @@ export function* frames(s: Int16Array, size: number): Generator<Int16Array> {
     }
   }
 }
-
 export class Gain {
   static readonly TARGET_RMS = 3000;
   static readonly MAX = 16;
   static readonly SPEECH_RMS = 40;
   gain = 1;
-
   apply(frame: Int16Array): Int16Array {
     const { rms } = level(frame);
     if (rms >= Gain.SPEECH_RMS) {
       const want = Math.min(Gain.MAX, Math.max(1, Gain.TARGET_RMS / rms));
-
       this.gain += (want - this.gain) * (want < this.gain ? 0.5 : 0.1);
     }
     if (this.gain === 1) return frame;

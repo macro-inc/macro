@@ -6,7 +6,6 @@ import type {
   CallTokenResponse,
 } from '../../../sdk/generated/storage/types.gen.ts';
 import type { MacroHttp } from '../macro.ts';
-
 export type Conn = {
   url: string;
   token: string;
@@ -21,7 +20,6 @@ export type Meeting = Pick<
   ActiveMeeting,
   'id' | 'callId' | 'title' | 'shareToken' | 'createdBy' | 'channelId'
 >;
-
 export interface CallApi {
   join(
     kind: 'channel' | 'meeting',
@@ -30,9 +28,11 @@ export interface CallApi {
   ): Promise<Conn>;
   activeCalls(): Promise<ActiveCall[]>;
   meetings(): Promise<Meeting[]>;
-  channel(id: string): Promise<{ dm: boolean; name: string }>;
+  channel(id: string): Promise<{
+    dm: boolean;
+    name: string;
+  }>;
 }
-
 /** Wire types come from the generated storage contract. */
 export function macroCalls(http: MacroHttp): CallApi {
   const json = async <T>(path: string, init?: RequestInit): Promise<T> =>

@@ -1,13 +1,28 @@
 import { match } from 'ts-pattern';
 import type { SttEvent } from './stt.ts';
-
 export type TurnEvent =
-  | { type: 'joined'; who: string; name: string }
-  | { type: 'left'; who: string }
-  | { type: 'stt'; who: string; ev: SttEvent }
-  | { type: 'agent_audio'; playing: boolean }
-  | { type: 'brain_done'; turn: number };
-
+  | {
+      type: 'joined';
+      who: string;
+      name: string;
+    }
+  | {
+      type: 'left';
+      who: string;
+    }
+  | {
+      type: 'stt';
+      who: string;
+      ev: SttEvent;
+    }
+  | {
+      type: 'agent_audio';
+      playing: boolean;
+    }
+  | {
+      type: 'brain_done';
+      turn: number;
+    };
 export type Action =
   | {
       type: 'ask';
@@ -18,27 +33,37 @@ export type Action =
       context: string[];
       cutOff: boolean;
     }
-  | { type: 'say'; text: string }
-  | { type: 'stop_speaking' }
-  | { type: 'duck'; on: boolean }
-  | { type: 'interrupt'; turn: number }
-  | { type: 'leave'; why: string };
-
+  | {
+      type: 'say';
+      text: string;
+    }
+  | {
+      type: 'stop_speaking';
+    }
+  | {
+      type: 'duck';
+      on: boolean;
+    }
+  | {
+      type: 'interrupt';
+      turn: number;
+    }
+  | {
+      type: 'leave';
+      why: string;
+    };
 export const SETTLE_MS = 300;
 export const NAME_ONLY_MS = 2500;
 export const MAX_HOLD_MS = 4000;
-export const FOLLOW_UP_MS = 20_000;
+export const FOLLOW_UP_MS = 20000;
 export const BARGE_IN_WORDS = 2;
 export const UNHEARD_EVERY_MS = 8000;
-
 export const DUCK_MS = 2000;
 export const UNHEARD_QUIET_MS = 3000;
-export const ALONE_MS = 30_000;
-export const NOBODY_MS = 60_000;
+export const ALONE_MS = 30000;
+export const NOBODY_MS = 60000;
 export const UNHEARD_LINE = "Sorry, didn't catch that.";
-
 const STOP = /^\W*(stop|wait|hold on|hang on|sorry|no|nope|okay stop)\b/i;
-
 type Speaker = {
   name: string;
   buf: string[];
@@ -46,15 +71,15 @@ type Speaker = {
   lastWords: number;
   due: number | null;
 };
-
 export class Turns {
   private readonly name: RegExp;
   private readonly nameOnly: RegExp;
-
+  private readonly answer?: (who: string, text: string) => boolean;
   constructor(
     names: string[],
-    private readonly answer?: (who: string, text: string) => boolean
+    answer?: (who: string, text: string) => boolean
   ) {
+    this.answer = answer;
     const escaped = names
       .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       .join('|');
@@ -64,22 +89,32 @@ export class Turns {
       'i'
     );
   }
-
   state: 'idle' | 'thinking' | 'speaking' = 'idle';
   turn = 0;
   private humans = new Map<string, Speaker>();
   private heard: string[] = [];
   private audioPlaying = false;
-  private asker: { who: string; text: string; spoke: boolean } | null = null;
+  private asker: {
+    who: string;
+    text: string;
+    spoke: boolean;
+  } | null = null;
   private cutOff = false;
-  private unanswered: { who: string; text: string } | null = null;
-  private followUp: { who: string; until: number } | null = null;
+  private unanswered: {
+    who: string;
+    text: string;
+  } | null = null;
+  private followUp: {
+    who: string;
+    until: number;
+  } | null = null;
   private lastUnheard = -Infinity;
-  private ducked: { until: number } | null = null;
+  private ducked: {
+    until: number;
+  } | null = null;
   private lastAgentAudio = -Infinity;
   private aloneSince: number | null = 0;
   private everJoined = false;
-
   handle(e: TurnEvent, now: number): Action[] {
     return match(e)
       .returnType<Action[]>()
@@ -126,7 +161,6 @@ export class Turns {
       })
       .exhaustive();
   }
-
   private stt(who: string, ev: SttEvent, now: number): Action[] {
     const s = this.humans.get(who);
     if (!s) return [];
@@ -148,7 +182,6 @@ export class Turns {
           s.buf.push(ev.text);
           const cut = this.bargeIn(who, ev.text, now);
           out.push(...cut);
-
           if (!cut.length && this.ducked) out.push(...this.unduck());
         }
         if (ev.speechFinal) s.speaking = false;
@@ -192,12 +225,10 @@ export class Turns {
       .exhaustive();
     return out;
   }
-
   private unduck(): Action[] {
     this.ducked = null;
     return [{ type: 'duck', on: false }];
   }
-
   private bargeIn(
     who: string,
     text: string,
@@ -223,7 +254,6 @@ export class Turns {
       if (words < BARGE_IN_WORDS && !this.name.test(text) && !STOP.test(text))
         return [];
     }
-
     if (
       this.state === 'thinking' &&
       !this.oneOnOne() &&
@@ -243,24 +273,20 @@ export class Turns {
       if (this.asker?.spoke) this.cutOff = true;
       else if (this.asker)
         this.unanswered = { who: this.asker.who, text: this.asker.text };
-
       this.followUp = { who, until: Infinity };
       this.state = 'idle';
       this.asker = null;
     }
     return out;
   }
-
   private oneOnOne() {
     return this.humans.size === 1;
   }
-
   private addressed(who: string, text: string, now: number) {
     if (this.answer) return this.answer(who, text);
     if (this.oneOnOne() || this.name.test(text)) return true;
     return this.followUp?.who === who && now <= this.followUp.until;
   }
-
   tick(now: number): Action[] {
     const out: Action[] = [];
     if (this.ducked && now >= this.ducked.until) out.push(...this.unduck());
@@ -281,7 +307,6 @@ export class Turns {
       s.buf = [];
       s.due = null;
       const line = `${s.name}: ${text}`;
-
       const backchannel =
         this.state !== 'idle' &&
         text.split(/\s+/).filter(Boolean).length < BARGE_IN_WORDS &&

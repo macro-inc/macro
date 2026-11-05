@@ -4,21 +4,16 @@ import type { Emit } from './events.ts';
 import type { SttEvent } from './stt.ts';
 import { speakable, type Tts } from './tts.ts';
 import { type Action, type TurnEvent, Turns } from './turns.ts';
-
 export interface Speaker {
   play(pcm: Int16Array): void;
   clear(): void;
-
   duck(on: boolean): void;
-
   drained(): Promise<void>;
 }
-
 export type TtsFactory = (h: {
   onAudio: (pcm: Int16Array, turn: number) => void;
   onDone: (turn: number) => void;
 }) => Tts;
-
 export class Call {
   readonly turns: Turns;
   private tts: Tts;
@@ -29,15 +24,25 @@ export class Call {
   private flushed = new Set<number>();
   private timer: ReturnType<typeof setInterval> | null = null;
   onLeave: (why: string) => void = () => {};
-
+  private brain: Brain;
+  private speaker: Speaker;
+  private emit: Emit;
+  private now: () => number;
   constructor(
-    private brain: Brain,
+    brain: Brain,
     tts: TtsFactory,
-    private speaker: Speaker,
-    private emit: Emit,
-    private now: () => number,
-    policy: { names: string[]; answer?: (who: string, text: string) => boolean }
+    speaker: Speaker,
+    emit: Emit,
+    now: () => number,
+    policy: {
+      names: string[];
+      answer?: (who: string, text: string) => boolean;
+    }
   ) {
+    this.brain = brain;
+    this.speaker = speaker;
+    this.emit = emit;
+    this.now = now;
     this.turns = new Turns(policy.names, policy.answer);
     this.tts = tts({
       onAudio: (pcm, turn) => {
@@ -54,14 +59,12 @@ export class Call {
       },
     });
   }
-
   start(tickMs = 50) {
     this.timer = setInterval(
       () => this.run(this.turns.tick(this.now())),
       tickMs
     );
   }
-
   stop() {
     if (this.timer) clearInterval(this.timer);
     this.current = 0;
@@ -69,7 +72,6 @@ export class Call {
     this.speaker.clear();
     this.tts.close();
   }
-
   joined(who: string, name: string) {
     this.feed({ type: 'joined', who, name });
   }
@@ -82,11 +84,9 @@ export class Call {
   say(text: string) {
     this.run([{ type: 'say', text }]);
   }
-
   private feed(e: TurnEvent) {
     this.run(this.turns.handle(e, this.now()));
   }
-
   private run(actions: Action[]) {
     for (const a of actions) {
       const { type, ...rest } = a;
@@ -99,7 +99,6 @@ export class Call {
         })
         .with({ type: 'say' }, (a) => {
           const t = this.sayTurn--;
-
           if (this.current > 0 && !this.ended.has(this.current)) return;
           this.current = t;
           this.ended.add(t);
@@ -127,7 +126,6 @@ export class Call {
         .exhaustive();
     }
   }
-
   private silence() {
     this.tts.clear();
     this.speaker.clear();
@@ -137,7 +135,6 @@ export class Call {
       this.emit('agent.audio_stopped');
     }
   }
-
   private async answer(turn: number, content: string) {
     try {
       for await (const s of this.brain.ask(turn, content)) {
@@ -155,7 +152,6 @@ export class Call {
     if (turn === this.current) this.tts.flush(turn);
     else this.feed({ type: 'brain_done', turn });
   }
-
   private async maybeFinish(turn: number) {
     if (
       turn !== this.current ||
@@ -171,5 +167,6 @@ export class Call {
       this.feed({ type: 'agent_audio', playing: false });
     }
     if (turn > 0) this.feed({ type: 'brain_done', turn });
+    this.emit('turn.completed', { turn });
   }
 }

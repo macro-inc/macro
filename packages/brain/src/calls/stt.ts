@@ -3,10 +3,16 @@ import WebSocket from 'ws';
 import { Gain } from './audio.ts';
 import type { Emit } from './events.ts';
 import type { SpeechGateway } from './speech.ts';
-
 export type SttEvent =
-  | { kind: 'speech_started' }
-  | { kind: 'interim'; text: string; startMs?: number; endMs?: number }
+  | {
+      kind: 'speech_started';
+    }
+  | {
+      kind: 'interim';
+      text: string;
+      startMs?: number;
+      endMs?: number;
+    }
   | {
       kind: 'final';
       text: string;
@@ -14,10 +20,15 @@ export type SttEvent =
       startMs?: number;
       endMs?: number;
     }
-  | { kind: 'utterance_end' }
-  | { kind: 'voice' }
-  | { kind: 'unheard' };
-
+  | {
+      kind: 'utterance_end';
+    }
+  | {
+      kind: 'voice';
+    }
+  | {
+      kind: 'unheard';
+    };
 export const LISTEN_PARAMS = {
   model: 'nova-3',
   encoding: 'linear16',
@@ -29,7 +40,6 @@ export const LISTEN_PARAMS = {
   utterance_end_ms: '1000',
   vad_events: 'true',
 };
-
 export function parseDeepgram(msg: unknown): SttEvent | null {
   const m = msg as {
     type?: string;
@@ -37,7 +47,11 @@ export function parseDeepgram(msg: unknown): SttEvent | null {
     speech_final?: boolean;
     start?: number;
     duration?: number;
-    channel?: { alternatives?: { transcript?: string }[] };
+    channel?: {
+      alternatives?: {
+        transcript?: string;
+      }[];
+    };
   };
   const at =
     m.start !== undefined && m.duration !== undefined
@@ -56,18 +70,18 @@ export function parseDeepgram(msg: unknown): SttEvent | null {
       : null;
   return text ? { kind: 'interim', text, ...at } : null;
 }
-
 export interface Stt {
   send(frame: Int16Array): void;
   close(): Promise<void>;
 }
-
 export type SttFactory = (who: string, onEvent: (e: SttEvent) => void) => Stt;
-
 export function deepgramStt(
   gateway: SpeechGateway,
   emit: Emit,
-  opts: { gain?: boolean; params?: Record<string, string> } = {}
+  opts: {
+    gain?: boolean;
+    params?: Record<string, string>;
+  } = {}
 ): SttFactory {
   return (who, onEvent) => {
     const gain = opts.gain ? new Gain() : null;
@@ -84,11 +98,9 @@ export function deepgramStt(
     let lastSend = Date.now();
     let opened!: () => void;
     const open = new Promise<void>((r) => (opened = r));
-
     let reconnect: ReturnType<typeof setTimeout> | undefined;
     const connect = () => {
       if (closing) return;
-
       ws = new WebSocket(url, { headers: gateway.headers() });
       ws.binaryType = 'arraybuffer';
       ws.onopen = () => {
@@ -117,12 +129,10 @@ export function deepgramStt(
       };
     };
     connect();
-
     const keepAlive = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN && Date.now() - lastSend > 4000)
         ws.send(JSON.stringify({ type: 'KeepAlive' }));
     }, 2000);
-
     return {
       send(frame) {
         const out = gain ? gain.apply(frame) : frame;
@@ -147,7 +157,6 @@ export function deepgramStt(
         }
         if (ws.readyState !== WebSocket.OPEN) return ws.close();
         ws.send(JSON.stringify({ type: 'CloseStream' }));
-
         await new Promise<void>((r) => {
           const timer = setTimeout(() => {
             ws.close();

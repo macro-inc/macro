@@ -11,7 +11,6 @@ import type { SpeechGateway } from './speech.ts';
 import { deepgramStt } from './stt.ts';
 import { deepgramTts, TTS_RATE } from './tts.ts';
 import type { Invitation } from './watch.ts';
-
 export type CallOptions = {
   invitation: Invitation;
   api: CallApi;
@@ -30,10 +29,10 @@ export type CallOptions = {
   finished(
     callId: string,
     channel: string | null,
-    transcript: string[]
+    summary: string
   ): Promise<void>;
+  lifecycle?(phase: 'connected' | 'ended'): Promise<void>;
 };
-
 export async function fetchConn(
   api: Pick<CallApi, 'join'>,
   kind: 'channel' | 'meeting',
@@ -46,7 +45,6 @@ export async function fetchConn(
     onAttempt: (attempt) => emit('join.token', { ...attempt }),
   });
 }
-
 /** Each call owns its media resources; hand-offs belong to the longer-lived brain. */
 export async function joinCall(options: CallOptions): Promise<void> {
   if (options.signal.aborted) return;
@@ -159,6 +157,7 @@ export async function joinCall(options: CallOptions): Promise<void> {
       }
     );
     emit('call.start', { room: conn.room });
+    await options.lifecycle?.('connected');
     if (signal.aborted) return;
     call.start();
     const warm = brain.start();
@@ -171,12 +170,28 @@ export async function joinCall(options: CallOptions): Promise<void> {
   } finally {
     emit('call.leave', { why: String(signal.reason ?? 'error') });
     call.stop();
-    await room.leave();
-    await Promise.all([...ears.values()].map((ear) => ear.close()));
-    await brain.close();
-    for (const recorder of recorders.values()) recorder.close();
-    log.close();
-    if (transcript.length)
-      await options.finished(options.invitation.callId, channel, transcript);
+    try {
+      await room.leave();
+      await Promise.all([...ears.values()].map((ear) => ear.close()));
+      if (transcript.length) {
+        let summary = '';
+        for await (const sentence of brain.ask(
+          Number.MAX_SAFE_INTEGER,
+          'The call has ended. Write a brief factual summary for memory and the conversation, including decisions and handed-off work. Do not use tools.'
+        ))
+          summary += `${sentence} `;
+        if (summary.trim())
+          await options.finished(
+            options.invitation.callId,
+            channel,
+            summary.trim()
+          );
+      }
+    } finally {
+      await brain.close();
+      for (const recorder of recorders.values()) recorder.close();
+      log.close();
+      await options.lifecycle?.('ended');
+    }
   }
 }

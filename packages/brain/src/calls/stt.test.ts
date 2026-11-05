@@ -1,7 +1,5 @@
-import { expect } from 'jsr:@std/expect@1';
-
-const test = Deno.test;
-
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { parseDeepgram } from './stt.ts';
 
 const results = (
@@ -14,30 +12,28 @@ const results = (
   speech_final,
   channel: { alternatives: [{ transcript }] },
 });
-
 test('Deepgram messages map to STT events', () => {
-  expect(parseDeepgram({ type: 'SpeechStarted' })).toEqual({
+  assert.deepStrictEqual(parseDeepgram({ type: 'SpeechStarted' }), {
     kind: 'speech_started',
   });
-  expect(parseDeepgram({ type: 'UtteranceEnd' })).toEqual({
+  assert.deepStrictEqual(parseDeepgram({ type: 'UtteranceEnd' }), {
     kind: 'utterance_end',
   });
-  expect(parseDeepgram(results('hel', false))).toEqual({
+  assert.deepStrictEqual(parseDeepgram(results('hel', false)), {
     kind: 'interim',
     text: 'hel',
   });
-  expect(parseDeepgram(results('Hello?', true, true))).toEqual({
+  assert.deepStrictEqual(parseDeepgram(results('Hello?', true, true)), {
     kind: 'final',
     text: 'Hello?',
     speechFinal: true,
   });
-  expect(parseDeepgram({ type: 'Metadata' })).toBeNull();
+  assert.strictEqual(parseDeepgram({ type: 'Metadata' }), null);
 });
-
 test('empty interims are dropped, an empty speech_final still ends speech', () => {
-  expect(parseDeepgram(results('', false))).toBeNull();
-  expect(parseDeepgram(results('', true))).toBeNull();
-  expect(parseDeepgram(results('', true, true))).toEqual({
+  assert.strictEqual(parseDeepgram(results('', false)), null);
+  assert.strictEqual(parseDeepgram(results('', true)), null);
+  assert.deepStrictEqual(parseDeepgram(results('', true, true)), {
     kind: 'final',
     text: '',
     speechFinal: true,

@@ -1,14 +1,15 @@
 import { setTimeout as delay } from 'node:timers/promises';
-export type Attempt = { attempt: number; ms: number; error?: string };
-
+export type Attempt = {
+  attempt: number;
+  ms: number;
+  error?: string;
+};
 export const TOKEN_RETRY = {
   attempts: 4,
   timeoutMs: 2000,
   backoffMs: [250, 750, 1500],
 };
-
 export class TimeoutError extends Error {}
-
 export async function retry<T>(
   fn: (signal: AbortSignal) => Promise<T>,
   opts: {
@@ -52,7 +53,6 @@ export async function retry<T>(
   }
   throw last;
 }
-
 export function rejoinDelay(failures: number): number {
   return Math.min(1000 * 2 ** Math.max(0, failures - 1), 8000);
 }

@@ -2,6 +2,7 @@
 export { Brain, type BrainDeps, type Wiring } from './brain.ts';
 export { type Budget, SpendLedger } from './budget.ts';
 export * as events from './events.ts';
+export * as calls from './calls/mod.ts';
 export { HeartbeatStore } from './heartbeat.ts';
 export { History } from './history.ts';
 export { type JevConfig, judge } from './jev.ts';

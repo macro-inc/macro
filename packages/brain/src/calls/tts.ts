@@ -1,23 +1,18 @@
 import WebSocket from 'ws';
 import type { Emit } from './events.ts';
 import type { SpeechGateway } from './speech.ts';
-
 export const TTS_RATE = 24000;
 export const VOICE = 'aura-2-arcas-en';
-
 export interface Tts {
   speak(text: string, turn: number): void;
-
   flush(turn: number): void;
   clear(): void;
   close(): void;
 }
-
 export type TtsHandlers = {
   onAudio: (pcm: Int16Array, turn: number) => void;
   onDone: (turn: number) => void;
 };
-
 export function deepgramTts(
   gateway: SpeechGateway,
   emit: Emit,
@@ -33,13 +28,11 @@ export function deepgramTts(
   let ws: WebSocket;
   let closing = false;
   let outbox: string[] = [];
-
   let flushes: number[] = [];
   let current: number | null = null;
   let firstAudio = new Set<number>();
   let dropping = false;
   let carry: Uint8Array | null = null;
-
   const send = (m: object) => {
     const s = JSON.stringify(m);
     if (ws.readyState === WebSocket.OPEN) ws.send(s);
@@ -57,7 +50,9 @@ export function deepgramTts(
     };
     ws.onmessage = (m) => {
       if (typeof m.data === 'string') {
-        const j = JSON.parse(m.data) as { type: string };
+        const j = JSON.parse(m.data) as {
+          type: string;
+        };
         if (j.type === 'Flushed') {
           const turn = flushes.shift();
           if (turn !== undefined && !dropping) h.onDone(turn);
@@ -92,7 +87,6 @@ export function deepgramTts(
     ws.onerror = (e) => emit('tts.error', { error: String(e.message) });
     ws.onclose = (e) => {
       emit('tts.close', { code: e.code, reason: e.reason });
-
       for (const t of flushes) h.onDone(t);
       flushes = [];
       current = null;
@@ -100,7 +94,6 @@ export function deepgramTts(
     };
   };
   connect();
-
   return {
     speak(text, turn) {
       if (current === null) current = turn;
@@ -133,7 +126,6 @@ export function deepgramTts(
     },
   };
 }
-
 export function speakable(text: string): string {
   return text
     .replace(/```[\s\S]*?```/g, ' ')

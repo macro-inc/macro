@@ -1,6 +1,5 @@
 export const MAX_SENTENCES = 3;
 export const MAX_WORDS = 60;
-
 const CHECKS: [RegExp, string][] = [
   [
     /(\b[\w']+(\s[\w']+){0,2},\s+){3,}(and|or)\b|(\b[\w']+(\s[\w']+){0,2},\s+){2,}[\w']+(\s[\w']+){0,3}\s(and|or)\s/i,
@@ -32,14 +31,12 @@ const CHECKS: [RegExp, string][] = [
     'AI-speak',
   ],
 ];
-
 export type Score = {
   ok: boolean;
   problems: string[];
   sentences: number;
   words: number;
 };
-
 export function scoreSpoken(reply: string): Score {
   const text = reply.trim();
   const sentences = text
@@ -51,7 +48,6 @@ export function scoreSpoken(reply: string): Score {
   if (sentences > MAX_SENTENCES)
     problems.push(`${sentences} sentences (max ${MAX_SENTENCES})`);
   if (words > MAX_WORDS) problems.push(`${words} words (max ${MAX_WORDS})`);
-
   const body = text
     .split(/(?<=[.!?;])\s+/)
     .map((s) =>
@@ -60,7 +56,6 @@ export function scoreSpoken(reply: string): Score {
         ''
       )
     )
-
     .map((s) =>
       s.replace(
         /,?\s+(like|such as|including)\s+[\w']+(\s[\w']+)?(,\s*[\w']+(\s[\w']+)?)?,?\s+(and|or)\s+[\w']+(\s[\w']+)?/gi,

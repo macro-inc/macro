@@ -1,19 +1,26 @@
+import { readFile } from 'node:fs/promises';
 import { frames, parseWav, resample } from './audio.ts';
 import { Ear, type Rescue } from './ear.ts';
 import type { Emit } from './events.ts';
 import type { SttFactory } from './stt.ts';
 import { type Action, Turns } from './turns.ts';
-
 export type ReplayResult = {
-  actions: { t: number; action: Action }[];
+  actions: {
+    t: number;
+    action: Action;
+  }[];
   asks: string[];
 };
-
 /** Replay the same ear and turn machine without wall-clock polling or a model. */
 export async function replayPcm(
   samples: Int16Array,
   rate: number,
-  opts: { stt: SttFactory; rescue: Rescue; emit: Emit; tailMs?: number }
+  opts: {
+    stt: SttFactory;
+    rescue: Rescue;
+    emit: Emit;
+    tailMs?: number;
+  }
 ): Promise<ReplayResult> {
   const pcm = resample(samples, rate, 16000);
   const turns = new Turns(['Agent']);
@@ -57,11 +64,10 @@ export async function replayPcm(
     ),
   };
 }
-
 export async function replayWav(
   path: string,
   opts: Parameters<typeof replayPcm>[2]
 ) {
-  const wav = parseWav(await Deno.readFile(path));
+  const wav = parseWav(await readFile(path));
   return replayPcm(wav.samples, wav.rate, opts);
 }

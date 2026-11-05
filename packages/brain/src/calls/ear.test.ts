@@ -1,21 +1,20 @@
-import { expect } from 'jsr:@std/expect@1';
-import { afterAll, it as test } from 'jsr:@std/testing@1/bdd';
+import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { after as afterAll, test } from 'node:test';
 import { encodeWav, frames, level, parseWav } from './audio.ts';
 import { Segmenter, trimDelivered } from './ear.ts';
 import { replayPcm, replayWav } from './replay.ts';
 import type { SttFactory } from './stt.ts';
 
 const FIX = new URL('./fixtures/1', import.meta.url).pathname;
-const expected = JSON.parse(await Deno.readTextFile(`${FIX}/expected.json`));
+const expected = JSON.parse(await readFile(`${FIX}/expected.json`, 'utf8'));
 const noop = () => {};
-
 const RATE = 16000;
 const tmp = mkdtempSync(join(tmpdir(), 'ear-test-'));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
-
 /** A gated client's floor: zeros and +/-1, the same every run. */
 function gatedFloor(seconds: number): Int16Array {
   let x = 1;
@@ -25,7 +24,6 @@ function gatedFloor(seconds: number): Int16Array {
     return r < 0.05 ? 1 : r < 0.1 ? -1 : 0;
   });
 }
-
 /** A vowel-like tone at 120 Hz with harmonics and 30 ms ramps, scaled to dbfs RMS. */
 function voiced(ms: number, dbfs: number): Int16Array {
   const n = Math.round((ms / 1000) * RATE);
@@ -40,21 +38,17 @@ function voiced(ms: number, dbfs: number): Int16Array {
   const scale = (32768 * 10 ** (dbfs / 20)) / rms;
   return Int16Array.from(raw, (v) => Math.round(v * scale));
 }
-
 function writeWav(name: string, samples: Int16Array): string {
   const path = join(tmp, name);
   writeFileSync(path, encodeWav({ rate: RATE, samples }));
   return path;
 }
-
 const at = (t: number) => Math.round(t * RATE);
-
 const GATED = expected['noise-gated'];
 const gatedPcm = gatedFloor(GATED.seconds);
 for (const t of GATED.segments)
   gatedPcm.set(voiced(GATED.burstMs, GATED.dbfs), at(t));
 const gatedWav = writeWav('noise-gated.wav', gatedPcm);
-
 const NORMAL = expected['normal-level'];
 const [phraseStart, phraseEnd] = NORMAL.phrase;
 const normalPcm = gatedFloor(NORMAL.seconds);
@@ -63,24 +57,23 @@ normalPcm.set(
   at(phraseStart)
 );
 const normalWav = writeWav('normal-level.wav', normalPcm);
-
 test('synthetic calls have the shape of the real failures', () => {
   const bursts = GATED.segments.map((t: number) => [
     at(t),
     at(t + GATED.burstMs / 1000),
   ]);
   for (const [from, to] of bursts)
-    expect(level(gatedPcm.subarray(from, to)).dbfs).toBe(GATED.dbfs);
+    assert.strictEqual(level(gatedPcm.subarray(from, to)).dbfs, GATED.dbfs);
   const floor = gatedPcm.filter(
     (_, i) => !bursts.some(([from, to]: number[]) => i >= from! && i < to!)
   );
-  expect(Math.max(...new Set(floor))).toBe(1);
-  expect(Math.min(...new Set(floor))).toBe(-1);
-  expect(level(normalPcm.subarray(at(phraseStart), at(phraseEnd))).dbfs).toBe(
+  assert.strictEqual(Math.max(...new Set(floor)), 1);
+  assert.strictEqual(Math.min(...new Set(floor)), -1);
+  assert.strictEqual(
+    level(normalPcm.subarray(at(phraseStart), at(phraseEnd))).dbfs,
     NORMAL.dbfs
   );
 });
-
 /** Streaming STT as it behaved on recorded failure: hears speech, returns no words. */
 const deafStream: SttFactory = (_who, on) => ({
   send() {},
@@ -88,31 +81,31 @@ const deafStream: SttFactory = (_who, on) => ({
     on({ kind: 'final', text: '', speechFinal: true });
   },
 });
-
 test('segmenter finds the three noise-gated bursts, shaped like call recorded failure', async () => {
-  const w = parseWav(new Uint8Array(await Deno.readFile(gatedWav)));
+  const w = parseWav(new Uint8Array(await readFile(gatedWav)));
   const seg = new Segmenter();
-  const found: { start: number; end: number }[] = [];
+  const found: {
+    start: number;
+    end: number;
+  }[] = [];
   for (const f of frames(w.samples, 320)) {
     const s = seg.push(f);
     if (s) found.push(s);
   }
-  expect(found).toHaveLength(GATED.answered);
+  assert.strictEqual(found.length, GATED.answered);
   found.forEach((s, i) => {
-    expect(Math.abs(s.start / 1000 - GATED.segments[i])).toBeLessThan(0.1);
-    expect(Math.abs(s.end - s.start - GATED.burstMs)).toBeLessThan(100);
+    assert(Math.abs(s.start / 1000 - GATED.segments[i]) < 0.1);
+    assert(Math.abs(s.end - s.start - GATED.burstMs) < 100);
   });
 });
-
 test('segmenter ignores the noise floor and a lone click', () => {
   const seg = new Segmenter();
   let n = 0;
   const quiet = Int16Array.from({ length: 320 }, (_, i) => (i % 9 ? 0 : 1));
   const click = Int16Array.from({ length: 320 }, (_, i) => (i < 20 ? 8000 : 0));
   for (let i = 0; i < 200; i++) if (seg.push(i === 100 ? click : quiet)) n++;
-  expect(n).toBe(0);
+  assert.strictEqual(n, 0);
 });
-
 test('recorded failure regression: deaf streaming STT, rescue finds the words, Tod is asked all three', async () => {
   const words = ['Hello?', 'Hello?', 'Tod.'];
   let k = 0;
@@ -121,20 +114,21 @@ test('recorded failure regression: deaf streaming STT, rescue finds the words, T
     rescue: async () => words[k++] ?? '',
     emit: noop,
   });
-  expect(r.asks).toEqual(words);
-  expect(r.asks).toHaveLength(GATED.answered);
+  assert.deepStrictEqual(r.asks, words);
+  assert.strictEqual(r.asks.length, GATED.answered);
 });
-
 test('recorded failure regression: even when rescue finds nothing, a 1:1 caller gets "didn\'t catch that"', async () => {
   const r = await replayWav(gatedWav, {
     stt: deafStream,
     rescue: async () => '',
     emit: noop,
   });
-  expect(r.asks.length).toBeGreaterThanOrEqual(1);
-  expect(r.asks.every((a) => a.startsWith('(say)'))).toBe(true);
+  assert(r.asks.length >= 1);
+  assert.strictEqual(
+    r.asks.every((a) => a.startsWith('(say)')),
+    true
+  );
 });
-
 test('when streaming hears the words, no rescue call is made', async () => {
   let rescues = 0;
   const hearing: SttFactory = (_who, on) => {
@@ -153,11 +147,10 @@ test('when streaming hears the words, no rescue call is made', async () => {
     rescue: async () => (rescues++, 'x'),
     emit: (t) => t === 'ear.segment' && segments++,
   });
-  expect(segments).toBeGreaterThan(0); // the ear did notice speech
-  expect(rescues).toBe(0);
-  expect(r.asks.length).toBeGreaterThan(0);
+  assert(segments > 0); // the ear did notice speech
+  assert.strictEqual(rescues, 0);
+  assert(r.asks.length > 0);
 });
-
 test('recorded failure regression: words streaming showed only as an interim are used when rescue is empty', async () => {
   const interimOnly: SttFactory = (_who, on) => {
     let n = 0;
@@ -174,10 +167,9 @@ test('recorded failure regression: words streaming showed only as an interim are
     rescue: async () => '',
     emit: noop,
   });
-  expect(r.asks).toEqual(['Hi.']);
-  expect(r.asks).toHaveLength(NORMAL.answered);
+  assert.deepStrictEqual(r.asks, ['Hi.']);
+  assert.strictEqual(r.asks.length, NORMAL.answered);
 });
-
 const speechThenQuiet = (speechMs = 1000, totalMs = 6000) =>
   Int16Array.from({ length: (totalMs / 1000) * 16000 }, (_, i) =>
     i < (speechMs / 1000) * 16000
@@ -186,7 +178,6 @@ const speechThenQuiet = (speechMs = 1000, totalMs = 6000) =>
         ? 0
         : 1
   );
-
 test('probe recorded failure/recorded failure regression: streaming holds a sentence as interims for seconds; rescue transcribes it, asked once, late final dropped', async () => {
   const slow: SttFactory = (_who, on) => {
     let n = 0;
@@ -217,11 +208,10 @@ test('probe recorded failure/recorded failure regression: streaming holds a sent
     rescue: async () => 'What is two plus two?',
     emit: noop,
   });
-  expect(r.asks).toEqual(['What is two plus two?']);
+  assert.deepStrictEqual(r.asks, ['What is two plus two?']);
   const ask = r.actions.find((a) => a.action.type === 'ask')!;
-  expect(ask.t).toBeLessThan(3200); // not the 5 s final
+  assert(ask.t < 3200); // not the 5 s final
 });
-
 test('a streaming final that arrives after the rescue delivered the same audio is dropped', async () => {
   const late: SttFactory = (_who, on) => {
     let n = 0;
@@ -244,9 +234,8 @@ test('a streaming final that arrives after the rescue delivered the same audio i
     rescue: async () => 'Hello?',
     emit: noop,
   });
-  expect(r.asks).toEqual(['Hello?']);
+  assert.deepStrictEqual(r.asks, ['Hello?']);
 });
-
 test('probe recorded failure regression: an interim that stops short of the end of the speech is not promoted', async () => {
   const lagging: SttFactory = (_who, on) => {
     let n = 0;
@@ -277,30 +266,32 @@ test('probe recorded failure regression: an interim that stops short of the end 
     rescue: async () => 'x',
     emit: noop,
   });
-  expect(r.asks).toEqual(['Hey, Tod. Can you hear me?']);
+  assert.deepStrictEqual(r.asks, ['Hey, Tod. Can you hear me?']);
 });
-
 test('trimDelivered keeps only the new words of an overlapping final', () => {
-  expect(
+  assert.strictEqual(
     trimDelivered(
       'Stop. Sorry. Quick one. What is two plus',
       'Stop. Sorry. Quick one.'
-    )
-  ).toBe('What is two plus');
-  expect(trimDelivered('Stop sorry quick one', 'Stop. Sorry. Quick one.')).toBe(
+    ),
+    'What is two plus'
+  );
+  assert.strictEqual(
+    trimDelivered('Stop sorry quick one', 'Stop. Sorry. Quick one.'),
     ''
   );
-  expect(trimDelivered('Something else entirely', 'Stop. Sorry.')).toBe(
+  assert.strictEqual(
+    trimDelivered('Something else entirely', 'Stop. Sorry.'),
     'Something else entirely'
   );
-  expect(
+  assert.strictEqual(
     trimDelivered(
       'Stop. Sorry. Quick one. One is two plus two.',
       'Stop sorry quick one what is two plus two'
-    )
-  ).toBe('');
+    ),
+    ''
+  );
 });
-
 test('probe recorded failure regression: a pause between sentences does not split one turn into two asks', async () => {
   const pcm = Int16Array.from({ length: 6 * 16000 }, (_, i) => {
     const t = i / 16000;
@@ -346,12 +337,14 @@ test('probe recorded failure regression: a pause between sentences does not spli
     rescue: async () => 'x',
     emit: noop,
   });
-  expect(
-    r.asks.join(' | ').replace(/Stop\. Sorry\. Quick one\. /, '')
-  ).not.toContain('Stop.');
-  expect(r.asks.at(-1)).toContain('What is two plus two?');
+  assert(
+    !r.asks
+      .join(' | ')
+      .replace(/Stop\. Sorry\. Quick one\. /, '')
+      .includes('Stop.')
+  );
+  assert(r.asks.at(-1).includes('What is two plus two?'));
 });
-
 test('probe recorded failure regression: a re-sent interim for words already delivered is dropped, not a new line', async () => {
   const resend: SttFactory = (_who, on) => {
     let n = 0;
@@ -390,9 +383,8 @@ test('probe recorded failure regression: a re-sent interim for words already del
     rescue: async () => 'What is two plus two?',
     emit: (t, d) => t === 'turn.ask' && seen.push(String(d?.text)),
   });
-  expect(r.asks).toEqual(['What is two plus two?']);
+  assert.deepStrictEqual(r.asks, ['What is two plus two?']);
 });
-
 test('live probe recorded failure regression: Deepgram VAD + empty final with no local segment still gets resolved (never silent)', async () => {
   const pcm = Int16Array.from({ length: 5 * 16000 }, (_, i) =>
     i % 13 ? 0 : 1
@@ -414,6 +406,6 @@ test('live probe recorded failure regression: Deepgram VAD + empty final with no
     rescue: async () => (rescued++, ''),
     emit: noop,
   });
-  expect(rescued).toBe(1);
-  expect(r.asks).toEqual(["(say) Sorry, didn't catch that."]);
+  assert.strictEqual(rescued, 1);
+  assert.deepStrictEqual(r.asks, ["(say) Sorry, didn't catch that."]);
 });

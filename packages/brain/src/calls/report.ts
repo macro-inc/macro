@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { match } from 'ts-pattern';
 import type { Event } from './events.ts';
 
@@ -7,7 +8,6 @@ const short = (who: unknown) =>
   String(who ?? '')
     .replace(/^macro\|/, '')
     .replace(/@.*/, '');
-
 function line(e: Event): string | null {
   const who = e.who ? short(e.who) : '';
   return match(e.type)
@@ -35,14 +35,20 @@ function line(e: Event): string | null {
         .join(' ')}`;
     });
 }
-
 export function formatReport(
   events: Event[],
-  opts: { all?: boolean } = {}
+  opts: {
+    all?: boolean;
+  } = {}
 ): string {
   const out: string[] = [];
-
-  const levels = new Map<string, { from: number; db: number[] }>();
+  const levels = new Map<
+    string,
+    {
+      from: number;
+      db: number[];
+    }
+  >();
   const flush = (who: string) => {
     const l = levels.get(who);
     if (l?.db.length)
@@ -68,7 +74,6 @@ export function formatReport(
     if (s) out.push(`${clock(e.t)}  ${s}`);
   }
   for (const who of [...levels.keys()]) flush(who);
-
   const asks = events.filter((e) => e.type === 'turn.ask');
   const firstAudio = (turn: unknown, after: number) =>
     events.find(
@@ -108,9 +113,8 @@ export function formatReport(
     );
   return out.join('\n');
 }
-
 export async function readEvents(path: string): Promise<Event[]> {
-  const text = await Deno.readTextFile(path);
+  const text = await readFile(path, 'utf8');
   return text
     .split('\n')
     .filter(Boolean)

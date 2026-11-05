@@ -1,17 +1,20 @@
 import { closeSync, mkdirSync, openSync, writeSync } from 'node:fs';
 import { startSpan } from '../telemetry.ts';
 import { level, wavHeader } from './audio.ts';
-
-export type Event = { t: number; type: string; [k: string]: unknown };
+export type Event = {
+  t: number;
+  type: string;
+  [k: string]: unknown;
+};
 export type Emit = (type: string, data?: Record<string, unknown>) => void;
-
 export class EventLog {
   readonly t0 = performance.now();
   private fd: number | null;
-  constructor(
-    readonly dir: string | null,
-    private echo = false
-  ) {
+  readonly dir: string | null;
+  private echo;
+  constructor(dir: string | null, echo = false) {
+    this.dir = dir;
+    this.echo = echo;
     if (dir) mkdirSync(dir, { recursive: true, mode: 0o700 });
     this.fd = dir ? openSync(`${dir}/events.jsonl`, 'a', 0o600) : null;
   }
@@ -45,21 +48,20 @@ export class EventLog {
     this.fd = null;
   }
 }
-
 export class TrackRecorder {
   private fd: number;
   private written = 0;
   private levelAcc: Int16Array[] = [];
   private levelSince: number;
-  constructor(
-    path: string,
-    readonly rate: number,
-    private log: EventLog,
-    readonly who: string
-  ) {
+  readonly rate: number;
+  private log: EventLog;
+  readonly who: string;
+  constructor(path: string, rate: number, log: EventLog, who: string) {
+    this.rate = rate;
+    this.log = log;
+    this.who = who;
     this.fd = openSync(path, 'w', 0o600);
     writeSync(this.fd, wavHeader(rate, 0));
-
     this.fill(Math.floor((log.now() / 1000) * rate));
     this.levelSince = log.now();
   }

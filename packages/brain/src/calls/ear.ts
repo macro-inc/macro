@@ -4,9 +4,10 @@ import type { Stt, SttEvent, SttFactory } from './stt.ts';
 
 const _RATE = 16000;
 const FRAME_MS = 20;
-
-export type Segment = { start: number; end: number };
-
+export type Segment = {
+  start: number;
+  end: number;
+};
 export class Segmenter {
   static readonly MIN_RMS = 40;
   static readonly HANG_MS = 500;
@@ -17,20 +18,16 @@ export class Segmenter {
   private lastVoiced = 0;
   private voicedMs = 0;
   t = 0;
-
   get speaking() {
     return this.start !== null;
   }
-
   get voiced() {
     return this.start === null ? 0 : this.voicedMs;
   }
-
   push(frame: Int16Array): Segment | null {
     const { rms } = level(frame);
     const t = this.t;
     this.t += FRAME_MS;
-
     this.floor += (rms - this.floor) * (rms < this.floor ? 0.2 : 0.002);
     const voiced = rms >= Math.max(Segmenter.MIN_RMS, this.floor * 3);
     if (voiced) {
@@ -50,23 +47,18 @@ export class Segmenter {
     return enough ? seg : null;
   }
 }
-
 export type Rescue = (pcm: Int16Array) => Promise<string>;
-
 const norm = (w: string) => w.toLowerCase().replace(/[^a-z0-9']/g, '');
-
 export function trimDelivered(text: string, delivered: string): string {
   const words = text.split(/\s+/).filter(Boolean);
   const done = delivered.split(/\s+/).map(norm).filter(Boolean);
   if (!done.length) return text;
-
   const n = Math.min(done.length, words.length);
   let same = 0;
   for (let i = 0; i < n; i++) if (norm(words[i]!) === done[i]) same++;
   if (same < Math.max(1, n * 0.6)) return text;
   return words.slice(n).join(' ');
 }
-
 export class Ear {
   static readonly GRACE_MS = 1200;
   static readonly STABLE_MS = 600;
@@ -88,25 +80,33 @@ export class Ear {
   private dgSpeechAt: number | null = null;
   private gaveUpAt = -Infinity;
   private readonly rescues = new Set<Promise<void>>();
-  private delivered: { text: string; endMs: number } | null = null;
+  private delivered: {
+    text: string;
+    endMs: number;
+  } | null = null;
   private voiceSent = false;
   closed = false;
   static readonly VOICE_MS = 400;
-
+  readonly who: string;
+  private rescue: Rescue;
+  private onEvent: (e: SttEvent) => void;
+  private emit: Emit;
   constructor(
-    readonly who: string,
+    who: string,
     stt: SttFactory,
-    private rescue: Rescue,
-    private onEvent: (e: SttEvent) => void,
-    private emit: Emit
+    rescue: Rescue,
+    onEvent: (e: SttEvent) => void,
+    emit: Emit
   ) {
+    this.who = who;
+    this.rescue = rescue;
+    this.onEvent = onEvent;
+    this.emit = emit;
     this.stream = stt(who, (e) => this.fromStream(e));
   }
-
   private get now() {
     return this.seg.t;
   }
-
   private fromStream(ev: SttEvent) {
     let e = ev;
     if (e.kind === 'speech_started') this.dgSpeechAt = this.now;
@@ -120,7 +120,6 @@ export class Ear {
           startMs: start,
           endMs: end,
         });
-
       if (e.text && this.delivered && start < this.delivered.endMs) {
         const rest = trimDelivered(e.text, this.delivered.text);
         if (rest !== e.text)
@@ -140,7 +139,6 @@ export class Ear {
         this.interim = null;
       } else if (e.speechFinal) {
         this.gaveUpAt = this.now;
-
         if (
           this.dgSpeechAt !== null &&
           !this.pending.length &&
@@ -164,7 +162,6 @@ export class Ear {
     }
     this.onEvent(e);
   }
-
   push(raw: Int16Array) {
     const frame = this.gain.apply(raw);
     this.stream.send(frame);
@@ -186,7 +183,6 @@ export class Ear {
     }
     this.resolve();
   }
-
   private resolve() {
     this.pending = this.pending.filter((p) => this.covered < p.end - 200);
     if (!this.pending.length || this.seg.speaking) return;
@@ -197,7 +193,6 @@ export class Ear {
     const words =
       !!this.interim &&
       this.interim.endMs > Math.max(this.covered, first.start - 200);
-
     const wait = words ? Ear.PROMOTE_AFTER_MS : Ear.GRACE_MS;
     if (since < wait && !gaveUp) return;
     const span = { start: first.start, end: last.end };
@@ -206,7 +201,6 @@ export class Ear {
     this.rescues.add(rescue);
     void rescue.finally(() => this.rescues.delete(rescue));
   }
-
   private deliver(text: string, until: number, via: string) {
     this.covered = Math.max(this.covered, until);
     this.interim = null;
@@ -215,7 +209,6 @@ export class Ear {
     this.onEvent({ kind: 'final', text, speechFinal: true });
     if (!this.seg.speaking) this.onEvent({ kind: 'utterance_end' });
   }
-
   private async rescueSegment(s: Segment) {
     const from = Math.max(0, Math.max(s.start, this.covered) - Ear.PAD_MS);
     const to = s.end + Ear.PAD_MS;
@@ -227,7 +220,6 @@ export class Ear {
     const pcm = new Int16Array(frames.length * 320);
     frames.forEach((f, i) => pcm.set(f, i * 320));
     const before = this.covered;
-
     const t0 = performance.now();
     const text = (
       await this.rescue(pcm).catch(
@@ -236,7 +228,6 @@ export class Ear {
         )
       )
     ).trim();
-
     this.emit('ear.rescue', {
       who: this.who,
       startMs: s.start,
@@ -247,7 +238,6 @@ export class Ear {
     if (this.closed) return;
     if (this.covered > before && this.covered >= s.end - 200) return;
     if (text) return this.deliver(text, s.end, 'rescue');
-
     if (this.interim && this.interim.endMs > s.start - 200) {
       const rest = this.delivered
         ? trimDelivered(this.interim.text, this.delivered.text)
@@ -257,11 +247,9 @@ export class Ear {
     this.covered = Math.max(this.covered, s.end);
     this.onEvent({ kind: 'unheard' });
   }
-
   async settled() {
     await Promise.all(this.rescues);
   }
-
   async close() {
     this.closed = true;
     await this.stream.close();

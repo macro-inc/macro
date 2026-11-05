@@ -18,23 +18,17 @@ import {
 import type { Speaker } from './call.ts';
 import type { Emit } from './events.ts';
 import type { Conn } from './macro.ts';
-
 export const IN_RATE = 16000;
 export const IN_FRAME = 320; // 20 ms
-
 export type RoomHandlers = {
   joined(who: string, name: string): void;
   left(who: string): void;
-
   audio(who: string, frame: Int16Array): void;
-
   trackEnded?(who: string): void;
   disconnected(reason: string): void;
 };
-
 const human = (p: Participant) => p.kind !== ParticipantKind.AGENT;
 const label = (p: Participant) => p.identity;
-
 export class SourceSpeaker implements Speaker {
   private queue: Int16Array[] = [];
   private pumping = false;
@@ -42,11 +36,18 @@ export class SourceSpeaker implements Speaker {
   private gain = 1;
   private waiters: (() => void)[] = [];
   static readonly DUCK_GAIN = 0.2;
+  readonly source: AudioSource;
+  readonly rate: number;
+  private onPlayed?: (pcm: Int16Array) => void;
   constructor(
-    readonly source: AudioSource,
-    readonly rate: number,
-    private onPlayed?: (pcm: Int16Array) => void
-  ) {}
+    source: AudioSource,
+    rate: number,
+    onPlayed?: (pcm: Int16Array) => void
+  ) {
+    this.source = source;
+    this.rate = rate;
+    this.onPlayed = onPlayed;
+  }
   play(pcm: Int16Array) {
     const n = this.rate / 100;
     for (let i = 0; i < pcm.length; i += n) {
@@ -84,16 +85,16 @@ export class SourceSpeaker implements Speaker {
     await this.source.waitForPlayout();
   }
 }
-
 export class CallRoom {
   readonly room = new Room();
   private listening = new Set<string>(); // track sids
   private source: AudioSource | null = null;
-  constructor(
-    private emit: Emit,
-    private h: RoomHandlers
-  ) {}
-
+  private emit: Emit;
+  private h: RoomHandlers;
+  constructor(emit: Emit, h: RoomHandlers) {
+    this.emit = emit;
+    this.h = h;
+  }
   async connect(conn: Conn) {
     const r = this.room;
     r.on(RoomEvent.ParticipantConnected, (p: RemoteParticipant) => {
@@ -153,7 +154,6 @@ export class CallRoom {
       this.emit('room.disconnected', { reason: String(reason) });
       this.h.disconnected(String(reason));
     });
-
     await r.connect(conn.url, conn.token, {
       autoSubscribe: true,
       dynacast: false,
@@ -175,7 +175,6 @@ export class CallRoom {
           this.subscribed(pub.track, pub, p);
     }
   }
-
   private subscribed(
     t: RemoteTrack,
     pub: RemoteTrackPublication,
@@ -197,7 +196,6 @@ export class CallRoom {
     this.listening.add(pub.sid!);
     void this.listen(t, pub.sid!, label(p));
   }
-
   private async listen(t: RemoteTrack, sid: string, who: string) {
     const stream = new AudioStream(t, {
       sampleRate: IN_RATE,
@@ -226,12 +224,10 @@ export class CallRoom {
       this.h.trackEnded?.(who);
     }
   }
-
   speaker(rate: number, onPlayed?: (pcm: Int16Array) => void): SourceSpeaker {
     this.source = new AudioSource(rate, 1, 200); // short queue: a duck or stop is heard at once
     return new SourceSpeaker(this.source, rate, onPlayed);
   }
-
   async publish(name: string) {
     if (!this.source) throw new Error('speaker() first');
     const track = LocalAudioTrack.createAudioTrack(name, this.source);
@@ -240,11 +236,9 @@ export class CallRoom {
     await this.room.localParticipant!.publishTrack(track, opts);
     this.emit('room.published', { name });
   }
-
   humans(): string[] {
     return [...this.room.remoteParticipants.values()].filter(human).map(label);
   }
-
   async leave() {
     await this.room.disconnect();
     this.source?.close();

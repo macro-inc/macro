@@ -10,13 +10,10 @@ import type { Emit } from './events.ts';
 export const SILENT = '(silent)';
 export interface Brain {
   start(): Promise<void>;
-
   ask(turn: number, content: string): AsyncIterable<string>;
-
   interrupt(): void;
   close(): Promise<void>;
 }
-
 export type Asked = {
   who: string;
   name: string;
@@ -24,7 +21,6 @@ export type Asked = {
   context: string[];
   cutOff: boolean;
 };
-
 export function askContent(a: Asked): string {
   const parts: string[] = [];
   if (a.cutOff)
@@ -36,7 +32,6 @@ export function askContent(a: Asked): string {
   parts.push(`${a.name} [${a.who}] says to you: ${a.text}`);
   return parts.join('\n\n');
 }
-
 export function sentences(buf: string): [string[], string] {
   const out: string[] = [];
   let start = 0;
@@ -58,7 +53,6 @@ export function sentences(buf: string): [string[], string] {
   }
   return [out, buf.slice(start)];
 }
-
 export function rules(): string {
   return `You are on a live voice call. Everything you write is spoken aloud,
   sentence by sentence. Use one or two short sentences, then let others talk.
@@ -71,7 +65,6 @@ export function rules(): string {
   the call ends. Never promise work without handing it off. Say bye briefly
   and use hang_up when asked to leave.`;
 }
-
 export type CallBrainOptions = {
   callId: string;
   channel: string;
@@ -82,7 +75,6 @@ export type CallBrainOptions = {
   operating: string;
   options: Options;
 };
-
 class Inbox implements AsyncIterable<SDKUserMessage> {
   private q: SDKUserMessage[] = [];
   private wake: (() => void) | null = null;
@@ -109,9 +101,14 @@ class Inbox implements AsyncIterable<SDKUserMessage> {
     }
   }
 }
-
-type Out = { kind: 'text'; text: string } | { kind: 'end' };
-
+type Out =
+  | {
+      kind: 'text';
+      text: string;
+    }
+  | {
+      kind: 'end';
+    };
 export function claudeBrain(opts: CallBrainOptions): Brain {
   const { emit } = opts;
   const inbox = new Inbox();
@@ -121,7 +118,6 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
   let q: ReturnType<typeof query> | null = null;
   let ready!: () => void;
   const started = new Promise<void>((r) => (ready = r));
-
   const tools = createSdkMcpServer({
     name: 'call',
     version: '1.0.0',
@@ -163,14 +159,16 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
       ),
     ],
   });
-
   async function pump() {
     let buf = '';
     for await (const m of q!) {
       if (m.type === 'stream_event') {
         const ev = m.event as {
           type: string;
-          delta?: { type: string; text?: string };
+          delta?: {
+            type: string;
+            text?: string;
+          };
         };
         if (
           ev.type === 'content_block_delta' &&
@@ -207,7 +205,6 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
     emit('brain.exit');
     sink?.({ kind: 'end' });
   }
-
   function runTurn(content: string, turnNo: number) {
     const queue: string[] = [];
     let wake: (() => void) | null = null;
@@ -243,7 +240,6 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
     }
     return { texts: texts(), done };
   }
-
   async function* serial(
     content: string,
     turnNo: number
@@ -256,7 +252,6 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
     t.done.then(release);
     yield* t.texts;
   }
-
   return {
     async start() {
       const brief = opts.briefing();

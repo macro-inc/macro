@@ -1,8 +1,9 @@
-import { assertEquals } from '@std/assert';
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { parseCallsConfig } from './config.ts';
 import { type World, wanted } from './watch.ts';
 
-Deno.test('joins ringing, DM, allowed channels and invited meetings; exclusions override every path', () => {
+test('joins ringing, DM, allowed channels and invited meetings; exclusions override every path', () => {
   const config = parseCallsConfig({
     channels: ['allowed'],
     blockedChannels: ['blocked'],
@@ -96,7 +97,7 @@ Deno.test('joins ringing, DM, allowed channels and invited meetings; exclusions 
       name: '',
     },
   ];
-  assertEquals(
+  assert.deepStrictEqual(
     wanted(world).map((call) => call.callId),
     ['ring', 'dm', 'allowed', 'meeting-call']
   );

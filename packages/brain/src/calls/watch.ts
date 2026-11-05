@@ -2,7 +2,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { Emit } from './events.ts';
 import type { ActiveCall, CallApi, Meeting } from './macro.ts';
 import { rejoinDelay } from './retry.ts';
-
 export type Invitation = {
   callId: string;
   kind: 'channel' | 'meeting';
@@ -13,16 +12,18 @@ export type CallsConfig = {
   channels: string[];
   blockedChannels: string[];
   hungUp: string[];
-  voice: string;
 };
 export type World = {
   me: string;
-  calls: (ActiveCall & { ringing: boolean; dm: boolean; name: string })[];
+  calls: (ActiveCall & {
+    ringing: boolean;
+    dm: boolean;
+    name: string;
+  })[];
   meetings: Meeting[];
   config: CallsConfig;
 };
 const customer = /^macro\s*(support\s*)?x\s/i;
-
 export function wanted(world: World): Invitation[] {
   const { config, me } = world;
   const permitted = (id: string, name: string, channel: string | null) =>
@@ -62,7 +63,6 @@ export function wanted(world: World): Invitation[] {
       ),
   ];
 }
-
 /** Owns one watcher and one session per call; failed sessions retry while live. */
 export async function watchCalls(options: {
   api: CallApi;
@@ -75,7 +75,13 @@ export async function watchCalls(options: {
 }): Promise<void> {
   const running = new Map<string, AbortController>();
   const pending = new Set<Promise<void>>();
-  const attempts = new Map<string, { failures: number; due: number }>();
+  const attempts = new Map<
+    string,
+    {
+      failures: number;
+      due: number;
+    }
+  >();
   try {
     while (!options.signal.aborted) {
       try {
@@ -105,6 +111,7 @@ export async function watchCalls(options: {
           config,
         });
         for (const invitation of invitations) {
+          if (running.size > 0) continue;
           if (
             running.has(invitation.callId) ||
             Date.now() < (attempts.get(invitation.callId)?.due ?? 0)
