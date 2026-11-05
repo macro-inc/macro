@@ -461,7 +461,8 @@ the shimmer.
   tagging the workspace and row nodes and checking they survive the click.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
-  actions. Archived sessions are grouped at the bottom under **Archived**.
+  actions. Archived sessions are grouped at the bottom under **Archived**, a
+  section that starts collapsed; click its header (count and caret) to expand it.
   Runs of routines set to **Hide runs** (the default) are left out until the
   clock button beside the search control (**Show hidden routine runs**) is
   pressed; runs of routines set to **Show runs** are always listed. Every

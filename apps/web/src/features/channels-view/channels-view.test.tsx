@@ -193,7 +193,6 @@ vi.mock('./channels-view-context', () => ({
   ChannelsViewProvider: mocks.pass,
   useChannelsView: () => ({
     state: {
-      asideWidth: 256,
       tab: 'browse',
       sortBy: { channels: 'updated_at', direct_messages: 'updated_at' },
     },
@@ -212,7 +211,6 @@ vi.mock('./channels-view-context', () => ({
             target: mocks.target(),
           }
         : undefined,
-    setAsideWidth: vi.fn(),
   }),
 }));
 vi.mock('./queries', () => ({
