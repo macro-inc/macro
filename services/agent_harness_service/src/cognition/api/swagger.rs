@@ -31,10 +31,10 @@ use mcp_client::inbound::axum_router::{
 use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryResponse};
 use onboarding::inbound::axum_router::{self as onboarding_api, CompleteOnboardingRequest};
 use pipedream_mcp::inbound::axum_router::{
-    self as pipedream_api, PipedreamCatalogEntryResponse, PipedreamCatalogResponse,
-    PipedreamCompleteRequest, PipedreamConnectCompleteRequest, PipedreamConnectionResponse,
-    PipedreamOverlayResponse, PipedreamProviderResponse, PipedreamRecoverRequest,
-    PipedreamTokenRequest, PipedreamTokenResponse, PipedreamUpdateRequest,
+    self as pipedream_api, ConnectorOrgSetupResponse, PipedreamCatalogEntryResponse,
+    PipedreamCatalogResponse, PipedreamCompleteRequest, PipedreamConnectCompleteRequest,
+    PipedreamConnectionResponse, PipedreamOverlayResponse, PipedreamProviderResponse,
+    PipedreamRecoverRequest, PipedreamTokenRequest, PipedreamTokenResponse, PipedreamUpdateRequest,
 };
 
 use crate::cognition::api::preview::get_batch_preview::{
@@ -283,6 +283,7 @@ use utoipa::OpenApi;
                 PipedreamRecoverRequest,
                 PipedreamCatalogResponse,
                 PipedreamCatalogEntryResponse,
+                ConnectorOrgSetupResponse,
                 PipedreamOverlayResponse,
                 model_error_response::ErrorResponse,
             ),

@@ -13,6 +13,7 @@ import { type Accessor, createSignal, For, Show } from 'solid-js';
 import { ConnectAction } from '../integration-ui';
 import { connectorDescription, ImportAction } from './import-action';
 import { IntegrationListRow } from './integrations-list';
+import { OrgSetupNote } from './org-setup-note';
 
 type CatalogSearch = ReturnType<typeof createPipedreamCatalogSearch>;
 
@@ -110,6 +111,11 @@ function CatalogRow(props: { entry: PipedreamCatalogEntryResponse }) {
       name={name()}
       kind="mcp"
       description={connectorDescription(props.entry.app_slug, name())}
+      note={
+        <Show when={props.entry.org_setup}>
+          {(setup) => <OrgSetupNote setup={setup()} />}
+        </Show>
+      }
       categories={catalogCategories(props.entry)}
       status="available"
     >

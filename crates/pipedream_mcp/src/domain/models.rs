@@ -120,6 +120,23 @@ pub struct CatalogEntry {
     pub icon_url: Option<String>,
     /// Categories assigned by the Pipedream app directory.
     pub categories: Vec<String>,
+    /// Setup an admin of the user's organization must do at the vendor.
+    pub org_setup: Option<OrgSetup>,
+}
+
+/// Setup an admin of the user's organization must do at the vendor.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OrgSetup {
+    /// One sentence on what the admin does and what happens without it.
+    pub summary: String,
+    /// The steps, in order.
+    pub steps: Vec<String>,
+    /// Where the admin does it.
+    pub settings_url: String,
+    /// Connecting fails until this is done.
+    pub required: bool,
+    /// The URL the admin adds, when a step adds one.
+    pub allowlist_url: Option<String>,
 }
 
 /// One page of catalog results.

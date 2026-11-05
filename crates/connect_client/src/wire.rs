@@ -27,6 +27,26 @@ pub struct CatalogEntry {
     /// connections off Pipedream. Empty when there is no equivalent.
     #[serde(default)]
     pub pipedream_app_slugs: Vec<String>,
+    /// Setup an admin of the user's organization must do at the vendor; show it
+    /// to the user. Absent when there is none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_setup: Option<OrgSetup>,
+}
+
+/// Setup an admin of the user's organization must do at the vendor.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+pub struct OrgSetup {
+    /// One sentence on what the admin does and what happens without it.
+    pub summary: String,
+    /// The steps, in order.
+    pub steps: Vec<String>,
+    /// Where the admin does it.
+    pub settings_url: String,
+    /// Connecting fails until this is done. Otherwise it works with less access.
+    pub required: bool,
+    /// The URL the admin adds, when a step adds one. Differs per deployment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowlist_url: Option<String>,
 }
 
 /// How Connect obtains a vendor OAuth client.

@@ -1446,6 +1446,32 @@ export type PatchChatRequest = {
 };
 
 /**
+ * Setup an admin of the user's organization must do at the vendor.
+ */
+export type ConnectorOrgSetupResponse = {
+    /**
+     * The URL the admin adds, when a step adds one.
+     */
+    allowlist_url?: string | null;
+    /**
+     * Connecting fails until this is done.
+     */
+    required: boolean;
+    /**
+     * Where the admin does it.
+     */
+    settings_url: string;
+    /**
+     * The steps, in order.
+     */
+    steps: Array<string>;
+    /**
+     * One sentence on what the admin does and what happens without it.
+     */
+    summary: string;
+};
+
+/**
  * One connectable app in the catalog.
  */
 export type PipedreamCatalogEntryResponse = {
@@ -1469,6 +1495,7 @@ export type PipedreamCatalogEntryResponse = {
      * URL of the app's icon, when available.
      */
     icon_url?: string | null;
+    org_setup?: null | ConnectorOrgSetupResponse;
 };
 
 /**

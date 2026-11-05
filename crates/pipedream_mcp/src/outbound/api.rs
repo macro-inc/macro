@@ -539,6 +539,7 @@ fn offered_catalog_entry(app: AppResponse) -> Option<CatalogEntry> {
     }
     Some(CatalogEntry {
         categories: app.categories,
+        org_setup: None,
         app_slug: app.name_slug,
         display_name: app.name,
         description: app
