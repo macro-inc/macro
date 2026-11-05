@@ -26,6 +26,9 @@ pub enum Runner {
     /// cache volume, isolated from the deploy profiles so deploy's churn can't
     /// evict the CI Cargo/Nix caches.
     RustCi,
+    /// 32 vCPU, 64 GiB profile for the Rust `test` job, which is held back by
+    /// compile parallelism and memory on smaller runners.
+    Large,
     /// Apple Silicon, for jobs that need a real Apple SDK. A machine label
     /// rather than a dashboard profile, so it needs no setup outside this file.
     MacOsArm,
@@ -43,6 +46,7 @@ impl fmt::Display for Runner {
             Runner::Small => "namespace-profile-linux-small",
             Runner::Mid => "namespace-profile-linux-mid",
             Runner::RustCi => "namespace-profile-linux-rust-ci",
+            Runner::Large => "namespace-profile-linux-large-build",
             Runner::MacOsArm => "nscloud-macos-sequoia-arm64-6x14",
             Runner::MacOsArmLarge => "nscloud-macos-sequoia-arm64-12x28",
             Runner::Windows => "nscloud-windows-2022-amd64-8x16",
