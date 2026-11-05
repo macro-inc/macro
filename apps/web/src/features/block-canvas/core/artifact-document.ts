@@ -35,7 +35,6 @@ export function artifactThemeTokens(element: Element): Record<string, string> {
   );
 }
 
-<<<<<<< HEAD
 /**
  * Focus inside a frame keeps keys from the host, so the host cannot exit or step
  * through a presentation. Forward the few it needs, unless the artifact handled
@@ -50,11 +49,8 @@ const KEY_BRIDGE = `addEventListener('keydown', function (event) {
   parent.postMessage({ macroArtifactKey: event.key }, '*');
 });`;
 
-/** Bounds cycles and fan-out between components that use each other. */
-=======
 /** Bound cycles and fan-out between components. Expansion runs on the host's main
  * thread, and a peer can store entries past the authoring limit. */
->>>>>>> eric/canvas-artifact-library
 const MAX_COMPONENT_EXPANSIONS = 500;
 const MAX_EXPANDED_LENGTH = 2_000_000;
 
