@@ -10,7 +10,7 @@ import { Document } from './document';
 import { SystemSkill } from './system-skill';
 
 /**
- * @routing Use when writing, creating, reading or editing a document of any kind, such as a brief, notes, a spec, a canvas, a spreadsheet or a deck; not databases, tasks or email.
+ * @routing Use when writing, creating, reading or editing a document of any kind, such as a brief, notes, a spec, a canvas, a spreadsheet or a deck, or publishing an HTML page as an artifact; not databases, tasks or email.
  *
  * @agent
  * ## Linking Macro items inside document content
