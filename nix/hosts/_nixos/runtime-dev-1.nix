@@ -13,7 +13,7 @@
   disko.devices = {
     disk.boot = {
       type = "disk";
-      device = "/dev/disk/by-id/google-persistent-disk-0";
+      device = "/dev/disk/by-id/scsi-0Google_PersistentDisk_persistent-disk-0";
       content = {
         type = "gpt";
         partitions = {
@@ -44,7 +44,7 @@
     };
     disk.pool = {
       type = "disk";
-      device = "/dev/disk/by-id/google-persistent-disk-1";
+      device = "/dev/disk/by-id/scsi-0Google_PersistentDisk_persistent-disk-1";
       content = {
         type = "zfs";
         pool = "tank";
