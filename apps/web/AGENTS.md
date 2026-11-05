@@ -94,8 +94,6 @@ that coverage proves the meter's layout there, not that touch users can reach it
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
-CRM contact phones (desktop and phone) and call source badges:
-`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts contact-phones.browser.e2e.ts`.
 
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details) have a backend-free
