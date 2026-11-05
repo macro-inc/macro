@@ -117,7 +117,9 @@ impl IntoResponse for TeamAgentError {
             TeamAgentError::EmailUnavailable => StatusCode::SERVICE_UNAVAILABLE,
             TeamAgentError::Forbidden | TeamAgentError::NotEnabled => StatusCode::FORBIDDEN,
             TeamAgentError::ComputerUnavailable(_) => StatusCode::CONFLICT,
-            TeamAgentError::EmailProvider(_) => StatusCode::BAD_GATEWAY,
+            TeamAgentError::EmailProvider(_) | TeamAgentError::ComputerProvider(_) => {
+                StatusCode::BAD_GATEWAY
+            }
             TeamAgentError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -125,6 +127,10 @@ impl IntoResponse for TeamAgentError {
             TeamAgentError::Internal(error) => {
                 tracing::error!(error = ?error, "team agent request failed");
                 "internal error".to_string()
+            }
+            TeamAgentError::ComputerProvider(error) => {
+                tracing::error!(error = ?error, "the computer billing provider failed");
+                "the computer billing provider failed".to_string()
             }
             TeamAgentError::EmailProvider(error) => {
                 tracing::error!(error = ?error, "the email provider failed");
@@ -166,6 +172,7 @@ pub struct QuoteQuery {
         (status = 403, body = ErrorResponse),
         (status = 409, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 502, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
@@ -202,6 +209,7 @@ where
         (status = 403, body = ErrorResponse),
         (status = 409, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 502, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]

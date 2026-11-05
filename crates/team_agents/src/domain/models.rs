@@ -461,6 +461,9 @@ pub enum TeamAgentError {
     /// The computer can't be bought right now (sold out, no subscription).
     #[error("the computer can't be bought: {0}")]
     ComputerUnavailable(String),
+    /// The computer billing provider failed.
+    #[error("the computer billing provider failed: {0}")]
+    ComputerProvider(rootcause::Report),
     /// The email provider failed.
     #[error("the email provider failed: {0}")]
     EmailProvider(rootcause::Report),

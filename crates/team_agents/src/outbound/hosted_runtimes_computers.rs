@@ -166,6 +166,9 @@ fn error(source: ComputerError) -> TeamAgentError {
             | BillingError::IntervalNotSold(_)
             | BillingError::PaymentFailed,
         ) => TeamAgentError::ComputerUnavailable(source.to_string()),
+        ComputerError::Billing(BillingError::Provider(report)) => {
+            TeamAgentError::ComputerProvider(report)
+        }
         other => TeamAgentError::internal(other),
     }
 }

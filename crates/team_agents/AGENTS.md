@@ -54,6 +54,8 @@ from the hosted-runtimes size catalog alongside the seat and computer price.
   its purchase forwards the persona and seat in `extra_items` for one Stripe
   update. Tests keep the fake `Computers` port. The persona (name, job,
   personality) is written into the repo's `OPERATING.md` by `agent_git`.
+- Quote and purchase report billing-provider outages as 502, without exposing
+  provider details in the response.
 - Delete runs computer → repo → seat → mailbox → account; the row goes last
   so a retry after a partial failure still finds the agent.
 - Without `DEAD_SIMPLE_MAIL_API_KEY` agents get an `@agents.macro.invalid`

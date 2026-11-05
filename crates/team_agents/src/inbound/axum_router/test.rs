@@ -473,3 +473,24 @@ async fn a_computer_that_cannot_be_bought_answers_conflict() {
         r#"{"message":"the computer can't be bought: sold out"}"#
     );
 }
+
+#[tokio::test]
+async fn a_billing_provider_failure_answers_bad_gateway_without_provider_details() {
+    let service = Arc::new(FakeService::default());
+    *service.create_error.lock().expect("lock") = Some(TeamAgentError::ComputerProvider(
+        rootcause::report!("private provider details"),
+    ));
+    let response = router(service, TeamRole::Admin).oneshot(
+        Request::post("/")
+            .header(header::AUTHORIZATION, "Bearer admin")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"name":"Agent","jobDescription":"Handle tasks","personality":"Direct","size":"standard"}"#))
+            .expect("request"),
+    ).await.expect("response");
+    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+    assert!(
+        !body_text(response)
+            .await
+            .contains("private provider details")
+    );
+}

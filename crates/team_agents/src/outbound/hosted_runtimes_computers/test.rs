@@ -245,12 +245,18 @@ impl ComputerRepo for FakeRepo {
 #[derive(Default)]
 struct FakeBilling {
     decline: bool,
+    provider_fails: bool,
     updates: Arc<Mutex<Vec<(ComputerSize, Vec<SubscriptionItem>, String)>>>,
     removals: Mutex<Vec<(ComputerSize, String)>>,
 }
 
 impl Billing for FakeBilling {
     async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
+        if self.provider_fails {
+            return Err(BillingError::Provider(rootcause::report!(
+                "billing is unreachable"
+            )));
+        }
         Ok(Quote {
             size,
             price_id: format!("price_{}", size.as_ref()),
@@ -435,4 +441,20 @@ async fn declined_purchase_reports_unavailable_and_releases_reserved_capacity() 
             .values()
             .all(|row| row.state.phase == Phase::Destroyed)
     );
+}
+
+#[tokio::test]
+async fn billing_provider_failures_remain_upstream_errors() {
+    let service = HostedRuntimesComputers::new(Arc::new(ComputerService::new(
+        FakeRepo::default(),
+        FakeBilling {
+            provider_fails: true,
+            ..Default::default()
+        },
+        FixedClock,
+    )));
+    assert!(matches!(
+        service.quote(TEAM, agent::ComputerSize::Standard).await,
+        Err(agent::TeamAgentError::ComputerProvider(_))
+    ));
 }
