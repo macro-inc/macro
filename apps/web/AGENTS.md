@@ -98,6 +98,13 @@ meter on every row except on phones, with the direction in its label while
 importance moves:
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
 
+A channel call's row and its call panel (the real `Channel` over synthetic service
+responses) have a backend-free desktop and phone regression: the collapsed row, the
+blank slate, composer pinning, quote replies and the outside-message popup:
+`bunx playwright test --config src/features/channel/Call/discussion/browser-test/playwright.config.ts`.
+On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
+Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 

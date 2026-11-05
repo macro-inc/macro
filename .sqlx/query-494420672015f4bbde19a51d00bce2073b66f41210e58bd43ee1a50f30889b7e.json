@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT cr.id, cr.channel_id, cr.room_name, cr.created_by, cr.started_at, cr.ended_at, cr.duration_ms, cr.egress_id, cr.recording_key, cr.preview_url, cr.recording_started_at, cr.custom_name, cr.summary,\n                   sp.team_share_access_level AS \"team_share_access_level?: AccessLevel\"\n            FROM call_records cr\n            JOIN \"SharePermission\" sp ON sp.id = cr.share_permission_id\n            WHERE cr.id = $1\n            ",
+  "query": "\n            SELECT c.id, c.channel_id, c.room_name, c.created_by, c.created_at, c.egress_id, c.recording_key, c.preview_url, c.recording_started_at,\n                   (SELECT title FROM call_meetings WHERE id = c.meeting_id) AS custom_name,\n                   c.share_with_team,\n                   ce.discussion,\n                   sp.team_share_access_level AS \"team_share_access_level?: AccessLevel\"\n            FROM calls c\n            JOIN call_entities ce ON ce.id = c.id\n            JOIN \"SharePermission\" sp ON sp.id = c.share_permission_id\n            WHERE c.id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -25,51 +25,46 @@
       },
       {
         "ordinal": 4,
-        "name": "started_at",
+        "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
         "ordinal": 5,
-        "name": "ended_at",
-        "type_info": "Timestamptz"
-      },
-      {
-        "ordinal": 6,
-        "name": "duration_ms",
-        "type_info": "Int8"
-      },
-      {
-        "ordinal": 7,
         "name": "egress_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 6,
         "name": "recording_key",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 7,
         "name": "preview_url",
         "type_info": "Text"
       },
       {
-        "ordinal": 10,
+        "ordinal": 8,
         "name": "recording_started_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 9,
         "name": "custom_name",
         "type_info": "Text"
       },
       {
-        "ordinal": 12,
-        "name": "summary",
+        "ordinal": 10,
+        "name": "share_with_team",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "discussion",
         "type_info": "Text"
       },
       {
-        "ordinal": 13,
+        "ordinal": 12,
         "name": "team_share_access_level?: AccessLevel",
         "type_info": {
           "Custom": {
@@ -97,16 +92,15 @@
       false,
       false,
       false,
+      true,
+      true,
+      true,
+      true,
+      null,
       false,
       false,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
       true
     ]
   },
-  "hash": "7a8672111c0c887bf1c2c873a478615fc42fed6f7769515edc0e025cc5c6d493"
+  "hash": "494420672015f4bbde19a51d00bce2073b66f41210e58bd43ee1a50f30889b7e"
 }

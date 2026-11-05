@@ -49,6 +49,9 @@ in-call chat.
 
 ## Gotchas
 
+- A call's discussion is stored in `call_entities.discussion` when it is created, and can't be
+  inferred from `channel_id`: past channel calls keep `call_chat`. See
+  `docs/design/call-chat-in-channel.md`.
 - Declining a call on one device must stop ringing on every other device — this
   regressed once (#7092); route the decline through the shared call state, not
   a per-device signal.
