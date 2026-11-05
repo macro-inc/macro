@@ -130,7 +130,9 @@ pub(super) fn clear_state(instance: &Instance) -> Result<()> {
 /// Docker containers running.
 pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     let stage = Stage::from_env_cli(args.run.verbose);
-    let instance = Instance::derive(
+    let mut instance = super::allocator::allocate(
+        &stage,
+        mode,
         args.run.instance.instance.as_deref(),
         args.run.instance.port_base,
     )?;
@@ -163,10 +165,10 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
 
     let static_frontend = !args.run.no_frontend && !args.infra_only;
     let infra_only = args.infra_only;
-    let (env, target) = super::prepare(
+    let (env, target) = super::prepare_on_free_window(
         &stage,
         mode,
-        &instance,
+        &mut instance,
         &args.run,
         static_frontend,
         infra_only,
@@ -175,6 +177,7 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         // no cloudflared and no @cursor sessions to feed; the egress stays
         // in-network and previews stay reachable on that box only.
         Tunnels::default(),
+        args.run.instance.port_base,
     )?;
 
     // Build + stage the frontend bundle in the background: it's pure host-side
@@ -305,7 +308,7 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
 /// `cargo x stack update` — adopt a new build into the running stack.
 /// Volumes stay. With no recorded stack, this bootstraps through [`up`].
 pub fn update(args: &UpdateArgs) -> Result<()> {
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
     if read_state(&instance).is_none() {
         return bootstrap_from_update(args);
     }
@@ -337,7 +340,7 @@ fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
 
 fn update_running(args: &UpdateArgs) -> Result<()> {
     let stage = Stage::from_env_cli(args.verbose);
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
     let state = read_state(&instance).expect("update_running requires stack state");
     let mode = mode_from_label(&state.mode)?;
     stage.section(&format!(
@@ -478,7 +481,7 @@ fn reload_static_frontend(
 /// `cargo x stack status` — container states + health through the proxy, as a
 /// human summary or `--json` for machines.
 pub fn status(args: &StatusArgs) -> Result<()> {
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
     let state = read_state(&instance);
     let services = compose_ps(&instance)?;
     let running = services.iter().any(|s| s.state == "running");
@@ -538,7 +541,7 @@ pub fn status(args: &StatusArgs) -> Result<()> {
 /// `cargo x stack down` — reclaim the instance: containers, volumes, networks,
 /// and state. `--keep-data` only stops containers.
 pub fn down(args: &DownArgs) -> Result<()> {
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
     if args.keep_data {
         return super::stop(&args.instance);
     }

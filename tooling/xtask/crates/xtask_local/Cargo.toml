@@ -53,6 +53,7 @@ xtask_paths = { path = "../xtask_paths" }
 
 [dev-dependencies]
 jsonwebtoken = { workspace = true }
+tempfile = { workspace = true }
 
 [features]
 # Local Kafka topic provisioning (`run-local` / `kafka-provision`). Off by

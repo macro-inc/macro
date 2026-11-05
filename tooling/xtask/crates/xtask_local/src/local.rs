@@ -13,6 +13,7 @@
 
 use std::path::PathBuf;
 
+pub mod allocator;
 pub mod arch;
 pub mod build;
 pub mod cf_tunnel;
@@ -200,7 +201,12 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         kafka::ensure_available(&format!("run-{}", mode.label()))?;
     }
     let stage = Stage::from_env_cli(args.verbose);
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let mut instance = allocator::allocate(
+        &stage,
+        mode,
+        args.instance.instance.as_deref(),
+        args.instance.port_base,
+    )?;
     stage.section(&format!(
         "macro {} stack — instance {}",
         mode.label(),
@@ -319,10 +325,15 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // Foreground: resolve env, build binaries + runtime image, generate the
     // compose override / Caddyfile / kickstart. None of this touches the volumes
     // or containers the teardown is removing, so it's safe to overlap.
-    let (env, target) = prepare(
+    // The open tunnels point at this window's ports, so it can't move under them.
+    let pinned_base = args
+        .instance
+        .port_base
+        .or(share_app.then_some(instance.port_base()));
+    let (env, target) = prepare_on_free_window(
         &stage,
         mode,
-        &instance,
+        &mut instance,
         args,
         share_app,
         false,
@@ -331,6 +342,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
             egress: egress_tunnel.as_ref().map(|tunnel| tunnel.url.as_str()),
             preview_ssh: preview_ssh_tunnel_host.as_deref(),
         },
+        pinned_base,
     )?;
 
     // Build + stage the shareable bundle in the background (pure host-side
@@ -649,6 +661,7 @@ fn interact(
                 // (its start-of-run teardown then has nothing to stop). Best-effort
                 // — we're exiting regardless.
                 let _ = teardown(stage, instance);
+                let _ = allocator::release(instance);
                 return Ok(());
             }
             _ => {}
@@ -734,6 +747,48 @@ fn prepare(
         pull_app_service_images(stage, instance, &env)?;
     }
     Ok((env, target))
+}
+
+/// [`prepare`], then make sure the port window survived the build. A tool that
+/// doesn't use the allocator (an older checkout, anything on the host) can take a
+/// port meanwhile, and finding out at `docker compose up` would waste the build.
+/// If so, regenerate on another window; the second build has nothing to compile.
+/// `pinned_base` is a window that mustn't move, which fails here instead.
+#[allow(clippy::too_many_arguments)]
+fn prepare_on_free_window(
+    stage: &Stage,
+    mode: Mode,
+    instance: &mut Instance,
+    args: &cli::RunArgs,
+    static_frontend: bool,
+    pull_app_images: bool,
+    infra_only: bool,
+    tunnels: local_env::Tunnels<'_>,
+    pinned_base: Option<u16>,
+) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
+    loop {
+        let prepared = prepare(
+            stage,
+            mode,
+            instance,
+            args,
+            static_frontend,
+            pull_app_images,
+            infra_only,
+            tunnels,
+        )?;
+        let current = allocator::allocate(stage, mode, Some(instance.name()), pinned_base)?;
+        if current.port_base() == instance.port_base() {
+            *instance = current;
+            return Ok(prepared);
+        }
+        stage.note(&format!(
+            "port window {} was taken during the build; moving to {}",
+            instance.port_base(),
+            current.port_base()
+        ));
+        *instance = current;
+    }
 }
 
 /// A `docker compose` command wired for this instance's full file set + the
@@ -1042,7 +1097,7 @@ fn connect_tracing_network(instance: &Instance) {
     };
     let _ = Command::new("docker")
         .args(["network", "connect", "--alias", "otel-collector"])
-        .arg(format!("{}_services", instance.project_name()))
+        .arg(instance.network_services())
         .arg(collector)
         .output();
 }
@@ -1053,7 +1108,7 @@ fn connect_tracing_network(instance: &Instance) {
 /// leaves the instance's `services` network behind ("active endpoints",
 /// silently swallowed). Best-effort like its counterpart.
 fn disconnect_tracing_network(instance: &Instance) {
-    let network = format!("{}_services", instance.project_name());
+    let network = instance.network_services();
     let Some(attached) = Command::new("docker")
         .args([
             "network",
@@ -1158,19 +1213,15 @@ fn instance_volumes(instance: &Instance) -> [String; 6] {
     ]
 }
 
-/// The instance's external Docker networks.
-fn instance_networks(instance: &Instance) -> [String; 2] {
-    [instance.network_databases(), instance.network_auth()]
-}
-
 /// The docker teardown work: stop + remove the instance's stack and ALL its
 /// stateful volumes — the basis of `run_local`'s full-delete/full-create
-/// idempotency, the quit hotkey, and `destroy-local`. Containers + project
-/// networks come down with `down -v`; the data volumes are then removed
-/// explicitly, because FusionAuth's (and named instances' infra) volumes are
-/// declared `external`, which `down -v` leaves behind. Output is captured (this
-/// is best-effort and noisy) so callers surface it as a single line; absent
-/// containers/volumes are ignored.
+/// idempotency, the quit hotkey, and `destroy-local`. Containers come down with
+/// `down -v`; the data volumes and a named instance's networks are then removed
+/// explicitly, because they are declared `external`, which `down -v` leaves
+/// behind. A stack that's gone must not keep holding subnets. The default
+/// instance's networks are shared with the base compose files, so they stay.
+/// Output is captured (this is best-effort and noisy) so callers surface it as a
+/// single line; absent containers/volumes are ignored.
 fn teardown_commands(instance: &Instance) {
     sdk_webhook::stop(instance);
     // Detach the global trace collector first or `down` can't remove the
@@ -1198,6 +1249,13 @@ fn teardown_commands(instance: &Instance) {
             .args(["volume", "rm", "-f", &vol])
             .output();
     }
+    if !instance.is_default() {
+        for (network, _) in instance.networks() {
+            let _ = Command::new("docker")
+                .args(["network", "rm", &network])
+                .output();
+        }
+    }
 }
 
 /// [`teardown_commands`] shown as a single progress row (for the quit hotkey and
@@ -1216,11 +1274,11 @@ fn teardown(stage: &Stage, instance: &Instance) -> Result<()> {
 /// Create the per-instance external networks and volumes the compose files
 /// reference (idempotent — replaces the old `just create_networks`).
 fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
-    let networks = instance_networks(instance);
+    let networks = instance.networks();
     let volumes = instance_volumes(instance);
     stage.run_step("Ensuring networks & volumes", || {
-        for n in &networks {
-            docker::ensure_network(n)?;
+        for (name, subnet) in &networks {
+            docker::ensure_network(name, subnet.as_deref())?;
         }
         for v in &volumes {
             docker::ensure_volume(v)?;
@@ -1268,7 +1326,7 @@ pub fn runtime_image_only(force: bool) -> Result<()> {
 
 /// `cargo x gen-compose`.
 pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
-    let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+    let instance = Instance::resolve(args.instance.as_deref(), args.port_base)?;
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
     let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false)?;
@@ -1279,7 +1337,7 @@ pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
 /// `cargo x stop-local` — stop the instance's containers (keep volumes).
 pub fn stop(args: &cli::InstanceArgs) -> Result<()> {
     let stage = Stage::from_env();
-    let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+    let instance = Instance::resolve(args.instance.as_deref(), args.port_base)?;
     sdk_webhook::stop(&instance);
     let mut cmd = Command::new("docker");
     cmd.args(["compose", "-p", instance.project_name(), "stop"]);
@@ -1289,27 +1347,20 @@ pub fn stop(args: &cli::InstanceArgs) -> Result<()> {
 /// `cargo x reset-local` — drop, recreate, and migrate the instance DB.
 pub fn reset(args: &cli::InstanceArgs) -> Result<()> {
     let stage = Stage::from_env();
-    let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+    let instance = Instance::resolve(args.instance.as_deref(), args.port_base)?;
     db::reset(&stage, &instance)
 }
 
 /// `cargo x destroy-local` — remove the instance's containers, volumes, and
-/// (named instances) external networks.
+/// (named instances) networks, and free its allocation.
 pub fn destroy(args: &cli::InstanceArgs) -> Result<()> {
     let stage = Stage::from_env();
-    let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+    let instance = Instance::resolve(args.instance.as_deref(), args.port_base)?;
     // Containers + all volumes (incl. FusionAuth's external ones, which `down -v`
     // leaves behind — the same teardown run_local does for its clean slate).
     teardown(&stage, &instance)?;
-    // The per-instance external networks only exist for named instances; the
-    // default instance's are shared base-compose networks we leave in place.
-    if !instance.is_default() {
-        stage.run_step("Removing instance networks", || {
-            for n in instance_networks(&instance) {
-                let _ = Command::new("docker").args(["network", "rm", &n]).status();
-            }
-            Ok(())
-        })?;
+    if !stage.is_dry_run() {
+        allocator::release(&instance)?;
     }
     Ok(())
 }
