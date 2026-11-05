@@ -405,6 +405,7 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
     assert_eq!(quote.interval, agent::BillingInterval::Month);
     let pending = service.status(TEAM, id).await.expect("status");
     assert_eq!(pending.status, agent::ComputerStatusKind::SettingUp);
+    assert_eq!(pending.payment, agent::ComputerPayment::Paid);
     assert_eq!(pending.setup.unwrap().step, agent::SetupStep::Creating);
     assert!(matches!(
         service.status(Uuid::now_v7(), id).await,
@@ -444,6 +445,10 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
     );
     service.release(TEAM, id).await.expect("release");
     service.release(TEAM, id).await.expect("repeat release");
+    assert_eq!(
+        service.status(TEAM, id).await.unwrap().payment,
+        agent::ComputerPayment::Paid
+    );
     service
         .release(TEAM, Uuid::now_v7())
         .await
@@ -564,7 +569,16 @@ async fn payment_errors_recover_the_durable_computer_and_its_payment_status() {
         assert_eq!(updates.lock().unwrap().len(), update_count);
         let saved = repo.get(id).await.unwrap().unwrap();
         assert_eq!(saved.team_id, TEAM);
-        assert_eq!(computers.status(TEAM, id).await.unwrap().status, expected);
+        let status = computers.status(TEAM, id).await.unwrap();
+        assert_eq!(status.status, expected);
+        assert_eq!(
+            status.payment,
+            if decline {
+                agent::ComputerPayment::Unbilled
+            } else {
+                agent::ComputerPayment::Pending
+            }
+        );
         if decline {
             assert_eq!(saved.state.phase, Phase::PaymentFailed);
         } else {
@@ -585,6 +599,13 @@ async fn payment_errors_recover_the_durable_computer_and_its_payment_status() {
             Err(agent::TeamAgentError::RetryUnavailable(_))
         ));
         assert_eq!(updates.lock().unwrap().len(), update_count);
+        if decline {
+            computers.release(TEAM, id).await.unwrap();
+            computers.release(TEAM, id).await.unwrap();
+            let released = computers.status(TEAM, id).await.unwrap();
+            assert_eq!(released.status, agent::ComputerStatusKind::Released);
+            assert_eq!(released.payment, agent::ComputerPayment::Unbilled);
+        }
     }
 }
 
