@@ -385,6 +385,31 @@ export class SessionLoadTrace {
 }
 
 /**
+ * The log subscription ended and is being reopened: the server closed it
+ * (a subscriber that fell behind, a refused session) or the transport gave
+ * up. Every frame published until the new one is up reaches the session only
+ * through the refetch that follows, so a burst of these is a live feed that
+ * keeps dying.
+ */
+export function traceFollowResumed(
+  sessionId: string,
+  reason: 'error' | 'ended',
+  attempt: number,
+  delayMs: number
+): void {
+  const span = start('agent.session.log.follow_resumed', sessionId);
+  if (!span) return;
+  try {
+    span.setAttr('agent.session.log.follow.reason', reason);
+    span.setAttr('agent.session.log.follow.attempt', attempt);
+    span.setAttr('agent.session.log.follow.delay_ms', delayMs);
+    span.end();
+  } catch {
+    // See the module comment.
+  }
+}
+
+/**
  * A write of the cached log, after the load: its own short span and
  * measure, since the load span has usually ended by the time rows stream in.
  */

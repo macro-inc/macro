@@ -82,10 +82,15 @@ a persona, effort, or speed keeps the control request. Either way the prompt
 shows as one bubble that the logged row confirms in place.
 
 Switching a disconnected session's model wakes its runtime first; the
-selector re-enables with the new model's options once the runtime answers. If
-the live feed misses that answer, the client reads the log after 10 seconds,
-and after a minute it takes back an unconfirmed change, so the selector shows
-the runtime's model again and stays usable.
+selector re-enables with the new model's options once the runtime answers.
+The wake replays the session, and a viewer whose live log subscription falls
+behind that burst is closed by the server; the client reopens it at once and
+refetches the log, so the answer still arrives live. If it is missed anyway,
+the client reads the log after 10 seconds, and after a minute it takes back an
+unconfirmed change, so the selector shows the runtime's model again and stays
+usable. `agent.session.confirm_control` records whether the live feed or the
+reread settled it, and `agent.session.log.follow_resumed` each reopened
+subscription.
 
 Macro's in-process agent opens each reply with a line from a fast model
 (`gpt-5.4-mini`), usually within half a second of Enter. Small talk
