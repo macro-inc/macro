@@ -56,6 +56,19 @@ pub trait RepoStore: Send + Sync + 'static {
     /// Adapter error.
     type Err: std::error::Error + Send + Sync + 'static;
 
+    /// Read the selected voice from the current main branch.
+    fn voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<super::voice::VoiceConfig, Self::Err>> + Send;
+
+    /// Commit the selection on main, preserving a concurrent agent push.
+    fn set_voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        voice: &super::voice::VoiceConfig,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Create the bare repo with `files` as its initial commit. A repo that
     /// already exists is left as is.
     fn create_repo(
@@ -111,6 +124,20 @@ pub trait GitBackend: Send + Sync + 'static {
 
 /// The use cases inbound adapters drive.
 pub trait AgentGitService: Send + Sync + 'static {
+    /// Read a voice for a caller that already verified the agent's team.
+    fn voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<super::voice::VoiceConfig, AgentGitError>> + Send;
+
+    /// Commit a team-authorized voice change through the server.
+    fn set_voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        voice: super::voice::VoiceConfig,
+    ) -> impl Future<Output = Result<(), AgentGitError>> + Send;
     /// Create the agent's repo and mint its token. Repeating it for the same
     /// team keeps the repo and replaces the token, so a retry after a lost
     /// response still ends with one working token.

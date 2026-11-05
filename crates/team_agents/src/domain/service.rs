@@ -2,7 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use entity_access::domain::models::{AdminTeamRole, EntityAccessReceipt};
+use entity_access::domain::models::{
+    AdminTeamRole, EntityAccessReceipt, MemberTeamRole, RequiredPermission,
+};
 use feature_flags::FeatureFlags;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -141,6 +143,12 @@ fn slug(name: &str) -> String {
 
 /// The request with its text trimmed, or why it is malformed.
 fn validate(request: CreateTeamAgent) -> Result<CreateTeamAgent, TeamAgentError> {
+    if let Some(model) = &request.voice {
+        super::voice::AgentVoice {
+            model: model.clone(),
+        }
+        .validate()?;
+    }
     let name = request.name.trim().to_string();
 
     if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
@@ -164,6 +172,7 @@ fn validate(request: CreateTeamAgent) -> Result<CreateTeamAgent, TeamAgentError>
     }
 
     Ok(CreateTeamAgent {
+        voice: request.voice,
         expected_included: request.expected_included,
         name,
         job_description,
@@ -232,7 +241,9 @@ fn persona(
     }
 }
 
-fn team_id(receipt: &EntityAccessReceipt<AdminTeamRole>) -> Result<Uuid, TeamAgentError> {
+fn team_id<T: RequiredPermission>(
+    receipt: &EntityAccessReceipt<T>,
+) -> Result<Uuid, TeamAgentError> {
     Uuid::parse_str(&receipt.entity().entity_id)
         .map_err(|_| TeamAgentError::BadRequest("the caller has no team".to_string()))
 }
@@ -363,6 +374,7 @@ where
         );
 
         let seed = PersonaSeed {
+            voice: request.voice,
             creator_id: Some(created_by.as_ref().to_string()),
             name: request.name.clone(),
             job_description: request.job_description,
@@ -421,9 +433,9 @@ where
     }
 
     /// The agent on the receipt's team, or `NotFound`.
-    async fn team_agent(
+    async fn team_agent<T: RequiredPermission>(
         &self,
-        receipt: &EntityAccessReceipt<AdminTeamRole>,
+        receipt: &EntityAccessReceipt<T>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<TeamAgent, TeamAgentError> {
         let team_id = team_id(receipt)?;
@@ -573,6 +585,50 @@ where
     Flags: FeatureFlags + 'static,
 {
     #[tracing::instrument(skip_all, err)]
+    async fn voice(
+        &self,
+        receipt: EntityAccessReceipt<MemberTeamRole>,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<super::voice::AgentVoice, TeamAgentError> {
+        let agent = self.team_agent(&receipt, user).await?;
+        if !receipt.entity_permission().satisfies::<AdminTeamRole>()
+            && agent.created_by.as_ref()
+                != Some(
+                    receipt
+                        .get_authenticated_user()
+                        .map_err(|_| TeamAgentError::Forbidden)?,
+                )
+        {
+            return Err(TeamAgentError::Forbidden);
+        }
+        self.repos.voice(user, agent.team_id).await
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn set_voice(
+        &self,
+        receipt: EntityAccessReceipt<MemberTeamRole>,
+        user: &MacroUserIdStr<'_>,
+        voice: super::voice::AgentVoice,
+    ) -> Result<super::voice::AgentVoice, TeamAgentError> {
+        let agent = self.team_agent(&receipt, user).await?;
+        if !receipt.entity_permission().satisfies::<AdminTeamRole>()
+            && agent.created_by.as_ref()
+                != Some(
+                    receipt
+                        .get_authenticated_user()
+                        .map_err(|_| TeamAgentError::Forbidden)?,
+                )
+        {
+            return Err(TeamAgentError::Forbidden);
+        }
+        voice.validate()?;
+        self.repos
+            .set_voice(user, agent.team_id, voice.clone())
+            .await?;
+        Ok(voice)
+    }
+    #[tracing::instrument(skip_all, err)]
     async fn sizes(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -720,7 +776,7 @@ where
     #[tracing::instrument(skip_all, err)]
     async fn list(
         &self,
-        receipt: EntityAccessReceipt<AdminTeamRole>,
+        receipt: EntityAccessReceipt<MemberTeamRole>,
     ) -> Result<TeamAgents, TeamAgentError> {
         let team_id = team_id(&receipt)?;
         let stored = self
@@ -732,6 +788,16 @@ where
         let mut agents = Vec::with_capacity(stored.len());
 
         for agent in stored {
+            if !receipt.entity_permission().satisfies::<AdminTeamRole>()
+                && agent.created_by.as_ref()
+                    != Some(
+                        receipt
+                            .get_authenticated_user()
+                            .map_err(|_| TeamAgentError::Forbidden)?,
+                    )
+            {
+                continue;
+            }
             // One computer the status lookup fails for keeps its last known
             // status rather than failing the whole list.
             let mut fallback = agent.clone();

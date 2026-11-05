@@ -85,6 +85,62 @@ where
     Limiter: PushRateLimiter,
     Backend: GitBackend,
 {
+    async fn voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> Result<super::voice::VoiceConfig, AgentGitError> {
+        let repo = self
+            .adapters
+            .repos
+            .find_repo(agent_user_id)
+            .await
+            .map_err(internal)?
+            .ok_or(AgentGitError::NotFound)?;
+        if repo.team_id != team_id {
+            return Err(AgentGitError::TeamMismatch);
+        }
+        self.adapters
+            .store
+            .voice(agent_user_id)
+            .await
+            .map_err(internal)
+    }
+
+    async fn set_voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        voice: super::voice::VoiceConfig,
+    ) -> Result<(), AgentGitError> {
+        let _mutation = self.mutations.lock().await;
+        let repo = self
+            .adapters
+            .repos
+            .find_repo(agent_user_id)
+            .await
+            .map_err(internal)?
+            .ok_or(AgentGitError::NotFound)?;
+        if repo.team_id != team_id {
+            return Err(AgentGitError::TeamMismatch);
+        }
+        if voice.model.is_empty()
+            || voice.model.len() > 100
+            || !voice
+                .model
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        {
+            return Err(AgentGitError::Forbidden(
+                crate::domain::models::GitAccess::Push,
+            ));
+        }
+        self.adapters
+            .store
+            .set_voice(agent_user_id, &voice)
+            .await
+            .map_err(internal)
+    }
     async fn create_repo(
         &self,
         agent_user_id: MacroUserIdStr<'static>,

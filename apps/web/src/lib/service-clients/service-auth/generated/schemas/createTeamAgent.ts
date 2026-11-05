@@ -7,6 +7,7 @@
 
 import type { ComputerSize } from './computerSize';
 import type { CreateTeamAgentAvatarUrl } from './createTeamAgentAvatarUrl';
+import type { CreateTeamAgentVoice } from './createTeamAgentVoice';
 
 /**
  * Input for inviting a team agent and buying its computer.
@@ -24,4 +25,6 @@ export interface CreateTeamAgent {
   personality: string;
   /** The computer to buy. */
   size: ComputerSize;
+  /** Aura-2 model chosen in the voice picker; older clients use a persona default. */
+  voice?: CreateTeamAgentVoice;
 }

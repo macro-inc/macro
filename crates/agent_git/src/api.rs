@@ -6,6 +6,16 @@ use uuid::Uuid;
 
 use crate::domain::template::PersonaSeed;
 
+/// Team-qualified management request for the voice setting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceRequest {
+    /// Team already authorized by the caller's domain service.
+    pub team_id: Uuid,
+    /// New configuration.
+    pub voice: crate::domain::voice::VoiceConfig,
+}
+
 /// Create (or re-key) the agent's repo.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

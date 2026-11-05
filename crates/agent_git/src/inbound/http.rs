@@ -91,6 +91,10 @@ where
         .route("/internal/repos", post(create_repo::<Service, Auth>))
         .route("/internal/repos/ensure", post(ensure_repo::<Service, Auth>))
         .route(
+            "/internal/repos/{agent_user_id}/voice",
+            get(read_voice::<Service, Auth>).put(write_voice::<Service, Auth>),
+        )
+        .route(
             "/internal/repos/{agent_user_id}",
             delete(delete_repo::<Service, Auth>),
         )
@@ -317,6 +321,36 @@ async fn lfs_unsupported() -> Response {
         r#"{"message":"Git LFS is not supported on agent workspace repos"}"#,
     )
         .into_response()
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VoiceQuery {
+    team_id: uuid::Uuid,
+}
+
+#[tracing::instrument(skip_all, err)]
+async fn read_voice<Service: AgentGitService, Auth: MacroAuthorizationService>(
+    State(state): State<AgentGitRouterState<Service, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Path(agent): Path<MacroUserIdStr<'static>>,
+    Query(query): Query<VoiceQuery>,
+) -> Result<Json<crate::domain::voice::VoiceConfig>, AgentGitHttpError> {
+    Ok(Json(state.service.voice(&agent, query.team_id).await?))
+}
+
+#[tracing::instrument(skip_all, err)]
+async fn write_voice<Service: AgentGitService, Auth: MacroAuthorizationService>(
+    State(state): State<AgentGitRouterState<Service, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Path(agent): Path<MacroUserIdStr<'static>>,
+    Json(request): Json<crate::api::VoiceRequest>,
+) -> Result<StatusCode, AgentGitHttpError> {
+    state
+        .service
+        .set_voice(&agent, request.team_id, request.voice)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[tracing::instrument(skip_all, err)]

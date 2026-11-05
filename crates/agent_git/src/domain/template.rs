@@ -27,6 +27,9 @@ pub const WORKSPACE_TEMPLATE: WorkspaceTemplate = WorkspaceTemplate {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonaSeed {
+    /// User-owned call voice; old saved seeds use the template default.
+    #[serde(default)]
+    pub voice: Option<String>,
     /// Display name.
     pub name: String,
     /// What the agent is responsible for.
@@ -65,6 +68,14 @@ impl WorkspaceTemplate {
                             "{{creator}}",
                             seed.creator_id.as_deref().unwrap_or("the team owner"),
                         )
+                } else if file.path == "config/voice.json" {
+                    let model = seed.voice.as_deref().unwrap_or("aura-2-arcas-en");
+                    format!(
+                        "{}\n",
+                        serde_json::to_string_pretty(&crate::domain::voice::VoiceConfig {
+                            model: model.to_owned()
+                        })?
+                    )
                 } else if file.path == "config/jev.json" {
                     let mut config = serde_json::from_str(file.contents)?;
                     render_jev(&mut config, seed);

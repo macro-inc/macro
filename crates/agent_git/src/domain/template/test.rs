@@ -36,6 +36,7 @@ fn every_canonical_file_is_seeded_with_its_contents() {
 
     let rendered = WORKSPACE_TEMPLATE
         .render(&PersonaSeed {
+            voice: None,
             name: "Example".into(),
             job_description: "Help with operations".into(),
             personality: "Thoughtful".into(),

@@ -5,3 +5,4 @@ pub mod included;
 pub mod models;
 pub mod ports;
 pub mod service;
+pub mod voice;

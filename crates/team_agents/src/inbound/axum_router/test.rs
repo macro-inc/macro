@@ -67,6 +67,34 @@ impl FakeService {
 }
 
 impl TeamAgentService for FakeService {
+    async fn voice(
+        &self,
+        receipt: EntityAccessReceipt<MemberTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<crate::domain::voice::AgentVoice, TeamAgentError> {
+        self.record(format!(
+            "voice {} {}",
+            receipt.entity().entity_id,
+            agent.as_ref()
+        ));
+        Ok(crate::domain::voice::AgentVoice {
+            model: "aura-2-arcas-en".to_owned(),
+        })
+    }
+    async fn set_voice(
+        &self,
+        receipt: EntityAccessReceipt<MemberTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+        voice: crate::domain::voice::AgentVoice,
+    ) -> Result<crate::domain::voice::AgentVoice, TeamAgentError> {
+        self.record(format!(
+            "set_voice {} {}",
+            receipt.entity().entity_id,
+            agent.as_ref()
+        ));
+        Ok(voice)
+    }
+
     async fn sizes(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -117,7 +145,7 @@ impl TeamAgentService for FakeService {
 
     async fn list(
         &self,
-        receipt: EntityAccessReceipt<AdminTeamRole>,
+        receipt: EntityAccessReceipt<MemberTeamRole>,
     ) -> Result<TeamAgents, TeamAgentError> {
         self.record(format!("list {}", receipt.entity().entity_id));
         Ok(TeamAgents {

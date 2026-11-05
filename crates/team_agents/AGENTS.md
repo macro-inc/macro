@@ -164,3 +164,13 @@ usage to the agent and its current team.
 
 Trace invite phases under the caller, record `billing_kind` as stripe/comped,
 and hash email-bearing agent user IDs with `macro_user_id::telemetry_id`.
+
+## Call voice ownership
+
+Voice settings require team membership plus either an admin/owner role or the
+agent's `created_by` identity. Member roster reads return only agents they created;
+computer create/retry/delete stay admin-only. Provisioning persists the selected
+voice in the saved persona seed. Voice updates call the agent git port, which
+commits only `config/voice.json`; no settings database column is needed.
+The harness owns the provider catalog and fixed-line sample cache. Discovery
+requires team membership; changing an agent's voice additionally checks ownership.

@@ -26,6 +26,7 @@ async fn advertised_clone_url_uses_the_computer_base_and_preserves_the_repo_toke
             &MacroUserIdStr::parse_from_str("macro|brain@example.com").unwrap(),
             Uuid::from_u128(1),
             &PersonaSeed {
+                voice: None,
                 creator_id: Some("macro|admin@example.com".to_string()),
                 name: "Brain".into(),
                 job_description: "Help".into(),
@@ -67,6 +68,7 @@ async fn missing_git_returns_a_safe_pre_purchase_failure_reason() {
             &MacroUserIdStr::parse_from_str("macro|agent@example.com").unwrap(),
             Uuid::from_u128(1),
             &PersonaSeed {
+                voice: None,
                 creator_id: None,
                 name: "Agent".into(),
                 job_description: "Help".into(),

@@ -10,6 +10,7 @@ import type {
   AgentSecretSummaries,
   AgentSecretSummary,
   AgentSetupResponse,
+  AgentVoice,
   AiBillingErrorBody,
   AppleLoginRequest,
   ChangePlanRequest,
@@ -7777,6 +7778,125 @@ export const deleteTeamAgentSecret = async (
     status: res.status,
     headers: res.headers,
   } as deleteTeamAgentSecretResponse;
+};
+
+/**
+ * @summary Read the user-selected voice from the agent's repository.
+ */
+export type getTeamAgentVoiceResponse200 = {
+  data: AgentVoice;
+  status: 200;
+};
+
+export type getTeamAgentVoiceResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getTeamAgentVoiceResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getTeamAgentVoiceResponseSuccess = getTeamAgentVoiceResponse200 & {
+  headers: Headers;
+};
+export type getTeamAgentVoiceResponseError = (
+  | getTeamAgentVoiceResponse403
+  | getTeamAgentVoiceResponse404
+) & {
+  headers: Headers;
+};
+
+export type getTeamAgentVoiceResponse =
+  | getTeamAgentVoiceResponseSuccess
+  | getTeamAgentVoiceResponseError;
+
+export const getGetTeamAgentVoiceUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/voice`;
+};
+
+export const getTeamAgentVoice = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<getTeamAgentVoiceResponse> => {
+  const res = await fetch(getGetTeamAgentVoiceUrl(agentUserId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamAgentVoiceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamAgentVoiceResponse;
+};
+
+/**
+ * @summary Commit an administrator's voice selection to the agent's repository.
+ */
+export type setTeamAgentVoiceResponse200 = {
+  data: AgentVoice;
+  status: 200;
+};
+
+export type setTeamAgentVoiceResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type setTeamAgentVoiceResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type setTeamAgentVoiceResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type setTeamAgentVoiceResponseSuccess = setTeamAgentVoiceResponse200 & {
+  headers: Headers;
+};
+export type setTeamAgentVoiceResponseError = (
+  | setTeamAgentVoiceResponse400
+  | setTeamAgentVoiceResponse403
+  | setTeamAgentVoiceResponse404
+) & {
+  headers: Headers;
+};
+
+export type setTeamAgentVoiceResponse =
+  | setTeamAgentVoiceResponseSuccess
+  | setTeamAgentVoiceResponseError;
+
+export const getSetTeamAgentVoiceUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/voice`;
+};
+
+export const setTeamAgentVoice = async (
+  agentUserId: string,
+  agentVoice: AgentVoice,
+  options?: RequestInit
+): Promise<setTeamAgentVoiceResponse> => {
+  const res = await fetch(getSetTeamAgentVoiceUrl(agentUserId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentVoice),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setTeamAgentVoiceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setTeamAgentVoiceResponse;
 };
 
 /**

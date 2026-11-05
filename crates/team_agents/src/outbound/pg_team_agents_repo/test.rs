@@ -49,6 +49,7 @@ async fn seed(pool: &PgPool) -> Uuid {
 fn account(team_id: Uuid) -> NewAgentAccount {
     NewAgentAccount {
         persona_seed: PersonaSeed {
+            voice: None,
             creator_id: Some(ADMIN.to_string()),
             name: "Sam".to_string(),
             job_description: "Help the team".to_string(),

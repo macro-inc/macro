@@ -26,6 +26,32 @@ impl AgentGitRepos {
 }
 
 impl AgentRepos for AgentGitRepos {
+    #[tracing::instrument(skip_all, err)]
+    async fn voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team: Uuid,
+    ) -> Result<crate::domain::voice::AgentVoice, TeamAgentError> {
+        let voice = self.client.voice(agent, team).await.map_err(|error| {
+            TeamAgentError::RepoProvider(rootcause::Report::new(error).into_dynamic())
+        })?;
+        Ok(crate::domain::voice::AgentVoice { model: voice.model })
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn set_voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team: Uuid,
+        voice: crate::domain::voice::AgentVoice,
+    ) -> Result<(), TeamAgentError> {
+        self.client
+            .set_voice(agent, team, voice.model)
+            .await
+            .map_err(|error| {
+                TeamAgentError::RepoProvider(rootcause::Report::new(error).into_dynamic())
+            })
+    }
     #[tracing::instrument(name = "team_agents.repo.create", skip_all, err)]
     async fn create(
         &self,
@@ -50,6 +76,7 @@ impl AgentRepos for AgentGitRepos {
                 agent_user_id.clone().into_owned(),
                 team_id,
                 RepoSeed {
+                    voice: seed.voice.clone(),
                     creator_id: seed.creator_id.clone(),
                     name: seed.name.clone(),
                     job_description: seed.job_description.clone(),
@@ -89,6 +116,7 @@ impl AgentRepos for AgentGitRepos {
                 agent_user_id.clone().into_owned(),
                 team_id,
                 RepoSeed {
+                    voice: seed.voice.clone(),
                     creator_id: seed.creator_id.clone(),
                     name: seed.name.clone(),
                     job_description: seed.job_description.clone(),

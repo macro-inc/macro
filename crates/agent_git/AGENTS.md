@@ -79,3 +79,11 @@ both full and per-service filtered Nix sources, including `brain.lock`.
 `agent_git.transfer` retains its span through request/response streaming and
 backend exit, records byte counts and fixed failure categories, and uses the
 SHA-256 repository identity. Never export CGI stderr or raw repository paths.
+
+`GET`/`PUT /internal/repos/{agent_user_id}/voice` are internal-only, team-scoped
+operations. The store reads `main:config/voice.json`; writes create a server commit
+in a temporary clone and push without forcing, preserving unrelated files and
+retrying concurrent main updates. Repeating a saved choice creates no new commit.
+Reject a symlinked config directory; replace voice.json atomically without following
+repository symlinks, because repository contents are controlled by the agent.
+The canonical recursive embedder includes voice/call configuration automatically.

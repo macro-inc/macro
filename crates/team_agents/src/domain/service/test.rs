@@ -421,6 +421,27 @@ struct FakeRepos {
 }
 
 impl AgentRepos for FakeRepos {
+    async fn voice(
+        &self,
+        _agent: &MacroUserIdStr<'_>,
+        _team: Uuid,
+    ) -> Result<crate::domain::voice::AgentVoice, TeamAgentError> {
+        self.journal.record("repo.voice")?;
+        Ok(crate::domain::voice::AgentVoice {
+            model: "aura-2-arcas-en".to_owned(),
+        })
+    }
+    async fn set_voice(
+        &self,
+        _agent: &MacroUserIdStr<'_>,
+        _team: Uuid,
+        voice: crate::domain::voice::AgentVoice,
+    ) -> Result<(), TeamAgentError> {
+        self.journal.record("repo.set_voice")?;
+        self.seeds.lock().unwrap().last_mut().unwrap().voice = Some(voice.model);
+        Ok(())
+    }
+
     async fn create(
         &self,
         _agent_user_id: &MacroUserIdStr<'_>,
@@ -544,7 +565,9 @@ fn build(setup: Setup) -> (Service, Arc<Journal>) {
     (service, journal)
 }
 
-fn receipt(team_id: &str) -> EntityAccessReceipt<AdminTeamRole> {
+fn receipt<T: entity_access::domain::models::RequiredPermission>(
+    team_id: &str,
+) -> EntityAccessReceipt<T> {
     EntityAccessReceipt::dangerously_assert_authenticated_user(
         user(ADMIN),
         team_id,
@@ -554,6 +577,7 @@ fn receipt(team_id: &str) -> EntityAccessReceipt<AdminTeamRole> {
 
 fn request() -> CreateTeamAgent {
     CreateTeamAgent {
+        voice: None,
         expected_included: false,
         name: "  Sam Rivera ".to_string(),
         job_description: "Runs vendor relations.".to_string(),
@@ -609,6 +633,7 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
     assert_eq!(
         *service.repos.seeds.lock().expect("lock"),
         vec![PersonaSeed {
+            voice: None,
             creator_id: Some(ADMIN.to_string()),
             name: "Sam Rivera".to_string(),
             job_description: "Runs vendor relations.".to_string(),
@@ -1807,5 +1832,77 @@ async fn purchase_status_outage_stays_provisioning_and_recovers() {
     assert_eq!(
         service.me(&user(AGENT)).await.unwrap().status,
         TeamAgentStatus::Running
+    );
+}
+
+#[tokio::test]
+async fn voice_changes_require_same_team_and_either_creator_or_admin() {
+    use entity_access::domain::models::{Entity, EntityPermission, MemberTeamRole, TeamRole};
+    let (service, _) = build(Setup::default());
+    service
+        .create(receipt(TEAM_ID), request())
+        .await
+        .expect("create");
+    let member = |actor: &str, team: &str| {
+        EntityAccessReceipt::<MemberTeamRole>::try_new_authenticated_user(
+            user(actor),
+            Entity {
+                entity_id: team.to_owned(),
+                entity_type: EntityType::Team,
+            },
+            EntityPermission::TeamRole {
+                role: TeamRole::Member,
+            },
+        )
+        .expect("member receipt")
+    };
+    let voice = super::super::voice::AgentVoice {
+        model: "aura-2-thalia-en".to_owned(),
+    };
+    assert!(matches!(
+        service
+            .set_voice(
+                member("macro|other@example.com", TEAM_ID),
+                &user(AGENT),
+                voice.clone()
+            )
+            .await,
+        Err(TeamAgentError::Forbidden)
+    ));
+    assert!(matches!(
+        service
+            .set_voice(member(ADMIN, OTHER_TEAM_ID), &user(AGENT), voice.clone())
+            .await,
+        Err(TeamAgentError::NotFound)
+    ));
+    assert!(
+        service
+            .list(member("macro|other@example.com", TEAM_ID))
+            .await
+            .expect("list")
+            .agents
+            .is_empty()
+    );
+    assert_eq!(
+        service
+            .list(member(ADMIN, TEAM_ID))
+            .await
+            .expect("creator list")
+            .agents
+            .len(),
+        1
+    );
+    assert_eq!(
+        service
+            .set_voice(member(ADMIN, TEAM_ID), &user(AGENT), voice.clone())
+            .await
+            .expect("creator can change voice after demotion"),
+        voice
+    );
+    assert!(
+        service
+            .set_voice(receipt(TEAM_ID), &user(AGENT), voice)
+            .await
+            .is_ok()
     );
 }
