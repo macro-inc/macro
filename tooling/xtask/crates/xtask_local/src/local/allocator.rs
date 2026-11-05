@@ -307,18 +307,29 @@ impl Machine {
         (own, others)
     }
 
-    /// Every subnet in use, except those of `instance`'s own networks.
-    fn subnets_except(&self, instance: &Instance) -> Vec<Ipv4Range> {
+    /// Every range `instance` can't use: other networks' subnets, and host
+    /// routes. Each Docker bridge adds a host route for its own subnet, so
+    /// routes matching a Docker network are left to the network check, or an
+    /// instance's own networks would push it off its block.
+    fn used_subnets(&self, instance: &Instance, routes: Vec<Ipv4Range>) -> Vec<Ipv4Range> {
         let own: BTreeSet<String> = instance
             .networks()
             .into_iter()
             .map(|(name, _)| name)
             .collect();
+        let subnets = |network: &docker::NetworkSubnets| -> Vec<Ipv4Range> {
+            network
+                .subnets
+                .iter()
+                .filter_map(|cidr| Ipv4Range::parse(cidr))
+                .collect()
+        };
+        let docker: Vec<Ipv4Range> = self.networks.iter().flat_map(subnets).collect();
         self.networks
             .iter()
             .filter(|network| !own.contains(&network.name))
-            .flat_map(|network| &network.subnets)
-            .filter_map(|cidr| Ipv4Range::parse(cidr))
+            .flat_map(subnets)
+            .chain(routes.into_iter().filter(|route| !docker.contains(route)))
             .collect()
     }
 }
@@ -429,10 +440,10 @@ pub fn allocate(
             .with_context(|| exhausted_message("port windows", &machine))?
     };
 
-    let mut used_subnets = machine.subnets_except(&instance);
-    used_subnets.extend(parse_routes(
-        &std::fs::read_to_string("/proc/net/route").unwrap_or_default(),
-    ));
+    let used_subnets = machine.used_subnets(
+        &instance,
+        parse_routes(&std::fs::read_to_string("/proc/net/route").unwrap_or_default()),
+    );
     let claimed_blocks: BTreeSet<u8> = registry
         .iter()
         .filter(|(other, _)| other.as_str() != instance.name())
