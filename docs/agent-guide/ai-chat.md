@@ -1669,8 +1669,11 @@ before collapsing smoothly. These delays are shared by the group, never queued
 per call, and do not delay answer text or tool execution. Manually opening,
 closing, or interacting with a group overrides automatic collapse. Subagents
 and tools requiring user input remain outside these groups so they stay visible
-during other tool bursts. Nested agent activity and code-mode SDK operations each
-use the same peek window.
+during other tool bursts. A subagent row is titled by the call's short
+description (else the first line of its brief) and says **Running**, **Done**,
+or **Failed**; expanding it shows the **Instructions** and the **Result**. A long
+title truncates before the state, never over it, on phones too. Nested agent
+activity and code-mode SDK operations each use the same peek window.
 
 The group and thought carets sit immediately after their labels and appear on
 hover or keyboard focus, and always on touch. Expand an edit row to view its diffs. Result bodies load only when their
