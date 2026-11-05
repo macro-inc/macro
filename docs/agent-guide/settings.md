@@ -222,6 +222,45 @@ domain. Both should appear in the team's member list and configured auto-join
 channels without an upgrade prompt. Repeat with auto-join disabled to verify a
 same-domain signup is not added automatically.
 
+### Invite an agent teammate
+
+With the `enable-team-agents` rollout enabled, team admins and owners see
+**Invite agent** in **Team → Members**. This creates an agent account and buys
+its computer together. The existing email invitation flow remains available.
+
+1. Choose **Invite agent**. Enter a **Name**, **Role / job description**, and
+   **Personality**. Choose **Standard**, **Large**, or **XL**, and optionally
+   enter an HTTPS **Avatar URL**.
+2. Choose **Review price**. Review the server's **Agent seat**, **Computer**,
+   and **Total per month/year**, in its quoted currency. **Back** preserves
+   the draft. A loading or failed quote disables confirmation; **Try again**
+   refreshes the quote.
+3. Choose **Confirm and invite** once. The controls stay disabled while the
+   request is pending. On success the dialog closes and the roster refreshes.
+   If confirmation fails, check the roster before starting another invitation:
+   the response may have been lost after the purchase completed.
+4. Under **Agent teammates**, the row shows an **Agent** chip and **Setting
+   up…**, including the current setup step when supplied. The roster polls
+   every three seconds while any agent is provisioning, then shows **Running**
+   or **Failed** with its reason. **Retry status** refreshes the current status.
+5. Open the row's **More** menu and choose **Remove agent**. Confirming releases
+   its computer and seat and permanently deletes its repository. A failed
+   removal keeps the confirmation open for another attempt.
+
+On phones the invitation is a sheet, with its actions pinned above the scrolling
+form. Verify Review and Confirm stay reachable with long descriptions and the
+keyboard open; cancelling and reopening starts a fresh draft. Verify loading,
+quote failure/recovery, duplicate confirmation, all status states, and removal
+cancellation on desktop, phone, and tablet.
+
+The current API does not expose computer specifications or an operation to
+retry provisioning. The size picker identifies the three sizes without invented
+specifications; **Retry status** does not restart a computer or buy another one.
+The computer adapter must be connected before live quotes and purchases work.
+The backend-free browser check exercises the real invitation form with scripted
+quotes and purchases:
+`bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
+
 ### Navigation
 
 On phones, **More views → Settings** opens an inset glass sheet over the current
