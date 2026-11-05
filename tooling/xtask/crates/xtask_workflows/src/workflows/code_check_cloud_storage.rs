@@ -180,6 +180,10 @@ fn test() -> Job {
         ))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
+        // Debug info is most of what the test build writes and links. Without it
+        // memory and disk use fall sharply, at the cost of backtrace line numbers.
+        .add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
+        .add_env(("CARGO_PROFILE_TEST_DEBUG", "0"))
         // The default 10-minute idle timeout can stop the server during long
         // link or test phases, which resets the stats reported at the end.
         .add_env(("SCCACHE_IDLE_TIMEOUT", "0"))
