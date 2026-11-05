@@ -94,6 +94,4 @@ export type ThreadProps = {
   rootSlot?: () => JSX.Element;
   /** Collapse to the indicator alone rather than previewing replies. */
   hideCollapsedPreview?: boolean;
-  /** Keep the reply input open below the collapsed indicator. */
-  replyInputAlwaysOpen?: boolean;
 } & ThreadState;

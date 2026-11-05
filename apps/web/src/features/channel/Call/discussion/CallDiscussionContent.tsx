@@ -23,7 +23,8 @@ export type CallPanelState = {
 
 /**
  * The one place a signed-in call chooses its discussion. Nothing below it
- * knows there is another kind.
+ * knows there is another kind. The record polls and returns a new object each
+ * time, so these stay unkeyed: remounting would lose scroll and focus.
  */
 export function CallDiscussionContent(props: {
   discussion: Accessor<CallDiscussion | undefined>;
@@ -45,23 +46,23 @@ export function CallDiscussionContent(props: {
   return (
     <Suspense>
       <Switch>
-        <Match when={channelThread()} keyed>
+        <Match when={channelThread()}>
           {(thread) => {
             const panel = (
               <ChannelCallPanel
-                channelId={thread.channel_id}
-                rootId={thread.root_id}
-                onViewChannel={() => props.onViewChannel(thread.channel_id)}
+                channelId={thread().channel_id}
+                rootId={thread().root_id}
+                onViewChannel={() => props.onViewChannel(thread().channel_id)}
                 onOutsideCountChange={props.onOutsideCountChange}
               />
             );
             return props.channelHost ? props.channelHost(panel) : panel;
           }}
         </Match>
-        <Match when={callChat()} keyed>
+        <Match when={callChat()}>
           {(chat) => (
             <CallChat
-              callId={chat.call_id}
+              callId={chat().call_id}
               open={props.panel.open}
               focusOnOpen={props.panel.focusOnOpen}
               onClose={props.panel.onClose}

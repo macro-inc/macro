@@ -30,7 +30,6 @@ import { createThreadReplyView } from './create-thread-reply-view';
 import { notifyElementOnMount } from './message-element-lifecycle';
 import { Thread } from './Thread';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
-import { ThreadReplyRail } from './ThreadReplyRail';
 import { ThreadTypingIndicator } from './ThreadTypingIndicator';
 import type { ThreadProps } from './types';
 import { channelReplyInputOffsetX } from './utils/thread-rail-geometry';
@@ -203,20 +202,16 @@ export function ChannelThread(props: ThreadProps) {
     props.isReplying() || unifiedReplyBinding() !== undefined;
   const hasRootSlot = () => !!props.rootSlot;
   const hasInlineReplyInput = () =>
-    (props.isReplying() || !!props.replyInputAlwaysOpen) &&
-    props.inputMode !== 'unified';
+    props.isReplying() && props.inputMode !== 'unified';
   const rootRailVisible = () =>
     !props.hideRail && (hasReplies() || hasInlineReplyInput());
   const shouldShowCollapsedIndicator = () =>
-    (!isReplyingToThread() || !!props.replyInputAlwaysOpen) &&
-    !props.isExpanded() &&
-    collapsedRepliesCount() > 0;
+    !isReplyingToThread() && !props.isExpanded() && collapsedRepliesCount() > 0;
   const replyAction = () => props.getMessageActions?.(props.data())?.onReply;
   const shouldShowReplyButton = () =>
     (hasReplies() || hasRootSlot()) &&
     !!replyAction() &&
     !isReplyingToThread() &&
-    !hasInlineReplyInput() &&
     !shouldShowCollapsedIndicator();
   const [replyListHandle, setReplyListHandle] =
     createSignal<ThreadReplyListHandle>();
@@ -432,7 +427,6 @@ export function ChannelThread(props: ThreadProps) {
                 when={
                   !props.hideRail &&
                   !props.monorail &&
-                  !props.replyInputAlwaysOpen &&
                   (shouldShowCollapsedIndicator() || shouldShowReplyButton())
                 }
               >
@@ -468,21 +462,6 @@ export function ChannelThread(props: ThreadProps) {
                       }
                     />
                   </DebugSuspense>
-
-                  {/* The spine continues past the indicator to the input below. */}
-                  <Show
-                    when={
-                      props.replyInputAlwaysOpen &&
-                      shouldShowCollapsedIndicator()
-                    }
-                  >
-                    <div class="relative">
-                      <Show when={!props.hideRail && !props.monorail}>
-                        <ThreadReplyRail />
-                      </Show>
-                      {actionsFooter()}
-                    </div>
-                  </Show>
 
                   <Show when={hasInlineReplyInput()}>
                     <div
@@ -534,9 +513,7 @@ export function ChannelThread(props: ThreadProps) {
                     </div>
                   </Show>
 
-                  <Show when={!props.replyInputAlwaysOpen}>
-                    {actionsFooter()}
-                  </Show>
+                  {actionsFooter()}
                 </Thread.RepliesContainer>
               </DebugSuspense>
             </div>

@@ -12,7 +12,9 @@ export function callDiscussionOf(
   callId: string | null | undefined
 ): CallDiscussion | undefined {
   if (!callId) return undefined;
-  if (record.isError) return { kind: 'call_chat', call_id: callId };
-  if (!record.isSuccess || record.data.callId !== callId) return undefined;
+  if (record.isPending) return undefined;
+  // A failed poll keeps the data it had; only a first read that failed has none.
+  if (record.isLoadingError) return { kind: 'call_chat', call_id: callId };
+  if (record.data?.callId !== callId) return undefined;
   return record.data.discussion;
 }

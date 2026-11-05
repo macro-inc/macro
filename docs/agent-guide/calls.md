@@ -79,8 +79,8 @@ With the `enable-call-channel-thread` server flag on for the caller, a new call 
 already running, and calls with no channel keep `call_chat`, and behave as described elsewhere here.
 
 In the channel, the call is a row at its start time: `<name> started a call`, the call time, live
-avatars and **Join** (or **Return to call**), with the thread collapsed under it and a reply input.
-When it ends the line says how long it lasted and the input gives way to `+`. While the live row is
+avatars and **Join** (or **Return to call**), with the thread collapsed under it, which replies like any other thread.
+When it ends the line says how long it lasted. While the live row is
 off screen, the banner above the composer shows a message count and scrolls to the row.
 
 In the call, the panel opens on desktop and tablet, closed on phones. Its first tab is the channel's
