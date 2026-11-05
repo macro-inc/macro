@@ -18,6 +18,8 @@ export function createScreenConnection(
   target: Accessor<HTMLElement | undefined>,
   connect: ConnectScreen
 ) {
+  const sessionId = createMemo(host.sessionId);
+  const harnessId = createMemo(host.harnessId);
   const [requestedControl, setRequestedControl] = createSignal(false);
   const [retry, setRetry] = createSignal(0);
   const [status, setStatus] = createSignal<
@@ -28,7 +30,7 @@ export function createScreenConnection(
   // Losing permission or changing the computer always resets the request.
   createEffect(
     on(
-      () => [host.sessionId(), host.harnessId()],
+      () => [sessionId(), harnessId()],
       () => setRequestedControl(false)
     )
   );
@@ -36,18 +38,18 @@ export function createScreenConnection(
     if (!canControl()) setRequestedControl(false);
   });
   createEffect(() => {
-    host.sessionId();
+    sessionId();
     const element = target();
-    const harnessId = host.harnessId();
+    const id = harnessId();
     const control = controlling();
     retry();
-    if (!element || !harnessId) return;
+    if (!element || !id) return;
     let disposed = false;
     let connection: ScreenConnection | undefined;
     setStatus('connecting');
     const open = async () => {
       try {
-        const url = await host.resolveUrl(harnessId, control);
+        const url = await host.resolveUrl(id, control);
         if (disposed) return;
         const next = await connect(element, url, control, {
           connected: () => {

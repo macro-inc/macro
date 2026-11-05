@@ -1046,7 +1046,9 @@ compose `AgentComputerScreen` around their Changes split and register
 `screenSearch.namespace`; `ChangesToggle` places its Screen toggle beside Changes.
 Resolve a session's computer through its bot's current harness binding, matching
 the backend's `session_harness` lookup; require `capabilities.screen`. Keep
-noVNC lazy-loaded, refresh socket auth like the sync router, default to view-only,
+the connection keyed by stable session/harness IDs so list polling preserves
+control and the stream. Keep noVNC lazy-loaded, refresh socket auth like the sync
+router, default to view-only,
 and reconnect when control changes. Touch devices remain watch-only.
 Settings computer rows compose `ComputerClaudeAccess`; managers fetch
 `claude-mode`, while other members read the harness list's `claude_mode`.

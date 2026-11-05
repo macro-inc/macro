@@ -820,6 +820,10 @@ sign-in** beside the field. Successful sign-in switches the label to your accoun
 failures appear inline. Members without management rights see the mode without
 account controls. This account is used by Claude on the shared computer.
 
+Macro computer screens keep the selected Watch or Take control mode when the
+runtime list refreshes; changing the computer or losing edit permission returns
+the pane to Watch.
+
 ### GitHub reconnect recovery
 
 When GitHub reports that reauthentication is required, reconnect starts OAuth

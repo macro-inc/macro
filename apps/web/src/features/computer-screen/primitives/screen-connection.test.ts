@@ -90,3 +90,31 @@ it('does not connect after an authorization request outlives the pane', async ()
   await authorized;
   expect(connect).not.toHaveBeenCalled();
 });
+
+it('keeps control and its connection when polling refreshes the same harness', async () => {
+  const [harness, setHarness] = createSignal({
+    id: 'computer',
+    connected: true,
+  });
+  const connect = vi.fn<ConnectScreen>(async () => ({ disconnect: vi.fn() }));
+  const { result, cleanup } = renderHook(() =>
+    createScreenConnection(
+      {
+        sessionId: () => 'session',
+        harnessId: () => harness().id,
+        canEdit: () => true,
+        mobile: () => false,
+        resolveUrl: async () => 'wss://screen',
+      },
+      () => document.createElement('div'),
+      connect
+    )
+  );
+  await waitFor(() => expect(connect).toHaveBeenCalledTimes(1));
+  result.toggleControl();
+  await waitFor(() => expect(connect).toHaveBeenCalledTimes(2));
+  setHarness({ id: 'computer', connected: true });
+  await waitFor(() => expect(result.controlling()).toBe(true));
+  expect(connect).toHaveBeenCalledTimes(2);
+  cleanup();
+});
