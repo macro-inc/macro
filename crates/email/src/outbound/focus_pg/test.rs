@@ -1,4 +1,9 @@
-use chrono::Duration;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
+
+use chrono::{Duration, NaiveDate};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use serde_json::Value;
 use sqlx::{Pool, Postgres};
@@ -6,8 +11,9 @@ use sqlx::{Pool, Postgres};
 use super::*;
 use crate::domain::{
     focus::{
-        ClassifyOutcome, FocusAnswers, FocusClassifier, FocusClassifierError, FocusNotifier,
-        FocusQueries, FocusQuestion, FocusService, FocusThread, FocusVerdict, ProfileSource,
+        ClassifyOutcome, DueDateExtractor, DueDateInput, FocusAnswers, FocusClassifier,
+        FocusClassifierError, FocusNotifier, FocusQueries, FocusQuestion, FocusService,
+        FocusThread, FocusVerdict, ProfileSource,
     },
     models::calendar_invitation::{CalendarInvitation, InvitationDateTime, InvitationMethod},
 };
@@ -46,6 +52,29 @@ impl ProfileSource for NoProfile {
     async fn profile(&self, _owner: &MacroUserIdStr<'static>) -> Result<Option<String>, Report> {
         Ok(None)
     }
+
+    async fn time_zone(&self, _owner: &MacroUserIdStr<'static>) -> Result<Option<String>, Report> {
+        Ok(None)
+    }
+}
+
+/// Finds the same date in every thread, counting how often it is asked.
+#[derive(Clone, Default)]
+struct FixedDueDates {
+    due_on: Option<NaiveDate>,
+    asked: Arc<AtomicUsize>,
+}
+
+impl DueDateExtractor for FixedDueDates {
+    async fn due_on(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+        _input: &DueDateInput,
+    ) -> Result<Option<NaiveDate>, Report> {
+        self.asked.fetch_add(1, Ordering::SeqCst);
+        Ok(self.due_on)
+    }
 }
 
 /// Answers every thread the same; fails the test's expectation by being called
@@ -80,12 +109,21 @@ impl FocusNotifier for NoReaders {
 fn worker(
     repo: &FocusPgRepository,
     answers: Result<Vec<f32>, FocusClassifierError>,
-) -> FocusService<FocusPgRepository, NoProfile, FixedClassifier, NoReaders> {
+) -> FocusService<FocusPgRepository, NoProfile, FixedClassifier, NoReaders, FixedDueDates> {
+    due_date_worker(repo, answers, &FixedDueDates::default())
+}
+
+fn due_date_worker(
+    repo: &FocusPgRepository,
+    answers: Result<Vec<f32>, FocusClassifierError>,
+    due_dates: &FixedDueDates,
+) -> FocusService<FocusPgRepository, NoProfile, FixedClassifier, NoReaders, FixedDueDates> {
     FocusService::new(
         repo.clone(),
         NoProfile,
         FixedClassifier { answers },
         NoReaders,
+        due_dates.clone(),
         vec!["acme.example".to_owned()],
     )
 }
@@ -190,6 +228,7 @@ fn record(thread_id: Uuid, message_id: Uuid, at: DateTime<Utc>, importance: u8) 
         answers: FocusAnswers::from_probabilities(&[0.5; FocusQuestion::ALL.len()]).unwrap(),
         model: "jev-test".to_owned(),
         classified_at: Utc::now(),
+        due_on: None,
     }
 }
 
@@ -1963,5 +2002,134 @@ async fn the_next_message_sets_a_new_rate_and_restarts_the_clock(
     let (_, focus) = read_at(&repo, INVOICE, next_at).await?;
     assert_eq!(focus.importance, verdict.importance);
     assert_eq!(focus.importance_trend, ImportanceTrend::Down);
+    Ok(())
+}
+
+fn nov(day: u32) -> NaiveDate {
+    NaiveDate::from_ymd_opt(2026, 11, day).unwrap()
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn a_stored_due_date_reads_back_as_a_calendar_date(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    let now = Utc::now();
+    let thread = load_thread(&repo, INVOICE).await?.expect("thread");
+    let latest = thread.messages.last().expect("message");
+    let due = FocusRecord {
+        due_on: Some(nov(6)),
+        ..record(INVOICE, latest.id, latest.at, 50)
+    };
+    assert!(repo.save(&due).await?);
+
+    let focus = repo
+        .focus_for_threads(&owner(), &[INVOICE], now, now)
+        .await?;
+    assert_eq!(focus.get(&INVOICE).expect("stored").due_on, Some(nov(6)));
+    let classified = load_thread(&repo, INVOICE).await?.unwrap().classified;
+    assert_eq!(classified.expect("stored").due_on, Some(nov(6)));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn a_classification_of_an_older_message_never_replaces_a_newer_date(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    let now = Utc::now();
+    let thread = load_thread(&repo, INVOICE).await?.expect("thread");
+    let (first, latest) = (
+        &thread.messages[0],
+        thread.messages.last().expect("message"),
+    );
+    let newer = FocusRecord {
+        due_on: Some(nov(6)),
+        ..record(INVOICE, latest.id, latest.at, 50)
+    };
+    let older = FocusRecord {
+        due_on: Some(nov(20)),
+        ..record(INVOICE, first.id, first.at, 50)
+    };
+    assert!(repo.save(&newer).await?);
+    assert!(!repo.save(&older).await?);
+
+    let focus = repo
+        .focus_for_threads(&owner(), &[INVOICE], now, now)
+        .await?;
+    assert_eq!(focus.get(&INVOICE).expect("stored").due_on, Some(nov(6)));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn deciding_a_row_again_keeps_its_due_date_without_asking_the_model(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let due_dates = FixedDueDates {
+        due_on: Some(nov(6)),
+        asked: Arc::default(),
+    };
+    let answers = vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0, 0.0, 0.0];
+    let classified = due_date_worker(&repo, Ok(answers), &due_dates)
+        .classify_thread(INVOICE)
+        .await?;
+    assert!(matches!(classified, ClassifyOutcome::Classified(_)));
+    assert_eq!(due_dates.asked.load(Ordering::SeqCst), 1);
+
+    sqlx::query!(
+        "UPDATE email_thread_focus SET rule_version = 0 WHERE thread_id = $1",
+        INVOICE
+    )
+    .execute(&pool)
+    .await?;
+    // Failing the classifier proves only the stored answers were read.
+    let redecided = due_date_worker(&repo, Err(FocusClassifierError::Rejected), &due_dates)
+        .classify_thread(INVOICE)
+        .await?;
+
+    assert!(matches!(redecided, ClassifyOutcome::Redecided(_)));
+    assert_eq!(due_dates.asked.load(Ordering::SeqCst), 1);
+    let now = Utc::now();
+    let focus = repo
+        .focus_for_threads(&owner(), &[INVOICE], now, now)
+        .await?;
+    assert_eq!(focus.get(&INVOICE).expect("stored").due_on, Some(nov(6)));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn a_messages_date_header_is_read_for_its_offset(pool: Pool<Postgres>) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    sqlx::query!(
+        r#"
+        UPDATE email_messages
+        SET headers_jsonb = '[{"name":"Subject","value":"Invoice"},{"name":"DATE","value":"Wed, 7 Oct 2026 21:00:00 -0500"}]'::jsonb
+        WHERE id = $1
+        "#,
+        FIRST_MESSAGE,
+    )
+    .execute(&pool)
+    .await?;
+
+    let thread = load_thread(&repo, INVOICE).await?.expect("thread");
+
+    assert_eq!(
+        thread.messages[0].date_header.as_deref(),
+        Some("Wed, 7 Oct 2026 21:00:00 -0500")
+    );
+    assert_eq!(thread.messages[1].date_header, None);
     Ok(())
 }
