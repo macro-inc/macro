@@ -50,6 +50,16 @@ it('resolves a legacy email id to the CRM contact with that email', async () => 
   expect(client.getQueryData(crmKeys.contact(ada.id).queryKey)).toEqual(ada);
 });
 
+it('keeps a literal percent in an already decoded legacy email id', async () => {
+  storage.getContactByEmail.mockResolvedValue(ok({ contact: ada }));
+  const query = mount('ada%20tag@example.com');
+
+  await waitFor(() => expect(query.data).toEqual(ada));
+  expect(storage.getContactByEmail).toHaveBeenCalledWith(
+    expect.objectContaining({ email: 'ada%20tag@example.com' })
+  );
+});
+
 it('fails a legacy email id that no CRM contact has', async () => {
   storage.getContactByEmail.mockResolvedValue(ok({ contact: null }));
   const query = mount('nobody@example.com');

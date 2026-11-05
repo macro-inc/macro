@@ -20,7 +20,8 @@ export type CrmContact = {
  */
 export function legacyContactEmail(contactId: string): string | undefined {
   let value = contactId;
-  if (value.includes('%')) {
+  // `encodeURIComponent` encodes "@", so a literal "@" is already decoded.
+  if (!value.includes('@') && value.includes('%')) {
     try {
       value = decodeURIComponent(value);
     } catch {

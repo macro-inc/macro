@@ -1,7 +1,7 @@
 import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
-import { CrmListSkeleton } from '../components/list-state';
+import { CrmListError, CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
 import { legacyContactEmail } from '../core/contact';
@@ -44,13 +44,17 @@ export function Contact(props: ContactProps) {
       ? contactQuery.data?.id
       : props.contactId;
   return (
-    <Show
-      when={contactId()}
-      keyed
-      fallback={<CrmListSkeleton label="Loading contact" />}
-    >
-      {(id) => <TracedContact {...props} contactId={id} />}
-    </Show>
+    <Switch fallback={<CrmListSkeleton label="Loading contact" />}>
+      <Match when={contactId()} keyed>
+        {(id) => <TracedContact {...props} contactId={id} />}
+      </Match>
+      <Match when={contactQuery.isError}>
+        <CrmListError
+          title="Couldn't load this contact."
+          onRetry={() => contactQuery.refetch()}
+        />
+      </Match>
+    </Switch>
   );
 }
 
