@@ -375,17 +375,21 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
   `scoped_bot_resolves_document_access_through_dss` fails, and fails the same way
   on a plain compose stack, so the platform does not cause it.
 
-**CI status (forge, 2026-11-04).** 21 of 25 jobs pass, including the Rust `check`
-job, web typecheck and generated code, cargo-deny, conventions, and infra. Four
-fail, from two portability gaps in the job image rather than in the code:
+**CI status (forge, 2026-11-05).** The ported checks run on Gitea: dependency, generated
+code, conventions, infra, parity, and AWS validation checks pass, as do web typecheck,
+build, and 61 Playwright functional tests. What remains:
 
-- Rust `test` and its status job dial their Postgres service at `localhost`. Hosted
-  runners publish it there; on a container job it is reachable by service name.
-- Web `Build` and `Test` run `playwright install --with-deps`, whose `apt-get` breaks
-  under the Nix dev shell's libraries.
+- Rust `test` reaches 14,627 passed and stops at one failure in `scheduled_action`
+  (`candidates_exact_recheck_activation_and_keyset_pages`). The branch does not touch
+  that code, and it is not yet known whether this is the forge's environment. The other
+  2,662 tests have not run on the forge.
+- Web `Test` has 11 failures of 20,870 tests, all in `apps/web/scripts`. The first is a
+  timeout; they have not been checked on a quieter host.
+- cargo-deny reports a new advisory that `pin-utils` is unmaintained. It is not specific
+  to the forge.
 
-**Playwright has not run against an instance.** Its downloaded browser cannot start
-on the NixOS host, and it belongs in a forge job once the failure above is fixed.
+**Playwright has not run against an instance.** Its downloaded browser cannot start on
+the NixOS host, and a forge job would need network access to the instance.
 
 Not built yet:
 
