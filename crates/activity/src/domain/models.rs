@@ -151,6 +151,13 @@ pub struct CallStart {
     pub call_id: String,
 }
 
+/// Payload of [`Action::AccessRequested`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AccessRequest {
+    /// The request; the owning domain serves its current outcome.
+    pub request_id: Uuid,
+}
+
 /// Task referenced by a project membership event. No task name is stored.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InitiativeTaskChange {
@@ -217,6 +224,8 @@ pub enum Action {
     TaskAdded(InitiativeTaskChange),
     /// A task was removed from an initiative.
     TaskRemoved(InitiativeTaskChange),
+    /// A principal asked to join the entity (channel membership).
+    AccessRequested(AccessRequest),
 }
 
 /// The names captured when an entity is renamed.
@@ -292,6 +301,7 @@ impl Action {
             Action::Renamed(change) => payload(change),
             Action::CallEnded(end) => payload(end),
             Action::TaskAdded(change) | Action::TaskRemoved(change) => payload(change),
+            Action::AccessRequested(request) => payload(request),
         };
         (tag, payload)
     }
@@ -335,6 +345,7 @@ impl Action {
             ActionTag::CallEnded => Ok(Action::CallEnded(parsed(payload)?)),
             ActionTag::TaskAdded => Ok(Action::TaskAdded(parsed(payload)?)),
             ActionTag::TaskRemoved => Ok(Action::TaskRemoved(parsed(payload)?)),
+            ActionTag::AccessRequested => Ok(Action::AccessRequested(parsed(payload)?)),
         }
     }
 }
