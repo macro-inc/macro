@@ -1,5 +1,7 @@
 # Temporary: runs the real sccache against each backend mode, with the exported
 # SCCACHE_CONF and without it. Never prints credentials.
+# Failures are the data here, so don't stop on them; the runner's shell sets -e.
+set +e
 set -uo pipefail
 stub="$GITHUB_WORKSPACE/tooling/xtask/crates/xtask_workflows/src/workflows/scripts/sccache_probe_stub.py"
 real_endpoint="$SCCACHE_WEBDAV_ENDPOINT"
