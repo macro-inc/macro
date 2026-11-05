@@ -376,7 +376,17 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   page membership stays so later tombstones resolve. The round still finishes
   as a clean sync. The warning `skipping an Outlook event Macro cannot read`
   and the `calendar.outlook_sync` span carry `calendar_id`,
-  `provider_event_id` and `rejected_field`. Discovery does not fail on a
+  `provider_event_id` and `rejected_field`. A series imports without an
+  occurrence the adapter cannot read (`OutlookEventRefresh::Refreshed`'s
+  `skipped`), warning `skipping an Outlook occurrence Macro cannot read` with
+  its `occurrence_id`, and the span adds `skipped_occurrences`. A secondary
+  calendar has no v1.0 delta, so each of its rounds lists and reads every
+  event again. A delta round lists only changes, so it also reads again the
+  members with no stored copy that an older `READER_REVISION` read (stamped
+  in `calendar_outlook_members.reader_revision`, NULL from builds before
+  it): a parser fix brings skipped events back without anyone touching
+  them, and a skip costs no read until the event changes or the revision
+  rises. Discovery does not fail on a
   mailbox time zone Macro cannot map to IANA either: `OutlookDiscovery`
   stores the account's calendars with no `time_zone`, which every reader
   treats as unknown, as it does a Google calendar's zone it cannot read

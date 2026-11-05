@@ -15,10 +15,17 @@ async fn mailbox(pool: &PgPool) -> (PgCalendarRepository, Uuid, String) {
     sqlx::query!("INSERT INTO email_link_microsoft_scopes(link_id,grant_generation,granted_scopes) VALUES($1,1,ARRAY['Calendars.ReadWrite'])",link).execute(pool).await.unwrap();
     (PgCalendarRepository::new(pool.clone()), link, owner)
 }
+/// The reader revision of the tests' worker.
+const READER_REVISION: i16 = 1;
+
 async fn claim(repo: &PgCalendarRepository) -> Option<OutlookCalendarLease> {
+    claim_at(repo, READER_REVISION).await
+}
+async fn claim_at(repo: &PgCalendarRepository, revision: i16) -> Option<OutlookCalendarLease> {
     repo.claim_outlook_calendar(
         Uuid::now_v7(),
         OccurrenceRange::maintenance_horizon(Utc::now()),
+        revision,
     )
     .await
     .unwrap()
@@ -681,6 +688,128 @@ async fn tombstones_refresh_known_series_and_reset_unknown_history(pool: PgPool)
     assert!(reset.cursor.is_none());
     assert!(reset.page_cursor.is_none());
     assert!(!reset.page_loaded);
+}
+
+fn delta_page(cursor: &str) -> OutlookCalendarProgress {
+    OutlookCalendarProgress::Page(OutlookCalendarPage {
+        members: vec![],
+        removed: vec![],
+        next: None,
+        delta: Some(cursor.into()),
+    })
+}
+
+async fn finish_round(repo: &PgCalendarRepository, pool: &PgPool, revision: i16) {
+    let lease = claim_at(repo, revision).await.unwrap();
+    assert!(lease.pending_ids.is_empty());
+    repo.checkpoint_outlook_calendar(&lease, OutlookCalendarProgress::Finish)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_outlook_work SET next_run_at=now() WHERE id=$1",
+        lease.id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_delta_round_reads_again_only_events_an_older_reader_skipped(pool: PgPool) {
+    let (repo, _, _) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    repo.checkpoint_outlook_calendar(
+        &lease,
+        OutlookCalendarProgress::Page(OutlookCalendarPage {
+            members: vec![
+                ("kept".into(), "provider-kept".into()),
+                ("skipped-occurrence".into(), "provider-skipped".into()),
+                ("unstamped-occurrence".into(), "provider-unstamped".into()),
+            ],
+            removed: vec![],
+            next: None,
+            delta: Some("baseline".into()),
+        }),
+    )
+    .await
+    .unwrap();
+    let event = claim(&repo).await.unwrap();
+    store(&repo, &event, "kept").await;
+    repo.checkpoint_outlook_calendar(
+        &event,
+        OutlookCalendarProgress::Event {
+            id: "provider-kept".into(),
+            exists: true,
+        },
+    )
+    .await
+    .unwrap();
+    for id in ["provider-skipped", "provider-unstamped"] {
+        let event = claim(&repo).await.unwrap();
+        repo.checkpoint_outlook_calendar(
+            &event,
+            OutlookCalendarProgress::Unreadable { id: id.into() },
+        )
+        .await
+        .unwrap();
+    }
+    finish_round(&repo, &pool, READER_REVISION).await;
+    // What a build before reader revisions left behind.
+    sqlx::query!("UPDATE calendar_outlook_members SET reader_revision=NULL WHERE master_id IN ('provider-kept','provider-unstamped')")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let delta = claim(&repo).await.unwrap();
+    repo.checkpoint_outlook_calendar(&delta, delta_page("second"))
+        .await
+        .unwrap();
+    let reread = claim(&repo).await.unwrap();
+    assert_eq!(
+        reread.pending_ids,
+        ["provider-unstamped"],
+        "a stored event and one this revision skipped are not read again"
+    );
+    repo.checkpoint_outlook_calendar(
+        &reread,
+        OutlookCalendarProgress::Unreadable {
+            id: "provider-unstamped".into(),
+        },
+    )
+    .await
+    .unwrap();
+    finish_round(&repo, &pool, READER_REVISION).await;
+
+    let delta = claim(&repo).await.unwrap();
+    repo.checkpoint_outlook_calendar(&delta, delta_page("third"))
+        .await
+        .unwrap();
+    finish_round(&repo, &pool, READER_REVISION).await;
+
+    let later = READER_REVISION + 1;
+    let delta = claim_at(&repo, later).await.unwrap();
+    repo.checkpoint_outlook_calendar(&delta, delta_page("fourth"))
+        .await
+        .unwrap();
+    let reread = claim_at(&repo, later).await.unwrap();
+    assert_eq!(
+        reread.pending_ids,
+        ["provider-skipped", "provider-unstamped"],
+        "a later revision reads again what older ones skipped"
+    );
+
+    repo.checkpoint_outlook_calendar(&reread, OutlookCalendarProgress::Reset)
+        .await
+        .unwrap();
+    let scan = claim_at(&repo, later).await.unwrap();
+    repo.checkpoint_outlook_calendar(&scan, delta_page("rescanned"))
+        .await
+        .unwrap();
+    let listed = claim_at(&repo, later).await.unwrap();
+    assert!(
+        listed.page_loaded && listed.pending_ids.is_empty(),
+        "a full scan reads only what it lists"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
