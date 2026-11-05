@@ -476,8 +476,12 @@ nix/hosts/computers-tunnels.sh reverse <gateway> <egress> <git> <harness> <stora
 nix/hosts/computers-tunnels.sh all <gateway> <egress> <git> <harness> <storage> <auth> # neither tunnel running
 ```
 
-Run it under `systemd-run --user -p Restart=always` to keep it up. Starting
-the stack again wipes the database but not the VMs: delete leftover instances
+Run it under `systemd-run --user -p Restart=always` to keep it up. When the
+SSH key comes from an agent, add
+`--setenv=SSH_AUTH_SOCK="$SSH_AUTH_SOCK"` to `systemd-run`; user services do not
+inherit the launching shell's agent socket.
+
+Starting the stack again wipes the database but not the VMs: delete leftover instances
 on the host with `incus delete --force <name>`.
 
 Check the generated wiring without starting anything:
