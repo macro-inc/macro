@@ -3,6 +3,7 @@
 mod api;
 mod computer_screen;
 mod config;
+mod voice_gateway;
 
 use utoipa::OpenApi;
 

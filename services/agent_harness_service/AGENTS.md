@@ -265,3 +265,26 @@ bridge hostname, preserving Host validation for other origins.
 
 The Anthropic brain gateway records hashed agent identity, team/computer IDs,
 validated model, numeric tokens/status and explicit admission category.
+
+## Speech gateway and voice catalog
+
+The computer egress listener proxies `/brain/inference/stt` and
+`/brain/inference/tts` WebSockets to LiveKit Inference. It shares
+BrainGatewayAccess with Anthropic: only registered agents on their team's
+running computer qualify. Server-only `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`
+sign 60-second `inference.perform` JWTs; neither secret nor upstream token is
+returned to the guest. Configure both together; both empty disables speech.
+The local stack already supplies them through its LiveKit configuration.
+There is no Deepgram key or direct Deepgram speech connection.
+
+Session contracts fix Nova-3 STT to mono PCM16/16k and Aura-2 TTS to PCM16/24k,
+with known catalog voices. Reject changes to models, encoding, voice or sample
+rate after creation. Bound message size, session duration and sample output.
+Meter forwarded PCM seconds and synthesis characters with the shared recorder
+and the `livekit-inference-deepgram-*` pricing rows. The model rates use the
+LiveKit Build/Ship baseline and preserve administrator-configured prices.
+
+Authenticated team members can query `/voices` and `/voices/{model}/sample`.
+Catalog metadata is cached for a day; fixed-line WAV previews are cached by model.
+The owning creator/admin settings policy lives in team_agents, and agent_git
+commits the selected model. Spans never include transcripts, synthesis text or keys.
