@@ -278,6 +278,7 @@ function Workspace(props: {
   app: string;
   asideRequired?: boolean;
   asidePinned?: boolean;
+  asideList?: ViewShellRootProps['asideList'];
   breakpoints?: ViewShellRootProps['breakpoints'];
   mounted?: () => void;
 }) {
@@ -299,6 +300,7 @@ function Workspace(props: {
         asidePreferenceKey={props.app}
         asideRequired={props.asideRequired}
         asidePinned={props.asidePinned}
+        asideList={props.asideList}
         breakpoints={props.breakpoints}
       >
         <ViewShell.Aside>
@@ -1126,4 +1128,46 @@ describe('automatic docked navigation exit', () => {
       expect(animate).not.toHaveBeenCalled();
     }
   );
+});
+
+describe('list navigation', () => {
+  const main = () => document.querySelector('[data-view-shell-main]')!;
+
+  it('fills a narrow shell with the list until an item opens, then goes back to it', () => {
+    const [width, setWidth] = createSignal(600);
+    measurement.width = width;
+    const [open, setOpen] = createSignal(false);
+    const onBack = vi.fn(() => setOpen(false));
+    render(() => (
+      <Workspace app="channels" asideList={{ open: open(), onBack }} />
+    ));
+
+    expect(screen.getByText('channels')).toBeTruthy();
+    expect(main().getAttribute('aria-hidden')).toBe('true');
+    expect(
+      screen.queryByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Hide navigation' })
+    ).toBeNull();
+
+    setOpen(true);
+    expect(screen.queryByText('channels')).toBeNull();
+    expect(main().getAttribute('aria-hidden')).not.toBe('true');
+    expect(
+      screen.queryByRole('button', { name: 'Show navigation' })
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(onBack).toHaveBeenCalledOnce();
+    expect(screen.getByText('channels')).toBeTruthy();
+
+    setOpen(true);
+    setWidth(1000);
+    expect(asideDocked()).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+    expect(
+      screen.getByRole('button', { name: 'Show navigation' })
+    ).toBeTruthy();
+  });
 });
