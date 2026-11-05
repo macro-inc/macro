@@ -599,6 +599,56 @@ it.each(['team_channels', 'channels'] as const)(
   }
 );
 
+it('opens search over mounted section rows', async () => {
+  mocks.realRenderer = true;
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.parentElement;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.hasAttribute('data-index') ? 34 : 200;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  const [searchOpen, setSearchOpen] = createSignal(false);
+  render(() => (
+    <ChannelsRail
+      sources={{
+        ...sources,
+        team_channels: { ...source, items: () => [] },
+        direct_messages: { ...source, items: () => [] },
+        search: {
+          ...source,
+          items: () => [{ ...channel, id: 'found', name: 'Found' }],
+        },
+      }}
+      searchQuery=""
+      onSearchQueryChange={() => {}}
+      searchOpen={searchOpen()}
+      onSearchOpenChange={setSearchOpen}
+    />
+  ));
+  await Promise.resolve();
+  expect(screen.getByRole('button', { name: 'One' })).toBeTruthy();
+
+  // Disposing the section rows must not rerun the sections being disposed.
+  expect(() => setSearchOpen(true)).not.toThrow();
+  await Promise.resolve();
+
+  expect(screen.getByRole('button', { name: 'Found' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'One' })).toBeNull();
+});
+
 describe('section heading navigation', () => {
   it.each([
     ['label:first', ']', 'label:second'],
