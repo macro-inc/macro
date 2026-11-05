@@ -137,6 +137,12 @@ using the control plane; a TLS SAN mismatch in ordinary curl is expected.
 - Public cert in the repo: `_nixos/certs/control-plane-dev.crt`; `incus-trust-control-plane.service` adds it to the Incus trust store at boot.
 - Rotate: generate a new pair, replace the repo cert, rebuild, then remove the old one with `incus config trust remove <fingerprint>`.
 
+## Configuration formats
+
+Use NixOS structured options for host config (including Incus preseed, sysctl,
+networking, and systemd). The `macro-boxes` filter and `macro-boxes-nat` rules
+remain nftables text because nixpkgs has no nftables ruleset format generator.
+
 ## Box network policy
 
 Boxes on `boxbr0` get DHCP/DNS from the bridge and outbound IPv4 internet

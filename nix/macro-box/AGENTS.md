@@ -18,7 +18,8 @@ and a Docker image (the dev-only DockerFleet).
   every deb under Ubuntu's `fakeroot`, which records the ownership one mapped
   uid cannot hold. The Nix closure of `tools` (macrod, claude-code, chromium,
   node 22, herdr, chrome-devtools-mcp) is copied into the guest's `/nix/store`
-  and linked from `/usr/local/bin`. `files/` is copied over `/`.
+  and linked from `/usr/local/bin`. `files/` supplies scripts and documentation;
+  `_config.nix` renders configuration from attrsets into the same rootfs overlay.
 - `_build.nix` packs `rootfs.tar` into `disk.qcow2` (GPT: ESP with shim →
   signed GRUB → `/boot/vmlinuz`, ext4 root via `mkfs.ext4 -d tar`) plus
   `metadata.tar.xz`, and `container.tar` (no kernel/modules) into a
@@ -29,6 +30,8 @@ and a Docker image (the dev-only DockerFleet).
 - `nix build .#macro-box-incus` → `result/{metadata.tar.xz,disk.qcow2}`.
 - `nix build .#macro-box-docker` → `docker load < result` → `macro-box:latest`.
 - `nix build .#macro-box-rootfs` → the two tarballs.
+- `nix build .#macro-box-config` → generated rootfs config, Incus metadata, GRUB,
+  and Docker enrollment config without building the Rust/tool closure.
 
 ## Contract with macrod and hosted_runtimes
 
@@ -73,6 +76,9 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
 
 ## Checks
 
+- For config-only edits, build `.#macro-box-config` and diff its rendered files
+  against the previous generation (parse INI/JSON/YAML when ordering changes).
+
 - Inside a running guest as root, run `bash tests/enrollment-agent-detection.sh`
   (copy it from this directory); it discovers Claude using the enrollment unit's
   environment in a fresh system service.
@@ -88,8 +94,9 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
 - Set enrollment's `HOME` to `/home/macro` so agent discovery works in a root
   system service and records adapter paths usable by the unprivileged daemon.
 - import-tree imports every `.nix` file under `nix/`; helpers start with `_`.
-- Keep `files/etc/macro/enroll.env` tracked despite the global `*.env` ignore;
-  it contains the non-secret Incus enrollment source required at VM boot.
+- Generate all configuration from attrsets in `_config.nix`; use Nix formats
+  for INI/JSON/YAML and `lib.generators.toKeyValue` for the remaining line formats.
+  Keep shell programs and Markdown in `files/`; the enrollment env is generated.
 - The `macro-box` profile turns Secure Boot off, so the shim path is built
   but untested; the ESP grub.cfg boots `/boot/vmlinuz` + `/boot/initrd.img`
   (the kernel's symlinks), so apt kernel upgrades need no update-grub.

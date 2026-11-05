@@ -58,6 +58,10 @@ let
   rootUuid = "6d61f6b2-7b8e-4c1a-9d0e-6d6163726f30";
   espVolumeId = "4D414352";
   espUuid = "4D41-4352";
+  config = import ./_config.nix {
+    inherit pkgs rootUuid espUuid;
+    inherit (lock) snapshot;
+  };
 
   rootfs =
     pkgs.runCommand "macro-box-rootfs"
@@ -74,36 +78,14 @@ let
           lib.concatMapStrings (deb: deb.file + "\n") (lib.filter (deb: deb.base) lock.debs)
         );
         FILES = ./files;
+        CONFIG = config.rendered;
         SKILLS = ./skills;
         CLOSURE = closure;
         TOOLS = tools;
-        ROOT_UUID = rootUuid;
-        ESP_UUID = espUuid;
       }
       ''
         unshare --user --map-root-user --mount bash ${./rootfs.sh}
       '';
-
-  grubCfg = pkgs.writeText "grub.cfg" ''
-    set timeout=0
-    search --no-floppy --fs-uuid --set=root ${rootUuid}
-    linux /boot/vmlinuz root=UUID=${rootUuid} ro console=tty1 console=ttyS0
-    initrd /boot/initrd.img
-    boot
-  '';
-
-  metadata = pkgs.writeText "metadata.yaml" ''
-    architecture: x86_64
-    creation_date: 1793836800
-    properties:
-      architecture: amd64
-      description: Macro computer (Ubuntu 24.04, snapshot ${lock.snapshot})
-      os: Ubuntu
-      release: noble
-      variant: macro-box
-      serial: "${lock.snapshot}"
-    templates: {}
-  '';
 
   incus =
     pkgs.runCommand "macro-box-incus"
@@ -133,8 +115,8 @@ let
         mcopy -i esp.img efi/usr/lib/shim/shimx64.efi.signed.latest ::/EFI/BOOT/BOOTX64.EFI
         mcopy -i esp.img efi/usr/lib/shim/mmx64.efi ::/EFI/BOOT/mmx64.efi
         mcopy -i esp.img efi/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed ::/EFI/BOOT/grubx64.efi
-        mcopy -i esp.img ${grubCfg} ::/EFI/BOOT/grub.cfg
-        mcopy -i esp.img ${grubCfg} ::/EFI/ubuntu/grub.cfg
+        mcopy -i esp.img ${config.grub} ::/EFI/BOOT/grub.cfg
+        mcopy -i esp.img ${config.grub} ::/EFI/ubuntu/grub.cfg
 
         mkfs.ext4 -q -L macro-root -U ${rootUuid} -E root_owner=0:0 \
           -d ${rootfs}/rootfs.tar root.img "''${rootMiB}M"
@@ -149,7 +131,7 @@ let
 
         mkdir -p $out
         qemu-img convert -c -O qcow2 disk.raw $out/disk.qcow2
-        cp ${metadata} metadata.yaml
+        cp ${config.metadata} metadata.yaml
         tar --owner=0 --group=0 --numeric-owner --mtime=@1 -cJf $out/metadata.tar.xz metadata.yaml
       '';
 
@@ -157,7 +139,7 @@ let
   # /etc/resolv.conf, and there are no disks to mount.
   dockerLayer = pkgs.runCommand "macro-box-docker-layer" { nativeBuildInputs = [ pkgs.gnutar ]; } ''
     mkdir -p root/etc/macro
-    printf 'MACRO_ENROLL_FROM=file:/run/macro/enrollment.json\n' > root/etc/macro/enroll.env
+    cp ${config.dockerEnrollment} root/etc/macro/enroll.env
     : > root/etc/resolv.conf
     : > root/etc/fstab
     tar --owner=0 --group=0 --numeric-owner --mtime=@1 --sort=name -C root -cf $out etc
@@ -166,6 +148,10 @@ let
   dockerConfig = {
     architecture = "amd64";
     os = "linux";
+    rootfs = {
+      type = "layers";
+      diff_ids = [ ];
+    };
     config = {
       Entrypoint = [ "/sbin/init" ];
       Env = [
@@ -175,6 +161,14 @@ let
       StopSignal = "SIGRTMIN+3";
     };
   };
+
+  dockerManifest = (pkgs.formats.json { }).generate "manifest.json" [
+    {
+      Config = "";
+      RepoTags = [ "macro-box:latest" ];
+      Layers = [ ];
+    }
+  ];
 
   # A docker-save archive put together by hand: dockerTools copies files out
   # of the store, which loses the ownership and setuid bits dpkg recorded.
@@ -200,13 +194,13 @@ let
           diffIds+=("sha256:$sum")
           layers+=("$sum/layer.tar")
         done
-        jq --args '.rootfs = { type: "layers", diff_ids: $ARGS.positional }' "''${diffIds[@]}" \
+        jq --args '.rootfs.diff_ids = $ARGS.positional' "''${diffIds[@]}" \
           < "$configPath" > config.json
         configSum=$(sha256sum config.json | cut -d' ' -f1)
         mv config.json image/$configSum.json
-        jq -n --arg config "$configSum.json" --args \
-          '[{ Config: $config, RepoTags: ["macro-box:latest"], Layers: $ARGS.positional }]' \
-          "''${layers[@]}" > image/manifest.json
+        jq --arg config "$configSum.json" --args \
+          '.[0].Config = $config | .[0].Layers = $ARGS.positional' \
+          "''${layers[@]}" < ${dockerManifest} > image/manifest.json
         tar --dereference --owner=0 --group=0 --numeric-owner --mtime=@1 --sort=name \
           -C image -cf - . | pigz -1 > $out
       '';
@@ -214,6 +208,7 @@ in
 {
   inherit
     rootfs
+    config
     incus
     docker
     tools

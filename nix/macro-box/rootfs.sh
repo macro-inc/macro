@@ -5,7 +5,7 @@
 # Ubuntu's fakeroot, which records the ownership the single mapped uid cannot
 # hold (FAKEROOTDONTTRYCHOWN: a real chown to an unmapped id is EINVAL,
 # which fakeroot does not swallow). Writes $out/rootfs.tar (VM) and $out/container.tar (Docker).
-# Inputs: DEBS BASE FILES SKILLS CLOSURE TOOLS ROOT_UUID ESP_UUID out.
+# Inputs: DEBS BASE FILES CONFIG SKILLS CLOSURE TOOLS out.
 # shellcheck disable=SC2154
 set -euo pipefail
 
@@ -35,6 +35,7 @@ mkdir -p "$root/nix/store"
 xargs -a "$CLOSURE/store-paths" cp -dR --preserve=mode,timestamps -t "$root/nix/store/"
 
 cp -rT "$FILES" "$root/.macro-box-files"
+cp -r --no-preserve=mode "$CONFIG"/. "$root/.macro-box-files/"
 cp -rT "$SKILLS" "$root/.macro-box-skills"
 
 in_chroot() {
@@ -42,7 +43,7 @@ in_chroot() {
     PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin \
     HOME=/root LC_ALL=C.UTF-8 FAKEROOTDONTTRYCHOWN=1 \
     DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true \
-    TOOLS="$TOOLS" ROOT_UUID="$ROOT_UUID" ESP_UUID="$ESP_UUID" \
+    TOOLS="$TOOLS" \
     /usr/bin/fakeroot-sysv "$@"
 }
 
@@ -75,29 +76,10 @@ in_chroot -i /.fakeroot -s /.fakeroot -- /bin/bash -euo pipefail -c '
 
   for bin in "$TOOLS"/bin/*; do ln -s "$bin" "/usr/local/bin/$(basename "$bin")"; done
 
-  echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
   locale-gen
   update-locale LANG=en_US.UTF-8
 
-  cat > /etc/fstab <<EOF
-UUID=$ROOT_UUID / ext4 defaults,discard,errors=remount-ro 0 1
-UUID=$ESP_UUID /boot/efi vfat umask=0077,nofail 0 1
-EOF
   mkdir -p /boot/efi
-
-  cat > /etc/apt/sources.list.d/ubuntu.sources <<EOF
-Types: deb
-URIs: http://archive.ubuntu.com/ubuntu
-Suites: noble noble-updates noble-backports
-Components: main restricted universe multiverse
-Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-
-Types: deb
-URIs: http://security.ubuntu.com/ubuntu
-Suites: noble-security
-Components: main restricted universe multiverse
-Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-EOF
 
   useradd --create-home --uid 1000 --user-group --shell /bin/bash --groups docker macro
   install -d -o root -g root -m 0755 /var/lib/macrod /etc/macro/personas
@@ -105,11 +87,9 @@ EOF
 
   # Skills and Claude Code user config for macro and for every persona user
   # macrod-enroll creates with useradd -m.
-  claude_json="{\"hasCompletedOnboarding\":true,\"mcpServers\":{\"chrome-devtools\":{\"type\":\"stdio\",\"command\":\"/usr/local/bin/chrome-devtools-mcp\",\"args\":[\"--browser-url\",\"http://127.0.0.1:9222\"]}}}"
   for home in /etc/skel /home/macro; do
     mkdir -p "$home/.claude"
     cp -rT /.macro-box-skills "$home/.claude/skills"
-    printf "%s\n" "$claude_json" > "$home/.claude.json"
   done
   rm -rf /.macro-box-skills
 

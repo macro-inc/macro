@@ -22,6 +22,7 @@
     {
       packages = lib.optionalAttrs (system == "x86_64-linux") {
         macro-box-rootfs = box.rootfs;
+        macro-box-config = box.config.artifacts;
         macro-box-incus = box.incus;
         macro-box-docker = box.docker;
       };
