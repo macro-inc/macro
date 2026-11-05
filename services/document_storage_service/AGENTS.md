@@ -88,11 +88,6 @@ threads, pins, recents, notifications, folders, activity.
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 
-- Don't declare a function that reaches the router `pub async fn`, even in a private
-  module. rustc compiles the body of every non-generic `pub async fn` in every build,
-  so the lib test would compile the whole service. `server::run` returns `impl Future`
-  for that reason.
-
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,
   `delete_document_worker`, `location_check`, all on by `default`) — a feature
   disabled locally can hide a bug that only shows in deployed builds.

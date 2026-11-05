@@ -9,9 +9,9 @@ set -euo pipefail
 # The filterset only decides which tests *run* after a workspace build; `-p`
 # is what keeps an unrelated crate's test binary from being compiled.
 #
-# `--lib --bins --tests` is safe with `--workspace` (cargo skips packages that
-# lack a given target type) but fails with `-p` when any selected package has
-# no lib — xtask binaries such as xtask_nextest_filter / xtask_workflows.
+# `--tests` with `--workspace` builds the test binary of every target with
+# `test = true`. `--bins` would also build the bins that opt out, and the normal
+# library beneath them.
 # Unconstrained `-p` still runs that package's tests.
 
 : "${RUST_PACKAGES:?RUST_PACKAGES is required}"
@@ -36,7 +36,7 @@ else
 fi
 
 if [ "$RUST_PACKAGES" = "all" ]; then
-  cargo nextest run --workspace --exclude sync_service --lib --bins --tests "${common[@]}"
+  cargo nextest run --workspace --exclude sync_service --tests "${common[@]}"
   exit 0
 fi
 

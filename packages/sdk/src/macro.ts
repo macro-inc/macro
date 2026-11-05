@@ -325,10 +325,12 @@ export {
   EditOutcomeUnknownError,
 } from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
+export type { FileContent } from './entities/documents/namespace';
 export { DocumentVersion } from './entities/documents/version';
 export {
   DraftAttachment,
   type DraftOptions,
+  type DraftSendOptions,
   EmailDraft,
 } from './entities/email/draft';
 export { EmailFilter, type EmailFilterOptions } from './entities/email/filter';

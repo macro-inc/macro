@@ -8600,6 +8600,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
