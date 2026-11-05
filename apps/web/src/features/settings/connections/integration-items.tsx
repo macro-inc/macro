@@ -452,38 +452,33 @@ export function useDialpadItem(): IntegrationItem {
     const state = () => dialpad.connection()?.state;
     return (
       <Switch>
+        <Match
+          when={
+            state() === 'failed' ||
+            dialpad.connection()?.issue === 'needs_reauth'
+          }
+        >
+          <ConnectMenu
+            label={t('dialpad.reconnect')}
+            ariaLabel={t('dialpad.reconnectDialpad')}
+          />
+        </Match>
         <Match when={state() === 'connected'}>
-          <Show
-            when={dialpad.connection()?.issue === 'needs_reauth'}
-            fallback={
-              <ConnectAction
-                label={t('dialpad.disconnect')}
-                variant="danger"
-                ariaLabel={t('dialpad.disconnectDialpad')}
-                onClick={() =>
-                  fireAndForget(dialpad.disconnect(), 'dialpad-settings')
-                }
-                disabled={dialpad.disconnecting()}
-              />
+          <ConnectAction
+            label={t('dialpad.disconnect')}
+            variant="danger"
+            ariaLabel={t('dialpad.disconnectDialpad')}
+            onClick={() =>
+              fireAndForget(dialpad.disconnect(), 'dialpad-settings')
             }
-          >
-            <ConnectMenu
-              label={t('dialpad.reconnect')}
-              ariaLabel={t('dialpad.reconnectDialpad')}
-            />
-          </Show>
+            disabled={dialpad.disconnecting()}
+          />
         </Match>
         <Match when={state() === 'connecting'}>
           <ConnectAction
             label={t('dialpad.connecting')}
             variant="neutral"
             loading
-          />
-        </Match>
-        <Match when={state() === 'failed'}>
-          <ConnectMenu
-            label={t('dialpad.reconnect')}
-            ariaLabel={t('dialpad.reconnectDialpad')}
           />
         </Match>
         <Match when={state() === 'not_connected'}>
