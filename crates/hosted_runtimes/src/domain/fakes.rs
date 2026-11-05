@@ -1,13 +1,14 @@
 //! In-memory fakes of the ports, for domain tests.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, TimeZone, Utc};
 use uuid::Uuid;
 
 use crate::domain::lifecycle::{
-    ComputerState, Context, EffectWorker, Event, HostId, Phase, transition,
+    ComputerState, Context, Effect, EffectWorker, Event, HostId, Phase, transition,
 };
 use crate::domain::models::{Computer, Host, HostRegistration, NewComputer};
 use crate::domain::ports::{ComputerRepo, DueTimer, PendingEffect, ReserveError};
@@ -37,6 +38,9 @@ pub struct FakeError;
 #[derive(Default)]
 pub struct FakeRepo {
     pub sold_units: u32,
+    pub fail_next_apply: AtomicBool,
+    pub payment_locks: Mutex<HashMap<Uuid, Arc<tokio::sync::Mutex<()>>>>,
+    pub effect_run_after: Mutex<HashMap<i64, DateTime<Utc>>>,
     pub computers: Mutex<HashMap<Uuid, Computer>>,
     pub effects: Mutex<Vec<PendingEffect>>,
     pub events: Mutex<Vec<(Uuid, Event)>>,
@@ -44,6 +48,18 @@ pub struct FakeRepo {
 
 impl ComputerRepo for FakeRepo {
     type Err = FakeError;
+    type PaymentGuard = tokio::sync::OwnedMutexGuard<()>;
+
+    async fn lock_payment(&self, computer_id: Uuid) -> Result<Self::PaymentGuard, FakeError> {
+        let lock = self
+            .payment_locks
+            .lock()
+            .unwrap()
+            .entry(computer_id)
+            .or_default()
+            .clone();
+        Ok(lock.lock_owned().await)
+    }
 
     async fn reserve(
         &self,
@@ -53,7 +69,7 @@ impl ComputerRepo for FakeRepo {
         let mut computers = self.computers.lock().unwrap();
         let sold: u32 = computers
             .values()
-            .filter(|existing| existing.state.phase != Phase::Destroyed)
+            .filter(|existing| existing.state.holds_units())
             .map(|existing| existing.size.units())
             .sum();
         if sold + computer.size.units() > self.sold_units {
@@ -71,6 +87,20 @@ impl ComputerRepo for FakeRepo {
             created_at: now,
             enrolled_at: None,
         };
+        let mut effects = self.effects.lock().unwrap();
+        let id = effects.iter().map(|effect| effect.id).max().unwrap_or(0) + 1;
+        effects.push(PendingEffect {
+            id,
+            computer_id: reserved.id,
+            effect: Effect::ConfirmPayment {
+                extra_items: computer.extra_items,
+            },
+            attempts: 0,
+        });
+        self.effect_run_after
+            .lock()
+            .unwrap()
+            .insert(id, now + crate::domain::lifecycle::PAYMENT_CONFIRM_DELAY);
         computers.insert(reserved.id, reserved.clone());
         Ok(reserved)
     }
@@ -81,6 +111,9 @@ impl ComputerRepo for FakeRepo {
         event: Event,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
+        if self.fail_next_apply.swap(false, Ordering::SeqCst) {
+            return Err(FakeError);
+        }
         self.events
             .lock()
             .unwrap()
@@ -100,7 +133,7 @@ impl ComputerRepo for FakeRepo {
         computer.state = state;
         let mut outbox = self.effects.lock().unwrap();
         for effect in effects {
-            let id = outbox.len() as i64 + 1;
+            let id = outbox.iter().map(|pending| pending.id).max().unwrap_or(0) + 1;
             outbox.push(PendingEffect {
                 id,
                 computer_id,
@@ -176,7 +209,7 @@ impl ComputerRepo for FakeRepo {
             .unwrap()
             .values()
             .filter(|computer| computer.state.host() == Some(host))
-            .filter(|computer| !matches!(computer.state.phase, Phase::Reserved { .. }))
+            .filter(|computer| !matches!(computer.state.phase, Phase::PendingPayment { .. }))
             .cloned()
             .collect())
     }
@@ -185,7 +218,7 @@ impl ComputerRepo for FakeRepo {
         &self,
         worker: EffectWorker,
         limit: u32,
-        _now: DateTime<Utc>,
+        now: DateTime<Utc>,
         _lease_until: DateTime<Utc>,
     ) -> Result<Vec<PendingEffect>, FakeError> {
         Ok(self
@@ -194,12 +227,20 @@ impl ComputerRepo for FakeRepo {
             .unwrap()
             .iter()
             .filter(|pending| pending.effect.worker() == worker)
+            .filter(|pending| {
+                self.effect_run_after
+                    .lock()
+                    .unwrap()
+                    .get(&pending.id)
+                    .is_none_or(|at| *at <= now)
+            })
             .take(limit as usize)
             .cloned()
             .collect())
     }
 
     async fn complete_effect(&self, id: i64) -> Result<(), FakeError> {
+        self.effect_run_after.lock().unwrap().remove(&id);
         self.effects
             .lock()
             .unwrap()
@@ -211,8 +252,9 @@ impl ComputerRepo for FakeRepo {
         &self,
         id: i64,
         _error: String,
-        _retry_at: DateTime<Utc>,
+        retry_at: DateTime<Utc>,
     ) -> Result<(), FakeError> {
+        self.effect_run_after.lock().unwrap().insert(id, retry_at);
         for pending in self.effects.lock().unwrap().iter_mut() {
             if pending.id == id {
                 pending.attempts += 1;

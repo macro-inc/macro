@@ -1258,6 +1258,10 @@ impl CustomerRepository for MockCustomerRepository {
         }
     }
 
+    async fn replay_item_change(&self, _idempotency_key: &str) -> Result<bool, CustomerError> {
+        Ok(false)
+    }
+
     async fn change_item_quantities(
         &self,
         subscription_id: &stripe::SubscriptionId,

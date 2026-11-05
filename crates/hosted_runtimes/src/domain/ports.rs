@@ -42,9 +42,17 @@ pub enum ReserveError<Err> {
 pub trait ComputerRepo: Send + Sync + 'static {
     type Err: std::error::Error + Send + Sync + 'static;
 
+    /// Serializes payment resolution through its lifecycle write across replicas.
+    type PaymentGuard: Send;
+
+    fn lock_payment(
+        &self,
+        computer_id: Uuid,
+    ) -> impl Future<Output = Result<Self::PaymentGuard, Self::Err>> + Send;
+
     /// Hold the computer's units on the host with the most sold capacity
-    /// left, and insert it in [`crate::domain::lifecycle::Phase::Reserved`]
-    /// with its expiry timer, in one transaction.
+    /// left, and insert it in [`crate::domain::lifecycle::Phase::PendingPayment`]
+    /// with its delayed ConfirmPayment billing effect, in one transaction.
     fn reserve(
         &self,
         computer: NewComputer,

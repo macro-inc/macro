@@ -8,11 +8,13 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::domain::models::SubscriptionItem;
+
 #[cfg(test)]
 mod test;
 
-/// How long a purchase may hold its reserved units before payment confirms.
-pub const RESERVATION_TTL: Duration = Duration::minutes(15);
+/// Delay before the outbox resolves a purchase whose normal path did not finish.
+pub const PAYMENT_CONFIRM_DELAY: Duration = Duration::minutes(2);
 /// Frozen this long without a prompt, a computer saves its RAM and suspends.
 pub const SUSPEND_AFTER: Duration = Duration::minutes(30);
 /// macrod may be gone this long while awake before we treat it as a crash.
@@ -36,10 +38,12 @@ pub type HostId = Uuid;
 #[serde(tag = "phase", rename_all = "snake_case")]
 pub enum Phase {
     /// Purchase in flight: units held on `host`, payment not yet confirmed.
-    Reserved {
+    PendingPayment {
         host: HostId,
-        expires_at: DateTime<Utc>,
+        since: DateTime<Utc>,
     },
+    /// Payment was definitely refused; no capacity or billing item is held.
+    PaymentFailed,
     /// Paid; the instance is being created on `host`, started when `start`
     /// (a full host creates it stopped and wakes it later).
     Provisioning {
@@ -119,10 +123,7 @@ impl ComputerState {
     /// A fresh purchase holding units on `host`.
     pub fn reserved(host: HostId, now: DateTime<Utc>) -> Self {
         Self {
-            phase: Phase::Reserved {
-                host,
-                expires_at: now + RESERVATION_TTL,
-            },
+            phase: Phase::PendingPayment { host, since: now },
             power: Power::On,
             billing: Billing::Active,
             macrod_connected: false,
@@ -131,10 +132,10 @@ impl ComputerState {
         }
     }
 
-    /// The host this computer lives on, unless it is destroyed.
+    /// The host this computer lives on, while it holds capacity.
     pub fn host(&self) -> Option<HostId> {
         match self.phase {
-            Phase::Reserved { host, .. }
+            Phase::PendingPayment { host, .. }
             | Phase::Provisioning { host, .. }
             | Phase::Booting { host }
             | Phase::Restarting { host }
@@ -144,8 +145,13 @@ impl ComputerState {
             | Phase::Stopping { host }
             | Phase::Stopped { host }
             | Phase::Failed { host } => Some(host),
-            Phase::Destroyed => None,
+            Phase::PaymentFailed | Phase::Destroyed => None,
         }
+    }
+
+    /// Whether the computer counts against sold capacity.
+    pub fn holds_units(&self) -> bool {
+        !matches!(self.phase, Phase::PaymentFailed | Phase::Destroyed)
     }
 
     /// Whether the computer holds host RAM, i.e. counts against awake capacity.
@@ -167,10 +173,8 @@ impl ComputerState {
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum Event {
     PaymentConfirmed,
-    /// The purchase's Stripe update failed; the reservation is dropped.
+    /// The purchase was definitely refused by billing.
     PurchaseFailed,
-    /// Timer: payment never confirmed.
-    ReservationExpired,
     /// The fleet finished creating the instance and started it.
     InstanceStarted,
     /// The fleet finished stopping the instance (or created it stopped).
@@ -226,7 +230,6 @@ pub enum Event {
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum TimerKind {
-    ReservationExpired,
     MacrodMissing,
     SuspendDue,
     RestartDue,
@@ -239,7 +242,6 @@ impl TimerKind {
     /// The event a timer delivers when it fires.
     pub fn event(self) -> Event {
         match self {
-            Self::ReservationExpired => Event::ReservationExpired,
             Self::MacrodMissing => Event::MacrodMissing,
             Self::SuspendDue => Event::SuspendDue,
             Self::RestartDue => Event::RestartDue,
@@ -254,6 +256,10 @@ impl TimerKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "effect", rename_all = "snake_case")]
 pub enum Effect {
+    /// Resolve a pending purchase with its original idempotency key and items.
+    ConfirmPayment {
+        extra_items: Vec<SubscriptionItem>,
+    },
     /// Create the instance from the base image with its enrollment; start it when `start`.
     Create {
         host: HostId,
@@ -310,7 +316,7 @@ impl Effect {
     /// Which worker carries the effect out. Billing runs where Stripe lives.
     pub fn worker(&self) -> EffectWorker {
         match self {
-            Self::RemoveBillingItem => EffectWorker::Billing,
+            Self::ConfirmPayment { .. } | Self::RemoveBillingItem => EffectWorker::Billing,
             Self::ScheduleTimer { .. } => EffectWorker::Timers,
             _ => EffectWorker::Fleet,
         }
@@ -348,11 +354,18 @@ pub fn transition(
     let mut effects = Vec::new();
     let now = context.now;
 
+    if state.phase == Phase::PaymentFailed {
+        if *event == Event::ReleaseNow {
+            next.phase = Phase::Destroyed;
+        }
+        return (next, effects);
+    }
+
     let Some(host) = state.host() else {
         return (next, effects);
     };
 
-    if let Phase::Reserved { .. } = state.phase {
+    if let Phase::PendingPayment { .. } = state.phase {
         match event {
             Event::PaymentConfirmed => {
                 let start = state.power == Power::On && context.host_has_room;
@@ -360,8 +373,8 @@ pub fn transition(
                 next.wake_requested = state.power == Power::On && !start;
                 effects.push(Effect::Create { host, start });
             }
-            Event::PurchaseFailed | Event::ReservationExpired => {
-                next.phase = Phase::Destroyed;
+            Event::PurchaseFailed => {
+                next.phase = Phase::PaymentFailed;
             }
             _ => {}
         }
@@ -369,7 +382,7 @@ pub fn transition(
     }
 
     match event {
-        Event::PaymentConfirmed | Event::PurchaseFailed | Event::ReservationExpired => {}
+        Event::PaymentConfirmed | Event::PurchaseFailed => {}
 
         Event::InstanceStarted => {
             if let Phase::Provisioning { start: true, .. } = state.phase {
@@ -711,10 +724,11 @@ fn power_down(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId)
             next.phase = Phase::Stopped { host };
             next.macrod_connected = false;
         }
-        Phase::Reserved { .. }
+        Phase::PendingPayment { .. }
         | Phase::Provisioning { .. }
         | Phase::Stopping { .. }
         | Phase::Stopped { .. }
+        | Phase::PaymentFailed
         | Phase::Destroyed => {}
     }
 }

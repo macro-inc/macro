@@ -83,6 +83,14 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
         extra_items: &[SubscriptionItem],
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
+        if self
+            .teams
+            .replay_subscription_item_change(idempotency_key)
+            .await
+            .map_err(billing_error)?
+        {
+            return Ok(());
+        }
         let (price_id, _) = self.computer_price(team_id, size).await?;
         let changes = std::iter::once(ItemQuantityChange { price_id, delta: 1 })
             .chain(extra_items.iter().map(|item| ItemQuantityChange {
@@ -103,6 +111,14 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
         size: ComputerSize,
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
+        if self
+            .teams
+            .replay_subscription_item_change(idempotency_key)
+            .await
+            .map_err(billing_error)?
+        {
+            return Ok(());
+        }
         let (price_id, _) = self.computer_price(team_id, size).await?;
         self.teams
             .change_team_subscription_items(

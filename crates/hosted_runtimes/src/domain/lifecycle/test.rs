@@ -78,9 +78,9 @@ fn cases() -> Vec<Case> {
     vec![
         Case {
             name: "payment with room creates and starts",
-            phase: Phase::Reserved {
+            phase: Phase::PendingPayment {
                 host: HOST,
-                expires_at: now() + RESERVATION_TTL,
+                since: now(),
             },
             power: Power::On,
             billing: Billing::Active,
@@ -103,9 +103,9 @@ fn cases() -> Vec<Case> {
         },
         Case {
             name: "payment on a full host creates stopped and waits to wake",
-            phase: Phase::Reserved {
+            phase: Phase::PendingPayment {
                 host: HOST,
-                expires_at: now() + RESERVATION_TTL,
+                since: now(),
             },
             power: Power::On,
             billing: Billing::Active,
@@ -127,10 +127,10 @@ fn cases() -> Vec<Case> {
             }],
         },
         Case {
-            name: "failed purchase drops the reservation",
-            phase: Phase::Reserved {
+            name: "failed purchase releases capacity but keeps a visible row",
+            phase: Phase::PendingPayment {
                 host: HOST,
-                expires_at: now() + RESERVATION_TTL,
+                since: now(),
             },
             power: Power::On,
             billing: Billing::Active,
@@ -139,24 +139,53 @@ fn cases() -> Vec<Case> {
             wake_requested: false,
             event: Event::PurchaseFailed,
             host_has_room: true,
-            expected_phase: Phase::Destroyed,
+            expected_phase: Phase::PaymentFailed,
             expected_power: Power::On,
             expected_billing: Billing::Active,
             expected_wake_requested: false,
             expected_effects: vec![],
         },
         Case {
-            name: "expired reservation is dropped",
-            phase: Phase::Reserved {
-                host: HOST,
-                expires_at: now(),
-            },
+            name: "failed payment ignores confirmation",
+            phase: Phase::PaymentFailed,
             power: Power::On,
             billing: Billing::Active,
             macrod_connected: false,
             recent_crashes: vec![],
             wake_requested: false,
-            event: Event::ReservationExpired,
+            event: Event::PaymentConfirmed,
+            host_has_room: true,
+            expected_phase: Phase::PaymentFailed,
+            expected_power: Power::On,
+            expected_billing: Billing::Active,
+            expected_wake_requested: false,
+            expected_effects: vec![],
+        },
+        Case {
+            name: "failed payment ignores power on",
+            phase: Phase::PaymentFailed,
+            power: Power::On,
+            billing: Billing::Active,
+            macrod_connected: false,
+            recent_crashes: vec![],
+            wake_requested: false,
+            event: Event::PowerOn,
+            host_has_room: true,
+            expected_phase: Phase::PaymentFailed,
+            expected_power: Power::On,
+            expected_billing: Billing::Active,
+            expected_wake_requested: false,
+            expected_effects: vec![],
+        },
+        Case {
+            name: "failed payment can be cleared without billing",
+            phase: Phase::PaymentFailed,
+            power: Power::On,
+            billing: Billing::Active,
+            macrod_connected: false,
+            recent_crashes: vec![],
+            wake_requested: false,
+            event: Event::ReleaseNow,
             host_has_room: true,
             expected_phase: Phase::Destroyed,
             expected_power: Power::On,
@@ -873,7 +902,6 @@ fn any_event() -> impl Strategy<Value = Event> {
     prop_oneof![
         Just(Event::PaymentConfirmed),
         Just(Event::PurchaseFailed),
-        Just(Event::ReservationExpired),
         Just(Event::InstanceStarted),
         Just(Event::InstanceStopped),
         Just(Event::MacrodConnected),
@@ -937,7 +965,9 @@ proptest! {
     #[test]
     fn invariants(
         sizes in proptest::collection::vec(prop_oneof![Just(1u32), Just(2), Just(4)], 1..5),
-        steps in proptest::collection::vec((0usize..5, any_event(), 0i64..120), 1..200),
+        // External subscription cancellation already removed the item upstream;
+        // this simulation models removals through our own billing effects.
+        steps in proptest::collection::vec((0usize..5, any_event().prop_filter("own billing removals", |event| *event != Event::SubscriptionCanceled), 0i64..120, any::<bool>()), 1..200),
     ) {
         let mut fleet = Fleet {
             capacity: 4,
@@ -948,11 +978,41 @@ proptest! {
         };
         let mut at = now();
 
-        for (index, event, minutes) in steps {
+        let mut charged = std::collections::HashSet::new();
+        let mut removed = std::collections::HashSet::new();
+        let mut lost_writes = std::collections::HashSet::new();
+        for (index, mut event, minutes, write_lost) in steps {
             let index = index % fleet.computers.len();
             at += Duration::minutes(minutes);
             let before = fleet.computers[index].1.clone();
+            // A confirmation worker replays the same successful Stripe operation.
+            if matches!(before.phase, Phase::PendingPayment { .. }) {
+                if lost_writes.contains(&index) {
+                    event = Event::PaymentConfirmed;
+                }
+                if event == Event::PaymentConfirmed {
+                    charged.insert(index);
+                    if write_lost {
+                        lost_writes.insert(index);
+                        for charged_id in &charged {
+                            let phase = &fleet.computers[*charged_id].1.phase;
+                            prop_assert_ne!(phase, &Phase::PaymentFailed);
+                            prop_assert!(*phase != Phase::Destroyed || removed.contains(charged_id));
+                        }
+                        continue;
+                    }
+                    lost_writes.remove(&index);
+                }
+            }
             let effects = fleet.apply(index, &event, at);
+            if effects.contains(&Effect::RemoveBillingItem) {
+                removed.insert(index);
+            }
+            for charged_id in &charged {
+                let phase = &fleet.computers[*charged_id].1.phase;
+                prop_assert_ne!(phase, &Phase::PaymentFailed);
+                prop_assert!(*phase != Phase::Destroyed || removed.contains(charged_id));
+            }
             let after = &fleet.computers[index].1;
 
             if before.phase == Phase::Destroyed {
@@ -976,5 +1036,10 @@ proptest! {
             }
             prop_assert!(fleet.awake_units() <= fleet.capacity);
         }
+        for index in lost_writes {
+            fleet.apply(index, &Event::PaymentConfirmed, at);
+            prop_assert!(matches!(fleet.computers[index].1.phase, Phase::Provisioning { .. }), "confirmation recovers a lost write");
+        }
+
     }
 }

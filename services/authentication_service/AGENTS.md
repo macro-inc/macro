@@ -54,7 +54,8 @@ key issuance, and account merge/link flows.
   `hosted_runtimes` `Billing` port on the team subscription (one item per
   `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID`, chosen by the
   subscription's interval). Prices are `ComputerPrices`
-  (`src/domain/computer_billing.rs`), not seat plans.
+  (`src/domain/computer_billing.rs`), not seat plans. Replay durable item-change
+  receipts before resolving current prices or subscription terms.
 - Every team subscription webhook re-reads the subscription and reports each
   size's billed count to `ComputerBillingObserver` (`ComputerService`), which
   cancels computers whose items were removed outside Macro. Its failures are

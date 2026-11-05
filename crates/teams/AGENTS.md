@@ -34,8 +34,13 @@ event contract (schema, sanitization, delivery semantics).
   (Macro computers) on the team subscription by price. One Stripe update per
   change set, under the team billing lock, invoiced now with
   `error_if_incomplete` (a decline is `CustomerError::PaymentFailed`) and
-  idempotent by key (`macro_item_change` subscription metadata plus Stripe's
-  `Idempotency-Key`). Seat prices passed here change seat items too.
+  idempotent by key (`subscription_item_change` durable requests/receipts plus
+  an atomic `macro_item_change` provider marker and Stripe's `Idempotency-Key`).
+  Replay the receipt before resolving current subscription/prices. Pending item
+  changes block subsequent subscription mutations until resolved; retries send
+  the stored endpoint and exact request, including scheduled updates. Retain
+  receipts after subscription/team deletion to prevent delayed duplicate charges.
+  Seat prices passed here change seat items too.
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI
   tool surface.
 - `src/outbound/team_repo.rs`: the Postgres repository; reads use the supplied pool.

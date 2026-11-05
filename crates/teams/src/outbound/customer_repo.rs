@@ -5,6 +5,8 @@ use std::{collections::HashMap, sync::Arc};
 #[cfg(test)]
 mod test;
 
+mod item_changes;
+
 use anyhow::Context;
 use macro_user_id::user_id::MacroUserIdStr;
 use stripe::{UpdateSubscription, UpdateSubscriptionItems};
@@ -33,8 +35,8 @@ pub struct CustomerRepositoryImpl {
 /// How an item update is sent beyond the items themselves.
 #[derive(Default)]
 struct ItemUpdateOptions<'a> {
-    /// Marks the subscription with this key and sends it as Stripe's
-    /// idempotency key, so a retried change is applied once.
+    /// Journals the request and marks the provider object with this key,
+    /// also sent as Stripe's idempotency key, so a retry applies once.
     idempotency_key: Option<&'a str>,
     /// Fail the update when its invoice cannot be paid, instead of leaving
     /// the subscription past due.
@@ -67,12 +69,25 @@ impl CustomerRepositoryImpl {
     async fn subscription_guard(
         &self,
         id: &stripe::SubscriptionId,
+        operation: Option<&str>,
     ) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, CustomerError> {
-        Self::billing_guard(
+        let guard = Self::billing_guard(
             &self.subscription_locks,
             &format!("subscription-billing:{id}"),
         )
-        .await
+        .await?;
+        let pending = sqlx::query_scalar!(
+            "SELECT idempotency_key FROM subscription_item_change WHERE subscription_id = $1 AND outcome = 'pending'",
+            id.as_str(),
+        ).fetch_optional(&self.pool).await.map_err(|error| CustomerError::StorageLayerError(error.into()))?;
+        if let Some(pending) = pending
+            && Some(pending.as_str()) != operation
+        {
+            return Err(CustomerError::StorageLayerError(anyhow::anyhow!(
+                "subscription has an unresolved item change"
+            )));
+        }
+        Ok(guard)
     }
 
     async fn read_pending(
@@ -157,6 +172,7 @@ impl CustomerRepositoryImpl {
         mut current: serde_json::Value,
         pending: PendingChanges,
         proration: &str,
+        idempotency_key: Option<&str>,
     ) -> Result<(), CustomerError> {
         current["end_date"] = pending.at.into();
         let mut next = current.clone();
@@ -210,7 +226,7 @@ impl CustomerRepositoryImpl {
         sqlx::query!("INSERT INTO subscription_plan_schedule (id, subscription_id, effective_at, member_plans) VALUES ($1, $2, $3, $4)", record_id, subscription.id.as_str(), effective_at, members).execute(&self.pool).await.map_err(|e| CustomerError::StorageLayerError(e.into()))?;
         let encoded = record_id.to_string();
         next["metadata"][APPLIED_KEY] = encoded.clone().into();
-        let request = ScheduleUpdate {
+        let mut request = ScheduleUpdate {
             phases: vec![current, next],
             proration_behavior: proration,
             end_behavior: "release",
@@ -219,6 +235,21 @@ impl CustomerRepositoryImpl {
                 (PENDING_KEY.to_string(), encoded),
             ]),
         };
+        if let Some(key) = idempotency_key {
+            request
+                .metadata
+                .insert(ITEM_CHANGE_KEY.to_owned(), key.to_owned());
+            let request = serde_json::to_value(request)
+                .map_err(|error| CustomerError::StorageLayerError(error.into()))?;
+            return self
+                .send_item_change(
+                    &subscription.id,
+                    key,
+                    format!("/subscription_schedules/{}", schedule.id),
+                    request,
+                )
+                .await;
+        }
         self.client
             .post_form::<stripe::SubscriptionSchedule, _>(
                 &format!("/subscription_schedules/{}", schedule.id),
@@ -386,20 +417,15 @@ impl CustomerRepositoryImpl {
                     }
                 }
                 replace_quantities(&mut phase, &quantities);
-                self.write_schedule(&schedule, &subscription, phase, pending, "always_invoice")
-                    .await?;
-                if let Some(key) = options.idempotency_key {
-                    let params = UpdateSubscription {
-                        metadata: Some(HashMap::from([(
-                            ITEM_CHANGE_KEY.to_string(),
-                            key.to_string(),
-                        )])),
-                        ..Default::default()
-                    };
-                    stripe::Subscription::update(&self.client, subscription_id, params)
-                        .await
-                        .map_err(storage)?;
-                }
+                self.write_schedule(
+                    &schedule,
+                    &subscription,
+                    phase,
+                    pending,
+                    "always_invoice",
+                    options.idempotency_key,
+                )
+                .await?;
                 return Ok(());
             }
             // The scheduled phase already became effective. Release it before
@@ -423,21 +449,24 @@ impl CustomerRepositoryImpl {
             update_params.payment_behavior =
                 Some(stripe::generated::billing::subscription::SubscriptionPaymentBehavior::ErrorIfIncomplete);
         }
-        let client = match options.idempotency_key {
-            Some(key) => {
-                update_params.metadata = Some(HashMap::from([(
-                    ITEM_CHANGE_KEY.to_string(),
-                    key.to_string(),
-                )]));
-                self.client
-                    .as_ref()
-                    .clone()
-                    .with_strategy(stripe::RequestStrategy::Idempotent(key.to_string()))
-            }
-            None => self.client.as_ref().clone(),
-        };
+        if let Some(key) = options.idempotency_key {
+            update_params.metadata = Some(HashMap::from([(
+                ITEM_CHANGE_KEY.to_owned(),
+                key.to_owned(),
+            )]));
+            let request = serde_json::to_value(update_params)
+                .map_err(|error| CustomerError::StorageLayerError(error.into()))?;
+            return self
+                .send_item_change(
+                    subscription_id,
+                    key,
+                    format!("/subscriptions/{subscription_id}"),
+                    request,
+                )
+                .await;
+        }
 
-        stripe::Subscription::update(&client, subscription_id, update_params)
+        stripe::Subscription::update(&self.client, subscription_id, update_params)
             .await
             .map_err(|error| update_error(error, options.error_if_incomplete))?;
 
@@ -552,7 +581,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         plan: SeatPlan,
         amount: u64,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(subscription_id).await?;
+        let _billing = self.subscription_guard(subscription_id, None).await?;
         let items = self.get_seat_items(subscription_id).await?;
         let existing = items.get(&plan);
         let quantity = existing
@@ -572,7 +601,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         plan: SeatPlan,
         amount: u64,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(subscription_id).await?;
+        let _billing = self.subscription_guard(subscription_id, None).await?;
         let items = self.get_seat_items(subscription_id).await?;
         let Some(existing) = items.get(&plan) else {
             return Err(CustomerError::NoMatchingLineItem);
@@ -600,7 +629,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         if from == to {
             return Ok(());
         }
-        let _billing = self.subscription_guard(subscription_id).await?;
+        let _billing = self.subscription_guard(subscription_id, None).await?;
         // Make sure the target plan is sold before touching anything.
         self.seat_prices.price_id(to)?;
 
@@ -625,7 +654,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         user: &MacroUserIdStr<'_>,
         plan: Option<SeatPlan>,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(id).await?;
+        let _billing = self.subscription_guard(id, None).await?;
         let subscription = stripe::Subscription::retrieve(&self.client, id, &[])
             .await
             .map_err(storage)?;
@@ -682,7 +711,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
             }
         };
         let current = phase_parameters(current_phase(&schedule, &subscription)?)?;
-        self.write_schedule(&schedule, &subscription, current, pending, "none")
+        self.write_schedule(&schedule, &subscription, current, pending, "none", None)
             .await
     }
 
@@ -692,7 +721,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         plan: SeatPlan,
         end_trial: bool,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(id).await?;
+        let _billing = self.subscription_guard(id, None).await?;
         let subscription = stripe::Subscription::retrieve(&self.client, id, &[])
             .await
             .map_err(storage)?;
@@ -758,7 +787,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         &self,
         id: &stripe::SubscriptionId,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(id).await?;
+        let _billing = self.subscription_guard(id, None).await?;
         let params = stripe::UpdateSubscription {
             metadata: Some(HashMap::from([(APPLIED_KEY.to_string(), String::new())])),
             ..Default::default()
@@ -770,13 +799,24 @@ impl CustomerRepository for CustomerRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn replay_item_change(&self, idempotency_key: &str) -> Result<bool, CustomerError> {
+        CustomerRepositoryImpl::replay_item_change(self, idempotency_key).await
+    }
+
     async fn change_item_quantities(
         &self,
         subscription_id: &stripe::SubscriptionId,
         changes: Vec<ItemQuantityChange>,
         idempotency_key: &str,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(subscription_id).await?;
+        let _billing = self
+            .subscription_guard(subscription_id, Some(idempotency_key))
+            .await?;
+        if let Some(change) = self.item_change(idempotency_key).await? {
+            return self
+                .replay_item_change_locked(idempotency_key, change)
+                .await;
+        }
         let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
             .await
             .map_err(storage)?;
@@ -860,7 +900,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         &self,
         subscription_id: &stripe::SubscriptionId,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(subscription_id).await?;
+        let _billing = self.subscription_guard(subscription_id, None).await?;
         // Cancelling is idempotent: a subscription that is already cancelled,
         // or that went away with its customer, needs nothing further.
         match stripe::Subscription::retrieve(&self.client, subscription_id, &[]).await {
@@ -892,7 +932,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         team_id: &uuid::Uuid,
         team_owner_id: &macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(subscription_id).await?;
+        let _billing = self.subscription_guard(subscription_id, None).await?;
         let mut metadata = HashMap::new();
         metadata.insert("team_id".to_string(), team_id.to_string());
         metadata.insert("owner_id".to_string(), team_owner_id.to_string());
@@ -947,7 +987,7 @@ fn paying_subscription(subscriptions: Vec<stripe::Subscription>) -> Option<strip
 }
 
 const OWNED_KEY: &str = "macro_plan_schedule";
-/// Subscription metadata holding the idempotency key of the last applied item change.
+/// Provider metadata holding the key of the last atomically applied item change.
 const ITEM_CHANGE_KEY: &str = "macro_item_change";
 const PENDING_KEY: &str = "macro_pending_seats";
 const APPLIED_KEY: &str = "macro_renewed_seats";

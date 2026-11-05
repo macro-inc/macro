@@ -39,6 +39,7 @@ async fn insert_team(pool: &PgPool) {
 
 fn standard(id: u128) -> NewComputer {
     NewComputer {
+        extra_items: vec![],
         id: Uuid::from_u128(id),
         team_id: TEAM,
         name: format!("Computer {id}"),
@@ -125,10 +126,11 @@ async fn apply_stores_state_effects_and_timers_and_wakes_only_with_room(pool: Pg
             start: false
         }
     );
-    let leased = repo
+    let mut leased = repo
         .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
         .await
         .unwrap();
+    leased.sort_by_key(|pending| pending.computer_id);
     assert_eq!(
         leased
             .iter()
@@ -212,24 +214,30 @@ async fn a_replaced_timer_does_not_fire(pool: PgPool) {
     .unwrap();
     repo.reserve(standard(1), now()).await.unwrap();
 
+    repo.apply(Uuid::from_u128(1), Event::PaymentConfirmed, now())
+        .await
+        .unwrap();
+    repo.apply(Uuid::from_u128(1), Event::InstanceStarted, now())
+        .await
+        .unwrap();
     let due = repo
         .due_timers(now() + Duration::hours(1), 10)
         .await
         .unwrap();
     assert_eq!(due.len(), 1);
-    assert_eq!(due[0].kind, TimerKind::ReservationExpired);
+    assert_eq!(due[0].kind, TimerKind::MacrodMissing);
 
     let mut stale = due[0].clone();
     stale.fire_at -= Duration::seconds(1);
     assert_eq!(repo.fire_timer(stale, now()).await.unwrap(), None);
 
-    let expired = repo
+    let crashed = repo
         .fire_timer(due[0].clone(), now() + Duration::hours(1))
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(expired.state.phase, Phase::Destroyed);
-    assert_eq!(repo.list_for_team(TEAM).await.unwrap(), vec![]);
+    assert!(matches!(crashed.state.phase, Phase::Restarting { .. }));
+    assert_eq!(repo.list_for_team(TEAM).await.unwrap().len(), 1);
     assert_eq!(repo.sold_out_sizes().await.unwrap(), vec![]);
 }
 
@@ -268,4 +276,124 @@ async fn lifecycle_selectors_read_the_nested_phase_tag(pool: PgPool) {
     repo.apply(id, Event::SessionsIdle, now()).await.unwrap();
     assert!(repo.running().await.unwrap().is_empty());
     assert_eq!(repo.coldest_frozen(host.id).await.unwrap(), Some(id));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reserve_atomically_schedules_confirmation_and_failed_payment_frees_capacity(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool.clone());
+    let host = repo
+        .register_host(HostRegistration {
+            name: "payment-host".to_owned(),
+            memory_gb: 15,
+            reserve_gb: 7,
+            oversell_factor: 1,
+        })
+        .await
+        .unwrap();
+    let mut purchase = standard(1);
+    purchase.extra_items = vec![crate::domain::models::SubscriptionItem {
+        price_id: "price_seat".to_owned(),
+        quantity: 1,
+    }];
+    let computer = repo.reserve(purchase, now()).await.unwrap();
+    assert_eq!(
+        computer.state.phase,
+        Phase::PendingPayment {
+            host: host.id,
+            since: now()
+        }
+    );
+    assert!(
+        repo.due_timers(now() + Duration::days(1), 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        repo.lease_effects(
+            EffectWorker::Billing,
+            10,
+            now(),
+            now() + Duration::minutes(1)
+        )
+        .await
+        .unwrap()
+        .is_empty()
+    );
+    let effects = repo
+        .lease_effects(
+            EffectWorker::Billing,
+            10,
+            now() + Duration::minutes(2),
+            now() + Duration::minutes(3),
+        )
+        .await
+        .unwrap();
+    assert_eq!(effects.len(), 1);
+    assert_eq!(effects[0].computer_id, Uuid::from_u128(1));
+    assert_eq!(
+        effects[0].effect,
+        Effect::ConfirmPayment {
+            extra_items: vec![crate::domain::models::SubscriptionItem {
+                price_id: "price_seat".to_owned(),
+                quantity: 1
+            }]
+        }
+    );
+    repo.apply(Uuid::from_u128(1), Event::PurchaseFailed, now())
+        .await
+        .unwrap();
+    let row = sqlx::query!(
+        "SELECT holds_units, awake, host_id FROM hosted_runtime WHERE id = $1",
+        Uuid::from_u128(1)
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!row.holds_units);
+    assert!(!row.awake);
+    assert_eq!(row.host_id, None);
+    assert_eq!(
+        repo.list_for_team(TEAM).await.unwrap()[0].status().status,
+        crate::domain::models::ComputerStatusKind::PaymentFailed
+    );
+    assert!(repo.instances_expected(host.id).await.unwrap().is_empty());
+    repo.reserve(standard(2), now()).await.unwrap();
+    repo.apply(Uuid::from_u128(1), Event::ReleaseNow, now())
+        .await
+        .unwrap();
+    let removal_count = sqlx::query_scalar!("SELECT COUNT(*) FROM hosted_runtime_effect WHERE computer_id = $1 AND effect->>'effect' = 'remove_billing_item'", Uuid::from_u128(1)).fetch_one(&pool).await.unwrap();
+    assert_eq!(removal_count, Some(0));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn payment_resolution_is_serialized_per_computer_across_repositories(pool: PgPool) {
+    let repo = PgComputerRepo::new(pool.clone());
+    let id = Uuid::from_u128(42);
+    let guard = repo.lock_payment(id).await.unwrap();
+    let mut competing = pool.begin().await.unwrap();
+    let key = format!("computer-payment:{id}");
+    let locked = sqlx::query_scalar!(
+        r#"SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS "locked!""#,
+        key
+    )
+    .fetch_one(&mut *competing)
+    .await
+    .unwrap();
+    assert!(!locked);
+    let other = PgComputerRepo::new(pool.clone())
+        .lock_payment(Uuid::from_u128(43))
+        .await
+        .unwrap();
+    other.commit().await.unwrap();
+    guard.commit().await.unwrap();
+    let locked = sqlx::query_scalar!(
+        r#"SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS "locked!""#,
+        key
+    )
+    .fetch_one(&mut *competing)
+    .await
+    .unwrap();
+    assert!(locked);
 }

@@ -33,11 +33,21 @@ impl From<serde_json::Error> for PgComputerError {
 #[derive(Clone)]
 pub struct PgComputerRepo {
     pool: PgPool,
+    payment_locks: PgPool,
 }
 
 impl PgComputerRepo {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        // Payment guards outlive provider calls; keep their waiters off the
+        // pool used to persist the outcome while the guard is held.
+        let payment_locks = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(pool.options().get_max_connections().min(4))
+            .idle_timeout(std::time::Duration::from_secs(60))
+            .connect_lazy_with(pool.connect_options().as_ref().clone());
+        Self {
+            pool,
+            payment_locks,
+        }
     }
 }
 
@@ -172,7 +182,7 @@ impl PgComputerRepo {
             computer_id,
             serde_json::to_value(&state)?,
             state.is_awake(),
-            !destroyed,
+            state.holds_units(),
             state.host(),
             now,
         )
@@ -221,6 +231,17 @@ impl PgComputerRepo {
 
 impl ComputerRepo for PgComputerRepo {
     type Err = PgComputerError;
+    type PaymentGuard = sqlx::Transaction<'static, sqlx::Postgres>;
+
+    #[tracing::instrument(skip(self), err)]
+    async fn lock_payment(&self, computer_id: Uuid) -> Result<Self::PaymentGuard, PgComputerError> {
+        let mut guard = self.payment_locks.begin().await?;
+        let key = format!("computer-payment:{computer_id}");
+        sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
+            .execute(&mut *guard)
+            .await?;
+        Ok(guard)
+    }
 
     #[tracing::instrument(skip(self, computer), fields(computer_id = %computer.id), err)]
     async fn reserve(
@@ -257,10 +278,6 @@ impl ComputerRepo for PgComputerRepo {
         };
 
         let state = ComputerState::reserved(host, now);
-        let expires_at = match state.phase {
-            Phase::Reserved { expires_at, .. } => expires_at,
-            _ => now,
-        };
         let state_json = serde_json::to_value(&state)
             .map_err(|error| ReserveError::Storage(PgComputerError::from(error)))?;
         let persona_json = computer
@@ -290,11 +307,16 @@ impl ComputerRepo for PgComputerRepo {
         .execute(&mut *tx)
         .await
         .map_err(storage)?;
+        let effect_json = serde_json::to_value(Effect::ConfirmPayment {
+            extra_items: computer.extra_items,
+        })
+        .map_err(|error| ReserveError::Storage(PgComputerError::from(error)))?;
         sqlx::query!(
-            "INSERT INTO hosted_runtime_timer (computer_id, kind, fire_at) VALUES ($1, $2, $3)",
+            "INSERT INTO hosted_runtime_effect (computer_id, worker, effect, run_after, created_at) VALUES ($1, 'billing', $2, $3, $4)",
             computer.id,
-            TimerKind::ReservationExpired.as_ref(),
-            expires_at,
+            effect_json,
+            now + crate::domain::lifecycle::PAYMENT_CONFIRM_DELAY,
+            now,
         )
         .execute(&mut *tx)
         .await
@@ -352,7 +374,7 @@ impl ComputerRepo for PgComputerRepo {
             SELECT id, team_id, name, size, state, harness_id, persona, created_by,
                    created_at, enrolled_at
             FROM hosted_runtime
-            WHERE team_id = $1 AND holds_units
+            WHERE team_id = $1 AND state->'phase'->>'phase' <> 'destroyed'
             ORDER BY created_at
             "#,
             team_id,
@@ -445,7 +467,7 @@ impl ComputerRepo for PgComputerRepo {
             SELECT id, team_id, name, size, state, harness_id, persona, created_by,
                    created_at, enrolled_at
             FROM hosted_runtime
-            WHERE host_id = $1 AND holds_units AND state->'phase'->>'phase' <> 'reserved'
+            WHERE host_id = $1 AND holds_units AND state->'phase'->>'phase' <> 'pending_payment'
             "#,
             host,
         )

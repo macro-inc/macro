@@ -7,7 +7,7 @@ use wiremock::{
     matchers::{method, path},
 };
 
-fn subscription() -> stripe::Subscription {
+pub(super) fn subscription() -> stripe::Subscription {
     stripe::Subscription {
         id: "sub_team".parse().unwrap(),
         customer: stripe::Expandable::Id("cus_test".parse().unwrap()),
@@ -39,7 +39,7 @@ fn item(id: &str, price: &str, quantity: u64) -> stripe::SubscriptionItem {
         ..Default::default()
     }
 }
-fn schedule() -> stripe::SubscriptionSchedule {
+pub(super) fn schedule() -> stripe::SubscriptionSchedule {
     stripe::SubscriptionSchedule {
         id: "sub_sched_test".parse().unwrap(),
         customer: stripe::Expandable::Id("cus_test".parse().unwrap()),
@@ -71,7 +71,7 @@ fn schedule() -> stripe::SubscriptionSchedule {
         ..Default::default()
     }
 }
-fn repo(server: &MockServer, pool: sqlx::PgPool) -> CustomerRepositoryImpl {
+pub(super) fn repo(server: &MockServer, pool: sqlx::PgPool) -> CustomerRepositoryImpl {
     CustomerRepositoryImpl::new(
         stripe::Client::from_url(server.uri().as_str(), "sk_test"),
         SeatPrices {
@@ -81,7 +81,7 @@ fn repo(server: &MockServer, pool: sqlx::PgPool) -> CustomerRepositoryImpl {
         pool,
     )
 }
-async fn mount<T: Serialize + DeserializeOwned>(
+pub(super) async fn mount<T: Serialize + DeserializeOwned>(
     server: &MockServer,
     verb: &str,
     route: &str,
@@ -852,13 +852,13 @@ async fn cancelling_a_guard_holder_releases_the_subscription_for_another_instanc
     let acquired = locked.clone();
     let task = tokio::spawn(async move {
         let id = "sub_team".parse().unwrap();
-        let _guard = holder.subscription_guard(&id).await.unwrap();
+        let _guard = holder.subscription_guard(&id, None).await.unwrap();
         acquired.notify_one();
         std::future::pending::<()>().await;
     });
     locked.notified().await;
     let id = "sub_team".parse().unwrap();
-    let mut waiting = Box::pin(waiter.subscription_guard(&id));
+    let mut waiting = Box::pin(waiter.subscription_guard(&id, None));
     assert!(
         tokio::time::timeout(std::time::Duration::from_millis(40), &mut waiting)
             .await
@@ -978,7 +978,7 @@ fn subscription_update(requests: &[wiremock::Request]) -> Vec<&wiremock::Request
         .collect()
 }
 
-fn computer(delta: i64) -> ItemQuantityChange {
+pub(super) fn computer(delta: i64) -> ItemQuantityChange {
     ItemQuantityChange {
         price_id: "price_computer".into(),
         delta,

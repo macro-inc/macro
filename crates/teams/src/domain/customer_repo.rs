@@ -125,6 +125,13 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         subscription: &stripe::SubscriptionId,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send;
 
+    /// Replay an internally generated operation key before resolving current
+    /// subscription/prices. Returns false only if no charge was attempted.
+    fn replay_item_change(
+        &self,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<bool, CustomerError>> + Send;
+
     /// Apply every change to the subscription in ONE update, invoiced now
     /// with proration (through the schedule, when one is attached, like seat
     /// changes). A declined payment fails with [`CustomerError::PaymentFailed`]

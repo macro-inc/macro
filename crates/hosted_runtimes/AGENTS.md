@@ -36,6 +36,12 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   every `extra_items` entry (`SubscriptionItem { price_id, quantity }`, quantity
   added to the item's current quantity), invoiced at once with proration. In-process
   in authentication_service, and on the internal route `POST /internal/computers`.
+  Persist `PendingPayment` and a delayed `ConfirmPayment` outbox effect together
+  before billing. Serialize payment resolution through its lifecycle write with
+  the per-computer payment guard. Both the normal path and the two-minute safety net use
+  `computer-add:{computer_id}` and the same extra items. Unknown outcomes stay
+  pending and retry indefinitely with capped backoff; definite refusals become
+  `PaymentFailed`, visible without holding capacity and clearable by release.
 - **Quote**: `ComputerService::quote(team_id, size)` → `Quote { price_id, amount, currency, interval }`
   at the team subscription's interval.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →
@@ -77,9 +83,7 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   only a computer's oldest effect per worker).
 - Timers are never cancelled: `transition` ignores events that no longer apply,
   so a new state must guard every timer event it can receive.
-- A Stripe failure after units are reserved emits `PurchaseFailed`. If Stripe
-  applied the update but the response was lost, the webhook count diff logs
-  `team billed for more computers than it has` for a manual refund.
+- Unresolved payment retries log `computer payment unresolved` at error level.
 
 ## Related
 

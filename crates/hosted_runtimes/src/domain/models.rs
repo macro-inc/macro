@@ -30,6 +30,8 @@ pub struct Computer {
 /// A computer to reserve units for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewComputer {
+    /// Persisted in the payment confirmation outbox for exact purchase replay.
+    pub extra_items: Vec<SubscriptionItem>,
     pub id: Uuid,
     pub team_id: Uuid,
     pub name: String,
@@ -141,6 +143,7 @@ pub enum ComputerStatusKind {
     Stopping,
     Stopped,
     Failed,
+    PaymentFailed,
     Released,
 }
 
@@ -192,7 +195,7 @@ impl Computer {
     pub fn status(&self) -> ComputerStatus {
         let setup_step = match self.state.phase {
             _ if self.enrolled_at.is_some() => None,
-            Phase::Reserved { .. } => Some(SetupStep::Paying),
+            Phase::PendingPayment { .. } => Some(SetupStep::Paying),
             Phase::Provisioning { .. } if self.harness_id.is_none() => Some(SetupStep::Creating),
             Phase::Provisioning { .. } => Some(SetupStep::Booting),
             Phase::Booting { .. } | Phase::Restarting { .. } => Some(SetupStep::Connecting),
@@ -210,8 +213,11 @@ impl Computer {
             Phase::Stopping { .. } => ComputerStatusKind::Stopping,
             Phase::Stopped { .. } => ComputerStatusKind::Stopped,
             Phase::Failed { .. } => ComputerStatusKind::Failed,
+            Phase::PaymentFailed => ComputerStatusKind::PaymentFailed,
             Phase::Destroyed => ComputerStatusKind::Released,
-            Phase::Reserved { .. } | Phase::Provisioning { .. } => ComputerStatusKind::SettingUp,
+            Phase::PendingPayment { .. } | Phase::Provisioning { .. } => {
+                ComputerStatusKind::SettingUp
+            }
         };
         let setup = setup_step.map(|step| SetupProgress {
             step,

@@ -22,6 +22,13 @@ pub enum TeamSubscriptionItemsError {
 /// their own accounting in [`crate::domain::team_repo::TeamService`]; this
 /// never interprets which price is a seat.
 pub trait TeamSubscriptionItems: Clone + Send + Sync + 'static {
+    /// Finish an earlier internally keyed operation using its durable receipt.
+    /// Returns false only when it has not reached the billing provider yet.
+    fn replay_subscription_item_change(
+        &self,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<bool, TeamSubscriptionItemsError>> + Send;
+
     /// Apply `changes` to the team subscription in one update, serialized
     /// with the team's seat changes. See
     /// [`crate::domain::customer_repo::CustomerRepository::change_item_quantities`].

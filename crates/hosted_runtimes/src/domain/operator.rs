@@ -249,9 +249,11 @@ where
                 tracing::error!(computer_id = %computer_id, reason = %reason, "computer needs an operator");
                 Ok(None)
             }
-            Effect::RemoveBillingItem | Effect::ScheduleTimer { .. } => Err(
-                ComputerError::BadRequest(format!("{effect:?} is not a fleet effect")),
-            ),
+            Effect::ConfirmPayment { .. }
+            | Effect::RemoveBillingItem
+            | Effect::ScheduleTimer { .. } => Err(ComputerError::BadRequest(format!(
+                "{effect:?} is not a fleet effect"
+            ))),
         }
     }
 
@@ -443,7 +445,8 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
         | Effect::Restart { host }
         | Effect::Destroy { host }
         | Effect::MakeRoom { host } => Some(*host),
-        Effect::RemoveBillingItem
+        Effect::ConfirmPayment { .. }
+        | Effect::RemoveBillingItem
         | Effect::RevokeHarness
         | Effect::ScheduleTimer { .. }
         | Effect::PageOperator { .. } => None,

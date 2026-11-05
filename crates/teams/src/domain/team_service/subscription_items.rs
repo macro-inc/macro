@@ -63,6 +63,17 @@ where
     OSR: OpenSeatRelease,
     OEC: OwnedEntityCleanup,
 {
+    #[tracing::instrument(skip(self), err)]
+    async fn replay_subscription_item_change(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<bool, TeamSubscriptionItemsError> {
+        Ok(self
+            .customer_repository
+            .replay_item_change(idempotency_key)
+            .await?)
+    }
+
     #[tracing::instrument(skip(self, changes), fields(changes = changes.len()), err)]
     async fn change_team_subscription_items(
         &self,

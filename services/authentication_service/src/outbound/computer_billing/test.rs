@@ -27,6 +27,18 @@ impl FakeTeams {
 }
 
 impl TeamSubscriptionItems for FakeTeams {
+    async fn replay_subscription_item_change(
+        &self,
+        key: &str,
+    ) -> Result<bool, TeamSubscriptionItemsError> {
+        Ok(self
+            .changes
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(_, _, applied)| applied == key))
+    }
+
     async fn change_team_subscription_items(
         &self,
         team_id: &Uuid,
@@ -197,4 +209,33 @@ async fn declines_and_missing_subscriptions_keep_their_meaning() {
         matches!(result, Err(BillingError::NoSubscription)),
         "{result:?}"
     );
+}
+
+#[tokio::test]
+async fn a_successful_purchase_replays_before_subscription_or_price_lookup() {
+    let team_id = Uuid::nil();
+    let mut teams = FakeTeams::new(BillingCadence::Month);
+    TeamComputerBilling::new(teams.clone(), prices())
+        .add_computer(
+            team_id,
+            ComputerSize::Standard,
+            &[],
+            "computer-add:confirmed",
+        )
+        .await
+        .unwrap();
+    teams.subscribed = false;
+    let mut unavailable_prices = prices();
+    unavailable_prices.standard.monthly = None;
+    let billing = TeamComputerBilling::new(teams.clone(), unavailable_prices);
+    billing
+        .add_computer(
+            team_id,
+            ComputerSize::Standard,
+            &[],
+            "computer-add:confirmed",
+        )
+        .await
+        .unwrap();
+    assert_eq!(teams.changes.lock().unwrap().len(), 1);
 }

@@ -158,6 +158,7 @@ async fn paid_computer(
         .repo
         .reserve(
             NewComputer {
+                extra_items: vec![],
                 id,
                 team_id: TEAM,
                 name: "Ada".to_owned(),
@@ -225,6 +226,7 @@ async fn an_effect_that_keeps_failing_fails_the_computer() {
     let id = paid_computer(&operator).await;
 
     for _ in 0..MAX_EFFECT_ATTEMPTS {
+        operator.repo.effect_run_after.lock().unwrap().clear();
         assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
     }
 
