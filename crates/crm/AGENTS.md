@@ -64,6 +64,8 @@ tools/HTTP/GraphQL surfaces over them.
 
 ## Gotchas
 
+- A generic pipeline has `record_type: None` and a text primary column. Don't
+  pass one to `referencing_rows`: its SQL reads primary cells as reference arrays.
 - Pipeline board-position reads require a pipeline View receipt, hold its live
   lifecycle guard, and scope the view to its backing table/database through
   `DatabaseStorage::storage_view_positions`.

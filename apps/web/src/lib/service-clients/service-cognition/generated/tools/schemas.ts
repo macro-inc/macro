@@ -85,22 +85,32 @@ export const AddToPipelineResponse = z.object({
   added: z.array(
     z.object({
       entryId: z.string().uuid(),
-      record: z.object({
-        id: z.string().uuid(),
-        name: z.union([z.string(), z.null()]).optional(),
-        detail: z.union([z.string(), z.null()]).optional(),
-      }),
+      record: z
+        .union([
+          z.object({
+            id: z.string().uuid(),
+            name: z.union([z.string(), z.null()]).optional(),
+            detail: z.union([z.string(), z.null()]).optional(),
+          }),
+          z.null(),
+        ])
+        .optional(),
       fields: z.record(z.any()),
     })
   ),
   alreadyPresent: z.array(
     z.object({
       entryId: z.string().uuid(),
-      record: z.object({
-        id: z.string().uuid(),
-        name: z.union([z.string(), z.null()]).optional(),
-        detail: z.union([z.string(), z.null()]).optional(),
-      }),
+      record: z
+        .union([
+          z.object({
+            id: z.string().uuid(),
+            name: z.union([z.string(), z.null()]).optional(),
+            detail: z.union([z.string(), z.null()]).optional(),
+          }),
+          z.null(),
+        ])
+        .optional(),
       fields: z.record(z.any()),
     })
   ),
@@ -5247,7 +5257,7 @@ export const ProjectDetails = z.object({
 
 export const CreatePipeline = z.object({
   name: z.string(),
-  tracks: z.enum(['company', 'contact']),
+  tracks: z.union([z.enum(['company', 'contact']), z.null()]).optional(),
   sharedWithTeam: z.union([z.boolean(), z.null()]).optional(),
   stages: z.array(z.string()).optional(),
   fields: z
@@ -5275,7 +5285,7 @@ export const CreatePipelineResponse = z.object({
   pipeline: z.object({
     id: z.string().uuid(),
     name: z.string(),
-    tracks: z.enum(['company', 'contact']),
+    tracks: z.union([z.enum(['company', 'contact']), z.null()]).optional(),
     access: z.any().superRefine((x, ctx) => {
       const schemas = [
         z.literal('view'),
@@ -7835,7 +7845,7 @@ export const EditPipelineResponse = z.object({
   pipeline: z.object({
     id: z.string().uuid(),
     name: z.string(),
-    tracks: z.enum(['company', 'contact']),
+    tracks: z.union([z.enum(['company', 'contact']), z.null()]).optional(),
     access: z.any().superRefine((x, ctx) => {
       const schemas = [
         z.literal('view'),
@@ -10587,11 +10597,16 @@ export const FindPipelineEntriesResponse = z.object({
       entries: z.array(
         z.object({
           entryId: z.string().uuid(),
-          record: z.object({
-            id: z.string().uuid(),
-            name: z.union([z.string(), z.null()]).optional(),
-            detail: z.union([z.string(), z.null()]).optional(),
-          }),
+          record: z
+            .union([
+              z.object({
+                id: z.string().uuid(),
+                name: z.union([z.string(), z.null()]).optional(),
+                detail: z.union([z.string(), z.null()]).optional(),
+              }),
+              z.null(),
+            ])
+            .optional(),
           fields: z.record(z.any()),
         })
       ),
@@ -13110,7 +13125,7 @@ export const ListPipelinesResponse = z.object({
     z.object({
       id: z.string().uuid(),
       name: z.string(),
-      tracks: z.enum(['company', 'contact']),
+      tracks: z.union([z.enum(['company', 'contact']), z.null()]).optional(),
       access: z.any().superRefine((x, ctx) => {
         const schemas = [
           z.literal('view'),
@@ -17763,11 +17778,16 @@ export const RemoveFromPipelineResponse = z.object({
   removed: z.array(
     z.object({
       entryId: z.string().uuid(),
-      record: z.object({
-        id: z.string().uuid(),
-        name: z.union([z.string(), z.null()]).optional(),
-        detail: z.union([z.string(), z.null()]).optional(),
-      }),
+      record: z
+        .union([
+          z.object({
+            id: z.string().uuid(),
+            name: z.union([z.string(), z.null()]).optional(),
+            detail: z.union([z.string(), z.null()]).optional(),
+          }),
+          z.null(),
+        ])
+        .optional(),
       fields: z.record(z.any()),
     })
   ),
@@ -19691,11 +19711,16 @@ export const UpdatePipelineEntriesResponse = z.object({
   updated: z.array(
     z.object({
       entryId: z.string().uuid(),
-      record: z.object({
-        id: z.string().uuid(),
-        name: z.union([z.string(), z.null()]).optional(),
-        detail: z.union([z.string(), z.null()]).optional(),
-      }),
+      record: z
+        .union([
+          z.object({
+            id: z.string().uuid(),
+            name: z.union([z.string(), z.null()]).optional(),
+            detail: z.union([z.string(), z.null()]).optional(),
+          }),
+          z.null(),
+        ])
+        .optional(),
       changes: z.array(
         z.object({ field: z.string(), before: z.any(), after: z.any() })
       ),

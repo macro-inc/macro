@@ -4552,17 +4552,15 @@ export type CreatePairingRequest = {
 };
 
 /**
- * Request to create an empty pipeline with the standard CRM columns.
+ * Request to create an empty pipeline: the standard CRM columns for a tracked
+ * record, or one Name column, like a new database, for a generic pipeline.
  */
 export type CreatePipeline = {
     /**
      * Pipeline name.
      */
     name: string;
-    /**
-     * Company or contact entries.
-     */
-    recordType: PipelineRecordType;
+    recordType?: null | PipelineRecordType;
     /**
      * Defaults to private.
      */
@@ -11666,10 +11664,7 @@ export type Pipeline = {
      * Protected primary column.
      */
     primaryColumnId: string;
-    /**
-     * Kind of the primary reference.
-     */
-    recordType: PipelineRecordType;
+    recordType: null | PipelineRecordType;
     /**
      * Whether the pipeline has a team grant.
      */
