@@ -103,10 +103,12 @@ Both Nix frameworks were measured pushing a real service (a 388 MB binary, a
   services. This replaces the apply order `cargo x platform` used to run itself.
 - **Secrets never enter the repo.** `platform up` applies them directly. External
   Secrets replaces that in the AWS phase.
-- **Parity check:** CI renders the `local` and `prod` instances and diffs
-  them. The only allowed differences are replicas, resources, storage sizes,
-  hostnames, registry, and secret references. Any other difference fails the
-  build.
+- **Parity check:** `nix build .#platform.parity` renders an instance at the `local`
+  and `prod` sizes and diffs them, on every pull request that touches the platform.
+  Only replicas, resources, and volume sizes may differ; anything else fails the build.
+  Hostnames, the registry, and secret references come from outside the sizes, so they
+  do not vary in this comparison. No prod instance exists yet; `sizes.prod` is what it
+  will start from.
 
 ### Forge and CI: Gitea
 
@@ -125,7 +127,7 @@ Both Nix frameworks were measured pushing a real service (a 388 MB binary, a
 - **Runners** are `act_runner` beside a Docker daemon, one job at a time per
   replica, each with its own Docker data and Nix store. Each job gets a clean
   Ubuntu container, like a hosted runner.
-- **Ported:** 10 of 60 workflows, the non-deploying pull request checks.
+- **Ported:** 11 of 61 workflows, the non-deploying pull request checks.
 - **Not ported yet:** deploys and releases (they target AWS and should move with
   the AWS phase, not before), native builds that need macOS or Windows, Android's
   check, and workflows tied to GitHub itself (labels, CLA, the privacy check).
@@ -392,8 +394,8 @@ Not built yet:
 - The rest of phase 7: publishing the images and chart per release, a generator for
   the Secrets a self-hoster must supply, a production-sized install, and a run on a
   stock cluster such as kind.
-- The parity check, and release images from crane. Every image today wraps a
-  host-built debug binary with debug info stripped.
+- Release images from crane. Every image today wraps a host-built debug binary with
+  debug info stripped.
 - Mirroring from GitHub automatically, which needs a credential decision.
 
 Deviations from the decisions above, to revisit in the AWS phase:

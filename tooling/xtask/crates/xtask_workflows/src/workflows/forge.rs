@@ -55,6 +55,10 @@ pub const PORTED: &[Ported] = &[
         dropped_jobs: &[],
     },
     Ported {
+        file_name: "platform_parity.yml",
+        dropped_jobs: &[],
+    },
+    Ported {
         file_name: "sdk-check.yml",
         dropped_jobs: &[],
     },

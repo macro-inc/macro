@@ -51,6 +51,7 @@ mod ios_release_drift;
 mod ios_release_watch;
 mod native_check_label;
 mod path_validation;
+mod platform_parity;
 mod pr_privacy_check;
 mod publish_sdk;
 mod pulumi_preview_pr;
@@ -405,6 +406,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "check_tauri_lockfiles",
         file_name: "check_tauri_lockfiles.yml",
         render_yaml: || render_gh_workflow(check_tauri_lockfiles::check_tauri_lockfiles)(),
+    },
+    WorkflowFile {
+        slug: "platform_parity",
+        file_name: "platform_parity.yml",
+        render_yaml: || render_gh_workflow(platform_parity::platform_parity)(),
     },
     WorkflowFile {
         slug: "check_generated",

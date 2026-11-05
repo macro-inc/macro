@@ -28,7 +28,7 @@ deploy repo, which Argo CD syncs.
 - `packages.nix`: components nixpkgs lacks (RustFS, celld, ExtendDB,
   local-kms, FusionAuth).
 - `instances.nix`: size profiles, the only thing allowed to differ between
-  environments.
+  environments. `parity/` enforces that.
 
 ## Start here
 
@@ -60,7 +60,9 @@ deploy repo, which Argo CD syncs.
 
 - `cargo test -p xtask_local --features local-stack platform`
 - `cargo x workflows --check`, for `.gitea/workflows`.
-- `python3 -m unittest test_generate_chart` in `selfhost/`.
+- `python3 -m unittest test_generate_chart` in `selfhost/`, and `test_check_parity` in
+  `parity/`.
+- `nix build --no-link .#platform.parity`: local and prod differ only in size.
 - Render an environment: `nix build --impure --expr '... f.platform.cluster.manifests'`
   (see `nix_build` in `platform.rs`). The flake reads only git-tracked files, so
   `git add` new files first.

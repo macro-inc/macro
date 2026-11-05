@@ -49,7 +49,7 @@ let
       ++ modules;
     }).${env}.environmentPackage;
 in
-{
+rec {
   inherit platformPkgs instances;
 
   # One instance. `binaries`: cargo bin name -> store path containing
@@ -192,6 +192,52 @@ in
           lib.mapAttrs (_: w: w.image) (if names == null then components else lib.getAttrs names components)
         );
     };
+
+  # Fails if the local and prod sizes render anything different but size. Stub
+  # artifacts keep it free of builds: rendering needs image references, not images.
+  parity =
+    let
+      stub = pkgs.emptyDirectory;
+      binaryNames = map builtins.head (
+        lib.filter builtins.isList (
+          builtins.split "bin = \"([a-z_]+)\"" (builtins.readFile ./components.nix)
+        )
+      );
+      render =
+        size:
+        (instance {
+          name = "parity";
+          host = "parity.example.com";
+          inherit size;
+          frontend = stub;
+          binaries = lib.genAttrs (binaryNames ++ [ "queue_gateway" "xtask_local" ]) (_: stub);
+          node = lib.genAttrs [
+            "lexical"
+            "websocket"
+            "sync-bundle"
+            "analytics-bundle"
+            "ai-editing-bundle"
+            "opensearch-helpers"
+          ] (_: stub);
+        }).manifests;
+    in
+    pkgs.runCommand "platform-parity"
+      {
+        nativeBuildInputs = [
+          pkgs.yq-go
+          pkgs.python3
+        ];
+      }
+      ''
+        mkdir local prod
+        for f in ${render instances.sizes.local}/macro-parity/*.yaml; do
+          yq -o=json "$f" > "local/$(basename "$f" .yaml).json"
+        done
+        for f in ${render instances.sizes.prod}/macro-parity/*.yaml; do
+          yq -o=json "$f" > "prod/$(basename "$f" .yaml).json"
+        done
+        python3 ${./parity/check_parity.py} local prod | tee $out
+      '';
 
   # Host-built binaries as store paths (the fast loop): cargo's output dir ->
   # attrset of wrapped binaries.
