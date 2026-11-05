@@ -25,7 +25,7 @@ Reusable named view definitions. Consumers are main Tasks and Email; the generic
 - Keep consumer edits on failed saves; only confirmed writes replace the baseline.
 - Keep sharing guidance beside the checkbox as a focusable info control; support hover and tap without toggling sharing.
 - Identify the saved view by name in edit and delete dialog titles; wrap long names on narrow screens.
-- The create/edit form body scrolls as one, name included, with the actions below it; consumer fields must not add their own scroll area. Consumers may pass the delete confirmation's description in their own terms.
+- The create/edit form body scrolls as one, name included, with the actions below it and edge fades (`ScrollIndicators`) standing in for the hidden scrollbar; consumer fields must not add their own scroll area. Consumers may pass the delete confirmation's description in their own terms.
 - Snapshot saved configuration when adapting query data; reconciled Solid stores must not mutate a confirmed draft baseline.
 - Mount picker menus inside the drawer portal scope, close menus before opening dialogs, then close the drawer and restore focus before opening another dialog.
 - Render the mobile picker trigger with the shared pill button and preserve the selected state supplied by its consumer.
