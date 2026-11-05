@@ -18,8 +18,8 @@ it again can retry. Marking read does not mark the notification done.
 
 **Rollout:** Tasks, Email, Notes, Calls and Databases require PostHog `enable-crm-activity`
 (off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
-this flag to decide whether to supply its task-composer preset; the shared
-composer itself is not feature-flagged. With it off, only Companies and People
+this flag to decide whether to supply its task-composer preset, and with
+`enable-crm` to show the Customer / Contact pill when creating any task. With it off, only Companies and People
 appear in Records, activity queries do not run, and activity deep links return to
 Companies after flags finish loading. Global task creation uses the standard
 composer; record-level New task still associates the new task with that record.
@@ -53,8 +53,8 @@ threads with CRM company domains or contact addresses. Lists page as you scroll.
 Empty CRM scope never falls back to all content. Activity loads directly with a
 server-resolved scope; it does not fetch every company and contact first. Hidden
 companies and contacts stay excluded even for admins. A loading failure offers
-**Try again**. Tasks has **New task**, with Companies and Contacts visible in
-place of Status. Choose a CRM association when creating a task from this feed.
+**Try again**. Tasks has **New task**, which opens the task composer. Choose a CRM
+association with its **Customer / Contact** pill when creating a task from this feed.
 Opening Task through the global Create menu while Customers is focused uses the
 same preset. With an embedded company or contact detail open, global Create
 prefills the current breadcrumb record; a contact also includes its company.
@@ -128,29 +128,13 @@ email), Company and Last contacted (sortable). `Search people` matches name or
 email on the server after a short typing pause, so results include contacts not
 yet scrolled into view. The desktop header has the title, shared **New** menu,
 and expandable Search; choose **Contact** from New. On touch, **New contact**
-is unchanged. Admins/owners have **People display options → Show removed people**
-on desktop and touch. This shows **Removed people** from the current team only,
-with server search and normal pagination. Open a person and use the existing
-**Restore to CRM** eye action; successful restoration removes the row from this
-view and returns it to normal People and company Team lists. **Show active people**
-returns to the normal list while keeping the search text. A hidden company also
-hides its people: restore the company first to make them visible. The banner
-explains this; no company is silently restored by an individual contact action.
-The choice is local to this workspace, clears on leaving People or changing
-account/team/role, and is not activated by a shared URL or saved filter. Members
-have no removed control, and server role checks still exclude hidden records.
-The contact dialog offers an optional **Choose a company** pill (searchable by name
-or domain, from the up to 500 most relevant companies, including name-only
-companies); without one the person is added with no company. The email is
-optional: personal addresses and different domains are accepted, and leaving it
-empty adds the person by name alone. Contacts without a company show no company
-pill. **Add contact** on a company's Team tab skips the company pill.
-Contact names allow up to 200 characters. A longer name keeps the form open
-with an error; shortening it allows submission without re-entering other fields.
-**New company** requires a name; its domain is optional. If supplied, it must be
-a company domain, not a personal email provider. The company, contact and pipeline dialogs share the
-task/project composer layout: name on the first row beside **Close**, details
-below, and a **Create …** button that also submits on Command-Enter.
+is unchanged. The **Visible / Archived** filter selects one view on People,
+Companies and company Team. Archived is available to admins/owners; People recovery
+is scoped to their current team. Search and sorting stay in place when switching.
+Archived rows carry a chip. Open a record and choose **Restore** beside its identity
+chip; the row leaves Archived and returns to ordinary lists and Cmd-K. People under
+an archived company require that company to be restored first. There is no permanent
+explanatory banner or recovery UI inside Cmd-K.
 
 Verify company domain validation by creating a company with an allowed business
 domain, then adding a contact whose email matches it. Personal email provider
@@ -231,29 +215,37 @@ queries or creation actions. Copy-link islands are 40px square on touch with
 a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
 and header fit at phone and tablet widths.
 
-To remove a person manually, choose the eye-slash **Remove from CRM** button
-beside **Copy contact link** in the top toolbar and confirm. Hidden people show
-the regular eye **Restore to CRM** action in the same place. Both the Customers
-record header and standalone contact header offer it on every section; there is
-no second action in Overview. Company removal stays below the details on
-**Overview**. On phones the confirmation is a bottom sheet. Only team admins
-and owners can remove or restore records; other members see a disabled action. Removal hides the record from the
-team's CRM lists without permanently deleting it. The page stays open and offers
-**Restore to CRM**; admins can also reopen the record's direct link to restore it.
-Hiding a company hides all its contacts and turns off team email sync. Restoring
-the company restores every contact, including individually hidden ones, but leaves
-email sync off; re-enable **Sync Emails** under the information panel's **Sharing**
-section if needed. A company's Team tab excludes hidden contacts for every role,
-including search results. Admins can find removed contacts in People display options and retain direct-link
-access for restoration. Removing or restoring a person refreshes open company Team lists;
-returning to a previously visited company reloads its contacts. Company row
-**Hide / Unhide** actions control the same state. The information panel has no
-visibility toggle; company Sharing contains only **Sync Emails**.
-Restoring a person under a hidden company does not make them appear in People
-until that company is restored too. People without a company can be restored
-directly; a person without a name or email is labeled **Contact** in the confirmation.
+To archive a person or company, choose **Archive** immediately beside **Copy link**
+in the top toolbar. Confirming archives the record for the team while retaining its
+history; Cancel changes nothing. While saving, duplicate actions and dismissal are
+blocked. A rejected save retains the prior state and an actionable retry. Only team
+admins/owners can archive or restore; other members see a disabled action.
 
-The removed-People discovery check is
+An archived record has a single **Archived** chip and a compact secondary **Restore**
+button beside its name on desktop, grouped beneath it on phones. Its toolbar keeps
+Copy link and Details. Hover or focus the chip for the explanation; tap on phones.
+Escape dismisses it. Restore is a separate focus target. Verify 320px and 390px phone
+widths, aligned 24px visible controls and metadata, and separate 44px touch targets.
+Tap above and below the painted Archived, Restore and company controls to verify
+their expanded targets, then check focus after confirmation or cancellation.
+
+Company archive archives all its people and turns off team email sync. Restoring the
+company requires an explicit confirmation: every person is restored, including those
+archived individually, while email syncing stays off. Re-enable **Sync Emails** under
+**Email sharing** separately. A person whose company is archived offers **Open company**
+so that restoration happens there first. Unfiled people restore directly. Company row
+**Archive / Restore** actions also confirm the cascade. Record details and References
+appear first in both information panels; company Properties, Lists and Email sharing
+follow. Neither panel has a duplicate visibility control.
+
+Verify successful changes update open People, Companies, Team and ordinary Cmd-K;
+late responses must not reintroduce archived rows or hide restored rows with an
+old empty page. Returning to a cached company
+must show confirmed embedded contacts. Failed reads after a successful save must not
+claim the save failed. Run the actual-control desktop/phone fixture with
+`bunx playwright test --config src/features/crm/browser-test/archive/playwright.config.ts`.
+
+The archived-People discovery check is
 `bunx playwright test --config src/features/crm/browser-test/people/playwright.config.ts`
 from `apps/web`. It covers desktop/phone discovery, server-side search and cursor
 paging, query errors, unfiled records, hidden-parent behavior, rejected writes,
@@ -264,8 +256,6 @@ The backend-free browser check is
 from `apps/web`. It exercises cancellation, pending/error handling, restoration,
 permissions, and changing records with an open confirmation on desktop, phone,
 and tablet.
-Fixture screenshots: [company confirmation on desktop](media/crm-removal/company-desktop.png)
-and [person confirmation on phone](media/crm-removal/contact-phone.png).
 
 Their information panel starts closed and opens as a floating bubble at every
 width, without shrinking the record content. Click outside the bubble or use
@@ -280,7 +270,7 @@ fills the row beside the filter button, or the whole row without filters.
 Email importance and inbox choices open in the shared filter drawer.
 Section creation actions appear at the bottom right above the navigation dock,
 replacing the default app-wide action: Add contact, New email, New note, New task,
-New call, or New database. Add contact is available once the company is loaded,
+New call, or New database. Add contact is available once the company is loaded and visible,
 including companies without a domain; contact emails may use any valid domain.
 Email-sync and database gates, recipients, and task associations still apply. With company email
 sync off, New email stays visible but disabled; New company must not replace it.
@@ -345,7 +335,10 @@ A contact has the same layout with `Overview`, `Emails`, `Files`, `Tasks`, `Call
 interacted`, followed by the contact's Pipelines cards. Its Files, Tasks, Calls,
 and References show items associated with the contact itself (its `Contacts`
 property or an @mention of it), not everything associated with its company;
-Files also includes attachments of emails with its address. Tasks created from a
+Files also includes attachments of emails with its address. Contacts without an
+email still list their associated non-task files; they send no email-attachment
+participant filter. Verify both an empty list and linked files on desktop and phone.
+Tasks created from a
 contact also reference its company. The side panel contains References, with no
 empty Sharing section.
 
@@ -448,7 +441,7 @@ tabs. Its header shows the name, edited in place by editors, a **Pipeline
 actions** menu (**Rename** and **Import CSV** for editors, **Export CSV** for
 anyone who can open it, **Trash pipeline** for the owner) and **Share**. The
 toolbar below has **All records**, the pipeline's stored views and **New view**
-(Table or Board), plus Group by (boards), Filter and Sort, then **Add deal**
+(Table, Board, or Timeline), plus Group by (boards), Filter and Sort, then **Add deal**
 (company pipelines) or **Add contact** (contact pipelines) for editors. It opens
 a dialog titled **Add deal** (or **Add contact**) with the pipeline's name in a
 chip beside it and Close. Below the header, each field has its label stacked
@@ -465,8 +458,29 @@ different company before submitting. Editing the email keeps that explicit choic
 Focusing the suggestion reveals its full name; Enter accepts it without submitting
 the form, and closes the tooltip without a browser error.
 **Add deal** stays disabled until a record is chosen, and Command-Enter submits.
+Use **Stage requirements** in the toolbar to choose a single-select stage field,
+a stage, and the fields required to enter it. Save one stage at a time; unchecking
+all fields removes that rule. Renaming a field or stage keeps the rule. Deleting
+one removes its corresponding requirements. Remove requirements before changing
+a referenced field's type or deleting options from a required field. Existing
+deals stay in place when a rule is added;
+entering that stage or editing its required fields validates the final values.
+
+The Add deal form marks the selected stage's required fields **Required** and
+names missing fields on submit. Empty text and empty selections are missing;
+zero and an unchecked checkbox are valid values. The record and field edits stay
+in the form after a refusal. An open form follows stage renames by identity; if
+its selected stage is deleted, it asks for another value while keeping other edits.
+Deleted fields leave the draft submission. Board moves, timeline group moves, table edits, agent tools and CSV imports
+use the same server rule; a rejected operation batch saves none of its edits.
+Verify by requiring Revenue for Negotiation, trying a move with no Revenue,
+filling Revenue, then retrying; also rename the field/stage and repeat. Check the
+form on desktop and mobile, including correction after a rejected submit.
+
 The form makes one row with every value set. A board lane's **New record** opens
-the same dialog with the lane's stage filled in. The table's blank row at the
+the same dialog with the lane's stage filled in. A timeline's **New record here**
+or range-drawing gesture also opens the form, preserving the chosen date range
+and the group stage when one was selected. The table's blank row at the
 bottom still adds a row inline. On mobile the dialog is a bottom drawer. To verify
 the person picker, choose an **Owner** in the dialog: its menu must accept the
 click.
@@ -497,7 +511,12 @@ pipeline columns of the same name, adding missing select options. A record
 the pipeline already had is not added again, so retrying an interrupted import
 adds only what is missing; several rows for one new record add separate entries
 (deals), as an export of such a pipeline lists them. Relation and non-person entity columns are skipped,
-and a value that does not fit its column is left empty.
+and a value that does not fit its column is left empty. Stage-validation refusals
+are isolated to individual entries: valid rows continue importing, and the result
+lists each refused entry by its import position, domain or email, and missing fields.
+Use **Add deal** or **Add contact** to correct and add a refused entry, including a
+second deal for a company whose valid entry was imported. Reimporting skips records
+already present in the pipeline.
 
 Agent CSV imports report ambiguous contact emails as unresolved records with an
 actionable reason and continue the valid rows. They never create another contact

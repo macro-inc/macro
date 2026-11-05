@@ -1,4 +1,9 @@
 export default {
+  crmVisibility: 'Visibility',
+  crmVisible: 'Visible',
+  crmArchived: 'Archived',
+  crmArchive: 'Archive',
+  crmRestore: 'Restore',
   // View tabs
   favorites: 'Favorites',
   scheduled: 'Scheduled',
@@ -75,6 +80,7 @@ export default {
   groupList: 'Group list',
   filterList: 'Filter list',
   clearFilters: 'Clear filters',
+  showHiddenRoutineRuns: 'Show hidden routine runs',
 
   // Filter menu
   filter: 'Filter',

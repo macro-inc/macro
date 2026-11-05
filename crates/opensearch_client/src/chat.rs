@@ -1,5 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
+    retry::resend_on_lost_connection,
     upsert::{self, chat_message::UpsertChatMessageArgs, properties::IndexedProperty},
 };
 
@@ -10,11 +11,13 @@ impl OpensearchClient {
         upsert_chat_message_args: &UpsertChatMessageArgs,
         index_override: Option<&str>,
     ) -> Result<()> {
-        upsert::chat_message::upsert_chat_message(
-            &self.inner,
-            upsert_chat_message_args,
-            index_override,
-        )
+        resend_on_lost_connection(|| {
+            upsert::chat_message::upsert_chat_message(
+                &self.inner,
+                upsert_chat_message_args,
+                index_override,
+            )
+        })
         .await
     }
 
@@ -22,7 +25,10 @@ impl OpensearchClient {
     /// This will remove all messages for a given chat
     #[tracing::instrument(skip(self))]
     pub async fn delete_chat(&self, chat_id: &str, index_override: Option<&str>) -> Result<()> {
-        delete::chat::delete_chat_by_id(&self.inner, chat_id, index_override).await
+        resend_on_lost_connection(|| {
+            delete::chat::delete_chat_by_id(&self.inner, chat_id, index_override)
+        })
+        .await
     }
 
     /// Deletes a chat message from the opensearch chat index
@@ -34,17 +40,22 @@ impl OpensearchClient {
         chat_message_id: &str,
         index_override: Option<&str>,
     ) -> Result<()> {
-        delete::chat::delete_chat_message_by_id(
-            &self.inner,
-            chat_id,
-            chat_message_id,
-            index_override,
-        )
+        resend_on_lost_connection(|| {
+            delete::chat::delete_chat_message_by_id(
+                &self.inner,
+                chat_id,
+                chat_message_id,
+                index_override,
+            )
+        })
         .await
     }
 
     pub async fn update_chat_metadata(&self, chat_id: &str, title: &str) -> Result<()> {
-        upsert::chat_message::update_chat_metadata(&self.inner, chat_id, title).await
+        resend_on_lost_connection(|| {
+            upsert::chat_message::update_chat_metadata(&self.inner, chat_id, title)
+        })
+        .await
     }
 
     /// Refresh only the denormalized `properties` on an existing parent chat doc.
@@ -54,10 +65,14 @@ impl OpensearchClient {
         chat_id: &str,
         properties: &[IndexedProperty],
     ) -> Result<()> {
-        upsert::chat_message::update_chat_properties(&self.inner, chat_id, properties).await
+        resend_on_lost_connection(|| {
+            upsert::chat_message::update_chat_properties(&self.inner, chat_id, properties)
+        })
+        .await
     }
 
     pub async fn delete_chat_by_user_id(&self, user_id: &str) -> Result<()> {
-        delete::chat::delete_chat_by_user_id(&self.inner, user_id).await
+        resend_on_lost_connection(|| delete::chat::delete_chat_by_user_id(&self.inner, user_id))
+            .await
     }
 }

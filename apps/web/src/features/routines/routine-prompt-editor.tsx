@@ -1,6 +1,7 @@
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { useRoutinePromptMentionUsers } from './routine-prompt-mention-users';
 
 export function RoutinePromptEditor(props: {
   initialValue: string;
@@ -12,7 +13,7 @@ export function RoutinePromptEditor(props: {
     .namespace('routine-prompt')
     .withHistory()
     .withLinks()
-    .withMentions()
+    .withMentions({ users: useRoutinePromptMentionUsers() })
     .onChange(props.onChange);
 
   return (

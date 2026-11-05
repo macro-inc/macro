@@ -53,33 +53,41 @@ pub struct SetPricingRequest {
     pub price_per_mil_cache_write: Option<f32>,
     /// Price per minute of audio (USD), or null for token-only pricing.
     pub price_per_audio_minute: Option<f32>,
+    /// Price per vendor credit (USD), or null unless the model bills in credits.
+    pub price_per_provider_credit: Option<f32>,
 }
 
 impl SetPricingRequest {
     fn pricing(&self) -> Result<ModelPricing, &'static str> {
         let cache_read = self.price_per_mil_cache_read;
         let cache_write = self.price_per_mil_cache_write;
+        let no_token_rates = self.price_per_mil_in.is_none_or(|price| price == 0.0)
+            && self.price_per_mil_out.is_none_or(|price| price == 0.0)
+            && cache_read.is_none()
+            && cache_write.is_none();
+
         match (
             self.price_per_mil_in,
             self.price_per_mil_out,
             self.price_per_audio_minute,
+            self.price_per_provider_credit,
         ) {
-            (input, output, Some(per_minute))
-                if input.is_none_or(|price| price == 0.0)
-                    && output.is_none_or(|price| price == 0.0)
-                    && cache_read.is_none()
-                    && cache_write.is_none() =>
-            {
+            (_, _, Some(per_minute), None) if no_token_rates => {
                 Ok(ModelPricing::Audio { per_minute })
             }
-            (Some(input), Some(output), None) => Ok(ModelPricing::Tokens {
+            (_, _, None, Some(per_credit)) if no_token_rates => {
+                Ok(ModelPricing::ProviderCredits { per_credit })
+            }
+            (Some(input), Some(output), None, None) => Ok(ModelPricing::Tokens {
                 input,
                 output,
                 cache_read,
                 cache_write,
             }),
-            (_, _, Some(_)) => Err("choose token pricing or audio pricing"),
-            _ => Err("provide both token prices or an audio price"),
+            (_, _, Some(_), _) | (_, _, _, Some(_)) => {
+                Err("choose token, audio, or credit pricing")
+            }
+            _ => Err("provide both token prices, an audio price, or a credit price"),
         }
     }
 }

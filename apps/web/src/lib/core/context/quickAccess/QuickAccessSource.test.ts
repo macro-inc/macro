@@ -1222,6 +1222,17 @@ describe('Quick Access source integration', () => {
     expect(list.items()[0].data).toMatchObject(restCompany);
   });
 
+  it('excludes archived REST suggestions and includes restored companies', () => {
+    mocks.cacheEnabled = false;
+    mocks.companies = [{ ...restCompany, hidden: true }];
+    const archived = setup((source) => source.useList('crm_company'));
+    expect(archived.items()).toEqual([]);
+    dispose?.();
+    mocks.companies = [{ ...restCompany, hidden: false }];
+    const restored = setup((source) => source.useList('crm_company'));
+    expect(restored.items().map((item) => item.id)).toEqual(['company-1']);
+  });
+
   it('preserves REST company mentions with GraphQL disabled', () => {
     mocks.cacheEnabled = false;
     mocks.companies = [restCompany];

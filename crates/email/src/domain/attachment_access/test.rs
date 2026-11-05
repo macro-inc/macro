@@ -13,6 +13,9 @@ struct Probe {
     document_reads: Arc<AtomicUsize>,
     provider_reads: Arc<AtomicUsize>,
     file_reads: Arc<AtomicUsize>,
+    document_stores: Arc<AtomicUsize>,
+    awaiting_upload: bool,
+    provider_unavailable: bool,
 }
 impl EmailUserRepo for Probe {
     async fn user_sender_filters(&self, _: Uuid) -> Result<Vec<EmailFilter>, EmailErr> {
@@ -59,14 +62,20 @@ impl AttachmentReadRepository for Probe {
     async fn existing_attachment_document(
         &self,
         _: Uuid,
-    ) -> Result<Option<String>, AttachmentError> {
+    ) -> Result<Option<ExistingAttachmentDocument>, AttachmentError> {
         self.document_reads.fetch_add(1, Ordering::Relaxed);
-        Ok(Some("existing-document".into()))
+        Ok(Some(ExistingAttachmentDocument {
+            id: "existing-document".into(),
+            awaiting_upload: self.awaiting_upload,
+        }))
     }
 }
 impl AttachmentBytes for Probe {
     async fn bytes(&self, _: &AttachmentReadRecord) -> Result<Vec<u8>, AttachmentError> {
         self.provider_reads.fetch_add(1, Ordering::Relaxed);
+        if self.provider_unavailable {
+            return Err(AttachmentError::Infrastructure);
+        }
         Ok(vec![1, 2, 3])
     }
 }
@@ -90,7 +99,8 @@ impl AttachmentFiles for Probe {
         _: &AttachmentReadRecord,
         _: Vec<u8>,
     ) -> Result<String, AttachmentError> {
-        panic!("existing document")
+        self.document_stores.fetch_add(1, Ordering::Relaxed);
+        Ok("existing-document".into())
     }
 }
 fn probe(accessible: bool) -> Probe {
@@ -139,6 +149,9 @@ fn probe(accessible: bool) -> Probe {
         document_reads: Arc::new(AtomicUsize::new(0)),
         provider_reads: Arc::new(AtomicUsize::new(0)),
         file_reads: Arc::new(AtomicUsize::new(0)),
+        document_stores: Arc::new(AtomicUsize::new(0)),
+        awaiting_upload: false,
+        provider_unavailable: false,
     }
 }
 
@@ -191,6 +204,69 @@ async fn authorized_delegate_uses_cache_without_provider_credentials() {
     assert_eq!(probe.document_reads.load(Ordering::Relaxed), 1);
     assert_eq!(probe.file_reads.load(Ordering::Relaxed), 1);
     assert_eq!(probe.provider_reads.load(Ordering::Relaxed), 0);
+    assert_eq!(probe.document_stores.load(Ordering::Relaxed), 0);
+}
+
+#[tokio::test]
+async fn opening_a_document_whose_upload_never_finished_stores_it_again() {
+    let mut probe = probe(true);
+    probe.awaiting_upload = true;
+    let service = AttachmentReadService {
+        repository: probe.clone(),
+        provider: probe.clone(),
+        files: probe.clone(),
+        access: NoOpEntityAccessService,
+    };
+    let actor = MacroUserIdStr::try_from_email("owner@example.com").unwrap();
+    let id = probe.record.attachment.db_id;
+    assert_eq!(
+        service.document(&actor, id).await.unwrap(),
+        "existing-document"
+    );
+    assert_eq!(probe.provider_reads.load(Ordering::Relaxed), 1);
+    assert_eq!(probe.document_stores.load(Ordering::Relaxed), 1);
+}
+
+#[tokio::test]
+async fn a_failed_repair_still_opens_the_existing_document() {
+    let mut probe = probe(true);
+    probe.awaiting_upload = true;
+    probe.provider_unavailable = true;
+    let service = AttachmentReadService {
+        repository: probe.clone(),
+        provider: probe.clone(),
+        files: probe.clone(),
+        access: NoOpEntityAccessService,
+    };
+    let actor = MacroUserIdStr::try_from_email("owner@example.com").unwrap();
+    let id = probe.record.attachment.db_id;
+    assert_eq!(
+        service.document(&actor, id).await.unwrap(),
+        "existing-document"
+    );
+    assert_eq!(probe.provider_reads.load(Ordering::Relaxed), 1);
+    assert_eq!(probe.document_stores.load(Ordering::Relaxed), 0);
+}
+
+#[tokio::test]
+async fn unauthorized_reader_cannot_trigger_a_repair() {
+    let mut probe = probe(false);
+    probe.awaiting_upload = true;
+    let service = AttachmentReadService {
+        repository: probe.clone(),
+        provider: probe.clone(),
+        files: probe.clone(),
+        access: NoOpEntityAccessService,
+    };
+    let actor = MacroUserIdStr::try_from_email("unrelated@example.com").unwrap();
+    assert!(matches!(
+        service
+            .document(&actor, probe.record.attachment.db_id)
+            .await,
+        Err(AttachmentError::Forbidden)
+    ));
+    assert_eq!(probe.provider_reads.load(Ordering::Relaxed), 0);
+    assert_eq!(probe.document_stores.load(Ordering::Relaxed), 0);
 }
 
 #[tokio::test]

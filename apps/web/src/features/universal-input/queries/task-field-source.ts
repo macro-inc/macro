@@ -6,6 +6,7 @@ import {
 } from '@property/constants';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
+import { CUSTOMER_CONTACT_PROPERTY_IDS } from '../../task-composer/customer-contact';
 import type { InputFields } from '../core/input';
 import {
   parseTaskDate,
@@ -20,10 +21,12 @@ export function createTaskFieldSource(userId: string) {
     scope: 'system',
     includeOptions: true,
   }));
+  // What extraction may suggest; Customer / Contact is only ever picked by hand.
   const allowed = new Set([
     ...getBuiltinPropertyIds('task'),
     SYSTEM_PROPERTY_IDS.PROJECT,
   ]);
+  const creatable = new Set([...allowed, ...CUSTOMER_CONTACT_PROPERTY_IDS]);
   const items = useQuickAccess().useList(
     'person',
     'initiative',
@@ -31,12 +34,13 @@ export function createTaskFieldSource(userId: string) {
     'document'
   );
   const fromRows = (
-    rows: PropertyDefinitionResponse[]
+    rows: PropertyDefinitionResponse[],
+    ids: ReadonlySet<string> = allowed
   ): TaskFieldDefinition[] =>
     rows.flatMap((property) => {
       const definition =
         'definition' in property ? property.definition : property;
-      if (!allowed.has(definition.id)) return [];
+      if (!ids.has(definition.id)) return [];
       return [
         {
           definition,
@@ -46,12 +50,12 @@ export function createTaskFieldSource(userId: string) {
       ];
     });
   const definitions = () => (query.isSuccess ? fromRows(query.data) : []);
-  const loadDefinitions = async () => {
-    if (query.isSuccess) return definitions();
+  const loadRows = async () => {
+    if (query.isSuccess) return query.data;
     const result = await query.refetch({ cancelRefetch: false });
     if (!result.isSuccess)
       throw result.error ?? new Error('Could not load task fields');
-    return fromRows(result.data);
+    return result.data;
   };
   const references = (): TaskReference[] =>
     items.items().map((item) =>
@@ -78,7 +82,7 @@ export function createTaskFieldSource(userId: string) {
     );
   return {
     definitions: async () =>
-      (await loadDefinitions())
+      fromRows(await loadRows())
         .filter(
           ({ definition }) => definition.id !== SYSTEM_PROPERTY_IDS.DUE_DATE
         )
@@ -88,7 +92,7 @@ export function createTaskFieldSource(userId: string) {
         })),
     createDefinitions: async () =>
       new Map(
-        (await loadDefinitions()).map(({ definition }) => [
+        fromRows(await loadRows(), creatable).map(({ definition }) => [
           definition.id,
           definition,
         ])

@@ -69,8 +69,13 @@ function Fixture() {
         listeners.delete(listener);
       };
     },
-    pushUpdate: async (updates) => {
-      if (new URLSearchParams(location.search).has('reject')) return false;
+    pushUpdate: async (updates, options) => {
+      const params = new URLSearchParams(location.search);
+      if (params.has('reject')) return false;
+      // Sync-service accepts only comment marks from a commenter, so any
+      // other change from their session, even one the editor derives on its
+      // own, is never acknowledged.
+      if (params.has('readonly') && !options?.commentOnly) return false;
       for (const update of updates) {
         if (server.importUpdate(update).isErr()) return false;
       }
@@ -281,7 +286,6 @@ function Editor(props: {
           syncSource={props.syncSource}
           sourceReady={() => true}
           canEdit={() => !readonly}
-          canComment={() => true}
           editorError={editorError}
         />
       </div>

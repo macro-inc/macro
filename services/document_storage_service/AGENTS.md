@@ -23,6 +23,8 @@ threads, pins, recents, notifications, folders, activity.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
+  It also builds the attention feeds (Home's work feed and the notifications
+  inbox) from one set of `attention_feed` adapters, triggers and viewer lookup.
 - `src/external_chat.rs`: composes `ExternalChatService<WhatsAppProvider>`,
   mounts `/external-chats` (`crates/external_chat`) and `/whatsapp`
   (`crates/whatsapp_linked`) and runs the notification/import worker (LISTEN
@@ -78,12 +80,18 @@ threads, pins, recents, notifications, folders, activity.
 
 - `cargo test -p document_storage_service` (`SQLX_OFFLINE` unset; needs
   MacroDB + Redis — `just run_dbs` from repo root; DynamoDB local via
-  `just ensure::ensure_dynamodb`, see `justfile`).
+  `just ensure::ensure_dynamodb` from `services/document_storage_service`,
+  whose `justfile` declares the `ensure` module).
 - After query changes: `nix develop --command just prepare_db` from the repo root.
 
 ## Gotchas
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
+
+- Don't declare a function that reaches the router `pub async fn`, even in a private
+  module. rustc compiles the body of every non-generic `pub async fn` in every build,
+  so the lib test would compile the whole service. `server::run` returns `impl Future`
+  for that reason.
 
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,
   `delete_document_worker`, `location_check`, all on by `default`) — a feature

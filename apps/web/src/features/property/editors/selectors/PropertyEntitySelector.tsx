@@ -64,9 +64,9 @@ type EntityInputProps = {
 };
 
 function getEntityTypePluralLabel(
-  entityType: EntityType | null | undefined
+  entityType: EntityType | EntityType[] | null | undefined
 ): string {
-  if (!entityType) return 'entities';
+  if (!entityType || Array.isArray(entityType)) return 'entities';
   switch (entityType) {
     case 'USER':
       return 'users';
@@ -243,10 +243,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       } else {
         const entity = quickAccessItemToEntity(item);
         const entityType = getEntityType(entity);
-        if (
-          entityType &&
-          (!specificEntityType || entityType === specificEntityType)
-        ) {
+        const matches =
+          !specificEntityType ||
+          (Array.isArray(specificEntityType)
+            ? entityType && specificEntityType.includes(entityType)
+            : entityType === specificEntityType);
+        if (entityType && matches) {
           converted.push(entity);
         }
       }
@@ -651,8 +653,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
               when={!isLoadingEntities()}
               fallback={<span>Loading...</span>}
             >
-              No {getEntityTypePluralLabel(props.config.specificEntityType)}{' '}
-              found
+              {props.config.emptyMessage ??
+                `No ${getEntityTypePluralLabel(props.config.specificEntityType)} found`}
             </Show>
           </div>
         )}
