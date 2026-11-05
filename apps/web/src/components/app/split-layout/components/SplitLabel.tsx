@@ -409,15 +409,15 @@ function SplitLabelContextMenu(props: ParentProps) {
  * left behind would keep a view that has gone alive.
  */
 export function titleFileMenuMount(
-  panel: Pick<SplitPanelContextType, 'titleFileMenuRef' | 'setTitleFileMenuRef'>
+  panel: Pick<SplitPanelContextType, 'setTitleFileMenuRef'>
 ) {
   return (element: HTMLDivElement) => {
     panel.setTitleFileMenuRef(element);
-    onCleanup(() => {
-      if (panel.titleFileMenuRef() === element) {
-        panel.setTitleFileMenuRef(undefined);
-      }
-    });
+    onCleanup(() =>
+      panel.setTitleFileMenuRef((current) =>
+        current === element ? undefined : current
+      )
+    );
   };
 }
 
