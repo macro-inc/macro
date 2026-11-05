@@ -379,11 +379,19 @@ export function NotificationsView(props: NotificationsViewProps) {
   };
 
   // Back and forward change the shown row too; the preview claims what it
-  // shows, and yields to another split that already shows it.
+  // shows, and yields to another split that already shows it. Touch has no
+  // preview to claim for.
   createEffect(
     on(
       previewTarget,
-      (target) => {
+      (target, previous) => {
+        if (isTouchDevice()) return;
+        if (
+          target?.blockType === previous?.blockType &&
+          target?.blockId === previous?.blockId
+        ) {
+          return;
+        }
         if (!guard(target)) selection.clear({ replace: true });
       },
       { defer: true }
