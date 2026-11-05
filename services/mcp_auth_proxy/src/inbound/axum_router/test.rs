@@ -82,6 +82,19 @@ fn authorize_request(client_id: &str, redirect_uri: &str, code_verifier: &str) -
         .expect("request should build")
 }
 
+/// The authorize request a user sends from the sign-in choice, which is where
+/// the flow starts for a host that offers one.
+fn chosen_authorize_request(
+    client_id: &str,
+    redirect_uri: &str,
+    code_verifier: &str,
+) -> Request<Body> {
+    let mut request = authorize_request(client_id, redirect_uri, code_verifier);
+    let uri = format!("{}&sign_in=google", request.uri());
+    *request.uri_mut() = uri.parse().expect("uri should parse");
+    request
+}
+
 fn token_request(form: &str) -> Request<Body> {
     Request::builder()
         .method("POST")
@@ -146,7 +159,7 @@ async fn authorize_explains_how_to_reconnect_an_unregistered_client() {
 
     let response = send(
         &harness,
-        authorize_request(
+        chosen_authorize_request(
             "not-a-registered-client",
             TRUSTED_REDIRECT_URI,
             VICTIM_CODE_VERIFIER,
@@ -184,7 +197,7 @@ async fn authorize_withholds_the_client_origin_from_the_identity_provider() {
 
         let authorize = send(
             &harness,
-            authorize_request(&client_id, redirect_uri, VICTIM_CODE_VERIFIER),
+            chosen_authorize_request(&client_id, redirect_uri, VICTIM_CODE_VERIFIER),
         )
         .await;
 
@@ -343,9 +356,17 @@ async fn registered_client_completes_the_whole_flow() {
         Some(TRUSTED_REDIRECT_URI)
     );
 
-    let authorize = send(
+    let choice = send(
         &harness,
         authorize_request(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER),
+    )
+    .await;
+    assert_eq!(choice.status, StatusCode::OK);
+    assert!(!harness.inflight.has_pending());
+
+    let authorize = send(
+        &harness,
+        chosen_authorize_request(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER),
     )
     .await;
     assert_eq!(authorize.status, StatusCode::TEMPORARY_REDIRECT);
