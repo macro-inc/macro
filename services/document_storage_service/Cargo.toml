@@ -7,6 +7,7 @@ version = "0.1.0"
 
 # The bins hold no tests and the library no doctests. Neither target builds under
 # `cargo test`, so the test job compiles the library once, as its test binary.
+# The `build-service-bins` job builds the real binary.
 [lib]
 doctest = false
 
