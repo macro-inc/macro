@@ -2,6 +2,38 @@ import { expect, test } from '@playwright/test';
 
 const fixture = '/src/features/crm/browser-test/pipelines.html';
 
+test('create a generic pipeline that tracks no company or contact', async ({
+  page,
+}) => {
+  await page.routeWebSocket('**', (socket) => socket.close());
+  await page.route('https://**', (route) => route.abort());
+  await page.route('**/__macro_dev/**', (route) => route.abort());
+  await page.goto(fixture, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'New pipeline', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: 'Pipeline name' }).fill('Launch');
+  await dialog.getByRole('button', { name: 'Track Companies' }).click();
+  await page.getByRole('menuitemradio', { name: 'Generic' }).click();
+  await expect(
+    dialog.getByRole('button', { name: 'Track Generic' })
+  ).toBeVisible();
+  await dialog.getByRole('button', { name: 'Create pipeline' }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(
+    page.getByRole('columnheader', { name: 'Name', exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('columnheader', { name: 'Company', exact: true })
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Pipeline actions' }).click();
+  await expect(
+    page.getByRole('menuitem', { name: 'Export CSV' })
+  ).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Import CSV' })).toHaveCount(
+    0
+  );
+});
+
 test('create a private company pipeline and customize a column', async ({
   page,
 }) => {

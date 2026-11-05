@@ -27585,16 +27585,23 @@
       },
       "CreatePipeline": {
         "type": "object",
-        "description": "Request to create an empty pipeline with the standard CRM columns.",
-        "required": ["name", "recordType"],
+        "description": "Request to create an empty pipeline: the standard CRM columns for a tracked\nrecord, or one Name column, like a new database, for a generic pipeline.",
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
             "description": "Pipeline name."
           },
           "recordType": {
-            "$ref": "#/components/schemas/PipelineRecordType",
-            "description": "Company or contact entries."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Company or contact entries; omitted, a generic pipeline of free-form rows."
+              }
+            ]
           },
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",
@@ -39054,11 +39061,18 @@
           "primaryColumnId": {
             "type": "string",
             "format": "uuid",
-            "description": "Protected primary column."
+            "description": "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
           },
           "recordType": {
-            "$ref": "#/components/schemas/PipelineRecordType",
-            "description": "Kind of the primary reference."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Kind of the primary reference; `None` for a generic pipeline, whose\nprimary column is plain text."
+              }
+            ]
           },
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",

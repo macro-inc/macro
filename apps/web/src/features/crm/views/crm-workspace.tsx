@@ -24,10 +24,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { usePreference } from '@app/preferences/use-preference';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SplitPanel } from '@components/app/split-panel';
-import {
-  enableCrmActivity,
-  enableDatabases,
-} from '@core/constant/featureFlags';
+import { enableCrmActivity } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -256,7 +253,6 @@ export function CrmWorkspaceView(props: {
   }) => JSX.Element;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const {
     openCreateCompany: openCreateCompanyModal,
     openCreateContact: openCreateContactModal,
@@ -358,16 +354,10 @@ export function CrmWorkspaceView(props: {
   const peopleActive = () => active() === 'people';
   const activityTab = () => {
     const tab = active();
-    return activityFlag().enabled &&
-      (tab !== 'databases' || databasesFlag().enabled) &&
-      isCrmActivityTab(tab)
-      ? tab
-      : undefined;
+    return activityFlag().enabled && isCrmActivityTab(tab) ? tab : undefined;
   };
   const activityPending = () =>
-    isCrmActivityTab(active()) &&
-    (activityFlag().loading ||
-      (active() === 'databases' && databasesFlag().loading));
+    isCrmActivityTab(active()) && activityFlag().loading;
   const [exporting, setExporting] = createSignal(false);
   const activeList = () =>
     lists.lists().find((list) => `list:${list.id}` === active());
@@ -419,7 +409,6 @@ export function CrmWorkspaceView(props: {
     settings.close();
     if (!listsEnabled() && id.startsWith('list:')) id = 'active';
     if (!activityFlag().enabled && isCrmActivityTab(id)) id = 'active';
-    if (id === 'databases' && !databasesFlag().enabled) id = 'active';
     if (id !== 'people' && !id.startsWith('list:') && !isCrmActivityTab(id))
       id = 'active';
     if (id === active()) view.host.record.close();
@@ -459,6 +448,8 @@ export function CrmWorkspaceView(props: {
   };
   onMount(() => {
     if (!listsEnabled() && active().startsWith('list:')) navigate('active');
+    // Saved and shared links to the retired Databases view open Companies.
+    if (active() === 'databases') navigate('active');
   });
   const toolbarCreateMenu = () => (
     <CrmCreateMenu
@@ -478,19 +469,9 @@ export function CrmWorkspaceView(props: {
   // Keep cold activity links intact until PostHog resolves; off falls back to Companies.
   createEffect(
     on(
-      () =>
-        [
-          activityPending(),
-          activityFlag().enabled,
-          databasesFlag().enabled,
-          active(),
-        ] as const,
-      ([loading, activityEnabled, databasesEnabled, tab]) => {
-        if (
-          !loading &&
-          isCrmActivityTab(tab) &&
-          (!activityEnabled || (tab === 'databases' && !databasesEnabled))
-        )
+      () => [activityPending(), activityFlag().enabled, active()] as const,
+      ([loading, activityEnabled, tab]) => {
+        if (!loading && isCrmActivityTab(tab) && !activityEnabled)
           navigate('active');
       }
     )

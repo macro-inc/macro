@@ -152,14 +152,15 @@ links; Notes excludes task, snippet and skill Markdown subtypes. Email matches
 visible company domains/contact addresses in the viewer's own mailbox, without
 team-scope widening or requiring a property link on the email.
 
-Databases is a row-linked activity view, not a direct database-to-CRM relation.
-It opts into database rows with the same server-resolved CRM selector and lists
-each containing database once, intersected with authorized database discovery.
-A company includes rows linked to its visible contacts; a contact does not inherit
-its company's rows. Empty row matches never fall back to all databases. Preserve
-Soup pagination and CRM-link invalidation rather than enumerating CRM IDs or table
-IDs in the browser. Database creation uses the existing app action; a database
-joins the CRM list only after a row has a Companies or Contacts link.
+Customers has no Databases view or record section. A database that holds work
+outside companies and contacts is a generic pipeline: `recordType` is null, the
+primary column starts as an optional Name text column anyone can retype or delete
+(the first column then titles rows), and rows are added directly in
+the shared editor with no record picker or stage requirements. CSV import needs
+a record to resolve, so it is hidden for generic pipelines; export includes Name.
+Retired routes keep old links working: middleware sends a record's `databases`
+section to the record, and a database opened under Customers to `/database/<id>`.
+A saved `databases` workspace tab opens Companies.
 
 CRM collection and record lists use full-height empty states, horizontally
 centered and raised toward the toolbar, with
@@ -192,9 +193,9 @@ a record independently of the row; additional values use the shared overflow men
 Email still matches visible company domains and contact addresses for feed
 membership, but the row displays only stored properties, not inferred matches.
 No separate CRM association metadata lookup or row footer runs during paging.
-Linked Tasks, Email, Notes, Calls and Databases open through nested Customers
-routes from workspace activity and record sections. Tasks, Emails, Calls and
-Databases record sections append only `<item-id>` because their section determines
+Linked Tasks, Email, Notes and Calls open through nested Customers
+routes from workspace activity and record sections. Tasks, Emails and Calls
+record sections append only `<item-id>` because their section determines
 the renderer; Tasks also omit the redundant `md/task` suffix. These sections reject
 redundant typed item URLs rather than retaining fallback routes. Workspace activity
 retains `<item-type>/<item-id>` and document metadata; record Files and overview
