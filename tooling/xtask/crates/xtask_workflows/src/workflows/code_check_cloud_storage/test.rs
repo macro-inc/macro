@@ -76,7 +76,7 @@ fn status_check_covers_every_job() {
         "test",
         "graphql-schema-compat",
     ] {
-        let check = format!(r#"[[ "${{{{ needs.{needed}.result }}}}" == "failure" ]]"#);
+        let check = format!(r#""${{{{ needs.{needed}.result }}}}""#);
         assert!(script.contains(&check), "{check}: {script}");
         assert!(
             status["needs"]
@@ -289,6 +289,45 @@ fn schema_changes_run_the_compatibility_check() {
     );
     let job = job.to_string();
     assert!(job.contains("graphql-schema-compat --base HEAD^1"), "{job}");
+}
+
+/// A stalled step must not hold a runner for the default six hours, and the dev
+/// shell, where stalls have happened, must fail well before the job limit.
+#[test]
+fn rust_jobs_have_timeouts() {
+    for job in [
+        path_check(),
+        check(),
+        doppler_config(),
+        graphql_schema_compat(),
+        test(),
+        status_check(),
+    ] {
+        let job = serde_json::to_value(job).unwrap();
+        assert!(job["timeout-minutes"].is_u64(), "{job}");
+    }
+    for job in [check(), doppler_config(), test()] {
+        let job = serde_json::to_value(job).unwrap();
+        let shell = job["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|step| step["name"] == "Setup Nix dev shell")
+            .expect("dev shell step");
+        assert_eq!(shell["timeout-minutes"], vars::DEV_SHELL_TIMEOUT_MINUTES);
+    }
+}
+
+/// A job that hits its timeout reports `cancelled`, so the required check can't
+/// treat only `failure` as a problem.
+#[test]
+fn status_check_rejects_cancelled_jobs() {
+    let status = serde_json::to_value(status_check()).unwrap();
+    let script = status["steps"][0]["run"].as_str().unwrap();
+    assert!(
+        script.contains(r#"[[ "$result" != "success" && "$result" != "skipped" ]]"#),
+        "{script}"
+    );
 }
 
 /// Plain `cargo test` here rebuilt hundreds of crates under different flags to run

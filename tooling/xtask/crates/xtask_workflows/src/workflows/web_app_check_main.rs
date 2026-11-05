@@ -144,6 +144,7 @@ fn generated_code() -> Job {
             "needs.path-check.outputs.codegen_changed == 'true'",
         ))
         .name("Generated Code Check")
+        .timeout_minutes(45u32)
         .runs_on(mid_web_runner())
         // The generators run once and are thrown away, so debug info is pure
         // cost: it made the 15 binaries 12.7 GB instead of 466 MB. Job-level,
@@ -158,7 +159,10 @@ fn generated_code() -> Job {
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_cache_volume(true))
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_reqs_web("Setup Prereqs", false))
+        .add_step(
+            steps::setup_reqs_web("Setup Prereqs", false)
+                .timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES),
+        )
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::code_mode_assets())
         .add_step(build_schema_binaries())
@@ -542,11 +546,13 @@ fn check_job_results() -> Step<Run> {
         echo "ios-native-check: ${{ needs.ios-native-check.result }}"
 
         # Fail if any job failed (skipped and success are both OK). The iOS
-        # gate is the merge gate, so a cancelled gate is not OK either.
+        # gate is the merge gate, so a cancelled gate is not OK either. The same
+        # goes for generated code: a job that hits its timeout reports cancelled.
         if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
            [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.typescript.result }}" == "failure" ]] || \
            [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
+           [[ "${{ needs.generated-code.result }}" == "cancelled" ]] || \
            [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
            [[ "${{ needs.test.result }}" == "failure" ]] || \
            [[ "${{ needs.cycles.result }}" == "failure" ]] || \
