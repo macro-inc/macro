@@ -1,3 +1,4 @@
+throw new Error('deliberate failure for CI proof');
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { DynamoDBTable } from '../../packages/resources';

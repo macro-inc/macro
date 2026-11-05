@@ -266,3 +266,4 @@ fn temp_preview_path(record_index: usize) -> PathBuf {
         std::process::id()
     ))
 }
+// ci-speed: a changed handler has to compile
