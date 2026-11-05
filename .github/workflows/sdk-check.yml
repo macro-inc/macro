@@ -7,12 +7,14 @@ name: SDK Check
     - main
     paths:
     - packages/sdk/**
+    - packages/lexical-core/**
     - '.github/workflows/sdk-check.yml'
   push:
     branches:
     - main
     paths:
     - packages/sdk/**
+    - packages/lexical-core/**
     - '.github/workflows/sdk-check.yml'
 jobs:
   check-package:
