@@ -94,6 +94,7 @@ impl PortUse<'_> {
         // After the overlap check on purpose: a probe's brief bind must never
         // touch a window another start has reserved.
         Port::all()
+            .filter(|port| port.is_bound())
             .map(|port| base + port.offset())
             .filter(|port| !self.published_by_self.contains(port))
             .find(|port| self.published_by_others.contains(port) || !(self.bindable)(*port))
