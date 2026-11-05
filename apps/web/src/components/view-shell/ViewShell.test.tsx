@@ -1166,6 +1166,14 @@ describe('list navigation', () => {
     expect(list().getAttribute('aria-hidden')).not.toBe('true');
     expect(document.activeElement).toBe(listElement);
 
+    // Focus handed to the pane around the view also returns to the list.
+    const pane = screen.getByRole('region', { name: 'channels' });
+    pane.tabIndex = -1;
+    setOpen(true);
+    pane.focus();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(document.activeElement).toBe(listElement);
+
     setOpen(true);
     setWidth(1000);
     expect(asideDocked()).toBe(true);

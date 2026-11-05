@@ -528,8 +528,10 @@ function NarrowListAside(props: JSX.HTMLAttributes<HTMLDivElement>) {
       (isHidden) => {
         if (isHidden || !list) return;
         const active = document.activeElement;
-        const focusLost = !active || active === document.body;
         const shell = list.closest('[data-view-shell]');
+        // Removing a focused scope hands focus to the pane around this view.
+        const focusLost =
+          !active || active === document.body || active.contains(shell);
         if (!focusLost && !shell?.contains(active)) return;
         if (list.contains(active)) return;
 
