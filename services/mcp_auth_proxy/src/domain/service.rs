@@ -13,6 +13,7 @@ use std::{
 
 use super::{
     access_token_clients::AccessTokenClients,
+    client_name::{ClientName, ReservedClientName},
     models::{
         AuthorizeRequest, CallbackRequest, ClientRegistrationRequest, ClientRegistrationResponse,
         IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RefreshTokenBinding,
@@ -43,6 +44,8 @@ pub const REVOKED_GRANT_TTL: Duration = REFRESH_TOKEN_BINDING_TTL;
 const MAX_REDIRECT_URIS_PER_CLIENT: usize = 8;
 /// Longest redirect URI accepted at registration.
 const MAX_REDIRECT_URI_LEN: usize = 512;
+/// Stored for a client that registers without a usable name.
+const UNNAMED_CLIENT_NAME: &str = "MCP client";
 
 /// Domain interface for the MCP OAuth broker.
 pub trait McpAuthProxyService: Clone + Send + Sync + 'static {
@@ -431,11 +434,17 @@ where
             }
         }
 
+        let client_name = match request.client_name.as_deref().map(ClientName::parse) {
+            Some(Err(ReservedClientName)) => {
+                return Err(RegisterClientError::ReservedClientName);
+            }
+            Some(Ok(Some(name))) => name.into(),
+            Some(Ok(None)) | None => UNNAMED_CLIENT_NAME.to_owned(),
+        };
+
         let client = RegisteredClient {
             client_id: uuid::Uuid::new_v4().to_string(),
-            client_name: request
-                .client_name
-                .unwrap_or_else(|| "mcp-client".to_owned()),
+            client_name,
             redirect_uris: request.redirect_uris,
         };
 
@@ -721,6 +730,9 @@ pub enum RegisterClientError {
         /// The rejected URI, for logging.
         uri: String,
     },
+    /// The client named itself as Macro or its staff.
+    #[error("client_name is reserved")]
+    ReservedClientName,
     /// The registration could not be persisted.
     #[error("failed to persist client registration")]
     ClientRegistrationStore(anyhow::Error),

@@ -101,6 +101,30 @@ fn callback_request(session_id: &str) -> Request<Body> {
         .expect("request should build")
 }
 
+#[tokio::test]
+async fn registration_under_a_reserved_name_is_a_bad_request() {
+    let harness = Harness::new();
+
+    let registration = send(
+        &harness,
+        Request::builder()
+            .method("POST")
+            .uri("/register")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(format!(
+                r#"{{"client_name":"Macro","redirect_uris":["{TRUSTED_REDIRECT_URI}"]}}"#
+            )))
+            .expect("request should build"),
+    )
+    .await;
+
+    assert_eq!(registration.status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        registration.body,
+        "client_name may not name Macro or its staff"
+    );
+}
+
 /// The attack from the report, over HTTP: the attacker cannot register their
 /// own callback, and cannot smuggle it onto an authorize request belonging to a
 /// client that is registered. No code reaches them, so there is nothing to
