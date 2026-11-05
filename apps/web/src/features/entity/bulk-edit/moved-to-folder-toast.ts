@@ -26,6 +26,7 @@ export function toastMovedToFolder(count: number, folderId: string) {
               {
                 label: t('entityActions.toastOpenSplit'),
                 icon: SplitIcon,
+                trailingIcon: true,
                 variant: 'secondary' as const,
                 onClick: () => open(true),
               },
@@ -34,6 +35,7 @@ export function toastMovedToFolder(count: number, folderId: string) {
         {
           label: t('entityActions.open'),
           icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: () => open(false),
         },
       ],

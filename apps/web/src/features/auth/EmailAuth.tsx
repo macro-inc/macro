@@ -25,6 +25,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { whenSettled } from '@core/util/whenSettled';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
@@ -167,6 +168,7 @@ function promptForEmailAccess(scopes: ConsentScopes | undefined) {
       actions: [
         {
           label: 'Try again',
+          icon: ArrowCounterClockwise,
           onClick: () => {
             toast.dismiss(toastId);
             openAddInboxDialog({ scopes });

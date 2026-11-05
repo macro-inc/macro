@@ -2,6 +2,7 @@ import './toast.css';
 import { t } from '@app/lib/i18n';
 import { isMobile } from '@core/mobile/isMobile';
 import CheckIcon from '@icon/system/bold/check-bold.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import WarningIcon from '@icon/system/regular/warning.svg';
 import XIcon from '@icon/system/regular/x.svg';
@@ -44,6 +45,8 @@ const TOAST_STYLES: Record<
 interface ToastAction {
   label: string;
   icon?: Component<{ class?: string }>;
+  /** Directional actions place their icon after the label. */
+  trailingIcon?: boolean;
   variant?: 'primary' | 'secondary';
   onClick: () => void;
 }
@@ -64,7 +67,7 @@ interface ToastOptions {
   showCloseButton?: boolean;
   /** Replace an action toast's Dismiss button with a desktop close icon. */
   dismissStyle?: ToastDismissStyle;
-  /** Place actions beside the title; defaults to a stacked action row. */
+  /** Inline multiple actions on notices without a description; single actions inline automatically. */
   actionLayout?: ToastActionLayout;
 }
 
@@ -243,11 +246,13 @@ function ActionButtons(props: {
             variant={action.variant ?? 'primary'}
             class="max-w-full"
           >
-            <Show when={action.icon}>
-              {(icon) => (
-                <Dynamic component={icon()} class="size-3.5 shrink-0" />
+            <Dynamic
+              component={action.icon ?? ArrowRightIcon}
+              class={cn(
+                'size-4 shrink-0',
+                (action.trailingIcon ?? !action.icon) && 'order-last'
               )}
-            </Show>
+            />
             <span class="min-w-0 whitespace-normal break-words">
               {action.label}
             </span>
@@ -283,8 +288,10 @@ export function ToastContent(props: {
   const hasActions = () => actions().length > 0;
   const inlineActions = () =>
     !props.embed &&
+    !hasBody() &&
     hasActions() &&
-    (props.custom?.actionLayout ?? props.actionLayout) === 'inline';
+    (actions().length === 1 ||
+      (props.custom?.actionLayout ?? props.actionLayout) === 'inline');
   const singleRow = () =>
     !props.embed && !hasBody() && (!hasActions() || inlineActions());
   const dismissLabel = () => props.custom?.dismissLabel ?? t('common.dismiss');

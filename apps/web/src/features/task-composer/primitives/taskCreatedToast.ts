@@ -25,6 +25,7 @@ export function showTaskCreatedToast(
             {
               label: t('entityActions.toastOpenSplit'),
               icon: SplitIcon,
+              trailingIcon: true,
               variant: 'secondary' as const,
               onClick: () => open(true),
             },
@@ -33,6 +34,7 @@ export function showTaskCreatedToast(
       {
         label: t('entityActions.open'),
         icon: ArrowSquareOutIcon,
+        trailingIcon: true,
         onClick: () => open(false),
       },
     ],

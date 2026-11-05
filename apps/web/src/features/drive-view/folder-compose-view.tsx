@@ -5,6 +5,9 @@ import { SplitPanel } from '@components/app/split-panel';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
 import { onMount, Suspense } from 'solid-js';
 import type { FolderDraft, FolderSubmission } from './core/folder-composer';
 import { createFolderCommands } from './queries/folder-creation';
@@ -27,36 +30,41 @@ async function settleFolderSubmission(
 ) {
   const outcome = await submission.result;
   if (outcome.type === 'failed') {
-    toast.failure(
-      outcome.draft.error ?? 'Could not finish creating the folder.',
-      {
-        actions: [
-          {
-            label: 'Retry',
-            onClick: () => {
-              layout.popoverSplit({
-                type: 'component',
-                id: 'folder-compose',
-                params: { ...options, initialDraft: outcome.draft },
-              });
-            },
+    toast.failure('Folder creation failed', {
+      subtext: outcome.draft.error ?? 'Please try again',
+      actions: [
+        {
+          label: 'Retry',
+          icon: ArrowCounterClockwise,
+          onClick: () => {
+            layout.popoverSplit({
+              type: 'component',
+              id: 'folder-compose',
+              params: { ...options, initialDraft: outcome.draft },
+            });
           },
-        ],
-      }
-    );
+        },
+      ],
+    });
     return;
   }
-  toast.success(`Created “${outcome.name}”`, {
-    dismissStyle: 'icon',
-    actions: [
-      {
-        label: t('entityActions.open'),
-        onClick: () => {
-          layout.openWithSplit({ type: 'project', id: outcome.id });
+  toast.custom(
+    {
+      title: `${outcome.name} created`,
+      icon: FolderIcon,
+      actions: [
+        {
+          label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
+          onClick: () => {
+            layout.openWithSplit({ type: 'project', id: outcome.id });
+          },
         },
-      },
-    ],
-  });
+      ],
+    },
+    { dismissStyle: 'icon' }
+  );
 }
 
 export function FolderComposeView(props: FolderComposeProps) {

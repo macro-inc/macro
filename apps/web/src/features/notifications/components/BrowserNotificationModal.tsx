@@ -35,20 +35,13 @@ export const BrowserNotificationModal = () => {
   );
 };
 
-/** Native apps ask for app notifications; only the web app uses the browser's. */
-function promptTitle() {
-  if (isPlatform('desktop')) return 'Enable Desktop Notifications';
-  if (isPlatform('android')) return 'Enable Notifications';
-  return 'Enable Browser Notifications';
-}
-
 function NotificationToastTrigger(props: {
   settings: SupportedNotificationSettings;
 }) {
   onMount(() => {
     const toastId = toast.custom(
       {
-        title: promptTitle(),
+        title: 'Enable notifications',
         dismissLabel: t('common.notNow'),
         icon: Bell,
         color: 'var(--color-accent)',

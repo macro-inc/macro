@@ -378,9 +378,11 @@ Drive's **New** menu (in the sidebar and after the header's Sort and Filter
 buttons; beside the title in narrow layouts) is headed
 **Create in &lt;folder&gt;** and creates everything in the open folder; on a tab or
 the Drive root it reads **Create in Drive**. **Folder** opens a **New folder**
-dialog with `Untitled folder` preselected; creating keeps Drive where it is, adds
-the folder to the open folder's list, and shows a toast with **Open**. Every other
-item opens as an inline detail in the open folder or tab once created
+dialog with `Untitled folder` preselected; creating keeps Drive where it is and adds
+the folder to the open folder's list. Creation and completed folder uploads show
+a compact toast with the folder icon, **&lt;folder name&gt; created/uploaded**, and
+**Open**, without a separate description.
+Every other item opens as an inline detail in the open folder or tab once created
 (`/app/drive/folder/<uuid>/spreadsheet/<uuid>`, `/app/drive/database/<uuid>`),
 the same as opening an existing file: the Drive sidebar stays mounted and no
 loading pane replaces Drive. Databases and forms opened from Drive's list or

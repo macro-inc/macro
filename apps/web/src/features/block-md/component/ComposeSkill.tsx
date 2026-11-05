@@ -248,6 +248,7 @@ export function ComposeSkill(props: ComposeSkillProps) {
         {
           label: t('entityActions.toastOpenSplit'),
           icon: SplitIcon,
+          trailingIcon: true,
           variant: 'secondary',
           onClick: () => {
             openWithSplit(
@@ -259,6 +260,7 @@ export function ComposeSkill(props: ComposeSkillProps) {
         {
           label: t('entityActions.open'),
           icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: () => {
             openWithSplit(
               { type: 'skill', id: documentId },

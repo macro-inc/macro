@@ -102,12 +102,14 @@ async function settleProjectSubmission(
       {
         label: t('entityActions.toastOpenSplit'),
         icon: SplitIcon,
+        trailingIcon: true,
         variant: 'secondary',
         onClick: () => open(true),
       },
       {
         label: t('entityActions.open'),
         icon: ArrowSquareOutIcon,
+        trailingIcon: true,
         onClick: () => open(false),
       },
     ],

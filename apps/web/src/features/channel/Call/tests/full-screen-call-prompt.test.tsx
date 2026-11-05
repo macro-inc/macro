@@ -54,7 +54,7 @@ vi.mock('@notifications/notification-settings', () => ({
 }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: native.invoke }));
 
-const title = 'Show Calls on Your Lock Screen';
+const title = 'Lock-screen calls';
 
 function renderPrompt() {
   return render(() => (

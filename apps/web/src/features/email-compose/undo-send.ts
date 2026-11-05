@@ -71,19 +71,25 @@ export async function runQueuedUndoSend(options: {
   } catch (error) {
     endUndoSend(draftId);
     if (error instanceof EmailSendCancellationPending) {
-      toast.alert('Cancellation pending — waiting for confirmation');
+      toast.alert('Cancellation pending', {
+        subtext: 'Waiting for confirmation',
+      });
       return;
     }
     Telemetry.error(
       error instanceof Error ? error : new Error('Failed to undo send')
     );
-    toast.failure(
-      error instanceof EmailSendDeliveryUnconfirmed
-        ? error.message
-        : error instanceof EmailSendCancellationTooLate
-          ? 'Too late to undo — delivery has already started'
+    if (error instanceof EmailSendCancellationTooLate) {
+      toast.failure('Too late to undo', {
+        subtext: 'Delivery has already started',
+      });
+    } else {
+      toast.failure(
+        error instanceof EmailSendDeliveryUnconfirmed
+          ? error.message
           : 'Failed to undo send'
-    );
+      );
+    }
   }
 }
 
@@ -113,11 +119,13 @@ export async function runUndoSend(options: {
       const alreadySent = result.error.some(
         (e) => e.code === 'HTTP_ERROR' && e.message.includes('status: 400')
       );
-      toast.failure(
-        alreadySent
-          ? 'Too late to undo — the email was already sent'
-          : 'Failed to undo send'
-      );
+      if (alreadySent) {
+        toast.failure('Too late to undo', {
+          subtext: 'The email was already sent',
+        });
+      } else {
+        toast.failure('Failed to undo send');
+      }
       return;
     }
     queryClient.invalidateQueries({

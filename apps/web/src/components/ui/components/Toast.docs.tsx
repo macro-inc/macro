@@ -7,6 +7,7 @@ import { createMobileToastSwipe } from '@core/component/Toast/create-mobile-toas
 import { ToastContent, ToastType } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
 import {
@@ -301,6 +302,7 @@ function ActionsDemo(props: ToastDemoProps = {}) {
       actions: [
         {
           label: 'Undo',
+          icon: ArrowCounterClockwise,
           onClick: () => {
             preview.dismiss(id);
             preview.show({
@@ -316,12 +318,13 @@ function ActionsDemo(props: ToastDemoProps = {}) {
     const id = preview.show({
       persistent: true,
       custom: {
-        title: 'Reconnect email and calendar',
+        title: 'Reconnect inbox',
         content: () => 'Reconnect your account to resume syncing.',
         icon: LinkIcon,
         actions: [
           {
             label: 'Reconnect',
+            icon: ArrowCounterClockwise,
             onClick: () => {
               preview.dismiss(id);
               preview.show({
@@ -643,7 +646,7 @@ export default defineDoc({
   wide: true,
   category: 'Feedback',
   description:
-    'Standalone status icons, title-aligned content, primary and secondary actions, desktop close icons for undo and navigation notices, and compact mobile notices. Preview them inline or at the device-specific app position without triggering real operations or publishing into the app notification regions.',
+    'Short titles, consistent action icons, actions below descriptions, single-action notices inline, and desktop close controls. Preview them inline or at the device-specific app position without triggering real operations or publishing into the app notification regions.',
   import: "import { toast } from '@core/component/Toast/Toast';",
   demos: [
     {
@@ -694,11 +697,12 @@ export default defineDoc({
       'Use a short title and put supporting details in subtext.',
       'Reserve persistent prompts for notices that need a response.',
       'Keep action labels short and retain meaningful content on mobile.',
-      'Keep Undo beside the title with a desktop close icon instead of Dismiss.',
+      'Keep a single action beside the title when there is no description.',
       'Use a desktop close icon on navigation notices and put secondary Open split before primary Open.',
       'Use Not now for optional setup prompts; keep Dismiss for recovery prompts.',
       'Omit the close icon on mobile; retain swipe dismissal in either direction.',
-      'Set actionLayout to inline for brief notices; keep stacked actions for longer prompts.',
+      'Place actions below descriptions; use actionLayout inline only for multiple actions without a description.',
+      'Use the same 16px icon for the same action in every toast.',
       'Use the existing toast service so queueing, timing, and dismissal stay consistent.',
       'Use the shared Spinner for loading; keep the progress bar for known progress.',
     ],

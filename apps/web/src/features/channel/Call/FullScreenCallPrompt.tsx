@@ -132,7 +132,7 @@ function FullScreenCallToastTrigger(props: { onHide: () => void }) {
   onMount(() => {
     const toastId = toast.custom(
       {
-        title: 'Show Calls on Your Lock Screen',
+        title: 'Lock-screen calls',
         dismissLabel: t('common.notNow'),
         icon: PhoneIncoming,
         color: 'var(--color-accent)',

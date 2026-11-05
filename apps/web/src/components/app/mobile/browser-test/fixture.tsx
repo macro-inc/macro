@@ -360,7 +360,7 @@ function PersistentPromptScenario() {
   onMount(() => {
     toast.custom(
       {
-        title: 'Enable Browser Notifications',
+        title: 'Enable notifications',
         dismissLabel: t('common.notNow'),
         content: () =>
           'Get notified about new messages, mentions, comments, and emails.',

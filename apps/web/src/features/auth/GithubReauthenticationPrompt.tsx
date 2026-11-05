@@ -3,6 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import { useReauthenticateGithubMutation } from '@queries/auth';
 import { authServiceClient } from '@service-auth/client';
 import { createSignal, onCleanup, onMount } from 'solid-js';
@@ -77,6 +78,7 @@ export function GithubReauthenticationPrompt() {
       actions: [
         {
           label: 'Reconnect',
+          icon: ArrowCounterClockwise,
           onClick: () => {
             fireAndForget(reconnect(), 'github-reauth');
           },

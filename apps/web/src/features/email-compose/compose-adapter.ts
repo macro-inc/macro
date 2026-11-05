@@ -186,10 +186,14 @@ export function createEmailComposeContext(
       ...options,
       dismissStyle: hasUndo || hasNavigation ? ('icon' as const) : undefined,
       actionLayout: hasUndo ? ('inline' as const) : undefined,
-      actions: options?.actions?.map(({ kind, ...action }) => ({
-        ...action,
-        icon: kind === 'open' ? ArrowSquareOut : ArrowCounterClockwise,
-      })),
+      actions: options?.actions?.map(({ kind, ...action }) => {
+        if (kind === 'save') return action;
+        return {
+          ...action,
+          icon: kind === 'open' ? ArrowSquareOut : ArrowCounterClockwise,
+          trailingIcon: kind === 'open',
+        };
+      }),
     };
   };
   const reportError = (error: unknown) =>

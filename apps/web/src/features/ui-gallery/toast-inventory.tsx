@@ -5,7 +5,9 @@ import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import Bell from '@icon/system/regular/bell.svg';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
 import SplitIcon from '@icon/system/regular/square-half.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import PhoneIncoming from '@phosphor/phone-incoming.svg';
 import type { ComponentProps } from 'solid-js';
 
@@ -80,7 +82,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         dismissLabel: t('common.notNow'),
-        title: 'Enable Browser Notifications',
+        title: 'Enable notifications',
         icon: Bell,
         color: 'var(--color-accent)',
         content: () => (
@@ -101,7 +103,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         dismissLabel: t('common.notNow'),
-        title: 'Enable Desktop Notifications',
+        title: 'Enable notifications',
         icon: Bell,
         color: 'var(--color-accent)',
         content: () => (
@@ -122,7 +124,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         dismissLabel: t('common.notNow'),
-        title: 'Enable Notifications',
+        title: 'Enable notifications',
         icon: Bell,
         color: 'var(--color-accent)',
         content: () => (
@@ -143,7 +145,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         dismissLabel: t('common.notNow'),
-        title: 'Show Calls on Your Lock Screen',
+        title: 'Lock-screen calls',
         icon: PhoneIncoming,
         color: 'var(--color-accent)',
         content: () => (
@@ -167,7 +169,9 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         title: 'Reconnect inbox',
         content: () =>
           'Sync stopped for user@example.com. Reconnect to restore email sync.',
-        actions: [{ label: 'Reconnect', onClick: dismiss }],
+        actions: [
+          { label: 'Reconnect', icon: ArrowCounterClockwise, onClick: dismiss },
+        ],
       },
     }),
   },
@@ -179,10 +183,12 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: 'Persistent · closing suppresses the prompt for this session',
     create: (dismiss) => ({
       custom: {
-        title: 'Reconnect email and calendar',
+        title: 'Reconnect inbox',
         content: () =>
           'Sync stopped for user@example.com. Reconnect to restore email and calendar sync.',
-        actions: [{ label: 'Reconnect', onClick: dismiss }],
+        actions: [
+          { label: 'Reconnect', icon: ArrowCounterClockwise, onClick: dismiss },
+        ],
       },
     }),
   },
@@ -197,7 +203,9 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         title: 'Reconnect GitHub',
         content: () =>
           'Your GitHub authorization has expired. Reconnect GitHub to restore pull request details.',
-        actions: [{ label: 'Reconnect', onClick: dismiss }],
+        actions: [
+          { label: 'Reconnect', icon: ArrowCounterClockwise, onClick: dismiss },
+        ],
       },
     }),
   },
@@ -213,7 +221,9 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         title: 'Email access required',
         content: () =>
           "Macro connects an account's email and calendar together, so keep the email permissions checked. The account was not connected.",
-        actions: [{ label: 'Try again', onClick: dismiss }],
+        actions: [
+          { label: 'Try again', icon: ArrowCounterClockwise, onClick: dismiss },
+        ],
       },
     }),
   },
@@ -225,12 +235,14 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: 'Persistent · touch devices only',
     create: (dismiss) => ({
       custom: {
-        title: 'A new version of Macro is ready',
-        actions: [{ label: 'Reload', onClick: dismiss }],
+        title: 'Update ready',
+        actions: [
+          { label: 'Reload', icon: ArrowCounterClockwise, onClick: dismiss },
+        ],
       },
     }),
   },
-  // compose-adapter.ts supplies this custom error icon and the recovery-action icon.
+  // compose-adapter.ts supplies the custom error icon.
   {
     name: 'Draft-save recovery',
     category: 'Recovery',
@@ -248,7 +260,6 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         actions: [
           {
             label: 'Save as new draft',
-            icon: ArrowCounterClockwise,
             onClick: dismiss,
           },
         ],
@@ -318,7 +329,9 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       message: 'Row deleted',
       dismissStyle: 'icon',
       actionLayout: 'inline',
-      actions: [{ label: 'Undo', onClick: dismiss }],
+      actions: [
+        { label: 'Undo', icon: ArrowCounterClockwise, onClick: dismiss },
+      ],
     }),
   },
   {
@@ -385,7 +398,12 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       actionLayout: 'inline',
       actions: [
         { label: 'Undo', icon: ArrowCounterClockwise, onClick: dismiss },
-        { label: 'View message', icon: ArrowSquareOutIcon, onClick: dismiss },
+        {
+          label: 'View message',
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
+          onClick: dismiss,
+        },
       ],
     }),
   },
@@ -401,7 +419,12 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       subtext: 'Sends Mon, Nov 9 at 10:00 AM',
       dismissStyle: 'icon',
       actions: [
-        { label: 'View message', icon: ArrowSquareOutIcon, onClick: dismiss },
+        {
+          label: 'View message',
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
+          onClick: dismiss,
+        },
       ],
     }),
   },
@@ -421,6 +444,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
               {
                 label: t('entityActions.toastOpenSplit'),
                 icon: SplitIcon,
+                trailingIcon: true,
                 variant: 'secondary' as const,
                 onClick: dismiss,
               },
@@ -429,6 +453,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         {
           label: t('entityActions.open'),
           icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -448,12 +473,14 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         {
           label: t('entityActions.toastOpenSplit'),
           icon: SplitIcon,
+          trailingIcon: true,
           variant: 'secondary',
           onClick: dismiss,
         },
         {
           label: t('entityActions.open'),
           icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -474,12 +501,14 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         {
           label: t('entityActions.toastOpenSplit'),
           icon: SplitIcon,
+          trailingIcon: true,
           variant: 'secondary',
           onClick: dismiss,
         },
         {
           label: t('entityActions.open'),
           icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -492,10 +521,19 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     trigger: 'A Drive folder finishes being created after its composer closes.',
     behavior: '4.5 seconds',
     create: (dismiss) => ({
-      toastType: ToastType.SUCCESS,
-      message: 'Created “Example folder”',
       dismissStyle: 'icon',
-      actions: [{ label: t('entityActions.open'), onClick: dismiss }],
+      custom: {
+        title: 'Example folder created',
+        icon: FolderIcon,
+        actions: [
+          {
+            label: t('entityActions.open'),
+            icon: ArrowSquareOutIcon,
+            trailingIcon: true,
+            onClick: dismiss,
+          },
+        ],
+      },
     }),
   },
   {
@@ -505,10 +543,19 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     trigger: 'A background folder upload finishes.',
     behavior: '4.5 seconds',
     create: (dismiss) => ({
-      toastType: ToastType.SUCCESS,
-      message: 'Uploaded Example folder',
       dismissStyle: 'icon',
-      actions: [{ label: 'Open folder', onClick: dismiss }],
+      custom: {
+        title: 'Example folder uploaded',
+        icon: FolderIcon,
+        actions: [
+          {
+            label: t('entityActions.open'),
+            icon: ArrowSquareOutIcon,
+            trailingIcon: true,
+            onClick: dismiss,
+          },
+        ],
+      },
     }),
   },
   {
@@ -519,9 +566,16 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: '4.5 seconds · multi-channel sends have no navigation action',
     create: (dismiss) => ({
       toastType: ToastType.SUCCESS,
-      message: 'Message sent successfully',
+      message: 'Message sent',
       dismissStyle: 'icon',
-      actions: [{ label: 'View in channel', onClick: dismiss }],
+      actions: [
+        {
+          label: 'View in channel',
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
+          onClick: dismiss,
+        },
+      ],
     }),
   },
   {
@@ -532,9 +586,16 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: '4.5 seconds',
     create: (dismiss) => ({
       toastType: ToastType.SUCCESS,
-      message: 'Calendar event created',
+      message: 'Event created',
       dismissStyle: 'icon',
-      actions: [{ label: t('entityActions.open'), onClick: dismiss }],
+      actions: [
+        {
+          label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
+          onClick: dismiss,
+        },
+      ],
     }),
   },
   {
@@ -554,6 +615,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
               {
                 label: t('entityActions.toastOpenSplit'),
                 icon: SplitIcon,
+                trailingIcon: true,
                 variant: 'secondary' as const,
                 onClick: dismiss,
               },
@@ -562,6 +624,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         {
           label: t('entityActions.open'),
           icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -581,6 +644,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         {
           label: t('entityActions.open'),
           icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -698,7 +762,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: '4.5 seconds',
     create: () => ({
       toastType: ToastType.ALERT,
-      message: 'Cancellation pending — waiting for confirmation',
+      message: 'Cancellation pending',
+      subtext: 'Waiting for confirmation',
     }),
   },
   {
@@ -709,7 +774,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: '4.5 seconds',
     create: () => ({
       toastType: ToastType.FAILURE,
-      message: 'Too late to undo — delivery has already started',
+      message: 'Too late to undo',
+      subtext: 'Delivery has already started',
     }),
   },
   {
@@ -776,7 +842,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: '4.5 seconds',
     create: () => ({
       toastType: ToastType.FAILURE,
-      message: 'Failed to download attachment. Please try again.',
+      message: 'Download failed',
+      subtext: 'Please try again',
     }),
   },
   {
@@ -787,7 +854,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: '4.5 seconds',
     create: () => ({
       toastType: ToastType.FAILURE,
-      message: 'Failed to get attachment. Please try again.',
+      message: 'Attachment unavailable',
+      subtext: 'Please try again',
     }),
   },
   {
@@ -800,7 +868,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         title: 'Preparing file… 45%',
-        actions: [{ label: 'Cancel', onClick: dismiss }],
+        actions: [{ label: 'Cancel', icon: XIcon, onClick: dismiss }],
       },
     }),
   },

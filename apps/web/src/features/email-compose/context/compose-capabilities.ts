@@ -445,7 +445,11 @@ export interface ComposeNoticeOptions {
   duration?: number;
   persistent?: boolean;
   /** `kind` picks the action's icon; actions default to undo. */
-  actions?: { label: string; onClick: () => void; kind?: 'undo' | 'open' }[];
+  actions?: {
+    label: string;
+    onClick: () => void;
+    kind?: 'undo' | 'open' | 'save';
+  }[];
 }
 export interface EmailComposeHost {
   focusSibling?: (direction: 'next' | 'prev') => boolean | void;

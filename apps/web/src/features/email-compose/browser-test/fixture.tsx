@@ -115,7 +115,11 @@ function Fixture() {
         dismissStyle: 'icon',
         actionLayout: 'inline',
         actions: [
-          { label: 'Undo', onClick: () => toast.success('Send undone') },
+          {
+            label: 'Undo',
+            icon: ArrowCounterClockwise,
+            onClick: () => toast.success('Send undone'),
+          },
         ],
         duration: 5_000,
       });
@@ -160,6 +164,7 @@ function Fixture() {
         {
           label: 'View message',
           icon: ArrowSquareOut,
+          trailingIcon: true,
           onClick: dismissThen(() => setView('compose')),
         },
       ],
