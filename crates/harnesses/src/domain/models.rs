@@ -49,7 +49,7 @@ pub struct Harness {
     pub created_at: DateTime<Utc>,
     /// Update timestamp.
     pub updated_at: DateTime<Utc>,
-    /// Whether a replica currently holds a live runtime connection for it.
+    /// Whether the daemon currently holds a runtime connection.
     pub connected: bool,
     /// When the daemon last attached a runtime connection.
     pub last_connected_at: Option<DateTime<Utc>>,
