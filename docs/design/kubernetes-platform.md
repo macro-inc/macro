@@ -125,9 +125,10 @@ Both Nix frameworks were measured pushing a real service (a 388 MB binary, a
 - **Runners** are `act_runner` beside a Docker daemon, one job at a time per
   replica, each with its own Docker data and Nix store. Each job gets a clean
   Ubuntu container, like a hosted runner.
+- **Ported:** 10 of 60 workflows, the non-deploying pull request checks.
 - **Not ported yet:** deploys and releases (they target AWS and should move with
-  the AWS phase, not before), native builds that need macOS or Windows, and GitHub
-  bots tied to GitHub itself (labels, CLA).
+  the AWS phase, not before), native builds that need macOS or Windows, Android's
+  check, and workflows tied to GitHub itself (labels, CLA, the privacy check).
 
 ### Infrastructure as code: terranix + OpenTofu, operators in-cluster
 
@@ -365,7 +366,15 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
   `scoped_bot_resolves_document_access_through_dss` fails, and fails the same way
   on a plain compose stack, so the platform does not cause it.
 
-@@CI_STATUS@@
+**CI status (forge, 2026-11-04).** Passing: cargo-deny, workspace dependency and
+hakari checks, generated workflows, Linux `node_modules`, Tauri lockfiles, ast-grep
+conventions, infra Biome and checks, every path filter, and web typecheck, Biome,
+and import cycles. Failing: web Build and Test, both at `playwright install
+--with-deps`, which runs `apt-get` under the Nix dev shell's libraries. Not yet
+confirmed: Rust `check` and `test`, and generated code.
+
+**Playwright has not run against an instance.** Its downloaded browser cannot start
+on the NixOS host, and it belongs in a forge job once the failure above is fixed.
 
 Not built yet:
 
