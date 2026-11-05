@@ -36,9 +36,9 @@ const STRANGER: Uuid = uuid::uuid!("00000000-0000-0000-0000-0000000cf006");
 const INBOX_LABEL: Uuid = uuid::uuid!("00000000-0000-0000-0000-0000000bf002");
 const UPDATES_LABEL: Uuid = uuid::uuid!("00000000-0000-0000-0000-0000000bf004");
 /// Answers that earn nothing: only key mail and the wait bring a thread in.
-const LOW_ANSWERS: [f32; 8] = [0.05, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0];
+const LOW_ANSWERS: [f32; 10] = [0.05, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
 /// Answers that earn Focus on their own.
-const HIGH_ANSWERS: [f32; 8] = [0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+const HIGH_ANSWERS: [f32; 10] = [0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
 
 struct NoProfile;
 
@@ -185,6 +185,7 @@ fn record(thread_id: Uuid, message_id: Uuid, at: DateTime<Utc>, importance: u8) 
             needs_follow_up: false,
             awaiting_reply: false,
             importance,
+            importance_rate: 0,
         },
         answers: FocusAnswers::from_probabilities(&[0.5; FocusQuestion::ALL.len()]).unwrap(),
         model: "jev-test".to_owned(),
@@ -977,7 +978,10 @@ async fn a_held_thread_that_needs_a_reply_loses_the_flag_with_the_hold(
     )
     .await?;
     // Reads as automated, yet Jev says it asks the owner something.
-    let asks = worker(&repo, Ok(vec![0.05, 0.0, 0.9, 0.0, 0.0, 0.0, 0.9, 0.0]));
+    let asks = worker(
+        &repo,
+        Ok(vec![0.05, 0.0, 0.9, 0.0, 0.0, 0.0, 0.9, 0.0, 0.0, 0.0]),
+    );
     assert!(matches!(
         asks.classify_thread(thread).await?,
         ClassifyOutcome::Classified(_)
@@ -1503,7 +1507,10 @@ async fn mail_from_a_recent_contact_is_found_and_pinned_outside_the_signal_inbox
         .await?;
     assert!(stale.iter().any(|stale| stale.thread_id == RECENT_CONTACT));
 
-    let worker = worker(&repo, Ok(vec![0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
+    let worker = worker(
+        &repo,
+        Ok(vec![0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+    );
     let ClassifyOutcome::Classified(verdict) = worker.classify_thread(RECENT_CONTACT).await? else {
         panic!("expected the recent contact's mail to be classified");
     };
@@ -1608,7 +1615,7 @@ async fn rows_from_an_older_rule_read_right_and_are_decided_again_without_the_cl
     let thread = load_thread(&repo, INVOICE).await?.expect("thread");
     let latest = thread.messages.last().expect("message");
     let scores = serde_json::to_value(FocusAnswers::from_probabilities(&[
-        0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.9,
+        0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.9, 0.0, 0.0,
     ]))?;
     sqlx::query!(
         r#"
@@ -1742,5 +1749,219 @@ async fn editing_a_draft_never_changes_who_wrote_last(pool: Pool<Postgres>) -> R
         .await?;
     let answered = focus.get(&REPLIED_YESTERDAY).expect("stored");
     assert!(answered.needs_reply && !answered.needs_follow_up);
+    Ok(())
+}
+
+/// `record`, moving at `importance_rate` once stored.
+fn record_moving(
+    thread_id: Uuid,
+    message_id: Uuid,
+    at: DateTime<Utc>,
+    importance: u8,
+    importance_rate: i8,
+) -> FocusRecord {
+    let stored = record(thread_id, message_id, at, importance);
+    FocusRecord {
+        verdict: FocusVerdict {
+            importance_rate,
+            ..stored.verdict
+        },
+        ..stored
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn importance_moves_at_its_stored_rate_as_the_classified_message_ages(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    let thread = load_thread(&repo, INVOICE).await?.expect("thread");
+    let latest = thread.messages.last().expect("message");
+    let two_days_on = latest.at + Duration::days(2);
+
+    repo.save(&record_moving(INVOICE, latest.id, latest.at, 50, 10))
+        .await?;
+    let (_, right_away) = read_at(&repo, INVOICE, latest.at).await?;
+    assert_eq!(right_away.importance, 50);
+    assert_eq!(right_away.importance_trend, ImportanceTrend::Up);
+    let (_, growing) = read_at(&repo, INVOICE, two_days_on).await?;
+    assert_eq!(growing.importance, 60);
+    assert_eq!(growing.importance_trend, ImportanceTrend::Up);
+
+    // Saving again replaces the rate, so a new verdict can never keep an old one.
+    repo.save(&record_moving(INVOICE, latest.id, latest.at, 50, -10))
+        .await?;
+    let (_, fading) = read_at(&repo, INVOICE, two_days_on).await?;
+    assert_eq!(fading.importance, 41);
+    assert_eq!(fading.importance_trend, ImportanceTrend::Down);
+
+    repo.save(&record_moving(INVOICE, latest.id, latest.at, 50, 0))
+        .await?;
+    let (_, flat) = read_at(&repo, INVOICE, two_days_on).await?;
+    assert_eq!(flat.importance, 50);
+    assert_eq!(flat.importance_trend, ImportanceTrend::Flat);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn importance_never_changes_who_is_on_the_list(pool: Pool<Postgres>) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    let thread = load_thread(&repo, INVOICE).await?.expect("thread");
+    let latest = thread.messages.last().expect("message");
+    let month_on = latest.at + Duration::days(30);
+
+    // Fading goes well below the 70 a thread needing a reply starts from at least.
+    repo.save(&record_moving(INVOICE, latest.id, latest.at, 70, -10))
+        .await?;
+    let (listed, faded) = read_at(&repo, INVOICE, month_on).await?;
+    assert!(listed && faded.is_focus && faded.needs_reply);
+    assert_eq!(faded.importance, 3);
+    assert_eq!(faded.importance_trend, ImportanceTrend::Down);
+
+    repo.save(&record_moving(INVOICE, latest.id, latest.at, 70, 10))
+        .await?;
+    let (listed, grown) = read_at(&repo, INVOICE, month_on).await?;
+    assert!(listed && grown.is_focus && grown.needs_reply);
+    assert_eq!(grown.importance, 99);
+    assert_eq!(grown.importance_trend, ImportanceTrend::Up);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn newer_mail_stops_importance_moving_before_the_worker_gets_to_the_thread(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    let thread = load_thread(&repo, INVOICE).await?.expect("thread");
+    let first = thread.messages.first().expect("message");
+    let latest = thread.messages.last().expect("message");
+
+    // Classified at Casey's first message: the rate judged that, not what came after.
+    repo.save(&record_moving(INVOICE, first.id, first.at, 50, 10))
+        .await?;
+    let (_, focus) = read_at(&repo, INVOICE, latest.at + Duration::days(10)).await?;
+    assert_eq!(focus.importance, 50);
+    assert_eq!(focus.importance_trend, ImportanceTrend::Flat);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn a_row_stored_before_the_time_questions_stays_flat_without_asking_jev_again(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let thread = load_thread(&repo, INVOICE).await?.expect("thread");
+    let latest = thread.messages.last().expect("message");
+    let later = latest.at + Duration::days(10);
+
+    // As the previous version wrote it: eight answers and no rate.
+    let scores = serde_json::json!({
+        "focus": 0.1,
+        "outreach": 0.0,
+        "automated": 0.0,
+        "customer": 0.0,
+        "calendar_rsvp": 0.0,
+        "needs_decision": 0.0,
+        "needs_response": 0.9,
+        "needs_follow_up": 0.0,
+    });
+    sqlx::query!(
+        r#"
+        INSERT INTO email_thread_focus (
+            thread_id, link_id, classified_message_id, classified_message_ts, is_focus,
+            category, importance, needs_reply, needs_follow_up, scores, model, classified_at,
+            rule_version
+        )
+        VALUES ($1, $2, $3, $4, true, 'known', 70, true, false, $5, 'jev-earlier', $6, $7)
+        "#,
+        INVOICE,
+        OWNER_LINK,
+        latest.id,
+        latest.at,
+        scores,
+        latest.at,
+        FOCUS_RULE_VERSION,
+    )
+    .execute(&pool)
+    .await?;
+
+    let (listed, focus) = read_at(&repo, INVOICE, later).await?;
+    assert!(listed && focus.is_focus);
+    assert_eq!(focus.importance, 70);
+    assert_eq!(focus.importance_trend, ImportanceTrend::Flat);
+
+    // Its answers still decode, and failing the classifier proves it isn't asked.
+    let classified = load_thread(&repo, INVOICE).await?.unwrap().classified;
+    let answers = classified.expect("stored").answers.expect("decodes");
+    assert_eq!(answers.grows_with_time, 0.0);
+    assert_eq!(answers.fades_with_time, 0.0);
+    let worker = worker(&repo, Err(FocusClassifierError::Rejected));
+    assert_eq!(
+        worker.classify_thread(INVOICE).await?,
+        ClassifyOutcome::UpToDate
+    );
+
+    // Should a later rule re-decide it, that doesn't ask Jev either, and it stays flat.
+    sqlx::query!(
+        "UPDATE email_thread_focus SET rule_version = 0 WHERE thread_id = $1",
+        INVOICE,
+    )
+    .execute(&pool)
+    .await?;
+    let ClassifyOutcome::Redecided(verdict) = worker.classify_thread(INVOICE).await? else {
+        panic!("expected the row to be decided again");
+    };
+    assert_eq!(verdict.importance_rate, 0);
+    let (_, focus) = read_at(&repo, INVOICE, later).await?;
+    assert_eq!(focus.importance_trend, ImportanceTrend::Flat);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn the_next_message_sets_a_new_rate_and_restarts_the_clock(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let growing = vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.1];
+    let fading = vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.9];
+
+    let ClassifyOutcome::Classified(verdict) =
+        worker(&repo, Ok(growing)).classify_thread(INVOICE).await?
+    else {
+        panic!("expected a classification");
+    };
+    assert_eq!(verdict.importance_rate, 8);
+    let first = load_thread(&repo, INVOICE).await?.expect("thread");
+    let first_at = first.messages.last().expect("message").at;
+    let (_, focus) = read_at(&repo, INVOICE, first_at + Duration::days(1)).await?;
+    assert!(focus.importance > verdict.importance);
+    assert_eq!(focus.importance_trend, ImportanceTrend::Up);
+
+    let next_at = first_at + Duration::days(5);
+    insert_message(&pool, INVOICE, false, next_at).await?;
+    let ClassifyOutcome::Classified(verdict) =
+        worker(&repo, Ok(fading)).classify_thread(INVOICE).await?
+    else {
+        panic!("expected a classification");
+    };
+    assert_eq!(verdict.importance_rate, -8);
+    let (_, focus) = read_at(&repo, INVOICE, next_at).await?;
+    assert_eq!(focus.importance, verdict.importance);
+    assert_eq!(focus.importance_trend, ImportanceTrend::Down);
     Ok(())
 }
