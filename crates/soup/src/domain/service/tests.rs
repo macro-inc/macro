@@ -247,6 +247,9 @@ fn call_record(
     started_at: DateTime<Utc>,
 ) -> call::domain::models::CallRecord {
     call::domain::models::CallRecord {
+        discussion: call::domain::models::CallDiscussion::CallChat {
+            call_id: uuid::Uuid::nil(),
+        },
         call_id,
         channel_id: Some(channel_id),
         room_name: None,

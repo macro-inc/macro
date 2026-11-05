@@ -114,6 +114,7 @@ fn long_text_is_cut_on_a_character_boundary() {
 fn message(content: &str) -> Message {
     let at = Utc.with_ymd_and_hms(2026, 10, 5, 9, 30, 0).unwrap();
     Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: Uuid::nil(),
         parent: MessageParent::Channel(Uuid::nil()),
         thread_id: None,
@@ -231,6 +232,9 @@ fn calls_show_who_joined_and_what_they_said() {
     use call::domain::models::{CallRecordParticipant, CallRecordTranscriptSegment};
     let at = Utc.with_ymd_and_hms(2026, 10, 8, 14, 0, 0).unwrap();
     let record = CallRecord {
+        discussion: call::domain::models::CallDiscussion::CallChat {
+            call_id: Uuid::nil(),
+        },
         call_id: Uuid::nil(),
         channel_id: None,
         room_name: Some("room".into()),
