@@ -1,0 +1,7 @@
+id: tsx-no-client-list-filter
+valid:
+  - <For each={query.data?.pages.filter(Boolean)}>{(page) => <Page page={page} />}</For>
+  - <For each={tabs().filter((tab) => tab.visible)}>{(tab) => <Tab tab={tab} />}</For>
+invalid:
+  - <For each={calendarsQuery.data?.filter((calendar) => calendar.syncError)}>{(calendar) => <Row calendar={calendar} />}</For>
+  - <For each={props.source.items().filter((channel) => !pinned().has(channel.id))}>{(channel) => <Row channel={channel} />}</For>

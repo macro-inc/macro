@@ -530,11 +530,12 @@ fn run_biome() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
-/// Runs the browser-floor and native media permission ast-grep rules here
-/// because Conventions, which runs every ast-grep rule, is not a required check.
+/// Runs the browser-floor, native media permission and fetched-list filter
+/// (FE-70) ast-grep rules here because Conventions, which runs every ast-grep
+/// rule, is not a required check.
 fn check_platform_rules() -> Step<Run> {
-    Step::new("Check Browser Floor and Native Permissions").run(
-        "bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'",
+    Step::new("Check Required ast-grep Rules").run(
+        "bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|tsx?-no-client-list-filter|plist-media-.+)$'",
     )
 }
 

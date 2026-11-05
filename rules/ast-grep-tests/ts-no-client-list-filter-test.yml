@@ -1,0 +1,70 @@
+id: ts-no-client-list-filter
+valid:
+  # Dropping holes is structural, not a filter on the data.
+  - query.data?.pages.filter(Boolean)
+  - query.data?.pages.filter((page) => page !== null)
+  - query.data?.items.filter(isDefined)
+  # Building query inputs from constants is fine.
+  - |
+    export const rowTypesFor = (filters: InboxFilters) =>
+      ALL_INBOX_ROW_TYPES.filter((type) => !filters.hidden.includes(type));
+  # Event and message payloads are not fetched lists.
+  - message.data.items.filter((item) => item.kind === 'file')
+  - event.data.rows.filter((row) => row.selected)
+  # A name a sibling function binds to fetched data.
+  - |
+    function load(source: Source) {
+      const rows = source.rows();
+      return rows;
+    }
+    function visible() {
+      const rows = buildRows();
+      return rows.filter((row) => row.visible);
+    }
+  # `select` outside query options.
+  - |
+    const menu = { select: (items: Item[]) => items.filter((item) => item.enabled) };
+  # A local accessor that is not a list source.
+  - |
+    const shown = () => tabs().filter((tab) => tab.visible);
+# `ast-grep test` ignores `ast-grep-ignore` comments, so the escape hatch is
+# not testable here; `ast-grep scan` honours it.
+invalid:
+  # The notifications inbox's Unread tab: rows from a feed, filtered by a
+  # user-chosen predicate after paging.
+  - |
+    export function createInboxList(
+      feed: InboxFeedSource,
+      include: (row: NotificationInboxRow) => boolean
+    ) {
+      const view = () => {
+        const loaded = feed.rows();
+        if (loaded === undefined) return { t: 'loading' };
+        const rows = loaded.filter(include);
+        return { t: 'ready', rows };
+      };
+      return { view };
+    }
+  - calendarsQuery.data.filter((calendar) => calendar.isWritable)
+  - query.data?.entities.filter(isEmailEntity)
+  - (query.data?.entities ?? []).filter((entity) => entity.type === 'chat')
+  - search.data().filter(matches())
+  - props.source.items().filter((channel) => !pinned.has(channel.id))
+  - query.data?.items.toSorted((a, b) => a.name.localeCompare(b.name))
+  - query.data?.items.sort(byName)
+  - |
+    function unread(query: Query) {
+      const list = query.data ?? [];
+      return list.filter((row) => row.unseen);
+    }
+  - |
+    function unseenEntries(entries: readonly NotificationInboxEntryFieldsFragment[]) {
+      return entries.filter((entry) => entry.unseen);
+    }
+  - |
+    const options = infiniteQueryOptions({
+      queryKey: ['inbox'],
+      queryFn: fetchInbox,
+      select: ({ pages }) => pages.flatMap((page) => page.entries).filter((entry) => entry.unseen),
+    });
+  - query.data?.pages.flatMap((page) => page.items).filter((item) => !item.done)

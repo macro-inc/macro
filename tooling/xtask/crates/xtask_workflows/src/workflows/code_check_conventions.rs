@@ -1,8 +1,9 @@
 //! `conventions code check` — repo convention lints, generated into
 //! `code_check_conventions.yml`.
 //!
-//! Runs `ast-grep scan` over the custom structural rules in `rules/ast-grep`
-//! (config: `sgconfig.yml` at the repo root). The scan fails only on
+//! Runs the rule tests in `rules/ast-grep-tests`, then `ast-grep scan` over the
+//! custom structural rules in `rules/ast-grep` (config: `sgconfig.yml` at the
+//! repo root). The scan fails only on
 //! `severity: error` findings; `warning`/`hint` rules surface through
 //! CodeRabbit's ast-grep integration on changed code instead. The rules encode
 //! conventions from `docs/development/style-guide.md` at the repo root.
@@ -61,6 +62,7 @@ fn ast_grep() -> Job {
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
+        .add_step(test_ast_grep_rules())
         .add_step(run_ast_grep())
         .add_step(steps::teardown_nix())
 }
@@ -99,6 +101,12 @@ fn paths_filter() -> Step<Use> {
                   - '.github/workflows/code_check_conventions.yml'
             "#},
         ))
+}
+
+/// Snapshot tests are skipped: the cases only assert which code a rule flags.
+fn test_ast_grep_rules() -> Step<Run> {
+    Step::new("Test ast-grep rules")
+        .run("bunx --yes @ast-grep/cli@0.44.1 test --skip-snapshot-tests")
 }
 
 fn run_ast_grep() -> Step<Run> {
