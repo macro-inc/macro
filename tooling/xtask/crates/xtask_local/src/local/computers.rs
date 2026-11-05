@@ -7,20 +7,16 @@
 //!   dials the stack in-network. The harness already mounts the Docker socket
 //!   for local sandboxes; it also gets the enrollment directory at the same
 //!   absolute path, because the daemon resolves the bind sources it creates.
-//! - `incus`: computers are VMs on `runtime-dev-1`. The control plane reaches
-//!   the Incus API through `nix/hosts/computers-tunnels.sh incus`
-//!   (`localhost:18443` on this machine), relayed into compose over a unix
-//!   socket because the host firewall drops container-to-host traffic. Boxes
-//!   reach this stack's published ports at the host bridge `10.210.0.1`
-//!   through the script's reverse tunnel.
+//! - `incus`: VMs on `runtime-dev-1`, reached directly over Tailscale.
+//!   Resolve the runtime's IPv4 address before generating compose env so
+//!   containers do not depend on MagicDNS. Boxes dial the devbox's tailnet IP.
 //! - `off`: no control plane; every `COMPUTERS_*` key is removed.
 
 use std::collections::BTreeMap;
 use std::io::Write;
-use std::net::TcpStream;
+use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use clap::Args;
@@ -39,24 +35,17 @@ pub const DOCKER_IMAGE: &str = "macro-box:latest";
 pub const INCUS_IMAGE: &str = "macro-box";
 pub const DOCKER_HOST_NAME: &str = "local-docker";
 pub const INCUS_HOST_NAME: &str = "runtime-dev-1";
-/// Where `computers-tunnels.sh incus` forwards the host's Incus API.
-pub const INCUS_TUNNEL_PORT: u16 = 18443;
 /// SHA-256 of the DER certificate `runtime-dev-1`'s Incus API serves.
 pub const INCUS_SERVER_FINGERPRINT: &str =
     "7628fcff44f2338383650c2489f38e89a59db5eb951a3de9bf0469f50387d84b";
-/// The Incus host's box bridge; reverse-tunnelled ports listen here.
-pub const BOX_BRIDGE_ADDRESS: &str = "10.210.0.1";
-/// The in-network alias of the Incus API relay.
-pub const INCUS_RELAY_HOST: &str = "computers-incus";
-pub const INCUS_RELAY_PORT: u16 = 8443;
-pub const SOCAT_IMAGE: &str = "alpine/socat:1.8.0.3";
-/// Socket the two relay sidecars share, inside their `/relay` mount.
-pub const INCUS_RELAY_SOCKET: &str = "/relay/incus.sock";
+/// Default control-plane devbox on the development tailnet.
+pub const CONTROL_PLANE_ADDRESS: &str = "100.116.73.13";
+pub const INCUS_PORT: u16 = 8443;
 /// Label `hosted_runtimes::outbound::docker_fleet` puts on every computer.
 pub const COMPUTER_ID_LABEL: &str = "macro.computer_id";
 
 /// The `OVERRIDE_*` service URLs macrod's enrollment needs, with the host port
-/// a box dials through the reverse tunnel. The app origin has no port: macrod
+/// a box dials over Tailscale. The app origin has no port: macrod
 /// only prints links to it, which open in the developer's browser.
 const MACROD_SERVICES: &[(&str, Option<Port>)] = &[
     (
@@ -81,7 +70,7 @@ const MACROD_SERVICES: &[(&str, Option<Port>)] = &[
 pub enum Fleet {
     /// Containers on this machine's Docker daemon.
     Docker,
-    /// VMs on the Incus host runtime-dev-1, over the computers tunnels.
+    /// VMs on the Incus host runtime-dev-1, over Tailscale.
     Incus,
     /// No computer control plane.
     Off,
@@ -98,7 +87,7 @@ pub struct ComputersArgs {
     #[arg(long, conflicts_with_all = ["computers", "computers_incus"])]
     pub no_computers: bool,
     /// Run computers on runtime-dev-1 instead of local Docker
-    /// (`--computers incus`). Needs `nix/hosts/computers-tunnels.sh`.
+    /// (`--computers incus`). Needs Tailscale on both hosts.
     #[arg(long, conflicts_with = "computers")]
     pub computers_incus: bool,
 }
@@ -150,30 +139,16 @@ impl Computers {
             .join("enrollments")
     }
 
-    /// Host directory the Incus relay sidecars share their socket through.
-    pub fn incus_relay_dir(&self) -> PathBuf {
-        self.instance
-            .artifact_dir()
-            .join("computers")
-            .join("incus-relay")
-    }
-
-    /// Host ports boxes on the Incus host must reach through the reverse
-    /// tunnel.
-    pub fn tunnel_ports(&self) -> Vec<u16> {
-        MACROD_SERVICES
-            .iter()
-            .filter_map(|(_, port)| port.map(|port| self.instance.port(port)))
-            .collect()
-    }
-
     /// Replace every `COMPUTERS_*` key with this fleet's. `env` must already
     /// hold the stack's in-network service URLs (`LocalEnv::to_env`).
     pub fn write_env(&self, env: &mut BTreeMap<String, String>) -> Result<()> {
         let computers = match self.fleet {
             Fleet::Off => BTreeMap::new(),
             Fleet::Docker => self.docker_env(env)?,
-            Fleet::Incus => self.incus_env(env, &IncusCredentials::load()?)?,
+            Fleet::Incus => {
+                let network = IncusNetwork::load()?;
+                self.incus_env(env, &IncusCredentials::load(&network)?, &network)?
+            }
         };
         env.retain(|key, _| !key.starts_with("COMPUTERS_"));
         env.extend(computers);
@@ -208,13 +183,18 @@ impl Computers {
         &self,
         env: &BTreeMap<String, String>,
         credentials: &IncusCredentials,
+        network: &IncusNetwork,
     ) -> Result<BTreeMap<String, String>> {
         let overrides = MACROD_SERVICES
             .iter()
             .map(|(name, port)| {
                 let url = match port {
                     Some(port) => {
-                        format!("http://{BOX_BRIDGE_ADDRESS}:{}", self.instance.port(*port))
+                        format!(
+                            "http://{}:{}",
+                            network.control_plane,
+                            self.instance.port(*port)
+                        )
                     }
                     None => in_network(env, name)?,
                 };
@@ -225,10 +205,7 @@ impl Computers {
             ("COMPUTERS_FLEET".into(), "incus".into()),
             ("COMPUTERS_HOST_NAME".into(), INCUS_HOST_NAME.into()),
             ("COMPUTERS_IMAGE".into(), INCUS_IMAGE.into()),
-            (
-                "COMPUTERS_INCUS_URL".into(),
-                format!("https://{INCUS_RELAY_HOST}:{INCUS_RELAY_PORT}"),
-            ),
+            ("COMPUTERS_INCUS_URL".into(), network.url()),
             (
                 "COMPUTERS_INCUS_CLIENT_CERT".into(),
                 credentials.client_cert.clone(),
@@ -278,32 +255,54 @@ impl Computers {
                 "  computers: Docker fleet `{DOCKER_HOST_NAME}` ({DOCKER_IMAGE}) on {}",
                 self.instance.network_services()
             )),
-            Fleet::Incus => {
-                let tunnel_up = TcpStream::connect_timeout(
-                    &([127, 0, 0, 1], INCUS_TUNNEL_PORT).into(),
-                    Duration::from_millis(500),
-                )
-                .is_ok();
-                stage.note(&format!(
-                    "  computers: Incus on {INCUS_HOST_NAME}; boxes reach this stack through \
-                     the reverse tunnel:\n    {}",
-                    tunnel_command(tunnel_up, &self.tunnel_ports())
-                ));
-            }
+            Fleet::Incus => stage.note(&format!(
+                "  computers: Incus on {INCUS_HOST_NAME} over Tailscale; \
+                 allow this stack's egress, harness, storage and auth host ports on the devbox \
+                 (see nix/hosts/README.md)"
+            )),
         }
     }
 }
 
-/// The `computers-tunnels.sh` invocation this stack needs: only the reverse
-/// tunnel when the Incus one already listens.
-pub fn tunnel_command(incus_tunnel_up: bool, ports: &[u16]) -> String {
-    let verb = if incus_tunnel_up { "reverse" } else { "all" };
-    let ports = ports
-        .iter()
-        .map(u16::to_string)
-        .collect::<Vec<_>>()
-        .join(" ");
-    format!("nix/hosts/computers-tunnels.sh {verb} {ports}")
+/// Addresses are resolved on the host, never through compose's DNS resolver.
+struct IncusNetwork {
+    runtime: Ipv4Addr,
+    control_plane: Ipv4Addr,
+}
+
+impl IncusNetwork {
+    fn load() -> Result<Self> {
+        let runtime = match macro_env_var::maybe_read_env("COMPUTERS_INCUS_ADDRESS") {
+            Some(address) => address,
+            None => {
+                let output = Command::new("tailscale")
+                    .args(["ip", "-4", INCUS_HOST_NAME])
+                    .output()
+                    .context("running tailscale ip -4 runtime-dev-1; join both hosts to the tailnet or set COMPUTERS_INCUS_ADDRESS")?;
+                if !output.status.success() {
+                    bail!(
+                        "runtime-dev-1 is unavailable on Tailscale: {}",
+                        String::from_utf8_lossy(&output.stderr).trim()
+                    );
+                }
+                String::from_utf8(output.stdout).context("tailscale returned non-UTF-8 output")?
+            }
+        };
+        let control_plane = macro_env_var::maybe_read_env("COMPUTERS_CONTROL_PLANE_ADDRESS")
+            .unwrap_or_else(|| CONTROL_PLANE_ADDRESS.to_owned());
+        Self::parse(&runtime, &control_plane)
+    }
+
+    fn parse(runtime: &str, control_plane: &str) -> Result<Self> {
+        Ok(Self {
+            runtime: runtime.trim().parse().context("COMPUTERS_INCUS_ADDRESS / tailscale ip must provide one IPv4 address")?,
+            control_plane: control_plane.trim().parse().context("COMPUTERS_CONTROL_PLANE_ADDRESS must be an IPv4 address matching macro.computers.controlPlaneAddress")?,
+        })
+    }
+
+    fn url(&self) -> String {
+        format!("https://{}:{INCUS_PORT}", self.runtime)
+    }
 }
 
 fn in_network(env: &BTreeMap<String, String>, name: &str) -> Result<String> {
@@ -321,7 +320,7 @@ pub struct IncusCredentials {
 }
 
 impl IncusCredentials {
-    fn load() -> Result<Self> {
+    fn load(network: &IncusNetwork) -> Result<Self> {
         let dir = credentials_dir()?;
         let read = |name: &str| {
             let path = dir.join(name);
@@ -336,19 +335,13 @@ impl IncusCredentials {
         let client_key = read("dev-client.key")?;
         let server_path = dir.join("dev-server.crt");
         if !server_path.exists() {
-            let pem = fetch_server_cert()?;
+            let pem = fetch_server_cert(network)?;
+            verify_server_cert(&pem)?;
             std::fs::write(&server_path, &pem)
                 .with_context(|| format!("writing {}", server_path.display()))?;
         }
         let server_cert = read("dev-server.crt")?;
-        let fingerprint = sha256_fingerprint(&server_cert)?;
-        if fingerprint != INCUS_SERVER_FINGERPRINT {
-            bail!(
-                "{} has fingerprint {fingerprint}, not the pinned {INCUS_SERVER_FINGERPRINT}; \
-                 delete it to fetch it again through the tunnel",
-                server_path.display()
-            );
-        }
+        verify_server_cert(&server_cert)?;
         Ok(Self {
             client_cert,
             client_key,
@@ -357,7 +350,7 @@ impl IncusCredentials {
     }
 }
 
-/// `computers-tunnels.sh`'s state directory.
+/// Local Incus credentials directory.
 fn credentials_dir() -> Result<PathBuf> {
     let config = match macro_env_var::maybe_read_env("XDG_CONFIG_HOME") {
         Some(dir) => PathBuf::from(dir),
@@ -367,21 +360,31 @@ fn credentials_dir() -> Result<PathBuf> {
     Ok(config.join("macro-computers"))
 }
 
-/// The certificate the Incus API serves, read through the Incus tunnel.
-fn fetch_server_cert() -> Result<String> {
+fn verify_server_cert(pem: &str) -> Result<()> {
+    let fingerprint = sha256_fingerprint(pem)?;
+    if fingerprint != INCUS_SERVER_FINGERPRINT {
+        bail!(
+            "Incus server certificate fingerprint {fingerprint} differs from pinned {INCUS_SERVER_FINGERPRINT}; verify the endpoint and identity before replacing dev-server.crt"
+        );
+    }
+    Ok(())
+}
+
+/// Fetch over Tailscale; the fingerprint is verified before persisting it.
+fn fetch_server_cert(network: &IncusNetwork) -> Result<String> {
     let output = Command::new("openssl")
         .args([
             "s_client",
             "-connect",
-            &format!("localhost:{INCUS_TUNNEL_PORT}"),
+            &format!("{}:{INCUS_PORT}", network.runtime),
         ])
         .stdin(Stdio::null())
         .output()
         .context("running openssl s_client (run inside nix develop)")?;
     first_pem_certificate(&String::from_utf8_lossy(&output.stdout)).with_context(|| {
         format!(
-            "no certificate from localhost:{INCUS_TUNNEL_PORT}; start the Incus tunnel with \
-             `nix/hosts/computers-tunnels.sh incus`"
+            "no certificate from {}; check runtime-dev-1's Tailscale login and Incus listener",
+            network.url()
         )
     })
 }

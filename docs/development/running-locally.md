@@ -440,35 +440,38 @@ again removes the instance's computer containers along with its data.
 just run_local --instance computers --computers-incus
 ```
 
+Both the devbox and runtime must be logged into the same Tailscale tailnet.
+`tailscale ip -4 runtime-dev-1` must return an IPv4 address before startup;
+xtask fails loudly if it cannot resolve one. Set `COMPUTERS_INCUS_ADDRESS=<IPv4>`
+to override discovery. Compose receives the numeric
+`COMPUTERS_INCUS_URL=https://<runtime-tailnet-ip>:8443`, so it needs no MagicDNS
+and no socat/IAP sidecars.
+
 This needs the control-plane identity
 `~/.config/macro-computers/dev-client.{crt,key}` (see
-[`nix/hosts/README.md`](../../nix/hosts/README.md)) and the Incus tunnel
-(`nix/hosts/computers-tunnels.sh incus`, `localhost:18443`). On first use the
-stack reads the host's certificate through the tunnel into
-`~/.config/macro-computers/dev-server.crt`, checks its pinned SHA-256
-fingerprint on every start, and stops if the fingerprint does not match.
-
-The host firewall drops traffic from containers to the host, so two `socat`
-sidecars relay the tunnel into Compose over a unix socket:
-`computers_incus_uplink` (host network) and `computers_incus_relay`
-(`computers-incus:8443`), which is the harness's `COMPUTERS_INCUS_URL`.
+[`nix/hosts/README.md`](../../nix/hosts/README.md) for enrollment, rebuild,
+firewall rules and IAP recovery). On first use xtask fetches the server
+certificate over Tailscale into `~/.config/macro-computers/dev-server.crt`,
+verifying the pinned SHA-256 fingerprint before saving it and on every start.
+The Incus client pins the certificate bytes, so SAN/name mismatch is expected
+and does not weaken verification.
 
 Enrollment stores the fleet-reachable egress URL in macrod’s config. Computer
 sessions use it for first-party MCP servers and the Anthropic gateway, while
 other paired runtimes keep the stack’s external egress URL.
 
-Boxes reach the stack at `10.210.0.1:<host port>` through the reverse tunnel.
-Startup prints the command with this instance's ports (agent egress, agent harness, document
-storage, and auth), for example:
+Boxes reach the stack at `http://100.116.73.13:<host port>`. Override the devbox
+IP with `COMPUTERS_CONTROL_PLANE_ADDRESS`, keeping it in sync with the runtime's
+`macro.computers.controlPlaneAddress`. The runtime allows only the four stack
+TCP host ports (agent egress, harness, document storage, auth) to that address
+and masquerades them to `tailscale0`; other tailnet destinations are dropped.
+Custom `--port-base` values need a matching `controlPlanePorts` option update.
+The devbox firewall must accept those ports from the runtime's tailnet address;
+see the exact INPUT and Docker forwarding rules in the host README.
 
-```bash
-nix/hosts/computers-tunnels.sh reverse <egress> <harness> <storage> <auth>   # Incus tunnel already running
-nix/hosts/computers-tunnels.sh all <egress> <harness> <storage> <auth>       # neither tunnel running
-```
-
-Run it under `systemd-run --user -p Restart=always` to keep it up. Starting
-the stack again wipes the database but not the VMs: delete leftover instances
-on the host with `incus delete --force <name>`.
+The supervised [`computers-tunnels.sh`](../../nix/hosts/computers-tunnels.sh)
+remains a manual IAP recovery path, not a startup dependency. Existing VMs
+survive stack database replacement; handle their cleanup explicitly.
 
 Check the generated wiring without starting anything:
 

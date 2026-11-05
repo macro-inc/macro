@@ -61,43 +61,40 @@ fn docker_computers_dial_the_stack_in_network() {
 }
 
 #[test]
-fn incus_computers_dial_the_stack_through_the_box_bridge() {
+fn incus_computers_dial_tailnet_ips_without_compose_dns() {
     let instance = Instance::derive(Some("computers"), None).unwrap();
     let computers = Computers::new(Mode::Local, Fleet::Incus, &instance);
     let base = local_env(&instance);
-    let env = computers.incus_env(&base, &credentials()).unwrap();
+    let env = computers
+        .incus_env(
+            &base,
+            &credentials(),
+            &IncusNetwork::parse("100.101.102.103", "100.116.73.13").unwrap(),
+        )
+        .unwrap();
 
     assert_eq!(env["COMPUTERS_FLEET"], "incus");
     assert_eq!(env["COMPUTERS_HOST_NAME"], "runtime-dev-1");
     assert_eq!(env["COMPUTERS_IMAGE"], "macro-box");
-    assert_eq!(env["COMPUTERS_INCUS_URL"], "https://computers-incus:8443");
+    assert_eq!(env["COMPUTERS_INCUS_URL"], "https://100.101.102.103:8443");
     assert_eq!(env["COMPUTERS_INCUS_CLIENT_CERT"], "client cert");
     assert_eq!(env["COMPUTERS_INCUS_CLIENT_KEY"], "client key");
     assert_eq!(env["COMPUTERS_INCUS_SERVER_CERT"], "server cert");
     let overrides: BTreeMap<String, String> =
         serde_json::from_str(&env["COMPUTERS_SERVICE_URL_OVERRIDES"]).unwrap();
-    let bridge = |port: Port| format!("http://10.210.0.1:{}", instance.port(port));
+    let tailnet = |port: Port| format!("http://100.116.73.13:{}", instance.port(port));
     assert_eq!(
         overrides["OVERRIDE_AGENT_HARNESS_SERVICE_URL"],
-        bridge(Port::AgentHarness)
+        tailnet(Port::AgentHarness)
     );
     assert_eq!(
         overrides["OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL"],
-        bridge(Port::DocStorage)
+        tailnet(Port::DocStorage)
     );
-    assert_eq!(overrides["OVERRIDE_AUTH_SERVICE_URL"], bridge(Port::Auth));
+    assert_eq!(overrides["OVERRIDE_AUTH_SERVICE_URL"], tailnet(Port::Auth));
     assert_eq!(
         overrides["OVERRIDE_APP_SERVICE_URL"],
         base["OVERRIDE_APP_SERVICE_URL"]
-    );
-    assert_eq!(
-        computers.tunnel_ports(),
-        vec![
-            instance.port(Port::AgentHarnessEgress),
-            instance.port(Port::AgentHarness),
-            instance.port(Port::DocStorage),
-            instance.port(Port::Auth),
-        ]
     );
 }
 
@@ -150,14 +147,34 @@ fn flags_pick_the_fleet() {
 }
 
 #[test]
-fn tunnel_command_reuses_a_running_incus_tunnel() {
+fn incus_addresses_reject_missing_or_ambiguous_resolution() {
+    for address in [
+        "",
+        "runtime-dev-1",
+        "100.101.102.103\n100.101.102.104",
+        "::1",
+    ] {
+        assert!(IncusNetwork::parse(address, "100.116.73.13").is_err());
+    }
+    assert!(IncusNetwork::parse("100.101.102.103", "devbox").is_err());
+}
+
+#[test]
+fn incus_control_plane_address_can_be_overridden() {
+    let instance = Instance::derive(Some("computers-address"), None).unwrap();
+    let computers = Computers::new(Mode::Local, Fleet::Incus, &instance);
+    let network = IncusNetwork::parse("100.101.102.103\n", "100.104.105.106").unwrap();
+    let env = computers
+        .incus_env(&local_env(&instance), &credentials(), &network)
+        .unwrap();
+    let overrides: BTreeMap<String, String> =
+        serde_json::from_str(&env["COMPUTERS_SERVICE_URL_OVERRIDES"]).unwrap();
     assert_eq!(
-        tunnel_command(true, &[8101, 8086, 8080]),
-        "nix/hosts/computers-tunnels.sh reverse 8101 8086 8080"
-    );
-    assert_eq!(
-        tunnel_command(false, &[8101]),
-        "nix/hosts/computers-tunnels.sh all 8101"
+        overrides["OVERRIDE_AGENT_HARNESS_EGRESS_URL"],
+        format!(
+            "http://100.104.105.106:{}",
+            instance.port(Port::AgentHarnessEgress)
+        )
     );
 }
 

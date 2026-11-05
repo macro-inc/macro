@@ -22,7 +22,7 @@ use serde_yaml::Value;
 use serde_yaml::value::{Tag, TaggedValue};
 
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
-use super::computers::{self, Computers, Fleet};
+use super::computers::{Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::inventory::{RustService, services_for_mode};
 use super::{Mode, repo_root};
@@ -223,45 +223,7 @@ fn add_computers(
                 .volumes
                 .push(dct::Volumes::Simple(format!("{0}:{0}", dir.display())));
         }
-        Fleet::Incus => {
-            let dir = computers.incus_relay_dir();
-            std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-            let relay_mount = vec![dct::Volumes::Simple(format!("{}:/relay", dir.display()))];
-            let args = |args: &[String]| Some(dct::Command::Args(args.to_vec()));
-            // Host side: the tunnel listens on this machine's loopback only.
-            services.insert(
-                "computers_incus_uplink".to_string(),
-                Some(dct::Service {
-                    image: Some(computers::SOCAT_IMAGE.to_string()),
-                    network_mode: Some("host".to_string()),
-                    command: args(&[
-                        format!(
-                            "UNIX-LISTEN:{},fork,unlink-early,mode=600",
-                            computers::INCUS_RELAY_SOCKET
-                        ),
-                        format!("TCP:127.0.0.1:{}", computers::INCUS_TUNNEL_PORT),
-                    ]),
-                    volumes: relay_mount.clone(),
-                    restart: Some("unless-stopped".to_string()),
-                    ..Default::default()
-                }),
-            );
-            // Compose side: the harness dials `computers-incus:8443`.
-            services.insert(
-                "computers_incus_relay".to_string(),
-                Some(dct::Service {
-                    image: Some(computers::SOCAT_IMAGE.to_string()),
-                    command: args(&[
-                        format!("TCP-LISTEN:{},fork,reuseaddr", computers::INCUS_RELAY_PORT),
-                        format!("UNIX-CONNECT:{}", computers::INCUS_RELAY_SOCKET),
-                    ]),
-                    volumes: relay_mount,
-                    restart: Some("unless-stopped".to_string()),
-                    networks: net_aliases(&[("services", &[computers::INCUS_RELAY_HOST])]),
-                    ..Default::default()
-                }),
-            );
-        }
+        Fleet::Incus => {}
     }
     Ok(())
 }

@@ -8,7 +8,7 @@ use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
-use super::computers::{self, Computers, Fleet};
+use super::computers::{Computers, Fleet};
 use super::instance::Port;
 use super::inventory::services_for_mode;
 use super::local_env::Tunnels;
@@ -208,17 +208,18 @@ fn computers_failures(
                 failures.push("agent_harness_service lacks COMPUTERS_FLEET=incus".into());
             }
             for sidecar in ["computers_incus_uplink", "computers_incus_relay"] {
-                if !services.contains_key(sidecar) {
-                    failures.push(format!("the Incus relay sidecar '{sidecar}' is absent"));
+                if services.contains_key(sidecar) {
+                    failures.push(format!(
+                        "obsolete Incus relay sidecar '{sidecar}' is present"
+                    ));
                 }
             }
-            let url = format!(
-                "https://{}:{}",
-                computers::INCUS_RELAY_HOST,
-                computers::INCUS_RELAY_PORT
-            );
-            if env("COMPUTERS_INCUS_URL") != Some(url.as_str()) {
-                failures.push(format!("COMPUTERS_INCUS_URL is not {url}"));
+            let direct_endpoint = env("COMPUTERS_INCUS_URL")
+                .and_then(|url| url.strip_prefix("https://"))
+                .and_then(|endpoint| endpoint.strip_suffix(":8443"))
+                .is_some_and(|address| address.parse::<std::net::Ipv4Addr>().is_ok());
+            if !direct_endpoint {
+                failures.push("COMPUTERS_INCUS_URL must be https://<runtime IPv4>:8443".into());
             }
         }
     }
