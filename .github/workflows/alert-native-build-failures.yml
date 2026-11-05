@@ -11,6 +11,7 @@ on:
       - Build Desktop on Tag
       - iOS Preview
       - Release Android App Bundle
+      - cloud storage main check
     types: [completed]
 
 permissions:
@@ -45,6 +46,8 @@ jobs:
                       .name == "Build iOS simulator app and publish to Appetize"
                     elif $workflow == "Release Android App Bundle" then
                       .name == "Build signed Android App Bundle"
+                    elif $workflow == "cloud storage main check" then
+                      true
                     else false end
                   )
                 | .name] | unique | join(", ")
