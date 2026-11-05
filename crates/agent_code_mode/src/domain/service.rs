@@ -256,6 +256,9 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "GenerateObject"
                 // macro.documents.upload(), which sends the bytes through Macro.
                 | "UploadFile"
+                // macro.web.search() and macro.web.fetch().
+                | "WebSearch"
+                | "WebFetch"
                 // macro.agents.list() and macro.agentSessions.createManaged.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"

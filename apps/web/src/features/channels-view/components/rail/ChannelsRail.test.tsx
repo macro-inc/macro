@@ -502,97 +502,102 @@ it('delegates keyboard scrolling to the sectioned renderer instead of global ind
   expect(mocks.scrollBrowse).toHaveBeenCalledExactlyOnceWith(0, undefined);
 });
 
-it('keeps a pressed channel row attached through a live data refresh and activates once', async () => {
-  mocks.realRenderer = true;
-  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
-    function (this: HTMLElement) {
-      return this.parentElement;
-    }
-  );
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
-    function (this: HTMLElement) {
-      return this.hasAttribute('data-index') ? 34 : 200;
-    }
-  );
-  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
-  const observers: Array<{
-    callback: ResizeObserverCallback;
-    targets: Element[];
-  }> = [];
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      targets: Element[] = [];
-      constructor(readonly callback: ResizeObserverCallback) {
-        observers.push(this);
+it.each(['team_channels', 'channels'] as const)(
+  'keeps a pressed %s row attached through a live data refresh and activates once',
+  async (scope) => {
+    mocks.realRenderer = true;
+    vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        return this.parentElement;
       }
-      observe(target: Element) {
-        this.targets.push(target);
+    );
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        return this.hasAttribute('data-index') ? 34 : 200;
       }
-      unobserve(target: Element) {
-        this.targets = this.targets.filter((item) => item !== target);
+    );
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
+    const observers: Array<{
+      callback: ResizeObserverCallback;
+      targets: Element[];
+    }> = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        targets: Element[] = [];
+        constructor(readonly callback: ResizeObserverCallback) {
+          observers.push(this);
+        }
+        observe(target: Element) {
+          this.targets.push(target);
+        }
+        unobserve(target: Element) {
+          this.targets = this.targets.filter((item) => item !== target);
+        }
+        disconnect() {
+          this.targets = [];
+        }
       }
-      disconnect() {
-        this.targets = [];
+    );
+    mocks.selected = undefined;
+    const [channels, setChannels] = createSignal([channel]);
+    const liveSources: ChannelsSources = {
+      ...sources,
+      team_channels: { ...source, items: () => [] },
+      channels: { ...source, items: () => [] },
+      [scope]: { ...source, items: channels },
+      direct_messages: { ...source, items: () => [] },
+    };
+    const { container } = render(() => (
+      <ChannelsRail
+        sources={liveSources}
+        searchQuery=""
+        onSearchQueryChange={() => {}}
+        searchOpen={false}
+        onSearchOpenChange={() => {}}
+      />
+    ));
+    for (let pass = 0; pass < 3; pass++) {
+      await Promise.resolve();
+      for (const observer of observers) {
+        if (observer.targets.length === 0) continue;
+        observer.callback(
+          observer.targets.map((target) => ({
+            target,
+            contentRect: new DOMRect(
+              0,
+              0,
+              300,
+              target.hasAttribute('data-index') ? 34 : 200
+            ),
+            borderBoxSize: [
+              {
+                inlineSize: 300,
+                blockSize: target.hasAttribute('data-index') ? 34 : 200,
+              },
+            ],
+            contentBoxSize: [],
+            devicePixelContentBoxSize: [],
+          })),
+          observer as unknown as ResizeObserver
+        );
       }
     }
-  );
-  mocks.selected = undefined;
-  const [channels, setChannels] = createSignal([channel]);
-  const liveSources: ChannelsSources = {
-    ...sources,
-    team_channels: { ...source, items: channels },
-    direct_messages: { ...source, items: () => [] },
-  };
-  const { container } = render(() => (
-    <ChannelsRail
-      sources={liveSources}
-      searchQuery=""
-      onSearchQueryChange={() => {}}
-      searchOpen={false}
-      onSearchOpenChange={() => {}}
-    />
-  ));
-  for (let pass = 0; pass < 3; pass++) {
-    await Promise.resolve();
-    for (const observer of observers) {
-      if (observer.targets.length === 0) continue;
-      observer.callback(
-        observer.targets.map((target) => ({
-          target,
-          contentRect: new DOMRect(
-            0,
-            0,
-            300,
-            target.hasAttribute('data-index') ? 34 : 200
-          ),
-          borderBoxSize: [
-            {
-              inlineSize: 300,
-              blockSize: target.hasAttribute('data-index') ? 34 : 200,
-            },
-          ],
-          contentBoxSize: [],
-          devicePixelContentBoxSize: [],
-        })),
-        observer as unknown as ResizeObserver
-      );
-    }
-  }
-  const row = screen.getByRole('button', { name: 'One' });
-  fireEvent.pointerDown(row, { pointerType: 'mouse', button: 0 });
-  setChannels([{ ...channel, name: 'One updated' }]);
+    const row = screen.getByRole('button', { name: 'One' });
+    fireEvent.pointerDown(row, { pointerType: 'mouse', button: 0 });
+    setChannels([{ ...channel, name: 'One updated' }]);
 
-  expect(screen.getByRole('button', { name: 'One updated' })).toBe(row);
-  expect(container.contains(row)).toBe(true);
-  fireEvent.pointerUp(row, { pointerType: 'mouse', button: 0 });
-  fireEvent.click(row);
-  expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-    type: 'channel',
-    id: 'one',
-    target: undefined,
-  });
-});
+    expect(screen.getByRole('button', { name: 'One updated' })).toBe(row);
+    expect(container.contains(row)).toBe(true);
+    fireEvent.pointerUp(row, { pointerType: 'mouse', button: 0 });
+    fireEvent.click(row);
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
+      type: 'channel',
+      id: 'one',
+      target: undefined,
+    });
+  }
+);
 
 describe('section heading navigation', () => {
   it.each([

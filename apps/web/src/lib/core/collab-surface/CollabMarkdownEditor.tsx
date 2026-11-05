@@ -68,8 +68,6 @@ export type CollabMarkdownEditorProps = {
    * merely gets its updates rejected. Defaults to editable.
    */
   canEdit?: Accessor<boolean>;
-  /** Whether the caller may comment. Defaults to false. */
-  canComment?: Accessor<boolean>;
   /** Lexical namespace, for devtools disambiguation. */
   namespace?: string;
   /** Class applied to the outer container. */
@@ -100,7 +98,6 @@ false && fileFolderDrop;
  */
 export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
   const canEdit = props.canEdit ?? (() => true);
-  const canComment = props.canComment ?? (() => false);
 
   const session = props.session;
 
@@ -275,7 +272,6 @@ export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
               syncSource={session.syncSource}
               sourceReady={() => true}
               canEdit={canEdit}
-              canComment={canComment}
               editorError={editorError}
               statusChrome={props.statusChrome}
             />
