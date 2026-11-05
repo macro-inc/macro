@@ -900,6 +900,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_secrets"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "cursor_api_key",
+ "entity_access",
+ "lazy-regex",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-error-response",
+ "model_user",
+ "rootcause",
+ "serde",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "agent_session"
 version = "0.1.0"
 dependencies = [
@@ -2259,6 +2287,8 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm 0.10.3",
  "agent_api_keys",
+ "agent_git",
+ "agent_secrets",
  "ai_billing",
  "ai_usage",
  "analytics_client",
@@ -2370,6 +2400,7 @@ dependencies = [
  "static_file_service_client",
  "strum 0.27.2",
  "system_status",
+ "team_agents",
  "teams",
  "thiserror 2.0.18",
  "time",
@@ -20294,6 +20325,37 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "team_agents"
+version = "0.1.0"
+dependencies = [
+ "agent_git",
+ "agent_secrets",
+ "axum",
+ "chrono",
+ "entity_access",
+ "feature_flags",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-error-response",
+ "model_user",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "sqlx",
+ "strum 0.27.2",
+ "teams",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "user_api_key",
  "utoipa",
  "uuid",
  "workspace-hack",

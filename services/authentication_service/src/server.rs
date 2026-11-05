@@ -270,7 +270,7 @@ pub async fn run() -> anyhow::Result<()> {
                 cipher,
             )
             .with_connections_enabled(config.outlook_connections_enabled)
-            .with_feature_flags(feature_flags),
+            .with_feature_flags(feature_flags.clone()),
         ) as Arc<dyn MicrosoftAuth>
     });
 
@@ -695,6 +695,42 @@ pub async fn run() -> anyhow::Result<()> {
         hosted_runtimes::domain::service::SystemClock,
     ));
     let teams_service = Arc::new(teams_service_impl);
+    let team_agents_repository =
+        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone());
+    let team_agents_service = Arc::new(team_agents::domain::service::TeamAgentServiceImpl::new(
+        team_agents_repository.clone(),
+        team_agents::outbound::team_membership::TeamsMembership::new(teams_service.clone()),
+        team_agents::outbound::agent_api_keys::UserApiKeys::new(Arc::new(
+            user_api_key::domain::service::UserApiKeyServiceImpl::new(
+                user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo::new(db.clone()),
+            ),
+        )),
+        team_agents::outbound::dead_simple_email::DeadSimpleEmail::new(
+            config.dead_simple_mail_api_key.value().map(str::to_string),
+        )
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+        team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers,
+        team_agents::outbound::agent_git_repos::AgentGitRepos::new(
+            agent_git::client::AgentGitClient::new(
+                macro_service_urls::AgentGitServiceUrl::new()?.to_string(),
+                internal_key.clone(),
+            )
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+        ),
+        // Gates quoting and creating agents per admin (`enable-team-agents`).
+        // Without a PostHog key (local, tests) the feature is open.
+        feature_flags.clone(),
+        // The brain runs on its own computer, so it reaches Macro through the
+        // public gateway, never this container's in-network addresses.
+        macro_service_urls::ApiGatewayUrl::new()?.to_string(),
+    ));
+    let agent_secrets_service = Arc::new(agent_secrets::domain::service::AgentSecretServiceImpl::new(
+        agent_secrets::outbound::pg_agent_secrets_repo::PgAgentSecretsRepo::new(db.clone()),
+        agent_secrets::outbound::kms_secret_cipher::KmsSecretCipher::new(cursor_kms.clone()),
+        team_agents::outbound::agent_secrets_directory::TeamAgentsDirectory::new(
+            team_agents_repository,
+        ),
+    ));
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
             teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
@@ -825,6 +861,8 @@ pub async fn run() -> anyhow::Result<()> {
             computer_prices,
             computer_billing_observer: computer_service.clone(),
             computer_service,
+            team_agents_service,
+            agent_secrets_service,
             domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,

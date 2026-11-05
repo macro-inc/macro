@@ -563,6 +563,15 @@ service_url! {
             dev: "https://static-file-service-dev.macro.com",
             prod: "https://static-file-service.macro.com",
         },
+        /// Public API gateway origin: every service's API under its path
+        /// prefix (`/auth`, `/dss`, `/cognition`, `/agent-harness`, ...), as
+        /// clients off Macro's network reach them. Locally this is the stack's
+        /// proxy, which mirrors the gateway's prefixes.
+        pub ApiGatewayUrl {
+            local: "https://localhost:8090",
+            dev: "https://dev-gateway.macro.com",
+            prod: "https://gateway.macro.com",
+        },
         /// Agent harness service API URL. Serves the agent-session control
         /// routes, which run in the process that owns the live sessions.
         pub AgentHarnessServiceUrl {

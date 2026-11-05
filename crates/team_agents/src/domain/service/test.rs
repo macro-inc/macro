@@ -1,0 +1,895 @@
+use std::sync::{Arc, Mutex};
+
+use chrono::{TimeZone, Utc};
+use entity_access::domain::models::EntityType;
+use feature_flags::outbound::fake::FakeFeatureFlags;
+use feature_flags::{FlagSnapshot, FlagValue};
+
+use super::*;
+use crate::domain::models::{
+    BillingInterval, ComputerQuote, ComputerStatus, EmailMessages, Mailbox, SeatQuote,
+    SetupProgress, SetupStep, SubscriptionItem,
+};
+
+const TEAM_ID: &str = "0190f1b4-6c2e-7b7a-9a4c-1d2e3f405060";
+const OTHER_TEAM_ID: &str = "0190f1b4-6c2e-7b7a-9a4c-1d2e3f405061";
+const COMPUTER_ID: &str = "0190f1b4-6c2e-7b7a-9a4c-00000000c0de";
+const ADMIN: &str = "macro|admin@example.com";
+const AGENT: &str = "macro|sam@agents.example.com";
+
+fn user(id: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str(id)
+        .map(MacroUserIdStr::into_owned)
+        .expect("valid user id")
+}
+
+/// The calls every fake made, in order, and the one step that fails.
+#[derive(Default)]
+struct Journal {
+    steps: Mutex<Vec<&'static str>>,
+    fail_at: Option<&'static str>,
+}
+
+impl Journal {
+    fn record(&self, step: &'static str) -> Result<(), TeamAgentError> {
+        self.steps.lock().expect("lock").push(step);
+
+        if self.fail_at == Some(step) {
+            return Err(TeamAgentError::internal_message(format!("{step} failed")));
+        }
+
+        Ok(())
+    }
+
+    fn steps(&self) -> Vec<&'static str> {
+        self.steps.lock().expect("lock").clone()
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+struct FakeRepositoryError(String);
+
+struct StoredAgent {
+    account: NewAgentAccount,
+    computer_id: Option<Uuid>,
+    status: TeamAgentStatus,
+    status_reason: Option<String>,
+}
+
+struct FakeRepository {
+    journal: Arc<Journal>,
+    agents: Mutex<Vec<StoredAgent>>,
+}
+
+impl FakeRepository {
+    fn fail(&self, step: &'static str) -> Result<(), FakeRepositoryError> {
+        self.journal
+            .record(step)
+            .map_err(|error| FakeRepositoryError(error.to_string()))
+    }
+}
+
+impl TeamAgentRepository for FakeRepository {
+    type Err = FakeRepositoryError;
+
+    async fn create_account(&self, account: &NewAgentAccount) -> Result<(), Self::Err> {
+        self.fail("account.create")?;
+        self.agents.lock().expect("lock").push(StoredAgent {
+            account: account.clone(),
+            computer_id: None,
+            status: TeamAgentStatus::Provisioning,
+            status_reason: None,
+        });
+        Ok(())
+    }
+
+    async fn delete_account(&self, user_id: &MacroUserIdStr<'_>) -> Result<(), Self::Err> {
+        self.fail("account.delete")?;
+        self.agents
+            .lock()
+            .expect("lock")
+            .retain(|agent| agent.account.user_id.as_ref() != user_id.as_ref());
+        Ok(())
+    }
+
+    async fn get(&self, user_id: &MacroUserIdStr<'_>) -> Result<Option<TeamAgent>, Self::Err> {
+        Ok(self
+            .agents
+            .lock()
+            .expect("lock")
+            .iter()
+            .find(|agent| agent.account.user_id.as_ref() == user_id.as_ref())
+            .map(|agent| TeamAgent {
+                user_id: agent.account.user_id.clone(),
+                team_id: agent.account.team_id,
+                name: agent.account.name.clone(),
+                email: agent.account.email.clone(),
+                created_by: Some(agent.account.created_by.clone()),
+                computer_id: agent.computer_id,
+                status: agent.status,
+                status_reason: agent.status_reason.clone(),
+                setup: None,
+                created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
+            }))
+    }
+
+    async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<TeamAgent>, Self::Err> {
+        let user_ids: Vec<MacroUserIdStr<'static>> = self
+            .agents
+            .lock()
+            .expect("lock")
+            .iter()
+            .filter(|agent| agent.account.team_id == team_id)
+            .map(|agent| agent.account.user_id.clone())
+            .collect();
+
+        let mut agents = Vec::new();
+        for user_id in user_ids {
+            agents.extend(self.get(&user_id).await?);
+        }
+        Ok(agents)
+    }
+
+    async fn mailbox_id(&self, user_id: &MacroUserIdStr<'_>) -> Result<Option<String>, Self::Err> {
+        Ok(self
+            .agents
+            .lock()
+            .expect("lock")
+            .iter()
+            .find(|agent| agent.account.user_id.as_ref() == user_id.as_ref())
+            .and_then(|agent| agent.account.mailbox_id.clone()))
+    }
+
+    async fn set_computer(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        computer_id: Uuid,
+    ) -> Result<(), Self::Err> {
+        self.fail("account.set_computer")?;
+        for agent in self.agents.lock().expect("lock").iter_mut() {
+            if agent.account.user_id.as_ref() == user_id.as_ref() {
+                agent.computer_id = Some(computer_id);
+            }
+        }
+        Ok(())
+    }
+
+    async fn set_status(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        status: TeamAgentStatus,
+        reason: Option<&str>,
+    ) -> Result<(), Self::Err> {
+        self.fail("account.set_status")?;
+        for agent in self.agents.lock().expect("lock").iter_mut() {
+            if agent.account.user_id.as_ref() == user_id.as_ref() {
+                agent.status = status;
+                agent.status_reason = reason.map(str::to_string);
+            }
+        }
+        Ok(())
+    }
+}
+
+struct FakeMembership {
+    journal: Arc<Journal>,
+    seat: Option<SeatQuote>,
+}
+
+impl TeamMembership for FakeMembership {
+    async fn add_agent(
+        &self,
+        _receipt: EntityAccessReceipt<AdminTeamRole>,
+        _agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<SubscriptionItem>, TeamAgentError> {
+        self.journal.record("team.add")?;
+        Ok(self.seat.as_ref().map(|_| SubscriptionItem {
+            price_id: "price_seat".to_string(),
+            quantity: 1,
+        }))
+    }
+
+    async fn undo_add_agent(
+        &self,
+        _receipt: EntityAccessReceipt<AdminTeamRole>,
+        _agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), TeamAgentError> {
+        self.journal.record("team.undo")
+    }
+
+    async fn remove_agent(
+        &self,
+        _receipt: EntityAccessReceipt<AdminTeamRole>,
+        _agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), TeamAgentError> {
+        self.journal.record("team.remove")
+    }
+
+    async fn quote_seat(
+        &self,
+        _receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<Option<SeatQuote>, TeamAgentError> {
+        Ok(self.seat.clone())
+    }
+}
+
+struct FakeApiKeys {
+    journal: Arc<Journal>,
+}
+
+impl AgentApiKeys for FakeApiKeys {
+    async fn mint(&self, _agent_user_id: &MacroUserIdStr<'_>) -> Result<Credential, TeamAgentError> {
+        self.journal.record("api_key.mint")?;
+        Ok(Credential::new("mak_secret".to_string()))
+    }
+}
+
+struct FakeMailboxes {
+    journal: Arc<Journal>,
+    sent: Mutex<Vec<(String, SendEmail)>>,
+}
+
+impl Mailboxes for FakeMailboxes {
+    async fn create(&self, _username: &str, _display_name: &str) -> Result<Mailbox, TeamAgentError> {
+        self.journal.record("mailbox.create")?;
+        Ok(Mailbox {
+            mailbox_id: Some("inbox-1".to_string()),
+            email: "Sam@Agents.Example.com".to_string(),
+        })
+    }
+
+    async fn delete(&self, _mailbox_id: &str) -> Result<(), TeamAgentError> {
+        self.journal.record("mailbox.delete")
+    }
+
+    async fn list(&self, _mailbox_id: &str, _limit: u8) -> Result<EmailMessages, TeamAgentError> {
+        Ok(EmailMessages { messages: vec![] })
+    }
+
+    async fn get(
+        &self,
+        _mailbox_id: &str,
+        _message_id: &str,
+    ) -> Result<EmailMessage, TeamAgentError> {
+        Err(TeamAgentError::EmailUnavailable)
+    }
+
+    async fn send(&self, mailbox_id: &str, email: &SendEmail) -> Result<SentEmail, TeamAgentError> {
+        self.sent
+            .lock()
+            .expect("lock")
+            .push((mailbox_id.to_string(), email.clone()));
+        Ok(SentEmail {
+            message_id: "sent-1".to_string(),
+        })
+    }
+}
+
+struct FakeComputers {
+    journal: Arc<Journal>,
+    purchases: Mutex<Vec<ComputerPurchase>>,
+    interval: BillingInterval,
+    status: ComputerStatus,
+}
+
+impl Computers for FakeComputers {
+    async fn quote(
+        &self,
+        _team_id: Uuid,
+        _size: ComputerSize,
+    ) -> Result<ComputerQuote, TeamAgentError> {
+        Ok(ComputerQuote {
+            price_id: "price_computer_large".to_string(),
+            amount: 5000,
+            currency: "usd".to_string(),
+            interval: self.interval,
+        })
+    }
+
+    async fn purchase(&self, purchase: ComputerPurchase) -> Result<Uuid, TeamAgentError> {
+        self.journal.record("computer.purchase")?;
+        self.purchases.lock().expect("lock").push(purchase);
+        Ok(Uuid::parse_str(COMPUTER_ID).expect("uuid"))
+    }
+
+    async fn status(
+        &self,
+        _team_id: Uuid,
+        _computer_id: Uuid,
+    ) -> Result<ComputerStatus, TeamAgentError> {
+        Ok(self.status.clone())
+    }
+
+    async fn release(&self, _team_id: Uuid, _computer_id: Uuid) -> Result<(), TeamAgentError> {
+        self.journal.record("computer.release")
+    }
+}
+
+struct FakeRepos {
+    journal: Arc<Journal>,
+    seeds: Mutex<Vec<PersonaSeed>>,
+}
+
+impl AgentRepos for FakeRepos {
+    async fn create(
+        &self,
+        _agent_user_id: &MacroUserIdStr<'_>,
+        _team_id: Uuid,
+        seed: &PersonaSeed,
+    ) -> Result<AgentRepo, TeamAgentError> {
+        self.journal.record("repo.create")?;
+        self.seeds.lock().expect("lock").push(seed.clone());
+        Ok(AgentRepo {
+            url: "https://git.example.com/sam".to_string(),
+            token: Credential::new("mrt_token".to_string()),
+        })
+    }
+
+    async fn delete(&self, _agent_user_id: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
+        self.journal.record("repo.delete")
+    }
+}
+
+type Service = TeamAgentServiceImpl<
+    FakeRepository,
+    FakeMembership,
+    FakeApiKeys,
+    FakeMailboxes,
+    FakeComputers,
+    FakeRepos,
+    FakeFeatureFlags,
+>;
+
+struct Setup {
+    fail_at: Option<&'static str>,
+    flags: Option<FakeFeatureFlags>,
+    seat: Option<SeatQuote>,
+    computer_interval: BillingInterval,
+    computer_status: ComputerStatus,
+}
+
+impl Default for Setup {
+    fn default() -> Self {
+        Self {
+            fail_at: None,
+            flags: None,
+            seat: Some(SeatQuote {
+                amount: 4000,
+                currency: "usd".to_string(),
+                interval: BillingInterval::Month,
+            }),
+            computer_interval: BillingInterval::Month,
+            computer_status: ComputerStatus {
+                status: ComputerStatusKind::SettingUp,
+                setup: Some(SetupProgress {
+                    step: SetupStep::Paying,
+                    position: 1,
+                    total: 5,
+                }),
+            },
+        }
+    }
+}
+
+fn build(setup: Setup) -> (Service, Arc<Journal>) {
+    let journal = Arc::new(Journal {
+        steps: Mutex::new(vec![]),
+        fail_at: setup.fail_at,
+    });
+
+    let service = TeamAgentServiceImpl::new(
+        FakeRepository {
+            journal: journal.clone(),
+            agents: Mutex::new(vec![]),
+        },
+        FakeMembership {
+            journal: journal.clone(),
+            seat: setup.seat,
+        },
+        FakeApiKeys {
+            journal: journal.clone(),
+        },
+        FakeMailboxes {
+            journal: journal.clone(),
+            sent: Mutex::new(vec![]),
+        },
+        FakeComputers {
+            journal: journal.clone(),
+            purchases: Mutex::new(vec![]),
+            interval: setup.computer_interval,
+            status: setup.computer_status,
+        },
+        FakeRepos {
+            journal: journal.clone(),
+            seeds: Mutex::new(vec![]),
+        },
+        setup.flags,
+        "https://dev-gateway.macro.com/".to_string(),
+    );
+
+    (service, journal)
+}
+
+fn receipt(team_id: &str) -> EntityAccessReceipt<AdminTeamRole> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(user(ADMIN), team_id, EntityType::Team)
+}
+
+fn request() -> CreateTeamAgent {
+    CreateTeamAgent {
+        name: "  Sam Rivera ".to_string(),
+        job_description: "Runs vendor relations.".to_string(),
+        personality: "Dry, direct, kind.".to_string(),
+        size: ComputerSize::Large,
+        avatar_url: None,
+    }
+}
+
+#[tokio::test]
+async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
+    let (service, journal) = build(Setup::default());
+
+    let agent = service
+        .create(receipt(TEAM_ID), request())
+        .await
+        .expect("create succeeds");
+
+    assert_eq!(
+        agent,
+        TeamAgent {
+            user_id: user(AGENT),
+            team_id: Uuid::parse_str(TEAM_ID).expect("uuid"),
+            name: "Sam Rivera".to_string(),
+            email: "sam@agents.example.com".to_string(),
+            created_by: Some(user(ADMIN)),
+            computer_id: Some(Uuid::parse_str(COMPUTER_ID).expect("uuid")),
+            status: TeamAgentStatus::Provisioning,
+            status_reason: None,
+            setup: None,
+            created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
+        }
+    );
+    assert_eq!(
+        journal.steps(),
+        vec![
+            "mailbox.create",
+            "account.create",
+            "team.add",
+            "api_key.mint",
+            "repo.create",
+            "computer.purchase",
+            "account.set_computer",
+        ]
+    );
+    assert_eq!(
+        *service.repos.seeds.lock().expect("lock"),
+        vec![PersonaSeed {
+            name: "Sam Rivera".to_string(),
+            job_description: "Runs vendor relations.".to_string(),
+            personality: "Dry, direct, kind.".to_string(),
+        }]
+    );
+    assert_eq!(
+        *service.computers.purchases.lock().expect("lock"),
+        vec![ComputerPurchase {
+            team_id: Uuid::parse_str(TEAM_ID).expect("uuid"),
+            created_by: "macro|admin@example.com".to_string(),
+            size: ComputerSize::Large,
+            name: Some("Sam Rivera".to_string()),
+            persona: Some(Persona {
+                name: "Sam Rivera".to_string(),
+                os_user: "sam-rivera".to_string(),
+                extra_service: PersonaService {
+                    unit_name: "brain@sam-rivera".to_string(),
+                    exec: "/usr/local/bin/macro-brain".to_string(),
+                    env: BTreeMap::new(),
+                },
+                config: BTreeMap::from([
+                    (
+                        "MACRO_AGENT_USER_ID".to_string(),
+                        "macro|sam@agents.example.com".to_string(),
+                    ),
+                    (
+                        "MACRO_GATEWAY_URL".to_string(),
+                        "https://dev-gateway.macro.com".to_string(),
+                    ),
+                    (
+                        "MACRO_REPO_URL".to_string(),
+                        "https://git.example.com/sam".to_string(),
+                    ),
+                    ("MACRO_REPO_TOKEN".to_string(), "mrt_token".to_string()),
+                    ("MACRO_API_KEY".to_string(), "mak_secret".to_string()),
+                ]),
+            }),
+            extra_items: vec![SubscriptionItem {
+                price_id: "price_seat".to_string(),
+                quantity: 1,
+            }],
+        }]
+    );
+}
+
+#[tokio::test]
+async fn a_failure_before_the_purchase_undoes_everything_made_so_far() {
+    let cases: [(&str, Vec<&str>); 6] = [
+        ("mailbox.create", vec!["mailbox.create"]),
+        (
+            "account.create",
+            vec!["mailbox.create", "account.create", "mailbox.delete"],
+        ),
+        (
+            "team.add",
+            vec![
+                "mailbox.create",
+                "account.create",
+                "team.add",
+                "account.delete",
+                "mailbox.delete",
+            ],
+        ),
+        (
+            "api_key.mint",
+            vec![
+                "mailbox.create",
+                "account.create",
+                "team.add",
+                "api_key.mint",
+                "team.undo",
+                "account.delete",
+                "mailbox.delete",
+            ],
+        ),
+        (
+            "repo.create",
+            vec![
+                "mailbox.create",
+                "account.create",
+                "team.add",
+                "api_key.mint",
+                "repo.create",
+                "team.undo",
+                "account.delete",
+                "mailbox.delete",
+            ],
+        ),
+        (
+            "computer.purchase",
+            vec![
+                "mailbox.create",
+                "account.create",
+                "team.add",
+                "api_key.mint",
+                "repo.create",
+                "computer.purchase",
+                "repo.delete",
+                "team.undo",
+                "account.delete",
+                "mailbox.delete",
+            ],
+        ),
+    ];
+
+    for (fail_at, expected) in cases {
+        let (service, journal) = build(Setup {
+            fail_at: Some(fail_at),
+            ..Setup::default()
+        });
+
+        let result = service.create(receipt(TEAM_ID), request()).await;
+
+        assert!(result.is_err(), "{fail_at} should fail the create");
+        assert_eq!(journal.steps(), expected, "undo after {fail_at}");
+        assert!(
+            service.repository.agents.lock().expect("lock").is_empty(),
+            "no account survives a failed {fail_at}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_failure_after_the_purchase_keeps_the_paid_agent() {
+    let (service, journal) = build(Setup {
+        fail_at: Some("account.set_computer"),
+        ..Setup::default()
+    });
+
+    let result = service.create(receipt(TEAM_ID), request()).await;
+
+    assert!(matches!(result, Err(TeamAgentError::Internal(_))));
+    assert_eq!(
+        journal.steps(),
+        vec![
+            "mailbox.create",
+            "account.create",
+            "team.add",
+            "api_key.mint",
+            "repo.create",
+            "computer.purchase",
+            "account.set_computer",
+        ]
+    );
+    assert_eq!(service.repository.agents.lock().expect("lock").len(), 1);
+}
+
+#[tokio::test]
+async fn a_team_without_seat_billing_buys_only_the_computer() {
+    let (service, _journal) = build(Setup {
+        seat: None,
+        ..Setup::default()
+    });
+
+    service
+        .create(receipt(TEAM_ID), request())
+        .await
+        .expect("create succeeds");
+
+    let purchases = service.computers.purchases.lock().expect("lock");
+    assert_eq!(purchases[0].extra_items, vec![]);
+}
+
+#[tokio::test]
+async fn create_rejects_an_empty_personality_before_making_anything() {
+    let (service, journal) = build(Setup::default());
+    let mut request = request();
+    request.personality = "  ".to_string();
+
+    let result = service.create(receipt(TEAM_ID), request).await;
+
+    assert!(matches!(result, Err(TeamAgentError::BadRequest(_))));
+    assert_eq!(journal.steps(), Vec::<&str>::new());
+}
+
+#[tokio::test]
+async fn create_and_quote_need_the_flag_on_for_the_admin() {
+    let mut off = FakeFeatureFlags::default();
+    off.set(
+        user(ADMIN),
+        Ok(FlagSnapshot::new([(
+            TEAM_AGENTS_FLAG.to_string(),
+            FlagValue::Boolean(false),
+        )])),
+    );
+    let (service, journal) = build(Setup {
+        flags: Some(off),
+        ..Setup::default()
+    });
+
+    assert!(matches!(
+        service.create(receipt(TEAM_ID), request()).await,
+        Err(TeamAgentError::NotEnabled)
+    ));
+    assert!(matches!(
+        service.quote(receipt(TEAM_ID), ComputerSize::Standard).await,
+        Err(TeamAgentError::NotEnabled)
+    ));
+    assert_eq!(journal.steps(), Vec::<&str>::new());
+
+    let mut on = FakeFeatureFlags::default();
+    on.set(
+        user(ADMIN),
+        Ok(FlagSnapshot::new([(
+            TEAM_AGENTS_FLAG.to_string(),
+            FlagValue::Boolean(true),
+        )])),
+    );
+    let (service, _journal) = build(Setup {
+        flags: Some(on),
+        ..Setup::default()
+    });
+    assert!(service.create(receipt(TEAM_ID), request()).await.is_ok());
+}
+
+#[tokio::test]
+async fn create_stays_closed_when_flags_fail_to_load() {
+    let mut failing = FakeFeatureFlags::default();
+    failing.set(user(ADMIN), Err("posthog unavailable".to_string()));
+    let (service, journal) = build(Setup {
+        flags: Some(failing),
+        ..Setup::default()
+    });
+
+    assert!(matches!(
+        service.create(receipt(TEAM_ID), request()).await,
+        Err(TeamAgentError::NotEnabled)
+    ));
+    assert_eq!(journal.steps(), Vec::<&str>::new());
+}
+
+#[tokio::test]
+async fn quote_adds_the_seat_and_the_computer() {
+    let (service, _journal) = build(Setup::default());
+
+    let quote = service
+        .quote(receipt(TEAM_ID), ComputerSize::Large)
+        .await
+        .expect("quoted");
+
+    assert_eq!(
+        quote,
+        TeamAgentQuote {
+            seat: 4000,
+            computer: 5000,
+            total: 9000,
+            currency: "usd".to_string(),
+            interval: BillingInterval::Month,
+        }
+    );
+
+    let (service, _journal) = build(Setup {
+        seat: None,
+        ..Setup::default()
+    });
+    let quote = service
+        .quote(receipt(TEAM_ID), ComputerSize::Large)
+        .await
+        .expect("quoted");
+    assert_eq!((quote.seat, quote.total), (0, 5000));
+}
+
+#[tokio::test]
+async fn quote_refuses_a_seat_and_computer_on_different_intervals() {
+    let (service, _journal) = build(Setup {
+        computer_interval: BillingInterval::Year,
+        ..Setup::default()
+    });
+
+    assert!(matches!(
+        service.quote(receipt(TEAM_ID), ComputerSize::Large).await,
+        Err(TeamAgentError::Internal(_))
+    ));
+}
+
+#[tokio::test]
+async fn listing_shows_setup_progress_while_the_computer_comes_up() {
+    let (service, _journal) = build(Setup {
+        computer_status: ComputerStatus {
+            status: ComputerStatusKind::SettingUp,
+            setup: Some(SetupProgress {
+                step: SetupStep::Booting,
+                position: 3,
+                total: 5,
+            }),
+        },
+        ..Setup::default()
+    });
+    service
+        .create(receipt(TEAM_ID), request())
+        .await
+        .expect("create succeeds");
+
+    let listed = service.list(receipt(TEAM_ID)).await.expect("listed");
+
+    assert_eq!(listed.agents[0].status, TeamAgentStatus::Provisioning);
+    assert_eq!(
+        listed.agents[0].setup,
+        Some(SetupProgress {
+            step: SetupStep::Booting,
+            position: 3,
+            total: 5,
+        })
+    );
+}
+
+#[tokio::test]
+async fn a_ready_computer_makes_the_agent_running() {
+    let (service, _journal) = build(Setup {
+        computer_status: ComputerStatus {
+            status: ComputerStatusKind::Ready,
+            setup: None,
+        },
+        ..Setup::default()
+    });
+    service
+        .create(receipt(TEAM_ID), request())
+        .await
+        .expect("create succeeds");
+
+    let me = service.me(&user(AGENT)).await.expect("me");
+
+    assert_eq!(me.status, TeamAgentStatus::Running);
+    assert_eq!(me.setup, None);
+}
+
+#[tokio::test]
+async fn listing_takes_a_failure_from_the_computer() {
+    let (service, _journal) = build(Setup {
+        computer_status: ComputerStatus {
+            status: ComputerStatusKind::Failed,
+            setup: None,
+        },
+        ..Setup::default()
+    });
+    service
+        .create(receipt(TEAM_ID), request())
+        .await
+        .expect("create succeeds");
+
+    let listed = service.list(receipt(TEAM_ID)).await.expect("listed");
+
+    assert_eq!(listed.agents.len(), 1);
+    assert_eq!(listed.agents[0].status, TeamAgentStatus::Failed);
+    assert_eq!(
+        listed.agents[0].status_reason.as_deref(),
+        Some("the computer failed to start")
+    );
+
+    let stored = service.me(&user(AGENT)).await.expect("me");
+    assert_eq!(stored.status, TeamAgentStatus::Failed);
+    assert_eq!(
+        service.list(receipt(OTHER_TEAM_ID)).await.expect("listed").agents,
+        vec![]
+    );
+}
+
+#[tokio::test]
+async fn delete_releases_the_computer_and_removes_the_agent_last() {
+    let (service, journal) = build(Setup::default());
+    service
+        .create(receipt(TEAM_ID), request())
+        .await
+        .expect("create succeeds");
+    journal.steps.lock().expect("lock").clear();
+
+    assert!(matches!(
+        service.delete(receipt(OTHER_TEAM_ID), &user(AGENT)).await,
+        Err(TeamAgentError::NotFound)
+    ));
+    assert_eq!(journal.steps(), Vec::<&str>::new());
+
+    service
+        .delete(receipt(TEAM_ID), &user(AGENT))
+        .await
+        .expect("deleted");
+
+    assert_eq!(
+        journal.steps(),
+        vec![
+            "computer.release",
+            "repo.delete",
+            "team.remove",
+            "mailbox.delete",
+            "account.delete",
+        ]
+    );
+    assert!(matches!(
+        service.me(&user(AGENT)).await,
+        Err(TeamAgentError::NotAnAgent)
+    ));
+}
+
+#[tokio::test]
+async fn only_agents_can_send_email() {
+    let (service, _journal) = build(Setup::default());
+    let email = SendEmail {
+        to: vec!["vendor@example.com".to_string()],
+        subject: "Hi".to_string(),
+        text: "Hello".to_string(),
+        html: None,
+    };
+
+    assert!(matches!(
+        service.send_email(&user(ADMIN), email.clone()).await,
+        Err(TeamAgentError::NotAnAgent)
+    ));
+
+    service
+        .create(receipt(TEAM_ID), request())
+        .await
+        .expect("create succeeds");
+    let sent = service
+        .send_email(&user(AGENT), email)
+        .await
+        .expect("sent");
+
+    assert_eq!(sent.message_id, "sent-1");
+    assert_eq!(service.mailboxes.sent.lock().expect("lock")[0].0, "inbox-1");
+}
+
+#[test]
+fn slug_is_a_valid_os_user_name() {
+    assert_eq!(slug("Sam Rivera"), "sam-rivera");
+    assert_eq!(slug("  Ünïcode!! Bot 2 "), "n-code-bot-2");
+    assert_eq!(slug("✨"), "agent");
+    assert_eq!(slug("42 Things"), "agent-42-things");
+    assert_eq!(slug("Bartholomew Maximilian Montgomery"), "bartholomew-maximilian-m");
+}

@@ -1,0 +1,55 @@
+[package]
+edition = "2024"
+name = "team_agents"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "dep:utoipa",
+  "entity_access/axum",
+  "entity_access/inbound",
+]
+outbound = [
+  "dep:agent_git",
+  "dep:agent_secrets",
+  "dep:reqwest",
+  "dep:sqlx",
+  "dep:teams",
+  "dep:user_api_key",
+]
+
+[dependencies]
+agent_git = { path = "../agent_git", optional = true, default-features = false, features = ["client"] }
+agent_secrets = { path = "../agent_secrets", optional = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+feature_flags = { path = "../feature_flags" }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+model-error-response = { path = "../model-error-response", optional = true }
+reqwest = { workspace = true, optional = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+teams = { path = "../teams", optional = true, default-features = false, features = ["ports"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+user_api_key = { path = "../user_api_key", optional = true, features = ["ports"] }
+utoipa = { workspace = true, optional = true, features = ["chrono", "uuid"] }
+uuid = { workspace = true, features = ["serde", "v7"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+axum = { workspace = true }
+macro_db_migrator = { path = "../macro_db_migrator" }
+model_user = { path = "../model_user" }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

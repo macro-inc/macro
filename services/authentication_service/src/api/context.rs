@@ -120,6 +120,30 @@ pub(crate) type DomainNoticeServiceType = teams::domain::domain_notice::DomainNo
     >,
 >;
 
+pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentServiceImpl<
+    team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
+    team_agents::outbound::team_membership::TeamsMembership<TeamsServiceType>,
+    team_agents::outbound::agent_api_keys::UserApiKeys<
+        user_api_key::domain::service::UserApiKeyServiceImpl<
+            user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo,
+        >,
+    >,
+    team_agents::outbound::dead_simple_email::DeadSimpleEmail,
+    team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers,
+    team_agents::outbound::agent_git_repos::AgentGitRepos,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
+>;
+
+pub(crate) type AgentSecretsServiceType = agent_secrets::domain::service::AgentSecretServiceImpl<
+    agent_secrets::outbound::pg_agent_secrets_repo::PgAgentSecretsRepo,
+    agent_secrets::outbound::kms_secret_cipher::KmsSecretCipher<
+        cursor_api_key::cipher::AwsKmsCiphertexts,
+    >,
+    team_agents::outbound::agent_secrets_directory::TeamAgentsDirectory<
+        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
+    >,
+>;
+
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
@@ -257,6 +281,8 @@ pub(crate) struct ApiContext {
     pub user_roles_and_permissions_service:
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
+    pub team_agents_service: Arc<TeamAgentsServiceType>,
+    pub agent_secrets_service: Arc<AgentSecretsServiceType>,
     pub domain_notice_service: Arc<DomainNoticeServiceType>,
     pub channel_service: Arc<ChannelServiceType>,
     pub channel_messages: Arc<dyn messages::domain::api::MessageCommands>,
