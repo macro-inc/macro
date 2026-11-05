@@ -430,3 +430,8 @@ impl NotificationTitle for NotifEvent {
         }
     }
 }
+
+
+#[doc(hidden)]
+#[allow(dead_code)]
+const CI_INTEGRATE_NONCE: &str = "50aafb413a004eada83ec58ba5f15bfd";
