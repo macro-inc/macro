@@ -22,6 +22,19 @@ All `@macro.com` accounts see a **Bypass** button on every onboarding step. It
 skips the rest of the flow and leaves onboarding. Accounts on other domains
 do not see it.
 
+## Tools step — `/app/onboarding?step=tools`
+
+**Connect your tools.** lists four suggested tools and **Add another inbox**,
+each with its `native`/`mcp` badge and what connecting it does in Macro. The
+tools are ranked by mail from their sender domains in the last six months,
+searched live at Gmail or Outlook (`POST /email/senders/domain-counts`)
+because the inbox backfill hasn't run yet; with no such mail, or if the search
+fails, Slack, Linear, Notion and GitHub are suggested. **Browse all
+integrations** opens the searchable catalog without the suggested tools. The
+backend-free check is
+`bunx playwright test --config src/features/onboarding/browser-test/playwright.config.ts`
+from `apps/web`; seed `senderDomainCounts` in the fixture world to rank tools.
+
 ## Setup plan step — `/app/onboarding`
 
 The final step offers Pro with a 30-day trial only after the server confirms
