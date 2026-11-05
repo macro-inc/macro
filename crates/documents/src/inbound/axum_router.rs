@@ -5,6 +5,7 @@
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /slug/{slug}` - get document by team slug
 //! - `POST /{document_id}/ai-edit` — edit a markdown document by instructions
+//! - `GET`/`POST /{document_id}/lexical` — read/commit a markdown document as Lexical state
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
 //! - `GET /{document_id}/branch_name` — get short ID + task-aware git branch name (when the document is a task)
 //! - `GET /{document_id}/github_prs` — get GitHub pull requests associated with a task document
@@ -45,6 +46,8 @@ pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
 pub mod get_text;
+#[cfg(feature = "ai_tools")]
+pub mod lexical;
 pub mod put_interaction;
 pub mod put_snapshot;
 pub mod skill_description;
@@ -173,7 +176,7 @@ pub type DefaultDocumentCreator<T> = crate::domain::create::DocumentCreator<
     crate::outbound::mention_tracker::LexicalCommsMentionTracker,
 >;
 
-/// Editing worker behind the AI edit route.
+/// Editing worker behind the AI edit and Lexical routes.
 #[cfg(feature = "ai_tools")]
 pub type DefaultEditingWorker = crate::outbound::editing_worker_client::ReqwestEditingWorkerClient;
 
@@ -198,6 +201,9 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     /// EditDocument's AI-editing use case, with the host's admission and metering.
     #[cfg(feature = "ai_tools")]
     pub ai_editing: Arc<crate::domain::ai_editing::AiEditingService<DefaultEditingWorker>>,
+    /// Editing worker that reads and commits Lexical state, with no model.
+    #[cfg(feature = "ai_tools")]
+    pub editing_worker: Arc<DefaultEditingWorker>,
     /// JWT secret for signing document permission tokens.
     pub document_permission_jwt_secret: String,
     /// Whether a team bot with no acting user may own what it creates.
@@ -218,6 +224,8 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             creator: self.creator.clone(),
             #[cfg(feature = "ai_tools")]
             ai_editing: self.ai_editing.clone(),
+            #[cfg(feature = "ai_tools")]
+            editing_worker: self.editing_worker.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             non_user_owners: self.non_user_owners,
         }
@@ -320,10 +328,19 @@ where
         );
 
     #[cfg(feature = "ai_tools")]
-    let document_id_routes = document_id_routes.route(
-        "/{document_id}/ai-edit",
-        axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
-    );
+    let document_id_routes = document_id_routes
+        .route(
+            "/{document_id}/ai-edit",
+            axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/lexical",
+            axum::routing::get(lexical::get_lexical_handler::<T, Svc, Auth>).merge(
+                axum::routing::post(lexical::commit_lexical_handler::<T, Svc, Auth>).layer(
+                    axum::extract::DefaultBodyLimit::max(lexical::MAX_LEXICAL_COMMIT_BODY_BYTES),
+                ),
+            ),
+        );
 
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(
         state.clone(),
