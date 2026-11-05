@@ -693,8 +693,10 @@ impl Respond for GraphSeries {
     }
 }
 
-/// A synced daily series the mailbox organizes, or attends as a guest,
-/// and the original-start key of its second meeting.
+/// A synced daily series of two meetings the mailbox organizes, or attends
+/// as a guest, and the original-start key of its second meeting. Its meetings
+/// are occurrences only, so it reads the same before and after Graph's
+/// `originalStart` is selected, and only finding one meeting depends on it.
 async fn synced_series(
     pool: &PgPool,
     is_organizer: bool,
@@ -719,6 +721,7 @@ async fn synced_series(
         "ada@example.com"
     };
     let (mut master, mut instances) = upcoming_series("AAMkDaily", organizer, is_organizer);
+    instances.truncate(2);
     let guest = if is_organizer {
         "ada@example.com"
     } else {
@@ -745,7 +748,7 @@ async fn synced_series(
         .list_occurrences(OWNER, two_weeks(), None, 100)
         .await
         .unwrap();
-    assert_eq!(listed.len(), 3);
+    assert_eq!(listed.len(), 2);
     let event_id = listed[1].event.id;
     let key = listed[1].occurrence.occurrence_key.clone();
     (server, api, repo, event_id, key)
@@ -873,7 +876,7 @@ async fn deleting_one_meeting_of_an_outlook_series_deletes_only_that_meeting(poo
         .into_iter()
         .map(|listed| listed.occurrence.occurrence_key)
         .collect();
-    assert_eq!(left.len(), 2);
+    assert_eq!(left.len(), 1);
     assert!(!left.contains(&key));
 }
 
