@@ -182,31 +182,31 @@ or `aws-sdk-sns` directly. Also kept: FusionAuth (already a pod), Doppler.
 
 ### Queues on Kafka
 
-Kafka (Apache-2.0) replaces SQS everywhere, so an instance runs one messaging
-system. Mapping of the SQS features we use:
+Kafka (Apache-2.0) stores every queue, so an instance runs one messaging system.
 
-| SQS feature (uses in code) | On Kafka |
+**Services keep the SQS API.** `services/queue_gateway` serves that API and keeps
+messages in Kafka. The first version of this design put a new queue port in front of
+services, but over twenty call sites across `notification`, `reminders`,
+`calendar_events`, `slack_integration`, and others use `aws_sdk_sqs` directly.
+Rewriting them would put production code at risk for a change production does not
+need. The gateway needs no service changes and production stays on real SQS. A port
+remains the right move if production ever leaves SQS.
+
+| SQS feature | In the gateway |
 | --- | --- |
-| Work queue, per-message delete (`receive`/`delete_message`) | Consumer group per queue; commit the offset after the handler succeeds. |
-| Visibility timeout extension (5) | Not needed: a record is redelivered only if the consumer dies or exceeds `max.poll.interval.ms`, tuned per queue. |
-| Redrive to a dead-letter queue | Retry topic with a delivery count header, then `<queue>.dlq` after N attempts. |
-| FIFO message group (1) | Record key = group id, so one partition keeps the group's order. |
-| Deduplication id (1) | Idempotent producer, plus an idempotent handler keyed by the dedup id. |
-| Delay seconds (2) | A `<queue>.delayed` topic whose consumer holds each record until its due time, then republishes it. |
-| Lambda-style scaling | KEDA's Kafka scaler on consumer lag. |
+| Work queue, per-message delete | One topic and consumer group per queue. An offset commits only when every message before it is deleted, so a crash redelivers what was in flight. |
+| Visibility timeout and extension | Tracked in memory per message. |
+| Redrive to a dead-letter queue | Republished after `maxReceiveCount`, and committed only once the dead-letter queue has it. |
+| FIFO message group | Record key is the group id; one partition per queue; one message per group in flight. |
+| Deduplication id | Five-minute window, in memory. |
+| Delay seconds | The record holds its due time. |
 
-Kafka 4.2 made share groups (KIP-932, per-record ack like SQS) production-ready.
-Its C client exposes them only as a preview (librdkafka 2.15), and the Rust
-`rdkafka` crate does not expose them yet. The design above uses plain consumer
-groups, which work today. A later switch to share groups stays inside the
-adapter.
+Limits to know about: `ApproximateReceiveCount` and the deduplication window reset on
+restart, and each instance runs one gateway replica. Both are acceptable for instances
+and would not be for production, which is another reason it stays on SQS. Share groups
+(KIP-932) could replace the in-memory tracking once `rdkafka` exposes them.
 
-All of this lives behind one queue port in `sqs_worker`, renamed when it
-moves. Services do not call `aws-sdk-sqs` or `rdkafka` directly. Queues are
-declared in Nix next to the Kafka topics, from `macro_queues` and
-`macro_event_topics`. Locally Kafka runs one broker; prod runs three, with
-replication factor 3. That is a size difference, as the parity rule
-allows.
+Lambda-style scaling is still planned: KEDA's Kafka scaler on consumer lag.
 
 ### Service decomposition and gRPC
 
@@ -327,8 +327,7 @@ maintained twice:
    module; config through External Secrets; migrations as a Job. Done when
    `just instance up demo` serves the app and login works end to end, and
    `just dev <service>` replaces one pod in under 30 seconds.
-4. **Replacements.** Move queues to Kafka behind the queue port (ElasticMQ
-   covers any queue not yet moved); switch the AWS SDK endpoints to ExtendDB,
+4. **Replacements.** Move queues to Kafka behind the SQS API; switch the AWS SDK endpoints to ExtendDB,
    RustFS, and OpenBao; email and push behind their ports; Lambdas to KEDA
    workers; Workers to celld. Done when
    the local E2E suite (`just local-e2e`) passes against an instance.
@@ -356,8 +355,8 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
 - **Phase 3, for the core app:** every Rust service in the inventory, lexical,
   websocket, the edge, and the frontend. Sign-up reaches onboarding in a browser
   on these images.
-- **Phase 4, in part:** RustFS, ExtendDB, local-kms, and ElasticMQ behind one AWS
-  gateway; sync-service, analytics-proxy, and ai-editing-worker as celld fleets;
+- **Phase 4, in part:** RustFS, ExtendDB, local-kms, and the Kafka-backed queue gateway
+  behind one AWS gateway; sync-service, analytics-proxy, and ai-editing-worker as celld fleets;
   Valkey for Redis; provisioning as in-cluster Jobs; eleven Lambda handlers,
   unmodified, behind `lambda-runner`. The handlers start and stay up, but no
   handler has been driven end to end, and neither have uploads or search indexing.
@@ -386,8 +385,7 @@ on the NixOS host, and it belongs in a forge job once the failure above is fixed
 Not built yet:
 
 - convert-service, and the Lambda handlers with S3 or SNS triggers.
-- Queues on Kafka (services still use the SQS API, on ElasticMQ), OpenBao for
-  KMS, the email and push ports, and KEDA.
+- OpenBao for KMS, the email and push ports, and KEDA.
 - The bots, and deploys on the forge.
 - Phases 6, 8, and 9: AWS (the terranix module exists; nothing is wired or applied),
   gRPC and service splits, and the prod cutover.

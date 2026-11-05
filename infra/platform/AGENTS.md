@@ -73,8 +73,8 @@ deploy repo, which Argo CD syncs.
   their install in the store, so they are redirected there.
 - `/tmp` survives container restarts within a pod, so entrypoints must be
   idempotent.
-- `macro_queues` local defaults are bare names, which LocalStack accepts and
-  ElasticMQ rejects. The instance env sets `OVERRIDE_LOCAL_QUEUE_BASE_URL`, and
+- `macro_queues` local defaults are bare names, which LocalStack accepts and the
+  queue gateway rejects. The instance env sets `OVERRIDE_LOCAL_QUEUE_BASE_URL`, and
   `queue_urls` in `platform.rs` expands the env's queue variables.
 - Services publish not-ready addresses (compose DNS semantics). Kafka's
   controller dials itself through its Service before it is ready.
@@ -101,3 +101,5 @@ deploy repo, which Argo CD syncs.
   rewrites its RUNPATH for this reason.
 - A StatefulSet with a crash-looping pod does not roll: delete the pod once after
   fixing the image (forge runners).
+- RustFS reports a blocked private webhook target as `dns_failure`, while uploads
+  still succeed. Add a new target's origin to `RUSTFS_OUTBOUND_ALLOW_ORIGINS`.

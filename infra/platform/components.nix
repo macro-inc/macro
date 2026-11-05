@@ -473,6 +473,9 @@ in
         RUSTFS_NOTIFY_WEBHOOK_ENABLE_FINALIZER = "on";
         RUSTFS_NOTIFY_WEBHOOK_ENDPOINT_FINALIZER = "http://s3-events:8080/";
         RUSTFS_NOTIFY_WEBHOOK_QUEUE_DIR_FINALIZER = "/data/.notify";
+        # RustFS refuses webhooks that resolve to private addresses, as a ClusterIP
+        # does, and reports it as `dns_failure`.
+        RUSTFS_OUTBOUND_ALLOW_ORIGINS = "http://s3-events:8080";
       };
     };
     env = {
