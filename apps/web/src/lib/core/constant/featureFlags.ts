@@ -179,6 +179,16 @@ export const enableSlackArchiveImport = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Macro computers: buying hosted machines in Settings → Runtimes and listing
+ * them on team Billing. On in dev; production follows PostHog.
+ */
+export const enableMacroComputers = defineFlag({
+  key: 'enable-macro-computers',
+  env: 'ENABLE_MACRO_COMPUTERS',
+  default: onInDev,
+});
+
 /** Sidebar prompt cards: imports, calendars, repositories, and Home setup. */
 export const enableSidebarPromotions = defineFlag({
   key: 'enable-sidebar-promotions',
