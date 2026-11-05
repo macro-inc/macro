@@ -16,6 +16,7 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       codegen_changed: ${{ steps.filter.outputs.codegen_changed }}
+      web_artifact_changed: ${{ steps.filter.outputs.web_artifact_changed }}
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
       calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
@@ -52,6 +53,24 @@ jobs:
             - 'packages/code-mode-sdk/**'
             - 'crates/agent_code_mode/SKILL.md'
             - '.github/actions/setup-reqs-web/**'
+          web_artifact_changed:
+            - 'package.json'
+            - 'bun.lock'
+            - 'apps/web/**'
+            - 'packages/**'
+            - 'crates/folds/agent_fold/**'
+            - 'crates/agent_runtime_protocol/**'
+            - 'crates/client/cache-core/**'
+            - 'crates/client/cache-turso/**'
+            - 'crates/client/cache-wasm/**'
+            - 'crates/client/turso-opfs/**'
+            - 'crates/database_sql/**'
+            - 'crates/filter_ast/**'
+            - 'crates/item_filters/**'
+            - 'static_assets/schema.graphql'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
+            - 'rust-toolchain.toml'
           codegen_changed:
             - 'crates/**/*.rs'
             - 'services/**/*.rs'
@@ -301,7 +320,7 @@ jobs:
     - name: Check Floating Promises
       run: bun run lint:oxlint --quiet
     - name: Check Functional Test Types
-      run: bun run --bun --silent tsc --project tests/functional/tsconfig.json
+      run: bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json
       working-directory: apps/web
     - name: Check Collaboration Package Types
       run: bun run type-check
@@ -469,7 +488,81 @@ jobs:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
-    name: Test
+    name: Test (${{ matrix.shard }}/3)
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    strategy:
+      matrix:
+        shard:
+        - 1
+        - 2
+        - 3
+      fail-fast: false
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/vitest-modules
+          /home/runner/.cache/wasm-pkgs
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup
+      uses: './.github/actions/setup-reqs-web'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Build agent-fold WASM for tests
+      run: just build-agent-fold-wasm
+      env:
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+      timeout-minutes: 15
+      working-directory: apps/web
+    - name: Test
+      run: bun run test --shard=${{ matrix.shard }}/3
+      env:
+        VITEST_MODULE_CACHE_DIR: /home/runner/.cache/vitest-modules
+      working-directory: apps/web
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  functional:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Functional Tests
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
@@ -480,7 +573,10 @@ jobs:
         cache: nix
         path: |-
           /home/runner/.bun/install/cache
-          /home/runner/.cache/vitest-modules
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/wasm-pkgs
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -488,14 +584,118 @@ jobs:
       uses: './.github/actions/setup-reqs-web'
       with:
         playwright: 'true'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Start sccache server
+      run: sccache --start-server
+    - name: Build wasm packages
+      run: just build-wasm
+      env:
+        CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_PSD_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+      working-directory: apps/web
+    - name: Functional Browser Tests
+      run: bun run test:functional
+      env:
+        FUNCTIONAL_TEST_WORKERS: '8'
+      working-directory: apps/web
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  browser:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Browser Tests
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/vitest-modules
+          /home/runner/.cache/wasm-pkgs
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup
+      uses: './.github/actions/setup-reqs-web'
+      with:
+        playwright: 'true'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
     - name: Build agent-fold WASM for tests
       run: just build-agent-fold-wasm
-      timeout-minutes: 15
-      working-directory: apps/web
-    - name: Test
-      run: bun run test
       env:
-        VITEST_MODULE_CACHE_DIR: /home/runner/.cache/vitest-modules
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+      timeout-minutes: 15
       working-directory: apps/web
     - name: Sign-up Browser Tests
       run: just test-signup-browser
@@ -554,6 +754,9 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Build
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -572,8 +775,6 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
-      with:
-        playwright: 'true'
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -607,14 +808,78 @@ jobs:
     - name: Build
       run: just build-dev
       env:
+        CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_PSD_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
-      working-directory: apps/web
-    - name: Test Optimistic Mutations in Chromium
-      run: bun run test:functional
+        VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+        VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       working-directory: apps/web
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
+    - id: preview-credentials
+      name: Configure AWS Credentials
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+      continue-on-error: true
+    - id: preview-id
+      name: Get or create preview ID
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-credentials.outcome == 'success'
+      run: |
+        PREVIEW_ID=$(bun scripts/preview/get-or-create-id.ts \
+          --pr ${{ github.event.pull_request.number }} \
+          --repo ${{ github.repository }} \
+          --token ${{ secrets.GITHUB_TOKEN }} \
+          --branch "${{ github.head_ref }}")
+        echo "id=$PREVIEW_ID" >> $GITHUB_OUTPUT
+        echo "Preview ID: $PREVIEW_ID"
+      env:
+        PREVIEW_BUCKET: macro-preview-assets-dev
+      continue-on-error: true
+      working-directory: apps/web
+    - id: preview-bucket
+      name: Validate bucket name
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-id.outcome == 'success'
+      run: |
+        if [[ "${{ env.PREVIEW_BUCKET }}" != "macro-preview-assets-dev" ]]; then
+          echo "ERROR: PREVIEW_BUCKET must be 'macro-preview-assets-dev'"
+          exit 1
+        fi
+      env:
+        PREVIEW_BUCKET: macro-preview-assets-dev
+      continue-on-error: true
+    - id: preview-deploy
+      name: Deploy to S3
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-bucket.outcome == 'success'
+      run: |
+        bun scripts/preview/deploy.ts \
+          --preview-id ${{ steps.preview-id.outputs.id }} \
+          --skip-build
+      env:
+        PREVIEW_BUCKET: macro-preview-assets-dev
+      continue-on-error: true
+      working-directory: apps/web
+    - name: Comment on PR
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-deploy.outcome == 'success'
+      run: |
+        bun scripts/preview/post-comment.ts \
+          --pr ${{ github.event.pull_request.number }} \
+          --repo ${{ github.repository }} \
+          --token ${{ secrets.GITHUB_TOKEN }} \
+          --preview-id ${{ steps.preview-id.outputs.id }} \
+          --sha ${{ github.sha }}
+      env:
+        PREVIEW_BUCKET: macro-preview-assets-dev
+      continue-on-error: true
+      working-directory: apps/web
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -992,6 +1257,8 @@ jobs:
     - generated-code
     - biome-check
     - test
+    - functional
+    - browser
     - cycles
     - build
     - ios-native-check
@@ -1007,6 +1274,8 @@ jobs:
         echo "generated-code: ${{ needs.generated-code.result }}"
         echo "biome-check: ${{ needs.biome-check.result }}"
         echo "test: ${{ needs.test.result }}"
+        echo "functional: ${{ needs.functional.result }}"
+        echo "browser: ${{ needs.browser.result }}"
         echo "cycles: ${{ needs.cycles.result }}"
         echo "build: ${{ needs.build.result }}"
         echo "ios-native-check: ${{ needs.ios-native-check.result }}"
@@ -1019,6 +1288,8 @@ jobs:
            [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
            [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
            [[ "${{ needs.test.result }}" == "failure" ]] || \
+           [[ "${{ needs.functional.result }}" == "failure" ]] || \
+           [[ "${{ needs.browser.result }}" == "failure" ]] || \
            [[ "${{ needs.cycles.result }}" == "failure" ]] || \
            [[ "${{ needs.build.result }}" == "failure" ]] || \
            [[ "${{ needs.ios-native-check.result }}" == "failure" ]] || \
