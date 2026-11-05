@@ -126,6 +126,13 @@ owner-connection sessions include enabled connected apps and custom MCP servers;
 explicit agent selections retain their selected apps. All connections use the
 session credential through Macro's egress proxy.
 
+macrod adds one server of its own, `macrod` (a stdio server, `macrod mcp
+artifacts`), to every session that has Macro's server. Its `PublishArtifact`
+tool publishes files from the workspace as a Macro artifact: macrod reads and
+hashes them and uploads only what Macro lacks, through the egress with the same
+session credential, as the person who prompted the turn. Paths must stay inside
+the session's workspace (or, in a managed worktree, the agent's own directory).
+
 Claude receives MCP configuration in a private file. Codex receives per-launch
 MCP overrides; HTTP credentials come from private environment files sourced in
 the native pane, and stdio servers use private launch scripts. This requires a

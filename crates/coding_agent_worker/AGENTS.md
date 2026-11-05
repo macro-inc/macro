@@ -24,6 +24,15 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   (`src/harness.rs`) prefixes to each new session's first prompt — macrod
   version, workspace, forwarded MCP servers, permission bypass, listing only
   what the session has. General Macro guidance stays in the `SelfKnowledge` tool.
+- `src/artifacts.rs` (`src/artifacts/`): `PublishArtifact`. The bridge's
+  `SelfKnowledge` pass adds a stdio MCP server (`macrod mcp artifacts`, name
+  `macrod`) to every `session/new|load|resume` that carries Macro's `macro`
+  server, passing the egress base and session token read off that entry in
+  the server's environment. The server reads files under the session `cwd`
+  only (symlinks resolved), hashes them, and publishes through the egress
+  `/artifacts` route; no Macro API token touches the machine. Its tool
+  description carries the UI-replication guidance. Managed herdr worktrees
+  drop the root variable so the server roots at the agent's own directory.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,
@@ -119,6 +128,8 @@ external chat replies depend on it. Direct session controls still mint IDs.
   Windows-breaking code there without a cfg gate.
 - The ACP child is killed with its whole tree: a process group on Unix, a Job
   Object on Windows (`src/outbound/acp_process/job.rs`).
+- The artifact wire types in `src/artifacts/publish.rs` mirror the document
+  storage service's artifact API by hand; change them with that API.
 - Every herdr call goes through the `HerdrCli` facade; add a capability to both
   `cli/legacy.rs` and `cli/hc.rs`. herdr-core has no agent registry or
   worktrees, and status comes only from OSC 7501 (README.md, "Herdr versions").

@@ -11,6 +11,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::artifacts::LocalServer;
 use crate::config::Harness;
 use crate::outbound::acp_probe::{ProbeError, ProbeSubprocess, probe_subprocess};
 use crate::outbound::acp_process::{AcpProcess, AgentEvent, AttachedAgent, RunningAgent};
@@ -69,10 +70,13 @@ pub enum BridgeEnd {
 /// previous process image) and the service until either side ends, tracking
 /// its turns in `turns` and handing every ACP line to `tap` when there is
 /// one. `handoff` asks the bridge to stop at a line boundary and hand the
-/// agent over instead.
+/// agent over instead. Every session gets `local_server` alongside the MCP
+/// servers Macro forwards.
+#[expect(clippy::too_many_arguments, reason = "the bridge's whole input")]
 pub async fn bridge(
     harness: &Harness,
     cwd: &Path,
+    local_server: Option<LocalServer>,
     channel: RuntimeChannel,
     tap: Option<LineTap>,
     turns: &ActiveTurns,
@@ -118,6 +122,7 @@ pub async fn bridge(
         Ok(agent) => {
             relay(
                 agent.attach(debug),
+                SelfKnowledge::new(local_server),
                 &mut to_service,
                 &mut from_service,
                 &probes,
@@ -199,6 +204,7 @@ enum Relayed {
 
 async fn relay(
     mut agent: AttachedAgent,
+    mut self_knowledge: SelfKnowledge,
     to_service_slot: &mut Option<tokio::sync::mpsc::UnboundedSender<ToServerMessage>>,
     from_service: &mut tokio::sync::mpsc::UnboundedReceiver<ToRuntimeMessage>,
     probes: &HarnessModelProbes,
@@ -210,7 +216,6 @@ async fn relay(
         .expect("the bridge holds the sender");
     // Owned by the relay: ending it aborts every probe subprocess.
     let mut probe_tasks = JoinSet::new();
-    let mut self_knowledge = SelfKnowledge::default();
     loop {
         tokio::select! {
             event = agent.next_event() => match event {

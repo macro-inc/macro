@@ -15,6 +15,7 @@
 //! `agent_trigger.new` delivery opens a session and forwards the first prompt;
 //! `agent_trigger.existing` deliveries forward follow-up messages.
 
+mod artifacts;
 mod config;
 mod daemon;
 mod dispatch;
@@ -111,6 +112,13 @@ enum Command {
         #[arg(long)]
         workspace: Option<std::path::PathBuf>,
     },
+    /// Serve one of macrod's own MCP servers on stdio. Agents launch these
+    /// themselves: macrod adds them to each session it serves.
+    #[command(hide = true)]
+    Mcp {
+        #[command(subcommand)]
+        server: McpServer,
+    },
     /// List the ACP agents installed on this machine as JSON.
     DetectAgents,
     /// Report the service config's state as JSON without running anything.
@@ -126,6 +134,12 @@ fn default_tui_config() -> rootcause::Result<std::path::PathBuf> {
     config::default_config_path().ok_or_else(|| {
         rootcause::report!("no config path: pass --config or set HOME (USERPROFILE on Windows)")
     })
+}
+
+#[derive(clap::Subcommand)]
+enum McpServer {
+    /// `PublishArtifact`: publish files from the workspace as a Macro artifact.
+    Artifacts,
 }
 
 #[tokio::main]
@@ -172,6 +186,21 @@ async fn main() -> ExitCode {
                 Err(error) => {
                     service::emit_fatal(&format!("{error}"));
                     eprintln!("macrod service: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        Some(Command::Mcp {
+            server: McpServer::Artifacts,
+        }) => {
+            // stdout is the MCP stream: logs go to stderr.
+            tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .init();
+            return match artifacts::serve().await {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("macrod mcp artifacts: {error:?}");
                     ExitCode::FAILURE
                 }
             };
