@@ -3,7 +3,8 @@
 **Status:** Proposed. Implementation follows the PR plan at the end.
 
 Macro tasks: MACRO-4588 (documents and tasks), MACRO-4587 (spreadsheets),
-MACRO-4581 (Word and PowerPoint), MACRO-4584 (canvases).
+MACRO-4581 (Word and PowerPoint), MACRO-4584 (canvases), MACRO-4631
+(editing documents with Lexical).
 
 ## Goal
 
@@ -17,8 +18,9 @@ tools, and hides each tool from code-mode sessions once its SDK method exists.
 
 The primary API is an edit by **natural-language instructions**, run by the
 same AI-editing pipeline the direct tool uses: `await doc.edit('…')`.
-Deterministic, typed operations stay as a lower layer, only where instructions
-are a poor fit.
+Deterministic edits are a lower layer, for where instructions are a poor fit:
+for documents, a program edits a real Lexical editor and commits it; for
+canvases, typed operations.
 
 Out of scope: removing direct tools from non-code-mode hosts, and uploading or
 downloading file bytes (separate task).
@@ -64,11 +66,16 @@ sandbox                       DSS (crates/documents)               ai-editing wo
 doc.edit('…', opts)  ──POST /documents/{id}/ai-edit──▶ edit receipt,  ──▶ /edit: models write
                                                     AI admission,        ops, Doc applies them
                                                     scoped token         as a live Loro peer
-doc.structure()      ──GET  /documents/{id}/structure──▶ view receipt ──▶ lexical-service /xml
-structure.applyEdits(e => …)
-  vendored DocumentEditor → ops ──POST /documents/{id}/edits──▶ edit receipt ──▶ /document-ops:
-                                                                           no model, all or nothing
+doc.lexical()        ──GET  /documents/{id}/lexical──▶ view receipt ──▶ /lexical-state: Lexical
+                                                                           JSON + revision
+lexical.update(() => …)   headless Lexical + lexical-core nodes, in the sandbox, no network
+lexical.commit()     ──POST /documents/{id}/lexical──▶ edit receipt ──▶ /lexical-commit: block
+                                                                           diff vs base, all or nothing
 ```
+
+The Lexical layer runs Lexical, not Loro, in the sandbox. Everything below
+about Loro still holds: the program edits a plain editor state, and the
+worker's live peer is the only thing that writes Loro.
 
 ### Why not run the engines in the sandbox
 
@@ -172,10 +179,10 @@ await Promise.allSettled(
   and the op being typed at that moment can be left partway, since `setText`
   removes the old text before typing the new. Read the document to see what
   landed; never replay the instructions blindly.
-- **Structured batches** (`applyEdits`) also take `signal`: aborted before DSS
-  forwards the batch, nothing applies; once the worker has started the all-or-
-  nothing commit, the batch either lands whole or not at all, and the outcome
-  is unknown to the caller (`EditOutcomeUnknownError` semantics: read first).
+- **Lexical commits** (`lexical.commit`) also take `signal`: aborted before
+  the worker starts the commit, nothing applies; after that the commit lands
+  whole or not at all, and the outcome is unknown to the caller
+  (`EditOutcomeUnknownError`). Retrying the same commit is safe (below).
 
 Per type, all with the same shape (`edit(instructions, { signal })` returning
 the new revision, or the new document for `saveAs`, and `webUrl`):
@@ -199,51 +206,189 @@ the same revision checks. Each commits once, so an abort before the commit
 changes nothing and after it is too late to stop. AI admission and billing
 apply, as for `doc.edit`.
 
-### Lower layer: structured operations (markdown and canvas)
+### Lower layer: edit a document with Lexical
 
-Structured operations are deterministic: no model, no AI cost, exact. In this
-stack they exist only for markdown and canvas, for edits that instructions
-describe poorly:
+Deterministic edits: no model, no AI cost, exact. A program gets a real Lexical
+editor holding the document, edits it with the ordinary Lexical API and our
+`packages/lexical-core` nodes, and commits it. Models and developers already
+know Lexical, so this replaces the bespoke op vocabulary (`DocumentEditor`,
+about 100 methods) the first version of this design proposed for programs.
 
-- placing a saved question at a known block:
-  `doc.insertDatabaseQuery(afterBlockId, savedQuery)`;
-- restyling a database answer or chart, or pointing an embedded database at
-  another table or view (#9333's `setDatabaseQueryView`, `setDatabaseLocation`);
-- mechanical, repeatable edits a program computes: check off list items, set
-  table cells, rename a term in given blocks.
+Uses: check off list items, set table cells, rename a term, restructure a
+section from data a program computed, insert a saved question at a known
+block, restyle a database answer or chart.
 
 ```js
-const structure = await doc.structure();   // XML with durable node ids
-await structure.applyEdits((editor) => {
-  editor.setChecked('li4', true);
-  editor.setDatabaseQueryView('a9Lm', { displayMode: 'pie', title: 'Share' });
-  editor.setDatabaseLocation('c2Xw', { table: accounts });
+import { $getRoot } from 'lexical';
+import { $isListItemNode, $isTaskListNode } from '@macro-inc/sdk/lexical';
+
+const lexical = await doc.lexical();
+lexical.update(() => {
+  for (const block of $getRoot().getChildren()) {
+    if (!$isTaskListNode(block)) continue;
+    for (const item of block.getChildren()) {
+      if ($isListItemNode(item)) item.setChecked(true);
+    }
+  }
 });
+await lexical.commit();
 ```
 
-- **Reads** return the format the matching tool reads: markdown's XML view
-  (`toXml`, node ids as attributes) and the canvas scene with its revision.
-- **Revisions and conflicts** follow each engine, as typed SDK errors:
-  - Markdown merges with concurrent edits. A batch is all or nothing:
-    the worker applies it to a scratch copy of the live state first, and if any
-    op fails (a node someone deleted, text no longer found) nothing is committed
-    and `DocumentEditRejectedError` lists each failed op.
-  - Canvases carry `expectedRevision` from the read and raise
-    `RevisionConflictError`, after rebasing unrelated concurrent edits.
-  - A lost acknowledgement raises `EditOutcomeUnknownError` ("may have applied;
-    read before retrying").
-- **Handles take handles.** Builder methods accept `SavedQuery`, `DatabaseTable`
-  and `DatabaseView` handles (structurally: `{ toBlock() }`, `{ id }`), so the
-  vendored code stays free of SDK types and the model-facing sandbox keeps
-  passing strings.
+#### The handle
 
-Typed handles for the other types, `Document.spreadsheet()`, `.wordDocument()`,
-`.presentation()` and `.canvas()`, refuse the wrong file type and each has
-`webUrl()`. `documents.createSpreadsheet()` joins `createCanvas()`.
+- `doc.lexical()` returns a `DocumentLexical` with:
+  - `editor`: a headless `LexicalEditor` with every `SupportedNodeTypes` node and
+    `NodeReplacements` registered, and the document loaded. Anything Lexical
+    does headless works (`registerNodeTransform`, `parseEditorState`,
+    `$convertFromMarkdownString`).
+  - `update(fn)` and `read(fn)`: `editor.update(fn, { discrete: true })` and
+    `editor.read(fn)`, so a change is in the state when `update` returns.
+  - `commit({ signal })`: sends the change (below).
+  - `revision`: the base revision, the document version the state was read at.
+- Programs import `lexical` and `@macro-inc/sdk/lexical` and use them
+  directly; there is no wrapper DSL. `@macro-inc/sdk/lexical` is a curated
+  entry of `packages/lexical-core` (`lexical-core/sdk.ts`): the node classes and
+  their `$create…`/`$is…` helpers, the `@lexical/*` nodes and helpers our
+  documents use (lists, headings, quotes, links, tables, code, marks),
+  `$getId`, and the markdown transformers, so
+  `$convertFromMarkdownString(md, ALL_TRANSFORMERS)` builds blocks from markdown.
+  The same specifier works in code mode and for npm users.
+- Lexical's `$` functions work only against the module instance that owns the
+  editor, so the program and the SDK share one copy of `lexical` (bundle plan
+  below).
+- Not available headless: anything that needs a DOM (`$generateHtmlFromNodes`,
+  `exportDOM`). The spike found nothing else that breaks.
+
+#### Reading
+
+DSS `GET /documents/{id}/lexical` (view receipt, view-level document token)
+calls the worker's `POST /lexical-state`. The worker joins sync-service as its
+editing sessions do (initial sync into a `LoroManager` with
+`MARKDOWN_LORO_SCHEMA`), and returns `{ state, revision }`: the mirror's state
+normalized through a headless editor (`parseEditorState(…).toJSON()`), and the
+base64 oplog version vector (`revision.ts`, as `doc.edit` returns). Both come
+from the same Loro state, so they always agree. The worker owns this
+conversion because it owns the Loro mirror; lexical-service's `/raw` read
+carries no revision.
+
+#### Committing
+
+The SDK diffs the edited state against the base state it read, keyed by
+durable node id, at the level of **top-level blocks**, and sends only the
+change:
+
+```
+POST /documents/{id}/lexical
+{ revision, blocks: [{ id, after: <previous block id | null>, node }], removed: [id, …] }
+```
+
+`blocks` holds every top-level block that is new, changed, or moved, in
+document order; `node` is its serialized Lexical JSON (ids included) and
+`after` places it. Blocks the program left alone are not sent. Before
+diffing, the SDK gives every node without an id a fresh one
+(`$updateAllNodeIds`), as the editor does. An empty diff sends nothing:
+`commit()` resolves with the handle's own revision and leaves its base as it
+is, which may be behind the document.
+
+The worker joins as a live peer through `EditingWorkspace` (as `/edit` does)
+and builds three trees, each normalized through the same headless editor so
+they compare structurally:
+
+- **base**: rebuilt from Loro at the revision
+  (`doc.forkAt(doc.vvToFrontiers(revision))`, through the mirror). The worker
+  never trusts a base sent by the client.
+- **live**: the session's current state.
+- **wanted**: base with the request's blocks placed and its removals applied.
+
+#### Merge rules
+
+The worker merges the three trees recursively, node by node, keyed by id. A
+node is **atomic** (compared whole) unless it is a container: the root, a
+list, a table, a table row or a table cell, or a list item whose children are
+all lists (a nested list's holder). So a paragraph, a heading or a list item's
+text is one unit, and two people editing different items of the same list, or
+different cells of a table, merge.
+
+For each atomic node, and for each container's own attributes (everything but
+its children), with base `B`, live `L` and wanted `W`:
+
+| Case | Result |
+| --- | --- |
+| `W = B` | `L`: the program didn't touch it |
+| `L = B` | `W`: nobody else touched it |
+| `L = W` | `L`: already applied (a retry, or the same edit by someone else) |
+| otherwise | **conflict** (`changed`) |
+
+For a container's children, by id:
+
+| In base | In live | Wanted | Result |
+| --- | --- | --- | --- |
+| yes | yes | yes | merge recursively |
+| yes | yes | no | removed if `L = B`, else conflict (`changed`) |
+| yes | no | yes | stays removed if `W = B`, else conflict (`removed`) |
+| no | yes | no | kept: someone else inserted it |
+| no | no | yes | inserted |
+| no | yes | yes | kept if `L = W`, else conflict (`changed`) |
+
+**Order.** A child *moved* by one side is one outside the longest common
+subsequence of the base and that side's sibling order. The merged order starts
+from the live order; each child the program moved or inserted is then placed
+after its nearest wanted predecessor that is in the result (first if none).
+A child moved by both sides to different predecessors is a conflict
+(`moved`). So concurrent moves of the same block never silently overwrite one
+another.
+
+- A **conflict** rejects the whole commit; nothing is applied. The response
+  lists each node and why (`changed`, `removed` or `moved`). The SDK raises
+  `DocumentEditConflictError` with them; the program reads again with
+  `doc.lexical()` and redoes its edit.
+- **A revision the worker can't rebuild** (not a version of this document) is
+  a conflict with reason `revision` and no node.
+- **Nodes the program didn't touch are never written.** A collaborator typing
+  in any other block merges as usual, before, during and after the commit.
+- **Application** is one discrete update of the live session to the merged
+  tree, with no await between reading live and applying, so no remote edit can
+  slip in between. It is then propagated once, which diffs it into Loro keyed
+  by id, the WAL is flushed, and the worker waits for sync-service's
+  acknowledgement. A missing acknowledgement is `EditOutcomeUnknownError`.
+- **Retry safety** follows from the rules: retrying a commit whose first
+  attempt landed finds every node already equal to what it wants and applies
+  nothing. No idempotency key or server state is needed.
+- **Abort**: the worker checks the request signal before applying; aborted
+  there, nothing applies. After that the commit lands whole or not at all.
+- **Validation** (422, nothing applied): unknown node types, malformed JSON,
+  duplicate ids, a `node` whose id differs from its entry, more than 500
+  blocks.
+- **Result**: `{ revision, webUrl }`. The handle adopts the merged live state
+  and revision the worker returns as its new base, so a program can update and
+  commit again without reading.
+
+#### What happens to the structured-operations layer
+
+The first version of this design proposed a structured layer (branch
+`wolf/sdk-document-edits`, never merged): `packages/editor-ops`, a vendored
+`DocumentEditor`, `doc.structure()`, `structure.applyEdits()`, DSS
+`GET /structure` and `POST /edits`, and worker `/document-ops`. The Lexical
+layer replaces it for markdown:
+
+- **Kept**: its worker skeleton (live peer via `EditingWorkspace`, all or
+  nothing in one update, WAL flush and acknowledgement, `UnacknowledgedError`
+  → 502), as `/lexical-commit`; DSS's edit-token minting and outcome mapping;
+  its concurrent-typing tests; `EditOutcomeUnknownError`.
+- **Dropped**: the op vocabulary in the SDK, `packages/editor-ops`'s document
+  half and its vendoring, `doc.structure()` and its XML read,
+  `structure.applyEdits()`, `DocumentEditRejectedError` (replaced by
+  `DocumentEditConflictError`), and `doc.insertDatabaseQuery()` (a program
+  inserts a `DatabaseQueryNode` itself). `DocumentEditor` stays in the worker,
+  where models write ops through it.
+
+Canvases keep the structured layer: `CanvasEditor` ops against
+`expectedRevision`, raising `RevisionConflictError` after rebasing unrelated
+concurrent edits, in the canvas PR.
 
 ### Later option: structured editing for spreadsheets, Word and PowerPoint
 
-Not part of this stack. A typed lower layer like markdown's (vendored
+Not part of this stack. A typed lower layer like canvas's (vendored
 spreadsheet and Word op types, `pptx_engine` `EditOp` types generated from its
 schema, reads in the tools' formats, `expectedRevision` conflicts, and a
 PowerPoint version check replacing today's last-writer-wins) can follow if
@@ -258,42 +403,80 @@ its tool there once its SDK method lands: `EditDocument` with `doc.edit`,
 PowerPoint tools, and the canvas tools. Hosts without code mode keep the tools
 until they move.
 
-## How vendoring works
+## How Lexical reaches programs
 
-The vendored library is only the structured layer's builders; instruction
-edits need nothing in the sandbox. In this stack that is two builders:
+Instruction edits need nothing in the sandbox. The Lexical layer needs
+`lexical`, the `@lexical/*` packages lexical-core uses, and
+`packages/lexical-core` itself, as ordinary JavaScript: no WASM.
 
-| Builder | Why instructions don't cover it |
-| --- | --- |
-| `DocumentEditor` and `DocumentOp` | Deterministic markdown edits and database blocks (above) |
-| `CanvasEditor` and `CanvasOp` | Exact geometry and batches against a revision |
+### Spike results
 
-Spreadsheet, Word and PowerPoint types are deferred with their structured
-layer (later option, above).
+Lexical core nodes, `NodeReplacements`, `nodeIdPlugin` and the markdown
+transformers, bundled as code mode bundles the SDK and run under the exact
+sandbox flags (`--deny-import --deny-net`, scratch-only reads, 128 MiB, the
+bootstrap's timer ban):
 
-- **The builder lives in a package, not the worker.** The documents PR moves
-  `editor/ops.ts`, `document-editor.ts` and `errors.ts` from the worker into
-  `packages/editor-ops/src/document/`. The worker, its QuickJS sandbox bundle
-  (`scripts/generate-sandbox.ts`) and the SDK import it from there. Canvas's
-  builder moves to `packages/editor-ops/src/canvas/` in its PR.
-- **The SDK copies the files in at build time.** `packages/sdk` is a standalone
-  package with its own lockfile, its esbuild bundle inlines everything except
-  `node:*`, and `tsc` declaration emit is rooted at the package. `bun run
-  vendor` copies the listed sources into `packages/sdk/src/vendor/`, rewriting
-  workspace imports to the vendored copies; `vendor:check` fails CI when a copy
-  is stale. The files have no runtime dependencies, so SDK users get no new npm
-  dependencies, and TypeDoc and declaration emit see ordinary package files.
-- **Versioning.** The vendored builder and the server engine come from the same
-  commit. A program built against an older published SDK still works while the
-  op vocabulary only grows. Changing an op's meaning needs a new op kind,
-  because the published SDK and the deployed worker can differ.
-- **Size.** The builders add about 30 KB unminified to `sdk.mjs` and no WASM.
-- **Docs budget.** Each entity index must stay under 16 KiB, 32 KiB per tool
-  result, at most 32 topics (30 used). `edit` lives in the `documents` topic.
-  `DocumentEditor` gets its own `document-editing` topic so its roughly 100
-  methods don't crowd the documents index. Spreadsheet, Word, PowerPoint and
-  canvas handles share one `office` topic if they fit, which keeps the count at
-  32. Each PR measures its index.
+- Everything works. Discrete updates and the default microtask commit both
+  run, since neither needs a timer.
+- Loading the bundle takes about 90 ms. Markdown to state, an update, and
+  markdown out take about 30 ms for a small document. The heap is 11 MB.
+- **Size**: 810 KB minified (235 KB gzipped), against `sdk.mjs`'s 377 KB.
+  320 KB of it is `zod`, used by one table transformer
+  (`transformers/tables.ts`) for two number checks; replaced by plain checks,
+  the bundle is **580 KB** (184 KB gzipped). Next largest: `lexical` 150 KB,
+  lexical-core nodes 75 KB, `@lexical/table` 61 KB, `prismjs` 55 KB (pulled in
+  by `CustomCodeNode`).
+- Nothing DOM-only breaks: node `createDOM`/`exportDOM` touch `document` only
+  when called, and headless never calls them.
+
+### One entry: `@macro-inc/sdk/lexical`
+
+- `packages/lexical-core/sdk.ts` is the curated entry: the nodes,
+  `$create…`/`$is…` helpers, `NodeReplacements`, `SupportedNodeTypes`, `$getId`,
+  the transformers, and re-exports of the `@lexical/*` names our documents use.
+  It excludes the package index's AI and diff utilities.
+- `packages/sdk` vendors it: `bun run vendor` copies the entry and the files it
+  imports into `src/vendor/lexical-core/`, and `vendor:check` (run by the SDK's
+  checks) fails when a copy is stale. The SDK exports it as the
+  `@macro-inc/sdk/lexical` subpath, and `doc.lexical()` loads it with a dynamic
+  `import()`, so the SDK's main entry stays the size it is.
+- `lexical` and the `@lexical/*` packages are optional peer dependencies of
+  `@macro-inc/sdk`, pinned to the version lexical-core uses, so an npm
+  program's `lexical` import is the SDK's. Only `doc.lexical()` needs them; it
+  fails with a message naming them when they are missing. lexical-core's own
+  runtime dependencies (`nanoid`, `linkify-it`, `prismjs`) become SDK
+  dependencies.
+
+### Code mode: a separate, lazily loaded chunk
+
+- `packages/code-mode-sdk` builds, at build time with the rest of the bundle
+  (`crates/code_mode_assets`), code-split modules for `lexical`, the
+  `@lexical/*` packages and `@macro-inc/sdk/lexical`, beside `sdk.mjs`.
+  `crates/code_execution` writes them to the run's root and maps each
+  specifier in `imports.json`.
+- `sdk.mjs` keeps those specifiers external, so `doc.lexical()` imports them
+  through the same import map a program's `import { $getRoot } from 'lexical'`
+  uses: one module instance, as Lexical's `$` functions require.
+- Runs that never edit pay only the file write, not the parse and compile.
+
+### Versioning
+
+The committed JSON is Lexical's serialized form of our nodes. The worker
+rejects a commit whose node types or versions it doesn't know, naming them,
+rather than writing nodes the app can't render. Node JSON changes therefore
+follow the app's rule for persisted documents already: old JSON keeps loading.
+A program built against an older SDK keeps working while nodes only add
+optional fields.
+
+### Docs budget
+
+Each entity index must stay under 16 KiB, 32 KiB per tool result, at most 32
+topics (30 used). `edit` and `lexical()` live in the `documents` topic. A
+`DocumentLexical` documents the node types with their `$create…` helpers,
+the transformers, and the merge and conflict rules in its TSDoc; the Lexical
+API itself is not re-documented. Spreadsheet, Word, PowerPoint and
+canvas handles share one `office` topic if they fit, which keeps the count at
+32. Each PR measures its index.
 
 ## Documentation
 
@@ -309,8 +492,8 @@ method documents how to use it in its TSDoc:
   change a saved question's SQL, see comments or history, or edit other
   documents), and has worked examples: rewrite a section, fix formatting, abort
   sibling edits.
-- Every structured method has a short worked `@example`: read, edit, and handle
-  the conflict error where it has one.
+- `lexical()` and `commit()` have short worked `@example`s: read, update,
+  commit, and handle `DocumentEditConflictError` by reading again.
 - Each method appears in a code-mode docs topic, checked by the documentation
   tests.
 
@@ -321,30 +504,38 @@ new method as above (the SDK reference, code-mode bundle and documentation are
 generated at build time), and adds the direct tool it replaces to
 `covered_by_code_sdk`.
 
-1. **This design** (docs only).
+1. **This design** (docs only, #9404).
 2. **Documents and tasks** (MACRO-4588).
    - `doc.edit(instructions, { fast, signal })`: DSS `POST
      /documents/{id}/ai-edit` over `EditDocument`'s domain service; the
      worker's `/edit` returns the revision. Hides `EditDocument`.
-   - With #9333: `opts.queries` and the structured layer below.
-   - Structured layer: `packages/editor-ops` with the document builder
-     (accepting `SavedQuery`, table and view handles); worker `POST
-     /document-ops`, model-free and all or nothing; DSS `GET
-     /documents/{id}/structure` and `POST /documents/{id}/edits`;
-     `Document.structure()`, `DocumentStructure.applyEdits()`,
-     `Document.insertDatabaseQuery()`.
+   - With #9333: `opts.queries`.
    - Tests for round trips, concurrent typing during an edit, aborts, and
-     refused edits and batches.
-3. **Spreadsheets** (MACRO-4587). `sheet.edit(instructions, { signal })` with a
+     refused edits.
+3. **Documents with Lexical** (MACRO-4631), stacked PRs, tests first:
+   1. This design's Lexical layer, and lexical-core: `zod` replaced in
+      `transformers/tables.ts`, the curated `sdk.ts` entry.
+   2. Worker `/lexical-state` and `/lexical-commit`: every row of the merge
+      tables, concurrent moves, a human typing in the same block and in
+      another block during a commit, a retry after a lost acknowledgement, an
+      abort before the commit starts, unknown node types, an unreadable
+      revision.
+   3. DSS `GET` and `POST /documents/{id}/lexical`: receipts, document tokens,
+      outcome mapping (409 conflict, 422 invalid, 502 unknown), spans.
+   4. SDK `Document.lexical()`, `DocumentLexical`, the block diff,
+      `DocumentEditConflictError`, the vendored `@macro-inc/sdk/lexical` entry
+      and optional `lexical` peers; the code-mode chunks and import map, with a
+      Deno test that edits a document under the sandbox flags.
+4. **Spreadsheets** (MACRO-4587). `sheet.edit(instructions, { signal })` with a
    new writer model over `SpreadsheetService`; changed ranges and the new
    revision; `documents.createSpreadsheet()`. Hides `EditSpreadsheet`.
-4. **PowerPoint** (MACRO-4581). `deck.edit(instructions, { signal, saveAs })`
+5. **PowerPoint** (MACRO-4581). `deck.edit(instructions, { signal, saveAs })`
    with a new writer model over `PresentationService`; changed slides, the new
    version or the new `Presentation` for `saveAs`. Hides `EditPresentation`.
-5. **Word** (MACRO-4581). `wordDoc.edit(instructions, { signal })` with a new
+6. **Word** (MACRO-4581). `wordDoc.edit(instructions, { signal })` with a new
    writer model over `WordDocumentService`; changed paragraph ids. Hides
    `EditWordDocument`.
-6. **Canvases** (MACRO-4584). `canvas.edit(instructions, { signal })` over
+7. **Canvases** (MACRO-4584). `canvas.edit(instructions, { signal })` over
    `EditCanvas`; the structured layer (`CanvasEditor` in `packages/editor-ops`,
    ops with `expectedRevision`) and render. Hides `EditCanvas` and
    `ApplyCanvasEdits`.
