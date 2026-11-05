@@ -6,6 +6,6 @@
  */
 
 /**
- * Why the status is `failed`.
+ * Failure, transient health, or pending purchase-link recovery diagnostic.
  */
 export type TeamAgentStatusReason = string | null;

@@ -2469,7 +2469,7 @@ export type TeamAgent = {
      */
     status: TeamAgentStatus;
     /**
-     * Why the status is `failed`.
+     * Failure, transient health, or pending purchase-link recovery diagnostic.
      */
     statusReason?: string | null;
     /**
@@ -2575,7 +2575,7 @@ export type TeamAgentSizes = {
 /**
  * Where an agent's computer is in coming up.
  */
-export type TeamAgentStatus = 'provisioning' | 'running' | 'failed';
+export type TeamAgentStatus = 'provisioning' | 'running' | 'unhealthy' | 'failed';
 
 /**
  * A team's agents.

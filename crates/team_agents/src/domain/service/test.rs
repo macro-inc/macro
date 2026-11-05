@@ -322,6 +322,7 @@ struct FakeComputers {
     purchases: Mutex<Vec<ComputerPurchase>>,
     interval: BillingInterval,
     status: ComputerStatus,
+    unavailable: bool,
 }
 
 impl Computers for FakeComputers {
@@ -372,6 +373,9 @@ impl Computers for FakeComputers {
         _team_id: Uuid,
         _computer_id: Uuid,
     ) -> Result<ComputerStatus, TeamAgentError> {
+        if self.unavailable {
+            return Err(TeamAgentError::internal_message("status unavailable"));
+        }
         Ok(self.status.clone())
     }
 
@@ -525,6 +529,7 @@ fn build(setup: Setup) -> (Service, Arc<Journal>) {
             purchases: Mutex::new(vec![]),
             interval: setup.computer_interval,
             status: setup.computer_status,
+            unavailable: false,
         },
         FakeRepos {
             journal: journal.clone(),
@@ -763,7 +768,7 @@ async fn a_failure_after_the_purchase_keeps_the_paid_agent() {
     );
     assert_eq!(service.repository.agents.lock().expect("lock").len(), 1);
     let agent = service.agent(&user(AGENT)).await.unwrap();
-    assert_eq!(agent.status, TeamAgentStatus::Failed);
+    assert_eq!(agent.status, TeamAgentStatus::Provisioning);
     assert!(agent.status_reason.is_some());
     let before = journal.steps();
     assert!(matches!(
@@ -1275,13 +1280,13 @@ async fn retry_rejects_released_computers_before_repo_recovery() {
 }
 
 #[tokio::test]
-async fn missing_purchase_identity_keeps_credentials_and_a_failed_agent() {
+async fn missing_purchase_identity_keeps_credentials_and_a_provisioning_agent() {
     let (service, journal) = build(Setup {
         fail_at: Some("computer.purchase.uncertain"),
         ..Setup::default()
     });
     let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
-    assert_eq!(agent.status, TeamAgentStatus::Failed);
+    assert_eq!(agent.status, TeamAgentStatus::Provisioning);
     assert_eq!(
         agent.status_reason.as_deref(),
         Some(COMPUTER_LINK_FAILED_REASON)
@@ -1501,25 +1506,25 @@ async fn running_requires_a_ready_computer_and_live_healthy_persona() {
         (
             ComputerStatusKind::Ready,
             Some(unhealthy),
-            TeamAgentStatus::Failed,
+            TeamAgentStatus::Unhealthy,
             Some("unhealthy: brain process exited"),
         ),
         (
             ComputerStatusKind::Ready,
             None,
-            TeamAgentStatus::Failed,
+            TeamAgentStatus::Unhealthy,
             Some("unhealthy: brain health has not been reported"),
         ),
         (
             ComputerStatusKind::Ready,
             Some(disconnected),
-            TeamAgentStatus::Failed,
+            TeamAgentStatus::Unhealthy,
             Some("unhealthy: the harness is disconnected"),
         ),
         (
             ComputerStatusKind::Ready,
             Some(stale),
-            TeamAgentStatus::Failed,
+            TeamAgentStatus::Unhealthy,
             Some("unhealthy: the brain health report is stale"),
         ),
         (
@@ -1570,7 +1575,7 @@ async fn health_failure_diagnostics_are_updated_and_recovery_clears_them() {
     service.create(receipt(TEAM_ID), request()).await.unwrap();
     assert_eq!(
         service.me(&user(AGENT)).await.unwrap().status,
-        TeamAgentStatus::Failed
+        TeamAgentStatus::Unhealthy
     );
     let mut brain = healthy_brain();
     brain.healthy = false;
@@ -1589,7 +1594,7 @@ async fn health_failure_diagnostics_are_updated_and_recovery_clears_them() {
             .unwrap()
             .unwrap()
             .status_reason,
-        failed.status_reason
+        None
     );
     service.computers.status.brain = Some(healthy_brain());
     let recovered = service.me(&user(AGENT)).await.unwrap();
@@ -1719,4 +1724,88 @@ async fn a_verified_team_admin_qualifies_without_a_verified_owner() {
     service.create(receipt(TEAM_ID), create).await.unwrap();
     assert!(journal.steps().contains(&"computer.comped"));
     assert!(!journal.steps().contains(&"computer.purchase"));
+}
+
+#[tokio::test]
+async fn connecting_disconnect_then_ready_health_loss_and_reconnect_never_latch_failure() {
+    let (mut service, _) = build(Setup::default());
+    service.create(receipt(TEAM_ID), request()).await.unwrap();
+    // Repair legacy rows that incorrectly latched a transient disconnect.
+    service
+        .repository
+        .set_status(
+            &user(AGENT),
+            TeamAgentStatus::Failed,
+            Some("unhealthy: the harness is disconnected"),
+        )
+        .await
+        .unwrap();
+    let mut disconnected = healthy_brain();
+    disconnected.connected = false;
+    service.computers.status = ComputerStatus {
+        payment: ComputerPayment::Paid,
+        // Even a ready phase cannot override first-connect setup progress.
+        status: ComputerStatusKind::Ready,
+        setup: Some(SetupProgress {
+            step: SetupStep::Connecting,
+            position: 4,
+            total: 5,
+        }),
+        brain: Some(disconnected.clone()),
+    };
+    let connecting = service.me(&user(AGENT)).await.unwrap();
+    assert_eq!(connecting.status, TeamAgentStatus::Provisioning);
+    assert_eq!(connecting.setup.unwrap().step, SetupStep::Connecting);
+    assert_eq!(connecting.status_reason, None);
+    service.computers.status.setup = None;
+    service.computers.status.brain = Some(healthy_brain());
+    assert_eq!(
+        service.me(&user(AGENT)).await.unwrap().status,
+        TeamAgentStatus::Running
+    );
+    service.computers.status.brain = Some(disconnected);
+    let unhealthy = service.me(&user(AGENT)).await.unwrap();
+    assert_eq!(unhealthy.status, TeamAgentStatus::Unhealthy);
+    assert!(!unhealthy.retryable);
+    let stored = service.repository.get(&user(AGENT)).await.unwrap().unwrap();
+    assert_eq!(stored.status, TeamAgentStatus::Running);
+    assert_eq!(stored.status_reason, None);
+    service.computers.unavailable = true;
+    assert_eq!(
+        service.list(receipt(TEAM_ID)).await.unwrap().agents[0].status,
+        TeamAgentStatus::Unhealthy
+    );
+    assert_eq!(
+        service
+            .repository
+            .get(&user(AGENT))
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        TeamAgentStatus::Running
+    );
+    service.computers.unavailable = false;
+    service.computers.status.brain = Some(healthy_brain());
+    let recovered = service.me(&user(AGENT)).await.unwrap();
+    assert_eq!(recovered.status, TeamAgentStatus::Running);
+    assert_eq!(recovered.status_reason, None);
+}
+
+#[tokio::test]
+async fn purchase_status_outage_stays_provisioning_and_recovers() {
+    let (mut service, _) = build(Setup::default());
+    service.computers.unavailable = true;
+    let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
+    assert_eq!(agent.status, TeamAgentStatus::Provisioning);
+    assert_eq!(agent.status_reason, None);
+    service.computers.unavailable = false;
+    service.computers.status.status = ComputerStatusKind::Ready;
+    service.computers.status.payment = ComputerPayment::Paid;
+    service.computers.status.setup = None;
+    service.computers.status.brain = Some(healthy_brain());
+    assert_eq!(
+        service.me(&user(AGENT)).await.unwrap().status,
+        TeamAgentStatus::Running
+    );
 }

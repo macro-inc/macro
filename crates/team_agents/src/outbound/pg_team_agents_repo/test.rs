@@ -224,3 +224,20 @@ async fn included_policy_reads_only_the_current_owners_verified_primary_email(po
         None
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn transient_health_cannot_be_stored_as_failure(pool: PgPool) {
+    let team_id = seed(&pool).await;
+    let repo = PgTeamAgentsRepo::new(pool);
+    repo.create_account(&account(team_id)).await.unwrap();
+    repo.set_status(
+        &user(AGENT),
+        TeamAgentStatus::Unhealthy,
+        Some("unhealthy: disconnected"),
+    )
+    .await
+    .unwrap();
+    let agent = repo.get(&user(AGENT)).await.unwrap().unwrap();
+    assert_eq!(agent.status, TeamAgentStatus::Running);
+    assert_eq!(agent.status_reason, None);
+}

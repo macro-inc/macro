@@ -34,7 +34,7 @@ export interface TeamAgent {
   setup?: TeamAgentSetup;
   /** Where the computer is in coming up. */
   status: TeamAgentStatus;
-  /** Why the status is `failed`. */
+  /** Failure, transient health, or pending purchase-link recovery diagnostic. */
   statusReason?: TeamAgentStatusReason;
   /** Team the agent belongs to. */
   teamId: string;

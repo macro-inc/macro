@@ -33,7 +33,9 @@ pub enum TeamAgentStatus {
     Provisioning,
     /// The computer is ready and its brain is healthy.
     Running,
-    /// Provisioning or brain health failed; `statusReason` says why.
+    /// The computer is ready but its brain is temporarily unavailable.
+    Unhealthy,
+    /// Terminal provisioning or payment failure; `statusReason` says why.
     Failed,
 }
 
@@ -58,7 +60,7 @@ pub struct TeamAgent {
     pub computer_id: Option<Uuid>,
     /// Where the computer is in coming up.
     pub status: TeamAgentStatus,
-    /// Why the status is `failed`.
+    /// Failure, transient health, or pending purchase-link recovery diagnostic.
     pub status_reason: Option<String>,
     /// Whether failed computer provisioning can be retried without purchasing.
     pub retryable: bool,

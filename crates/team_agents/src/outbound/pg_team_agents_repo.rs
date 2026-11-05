@@ -325,6 +325,11 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         status: TeamAgentStatus,
         reason: Option<&str>,
     ) -> Result<(), Self::Err> {
+        // Transient health belongs to the response, never the stored column.
+        let (status, reason) = match status {
+            TeamAgentStatus::Unhealthy => (TeamAgentStatus::Running, None),
+            status => (status, reason),
+        };
         let status: &'static str = status.into();
 
         sqlx::query!(

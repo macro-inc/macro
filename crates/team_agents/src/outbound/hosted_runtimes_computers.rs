@@ -131,7 +131,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
             Ok(brain) => status.brain = brain,
             Err(source) => {
                 // Missing/unavailable observations must never reuse a stored
-                // healthy status. The domain projects missing health as failed.
+                // healthy status. The domain projects missing health as unhealthy.
                 tracing::error!(error = ?source, %computer_id, "could not read brain health");
             }
         }

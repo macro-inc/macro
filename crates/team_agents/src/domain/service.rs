@@ -501,7 +501,7 @@ where
                     };
                     match unhealthy {
                         Some(reason) => (
-                            TeamAgentStatus::Failed,
+                            TeamAgentStatus::Unhealthy,
                             Some(format!("unhealthy: {reason}")),
                         ),
                         None => (TeamAgentStatus::Running, None),
@@ -514,9 +514,16 @@ where
             }
         };
 
-        if status != agent.status || reason != agent.status_reason {
+        // Health is a live projection, never a durable failure. Retain only
+        // the underlying ready state so a lost observation cannot latch it.
+        let (stored_status, stored_reason) = if status == TeamAgentStatus::Unhealthy {
+            (TeamAgentStatus::Running, None)
+        } else {
+            (status, reason.as_deref())
+        };
+        if stored_status != agent.status || stored_reason != agent.status_reason.as_deref() {
             self.repository
-                .set_status(&agent.user_id, status, reason.as_deref())
+                .set_status(&agent.user_id, stored_status, stored_reason)
                 .await
                 .map_err(TeamAgentError::internal)?;
         }
@@ -669,7 +676,7 @@ where
                 self.repository
                     .set_status(
                         &user_id,
-                        TeamAgentStatus::Failed,
+                        TeamAgentStatus::Provisioning,
                         Some(COMPUTER_LINK_FAILED_REASON),
                     )
                     .await
@@ -688,7 +695,7 @@ where
             self.repository
                 .set_status(
                     &user_id,
-                    TeamAgentStatus::Failed,
+                    TeamAgentStatus::Provisioning,
                     Some(COMPUTER_LINK_FAILED_REASON),
                 )
                 .await
@@ -702,11 +709,7 @@ where
             Err(error) => {
                 tracing::warn!(error = ?error, "could not refresh saved computer purchase");
                 self.repository
-                    .set_status(
-                        &user_id,
-                        TeamAgentStatus::Failed,
-                        Some("computer status is unavailable"),
-                    )
+                    .set_status(&user_id, TeamAgentStatus::Provisioning, None)
                     .await
                     .map_err(TeamAgentError::internal)?;
                 self.agent(&user_id).await
@@ -735,7 +738,7 @@ where
             let agent = self.refresh_status(agent).await.unwrap_or_else(|error| {
                 tracing::error!(error = ?error, agent_user_id = %fallback.user_id, "could not refresh a team agent's computer status");
                 if fallback.status == TeamAgentStatus::Running {
-                    fallback.status = TeamAgentStatus::Failed;
+                    fallback.status = TeamAgentStatus::Unhealthy;
                     fallback.status_reason = Some("unhealthy: computer status is unavailable".to_string());
                 }
                 fallback

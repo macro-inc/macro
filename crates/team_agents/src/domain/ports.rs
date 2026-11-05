@@ -68,7 +68,8 @@ pub trait TeamAgentRepository: Send + Sync + 'static {
         computer_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Records where the agent's computer is.
+    /// Records the durable computer state. Transient `Unhealthy` observations
+    /// retain underlying `Running` with no reason; never persist health failure.
     fn set_status(
         &self,
         user_id: &MacroUserIdStr<'_>,

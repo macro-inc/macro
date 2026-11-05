@@ -15,5 +15,6 @@ export type TeamAgentStatus =
 export const TeamAgentStatus = {
   provisioning: 'provisioning',
   running: 'running',
+  unhealthy: 'unhealthy',
   failed: 'failed',
 } as const;

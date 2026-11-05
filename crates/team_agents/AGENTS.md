@@ -22,19 +22,24 @@ the agent remains `provisioning` at setup step `paying` ("Confirming payment").
 A definite `payment_failed` computer retains its agent as `failed` with reason
 `payment failed`. The response exposes durable `payment` (`pending`, `paid`,
 `unbilled`, `comped`), or null when its computer cannot be read. The agent exists and its
-`status` (`provisioning` → `running` | `failed`) is refreshed from the
+`status` (`provisioning` → `running` | `unhealthy` | `failed`) is refreshed from the
 computer on `GET /team_agents` and `GET /team_agents/me`.
 
 `running` requires a Ready computer and its enrolled persona's healthy harness
 report. Reports are live only while the harness is connected and `checked_at`
 is no more than two minutes old (future observations are rejected). A Ready
 computer with unhealthy, missing, disconnected, stale or unavailable health is
-`failed` with `statusReason: "unhealthy: <diagnostic>"`. Other non-failed computer
+`unhealthy` with `statusReason: "unhealthy: <diagnostic>"`. Before the first
+connection, setup progress takes precedence: a disconnected harness stays
+`provisioning` at `connecting` ("Connecting agent"). Other non-failed computer
 states remain `provisioning`; sleeping/stopped computers are not running agents.
 `lastTurnAt` carries the persona's last reported completed turn, including from
 unhealthy/missing reports. It is computed from harness capabilities, not stored
-in the team-agent row. Updated diagnostics are persisted even when status stays
-failed. Status refresh clears them when the brain recovers.
+in the team-agent row. Transient health diagnostics exist only in the response; the stored row keeps
+the underlying `running` state with no reason. Only terminal computer/payment
+outcomes persist `failed`. A failed status lookup preserves provisioning or
+returns transient `unhealthy` for a previously running agent, without writing a
+failure. Every refresh recomputes health and clears diagnostics on recovery.
 
 `GET /team_agents/sizes` returns the hosted-runtimes size catalog to any team
 admin, without consulting billing or feature flags. Use it for the size picker.
@@ -143,7 +148,7 @@ from the account's `created_by` before repo recovery.
 Hosted runtimes replays its original payment effect with the original idempotency
 key and extra seat item. Status refresh follows these phases without an
 agent-side reconciliation override or a second purchase. If identity recovery
-or saving the computer link fails, the retained agent is marked failed with a
+or saving the computer link fails, the retained agent remains provisioning with a
 link-recovery reason. Retry and delete require that missing link to be recovered
 first, preserving the account, credentials and repo while payment may resolve.
 
