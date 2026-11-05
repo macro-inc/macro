@@ -176,6 +176,8 @@ fn run(changed_files_path: &Path, base_revision: &str) -> Result<()> {
 const ROOT_MANIFEST: &str = "Cargo.toml";
 const WORKSPACE_HACK: &str = "workspace-hack";
 
+const TESTED_ONLY_WHEN_CHANGED: &[&str] = &["document_storage_service"];
+
 fn read_manifest(dir: &Path) -> Result<String> {
     let path = dir.join(ROOT_MANIFEST);
     std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))
@@ -313,7 +315,10 @@ fn selections<'g>(
                 package
                     .reverse_direct_links()
                     .map(|link| link.from())
-                    .filter(|dependent| dependent.in_workspace())
+                    .filter(|dependent| {
+                        dependent.in_workspace()
+                            && !TESTED_ONLY_WHEN_CHANGED.contains(&dependent.name())
+                    })
                     .map(|dependent| dependent.name().to_owned()),
             );
         }
