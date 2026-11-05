@@ -38,6 +38,13 @@ pub async fn handler(
         tracing::error!(error=?err, "failed to read chat completion response");
         (axum::http::StatusCode::BAD_GATEWAY, err.to_string())
     })?;
+    if !status.is_success() {
+        genai_telemetry::provider_account::report_provider_error(
+            "openai",
+            Some(status.as_u16()),
+            &String::from_utf8_lossy(&bytes),
+        );
+    }
 
     Ok::<_, (axum::http::StatusCode, String)>((
         status,

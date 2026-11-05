@@ -92,6 +92,11 @@ impl Client {
         let body = response.text().await.map_err(AnthropicError::Reqwest)?;
 
         if !status.is_success() {
+            genai_telemetry::provider_account::report_provider_error(
+                "anthropic",
+                Some(status.as_u16()),
+                &body,
+            );
             return match serde_json::from_str::<ApiError>(&body) {
                 Ok(api_error) => Err(AnthropicError::ApiError {
                     api_error,
@@ -140,15 +145,22 @@ impl Client {
 
             if !response.status().is_success() {
                 let code = response.status();
-                let err = match response.json::<serde_json::Value>().await {
+                let err = match response.text().await {
                     Err(e) => AnthropicError::Reqwest(e),
-                    Ok(json) => match serde_json::from_value::<ApiError>(json) {
-                        Ok(api_error) => AnthropicError::ApiError {
-                            api_error,
-                            status_code: code,
-                        },
-                        Err(e) => AnthropicError::JsonDeserialize(e),
-                    },
+                    Ok(body) => {
+                        genai_telemetry::provider_account::report_provider_error(
+                            "anthropic",
+                            Some(code.as_u16()),
+                            &body,
+                        );
+                        match serde_json::from_str::<ApiError>(&body) {
+                            Ok(api_error) => AnthropicError::ApiError {
+                                api_error,
+                                status_code: code,
+                            },
+                            Err(e) => AnthropicError::JsonDeserialize(e),
+                        }
+                    }
                 };
                 let _ = tx.send(Err(err));
                 return;
