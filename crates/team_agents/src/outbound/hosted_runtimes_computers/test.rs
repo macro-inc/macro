@@ -147,7 +147,7 @@ impl ComputerRepo for FakeRepo {
         Ok(())
     }
 
-    async fn idle_running(&self, _before: DateTime<Utc>) -> Result<Vec<Uuid>, FakeError> {
+    async fn running(&self) -> Result<Vec<Computer>, FakeError> {
         Ok(vec![])
     }
 
@@ -199,12 +199,20 @@ impl ComputerRepo for FakeRepo {
         Ok(())
     }
 
-    async fn take_due_timers(
+    async fn due_timers(
         &self,
         _now: DateTime<Utc>,
         _limit: u32,
     ) -> Result<Vec<DueTimer>, FakeError> {
         Ok(vec![])
+    }
+
+    async fn fire_timer(
+        &self,
+        _timer: DueTimer,
+        _now: DateTime<Utc>,
+    ) -> Result<Option<Computer>, FakeError> {
+        Ok(None)
     }
 
     async fn register_host(&self, _registration: HostRegistration) -> Result<Host, FakeError> {
@@ -245,7 +253,7 @@ impl Billing for FakeBilling {
     async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
         Ok(Quote {
             size,
-            price_id: format!("price_{}", size.as_str()),
+            price_id: format!("price_{}", size.as_ref()),
             amount: 2000 * i64::from(size.units()),
             currency: "usd".to_owned(),
             interval: BillingInterval::Month,
