@@ -3,7 +3,7 @@
 //!
 //! The hexagon lives in `crates/agent_harness`; this binary is the shell
 //! around it: it builds the Postgres repositories, the container
-//! manager (Daytona, or local Docker when opted in), and a channel service with the full side-effect stack for
+//! manager (local Docker when opted in), and a channel service with the full side-effect stack for
 //! announcements, derives agent triggers from `macro.channels`, then drives
 //! the orchestrator from the resulting `macro.agent_sessions` events.
 
@@ -69,15 +69,13 @@ use agent_harness::outbound::channel_announcer::MessageAnnouncer;
 use agent_harness::outbound::channel_prompt_context::MessagePromptContextAdapter;
 use agent_harness::outbound::containers::HarnessContainers;
 use agent_harness::outbound::cursor::{CursorContainerManager, PgCursorApiKeys, PostgresJournal};
-use agent_harness::outbound::daytona::{
-    AnthropicApiKey as AnthropicApiKeySecret, DaytonaApiKey as DaytonaApiKeySecret,
-    DaytonaContainerManager, DaytonaSettings, Snapshot,
-};
 use agent_harness::outbound::egress::EgressProvisioner;
 use agent_harness::outbound::forward::RedisCommandForwarder;
 use agent_harness::outbound::github_branches::GithubRepositoryBranches;
 use agent_harness::outbound::github_repositories::GithubReachableRepositories;
-use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
+use agent_harness::outbound::local::{
+    AnthropicApiKey as AnthropicApiKeySecret, LocalContainerManager, LocalSettings,
+};
 use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
 use agent_harness::outbound::primary_calendar_time_zones::PrimaryCalendarTimeZones;
 use agent_harness::outbound::prompt_mentions::{LexicalPromptMentions, PgSessionAccess};
@@ -417,21 +415,18 @@ async fn run() -> anyhow::Result<()> {
     let pending_commands = agent_harness::domain::pending::PendingCommands::new();
 
     // Containers: the sandbox provider (local Docker when a developer has
-    // opted in, Daytona otherwise) plus Cursor cloud agents for the `@cursor`
+    // opted in, none otherwise) plus Cursor cloud agents for the `@cursor`
     // bot, routed per session.
-    // The Anthropic key rides into every sandbox's environment; without it the
-    // runtime has no model provider at all (`container/opencode.json` enables
-    // only `anthropic`), so managed sessions would advertise no models and
-    // fail every prompt.
-    if config.anthropic_api_key.trim().is_empty() {
-        tracing::warn!(
-            "ANTHROPIC_API_KEY is unset: managed sandboxes have no model provider; external agent sessions are unaffected"
-        );
-    }
-    let anthropic_api_key = AnthropicApiKeySecret::new(config.anthropic_api_key.clone());
     let sandbox = if config.dev_dangerous_local_containers {
         if !matches!(config.environment, Environment::Local) {
             anyhow::bail!("DEV_DANGEROUS_LOCAL_CONTAINERS is only allowed when ENVIRONMENT=local");
+        }
+        // The Anthropic key rides into every sandbox's environment; without it
+        // the runtime has no model provider at all (`container/opencode.json`
+        // enables only `anthropic`), so sandboxed sessions would advertise no
+        // models and fail every prompt.
+        if config.anthropic_api_key.trim().is_empty() {
+            tracing::warn!("ANTHROPIC_API_KEY is unset: local sandboxes have no model provider");
         }
         let network = config.local_container_network.trim();
         if network.is_empty() {
@@ -443,26 +438,12 @@ async fn run() -> anyhow::Result<()> {
             docker_binary: config.local_container_docker_binary.clone(),
             image: config.local_container_image.clone(),
             network: network.to_owned(),
-            anthropic_api_key: anthropic_api_key.clone(),
+            anthropic_api_key: AnthropicApiKeySecret::new(config.anthropic_api_key.clone()),
         }))
     } else {
-        // Credential-less boot is deliberate: external sessions need no
-        // sandbox at all. A Daytona spawn without a key fails at spawn time
-        // instead, loudly.
-        if config.daytona_api_key.trim().is_empty() {
-            tracing::warn!(
-                "DAYTONA_API_KEY is unset: Daytona-backed sandboxes are unarmed; external agent sessions are unaffected"
-            );
-        }
-        HarnessContainers::Daytona(DaytonaContainerManager::new(
-            DaytonaSettings {
-                api_url: config.daytona_api_url.clone(),
-                api_key: DaytonaApiKeySecret::new(config.daytona_api_key.clone()),
-                snapshot: Snapshot::new(config.daytona_snapshot.clone()),
-                anthropic_api_key,
-            },
-            pending_commands.clone(),
-        ))
+        // No deployed sandbox provider: sandboxed sessions are declined
+        // before they are created, pointing the owner at their own runtimes.
+        HarnessContainers::Unavailable
     };
     let container_shutdown = sandbox.clone();
 

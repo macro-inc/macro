@@ -19,7 +19,7 @@ Pulumi stacks; they do not host extra agent processes.
   `agent_harness`).
 - `src/model_providers/`: per-harness runtime adapters — `cursor.rs`,
   `macrod.rs`, `in_memory.rs`.
-- `src/containers.rs`: Daytona sandbox lifecycle; local Docker opt-in.
+- `src/containers.rs`: sandbox routing; local Docker opt-in, no deployed sandbox provider.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose
@@ -109,8 +109,8 @@ produce events, independently of public session control.
 
 - `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset).
 - `just check` (`SQLX_OFFLINE=true cargo check`).
-- `just run-local` — needs `DAYTONA_API_KEY`, `DAYTONA_SNAPSHOT`,
-  `GITHUB_TOKEN` in the environment or a local `.env`.
+- `just run-local` — runs without a sandbox provider; use root `just run_local`
+  for the local Docker sandbox path.
 
 Code-mode credentials sign the session bot for SDK attribution and the selected
 user for API authorization; owner approval is required only for cross-account
@@ -151,9 +151,10 @@ listener failure shuts down the process so ECS can replace the task.
   control uses shared Postgres state. SSH claims a tunnel owner; browser HTTP/WS
   forwards directly to that owner. Keep preview security-group self-ingress on
   TCP 8111 so peers can connect; live SSH handles remain local to each process.
-- Two managed bots run on different runtimes: `@coder` (`HARNESS_BOT_ID`) in a
-  Daytona sandbox, `@macro-new`/`@macro` (`INMEM_BOT_ID`) on the in-process ACP
-  runtime — check which one a bug report is about before debugging containers.
+- Deployed harnesses have no sandbox provider: `@coder` (`HARNESS_BOT_ID`) is
+  declined with a pointer to Runtimes settings. Root `just run_local` serves
+  `@coder` through local Docker; `@macro-new`/`@macro` (`INMEM_BOT_ID`) uses
+  the in-process ACP runtime.
 
 - Analytics record the tool name, outcome, duration, and client headers only;
   never add tool arguments or results to them.

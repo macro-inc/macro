@@ -1,6 +1,6 @@
 //! Provisioning for in-process agent "containers".
 //!
-//! The sandbox flavor of this is a Daytona API call and a WebSocket; here it
+//! The sandbox flavor of this is a provisioned container and a WebSocket; here it
 //! is a duplex channel and a Tokio task, which is what makes a session start
 //! in milliseconds. The manager owns the map from session to live agent task
 //! and the conversation store those tasks read.

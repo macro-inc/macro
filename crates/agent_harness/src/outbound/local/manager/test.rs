@@ -1,5 +1,4 @@
 use super::*;
-use crate::outbound::daytona::AnthropicApiKey;
 use crate::testing::helpers::egress::test_egress;
 
 /// One container per session, so a resume finds exactly one and `docker ps`
@@ -23,8 +22,7 @@ fn a_sidecar_is_dialed_by_container_name() {
     );
 }
 
-/// Same environment Daytona injects, so the readiness recipe is exercised
-/// against what a deployed sandbox sees: the Anthropic key that activates the
+/// The sandbox environment the readiness recipe runs against: the Anthropic key that activates the
 /// one model provider `container/opencode.json` enables, plus the egress
 /// variables the clone and every outbound call go through. No GitHub
 /// credential - the proxy holds that one.

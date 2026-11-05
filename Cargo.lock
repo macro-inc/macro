@@ -821,7 +821,6 @@ dependencies = [
  "serde",
  "serde_json",
  "specta",
- "specta-serde",
  "specta-typescript",
  "strum 0.27.2",
  "thiserror 2.0.18",

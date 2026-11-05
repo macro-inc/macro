@@ -255,6 +255,12 @@ fn connection_prompt(blocker: SessionBlocker) -> AgentConnectionPrompt {
             "codex-cloud",
             "Codex",
         ),
+        SessionBlocker::SandboxUnavailable => (
+            "@coder",
+            "has no cloud sandbox to run in yet. Connect a runtime of your own in Runtimes settings, then mention me again.",
+            harness_id::MACROD_HARNESS_SLUG,
+            "Runtimes",
+        ),
     };
     AgentConnectionPrompt {
         agent_tag: agent_tag.to_owned(),
