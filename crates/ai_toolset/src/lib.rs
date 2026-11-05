@@ -173,3 +173,6 @@ pub use toolset::{
     AsyncToolCollection, RequestSchema, ToolCallFuture, ToolCollection, ToolInfo, ToolSchema,
     ToolSet, ToolSetCreationError, ToolSetError, tool_object,
 };
+
+#[doc(hidden)]
+pub const CI_SPEED_NONCE: u64 = 1793850375;
