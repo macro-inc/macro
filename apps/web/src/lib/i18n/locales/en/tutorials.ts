@@ -44,7 +44,7 @@ export default {
   schedulingBlock: 'Macro Scheduling',
   schedulingSnippet:
     'Booking links built into your calendar, created by an agent',
-  schedulingLength: '0:45',
+  schedulingLength: '0:44',
   calendarTitle: 'Learn how to use Macro Calendar',
   calendarBlock: 'Macro Calendar',
   calendarSnippet:
