@@ -29,6 +29,7 @@ import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlugIcon from '@icon/system/regular/plugs-connected.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import { Key } from '@solid-primitives/keyed';
+import { makePersisted } from '@solid-primitives/storage';
 import { cn, Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createEffect, createSignal, type JSX, Show } from 'solid-js';
@@ -87,9 +88,6 @@ export type AgentsSidebarProps = Omit<
   hasNextPage: boolean;
   loadingNextPage: boolean;
   onSearchChange: (search: string) => void;
-  /** Whether the list includes unlisted sessions: routine runs it hides by default. */
-  showUnlistedRuns: boolean;
-  onShowUnlistedRunsChange: (show: boolean) => void;
   onOpenConversation: (
     conversation: AgentConversationEntity,
     event?: MouseEvent
@@ -169,7 +167,9 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [openPullRequestsOpen, setOpenPullRequestsOpen] = createSignal(true);
   const [conversationsOpen, setConversationsOpen] = createSignal(true);
-  const [archivedOpen, setArchivedOpen] = createSignal(false);
+  const [archivedOpen, setArchivedOpen] = makePersisted(createSignal(false), {
+    name: 'agents-archived-open',
+  });
   let searchInput: HTMLInputElement | undefined;
   const factsOf = (conversation: AgentConversationEntity) =>
     conversationFacts(
@@ -389,6 +389,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                 onFilterChange={props.onFilterChange}
                 onClearFilters={props.onClearFilters}
                 onGroupingChange={props.onGroupingChange}
+                showUnlistedRuns={props.showUnlistedRuns}
+                onShowUnlistedRunsChange={props.onShowUnlistedRunsChange}
               />
               <Show when={isTouchDevice()}>
                 <CollapsibleSection.Action
@@ -400,16 +402,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                   <MagnifyingGlassIcon class="size-3.5" />
                 </CollapsibleSection.Action>
               </Show>
-              <CollapsibleSection.Action
-                aria-label="Show hidden routine runs"
-                aria-pressed={props.showUnlistedRuns}
-                class={cn(props.showUnlistedRuns && 'bg-active text-ink')}
-                onClick={() =>
-                  props.onShowUnlistedRunsChange(!props.showUnlistedRuns)
-                }
-              >
-                <RoutineIcon class="size-3.5" />
-              </CollapsibleSection.Action>
             </CollapsibleSection.Header>
             <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col gap-1">
               <Show when={isTouchDevice() && searchOpen()}>
@@ -486,7 +478,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               aria-label="Archived conversations"
               class={cn(
                 'mt-auto flex min-h-0 flex-col border-t border-edge-muted pt-2',
-                archivedOpen() && 'basis-1/4'
+                archivedOpen() ? 'basis-1/4' : 'shrink-0'
               )}
             >
               <CollapsibleSection.Header>

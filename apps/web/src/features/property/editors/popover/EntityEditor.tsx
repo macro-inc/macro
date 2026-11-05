@@ -16,6 +16,7 @@ import { useAgentAssignees } from '../../queries/agent-assignees';
 import type { EntityProperty, PropertyApiValues } from '../../types';
 import { isEntityProperty } from '../../utils';
 import { PropertyEntitySelector } from '../selectors/PropertyEntitySelector';
+import type { EntityPickerOptions } from '../selectors/types';
 import { EditorPopover } from './EditorPopover';
 
 type EntityEditorProps = {
@@ -25,6 +26,8 @@ type EntityEditorProps = {
    * is needed (e.g. composer with no entity yet).
    */
   selfFilter?: { entityType: EntityType; blockId?: string };
+  /** Set when one control edits several properties. */
+  entityPicker?: EntityPickerOptions;
 };
 
 /**
@@ -35,7 +38,10 @@ export function EntityEditor(props: EntityEditorProps) {
   const ctx = useProperty();
   return (
     <Show when={ctx.editorOpen() && isEntityProperty(ctx.property())}>
-      <EntityEditorBody selfFilter={props.selfFilter} />
+      <EntityEditorBody
+        selfFilter={props.selfFilter}
+        entityPicker={props.entityPicker}
+      />
     </Show>
   );
 }
@@ -135,8 +141,12 @@ function EntityEditorSelector(
         <PropertyEntitySelector
           config={{
             isMultiSelect: property.isMultiSelect,
-            placeholder: `${property.isMultiSelect ? 'Add' : 'Change'} ${property.displayName.toLowerCase()}...`,
-            specificEntityType: property.specificEntityType,
+            placeholder:
+              props.entityPicker?.placeholder ??
+              `${property.isMultiSelect ? 'Add' : 'Change'} ${property.displayName.toLowerCase()}...`,
+            emptyMessage: props.entityPicker?.emptyMessage,
+            specificEntityType:
+              props.entityPicker?.entityTypes ?? property.specificEntityType,
             selfFilter: props.selfFilter,
             users: isCompanyOwner ? teamMembers : undefined,
             additionalUsers: agents,
@@ -179,7 +189,11 @@ function EntityEditorBody(props: EntityEditorProps) {
   const draft = createEntityEditorDraft();
   return (
     <EditorPopover onClose={draft.closeAndSave}>
-      <EntityEditorSelector selfFilter={props.selfFilter} draft={draft} />
+      <EntityEditorSelector
+        selfFilter={props.selfFilter}
+        entityPicker={props.entityPicker}
+        draft={draft}
+      />
     </EditorPopover>
   );
 }
@@ -194,7 +208,10 @@ export function EntitySheetEditor(props: EntityEditorProps) {
   return (
     <Show when={isEntityProperty(ctx.property())}>
       <PickerSheet.Root open={ctx.editorOpen()} onCancel={ctx.closeEditor}>
-        <EntitySheetBody selfFilter={props.selfFilter} />
+        <EntitySheetBody
+          selfFilter={props.selfFilter}
+          entityPicker={props.entityPicker}
+        />
       </PickerSheet.Root>
     </Show>
   );
@@ -212,6 +229,7 @@ function EntitySheetBody(props: EntityEditorProps) {
       <PickerSheet.Body>
         <EntityEditorSelector
           selfFilter={props.selfFilter}
+          entityPicker={props.entityPicker}
           draft={draft}
           fillHeight
           onCancel={ctx.closeEditor}

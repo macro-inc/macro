@@ -44,6 +44,10 @@ word docs, Illustrator/Photoshop files).
   `edit_refused` is the worker's clarification, 502 `edit_failed` may have
   partly applied, and a client disconnect drops the worker call (never spawn
   it).
+- `axum_router/upload_file.rs`: `POST /upload` takes a file's raw bytes (25 MiB)
+  and runs UploadFile's `DocumentCreator::upload_file`, minting the project
+  receipt from the caller like the tool. It exists for clients that cannot PUT
+  to presigned storage URLs, such as code mode's sandbox.
 
 ## Scope
 
