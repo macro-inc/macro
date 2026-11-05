@@ -159,6 +159,13 @@ above the event whenever a late section changes its height. Keep the guest
 editors' `overlap`: without it their height follows the room below the button,
 so they never overflow, never flip, and squeeze the chosen people to nothing.
 
+Email invitation cards have a backend-free desktop/phone regression for long
+descriptions wrapping inside the card, collapsed and expanded, the guest row
+lining up with its icon, and `+N more` keeping a 44px tap target on touch:
+`bunx playwright test --config src/features/email-message/browser-test/playwright.config.ts`.
+Use `wrap-anywhere` alone on wrapping text: `break-words` is emitted later and
+overrides `[overflow-wrap:anywhere]`, which then no longer shrinks min-content.
+
 The desktop app's local runtime setup (find an agent, connect, create the
 agent, retry, open a session) has a backend-free browser regression over a
 scripted runtime:
@@ -1109,6 +1116,18 @@ browser moves focus off a disabled field, so a failed save would strand it. Ente
 and Escape return focus to the value through `Property.Root`; tabbing or clicking
 away leaves focus where the user put it. The backend-free regression is
 `bunx playwright test --config src/features/property/editors/inline/browser-test/playwright.config.ts`.
+
+### Assignee people scope
+
+Use only the current team roster and available agents for new Assignee selections.
+Keep existing selected outsiders visible and removable, without contact discovery.
+Reuse the existing selected-first ordering at opening and keep row positions
+stable while selecting. Keep the generic roster hook in `src/lib/queries/team/members.ts`.
+Preserve each picker’s existing placeholder, sizing, and row styling.
+Preserve filter-only Me/Unassigned choices, company-owner scope, and unrelated
+people/contact fields.
+Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
+import it directly from Tasks and legacy `next-soup` consumers.
 
 ### Sidebar tag dragging
 

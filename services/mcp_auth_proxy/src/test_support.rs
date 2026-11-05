@@ -20,7 +20,7 @@ use crate::domain::{
     ports::{
         ClientRegistrationStore, EmailCodeError, EmailCodeProvider, EmailCodeRequestFuture,
         EmailCodeTokensFuture, GrantRevokedFuture, OAuthProvider, RefreshTokenBindingFuture,
-        RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture,
+        RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture, UpstreamGrantError,
         UpstreamRevocationFuture, UpstreamTokensFuture,
     },
     redirect_uri::RedirectUriPolicy,
@@ -246,10 +246,15 @@ impl RefreshTokenBindingStore for FakeClientRegistry {
     }
 }
 
+/// Builds the failure a fake upstream grant answers with.
+type GrantFailure = Box<dyn Fn() -> UpstreamGrantError + Send + Sync>;
+
 /// Upstream provider that hands back fixed tokens, standing in for FusionAuth.
 pub struct FakeOAuthProvider {
     rotated_refresh_token: Option<String>,
     revoked_refresh_tokens: Mutex<HashSet<String>>,
+    refresh_failure: Option<GrantFailure>,
+    code_exchange_failure: Option<GrantFailure>,
 }
 
 impl FakeOAuthProvider {
@@ -259,7 +264,28 @@ impl FakeOAuthProvider {
         Self {
             rotated_refresh_token: None,
             revoked_refresh_tokens: Mutex::default(),
+            refresh_failure: None,
+            code_exchange_failure: None,
         }
+    }
+
+    /// This provider, with every refresh grant failing with `failure()`.
+    pub fn failing_refresh(
+        mut self,
+        failure: impl Fn() -> UpstreamGrantError + Send + Sync + 'static,
+    ) -> Self {
+        self.refresh_failure = Some(Box::new(failure));
+        self
+    }
+
+    /// This provider, with every authorization code grant failing with
+    /// `failure()`.
+    pub fn failing_code_exchange(
+        mut self,
+        failure: impl Fn() -> UpstreamGrantError + Send + Sync + 'static,
+    ) -> Self {
+        self.code_exchange_failure = Some(Box::new(failure));
+        self
     }
 
     /// Returns whether the provider was asked to revoke `refresh_token`.
@@ -274,7 +300,7 @@ impl FakeOAuthProvider {
     pub fn rotating(rotated_refresh_token: &str) -> Self {
         Self {
             rotated_refresh_token: Some(rotated_refresh_token.to_owned()),
-            revoked_refresh_tokens: Mutex::default(),
+            ..Self::new()
         }
     }
 }
@@ -295,6 +321,9 @@ impl OAuthProvider for FakeOAuthProvider {
 
     fn exchange_authorization_code<'a>(&'a self, _code: &'a str) -> UpstreamTokensFuture<'a> {
         Box::pin(async move {
+            if let Some(failure) = &self.code_exchange_failure {
+                return Err(failure());
+            }
             Ok(UpstreamTokens {
                 access_token: AccessToken::from(UPSTREAM_ACCESS_TOKEN),
                 refresh_token: RefreshToken::from(UPSTREAM_REFRESH_TOKEN),
@@ -308,13 +337,18 @@ impl OAuthProvider for FakeOAuthProvider {
         refresh_token: &'a RefreshToken,
     ) -> UpstreamTokensFuture<'a> {
         Box::pin(async move {
+            if let Some(failure) = &self.refresh_failure {
+                return Err(failure());
+            }
             if self
                 .revoked_refresh_tokens
                 .lock()
                 .expect("revoked refresh tokens lock")
                 .contains(refresh_token.as_str())
             {
-                anyhow::bail!("refresh token was revoked upstream");
+                return Err(UpstreamGrantError::InvalidGrant {
+                    detail: "invalid_grant (refresh_token_not_found)".to_owned(),
+                });
             }
             let next = self
                 .rotated_refresh_token

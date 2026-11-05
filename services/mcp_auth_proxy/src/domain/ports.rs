@@ -1,6 +1,6 @@
 //! Domain ports for upstream OAuth providers.
 
-use std::{future::Future, pin::Pin};
+use std::{future::Future, pin::Pin, time::Duration};
 
 use super::models::{
     EmailCodeRequest, RefreshToken, RefreshTokenBinding, RegisteredClient, UpstreamLogin,
@@ -9,7 +9,31 @@ use super::models::{
 
 /// Boxed future returning a token grant from the upstream provider.
 pub type UpstreamTokensFuture<'a> =
-    Pin<Box<dyn Future<Output = anyhow::Result<UpstreamTokens>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = Result<UpstreamTokens, UpstreamGrantError>> + Send + 'a>>;
+
+/// Why the upstream provider issued no tokens for a grant. Carries no
+/// credential, so it is safe to log.
+#[derive(Debug, thiserror::Error)]
+pub enum UpstreamGrantError {
+    /// The provider refused the code or refresh token itself as invalid,
+    /// expired, or revoked. Only the user authorizing again fixes it.
+    #[error("upstream refused the grant: {detail}")]
+    InvalidGrant {
+        /// The provider's reason, for logs.
+        detail: String,
+    },
+    /// The provider was unreachable or throttling requests; retrying later
+    /// can succeed.
+    #[error("upstream is unavailable")]
+    Unavailable {
+        /// How long the provider asked callers to wait, when it said.
+        retry_after: Option<Duration>,
+    },
+    /// Anything else: a request or client credential the provider rejected,
+    /// which is ours to fix, or an answer we could not use.
+    #[error("upstream grant request failed: {0:#}")]
+    Failed(anyhow::Error),
+}
 
 /// Boxed future returning nothing on success.
 pub type StoreWriteFuture<'a> = Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'a>>;

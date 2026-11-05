@@ -543,23 +543,6 @@ static CHANNEL_LIST_SELECT: &str = r#"
             ELSE uc.updated_at
         END) DESC, uc.id::text DESC
         LIMIT $3
-    ),
-    channel_participants_json AS (
-        SELECT
-            pc.id as channel_id,
-            ARRAY_AGG(
-                json_build_object(
-                    'channel_id', cp.channel_id,
-                    'user_id', cp.user_id,
-                    'role', cp.role,
-                    'joined_at', cp.joined_at,
-                    'left_at', cp.left_at
-                )
-            ) as participants
-        FROM paged_channels pc
-        JOIN comms_channel_participants cp ON cp.channel_id = pc.id
-        WHERE cp.left_at IS NULL
-        GROUP BY pc.id
     )
     SELECT
         pc.id as "id",
@@ -580,7 +563,22 @@ static CHANNEL_LIST_SELECT: &str = r#"
               AND cp_active.left_at IS NULL
         ) as "is_participant"
     FROM paged_channels pc
-    LEFT JOIN channel_participants_json cpj ON cpj.channel_id = pc.id
+    -- Per channel: a grouped join over the whole page is re-aggregated once
+    -- per page row when the page is estimated at one row.
+    LEFT JOIN LATERAL (
+        SELECT ARRAY_AGG(
+            json_build_object(
+                'channel_id', cp.channel_id,
+                'user_id', cp.user_id,
+                'role', cp.role,
+                'joined_at', cp.joined_at,
+                'left_at', cp.left_at
+            )
+        ) as participants
+        FROM comms_channel_participants cp
+        WHERE cp.channel_id = pc.id
+          AND cp.left_at IS NULL
+    ) cpj ON TRUE
     ORDER BY (CASE $2
         WHEN 'created_at' THEN pc.created_at
         WHEN 'viewed_at' THEN COALESCE(pc.viewed_at, '1970-01-01 00:00:00+00')
@@ -591,42 +589,111 @@ static CHANNEL_LIST_SELECT: &str = r#"
 
 /// Matches channels where the user has a live notification in `state`.
 ///
-/// Unseen and seen rows are few per user and usually the newest of a channel,
-/// so a per-channel `EXISTS` walks the channel's whole notification history
-/// before finding them. Those states read the user's own notifications once
-/// instead. `= ANY(ARRAY(...))` keeps that set an InitPlan; a plain `IN` is
-/// pulled up into a semi-join that probes every channel's history again.
-/// Done rows accumulate without bound and the oldest one usually matches, so
-/// the per-channel `EXISTS` stays cheaper for them.
+/// Each candidate channel is one seek on `idx_user_notification_viewer_entity`,
+/// whose key is the user, the entity and the state, so the cost is bounded by
+/// the user's channels. Collecting the user's notified channels into an array
+/// first reads every notification the user has in `state`: the planner reaches
+/// them through `(user_id, state)` and discards other entity types on the heap,
+/// which for a user with many pull request notifications is most of the read.
 #[cfg(feature = "list")]
 fn build_channel_notification_state_clause(state: item_filters::NotificationState) -> String {
     let predicate = notification_state_predicate(state);
-    match state {
-        item_filters::NotificationState::Unseen | item_filters::NotificationState::Seen => {
-            format!(
-                r#"(c.id)::text = ANY(ARRAY(
-            SELECT DISTINCT n.event_item_id
-            FROM user_notification un
-            JOIN notification n ON n.id = un.notification_id
-            WHERE un.user_id = $1
-              AND un.deleted_at IS NULL
-              AND {predicate}
-              AND n.event_item_type = 'channel'
-        ))"#
-            )
-        }
-        item_filters::NotificationState::Done => format!(
-            r#"EXISTS (
+    format!(
+        r#"EXISTS (
             SELECT 1
-            FROM notification n
-            JOIN user_notification un ON un.notification_id = n.id
+            FROM user_notification un
             WHERE un.user_id = $1
               AND un.deleted_at IS NULL
-              AND n.event_item_type = 'channel'
-              AND n.event_item_id = (c.id)::text
+              AND un.event_item_type = 'channel'
+              AND un.event_item_id = (c.id)::text
               AND {predicate}
         )"#
-        ),
+    )
+}
+
+#[cfg(feature = "list")]
+fn notification_state_bit(state: item_filters::NotificationState) -> u8 {
+    match state {
+        item_filters::NotificationState::Unseen => 1,
+        item_filters::NotificationState::Seen => 2,
+        item_filters::NotificationState::Done => 4,
+    }
+}
+
+/// States matched by a subtree made only of notification literals joined by OR.
+#[cfg(feature = "list")]
+fn notification_state_set<T>(
+    expr: &Expr<T>,
+    state_of: impl Fn(&T) -> Option<item_filters::NotificationState> + Copy,
+) -> Option<u8> {
+    match expr {
+        Expr::Literal(literal) => state_of(literal).map(notification_state_bit),
+        Expr::Or(left, right) => {
+            Some(notification_state_set(left, state_of)? | notification_state_set(right, state_of)?)
+        }
+        Expr::And(..) | Expr::Not(_) => None,
+    }
+}
+
+#[cfg(feature = "list")]
+fn collect_conjuncts<'a, T>(expr: &'a Expr<T>, conjuncts: &mut Vec<&'a Expr<T>>) {
+    match expr {
+        Expr::And(left, right) => {
+            collect_conjuncts(left, conjuncts);
+            collect_conjuncts(right, conjuncts);
+        }
+        _ => conjuncts.push(expr),
+    }
+}
+
+/// Drops each notification conjunct that a narrower one on the same AND chain
+/// implies. The Home unread feed sends `(unseen OR seen) AND unseen`, which
+/// matches exactly what `unseen` does, but every notification conjunct is its
+/// own read of the user's notifications.
+#[cfg(feature = "list")]
+fn drop_implied_notification_conjuncts<T: Clone>(
+    expr: &Expr<T>,
+    state_of: impl Fn(&T) -> Option<item_filters::NotificationState> + Copy,
+) -> Expr<T> {
+    let mut conjuncts = Vec::new();
+    collect_conjuncts(expr, &mut conjuncts);
+    let sets: Vec<Option<u8>> = conjuncts
+        .iter()
+        .map(|conjunct| notification_state_set(conjunct, state_of))
+        .collect();
+    let implied = |index: usize, set: u8| {
+        sets.iter().enumerate().any(|(other_index, other)| {
+            other.is_some_and(|other| {
+                other_index != index
+                    && other & set == other
+                    && (other != set || other_index < index)
+            })
+        })
+    };
+    conjuncts
+        .into_iter()
+        .enumerate()
+        .filter(|(index, _)| sets[*index].is_none_or(|set| !implied(*index, set)))
+        .map(|(_, conjunct)| conjunct.clone())
+        .reduce(Expr::and)
+        .unwrap_or_else(|| expr.clone())
+}
+
+#[cfg(feature = "list")]
+fn channel_literal_state(literal: &ChannelLiteral) -> Option<item_filters::NotificationState> {
+    match literal {
+        ChannelLiteral::NotificationState(state) => Some(*state),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "list")]
+fn channel_thread_literal_state(
+    literal: &ChannelThreadLiteral,
+) -> Option<item_filters::NotificationState> {
+    match literal {
+        ChannelThreadLiteral::NotificationState(state) => Some(*state),
+        _ => None,
     }
 }
 
@@ -704,22 +771,38 @@ fn channel_filter_mentions_participation(expr: &Expr<ChannelLiteral>) -> bool {
     })
 }
 
+/// Whether `IsParticipant(true)` is on the top-level AND chain, so only
+/// channels the user participates in can match.
+#[cfg(feature = "list")]
+fn channel_filter_requires_participation(expr: &Expr<ChannelLiteral>) -> bool {
+    match expr {
+        Expr::And(left, right) => {
+            channel_filter_requires_participation(left)
+                || channel_filter_requires_participation(right)
+        }
+        Expr::Literal(ChannelLiteral::IsParticipant(true)) => true,
+        _ => false,
+    }
+}
+
 #[cfg(feature = "list")]
 fn build_channel_list_query(
     filter_ast: &LiteralTree<ChannelLiteral>,
-) -> QueryBuilder<'_, Postgres> {
+) -> QueryBuilder<'static, Postgres> {
     // QueryBuilder is required because the channel filter is an AST with arbitrary
     // AND/OR/NOT shape. Dynamic literals are constrained to parsed domain types.
-    let prefix = if filter_ast
+    let filter = filter_ast
         .as_deref()
-        .is_some_and(channel_filter_mentions_participation)
-    {
+        .map(|expr| drop_implied_notification_conjuncts(expr, channel_literal_state));
+    let prefix = if filter.as_ref().is_some_and(|expr| {
+        channel_filter_mentions_participation(expr) && !channel_filter_requires_participation(expr)
+    }) {
         CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS
     } else {
         CHANNEL_LIST_PREFIX
     };
     let mut builder = QueryBuilder::new(prefix);
-    builder.push(build_channel_list_filter(filter_ast.as_deref()));
+    builder.push(build_channel_list_filter(filter.as_ref()));
     builder.push(CHANNEL_LIST_SELECT);
     builder
 }
@@ -832,39 +915,52 @@ fn push_channel_thread_participant_filter_expr(
         r#"(EXISTS (
             SELECT 1
             FROM comms_channel_participants pcp
-            WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = pcp.channel_id::text
+            WHERE pcp.channel_id = m.channel_message_parent_id
+              AND pcp.channel_id::text = m.parent_entity_id
               AND pcp.user_id = "#,
     );
     builder.push_bind(participant.clone());
+    // The root and its replies are checked apart: one `tm.id = m.id OR
+    // tm.thread_id = m.id` scan cannot use either index on its own.
     builder.push(
         r#"
               AND pcp.left_at IS NULL
-        ) AND EXISTS (
+        ) AND ((m.deleted_at IS NULL AND "#,
+    );
+    push_channel_message_participation_expr(builder, "m", &participant);
+    builder.push(
+        r#") OR EXISTS (
             SELECT 1
             FROM comms_messages tm
-            WHERE (tm.id = m.id OR tm.thread_id = m.id)
+            WHERE tm.thread_id = m.id
               AND tm.deleted_at IS NULL
-              AND (
-                tm.sender_id = "#,
+              AND "#,
     );
-    builder.push_bind(participant.clone());
-    builder.push(
+    push_channel_message_participation_expr(builder, "tm", &participant);
+    builder.push(")))");
+}
+
+/// Whether `participant` sent or is @-mentioned in the message aliased `message`.
+#[cfg(feature = "list")]
+fn push_channel_message_participation_expr(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    message: &'static str,
+    participant: &str,
+) {
+    builder.push(format!("({message}.sender_id = "));
+    builder.push_bind(participant.to_owned());
+    builder.push(format!(
         r#"
-                OR EXISTS (
-                    SELECT 1
-                    FROM comms_entity_mentions em
-                    WHERE em.source_entity_type = 'message'
-                      AND em.source_entity_id = tm.id::text
-                      AND em.entity_type = 'user'
-                      AND em.entity_id = "#,
-    );
-    builder.push_bind(participant);
-    builder.push(
-        r#"
-                )
-              )
-        ))"#,
-    );
+            OR EXISTS (
+                SELECT 1
+                FROM comms_entity_mentions em
+                WHERE em.source_entity_type = 'message'
+                  AND em.source_entity_id = {message}.id::text
+                  AND em.entity_type = 'user'
+                  AND em.entity_id = "#
+    ));
+    builder.push_bind(participant.to_owned());
+    builder.push("))");
 }
 
 #[cfg(feature = "list")]
@@ -895,8 +991,7 @@ fn push_channel_thread_notification_filter_expr(
 }
 
 #[cfg(feature = "list")]
-const CHANNEL_MESSAGE_ID_PATTERN: &str =
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
+const UUID_TEXT_PATTERN: &str = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
 
 /// Positive notification states, plus predicates that were ANDed onto them.
 ///
@@ -929,7 +1024,11 @@ fn channel_thread_expr_mentions_notification(expr: &Expr<ChannelThreadLiteral>) 
 /// Root ids of channel-message notifications in `state_predicate`.
 ///
 /// `$1` is the requesting user, the first bind `build_channel_thread_notification_query`
-/// pushes. Each arm fences the user's rows and the notification lookup with
+/// pushes. Message sends never carry a thread and are most of a user's channel
+/// notifications, so skipping them by the copied event type lets
+/// `idx_user_notification_channel_threads` return only rows that can name a
+/// root before any `notification` lookup.
+/// Each arm fences the user's rows and the notification lookup with
 /// `OFFSET 0`. Without the inner fence Postgres hashes every `channel_message`
 /// notification in the table when that type's statistics are too low. AND is
 /// `INTERSECT` because two states can be witnessed by different notification
@@ -944,6 +1043,8 @@ fn channel_message_notification_ids_sql(state_predicate: &str) -> String {
                FROM user_notification un
                WHERE un.user_id = $1
                  AND un.deleted_at IS NULL
+                 AND un.event_item_type = 'channel'
+                 AND un.notification_event_type <> 'channel_message_send'
                  AND {state_predicate}
                OFFSET 0
            ) un
@@ -953,7 +1054,7 @@ fn channel_message_notification_ids_sql(state_predicate: &str) -> String {
                WHERE n.id = un.notification_id
                  AND n.event_item_type = 'channel'
                  AND n.secondary_event_item_type = 'channel_message'
-                 AND n.secondary_event_item_id ~ '{CHANNEL_MESSAGE_ID_PATTERN}'
+                 AND n.secondary_event_item_id ~ '{UUID_TEXT_PATTERN}'
                OFFSET 0
            ) n ON TRUE"#
     )
@@ -1102,7 +1203,11 @@ fn build_channel_thread_notification_query(
         JOIN notified
           ON notified.root_id = m.id
          AND notified.channel_id = m.parent_entity_id
-        JOIN comms_channels c ON c.id::text = m.parent_entity_id
+        -- The generated uuid parent reaches the channel and participant keys;
+        -- the text comparisons keep the exact matching of the stored ids.
+        JOIN comms_channels c
+          ON c.id = m.channel_message_parent_id
+         AND c.id::text = m.parent_entity_id
         LEFT JOIN LATERAL (
             SELECT MAX(reply.updated_at) AS latest_reply_updated_at
             FROM comms_messages reply
@@ -1115,7 +1220,8 @@ fn build_channel_thread_notification_query(
           AND EXISTS (
               SELECT 1
               FROM comms_channel_participants cp
-              WHERE cp.channel_id::text = m.parent_entity_id
+              WHERE cp.channel_id = m.channel_message_parent_id
+                AND cp.channel_id::text = m.parent_entity_id
                 AND cp.user_id = "#
     ));
     // First bind. The `$1` literals inside `ids_sql` are this same user.
@@ -1153,7 +1259,11 @@ fn build_channel_thread_rows_query(
     let cursor_id_str = cursor_id.map(|id| id.to_string());
     let cursor_timestamp = cursor_timestamp.cloned();
 
-    if let Some(expr) = cursor.filter().as_deref()
+    let filter = cursor
+        .filter()
+        .as_deref()
+        .map(|expr| drop_implied_notification_conjuncts(expr, channel_thread_literal_state));
+    if let Some(expr) = filter.as_ref()
         && let ThreadNotifPlan::Ready { ids_sql, residuals } =
             classify_channel_thread_notification(expr)
     {
@@ -1203,7 +1313,7 @@ fn build_channel_thread_rows_query(
         "#,
     );
 
-    if let Some(expr) = cursor.filter().as_deref() {
+    if let Some(expr) = filter.as_ref() {
         builder.push(" AND ");
         push_channel_thread_filter_expr(&mut builder, expr, params.user());
     }

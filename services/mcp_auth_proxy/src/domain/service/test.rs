@@ -739,6 +739,118 @@ async fn revoked_refresh_token_cannot_mint_access_tokens() {
 }
 
 #[tokio::test]
+async fn a_refresh_token_the_upstream_refuses_is_an_invalid_grant() {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_refresh(|| {
+        UpstreamGrantError::InvalidGrant {
+            detail: "invalid_grant (refresh_token_not_found)".to_owned(),
+        }
+    }));
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+
+    let error = harness
+        .service
+        .exchange_token(refresh_request(refresh_token, &client_id))
+        .await
+        .expect_err("a refused refresh token must not mint an access token");
+
+    match error {
+        TokenExchangeError::RefreshFailed(UpstreamGrantError::InvalidGrant { detail }) => {
+            assert_eq!(detail, "invalid_grant (refresh_token_not_found)");
+        }
+        other => panic!("expected an upstream invalid grant, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn an_upstream_outage_during_refresh_is_reported_as_unavailable() {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_refresh(|| {
+        UpstreamGrantError::Unavailable {
+            retry_after: Some(Duration::from_secs(30)),
+        }
+    }));
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+
+    let error = harness
+        .service
+        .exchange_token(refresh_request(refresh_token, &client_id))
+        .await
+        .expect_err("an outage must fail the refresh");
+
+    assert!(matches!(
+        error,
+        TokenExchangeError::RefreshFailed(UpstreamGrantError::Unavailable {
+            retry_after: Some(retry_after),
+        }) if retry_after == Duration::from_secs(30)
+    ));
+}
+
+#[tokio::test]
+async fn a_failed_upstream_refresh_keeps_its_cause() {
+    let harness = Harness::with_provider(
+        FakeOAuthProvider::new()
+            .failing_refresh(|| UpstreamGrantError::Failed(anyhow::anyhow!("unexpected 500"))),
+    );
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+
+    let error = harness
+        .service
+        .exchange_token(refresh_request(refresh_token, &client_id))
+        .await
+        .expect_err("an upstream failure must fail the refresh");
+
+    assert!(matches!(
+        error,
+        TokenExchangeError::RefreshFailed(UpstreamGrantError::Failed(_))
+    ));
+    assert!(
+        error.to_string().contains("unexpected 500"),
+        "the cause must survive into the message: {error}"
+    );
+}
+
+#[tokio::test]
+async fn a_refused_upstream_code_fails_the_callback_without_issuing_a_code() {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_code_exchange(|| {
+        UpstreamGrantError::InvalidGrant {
+            detail: "invalid_request (auth_code_not_found)".to_owned(),
+        }
+    }));
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    harness
+        .service
+        .start_authorization(
+            harness.authorize_request(
+                &client_id,
+                TRUSTED_REDIRECT_URI,
+                &code_challenge_for(VICTIM_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::NotAsked,
+        )
+        .await
+        .expect("authorize should succeed");
+
+    let error = harness
+        .service
+        .complete_callback(
+            upstream_callback(&harness.inflight.only_pending_session_id()),
+            Some(harness.browser.clone()),
+        )
+        .await
+        .expect_err("a refused upstream code must fail the callback");
+
+    assert!(matches!(
+        error,
+        CompleteCallbackError::AuthorizationCodeExchangeFailed(
+            UpstreamGrantError::InvalidGrant { .. }
+        )
+    ));
+}
+
+#[tokio::test]
 async fn revoking_twice_succeeds() {
     let harness = Harness::new();
     let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
