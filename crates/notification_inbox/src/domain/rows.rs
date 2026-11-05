@@ -442,6 +442,7 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
         | NotifEvent::ChannelMessageReply(_)
         | NotifEvent::ChannelMessageReaction(_)
         | NotifEvent::ChannelInvite(_)
+        | NotifEvent::ChannelAccessRequested(_)
         | NotifEvent::CallStarted(_)
         | NotifEvent::MentionedInDocumentComment(_)
         | NotifEvent::RepliedToDocumentCommentThread(_)
