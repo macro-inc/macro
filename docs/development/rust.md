@@ -76,8 +76,10 @@ On a pull request, CI tests the changed packages, their direct dependents, and
 crates whose own third-party dependencies changed, and lints every package the
 change can reach. It doesn't compile or run the tests of indirect dependents, so
 after a change to a widely used crate, also test the indirect dependents you expect
-it to affect. The `cloud storage main check` workflow lints and tests the whole
-workspace on `main` after merge, and alerts on failure. It doesn't block deploys.
+it to affect. `document_storage_service`'s tests run only when that package itself
+changes, so run them too after a change it depends on. The `cloud storage main
+check` workflow lints and tests the whole workspace on `main` after merge, and
+alerts on failure. It doesn't block deploys.
 
 Keep tests in a sibling `test.rs` (CS-49). For example, `src/user.rs` declares:
 
