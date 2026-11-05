@@ -5,6 +5,7 @@ name: check generated workflows
   pull_request:
     branches:
     - main
+    - 'synoet/ci-int-base*'
     paths:
     - tooling/xtask/**
     - crates/macro_event_topics/**
