@@ -13,3 +13,7 @@ mod service;
 /// The service's OpenAPI document, rendered by the `*_openapi` binary.
 pub use api::swagger::ApiDoc;
 pub use server::run;
+
+/// Experiment marker, changed each round so dependents recompile.
+#[doc(hidden)]
+pub const CI_SPEED_NONCE: u32 = 2001;
