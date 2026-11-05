@@ -166,8 +166,18 @@ export function MacroComputers(props: {
         confirmName: computer.name,
       });
       setReleasing(undefined);
-      toast.success(`${computer.name} released`);
+      toast.success(
+        computer.status === 'payment_failed'
+          ? `${computer.name} removed`
+          : `${computer.name} released`
+      );
     } catch (error) {
+      if (computer.status === 'payment_failed') {
+        toast.failure(
+          failureMessage(error, "Couldn't remove the computer. Try again.")
+        );
+        return;
+      }
       setReleaseError(
         failureMessage(error, "Couldn't release the computer. Try again.")
       );
@@ -226,6 +236,10 @@ export function MacroComputers(props: {
                     fireAndForget(keep(computer), 'macro-computers')
                   }
                   onRelease={() => {
+                    if (computer.status === 'payment_failed') {
+                      fireAndForget(releaseNow(computer), 'macro-computers');
+                      return;
+                    }
                     setReleaseError(undefined);
                     setReleasing(computer);
                   }}

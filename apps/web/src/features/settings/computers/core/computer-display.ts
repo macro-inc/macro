@@ -81,6 +81,10 @@ export function computerStatusLabel(computer: ComputerStatus): {
       detail: 'Macro is looking into it. Contact support if it stays failed.',
       tone: 'failure',
     }))
+    .with('payment_failed', () => ({
+      label: 'Payment failed',
+      tone: 'failure',
+    }))
     .with('released', () => ({ label: 'Released', tone: 'muted' }))
     .exhaustive((unknown) => ({ label: String(unknown), tone: 'muted' }));
 }
@@ -89,6 +93,14 @@ export function computerStatusLabel(computer: ComputerStatus): {
 export function canTogglePower(computer: ComputerStatus): boolean {
   return match(computer.status)
     .with('ready', 'asleep', 'stopped', () => true)
-    .with('setting_up', 'waking', 'stopping', 'failed', 'released', () => false)
+    .with(
+      'setting_up',
+      'waking',
+      'stopping',
+      'failed',
+      'payment_failed',
+      'released',
+      () => false
+    )
     .exhaustive(() => false);
 }

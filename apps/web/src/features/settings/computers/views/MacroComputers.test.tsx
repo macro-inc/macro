@@ -3,13 +3,16 @@
  */
 
 import { ThrownResultError } from '@core/util/result';
-import type { SizeOffer } from '@service-auth/computers';
+import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { MacroComputers } from './MacroComputers';
 
 const mocks = vi.hoisted(() => ({
   offers: [] as SizeOffer[],
+  computers: [] as ComputerStatus[],
+  release: vi.fn(),
+  toastFailure: vi.fn(),
   purchase: vi.fn(),
   notify: vi.fn(),
   toastSuccess: vi.fn(),
@@ -36,13 +39,16 @@ vi.mock('@queries/computers/computers', () => ({
   useSetComputerPowerMutation: () => ({ isPending: false }),
   useCancelComputerMutation: () => ({ isPending: false }),
   useUndoCancelComputerMutation: () => ({ isPending: false }),
-  useReleaseComputerMutation: () => ({ isPending: false }),
+  useReleaseComputerMutation: () => ({
+    isPending: false,
+    mutateAsync: mocks.release,
+  }),
 }));
 
 vi.mock('../primitives/team-computers', () => ({
   useTeamComputers: () => ({
     enabled: () => true,
-    computers: () => [],
+    computers: () => mocks.computers,
     failed: () => false,
   }),
 }));
@@ -55,7 +61,7 @@ vi.mock('@queries/team/teams', () => ({
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { success: mocks.toastSuccess, failure: vi.fn() },
+  toast: { success: mocks.toastSuccess, failure: mocks.toastFailure },
 }));
 
 beforeAll(() => {
@@ -64,6 +70,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.computers = [];
   mocks.offers = [
     {
       size: 'standard',
@@ -167,4 +174,43 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
   await waitFor(() =>
     expect(screen.queryByText('Buy a Large Macro computer?')).toBeNull()
   );
+});
+
+it('removes a failed payment with the stored confirmation name and allows retry after an error', async () => {
+  mocks.computers = [
+    {
+      id: 'computer-1',
+      name: 'Build machine',
+      size: 'standard',
+      status: 'payment_failed',
+      poweredOn: false,
+      createdAt: '2026-01-01T00:00:00Z',
+    },
+  ];
+  mocks.release
+    .mockRejectedValueOnce(new Error('Request failed'))
+    .mockResolvedValueOnce({});
+
+  render(() => <MacroComputers harnesses={[]} />);
+
+  const remove = screen.getByRole('button', { name: 'Remove' });
+  fireEvent.click(remove);
+  await waitFor(() =>
+    expect(mocks.toastFailure).toHaveBeenCalledWith(
+      "Couldn't remove the computer. Try again."
+    )
+  );
+  expect(mocks.release).toHaveBeenNthCalledWith(1, {
+    computerId: 'computer-1',
+    confirmName: 'Build machine',
+  });
+
+  fireEvent.click(remove);
+  await waitFor(() =>
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Build machine removed')
+  );
+  expect(mocks.release).toHaveBeenNthCalledWith(2, {
+    computerId: 'computer-1',
+    confirmName: 'Build machine',
+  });
 });

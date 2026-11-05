@@ -92,39 +92,41 @@ export function ComputerRow(props: {
       }
     >
       <Show when={props.canManage}>
-        <ToggleSwitch
-          size="md"
-          label="Power"
-          labelClass="text-sm text-ink-muted"
-          checked={props.computer.poweredOn}
-          disabled={props.powerPending || !canTogglePower(props.computer)}
-          onChange={(on) => props.onPower(on)}
-        />
-        <Show
-          when={props.computer.cancelsAt}
-          fallback={
-            <Show when={!props.computer.retainedUntil}>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={props.billingPending}
-                onClick={props.onCancel}
-              >
-                Cancel at period end
-              </Button>
-            </Show>
-          }
-        >
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={props.billingPending}
-            onClick={props.onKeep}
+        <Show when={props.computer.status !== 'payment_failed'}>
+          <ToggleSwitch
+            size="md"
+            label="Power"
+            labelClass="text-sm text-ink-muted"
+            checked={props.computer.poweredOn}
+            disabled={props.powerPending || !canTogglePower(props.computer)}
+            onChange={(on) => props.onPower(on)}
+          />
+          <Show
+            when={props.computer.cancelsAt}
+            fallback={
+              <Show when={!props.computer.retainedUntil}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={props.billingPending}
+                  onClick={props.onCancel}
+                >
+                  Cancel at period end
+                </Button>
+              </Show>
+            }
           >
-            Keep computer
-          </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={props.billingPending}
+              onClick={props.onKeep}
+            >
+              Keep computer
+            </Button>
+          </Show>
         </Show>
         <Button
           type="button"
@@ -133,7 +135,9 @@ export function ComputerRow(props: {
           disabled={props.billingPending}
           onClick={props.onRelease}
         >
-          Release now
+          {props.computer.status === 'payment_failed'
+            ? 'Remove'
+            : 'Release now'}
         </Button>
       </Show>
     </IntegrationRow>
