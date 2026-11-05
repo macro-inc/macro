@@ -37,7 +37,6 @@ import {
   getEntityTimestampedItem,
   getEntityType,
   isChannelEntity,
-  prioritizeEntities,
   quickAccessItemToEntity,
   sortEntitiesWithSelfFirst,
   threadMapper,
@@ -57,8 +56,6 @@ type EntityInputProps = {
   onClose?: () => void;
   /** Escape in the search; `onClose` when absent, as a popover saves on close. */
   onCancel?: () => void;
-  /** Caller-prioritized ids stay ahead of other matching entities. */
-  priorityIds?: ReadonlySet<string>;
   /** Override empty-result content; null hides the default message. */
   emptyState?: JSX.Element;
 };
@@ -123,7 +120,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const [inputValue, setInputValue] = createSignal('');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
-  const openedSelectedIds = new Set(props.selectedOptions());
+  const openedSelectedIds = [...props.selectedOptions()];
   const keyboardMode = useKeyPressed(100);
 
   let scrollContainerRef: HTMLDivElement | undefined;
@@ -308,20 +305,18 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           !(getEntityType(e) === currentEntityType && e.id === blockId)
       : () => true;
 
-    // Get visible entities based on search
-    // Apply caller priority before the visible-result cap.
-    const localResults = term
-      ? prioritizeEntities(
-          entitySearch(allEntities, term).map((result) => result.item),
-          props.priorityIds,
-          props.priorityIds ? openedSelectedIds : undefined
-        )
-          .slice(0, MAX_SEARCH_RESULTS)
-          .filter(excludeFilter)
-      : prioritizeEntities(
-          sortEntitiesWithSelfFirst(allEntities.filter(excludeFilter), userId),
-          props.priorityIds
-        ).slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
+    let localResults: CombinedEntity[];
+    if (term) {
+      localResults = entitySearch(allEntities, term)
+        .slice(0, MAX_SEARCH_RESULTS)
+        .map((result) => result.item)
+        .filter(excludeFilter);
+    } else {
+      localResults = sortEntitiesWithSelfFirst(
+        allEntities.filter(excludeFilter),
+        userId
+      ).slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
+    }
 
     // For THREAD or generic entity: merge local + server results
     if (needsEmailSearch() && term) {
@@ -444,18 +439,19 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const fills = () => props.config.fillHeight === true;
   const keepSearchFocus = (event: Event) => event.preventDefault();
 
+  const selectedEntityCountAtOpen = createMemo(() => {
+    if (!props.config.isMultiSelect || searchTerm()) return 0;
+
+    return sortedEntities().filter((entity) =>
+      openedSelectedIds.includes(entity.id)
+    ).length;
+  });
   const shouldShowSelectedDivider = (index: number) => {
-    if (!props.config.isMultiSelect || searchTerm() || index === 0)
-      return false;
-    const items = sortedEntities();
-    const previous = items[index - 1];
-    const current = items[index];
-    return (
-      previous &&
-      current &&
-      openedSelectedIds.has(previous.id) &&
-      !openedSelectedIds.has(current.id)
-    );
+    const selectedCount = selectedEntityCountAtOpen();
+    if (selectedCount === 0) return false;
+    if (selectedCount === sortedEntities().length) return false;
+
+    return index === selectedCount;
   };
 
   return (

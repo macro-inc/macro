@@ -9,7 +9,6 @@ import {
 } from '@app/features/soup/assignee-picker';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { UserIcon } from '@core/component/UserIcon';
-import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { PropertyValueIcon } from '@property/component/propertyValue';
@@ -58,10 +57,9 @@ export function useTaskFilters() {
     () => true
   );
   const selectedAssigneesAtViewEntry = createMemo(
-    on(
-      assigneePicker.selectedIdsAtViewEntry,
-      () => new Set(state.facets.assignees ?? [])
-    )
+    on(assigneePicker.selectedIdsAtViewEntry, () => [
+      ...(state.facets.assignees ?? []),
+    ])
   );
 
   const peopleOptions = createMemo(() => {
@@ -115,6 +113,11 @@ export function useTaskFilters() {
         ]
       : options;
   });
+
+  const assigneeOptions = createMemo(() => [
+    ...peopleOptions().filter((option) => option.id === TASK_VIEWER),
+    ...assigneePicker.options().filter((option) => option.id !== NO_ASSIGNEE),
+  ]);
 
   const withUnavailable = (
     id: TaskFilterGroupId,
@@ -185,18 +188,7 @@ export function useTaskFilters() {
         id: 'assignees',
         label: 'Assignee',
         searchPlaceholder: assigneePicker.placeholder(),
-        options: [
-          ...peopleOptions().filter((option) => option.id === TASK_VIEWER),
-          ...assigneePicker
-            .options()
-            .filter((option) => option.id !== NO_ASSIGNEE),
-        ].toSorted(
-          (a, b) =>
-            Number(selectedAssigneesAtViewEntry().has(b.id)) -
-              Number(selectedAssigneesAtViewEntry().has(a.id)) ||
-            Number(isBotPrincipalId(b.id)) - Number(isBotPrincipalId(a.id))
-        ),
-        preserveOrder: true,
+        options: assigneeOptions(),
         footer: <AssigneePickerStatus picker={assigneePicker} />,
         onOpenChange: assigneePicker.onOpenChange,
       },
@@ -310,6 +302,7 @@ export function useTaskFilters() {
       setCustomRange(undefined);
     },
     groups,
+    selectedAssigneesAtViewEntry,
     isSelected,
     selectedIds: (groupId: TaskFilterGroupId) => state.facets[groupId] ?? [],
     setSelected,

@@ -1,18 +1,17 @@
 import { t } from '@app/lib/i18n';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
-import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
 } from '@property/utils/entityConversion';
+import { useTeamMembers } from '@queries/team/members';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createMemo, createSignal, Show, Suspense } from 'solid-js';
 import { useProperty } from '../../core/context';
 import { useAgentAssignees } from '../../queries/agent-assignees';
-import { useTeamMembers } from '../../queries/team-members';
 import type { EntityProperty, PropertyApiValues } from '../../types';
 import { isEntityProperty } from '../../utils';
 import { useQuickAccessEntities } from '../selectors/entityUtils';
@@ -130,19 +129,14 @@ function EntityEditorSelector(
     return scopedUserOptions(
       [...agents(), ...team.users()],
       people().map((item) => item.data),
-      entityReferencesToIdSet(props.draft.selectedRefs())
+      props.draft.selectedRefs().map((ref) => ref.entity_id)
     );
   });
-  const priorityIds = createMemo(
-    () =>
-      new Set(
-        users()
-          .filter((user) => isBotPrincipalId(user.id))
-          .map((user) => user.id)
-      )
-  );
-  const showRosterStatus = () =>
-    (isCompanyOwner || isAssignees) && (team.isLoading() || team.isError());
+  const showRosterStatus = () => {
+    if (!isCompanyOwner && !isAssignees) return false;
+
+    return team.isLoading() || team.isError();
+  };
 
   return (
     <>
@@ -164,7 +158,6 @@ function EntityEditorSelector(
             users: isCompanyOwner || isAssignees ? users : undefined,
             fillHeight: props.fillHeight,
           }}
-          priorityIds={isAssignees ? priorityIds() : undefined}
           emptyState={showRosterStatus() ? null : undefined}
           selectedOptions={() =>
             entityReferencesToIdSet(props.draft.selectedRefs())

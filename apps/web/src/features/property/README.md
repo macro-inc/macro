@@ -92,8 +92,8 @@ title-row tags retain their compact height.
 
 ## Assignee selection
 
-The system Assignees property lists selected assignees first at opening, then
-available agents, then the current team roster. Row positions stay stable while
+The system Assignees property uses the existing selected-first ordering at opening
+with available agents and the current team roster. Row positions stay stable while
 selecting. Search uses these options without contact discovery; preserve the
 existing Add/Change property and command-menu search placeholders.
 Existing selected outsiders remain visible and removable, including references
@@ -103,12 +103,12 @@ picker cannot add that person again unless they join the team.
 This applies to task/project composers, property pills, side panels, bulk
 editors, and touch picker sheets. References remain `USER` values. Company owner
 stays strictly team-only, and custom people properties keep their existing pool.
-`queries/team-members.ts` shares the non-suspending roster with Assignee filters.
+`src/lib/queries/team/members.ts` owns the shared non-suspending roster hook.
 The property-aware wrapper in `editors/popover/EntityEditor.tsx` owns roster
 scope, outsider retention, and roster-status UI. Keep that policy out of
-`PropertyEntitySelector`; its extension points are empty-state content and
-priority ids. The command-menu composer/bulk editor lives in
-`editor/entity-property-editor.tsx`; both editor compositions share
+`PropertyEntitySelector`; its empty-state content remains generic. Reuse existing
+picker ordering rather than adding Assignee-specific priority APIs. The command-menu
+composer/bulk editor lives in `editor/entity-property-editor.tsx`; both editor compositions share
 `editors/selectors/scoped-user-options.ts`.
 
 ## Side-panel collections

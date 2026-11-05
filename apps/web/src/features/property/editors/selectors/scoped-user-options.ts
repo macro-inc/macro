@@ -6,21 +6,27 @@ import { idToDisplayName, idToEmail } from '@core/user/util';
 export function scopedUserOptions(
   users: IUser[],
   otherUsers: IUser[],
-  selectedIds: ReadonlySet<string>
+  selectedIds: readonly string[]
 ): IUser[] {
-  const available = [
-    ...users,
-    ...otherUsers.filter((user) => selectedIds.has(user.id)),
-  ];
-  const options = new Map(available.map((user) => [user.id, user]));
+  const options = [...users];
 
   for (const id of selectedIds) {
-    if (options.has(id)) continue;
-    options.set(id, {
-      id,
-      email: isBotPrincipalId(id) ? '' : idToEmail(id),
-      name: isBotPrincipalId(id) ? 'Agent' : idToDisplayName(id),
-    });
+    const contact = otherUsers.find((user) => user.id === id);
+    const member = users.find((user) => user.id === id);
+    const user = contact ??
+      member ?? {
+        id,
+        email: isBotPrincipalId(id) ? '' : idToEmail(id),
+        name: isBotPrincipalId(id) ? 'Agent' : idToDisplayName(id),
+      };
+    const index = options.findIndex((option) => option.id === id);
+
+    if (index === -1) {
+      options.push(user);
+    } else {
+      options[index] = user;
+    }
   }
-  return [...options.values()];
+
+  return options;
 }

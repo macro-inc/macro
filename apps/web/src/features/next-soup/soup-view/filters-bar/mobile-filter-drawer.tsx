@@ -31,6 +31,7 @@ import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Accordion } from '@kobalte/core/accordion';
@@ -263,6 +264,13 @@ export const MobileFilterDrawer = (props: {
   const [expandedSections, setExpandedSections] = createSignal([
     categories()[0]?.id ?? 'assignee',
   ]);
+  const orderedAssigneeOptions = useSelectedFirst({
+    items: filteredAssigneeOptions,
+    selectedIds: assigneePicker.selectedIdsAtViewEntry,
+    searchQuery: assigneeSearch,
+    getId: (option) => option.id,
+    sortDeps: [assigneePicker.selectedIdsAtViewEntry],
+  });
 
   return (
     <Show when={hasFiltersOrCategories()}>
@@ -459,7 +467,7 @@ export const MobileFilterDrawer = (props: {
                 />
               </div>
               <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
-                <For each={filteredAssigneeOptions()}>
+                <For each={orderedAssigneeOptions()}>
                   {(option) => {
                     const active = () => assigneeFilter().includes(option.id);
                     return (

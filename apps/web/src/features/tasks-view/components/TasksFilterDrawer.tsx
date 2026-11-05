@@ -2,6 +2,7 @@ import type { ListControlOption } from '@app/components/view-shell/ListDropdowns
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import { Accordion } from '@kobalte/core/accordion';
 import { Key } from '@solid-primitives/keyed';
 import { type DialogHandle, Input } from '@ui';
@@ -22,6 +23,15 @@ import {
   TaskSavedViewCreateBanner,
 } from '../views/task-saved-views';
 import { TaskDueDateRangeDialog } from './task-due-date-range-dialog';
+
+type SavedViewScope = ReturnType<
+  ReturnType<typeof useTasksView>['savedViewScope']
+>;
+
+type PendingSavedViewAction = {
+  create: () => DialogHandle | undefined;
+  scope: SavedViewScope;
+};
 
 export function TasksFilterDrawer() {
   const { state, setPrimarySort, setState, savedViews, savedViewScope } =
@@ -44,12 +54,7 @@ export function TasksFilterDrawer() {
   };
   const owner = getOwner();
   let disposed = false;
-  let pending:
-    | {
-        create: () => DialogHandle | undefined;
-        scope: ReturnType<typeof savedViewScope>;
-      }
-    | undefined;
+  let pending: PendingSavedViewAction | undefined;
   onCleanup(() => {
     disposed = true;
     pending = undefined;
@@ -58,10 +63,7 @@ export function TasksFilterDrawer() {
     pending = { create, scope: savedViewScope() };
     setOpen(false);
   };
-  const reopen = async (
-    dialog: DialogHandle,
-    scope: ReturnType<typeof savedViewScope>
-  ) => {
+  const reopen = async (dialog: DialogHandle, scope: SavedViewScope) => {
     await dialog.closed;
     if (!disposed && scope === savedViewScope()) setOpen(true);
   };
@@ -191,14 +193,27 @@ export function TasksFilterDrawer() {
                       filters.isSelected(group().id, option.id)
                   ).length;
                 });
-                const visibleOptions = () =>
-                  group().options.filter(
-                    (option) =>
-                      group().id !== 'assignees' ||
-                      option.label
-                        .toLowerCase()
-                        .includes(assigneeSearch().toLowerCase())
+                const visibleOptions = () => {
+                  const options = group().options;
+                  if (group().id !== 'assignees') return options;
+
+                  const search = assigneeSearch().toLowerCase();
+                  if (!search) return options;
+
+                  return options.filter((option) =>
+                    option.label.toLowerCase().includes(search)
                   );
+                };
+                let orderedOptions = visibleOptions;
+                if (group().id === 'assignees') {
+                  orderedOptions = useSelectedFirst({
+                    items: visibleOptions,
+                    selectedIds: filters.selectedAssigneesAtViewEntry,
+                    searchQuery: assigneeSearch,
+                    getId: (option) => option.id,
+                    sortDeps: [filters.selectedAssigneesAtViewEntry],
+                  });
+                }
                 const renderOptions = (
                   options: Accessor<ListControlOption<string>[]>
                 ) => (
@@ -240,7 +255,7 @@ export function TasksFilterDrawer() {
                         />
                       </div>
                     </Show>
-                    {renderOptions(visibleOptions)}
+                    {renderOptions(orderedOptions)}
                   </MobileFilterDrawer.Section>
                 );
               }}

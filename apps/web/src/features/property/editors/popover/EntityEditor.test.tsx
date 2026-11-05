@@ -201,15 +201,14 @@ describe('assigning an agent through task and project properties', () => {
     { Editor: EntityEditor, search: true },
     { Editor: EntitySheetEditor, search: true },
   ])(
-    'keeps selected people above agents for keyboard assignment (search: $search)',
+    'supports keyboard agent assignment (search: $search)',
     async ({ Editor, search }) => {
       const onSave = setup(undefined, property, Editor);
       if (search) {
         const input = screen.getByRole('textbox');
-        fireEvent.input(input, { target: { value: 'no-match' } });
+        fireEvent.input(input, { target: { value: 'research' } });
         await waitFor(() => expect(screen.queryByText('Alice')).toBeNull());
-        fireEvent.input(input, { target: { value: 'a' } });
-        await screen.findByText('Alice');
+        await screen.findByText('Research assistant');
       }
       fireEvent.keyDown(screen.getByRole('textbox'), {
         key: 'ArrowDown',

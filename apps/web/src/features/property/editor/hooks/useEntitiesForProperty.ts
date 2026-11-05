@@ -18,7 +18,6 @@ import {
   getEntityTimestampedItem,
   getEntityType,
   isChannelEntity,
-  prioritizeEntities,
   quickAccessItemToEntity,
   sortEntitiesWithSelfFirst,
   threadMapper,
@@ -27,19 +26,17 @@ import {
 } from '../../editors/selectors/entityUtils';
 import type { Property, PropertyDefinitionDomain } from '../../types';
 
+type EntityPropertyOptions = {
+  /** Explicit USER pool replacing Quick Access people. */
+  users?: Accessor<IUser[] | undefined>;
+  /** Keep selected entities available beyond the initial result limit. */
+  selectedIds?: Accessor<string[] | undefined>;
+};
+
 export function useEntitiesForProperty(
   property: Accessor<Property | PropertyDefinitionDomain | undefined>,
   searchQuery: Accessor<string>,
-  options?: {
-    /** Explicit pool for USER pickers (e.g. company owner → team members);
-     * when it returns a list, it replaces the quick-access people list. */
-    users?: Accessor<IUser[] | undefined>;
-    /** Keep selected entities available beyond the initial result limit. */
-    selectedIds?: Accessor<ReadonlySet<string> | undefined>;
-    /** Selected ids captured at view entry, used only for search ordering. */
-    orderedSelectedIds?: Accessor<ReadonlySet<string> | undefined>;
-    priorityIds?: Accessor<ReadonlySet<string> | undefined>;
-  }
+  options?: EntityPropertyOptions
 ) {
   const [searchTerm, setSearchTerm] = createSignal('');
 
@@ -164,26 +161,25 @@ export function useEntitiesForProperty(
 
     // When no search query, sort self to top BEFORE slicing
     if (!query) {
-      const visible = prioritizeEntities(
-        sortEntitiesWithSelfFirst(available, userId),
-        options?.priorityIds?.()
-      ).slice(0, MAX_RESULTS);
+      const visible = sortEntitiesWithSelfFirst(available, userId).slice(
+        0,
+        MAX_RESULTS
+      );
       const selectedIds = options?.selectedIds?.();
       if (selectedIds) {
-        const visibleIds = new Set(visible.map((entity) => entity.id));
         for (const entity of available) {
-          if (selectedIds.has(entity.id) && !visibleIds.has(entity.id))
-            visible.push(entity);
+          if (!selectedIds.includes(entity.id)) continue;
+          if (visible.some((item) => item.id === entity.id)) continue;
+
+          visible.push(entity);
         }
       }
       return visible;
     }
 
-    const localResults = prioritizeEntities(
-      entitySearch(available, query).map((result) => result.item),
-      options?.priorityIds?.(),
-      options?.orderedSelectedIds?.()
-    ).slice(0, MAX_RESULTS);
+    const localResults = entitySearch(available, query)
+      .slice(0, MAX_RESULTS)
+      .map((result) => result.item);
 
     if (needsEmailSearch()) {
       const localIds = new Set(localResults.map((e) => e.id));

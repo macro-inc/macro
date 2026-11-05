@@ -592,7 +592,6 @@ export function useFilterRefinements() {
         getOrCreateConsolidatedChip(key, () => {
           const [isPopupOpen, _setPopupOpen] = createSignal(false);
           const setPopupOpen = (v: boolean) => {
-            assigneePicker.onOpenChange(v);
             if (!v) {
               queueMicrotask(() =>
                 panel.panelRef()?.focus({ preventScroll: true })
@@ -607,7 +606,6 @@ export function useFilterRefinements() {
             },
             values: getValues,
             searchableOptions: assigneePicker.options,
-            preserveOptionOrder: true,
             get searchFooter() {
               return <AssigneePickerStatus picker={assigneePicker} />;
             },

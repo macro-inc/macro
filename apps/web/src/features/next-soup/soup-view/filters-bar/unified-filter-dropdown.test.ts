@@ -1,4 +1,5 @@
 import { useAssigneePicker } from '@app/features/soup/assignee-picker';
+import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -10,7 +11,7 @@ vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|alice@example.com',
 }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
-vi.mock('@property/queries/team-members', () => ({
+vi.mock('@queries/team/members', () => ({
   useTeamMembers: () => ({
     users: () => [
       {
@@ -78,18 +79,23 @@ describe('Assignee filter ordering', () => {
     createRoot((dispose) => {
       const [ids, setIds] = createSignal(['macro|alice@example.com']);
       const picker = useAssigneePicker(ids, () => true);
+      const ordered = useSelectedFirst({
+        items: picker.options,
+        selectedIds: picker.selectedIdsAtViewEntry,
+        searchQuery: () => '',
+        getId: (option) => option.id,
+        sortDeps: [picker.selectedIdsAtViewEntry],
+      });
       picker.onOpenChange(true);
-      const initial = picker.options().map((option) => option.id);
+      const initial = ordered().map((option) => option.id);
       setIds(['macro|alice@example.com', 'macro|teammate@example.com']);
-      expect(picker.options().map((option) => option.id)).toEqual(initial);
+      expect(ordered().map((option) => option.id)).toEqual(initial);
       setIds(['macro|teammate@example.com']);
-      expect(picker.options().map((option) => option.id)).toEqual(initial);
+      expect(ordered().map((option) => option.id)).toEqual(initial);
       picker.onOpenChange(false);
       picker.onOpenChange(true);
-      expect(picker.options()[0].id).toBe('macro|teammate@example.com');
-      expect(picker.options()[1].id).toBe(
-        'bot|00000000-0000-0000-0000-000000000123'
-      );
+      expect(ordered()[0].id).toBe('macro|teammate@example.com');
+      expect(ordered()[1].id).toBe('bot|00000000-0000-0000-0000-000000000123');
       dispose();
     });
   });
@@ -99,7 +105,10 @@ describe('Assignee filter ordering', () => {
       const [ids, setIds] = createSignal(['macro|outside@example.com']);
       const picker = useAssigneePicker(ids, () => true);
       picker.onOpenChange(true);
-      expect(picker.options()[0].id).toBe('macro|outside@example.com');
+      expect(picker.selectedIdsAtViewEntry()).toEqual([
+        'macro|outside@example.com',
+      ]);
+      expect(picker.options().at(-1)?.id).toBe('macro|outside@example.com');
       setIds([]);
       expect(
         picker

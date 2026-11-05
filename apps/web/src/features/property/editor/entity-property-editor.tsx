@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
-import { isBotPrincipalId } from '@core/constant/macroAgent';
 import type { ListNavActions } from '@core/util/useListKeyBindings';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import { useTeamMembers } from '@queries/team/members';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import {
   CommandMenuEmptyState,
@@ -30,13 +30,20 @@ import { OptionCheckBox } from '../editors/selectors/OptionCheckBox';
 import { scopedUserOptions } from '../editors/selectors/scoped-user-options';
 import { usePropertyEntityDisplay } from '../hooks/usePropertyEntityDisplay';
 import { useAgentAssignees } from '../queries/agent-assignees';
-import { useTeamMembers } from '../queries/team-members';
 import type {
   Property,
   PropertyApiValues,
   PropertyDefinitionDomain,
 } from '../types';
 import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
+
+type EntityPropertyRow =
+  | { type: 'clear'; separatorBefore: boolean }
+  | {
+      type: 'entity';
+      entity: CombinedEntity;
+      separatorBefore: boolean;
+    };
 
 function selectedEntityRefs(
   property: Property | PropertyDefinitionDomain
@@ -62,9 +69,11 @@ export function EntityPropertyEditor(props: {
   const definitionId = () => {
     const property = props.property;
     if (!property) return '';
-    return 'propertyDefinitionId' in property
-      ? property.propertyDefinitionId
-      : property.id;
+    if ('propertyDefinitionId' in property) {
+      return property.propertyDefinitionId;
+    }
+
+    return property.id;
   };
   const isCompanyOwner = () =>
     definitionId() === SYSTEM_PROPERTY_IDS.COMPANY_OWNER;
@@ -75,11 +84,7 @@ export function EntityPropertyEditor(props: {
     props.property ? selectedEntityRefs(props.property) : []
   );
   const [orderedSelectedIds, setOrderedSelectedIds] = createSignal(
-    new Set(
-      props.property
-        ? selectedEntityRefs(props.property).map((ref) => ref.entity_id)
-        : []
-    )
+    localSelectedRefs().map((ref) => ref.entity_id)
   );
   let syncedPropertyId = definitionId();
   let syncedSelectionKey = props.property
@@ -103,7 +108,7 @@ export function EntityPropertyEditor(props: {
       syncedSelectionKey = nextSelectionKey;
       setOpenOrderFrozen(false);
       setLocalSelectedRefs(refs);
-      setOrderedSelectedIds(new Set(refs.map((ref) => ref.entity_id)));
+      setOrderedSelectedIds(refs.map((ref) => ref.entity_id));
       return;
     }
 
@@ -111,7 +116,7 @@ export function EntityPropertyEditor(props: {
 
     syncedSelectionKey = nextSelectionKey;
     setLocalSelectedRefs(refs);
-    setOrderedSelectedIds(new Set(refs.map((ref) => ref.entity_id)));
+    setOrderedSelectedIds(refs.map((ref) => ref.entity_id));
   });
 
   createEffect(() => {
@@ -135,16 +140,15 @@ export function EntityPropertyEditor(props: {
     props.onSubmit(entityRef);
   };
 
-  const canGroupMultiValues = () =>
-    Boolean(
-      props.property?.isMultiSelect &&
-        props.selectedEntityCount === 1 &&
-        props.property &&
-        'value' in props.property
-    );
+  const canGroupMultiValues = () => {
+    if (!props.property?.isMultiSelect) return false;
+    if (props.selectedEntityCount !== 1) return false;
 
-  const localSelectedIds = createMemo(
-    () => new Set(localSelectedRefs().map((ref) => ref.entity_id))
+    return 'value' in props.property;
+  };
+
+  const localSelectedIds = createMemo(() =>
+    localSelectedRefs().map((ref) => ref.entity_id)
   );
   const { items: people } = useQuickAccessEntities(() => 'USER');
   const users = createMemo(() => {
@@ -157,23 +161,16 @@ export function EntityPropertyEditor(props: {
       localSelectedIds()
     );
   });
-  const priorityIds = createMemo(
-    () =>
-      new Set(
-        users()
-          ?.filter((user) => isBotPrincipalId(user.id))
-          .map((user) => user.id)
-      )
-  );
   const { entities } = useEntitiesForProperty(
     () => props.property,
     props.searchValue,
     {
       users,
-      selectedIds: () => (isAssignees() ? localSelectedIds() : undefined),
-      orderedSelectedIds: () =>
-        isAssignees() ? orderedSelectedIds() : undefined,
-      priorityIds: () => (isAssignees() ? priorityIds() : undefined),
+      selectedIds: () => {
+        if (!isAssignees()) return undefined;
+
+        return localSelectedIds();
+      },
     }
   );
 
@@ -182,10 +179,10 @@ export function EntityPropertyEditor(props: {
 
     const selectedAtOpen = orderedSelectedIds();
     const selected = entities().filter((entity) =>
-      selectedAtOpen.has(entity.id)
+      selectedAtOpen.includes(entity.id)
     );
     const remaining = entities().filter(
-      (entity) => !selectedAtOpen.has(entity.id)
+      (entity) => !selectedAtOpen.includes(entity.id)
     );
 
     return [...selected, ...remaining];
@@ -193,17 +190,9 @@ export function EntityPropertyEditor(props: {
 
   const searchQuery = () => props.searchValue().trim();
   const showClearAllRow = () =>
-    canGroupMultiValues() && orderedSelectedIds().size > 0;
+    canGroupMultiValues() && orderedSelectedIds().length > 0;
   const showClearAllAtTop = () => showClearAllRow() && !searchQuery();
   const showClearAllAtBottom = () => showClearAllRow() && !!searchQuery();
-
-  type EntityPropertyRow =
-    | { type: 'clear'; separatorBefore: boolean }
-    | {
-        type: 'entity';
-        entity: CombinedEntity;
-        separatorBefore: boolean;
-      };
 
   const rows = createMemo(() => {
     const nextRows: EntityPropertyRow[] = [];
@@ -213,15 +202,16 @@ export function EntityPropertyEditor(props: {
     }
 
     for (const [index, entity] of orderedEntities().entries()) {
-      nextRows.push({
-        type: 'entity',
-        entity,
-        separatorBefore:
-          canGroupMultiValues() &&
-          index > 0 &&
-          orderedSelectedIds().has(orderedEntities()[index - 1].id) &&
-          !orderedSelectedIds().has(entity.id),
-      });
+      let separatorBefore = false;
+      if (canGroupMultiValues() && index > 0) {
+        const previous = orderedEntities()[index - 1];
+        const selectedAtOpen = orderedSelectedIds();
+        separatorBefore =
+          selectedAtOpen.includes(previous.id) &&
+          !selectedAtOpen.includes(entity.id);
+      }
+
+      nextRows.push({ type: 'entity', entity, separatorBefore });
     }
 
     if (showClearAllAtBottom()) {
@@ -247,15 +237,12 @@ export function EntityPropertyEditor(props: {
     if (!entityType) return;
     const selectedIds = localSelectedIds();
     setOpenOrderFrozen(true);
-    const nextRefs = selectedIds.has(entity.id)
-      ? localSelectedRefs().filter((ref) => ref.entity_id !== entity.id)
-      : [
-          ...localSelectedRefs(),
-          {
-            entity_id: entity.id,
-            entity_type: entityType,
-          },
-        ];
+    const nextRefs = localSelectedRefs().filter(
+      (ref) => ref.entity_id !== entity.id
+    );
+    if (!selectedIds.includes(entity.id)) {
+      nextRefs.push({ entity_id: entity.id, entity_type: entityType });
+    }
 
     setLocalSelectedRefs(nextRefs);
     props.onSave(
@@ -366,7 +353,7 @@ export function EntityPropertyEditor(props: {
                   <EntityRowContent
                     entity={entity()}
                     multiselect={canGroupMultiValues()}
-                    selected={localSelectedIds().has(entity().id)}
+                    selected={localSelectedIds().includes(entity().id)}
                   />
                 )}
               </Match>

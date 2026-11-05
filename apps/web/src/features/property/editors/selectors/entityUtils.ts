@@ -273,19 +273,3 @@ export function sortEntitiesWithSelfFirst<T extends CombinedEntity>(
   result.unshift(self);
   return result;
 }
-
-/** Keep selected entities first, then caller-prioritized entities, preserving ties. */
-export function prioritizeEntities<T extends { id: string }>(
-  entities: T[],
-  priorityIds: ReadonlySet<string> | undefined,
-  selectedIds?: ReadonlySet<string>
-): T[] {
-  if (!priorityIds?.size && !selectedIds?.size) return entities;
-  return entities.toSorted(
-    (a, b) =>
-      Number(selectedIds?.has(b.id) ?? false) -
-        Number(selectedIds?.has(a.id) ?? false) ||
-      Number(priorityIds?.has(b.id) ?? false) -
-        Number(priorityIds?.has(a.id) ?? false)
-  );
-}

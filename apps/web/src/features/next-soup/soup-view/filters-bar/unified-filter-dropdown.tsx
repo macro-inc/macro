@@ -899,9 +899,7 @@ export const UnifiedFilterDropdown = (
                       activeIds={assigneeFilter}
                       onChange={handleAssigneeChange}
                       placeholder={assigneePicker.placeholder()}
-                      preserveOrder
                       footer={<AssigneePickerStatus picker={assigneePicker} />}
-                      onOpenChange={assigneePicker.onOpenChange}
                     />
                   </Show>
 

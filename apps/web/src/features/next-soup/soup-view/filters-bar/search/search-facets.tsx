@@ -459,9 +459,7 @@ export function useSearchFacets(
     get placeholder() {
       return assigneePicker.placeholder();
     },
-    preserveOrder: true,
     footer: () => <AssigneePickerStatus picker={assigneePicker} />,
-    onPickerOpenChange: assigneePicker.onOpenChange,
   };
 
   const taskCreatedBy = multiFacet({

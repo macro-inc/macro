@@ -1115,9 +1115,9 @@ away leaves focus where the user put it. The backend-free regression is
 
 Use only the current team roster and available agents for new Assignee selections.
 Keep existing selected outsiders visible and removable, without contact discovery.
-Order selected assignees first at opening, then agents, then team members;
-keep row positions stable while selecting. Preserve each picker’s existing
-placeholder, sizing, and row styling.
+Reuse the existing selected-first ordering at opening and keep row positions
+stable while selecting. Keep the generic roster hook in `src/lib/queries/team/members.ts`.
+Preserve each picker’s existing placeholder, sizing, and row styling.
 Preserve filter-only Me/Unassigned choices, company-owner scope, and unrelated
 people/contact fields.
 Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;

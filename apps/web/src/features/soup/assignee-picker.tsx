@@ -2,12 +2,10 @@ import { NO_ASSIGNEE } from '@app/features/next-soup/filters';
 import type { SearchableOption } from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
-import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
-import type { IUser } from '@core/user/types';
 import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
 import { useAgentAssignees } from '@property/queries/agent-assignees';
-import { useTeamMembers } from '@property/queries/team-members';
+import { useTeamMembers } from '@queries/team/members';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 
 export function buildContactLabel(
@@ -30,50 +28,61 @@ export function useAssigneePicker(
   const team = useTeamMembers(enabled);
   const agents = useAgentAssignees(enabled);
   const userId = useUserId();
-  const [selectedIdsAtViewEntry, setSelectedIdsAtViewEntry] = createSignal(
-    new Set(activeIds())
-  );
+  const [selectedIdsAtViewEntry, setSelectedIdsAtViewEntry] = createSignal([
+    ...activeIds(),
+  ]);
   const onOpenChange = (open: boolean) => {
-    if (open) setSelectedIdsAtViewEntry(new Set(activeIds()));
+    if (open) setSelectedIdsAtViewEntry([...activeIds()]);
   };
 
-  const options = createMemo(() => {
-    const uid = userId();
-    const selectedIds = selectedIdsAtViewEntry();
-    const people = new Map<string, IUser>();
-    for (const member of team.users()) people.set(member.id, member);
-    for (const agent of agents()) people.set(agent.id, agent);
-    const visible = new Set<string>();
-    const result: SearchableOption[] = [];
-    const add = (id: string) => {
-      if (visible.has(id)) return;
-      visible.add(id);
-      result.push({
-        id,
-        label: buildContactLabel(people.get(id) ?? { id }, uid),
-        icon: () => (
-          <UserIcon id={id} size="sm" suppressClick showTooltip={false} />
-        ),
-      });
-    };
+  const options = createMemo(
+    () => {
+      const uid = userId();
+      const members = team.users();
+      const agentUsers = agents();
+      const people = [...agentUsers, ...members];
+      const result: SearchableOption[] = [];
+      const add = (id: string) => {
+        if (result.some((option) => option.id === id)) return;
 
-    for (const agent of agents()) add(agent.id);
-    if (uid) add(uid);
-    result.push({
-      id: NO_ASSIGNEE,
-      label: t('viewMenus.unassigned'),
-      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
-    });
-    for (const member of team.users()) add(member.id);
-    for (const id of activeIds()) {
-      if (id !== NO_ASSIGNEE) add(id);
+        const person = people.find((user) => user.id === id);
+        result.push({
+          id,
+          label: buildContactLabel(person ?? { id }, uid),
+          icon: () => (
+            <UserIcon id={id} size="sm" suppressClick showTooltip={false} />
+          ),
+        });
+      };
+
+      for (const agent of agentUsers) add(agent.id);
+      if (uid) add(uid);
+      result.push({
+        id: NO_ASSIGNEE,
+        label: t('viewMenus.unassigned'),
+        icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
+      });
+      for (const member of members) add(member.id);
+      for (const id of activeIds()) {
+        if (id !== NO_ASSIGNEE) add(id);
+      }
+      return result;
+    },
+    undefined,
+    {
+      // Selecting a roster member does not change the rows or their order.
+      equals: (previous, next) => {
+        if (previous.length !== next.length) return false;
+
+        return previous.every((option, index) => {
+          const nextOption = next[index];
+          return (
+            option.id === nextOption.id && option.label === nextOption.label
+          );
+        });
+      },
     }
-    return result.toSorted(
-      (a, b) =>
-        Number(selectedIds.has(b.id)) - Number(selectedIds.has(a.id)) ||
-        Number(isBotPrincipalId(b.id)) - Number(isBotPrincipalId(a.id))
-    );
-  });
+  );
   return {
     options,
     onOpenChange,

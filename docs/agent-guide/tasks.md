@@ -1192,9 +1192,9 @@ Macro in a new split (in place on touch devices); a PR Macro has not synced yet 
 GitHub instead.
 
 Assignees lists and searches current team members and available agents, keeping
-each surface's existing search placeholder and styling. Selected assignees appear
-first when opening the picker, followed by agents, then team members. Rows stay
-in place while selecting or deselecting. Existing selected outsiders remain visible and removable,
+each surface's existing search placeholder, styling, and selected-first ordering
+when opening the picker. Rows stay in place while selecting or deselecting.
+Existing selected outsiders remain visible and removable,
 including references absent from contacts. The picker has no contact discovery;
 a removed outsider cannot be added again unless they join the team.
 
