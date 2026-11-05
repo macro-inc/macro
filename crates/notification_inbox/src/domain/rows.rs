@@ -433,6 +433,7 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
         NotifEvent::InboxReauthRequired(_)
         | NotifEvent::InviteToTeam(_)
         | NotifEvent::ExternalChatMessage(_)
+        | NotifEvent::ChannelAccessRequested(_)
         | NotifEvent::RoutineRunFinished(_) => return None,
         // Channel activity and discussions are placed by their own rules; on
         // any other entity they have no row.

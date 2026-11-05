@@ -393,15 +393,27 @@ pub async fn get_document_id_by_att_id_and_link(
     Ok(result.map(|record| record.document_id))
 }
 
-/// Get document_id for email attachment if record exists
+/// The live document linked to an email attachment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkedAttachmentDocument {
+    /// The document id.
+    pub document_id: String,
+    /// The document's bytes have not finished reaching storage. DOCX is left
+    /// out: it stays not uploaded until its conversion finishes.
+    pub awaiting_upload: bool,
+}
+
+/// Get the document for email attachment if record exists
 #[tracing::instrument(skip(db), err)]
-pub async fn get_document_id_by_att_id(
+pub async fn get_document_by_att_id(
     db: &Pool<Postgres>,
     email_attachment_id: Uuid,
-) -> anyhow::Result<Option<String>> {
+) -> anyhow::Result<Option<LinkedAttachmentDocument>> {
     let result = sqlx::query!(
         r#"
-        SELECT document_id
+        SELECT
+            document_id,
+            (NOT d.uploaded AND d."fileType" IS DISTINCT FROM 'docx') AS "awaiting_upload!"
         FROM document_email de
         INNER JOIN "Document" d on de.document_id = d.id
         INNER JOIN email_attachments ea on de.email_attachment_id = ea.id
@@ -413,7 +425,10 @@ pub async fn get_document_id_by_att_id(
     .fetch_optional(db)
     .await?;
 
-    Ok(result.map(|record| record.document_id))
+    Ok(result.map(|record| LinkedAttachmentDocument {
+        document_id: record.document_id,
+        awaiting_upload: record.awaiting_upload,
+    }))
 }
 
 /// Get thread_id and link_id for an email attachment
