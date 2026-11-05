@@ -12,7 +12,6 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_urlencoded = { workspace = true }
-strum = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 upstream_error = { path = "../upstream_error", default-features = false, features = [

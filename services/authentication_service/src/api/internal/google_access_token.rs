@@ -165,12 +165,6 @@ fn refresh_error_response(
             tracing::warn!(error=?error, "refresh token rejected for userid {}", fusionauth_user_id);
             StatusCode::FORBIDDEN
         }
-        // The user's organization blocks Macro. Callers treat it like a
-        // revoked grant, so they ask for reauthorization instead of retrying.
-        FusionAuthClientError::GrantBlocked { reason } => {
-            tracing::warn!(reason = %reason, "{} grant blocked by policy for userid {}", identity_provider_name, fusionauth_user_id);
-            StatusCode::FORBIDDEN
-        }
         _ => {
             tracing::error!(error=?error, "error fetching access token for userid {}", fusionauth_user_id);
             StatusCode::INTERNAL_SERVER_ERROR
