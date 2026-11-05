@@ -104,19 +104,40 @@ fn relay_image_tag_follows_its_dockerfile() {
     assert!(tag.starts_with("macro-sdk-webhook-relay:"));
 }
 
-/// Every instance runs OpenSearch under a tag keyed by its Dockerfile, so a
-/// changed image is built rather than an old one reused under a fixed tag.
+/// Every instance runs the repository-built images under tags keyed by their
+/// inputs, so a changed image is built rather than an old one reused, and an
+/// unchanged one is shared rather than rebuilt per instance.
 #[test]
-fn every_instance_runs_the_content_tagged_opensearch_image() {
-    let image = opensearch_image().unwrap();
-    let tag = image.strip_prefix("macro-local-opensearch:").unwrap();
-    assert_eq!(tag.len(), 12);
-    assert!(tag.bytes().all(|b| b.is_ascii_hexdigit()));
-    for name in [None, Some("opensearch-tag-test")] {
-        let instance = Instance::derive(name, None).unwrap();
-        let mut services = IndexMap::new();
-        add_local_infra(&mut services, &instance, false).unwrap();
-        let search = services["search"].as_ref().unwrap();
-        assert_eq!(search.image.as_deref(), Some(image.as_str()));
+fn every_instance_runs_the_content_tagged_images() {
+    for image in content_tagged_images() {
+        let tag = image.tag().unwrap();
+        let key = tag.strip_prefix(&format!("{}:", image.repository)).unwrap();
+        assert_eq!(key.len(), 12);
+        assert!(key.bytes().all(|b| b.is_ascii_hexdigit()));
+        for name in [None, Some("content-tag-test")] {
+            let instance = Instance::derive(name, None).unwrap();
+            let mut services = IndexMap::new();
+            add_local_infra(&mut services, &instance, false).unwrap();
+            let service = services[image.service].as_ref().unwrap();
+            assert_eq!(
+                service.image.as_deref(),
+                Some(tag.as_str()),
+                "{}",
+                image.service
+            );
+        }
     }
+}
+
+/// The sync worker's tag follows its Rust closure, not unrelated files.
+#[test]
+fn sync_service_inputs_cover_its_closure_only() {
+    let inputs = sync_service_inputs().unwrap();
+    assert!(inputs.iter().any(|path| path == "Cargo.lock"));
+    assert!(inputs.iter().any(|path| path == "services/sync-service"));
+    assert!(
+        !inputs
+            .iter()
+            .any(|path| path.starts_with("docs") || path.starts_with("apps"))
+    );
 }

@@ -12,6 +12,8 @@ use std::process::Command;
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 
+use crate::local::content_key;
+
 /// Bump when the key's inputs or the entry layout change.
 const FORMAT: u32 = 1;
 
@@ -72,43 +74,13 @@ pub fn key(repo: &Path, build: &Command) -> Result<String> {
     for (name, value) in &env {
         h.update(format!("\0{name}={value}").as_bytes());
     }
-    h.update(tracked_inputs(repo)?);
+    h.update(content_key::tracked(repo, INPUTS)?);
     for path in ignored_inputs(repo)? {
         let bytes = std::fs::read(repo.join(&path)).with_context(|| format!("reading {path}"))?;
         h.update(format!("\0{path}\0{}\0", bytes.len()).as_bytes());
         h.update(&bytes);
     }
-    Ok(hex(&h.finalize()))
-}
-
-/// Mode, blob hash and path of every non-ignored input file as it is on disk.
-/// A copy of the checkout's index is updated from the working tree, so only
-/// changed files are read, and the real index is left alone.
-fn tracked_inputs(repo: &Path) -> Result<Vec<u8>> {
-    let index = git(repo, &["rev-parse", "--git-path", "index"], None)?;
-    let index = repo.join(String::from_utf8_lossy(&index).trim());
-    let scratch = tempfile_dir()?;
-    let copy = scratch.join("index");
-    // A brand-new worktree may not have written its index yet.
-    if index.exists() {
-        std::fs::copy(&index, &copy).with_context(|| format!("copying {}", index.display()))?;
-    }
-    // `git add` fails on a pathspec that matches nothing.
-    let present: Vec<&str> = INPUTS
-        .iter()
-        .copied()
-        .filter(|input| repo.join(input).exists())
-        .collect();
-    let result = (|| {
-        let mut add = vec!["add", "-A", "--"];
-        add.extend(&present);
-        git(repo, &add, Some(&copy))?;
-        let mut list = vec!["ls-files", "-s", "--"];
-        list.extend(&present);
-        git(repo, &list, Some(&copy))
-    })();
-    let _ = std::fs::remove_dir_all(&scratch);
-    result
+    Ok(content_key::hex(&h.finalize()))
 }
 
 /// Gitignored files the build reads: the generated wasm packages and local
@@ -125,7 +97,7 @@ fn ignored_inputs(repo: &Path) -> Result<Vec<String>> {
         "--",
     ];
     args.extend(INPUTS);
-    let listed = git(repo, &args, None)?;
+    let listed = content_key::git(repo, &args, None)?;
     let mut files = Vec::new();
     for entry in listed
         .split(|byte| *byte == 0)
@@ -157,32 +129,6 @@ fn collect_files(repo: &Path, rel: &str, out: &mut Vec<String>) -> Result<()> {
         collect_files(repo, &format!("{rel}/{name}"), out)?;
     }
     Ok(())
-}
-
-fn git(repo: &Path, args: &[&str], index: Option<&Path>) -> Result<Vec<u8>> {
-    let mut cmd = Command::new("git");
-    cmd.current_dir(repo).args(args);
-    if let Some(index) = index {
-        cmd.env("GIT_INDEX_FILE", index);
-    }
-    let out = cmd.output().context("running git")?;
-    anyhow::ensure!(
-        out.status.success(),
-        "git {} failed: {}",
-        args.join(" "),
-        String::from_utf8_lossy(&out.stderr)
-    );
-    Ok(out.stdout)
-}
-
-fn tempfile_dir() -> Result<PathBuf> {
-    let dir = root_dir()?.join(format!(
-        ".index-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
-    std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-    Ok(dir)
 }
 
 /// The cached bundle for `key`, if one is stored.
@@ -279,10 +225,6 @@ fn prune(root: &Path, keep: &str) {
             let _ = std::fs::remove_dir_all(path);
         }
     }
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 #[cfg(test)]

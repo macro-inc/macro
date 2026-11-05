@@ -19,6 +19,7 @@ pub mod arch;
 pub mod build;
 pub mod cf_tunnel;
 pub mod cli;
+pub mod content_key;
 pub mod db;
 pub mod docker;
 pub mod doctor;
@@ -493,6 +494,8 @@ pub(crate) fn bring_up(
     // Containers on a fresh start are new, so they start on the binaries built
     // above. (Reloading binaries into a running stack is `reload_services`' job.)
     bring_up_app(stage, mode, instance, &env)?;
+    // The new containers hold today's images now, so older tags can go.
+    gen_compose::prune_content_tagged_images();
     // A resumed stack's containers can predate the binaries this run just built.
     // A prebuilt `--binaries-dir` is adopted through the compose mount instead.
     if plan.start == Start::Resume && args.build.binaries_dir.is_none() && !stage.is_dry_run() {
