@@ -11,6 +11,10 @@ enforced by the ordinary backend APIs.
 - `src/macro.ts`: public exports and namespace registration.
 - `documents.createCanvas()` creates shared content before returning a Document handle;
   it requires no browser open or upload.
+- `documents.createSpreadsheet()` and `documents.spreadsheet(document)` return a
+  `Spreadsheet` (`src/entities/documents/spreadsheet.ts`) whose `read`,
+  `calculate` and `applyEdits` run the spreadsheet tools' engine; code mode
+  hides `ReadSpreadsheet`, `CalculateSpreadsheet` and `EditSpreadsheet`.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
 - `src/entities/workspace/namespace.ts`: filtered activity pages and iteration.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
