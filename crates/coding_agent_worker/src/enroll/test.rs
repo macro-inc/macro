@@ -427,7 +427,7 @@ fn a_recreated_guest_installs_its_saved_persona_and_enables_the_unit_idempotentl
                     "ensure_user ada".to_owned(),
                     format!("chown {} 1001:1002", env_path.display()),
                     "systemctl daemon-reload".to_owned(),
-                    "systemctl enable --now macro-brain-ada.service".to_owned(),
+                    "systemctl enable --now --no-block macro-brain-ada.service".to_owned(),
                 ]
             );
         }
