@@ -50,7 +50,7 @@ pub async fn cg_refresh_calendar(
     }
     for macro_id in recipients {
         let _ = client
-            .refresh_calendar(&macro_id, payload.clone())
+            .refresh_calendar_renamed(&macro_id, payload.clone())
             .await
             .inspect_err(
                 |e| tracing::error!(macro_id = %macro_id, "Failed to refresh calendar: {e}"),
@@ -74,7 +74,7 @@ pub async fn cg_refresh_join_request(
     )
     .unwrap_or_default();
     let _ = client
-        .refresh_calendar(requester_id, payload)
+        .refresh_calendar_renamed(requester_id, payload)
         .await
         .inspect_err(
             |e| tracing::error!(%event_id, "Failed to refresh the requester's calendar: {e}"),
@@ -131,7 +131,7 @@ pub async fn cg_refresh_team_calendar(
         async move {
             match tokio::time::timeout(
                 std::time::Duration::from_secs(3),
-                client.refresh_calendar(&user_id, payload),
+                client.refresh_calendar_renamed(&user_id, payload),
             )
             .await
             {
