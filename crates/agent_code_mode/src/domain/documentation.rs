@@ -70,9 +70,9 @@ pub fn entity_guide(name: &str) -> Option<&'static str> {
 }
 
 /// The entity whose guidance is searching across the workspace.
-const SEARCH_ENTITY: &str = "core";
+const SEARCH_ENTITY: &str = "search";
 
-/// How to search across the workspace in code: the `core` entity's guidance,
+/// How to search across the workspace in code: the `search` entity's guidance,
 /// also the `search` guide topic.
 pub fn search_guide() -> &'static str {
     entity_guide(SEARCH_ENTITY).unwrap_or_default()
