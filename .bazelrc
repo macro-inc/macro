@@ -2,7 +2,6 @@ common --lockfile_mode=off
 build --@rules_rust//rust/settings:pipelined_compilation=False
 build --action_env=PATH
 build --action_env=CODE_MODE_ASSETS_DIR
-build --action_env=AWS_LC_SYS_CMAKE_BUILDER
 build --action_env=AWS_LC_SYS_CMAKE_BUILDER_aarch64_linux_android
 build --action_env=AWS_LC_SYS_CMAKE_BUILDER_armv7_linux_androideabi
 build --action_env=AWS_LC_SYS_CMAKE_BUILDER_i686_linux_android

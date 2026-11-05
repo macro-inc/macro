@@ -421,7 +421,7 @@ def main():
     manifests.append("//:Cargo.toml")
 
     with open(os.path.join(root, "MODULE.bazel"), "w") as f:
-        f.write(MODULE.replace("@MANIFESTS@", starlark_list(manifests, "        ")))
+        f.write(MODULE.replace("@MANIFESTS@", starlark_list(manifests, "        ")).replace("@ROOT@", root))
     print(stats, "manifests", len(manifests), "crates reading across packages", escape_count)
     print("offline queries", len(queries), "matched to a crate", len(matched_queries))
 
@@ -455,6 +455,14 @@ crate.from_cargo(
 crate.annotation(
     crate = "openssl-sys",
     build_script_env = {"OPENSSL_NO_VENDOR": "1"},
+)
+crate.annotation(
+    crate = "aws-lc-sys",
+    build_script_env = {"AWS_LC_SYS_CMAKE_BUILDER": "0"},
+)
+crate.annotation(
+    crate = "rdkafka-sys",
+    build_script_env = {"CMAKE": "@ROOT@/tooling/bazel-proto/cmake_reproducible.sh"},
 )
 use_repo(crate, "crates")
 """
