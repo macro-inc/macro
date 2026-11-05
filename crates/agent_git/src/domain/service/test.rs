@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::models::{AgentRepo, RepoTokenHash};
-use crate::domain::template::WORKSPACE_TEMPLATE;
+use crate::domain::template::{PersonaSeed, RenderedFile, WORKSPACE_TEMPLATE};
 
 #[derive(Clone, Default)]
 struct FakeRepos {
@@ -93,7 +93,7 @@ impl RepoStore for FakeStore {
     async fn create_repo(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
-        _template: &WorkspaceTemplate,
+        _files: &[RenderedFile],
     ) -> Result<(), Infallible> {
         self.repos
             .lock()
@@ -224,7 +224,10 @@ async fn the_agent_token_pushes_and_an_admin_session_only_reads() {
     );
     let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
 
-    let created = service.create_repo(agent.clone(), TEAM).await.unwrap();
+    let created = service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
     assert!(created.token.expose().starts_with("mrt_"));
 
     service
@@ -301,8 +304,14 @@ async fn creating_again_replaces_the_token_and_another_team_is_refused() {
     );
     let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
 
-    let first = service.create_repo(agent.clone(), TEAM).await.unwrap();
-    let second = service.create_repo(agent.clone(), TEAM).await.unwrap();
+    let first = service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
+    let second = service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
 
     let with_first = service
         .serve_git(
@@ -326,6 +335,7 @@ async fn creating_again_replaces_the_token_and_another_team_is_refused() {
         .create_repo(
             agent,
             Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0002),
+            &seed(),
         )
         .await;
     assert!(matches!(other_team, Err(AgentGitError::TeamMismatch)));
@@ -353,7 +363,10 @@ async fn pushes_stop_at_the_size_cap_and_the_rate_limit() {
         WORKSPACE_TEMPLATE,
     );
     let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
-    let created = service.create_repo(agent.clone(), TEAM).await.unwrap();
+    let created = service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
 
     // 4 bytes of room: a 5-byte pack fails while streaming.
     let response = service
@@ -406,7 +419,10 @@ async fn a_full_repo_refuses_the_push_advertisement() {
         WORKSPACE_TEMPLATE,
     );
     let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
-    let created = service.create_repo(agent.clone(), TEAM).await.unwrap();
+    let created = service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
 
     let response = service
         .serve_git(
@@ -444,7 +460,10 @@ async fn deleting_removes_the_repo_and_the_row() {
         WORKSPACE_TEMPLATE,
     );
     let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
-    service.create_repo(agent.clone(), TEAM).await.unwrap();
+    service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
 
     service.delete_repo(&agent).await.unwrap();
     service.delete_repo(&agent).await.unwrap();
@@ -459,4 +478,26 @@ async fn deleting_removes_the_repo_and_the_row() {
         )
         .await;
     assert!(matches!(missing, Err(AgentGitError::NotFound)));
+}
+
+fn seed() -> PersonaSeed {
+    PersonaSeed {
+        name: "Sam".to_owned(),
+        job_description: "Books venues.".to_owned(),
+        personality: "Warm and direct.".to_owned(),
+    }
+}
+
+#[test]
+fn the_charter_carries_the_persona() {
+    let files = WORKSPACE_TEMPLATE.render(&seed());
+    let charter = files
+        .iter()
+        .find(|file| file.path == "OPERATING.md")
+        .unwrap();
+
+    assert!(charter.contents.ends_with(
+        "\n## Who you are\n\nYou are Sam.\n\n### Your job\n\nBooks venues.\n\n### Your personality\n\nWarm and direct.\n"
+    ));
+    assert_eq!(files.len(), WORKSPACE_TEMPLATE.files.len());
 }

@@ -1,6 +1,7 @@
 //! Workspace repos through `agent_git_service`'s internal API.
 
 use agent_git::client::AgentGitClient;
+use agent_git::domain::template::PersonaSeed as RepoSeed;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -28,14 +29,17 @@ impl AgentRepos for AgentGitRepos {
         team_id: Uuid,
         seed: &PersonaSeed,
     ) -> Result<AgentRepo, TeamAgentError> {
-        // TODO(agent-brains): agent_git's create request has no persona seed
-        // yet, so the repo starts from the plain template and `seed` is not
-        // written. Pass it once `CreateRepoRequest` carries one.
-        let _ = seed;
-
         let created = self
             .client
-            .create_repo(agent_user_id.clone().into_owned(), team_id)
+            .create_repo(
+                agent_user_id.clone().into_owned(),
+                team_id,
+                RepoSeed {
+                    name: seed.name.clone(),
+                    job_description: seed.job_description.clone(),
+                    personality: seed.personality.clone(),
+                },
+            )
             .await
             .map_err(TeamAgentError::internal)?;
 

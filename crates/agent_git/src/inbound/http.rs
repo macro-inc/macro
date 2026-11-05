@@ -302,7 +302,7 @@ async fn create_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
 ) -> Result<Json<CreatedRepoResponse>, AgentGitHttpError> {
     let created = state
         .service
-        .create_repo(request.agent_user_id, request.team_id)
+        .create_repo(request.agent_user_id, request.team_id, &request.seed)
         .await?;
 
     let clone_url = format!(

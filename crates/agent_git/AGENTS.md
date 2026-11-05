@@ -8,8 +8,9 @@ plus the internal create/delete API and its client.
 
 ## How it works
 
-`POST /internal/repos` creates the bare repo from `template/` (one initial
-commit on `main`) and upserts the `agent_repos` row with the SHA-256 of a new
+`POST /internal/repos` creates the bare repo from `template/` with the
+request's persona seed appended to `OPERATING.md` (one initial commit on
+`main`) and upserts the `agent_repos` row with the SHA-256 of a new
 `mrt_` token, returned once. Git requests (`/{agent_user_id}.git/...`, id
 percent-encoded) go through `AgentGitService::serve_git`, which authorizes,
 enforces limits, and hands the request to `git http-backend` (CGI, both bodies

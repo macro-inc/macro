@@ -7,7 +7,7 @@ use crate::domain::models::{
     AgentGitError, AgentRepo, AuthorizedRepo, CreatedRepo, GitCredential, GitRequest, GitResponse,
     RepoTokenHash,
 };
-use crate::domain::template::WorkspaceTemplate;
+use crate::domain::template::{PersonaSeed, RenderedFile};
 
 /// Repo rows (`agent_repos`).
 pub trait RepoRepository: Send + Sync + 'static {
@@ -48,12 +48,12 @@ pub trait RepoStore: Send + Sync + 'static {
     /// Adapter error.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Create the bare repo with the template as its initial commit. A repo
-    /// that already exists is left as is.
+    /// Create the bare repo with `files` as its initial commit. A repo that
+    /// already exists is left as is.
     fn create_repo(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
-        template: &WorkspaceTemplate,
+        files: &[RenderedFile],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Delete the bare repo; a missing repo is fine.
@@ -110,6 +110,7 @@ pub trait AgentGitService: Send + Sync + 'static {
         &self,
         agent_user_id: MacroUserIdStr<'static>,
         team_id: Uuid,
+        seed: &PersonaSeed,
     ) -> impl Future<Output = Result<CreatedRepo, AgentGitError>> + Send;
 
     /// Delete the agent's repo and its row. Idempotent.

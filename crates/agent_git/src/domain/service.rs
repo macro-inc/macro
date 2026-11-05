@@ -11,7 +11,7 @@ use crate::domain::models::{
 use crate::domain::ports::{
     AgentGitService, GitBackend, PushRateLimiter, RepoRepository, RepoStore, TeamAdmins,
 };
-use crate::domain::template::WorkspaceTemplate;
+use crate::domain::template::{PersonaSeed, WorkspaceTemplate};
 
 /// The adapters [`AgentGitServiceImpl`] runs on.
 pub struct AgentGitAdapters<Repos, Store, Admins, Limiter, Backend> {
@@ -85,6 +85,7 @@ where
         &self,
         agent_user_id: MacroUserIdStr<'static>,
         team_id: Uuid,
+        seed: &PersonaSeed,
     ) -> Result<CreatedRepo, AgentGitError> {
         let existing = self
             .adapters
@@ -99,7 +100,7 @@ where
 
         self.adapters
             .store
-            .create_repo(&agent_user_id, &self.template)
+            .create_repo(&agent_user_id, &self.template.render(seed))
             .await
             .map_err(internal)?;
 

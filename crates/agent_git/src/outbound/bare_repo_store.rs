@@ -6,7 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use crate::domain::ports::RepoStore;
-use crate::domain::template::WorkspaceTemplate;
+use crate::domain::template::RenderedFile;
 use crate::outbound::repo_directories::{RepoDirectories, git_command};
 
 /// Branch every repo starts on.
@@ -93,13 +93,13 @@ async fn run_git(
     Ok(())
 }
 
-/// Write the template into `work_tree` and commit it into `git_dir`.
+/// Write `files` into `work_tree` and commit them into `git_dir`.
 async fn commit_template(
     git_dir: &Path,
     work_tree: &Path,
-    template: &WorkspaceTemplate,
+    files: &[RenderedFile],
 ) -> Result<(), BareRepoStoreError> {
-    for file in template.files {
+    for file in files {
         let path = work_tree.join(file.path);
 
         if let Some(parent) = path.parent() {
@@ -108,7 +108,7 @@ async fn commit_template(
                 .map_err(io_error("create template directory", parent))?;
         }
 
-        tokio::fs::write(&path, file.contents)
+        tokio::fs::write(&path, &file.contents)
             .await
             .map_err(io_error("write template file", &path))?;
     }
@@ -154,11 +154,11 @@ fn directory_size_bytes(path: &Path) -> std::io::Result<u64> {
 impl RepoStore for BareRepoStore {
     type Err = BareRepoStoreError;
 
-    #[tracing::instrument(skip(self, template), err)]
+    #[tracing::instrument(skip(self, files), err)]
     async fn create_repo(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
-        template: &WorkspaceTemplate,
+        files: &[RenderedFile],
     ) -> Result<(), BareRepoStoreError> {
         let repo_path = self.directories.repo_path(agent_user_id);
 
@@ -195,7 +195,7 @@ impl RepoStore for BareRepoStore {
             })
             .await?;
 
-            commit_template(&git_dir, &work_tree, template).await?;
+            commit_template(&git_dir, &work_tree, files).await?;
 
             match tokio::fs::rename(&git_dir, &repo_path).await {
                 Ok(()) => Ok(()),

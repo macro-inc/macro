@@ -4,6 +4,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::domain::template::PersonaSeed;
+
 /// Create (or re-key) the agent's repo.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -12,6 +14,8 @@ pub struct CreateRepoRequest {
     pub agent_user_id: MacroUserIdStr<'static>,
     /// The team whose admins may read the repo.
     pub team_id: Uuid,
+    /// Who the agent is; written into the repo's charter.
+    pub seed: PersonaSeed,
 }
 
 /// The repo's credential, returned once.

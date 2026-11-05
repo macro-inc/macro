@@ -8,6 +8,7 @@ use reqwest::StatusCode;
 use uuid::Uuid;
 
 use crate::api::{CreateRepoRequest, CreatedRepoResponse};
+use crate::domain::template::PersonaSeed;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -83,6 +84,7 @@ impl AgentGitClient {
         &self,
         agent_user_id: MacroUserIdStr<'static>,
         team_id: Uuid,
+        seed: PersonaSeed,
     ) -> Result<CreatedRepoResponse, AgentGitClientError> {
         let response = self
             .http
@@ -92,6 +94,7 @@ impl AgentGitClient {
             .json(&CreateRepoRequest {
                 agent_user_id,
                 team_id,
+                seed,
             })
             .send()
             .await?;

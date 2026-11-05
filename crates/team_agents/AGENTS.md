@@ -44,8 +44,8 @@ computer on `GET /team_agents` and `GET /team_agents/me`.
   Every other secret goes through `agent_secrets`, fetched per use.
 - `outbound/hosted_runtimes_computers.rs` is a placeholder until PR A's
   purchase API lands: every call answers 409, so creates stop before any
-  charge. `outbound/agent_git_repos.rs` drops the persona seed until
-  `agent_git`'s create request takes one.
+  charge. The persona (name, job, personality) is written into the repo's
+  `OPERATING.md` by `agent_git`, not stored here.
 - Delete runs computer → repo → seat → mailbox → account; the row goes last
   so a retry after a partial failure still finds the agent.
 - Without `DEAD_SIMPLE_MAIL_API_KEY` agents get an `@agents.macro.invalid`

@@ -137,8 +137,11 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
 
     let agent_a = MacroUserIdStr::try_from("macro|agent-a@example.com".to_owned()).unwrap();
     let agent_b = MacroUserIdStr::try_from("macro|agent-b@example.com".to_owned()).unwrap();
-    let repo_a = client.create_repo(agent_a.clone(), TEAM_ID).await.unwrap();
-    let repo_b = client.create_repo(agent_b, TEAM_ID).await.unwrap();
+    let repo_a = client
+        .create_repo(agent_a.clone(), TEAM_ID, seed())
+        .await
+        .unwrap();
+    let repo_b = client.create_repo(agent_b, TEAM_ID, seed()).await.unwrap();
 
     // Clone, commit, push with the agent's token.
     let first = git(
@@ -265,7 +268,7 @@ async fn a_repo_at_its_size_limit_refuses_pushes_with_a_message(pool: PgPool) {
     let base_url = start_server(pool, storage.path(), 1).await;
     let client = AgentGitClient::new(base_url, INTERNAL_API_KEY.to_owned()).unwrap();
     let agent = MacroUserIdStr::try_from("macro|agent-a@example.com".to_owned()).unwrap();
-    let repo = client.create_repo(agent, TEAM_ID).await.unwrap();
+    let repo = client.create_repo(agent, TEAM_ID, seed()).await.unwrap();
 
     let cloned = git(
         work.path(),
@@ -286,4 +289,12 @@ async fn a_repo_at_its_size_limit_refuses_pushes_with_a_message(pool: PgPool) {
     assert!(!pushed.status.success());
     let stderr = String::from_utf8_lossy(&pushed.stderr);
     assert!(stderr.contains("1-byte limit"), "{stderr}");
+}
+
+fn seed() -> agent_git::domain::template::PersonaSeed {
+    agent_git::domain::template::PersonaSeed {
+        name: "Sam".to_owned(),
+        job_description: "Books venues.".to_owned(),
+        personality: "Warm and direct.".to_owned(),
+    }
 }
