@@ -369,3 +369,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[doc(hidden)]
+#[allow(dead_code)]
+const CI_INTEGRATE_NONCE: &str = "2b363b9c29f64593a8dec681cdb3cf79";
