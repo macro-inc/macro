@@ -451,6 +451,12 @@ pub fn code_mode_assets() -> Step<Run> {
     Step::new("Build code-mode assets").run(include_str!("scripts/code_mode_assets.sh"))
 }
 
+/// [`code_mode_assets`] for a job that already ran `bun install`: on a miss it runs
+/// the generator on those dependencies instead of building them again in Nix.
+pub fn code_mode_assets_from_install() -> Step<Run> {
+    code_mode_assets().add_env(("CODE_MODE_ASSETS_FROM_INSTALL", "true"))
+}
+
 /// Start the server before parallel compiler invocations can race to launch it.
 /// Keep this in a separate step after remote configuration so `GITHUB_ENV`
 /// has supplied the selected backend's credentials to the process.

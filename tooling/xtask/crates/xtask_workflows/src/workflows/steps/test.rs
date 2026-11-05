@@ -90,3 +90,17 @@ fn namespace_sccache_allows_a_slow_backend_check_at_startup() {
 
     assert!(write < export && export < stop);
 }
+
+/// Only a job that has run `bun install` may generate from it. Rust jobs have no
+/// `node_modules`, so they keep building the assets in Nix.
+#[test]
+fn only_the_install_variant_generates_code_mode_assets_from_dependencies() {
+    let flag = "CODE_MODE_ASSETS_FROM_INSTALL";
+    let with_flag = serde_json::to_string(&code_mode_assets_from_install()).expect("step json");
+    let without_flag = serde_json::to_string(&code_mode_assets()).expect("step json");
+    assert_eq!(
+        with_flag.matches(flag).count(),
+        without_flag.matches(flag).count() + 1,
+        "only the variant sets {flag}"
+    );
+}

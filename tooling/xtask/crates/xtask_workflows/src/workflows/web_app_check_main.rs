@@ -173,7 +173,7 @@ fn generated_code() -> Job {
                 .timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES),
         )
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
-        .add_step(steps::code_mode_assets())
+        .add_step(steps::code_mode_assets_from_install())
         .add_step(build_schema_binaries())
         .add_step(generate_api_types())
         .add_step(regenerate_sdk())
