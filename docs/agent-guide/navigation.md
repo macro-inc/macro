@@ -1163,7 +1163,9 @@ later), runs within about a second of its time, runs as soon as it is saved when
 the time has passed, and then shows **Completed**; its chip reads **Once at**
 the time.
 
-The event menu groups Macro activity triggers by surface:
+Event triggers appear only for users with the `enable-event-routines` PostHog
+flag; without it, **Add trigger** offers schedules only. The event menu groups
+Macro activity triggers by surface:
 
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.

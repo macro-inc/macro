@@ -56,10 +56,6 @@ pub struct Config {
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
     pub kafka_brokers: KafkaBrokers,
-    /// Enables event-trigger management, Kafka intake, and pending dispatch together.
-    /// Register EVENT_ROUTINES_ENABLED as a raw boolean in Doppler before rollout.
-    #[macro_config_default(false)]
-    pub event_routines_enabled: bool,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// TypeSafe credential for the Jev classifier behind trigger conditions.

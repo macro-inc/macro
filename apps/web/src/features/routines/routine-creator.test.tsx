@@ -26,11 +26,14 @@ const host = vi.hoisted(() => ({
   alert: vi.fn(),
   editorMount: vi.fn(),
   githubLinked: true as boolean | undefined,
+  eventRoutines: true,
   connectGithub: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
-    enabled: flag.key === 'enable-routine-conditions',
+    enabled:
+      flag.key === 'enable-routine-conditions' ||
+      (flag.key === 'enable-event-routines' && host.eventRoutines),
   }),
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
@@ -162,6 +165,7 @@ let styles: HTMLStyleElement;
 beforeEach(() => {
   vi.clearAllMocks();
   host.githubLinked = true;
+  host.eventRoutines = true;
   localStorage.clear();
   setCatalogState('success');
   styles = document.createElement('style');
@@ -660,6 +664,21 @@ describe('routine composer execution selection', () => {
       within(panel).getByRole('button', { name: 'Connect GitHub' })
     );
     expect(host.connectGithub).toHaveBeenCalledOnce();
+  });
+
+  it('offers only schedules without the event routines flag', async () => {
+    host.eventRoutines = false;
+    await mount();
+    inputPrompt();
+    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+    const panel = await screen.findByRole('dialog', { name: 'Add trigger' });
+    expect(
+      within(panel).getByRole('button', { name: /^Scheduled/ })
+    ).toBeTruthy();
+    expect(
+      within(panel).queryByRole('button', { name: 'Workflow failed' })
+    ).toBeNull();
+    expect(within(panel).queryByText('GitHub')).toBeNull();
   });
 
   it('keeps trigger edits local until confirmed and leaves an add chip', async () => {

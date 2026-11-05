@@ -113,23 +113,9 @@ fn settlement_requests_need_billing_on_and_the_authentication_key() {
 }
 
 #[test]
-fn event_routines_default_off_and_reuse_existing_brokers() {
+fn routines_reuse_existing_brokers() {
     let config: Config = serde_json::from_value(config_values()).unwrap();
-    assert!(!config.event_routines_enabled);
     assert_eq!(config.kafka_brokers.to_string(), "existing-broker:9092");
-}
-
-#[test]
-fn event_routines_require_an_explicit_boolean() {
-    for enabled in [false, true] {
-        let mut values = config_values();
-        values["EVENT_ROUTINES_ENABLED"] = json!(enabled);
-        let config: Config = serde_json::from_value(values).unwrap();
-        assert_eq!(config.event_routines_enabled, enabled);
-    }
-    let mut values = config_values();
-    values["EVENT_ROUTINES_ENABLED"] = json!("enabled");
-    assert!(serde_json::from_value::<Config>(values).is_err());
 }
 
 #[test]

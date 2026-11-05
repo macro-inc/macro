@@ -4,6 +4,7 @@ mod user_cleanup;
 
 use super::*;
 use crate::domain::event_runs::ClaimToken;
+use crate::domain::event_runs::test_support::Rollout;
 use crate::domain::models::{
     ActionConfigurationUpdate, ActionKind, ExecutionResource, ExecutionResourceType, ListedAction,
     MAX_ACTION_TIME, RunVisibility,
@@ -223,13 +224,13 @@ pub(crate) fn stored_actions(service: &TestService) -> Vec<ScheduledAction> {
 pub(crate) fn with_stopped_dispatcher(service: &TestService) -> Arc<TestService> {
     let (tx, _) = tokio::sync::mpsc::channel(1);
     Arc::new(
-        TestService::new(
+        ScheduledActionServiceImpl::new(
             Arc::clone(&service.repo),
             Arc::clone(&service.executor),
             tx,
             Arc::clone(&service.grants),
         )
-        .with_event_management_enabled(service.event_management_enabled),
+        .with_event_routines(service.rollout),
     )
 }
 
@@ -244,7 +245,14 @@ pub(crate) fn grant_to(service: &TestService, user_id: &str, id: Uuid) {
         .push(id);
 }
 
-pub(crate) type TestService = ScheduledActionServiceImpl<FakeRepo, FakeExecutor, FakeGrants>;
+pub(crate) type TestService = ScheduledActionServiceImpl<
+    FakeRepo,
+    FakeExecutor,
+    FakeGrants,
+    ModelOnlyTargets,
+    NoGithubLinks,
+    Rollout,
+>;
 
 fn grants(repo: &Arc<FakeRepo>) -> Arc<FakeGrants> {
     Arc::new(FakeGrants::all(Arc::clone(repo)))
@@ -255,13 +263,13 @@ pub(crate) fn service(enabled: bool) -> Arc<TestService> {
     let (tx, mut rx) = tokio::sync::mpsc::channel(32);
     tokio::spawn(async move { while rx.recv().await.is_some() {} });
     Arc::new(
-        TestService::new(
+        ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
             Arc::new(FakeExecutor::default()),
             tx,
             grants(&repo),
         )
-        .with_event_management_enabled(enabled),
+        .with_event_routines(Rollout(Some(enabled))),
     )
 }
 
@@ -329,7 +337,7 @@ fn update(config: ActionConfiguration) -> ActionConfigurationUpdate {
 async fn validates_before_persistence_and_rejects_cross_owner_selection() {
     let base = service(false);
     let sessions = Arc::new(Sessions::default());
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         base.repo.clone(),
         base.executor.clone(),
         base.dispatcher_tx.clone(),
@@ -381,7 +389,7 @@ async fn validates_before_persistence_and_rejects_cross_owner_selection() {
 #[tokio::test]
 async fn without_sessions_agents_are_refused_but_models_and_explicit_switches_are_kept() {
     let base = service(false);
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         base.repo.clone(),
         base.executor.clone(),
         base.dispatcher_tx.clone(),
@@ -440,7 +448,7 @@ async fn unavailable_agents_can_be_paused_deleted_and_have_history_read_without_
     for claimed in [false, true] {
         let base = service(false);
         let sessions = Arc::new(Sessions::default());
-        let svc = TestService::new(
+        let svc = ScheduledActionServiceImpl::new(
             base.repo.clone(),
             base.executor.clone(),
             base.dispatcher_tx.clone(),
@@ -496,7 +504,7 @@ async fn preparation_reauthorizes_previously_saved_selection_after_deletion_or_r
     ] {
         let base = service(false);
         let sessions = Arc::new(Sessions::default());
-        let svc = TestService::new(
+        let svc = ScheduledActionServiceImpl::new(
             base.repo.clone(),
             base.executor.clone(),
             base.dispatcher_tx.clone(),
@@ -566,7 +574,7 @@ async fn creates_both_triggers_with_server_owned_state() {
 async fn default_gate_rejects_event_creation_and_transition_but_allows_cron() {
     let (tx, _rx) = tokio::sync::mpsc::channel(8);
     let repo = Arc::new(FakeRepo::default());
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         repo.clone(),
         Arc::new(FakeExecutor::default()),
         tx,
@@ -597,13 +605,13 @@ async fn gate_off_rejects_enabling_an_existing_event_action() {
         .create_action(&user_principal(), config.clone())
         .await
         .unwrap();
-    let disabled = TestService::new(
+    let disabled = ScheduledActionServiceImpl::new(
         enabled.repo.clone(),
         enabled.executor.clone(),
         enabled.dispatcher_tx.clone(),
         grants(&enabled.repo),
     )
-    .with_event_management_enabled(false);
+    .with_event_routines(Rollout(Some(false)));
     config.enabled = true;
     assert_policy(
         disabled
@@ -747,7 +755,7 @@ async fn user_and_bot_for_user_record_a_user_and_team_bot_writes_nothing() {
 #[tokio::test]
 async fn disabled_manual_runs_work_for_both_variants_even_with_gate_off() {
     let enabled = service(true);
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         enabled.repo.clone(),
         enabled.executor.clone(),
         enabled.dispatcher_tx.clone(),
@@ -839,7 +847,7 @@ async fn active_execution_blocks_replacement_but_allows_disabling_even_with_gate
             .await,
         ActionPolicyError::UpdateConflict,
     );
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         enabled.repo.clone(),
         enabled.executor.clone(),
         enabled.dispatcher_tx.clone(),
@@ -956,7 +964,7 @@ fn seeded(
 async fn activation_changes_are_idempotent_and_keep_configuration() {
     let (tx, mut rx) = tokio::sync::mpsc::channel(8);
     let repo = Arc::new(FakeRepo::default());
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         repo.clone(),
         Arc::new(FakeExecutor::default()),
         tx,
@@ -1048,7 +1056,7 @@ async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
         Uuid::from_u128(5),
         Uuid::from_u128(9),
     ]);
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         repo.clone(),
         Arc::new(FakeExecutor::default()),
         tx,
@@ -1108,7 +1116,7 @@ async fn gate_off_allows_pausing_an_event_action_but_not_resuming_it() {
         .await
         .unwrap();
     let id = action.id.unwrap();
-    let gated = TestService::new(
+    let gated = ScheduledActionServiceImpl::new(
         enabled.repo.clone(),
         enabled.executor.clone(),
         enabled.dispatcher_tx.clone(),
@@ -1155,7 +1163,7 @@ async fn running_actions_can_be_paused_but_not_resumed() {
 async fn resuming_revalidates_the_stored_agent_but_pausing_does_not() {
     let base = service(false);
     let sessions = Arc::new(Sessions::default());
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         base.repo.clone(),
         base.executor.clone(),
         base.dispatcher_tx.clone(),
@@ -1313,13 +1321,13 @@ async fn conditions_are_rejected_unless_the_host_can_check_them() {
         ActionPolicyError::ConditionsDisabled,
     );
 
-    let with = TestService::new(
+    let with = ScheduledActionServiceImpl::new(
         without.repo.clone(),
         without.executor.clone(),
         without.dispatcher_tx.clone(),
         grants(&without.repo),
     )
-    .with_event_management_enabled(true)
+    .with_event_routines(Rollout(Some(true)))
     .with_conditions_enabled(true);
     let created = with
         .create_action(&user_principal(), conditional_configuration())
@@ -1410,13 +1418,13 @@ async fn a_github_trigger_runs_only_once_github_is_linked() {
         ActionPolicyError::GithubNotLinked,
     );
 
-    let linked = TestService::new(
+    let linked = ScheduledActionServiceImpl::new(
         unlinked.repo.clone(),
         unlinked.executor.clone(),
         unlinked.dispatcher_tx.clone(),
         grants(&unlinked.repo),
     )
-    .with_event_management_enabled(true)
+    .with_event_routines(Rollout(Some(true)))
     .with_github_links(Linked(true));
     assert!(
         linked
