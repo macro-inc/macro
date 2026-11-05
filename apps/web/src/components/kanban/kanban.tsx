@@ -427,7 +427,7 @@ export function KanbanLane(props: {
           droppable.ref(node);
         }}
         class={cn(
-          'relative flex w-72 shrink-0 flex-col rounded-xl border border-edge-frame bg-[color-mix(in_oklch,var(--color-panel)_94%,var(--color-ink))] p-2 transition-colors',
+          'relative flex w-72 shrink-0 flex-col rounded-xl border border-edge-frame bg-inset p-2 transition-colors',
           draggable.isActiveDraggable && 'opacity-35',
           highlighted() && 'ring-2 ring-accent',
           props.class
