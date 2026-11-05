@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use hosted_runtimes::domain::enrollment::PersonaService;
+use hosted_runtimes::domain::enrollment::{PersonaConfigKey, PersonaService};
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use uuid::Uuid;
 
@@ -178,41 +178,11 @@ fn persona_installs_its_user_environment_and_unit() {
 }
 
 #[test]
-fn persona_names_are_validated_before_anything_is_written() {
+fn persona_exec_is_validated_before_anything_is_written() {
     let paths = SystemPaths {
         root: PathBuf::from("/nonexistent"),
     };
     let persona = enrollment().persona.expect("the literal has a persona");
-    for os_user in [
-        "root",
-        "Ada",
-        "1ada",
-        "ada/../x",
-        "",
-        "a234567890123456789012345678901x",
-    ] {
-        let bad = Persona {
-            os_user: os_user.to_owned(),
-            ..persona.clone()
-        };
-        assert!(
-            PersonaFiles::render(&bad, &paths).is_err(),
-            "os_user `{os_user}` was accepted"
-        );
-    }
-    for unit_name in ["macrod", "macrod-enroll", "brain service", "../brain", ""] {
-        let bad = Persona {
-            extra_service: PersonaService {
-                unit_name: unit_name.to_owned(),
-                ..persona.extra_service.clone()
-            },
-            ..persona.clone()
-        };
-        assert!(
-            PersonaFiles::render(&bad, &paths).is_err(),
-            "unit_name `{unit_name}` was accepted"
-        );
-    }
     let bad_exec = Persona {
         extra_service: PersonaService {
             exec: "/bin/brain\nExecStartPre=/bin/evil".to_owned(),
@@ -221,11 +191,6 @@ fn persona_names_are_validated_before_anything_is_written() {
         ..persona.clone()
     };
     assert!(PersonaFiles::render(&bad_exec, &paths).is_err());
-    let bad_key = Persona {
-        config: BTreeMap::from([("NOT VALID".to_owned(), "x".to_owned())]),
-        ..persona.clone()
-    };
-    assert!(PersonaFiles::render(&bad_key, &paths).is_err());
 }
 
 #[tokio::test]
@@ -393,10 +358,13 @@ fn a_recreated_guest_installs_its_saved_persona_and_enables_the_unit_idempotentl
     let persona = Persona {
         config: BTreeMap::from([
             (
-                "REPO_URL".to_owned(),
+                PersonaConfigKey::parse("REPO_URL").unwrap(),
                 "https://example.com/repository.git".to_owned(),
             ),
-            ("AGENT_ID".to_owned(), "saved-agent".to_owned()),
+            (
+                PersonaConfigKey::parse("AGENT_ID").unwrap(),
+                "saved-agent".to_owned(),
+            ),
         ]),
         ..enrollment().persona.unwrap()
     };

@@ -40,7 +40,7 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   invalid timestamps prohibit orphan deletion. Never adopt unlabelled instances.
 - **Purchase**: `ComputerService::purchase(PurchaseRequest { team_id, created_by, size, name, persona, extra_items, billing })`
   → `computer_id`. A Stripe purchase adds the computer's item plus
-  every `extra_items` entry in one subscription update (`SubscriptionItem { price_id, quantity }`, quantity
+  every `extra_items` entry in one subscription update (`SubscriptionItem { price_id: StripePriceId, quantity }`, quantity
   added to the item's current quantity), invoiced at once with proration. In-process
   in authentication_service, and on the internal route `POST /internal/computers`.
   Persist `PendingPayment` and a delayed `ConfirmPayment` outbox effect together
@@ -78,8 +78,8 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   and retains the disk for the usual 14 days; undo is unavailable afterward.
   Cancel, release, retention expiry and delayed payment recovery make no Billing
   calls. A comped quote reads the Stripe quote and sets amount to zero, preserving
-  price id, currency and interval. With no subscription it uses an empty price id,
-  monthly USD and zero amount; other billing errors propagate.
+  price id, currency and interval. Without a subscription the quote returns
+  `NoSubscription`; billing errors propagate.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →
   `ComputerStatus` with `setup: Option<SetupProgress>` (Paying → Creating → Booting →
   Connecting → Ready) until macrod first connects. Readable by any team member.
@@ -98,7 +98,9 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 - **Persona**: `Persona { name, os_user, extra_service: { unit_name, exec, env }, config }`.
   `macrod enroll` creates `os_user`, writes `config` to `/etc/macro/personas/<os_user>.env`
   (the unit's `EnvironmentFile`), and installs + starts `/etc/systemd/system/<unit_name>.service`
-  as that user. Validated by `service::validate_persona`.
+  as that user. `PersonaOsUser`, `SystemdUnitName`, and `PersonaConfigKey` in
+  `domain::enrollment` validate names and keys on construction and JSON reads;
+  `service::validate_persona` checks commands and values.
 - Persona computers are never idle-frozen; they run until powered off or canceled.
 - Fleet host discovery must not abort harness startup: report unhealthy and retry
   registration after 10, 20, 40, then 60 seconds, holding fleet effects and timers

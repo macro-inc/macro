@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::enrollment::PersonaService;
+use crate::domain::enrollment::{PersonaConfigKey, PersonaOsUser, PersonaService, SystemdUnitName};
 use crate::domain::fakes::{FakeRepo, FixedClock, HOST, TEAM, now};
 use crate::domain::lifecycle::{Billing as BillingState, ComputerState, PaymentOutcome, Power};
 use crate::domain::models::{BillingInterval, SubscriptionItem};
@@ -33,7 +33,11 @@ impl Billing for FakeBilling {
         }
         Ok(Quote {
             size,
-            price_id: format!("price_{}", size.as_ref()),
+            price_id: crate::domain::models::StripePriceId::parse(&format!(
+                "price_{}",
+                size.as_ref()
+            ))
+            .unwrap(),
             amount: 2000 * i64::from(size.units()),
             currency: "usd".to_owned(),
             interval: if self.yearly {
@@ -94,13 +98,19 @@ impl Billing for FakeBilling {
 fn persona() -> Persona {
     Persona {
         name: "Ada".to_owned(),
-        os_user: "ada".to_owned(),
+        os_user: PersonaOsUser::parse("ada").unwrap(),
         extra_service: PersonaService {
-            unit_name: "ada-brain".to_owned(),
+            unit_name: SystemdUnitName::parse("ada-brain").unwrap(),
             exec: "/usr/local/bin/brain --persona ada".to_owned(),
-            env: BTreeMap::from([("RUST_LOG".to_owned(), "info".to_owned())]),
+            env: BTreeMap::from([(
+                PersonaConfigKey::parse("RUST_LOG").unwrap(),
+                "info".to_owned(),
+            )]),
         },
-        config: BTreeMap::from([("AGENT_ID".to_owned(), "agent-1".to_owned())]),
+        config: BTreeMap::from([(
+            PersonaConfigKey::parse("AGENT_ID").unwrap(),
+            "agent-1".to_owned(),
+        )]),
     }
 }
 
@@ -124,7 +134,7 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
             name: None,
             persona: Some(persona()),
             extra_items: vec![SubscriptionItem {
-                price_id: "price_agent_seat".to_owned(),
+                price_id: crate::domain::models::StripePriceId::parse("price_agent_seat").unwrap(),
                 quantity: 1,
             }],
         })
@@ -136,7 +146,7 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
         vec![(
             ComputerSize::Standard,
             vec![SubscriptionItem {
-                price_id: "price_agent_seat".to_owned(),
+                price_id: crate::domain::models::StripePriceId::parse("price_agent_seat").unwrap(),
                 quantity: 1,
             }],
             format!("computer-add:{computer_id}"),
@@ -169,7 +179,8 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
         vec![
             Effect::ConfirmPayment {
                 extra_items: vec![SubscriptionItem {
-                    price_id: "price_agent_seat".to_owned(),
+                    price_id: crate::domain::models::StripePriceId::parse("price_agent_seat")
+                        .unwrap(),
                     quantity: 1
                 }]
             },
@@ -273,7 +284,7 @@ async fn sold_out_size_is_not_billed() {
 }
 
 #[tokio::test]
-async fn persona_with_a_reserved_user_is_rejected_before_anything_is_held() {
+async fn persona_with_a_multiline_value_is_rejected_before_anything_is_held() {
     let service = ComputerService::new(
         FakeRepo {
             sold_units: 9,
@@ -282,8 +293,11 @@ async fn persona_with_a_reserved_user_is_rejected_before_anything_is_held() {
         FakeBilling::default(),
         FixedClock,
     );
-    let mut root = persona();
-    root.os_user = "root".to_owned();
+    let mut multiline = persona();
+    multiline.config.insert(
+        PersonaConfigKey::parse("AGENT_ID").unwrap(),
+        "agent-1\nAGENT_ID=other".to_owned(),
+    );
 
     let result = service
         .purchase(PurchaseRequest {
@@ -292,7 +306,7 @@ async fn persona_with_a_reserved_user_is_rejected_before_anything_is_held() {
             created_by: "macro|admin@example.com".to_owned(),
             size: ComputerSize::Standard,
             name: None,
-            persona: Some(root),
+            persona: Some(multiline),
             extra_items: vec![],
         })
         .await;
@@ -588,7 +602,7 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
             name: Some("Build box".to_owned()),
             persona: None,
             extra_items: vec![SubscriptionItem {
-                price_id: "price_seat".to_owned(),
+                price_id: crate::domain::models::StripePriceId::parse("price_seat").unwrap(),
                 quantity: 1,
             }],
         })
@@ -634,7 +648,7 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
     let expected = (
         ComputerSize::Large,
         vec![SubscriptionItem {
-            price_id: "price_seat".to_owned(),
+            price_id: crate::domain::models::StripePriceId::parse("price_seat").unwrap(),
             quantity: 1,
         }],
         format!("computer-add:{}", computer.id),

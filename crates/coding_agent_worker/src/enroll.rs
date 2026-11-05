@@ -436,15 +436,7 @@ struct PersonaFiles {
 impl PersonaFiles {
     fn render(persona: &Persona, paths: &SystemPaths) -> rootcause::Result<Self> {
         let os_user = &persona.os_user;
-        if !lazy_regex::regex_is_match!(r"^[a-z_][a-z0-9_-]{0,30}$", os_user) || os_user == "root" {
-            rootcause::bail!("persona os_user `{os_user}` is not a valid new Linux user name");
-        }
         let unit_name = &persona.extra_service.unit_name;
-        if !lazy_regex::regex_is_match!(r"^[a-zA-Z0-9_.@-]+$", unit_name)
-            || unit_name.starts_with("macrod")
-        {
-            rootcause::bail!("persona unit_name `{unit_name}` is not a valid persona unit name");
-        }
         for (field, value) in [
             ("name", persona.name.as_str()),
             ("extra_service.exec", persona.extra_service.exec.as_str()),
@@ -457,20 +449,12 @@ impl PersonaFiles {
         let env_system_path = format!("{PERSONA_ENV_DIR}/{os_user}.env");
         let mut env_contents = String::new();
         for (key, value) in &persona.config {
-            env_contents.push_str(&format!(
-                "{}=\"{}\"\n",
-                env_key(key)?,
-                env_file_value(value)?
-            ));
+            env_contents.push_str(&format!("{}=\"{}\"\n", key, env_file_value(value)?));
         }
 
         let mut environment = String::new();
         for (key, value) in &persona.extra_service.env {
-            environment.push_str(&format!(
-                "Environment=\"{}={}\"\n",
-                env_key(key)?,
-                unit_value(value)?
-            ));
+            environment.push_str(&format!("Environment=\"{}={}\"\n", key, unit_value(value)?));
         }
         let unit_contents = format!(
             "# Written by macrod enroll.\n\
@@ -495,8 +479,8 @@ impl PersonaFiles {
         );
 
         Ok(Self {
-            os_user: os_user.clone(),
-            unit_name: unit_name.clone(),
+            os_user: os_user.as_str().to_owned(),
+            unit_name: unit_name.as_str().to_owned(),
             env_path: paths.at(&env_system_path),
             env_contents,
             unit_path: paths.at(&format!("{SYSTEMD_UNIT_DIR}/{unit_name}.service")),
@@ -515,13 +499,6 @@ impl PersonaFiles {
         tracing::info!(os_user = %self.os_user, unit = %unit, "persona service installed");
         Ok(())
     }
-}
-
-fn env_key(key: &str) -> rootcause::Result<&str> {
-    if !lazy_regex::regex_is_match!(r"^[A-Za-z_][A-Za-z0-9_]*$", key) {
-        rootcause::bail!("`{key}` is not a valid environment variable name");
-    }
-    Ok(key)
 }
 
 /// A double-quoted `EnvironmentFile` value.
