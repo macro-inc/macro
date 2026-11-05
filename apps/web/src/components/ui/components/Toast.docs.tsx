@@ -650,7 +650,7 @@ export default defineDoc({
       id: 'current-toasts',
       title: 'Current app toasts',
       description:
-        'Review real toast copy and actions with the current shared renderer. Examples stay open for inspection; their normal lifetime and platform are listed below. Actions only dismiss the preview: they never connect accounts, change settings, move files, or reload. Replay restores a dismissed example. Account details are synthetic.',
+        'Review representative production toasts with the shared renderer, including setup, recovery, Undo, navigation, routine feedback, send cancellation, imports, downloads, and failures. This is not an exhaustive list of every toast call. Examples stay open for inspection; their normal lifetime and platform are listed below. Actions only dismiss the preview: they never connect accounts, change settings, move files, or reload. Replay restores a dismissed example. Account details and error details are synthetic.',
       render: CurrentToastsDemo,
       fill: true,
     },
