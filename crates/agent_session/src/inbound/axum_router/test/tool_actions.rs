@@ -342,3 +342,72 @@ async fn tools_cannot_approve_requests_or_supply_another_actor() {
     }
     assert!(controls.controls.lock().unwrap().is_empty());
 }
+
+#[derive(Clone)]
+struct ActivityReads(Arc<std::sync::atomic::AtomicUsize>);
+impl ::activity::domain::ports::AgentActivityReads for ActivityReads {
+    type Err = std::io::Error;
+    async fn agent_activity(
+        &self,
+        session: Uuid,
+        _: Option<Uuid>,
+        _: Option<(chrono::DateTime<Utc>, Uuid)>,
+        _: std::num::NonZeroU32,
+    ) -> Result<::activity::ActivityFeedPage, Self::Err> {
+        assert_eq!(session, AgentSessionId::TEST_A.as_uuid());
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(::activity::ActivityFeedPage {
+            records: Vec::new(),
+            next: None,
+        })
+    }
+}
+
+#[tokio::test]
+async fn session_activity_requires_view_access_and_valid_pagination_before_reading() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let reads = Arc::new(AtomicUsize::new(0));
+    for (level, query, expected) in [
+        (None, "", StatusCode::FORBIDDEN),
+        (Some(AccessLevel::View), "", StatusCode::OK),
+        (
+            Some(AccessLevel::View),
+            "?limit=101",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            Some(AccessLevel::View),
+            "?beforeId=00000000-0000-0000-0000-000000000001",
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        let auth = MacroAuthorizationServiceImpl::new(
+            FakeJwtValidator,
+            InternalAuthConfig {
+                api_key: "test-key".into(),
+                default_user_id: None,
+            },
+            SelfBotAuthorizer,
+            NoUserApiKeyAuthorizer,
+        );
+        let router =
+            super::super::activity::router(super::super::activity::AgentActivityState::new(
+                ActivityReads(reads.clone()),
+                Arc::new(FakeEntityAccessService {
+                    access_level: level,
+                }),
+                MacroAuthorizationState::new(Arc::new(auth)),
+            ));
+        let request = Request::builder()
+            .uri(format!(
+                "/agent-sessions/{}/activity{query}",
+                AgentSessionId::TEST_A
+            ))
+            .header(INTERNAL_API_KEY_HEADER, "test-key")
+            .header(INTERNAL_MACRO_USER_ID_HEADER, OWNER)
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(router.oneshot(request).await.unwrap().status(), expected);
+    }
+    assert_eq!(reads.load(Ordering::SeqCst), 1);
+}

@@ -182,3 +182,5 @@ listener failure shuts down the process so ECS can replace the task.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/config-and-service-urls.md`
+
+- Code-mode credentials create durable per-invocation agent correlation; the final merged HTTP router validates incoming attribution before handlers.

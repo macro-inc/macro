@@ -164,3 +164,5 @@ the existing gateway prefixes.
 
 - Workspace-import report/cancel endpoints remain app-only review plumbing,
   explicitly classified alongside the existing Notion routes in coverage skips.
+
+- `AgentSession.activity()` and invocation handles iterate durable agent-correlated history lazily; session visibility controls the feed.

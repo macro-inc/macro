@@ -25,9 +25,14 @@ pub async fn setup_and_serve<S: ::notification::domain::service::NotificationRea
     ingress_state: NotificationRouterState<S, AuthorizationService>,
 ) -> anyhow::Result<()> {
     let port = state.config.port;
+    let correlation = state.correlation.clone();
     let env = state.config.environment;
     let app = api_router(state.clone(), ingress_state)
         .with_state(state)
+        .layer(axum::middleware::from_fn_with_state(
+            correlation,
+            agent_correlation::inbound::propagate,
+        ))
         .merge(health::router())
         .layer(
             ServiceBuilder::new()

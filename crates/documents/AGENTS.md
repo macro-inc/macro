@@ -115,3 +115,5 @@ word docs, Illustrator/Photoshop files).
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md` ·
   Skill: `collab-surface-core`
+
+- Signed document grants carry agent correlation into Sync; editor deduplication and activity debounce include the invocation ID.

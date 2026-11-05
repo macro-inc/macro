@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, actor_id, action, action_payload, subject_id, entity_type, entity_id, occurred_at\n                   FROM activity_events WHERE entity_type = $1 AND entity_id = $2 AND (occurred_at, id) < ($3, $4)\n                   ORDER BY occurred_at DESC, id DESC LIMIT $5",
+  "query": "SELECT id, agent_correlation_id, actor_id, action, action_payload, subject_id, entity_type, entity_id, occurred_at\n                   FROM activity_events WHERE entity_type = $1 AND entity_id = $2 AND (occurred_at, id) < ($3, $4)\n                   ORDER BY occurred_at DESC, id DESC LIMIT $5",
   "describe": {
     "columns": [
       {
@@ -10,36 +10,41 @@
       },
       {
         "ordinal": 1,
+        "name": "agent_correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
         "name": "actor_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "name": "action",
         "type_info": "Text"
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "action_payload",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "subject_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "entity_type",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "entity_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "occurred_at",
         "type_info": "Timestamptz"
       }
@@ -55,6 +60,7 @@
     },
     "nullable": [
       false,
+      true,
       false,
       false,
       true,
@@ -64,5 +70,5 @@
       false
     ]
   },
-  "hash": "c2d43abe5421c305af59278182308864a933094f279095a7da1e313378489e12"
+  "hash": "696f790558ba0b27d243b5c9f39cdae05524fbee2a97a1b9a6f3f2e4775e35e0"
 }

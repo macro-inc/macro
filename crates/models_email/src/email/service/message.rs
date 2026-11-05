@@ -330,6 +330,9 @@ pub struct ScheduledMessage {
     /// The authenticated user who initiated the send, as a principal string
     /// (`macro|…`). `None` for rows created before actor tracking existed.
     pub actor_id: Option<String>,
+    /// Code-mode invocation that scheduled this delivery.
+    #[serde(default)]
+    pub agent_correlation_id: Option<Uuid>,
 }
 
 impl From<db::message::ScheduledMessage> for ScheduledMessage {
@@ -341,6 +344,7 @@ impl From<db::message::ScheduledMessage> for ScheduledMessage {
             sent: other.sent,
             processing: other.processing,
             actor_id: other.actor_id,
+            agent_correlation_id: other.agent_correlation_id,
         }
     }
 }

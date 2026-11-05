@@ -623,3 +623,64 @@ describe('AgentSession', () => {
     );
   });
 });
+
+test('session activity keeps invocation filters and lazily advances its cursor', async () => {
+  const requests: URL[] = [];
+  const invocationId = '0198a4cc-e138-7670-a308-a6b766602709';
+  const timestamp = '2026-11-05T12:00:00Z';
+  globalThis.fetch = (async (input) => {
+    const request = input instanceof Request ? input : new Request(input);
+    requests.push(new URL(request.url));
+    return Response.json({
+      activities: [
+        {
+          id: `row-${requests.length}`,
+          agent_correlation_id: invocationId,
+          actor_id: 'bot|0198a4cc-e138-7670-a308-a6b766602701',
+          subject_id: 'macro|owner@example.com',
+          entity_type: 'document',
+          entity_id: 'document-fixture',
+          action: 'edited',
+          action_payload: null,
+          occurred_at: timestamp,
+        },
+      ],
+      nextCursor:
+        requests.length === 1 ? { occurredAt: timestamp, id: 'row-1' } : null,
+    });
+  }) as typeof fetch;
+  const macro = new Macro({
+    token: 'fixture',
+    hosts: { 'agent-harness': 'https://agent.example.test' },
+  });
+  const session = macro.agentSessions.byId(sessionId);
+  const invocation = session.invocations.byId(invocationId);
+  const activity = invocation.activity({ limit: 1 });
+  expect(requests).toHaveLength(0);
+  const first = await activity.next();
+  expect(first.value?.invocation?.id).toBe(invocationId);
+  expect(requests).toHaveLength(1);
+  const second = await activity.next();
+  expect(second.value?.snapshot.id).toBe('row-2');
+  expect((await activity.next()).done).toBe(true);
+  expect(requests).toHaveLength(2);
+  expect(
+    requests.every(
+      (url) => url.searchParams.get('agentCorrelationId') === invocationId,
+    ),
+  ).toBe(true);
+  expect(requests[1].searchParams.get('beforeAt')).toBe(timestamp);
+  expect(requests[1].searchParams.get('beforeId')).toBe('row-1');
+  expect(JSON.stringify(invocation)).not.toContain('fixture');
+});
+
+test('session activity rejects another session invocation without a request', () => {
+  const macro = new Macro({ token: 'fixture' });
+  const session = macro.agentSessions.byId(sessionId);
+  const foreign = macro.agentSessions
+    .byId('other')
+    .invocations.byId('invocation');
+  expect(() => session.activity({ invocation: foreign })).toThrow(
+    'must belong to this session',
+  );
+});

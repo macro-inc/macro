@@ -282,3 +282,23 @@ fn rejects_an_unsupported_schema_version() {
         }) if topic == MacroExampleTopic::TOPIC_STR
     ));
 }
+
+#[tokio::test]
+async fn envelope_round_trip_preserves_correlation_and_legacy_events_default_to_none() {
+    let id = Uuid::now_v7();
+    let event = agent_correlation::context::scope(Some(id), async { example_event() }).await;
+    let decoded: Event<ExampleTopicEvent> =
+        serde_json::from_slice(&serde_json::to_vec(&event).unwrap()).unwrap();
+    assert_eq!(decoded.agent_correlation_id, Some(id));
+    let mut legacy = serde_json::to_value(event).unwrap();
+    legacy
+        .as_object_mut()
+        .unwrap()
+        .remove("agent_correlation_id");
+    assert_eq!(
+        serde_json::from_value::<Event<ExampleTopicEvent>>(legacy)
+            .unwrap()
+            .agent_correlation_id,
+        None
+    );
+}
