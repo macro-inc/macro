@@ -26,6 +26,7 @@ jobs:
       graphql_schema: ${{ steps.filter.outputs.graphql_schema }}
       rust_packages: ${{ steps.nextest-filter.outputs.rust_packages }}
       skip_tests: ${{ steps.nextest-filter.outputs.skip_tests }}
+    timeout-minutes: 15
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -248,6 +249,7 @@ jobs:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
       RUSTDOCFLAGS: '-Dwarnings'
       SQLX_OFFLINE: 'true'
+    timeout-minutes: 45
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -264,6 +266,7 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
+      timeout-minutes: 15
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -376,6 +379,7 @@ jobs:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
       RUSTDOCFLAGS: '-Dwarnings'
       SQLX_OFFLINE: 'true'
+    timeout-minutes: 45
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -433,6 +437,7 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
+      timeout-minutes: 15
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -537,6 +542,7 @@ jobs:
       CARGO_BUILD_JOBS: '2'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
       SCCACHE_IDLE_TIMEOUT: '0'
+    timeout-minutes: 90
     services:
       postgres:
         image: pgvector/pgvector:pg14
@@ -568,6 +574,7 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
+      timeout-minutes: 15
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -690,6 +697,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.graphql_schema == 'true'
     runs-on: namespace-profile-linux-small
+    timeout-minutes: 15
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -714,6 +722,7 @@ jobs:
     if: always()
     name: Cloud Storage Status Check
     runs-on: namespace-profile-linux-small
+    timeout-minutes: 5
     steps:
     - name: Check job results
       run: |
@@ -723,15 +732,19 @@ jobs:
         echo "test: ${{ needs.test.result }}"
         echo "graphql-schema-compat: ${{ needs.graphql-schema-compat.result }}"
 
-        # Fail if any job failed (skipped and success are both OK)
-        if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.check.result }}" == "failure" ]] || \
-           [[ "${{ needs.doppler-config.result }}" == "failure" ]] || \
-           [[ "${{ needs.test.result }}" == "failure" ]] || \
-           [[ "${{ needs.graphql-schema-compat.result }}" == "failure" ]]; then
-          echo "❌ One or more jobs failed"
-          exit 1
-        fi
+        # Only success and skipped are OK. A job that hits its timeout reports
+        # cancelled, and passing on that would merge code whose tests never ran.
+        for result in \
+          "${{ needs.path-check.result }}" \
+          "${{ needs.check.result }}" \
+          "${{ needs.doppler-config.result }}" \
+          "${{ needs.test.result }}" \
+          "${{ needs.graphql-schema-compat.result }}"; do
+          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+            echo "❌ One or more jobs failed or were cancelled"
+            exit 1
+          fi
+        done
 
         echo "✅ All jobs passed or were skipped"
 concurrency:
