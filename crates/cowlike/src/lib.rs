@@ -94,4 +94,4 @@ where
 }
 
 /// Timing probe.
-pub const CI_SPEED_WEB_COLD: u32 = 2;
+pub const CI_SPEED_WEB_COLD: u32 = 3;
