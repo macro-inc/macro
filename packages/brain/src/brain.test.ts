@@ -158,7 +158,7 @@ Deno.test('a direct message wakes a respond turn that replies, shows typing, and
   );
   assertEquals(talk[0]?.body, { active: true, thread_id: null });
   assertEquals(
-    (talk[1]?.body as { content: string; thread_id: null }).content,
+    (talk[1]?.body as { content: string } | undefined)?.content,
     'sent, check your inbox'
   );
   assertEquals(talk.at(-1)?.body, { active: false, thread_id: null });
