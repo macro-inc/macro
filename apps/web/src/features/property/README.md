@@ -94,7 +94,8 @@ title-row tags retain their compact height.
 
 The system Assignees property lists selected assignees first at opening, then
 available agents, then the current team roster. Row positions stay stable while
-selecting. **Search team...** searches these options without contact discovery.
+selecting. Search uses these options without contact discovery; preserve the
+existing Add/Change property and command-menu search placeholders.
 Existing selected outsiders remain visible and removable, including references
 absent from contacts. Removing an outsider removes that row immediately; the
 picker cannot add that person again unless they join the team.

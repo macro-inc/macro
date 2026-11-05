@@ -115,10 +115,6 @@ export function EntityPropertyEditor(props: {
   });
 
   createEffect(() => {
-    if (isAssignees()) {
-      props.setPlaceholder(t('viewMenus.searchAssignees'));
-      return;
-    }
     const entityTypeLabel =
       props.property?.specificEntityType?.toLowerCase() || 'entity';
     props.setPlaceholder(`Search for ${entityTypeLabel}...`);
@@ -403,9 +399,6 @@ function EntityRowContent(props: {
       <div class="flex-1 text-left">
         <p class="text-sm font-medium">{getEntityName(props.entity)}</p>
       </div>
-      <Show when={isBotPrincipalId(props.entity.id)}>
-        <span class="shrink-0 text-xs text-ink-muted">Agent</span>
-      </Show>
     </>
   );
 }

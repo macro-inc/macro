@@ -148,9 +148,7 @@ function EntityEditorSelector(
         <PropertyEntitySelector
           config={{
             isMultiSelect: property.isMultiSelect,
-            placeholder: isAssignees
-              ? t('viewMenus.searchAssignees')
-              : `${property.isMultiSelect ? 'Add' : 'Change'} ${property.displayName.toLowerCase()}...`,
+            placeholder: `${property.isMultiSelect ? 'Add' : 'Change'} ${property.displayName.toLowerCase()}...`,
             specificEntityType: property.specificEntityType,
             selfFilter: props.selfFilter,
             users: isCompanyOwner || isAssignees ? users : undefined,

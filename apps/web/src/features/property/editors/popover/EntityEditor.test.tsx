@@ -205,16 +205,16 @@ describe('assigning an agent through task and project properties', () => {
     async ({ Editor, search }) => {
       const onSave = setup(undefined, property, Editor);
       if (search) {
-        const input = screen.getByPlaceholderText('Search team...');
+        const input = screen.getByRole('textbox');
         fireEvent.input(input, { target: { value: 'no-match' } });
         await waitFor(() => expect(screen.queryByText('Alice')).toBeNull());
         fireEvent.input(input, { target: { value: 'a' } });
         await screen.findByText('Alice');
       }
-      fireEvent.keyDown(screen.getByPlaceholderText('Search team...'), {
+      fireEvent.keyDown(screen.getByRole('textbox'), {
         key: 'ArrowDown',
       });
-      fireEvent.keyDown(screen.getByPlaceholderText('Search team...'), {
+      fireEvent.keyDown(screen.getByRole('textbox'), {
         key: 'Enter',
       });
       fireEvent.click(
@@ -257,7 +257,7 @@ describe('assigning an agent through task and project properties', () => {
           'Agents assigned to this project automatically take on tasks created in or moved into it. Use a shared team agent for tasks added by teammates.'
         ) !== null
       ).toBe(selfFilter?.entityType === 'INITIATIVE');
-      fireEvent.input(screen.getByPlaceholderText('Search team...'), {
+      fireEvent.input(screen.getByRole('textbox'), {
         target: { value: 'research' },
       });
       await waitFor(() => expect(screen.queryByText('Alice')).toBeNull());
@@ -377,7 +377,7 @@ describe('team-first assignees', () => {
     'does not assign a non-team contact through search or Enter',
     async (Editor) => {
       const onSave = setup(undefined, property, Editor);
-      const input = screen.getByPlaceholderText('Search team...');
+      const input = screen.getByRole('textbox');
       expect(screen.getByText('Teammate')).toBeTruthy();
       expect(screen.queryByText('Outside')).toBeNull();
       fireEvent.input(input, { target: { value: 'outside' } });
@@ -426,7 +426,7 @@ describe('people in a picker sheet', () => {
   it('drops the picks on Escape and saves them on Done', async () => {
     const dropped = setup(undefined, property, EntitySheetEditor);
     fireEvent.click(screen.getByText('Research assistant'));
-    fireEvent.keyDown(screen.getByPlaceholderText('Search team...'), {
+    fireEvent.keyDown(screen.getByRole('textbox'), {
       key: 'Escape',
     });
     expect(screen.queryByRole('dialog')).toBeNull();

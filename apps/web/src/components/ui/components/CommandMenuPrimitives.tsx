@@ -174,7 +174,6 @@ export function CommandMenuList<T>(props: {
   scrollSelectedIntoView?: boolean;
   class?: string;
   itemId?: (item: T, index: number) => string;
-  itemClass?: (item: T, index: number) => string | undefined;
   itemDisabled?: (item: T, index: number) => boolean;
   beforeItem?: (item: T, index: number) => JSX.Element;
   onSelect: (item: T, index: number, event: MouseEvent) => void;
@@ -242,7 +241,7 @@ export function CommandMenuList<T>(props: {
               id={itemId(item, index())}
               selected={isSelected(index())}
               disabled={props.itemDisabled?.(item, index())}
-              class={cn('scroll-m-2', props.itemClass?.(item, index()))}
+              class="scroll-m-2"
               onClick={(event) => props.onSelect(item, index(), event)}
               onMouseMove={(event) => handleMouseMove(event, item, index())}
             >

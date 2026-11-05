@@ -76,7 +76,7 @@ For Search intent, extraction selects a search type before extracting only that
 type's supported filters. Task status/priority/assignee/creator filters and channel
 In/From filters use the same controls and resolution as desktop Command K.
 The task Assignee facet lists selected assignees first when opening the picker,
-then available agents, then team members, with the **Search team...** placeholder.
+then available agents, then team members, with the **Search assignees...** placeholder.
 Rows stay in place while selecting or deselecting. Existing selected outsiders
 remain removable, but contact discovery is not available. Desktop chips and the
 mobile filter drawer share this behavior.

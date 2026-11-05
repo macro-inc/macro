@@ -19,7 +19,6 @@ import {
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 
 export type SearchableOption = {
-  class?: string;
   id: string;
   label: string;
   icon?: () => JSX.Element;
@@ -29,7 +28,6 @@ export type SearchableOption = {
 };
 
 export type SearchableSelectAction = {
-  class?: string;
   label: string;
   icon?: () => JSX.Element;
   onSelect: () => void;
@@ -175,8 +173,7 @@ const SearchableMultiSelectItem = (itemProps: {
       onMouseDown={keepComboboxFocus}
       class={cn(
         'group relative rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left text-sm font-normal data-highlighted:bg-ink/5 cursor-default touch:min-h-11',
-        itemProps.item.rawValue.id !== ACTION_ID && 'pr-14',
-        itemProps.item.rawValue.class
+        itemProps.item.rawValue.id !== ACTION_ID && 'pr-14'
       )}
     >
       <Show
@@ -342,7 +339,6 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
         id: ACTION_ID,
         label: action.label,
         icon: action.icon,
-        class: action.class,
       },
     ];
   });
