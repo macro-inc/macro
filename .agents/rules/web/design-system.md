@@ -69,11 +69,6 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   buttons as tabs. The agent composer's Auto/Chat/Code switch remains
   `Tabs variant="track"`, a flat pill sliding along the composer's tray. Keep all
   tab treatments flat: use borders and selected fills, not raised edges, gradients, or shadows.
-- Raised surfaces (dialogs, menus, glass inputs) darken resting controls, so
-  an on state reads `--color-control-checked`, `--color-ink-unchecked`, and
-  `--button-secondary-checked`, which those surfaces strengthen. Use them, not
-  `overlay-active` or the momentary pressed fill, for checked and toggled-on
-  states, or a selection vanishes on a dialog.
 - **FE-65** Let `Tabs` own its touch styling: set its `touch` prop instead of
   swapping tab components or variants. For overflowing touch header sections,
   use a shared `MobileDrawer` selector instead of a scrolling tab strip.
