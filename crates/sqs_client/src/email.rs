@@ -1,5 +1,4 @@
 use crate::SQS;
-use email::domain::ports::EmailMessageEnqueuer;
 use models_email::email::service::backfill::BackfillPubsubMessage;
 use models_email::email::service::crm_cleanup::CrmCleanupPubsubMessage;
 pub use models_email::email::service::pubsub::LinkManagerMessage;
@@ -13,6 +12,35 @@ use uuid::Uuid;
 pub const BACKFILL_DEFERRALS_ATTRIBUTE: &str = "deferrals";
 
 impl SQS {
+    /// Enqueues one Gmail label write, split into operations no larger than a
+    /// provider batch. Each operation clears its message's `pending_write_id`
+    /// marker when it finishes.
+    pub async fn enqueue_gmail_label_write(
+        &self,
+        link_id: Uuid,
+        messages: Vec<(Uuid, String)>,
+        labels_to_add: Vec<String>,
+        labels_to_remove: Vec<String>,
+        pending_write_id: Uuid,
+    ) -> anyhow::Result<()> {
+        let messages = self.gmail_label_write_messages(
+            link_id,
+            messages,
+            labels_to_add,
+            labels_to_remove,
+            pending_write_id,
+        );
+        if !self.gmail_label_write_batches {
+            return self.enqueue_gmail_ops_notifications_batch(messages).await;
+        }
+        // A full batch is ~100 KB, so each goes out alone rather than in an
+        // SQS batch whose 256 KB cap is shared by all its entries.
+        for message in messages {
+            self.enqueue_gmail_ops_notification(message).await?;
+        }
+        Ok(())
+    }
+
     pub fn email_link_manager_queue(mut self, link_manager_queue: &str) -> Self {
         self.link_manager_queue = Some(link_manager_queue.to_string());
         self
@@ -198,94 +226,6 @@ impl SQS {
             return enqueue_sfs_delete_message(&self.inner, queue, message).await;
         }
         anyhow::bail!("email_sfs_delete_queue is not configured")
-    }
-}
-
-impl EmailMessageEnqueuer for SQS {
-    type Err = anyhow::Error;
-
-    const MAX_LABEL_WRITE_MESSAGES: usize =
-        models_email::gmail::gmail_ops::MAX_BATCH_MODIFY_MESSAGES;
-
-    async fn enqueue_scheduled_message(
-        &self,
-        link_id: Uuid,
-        message_id: Uuid,
-        delay_seconds: Option<i32>,
-    ) -> Result<(), Self::Err> {
-        self.enqueue_email_scheduled_message(
-            ScheduledPubsubMessage {
-                link_id,
-                message_id,
-            },
-            delay_seconds,
-        )
-        .await
-    }
-
-    #[tracing::instrument(
-        skip(self, messages, labels_to_add, labels_to_remove),
-        fields(message_count = messages.len()),
-        err
-    )]
-    async fn enqueue_gmail_ops_modify_labels_batch(
-        &self,
-        link_id: Uuid,
-        messages: Vec<(Uuid, String)>,
-        labels_to_add: Vec<String>,
-        labels_to_remove: Vec<String>,
-        pending_write_id: Uuid,
-    ) -> Result<(), Self::Err> {
-        let messages = self.gmail_label_write_messages(
-            link_id,
-            messages,
-            labels_to_add,
-            labels_to_remove,
-            pending_write_id,
-        );
-        if !self.gmail_label_write_batches {
-            return self.enqueue_gmail_ops_notifications_batch(messages).await;
-        }
-        // A full batch is ~100 KB, so each goes out alone rather than in an
-        // SQS batch whose 256 KB cap is shared by all its entries.
-        for message in messages {
-            self.enqueue_gmail_ops_notification(message).await?;
-        }
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self, email_address), err)]
-    async fn enqueue_gmail_ops_block_sender(
-        &self,
-        link_id: Uuid,
-        email_address: String,
-    ) -> Result<(), Self::Err> {
-        use models_email::gmail::gmail_ops::{
-            BlockSenderPayload, GmailOpsOperation, GmailOpsPubsubMessage,
-        };
-
-        self.enqueue_gmail_ops_notification(GmailOpsPubsubMessage {
-            link_id,
-            operation: GmailOpsOperation::BlockSender(BlockSenderPayload { email_address }),
-        })
-        .await
-    }
-
-    #[tracing::instrument(skip(self, email_address), err)]
-    async fn enqueue_gmail_ops_unblock_sender(
-        &self,
-        link_id: Uuid,
-        email_address: String,
-    ) -> Result<(), Self::Err> {
-        use models_email::gmail::gmail_ops::{
-            GmailOpsOperation, GmailOpsPubsubMessage, UnblockSenderPayload,
-        };
-
-        self.enqueue_gmail_ops_notification(GmailOpsPubsubMessage {
-            link_id,
-            operation: GmailOpsOperation::UnblockSender(UnblockSenderPayload { email_address }),
-        })
-        .await
     }
 }
 
