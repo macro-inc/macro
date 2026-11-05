@@ -40032,6 +40032,11 @@
             "format": "double",
             "description": "Node height."
           },
+          "item_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The node's canvas item id. Retry a placement with the same id to get\none node and one reference; a new id when omitted."
+          },
           "scene": {
             "type": ["string", "null"],
             "description": "Scene to show instead of `index.html`; it must exist in the current\nversion."
@@ -40060,7 +40065,8 @@
         "properties": {
           "item_id": {
             "type": "string",
-            "description": "The canvas item id of the new node."
+            "format": "uuid",
+            "description": "The canvas item id of the node."
           }
         }
       },

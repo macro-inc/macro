@@ -18,6 +18,9 @@ import {
   stageBundle,
 } from './bundle';
 
+/** Gateway failures after which a placement may or may not have applied. */
+const RETRIED_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
+
 /** Width and height the canvas UI gives an artifact it inserts. */
 const DEFAULT_PLACEMENT = { width: 960, height: 600 };
 
@@ -209,7 +212,9 @@ export class Artifact extends FavoritableEntity<ArtifactResponse> {
   /**
    * Place the artifact, or one scene, on a canvas you can edit, as the
    * embedded document node the canvas UI inserts, recording the canvas's
-   * reference to it. The node follows the artifact's current version.
+   * reference to it. The node follows the artifact's current version. A
+   * lost response is retried once with the same item id, which never places
+   * a second node.
    *
    * @example
    * const [empty] = await artifact.scenes();
@@ -223,19 +228,29 @@ export class Artifact extends FavoritableEntity<ArtifactResponse> {
     canvas: Document,
     options: PlaceArtifactOptions,
   ): Promise<ArtifactPlacement> {
-    const { item_id } = unwrap(
-      await this.client.storage.placeArtifact({
+    // One item id per call: a retry after a lost response converges on the
+    // same node and reference instead of placing the artifact twice.
+    const body = {
+      item_id: crypto.randomUUID(),
+      canvas_id: canvas.id,
+      scene: options.scene?.id ?? null,
+      x: options.x,
+      y: options.y,
+      width: options.width ?? DEFAULT_PLACEMENT.width,
+      height: options.height ?? DEFAULT_PLACEMENT.height,
+    };
+    const place = () =>
+      this.client.storage.placeArtifact({
         path: { document_id: this.id },
-        body: {
-          canvas_id: canvas.id,
-          scene: options.scene?.id ?? null,
-          x: options.x,
-          y: options.y,
-          width: options.width ?? DEFAULT_PLACEMENT.width,
-          height: options.height ?? DEFAULT_PLACEMENT.height,
-        },
-      }),
+        body,
+      });
+    const placed = await place().then(
+      (result) =>
+        RETRIED_STATUSES.has(result.response?.status ?? 0) ? place() : result,
+      // The request failed in transit, so it may have applied.
+      () => place(),
     );
+    const { item_id } = unwrap(placed);
     return { canvas, artifact: this, scene: options.scene, itemId: item_id };
   }
 

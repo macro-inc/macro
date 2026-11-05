@@ -588,7 +588,7 @@ impl EditingWorkerService for FakeEditingWorker {
         _: &str,
         _: &DocumentPermissionToken,
         _: &crate::domain::canvas::CanvasDocumentEmbed,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<()> {
         panic!("unexpected canvas embed call")
     }
 

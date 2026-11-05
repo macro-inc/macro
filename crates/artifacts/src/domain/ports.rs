@@ -167,6 +167,8 @@ pub trait ArtifactNotifier: Send + Sync + 'static {
 /// A document node to add to a canvas, as the canvas UI inserts one.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CanvasDocumentNode {
+    /// The node's canvas item id; committing it again is a no-op.
+    pub item_id: uuid::Uuid,
     /// The embedded document.
     pub document_id: String,
     /// Its name, shown on the node.
@@ -185,32 +187,31 @@ pub struct CanvasDocumentNode {
     pub height: f64,
     /// The canvas's entity mention of the document, which the canvas tracks
     /// next to the node so its own reference bookkeeping sees it as recorded.
-    pub mention_id: String,
+    pub mention_id: uuid::Uuid,
 }
 
 /// Canvases, as placing an artifact on one uses them.
 pub trait ArtifactCanvases: Send + Sync + 'static {
-    /// Record that `canvas_id` references `document_id`, through the same
-    /// entity mention the canvas UI records when it inserts a document node.
-    /// Returns the mention id.
+    /// Record that `canvas_id` references `document_id` as mention
+    /// `mention_id`, through the same entity mention the canvas UI records
+    /// when it inserts a document node. A mention already recorded under
+    /// that id is kept, so retries record it once.
     fn record_reference(
         &self,
+        mention_id: uuid::Uuid,
         canvas_id: &str,
         document_id: &str,
         user_id: &str,
-    ) -> impl Future<Output = Result<String, ArtifactError>> + Send;
+    ) -> impl Future<Output = Result<(), ArtifactError>> + Send;
 
-    /// Remove a reference whose node was never committed. Best effort.
-    fn forget_reference(&self, mention_id: &str) -> impl Future<Output = ()> + Send;
-
-    /// Commit `node` to the live canvas through the canvas editing path.
-    /// Returns the new item id.
+    /// Commit `node` to the live canvas through the canvas editing path. A
+    /// node already committed under its item id is left as it is.
     fn embed(
         &self,
         canvas: EntityAccessReceipt<EditAccessLevel>,
         publisher: &Publisher,
         node: CanvasDocumentNode,
-    ) -> impl Future<Output = Result<String, ArtifactError>> + Send;
+    ) -> impl Future<Output = Result<(), ArtifactError>> + Send;
 }
 
 /// Artifact use cases.

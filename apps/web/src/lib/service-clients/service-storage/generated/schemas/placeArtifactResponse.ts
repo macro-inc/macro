@@ -9,6 +9,6 @@
  * The node an artifact was placed as.
  */
 export interface PlaceArtifactResponse {
-  /** The canvas item id of the new node. */
+  /** The canvas item id of the node. */
   item_id: string;
 }

@@ -83,6 +83,7 @@ describe('POST /canvas request admission', () => {
       documentToken: token('edit'),
       request: {
         action: 'embed',
+        itemId: '0193f3a4-7d1e-7c2a-9f00-0000000001e7',
         documentId: 'artifact-1',
         name: 'Onboarding',
         fileType: 'artifact',
@@ -90,7 +91,7 @@ describe('POST /canvas request admission', () => {
         y: 0,
         width: 640,
         height: 480,
-        mentionId: 'mention-1',
+        mentionId: '0193f3a4-7d1e-7c2a-9f00-00000000ae17',
       },
     };
     expect((await post(embed)).status).toBe(401);

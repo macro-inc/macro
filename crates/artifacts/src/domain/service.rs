@@ -26,6 +26,8 @@ use super::ports::{
 
 /// The file type documents of artifacts carry.
 const ARTIFACT_FILE_TYPE: &str = "artifact";
+/// Namespace of the mention ids derived from canvas item ids (`uuid` v5).
+const CANVAS_REFERENCE_NAMESPACE: &[u8] = b"macro.artifact.canvas-reference";
 /// The file type of canvases artifacts are placed on.
 const CANVAS_FILE_TYPE: &str = "canvas";
 
@@ -596,16 +598,21 @@ where
         }
 
         let document = self.load_document(&document_id).await?;
-        let mention_id = self
-            .canvases
-            .record_reference(&canvas_id, &document_id, &publisher.user_id)
+        let item_id = request.item_id.unwrap_or_else(uuid::Uuid::new_v4);
+        span.record("item_id", item_id.to_string());
+        // Derived from the item id, so a retried placement finds its mention.
+        let mention_id = uuid::Uuid::new_v5(&item_id, CANVAS_REFERENCE_NAMESPACE);
+        self.canvases
+            .record_reference(mention_id, &canvas_id, &document_id, &publisher.user_id)
             .await?;
-        let embedded = self
-            .canvases
+        // A failed embed keeps the mention: the caller retries with the same
+        // item id, which converges on this mention and one node.
+        self.canvases
             .embed(
                 canvas,
                 publisher,
                 CanvasDocumentNode {
+                    item_id,
                     document_id: document_id.clone(),
                     name: document.document_name.clone(),
                     file_type: ARTIFACT_FILE_TYPE.to_string(),
@@ -614,21 +621,11 @@ where
                     y: request.y,
                     width: request.width,
                     height: request.height,
-                    mention_id: mention_id.clone(),
+                    mention_id,
                 },
             )
-            .await;
-
-        match embedded {
-            Ok(item_id) => {
-                span.record("item_id", item_id.as_str());
-                Ok(Placement { item_id })
-            }
-            Err(error) => {
-                self.canvases.forget_reference(&mention_id).await;
-                Err(error)
-            }
-        }
+            .await?;
+        Ok(Placement { item_id })
     }
 
     #[tracing::instrument(

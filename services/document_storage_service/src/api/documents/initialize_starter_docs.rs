@@ -354,6 +354,7 @@ pub async fn handler(
         let _ = state
             .channel_service
             .create_entity_mention(CreateEntityMentionOptions {
+                id: None,
                 source_entity_type: "document".to_string(),
                 source_entity_id: source_id.clone(),
                 entity_type: "document".to_string(),

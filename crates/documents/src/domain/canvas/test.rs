@@ -457,7 +457,7 @@ async fn embeds_mint_an_edit_token_for_the_user_and_actor_of_a_canvas() {
             assert_eq!(claims["access_level"], "edit");
             assert_eq!(claims["actor"], "bot-1");
             assert_eq!(embed.file_type, "artifact");
-            Box::pin(async { Ok("item-1".to_owned()) })
+            Box::pin(async { Ok(()) })
         });
     let embedder = CanvasEmbedder::new(
         Arc::new(documents("canvas")),
@@ -465,6 +465,7 @@ async fn embeds_mint_an_edit_token_for_the_user_and_actor_of_a_canvas() {
         SECRET.into(),
     );
     let embed = CanvasDocumentEmbed {
+        item_id: uuid::Uuid::nil(),
         document_id: "artifact".into(),
         name: "Onboarding".into(),
         file_type: "artifact".into(),
@@ -473,10 +474,10 @@ async fn embeds_mint_an_edit_token_for_the_user_and_actor_of_a_canvas() {
         y: 0.0,
         width: 640.0,
         height: 480.0,
-        mention_id: "mention".into(),
+        mention_id: uuid::Uuid::max(),
     };
 
-    let item_id = embedder
+    embedder
         .embed_document(
             receipt(AccessLevel::Edit),
             &user(),
@@ -485,7 +486,6 @@ async fn embeds_mint_an_edit_token_for_the_user_and_actor_of_a_canvas() {
         )
         .await
         .unwrap();
-    assert_eq!(item_id, "item-1");
 
     let refused = CanvasEmbedder::new(
         Arc::new(documents("md")),
