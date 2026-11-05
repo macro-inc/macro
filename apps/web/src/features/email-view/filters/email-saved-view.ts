@@ -127,6 +127,22 @@ export const EMPTY_EMAIL_SAVED_VIEW_FILTERS: EmailSavedViewFilters = {
   tags: [],
 };
 
+/** Whether a filter the builder keeps under Advanced settings is set. */
+export function hasAdvancedEmailFilters(
+  filters: EmailSavedViewFilters
+): boolean {
+  return (
+    filters.importance !== undefined ||
+    filters.read !== undefined ||
+    filters.done !== undefined ||
+    filters.receivedWithinDays !== undefined ||
+    filters.inboxIds.length > 0 ||
+    filters.starred ||
+    filters.calendarInvite ||
+    filters.attachments.length > 0
+  );
+}
+
 function uniqueSorted<T>(values: readonly T[], key: (value: T) => string): T[] {
   return [...new Map(values.map((value) => [key(value), value])).entries()]
     .sort(([left], [right]) => left.localeCompare(right))

@@ -1389,9 +1389,10 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   `example.com` offers the domain above the people at it. A typed address adds
   a person and a typed domain, `@domain` or website adds a domain, with Enter,
   a comma, or leaving the field), Match from (From/To/Cc/Bcc toggle buttons, at
-  least one on), Subject contains,
-  Importance, Status, Done, Latest activity, Inboxes (with two or more linked),
-  and Starred, calendar invite and attachment requirements. Values within one
+  least one on), Subject contains, and an **Advanced settings** toggle that
+  reveals Importance, Status, Done, Latest activity, Inboxes (with two or more
+  linked), and Starred, calendar invite and attachment requirements; it starts
+  open when the view already sets one of them. Values within one
   condition are alternatives; conditions all apply. On a filtered Signal, Noise,
   All, Archived, Favorites or Calendar tab, **Save view** left of Filters opens
   the builder prefilled; Sent, Drafts, Scheduled, Reminders, Shared and Focus

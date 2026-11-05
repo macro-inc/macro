@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { parseDomain } from '@core/util/domain';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import GlobeIcon from '@icon/system/regular/globe.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import {
@@ -12,6 +13,8 @@ import {
   Input,
   Tabs,
 } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
+import { cn } from '@ui/utils/classname';
 import * as EmailValidator from 'email-validator';
 import {
   type Accessor,
@@ -23,7 +26,10 @@ import {
   Show,
 } from 'solid-js';
 import { match } from 'ts-pattern';
-import type { EmailSavedViewFilters } from '../filters/email-saved-view';
+import {
+  type EmailSavedViewFilters,
+  hasAdvancedEmailFilters,
+} from '../filters/email-saved-view';
 import type { EmailParticipantSuggestion } from '../queries/use-email-participant-suggestions';
 import {
   EMAIL_RECEIVED_WITHIN_DAYS,
@@ -192,6 +198,11 @@ export function EmailSavedViewFields(props: {
   suggestions: Accessor<EmailParticipantSuggestion[]>;
 }) {
   const matchFromId = createUniqueId();
+  const advancedId = createUniqueId();
+  // Starts open when the view already uses one, so nothing set is hidden.
+  const [advancedOpen, setAdvancedOpen] = createSignal(
+    hasAdvancedEmailFilters(props.filters)
+  );
   const set = <K extends keyof EmailSavedViewFilters>(
     key: K,
     value: EmailSavedViewFilters[K]
@@ -296,101 +307,134 @@ export function EmailSavedViewFields(props: {
         />
       </Section>
 
-      <Choice
-        label={t('emailViews.importance')}
-        value={props.filters.importance ?? 'any'}
-        options={[
-          { value: 'signal', label: t('emailViews.signal') },
-          { value: 'noise', label: t('emailViews.noise') },
-        ]}
-        onChange={(value) =>
-          set('importance', value === 'any' ? undefined : value)
-        }
-      />
-      <Choice
-        label={t('emailViews.status')}
-        value={props.filters.read ?? 'any'}
-        options={[
-          { value: 'unread', label: t('emailViews.unread') },
-          { value: 'read', label: t('emailViews.read') },
-        ]}
-        onChange={(value) => set('read', value === 'any' ? undefined : value)}
-      />
-      <Choice
-        label={t('emailViews.done')}
-        value={props.filters.done ?? 'any'}
-        options={[
-          { value: 'not-done', label: t('emailViews.notDone') },
-          { value: 'done', label: t('emailViews.doneOnly') },
-        ]}
-        onChange={(value) => set('done', value === 'any' ? undefined : value)}
-      />
-      <Choice
-        label={t('emailViews.received')}
-        value={String(props.filters.receivedWithinDays ?? 'any')}
-        options={EMAIL_RECEIVED_WITHIN_DAYS.map((days) => ({
-          value: String(days),
-          label: t('emailViews.lastDays', { count: days }),
-        }))}
-        onChange={(value) =>
-          set(
-            'receivedWithinDays',
-            EMAIL_RECEIVED_WITHIN_DAYS.find((days) => String(days) === value)
-          )
-        }
-      />
-
-      <Show when={props.inboxes.length > 1}>
-        <Section label={t('emailViews.inboxes')}>
-          <p class="text-xs text-ink-muted">{t('emailViews.inboxesHint')}</p>
-          <For each={props.inboxes}>
-            {(inbox) => (
-              <Toggle
-                label={inbox.label}
-                checked={props.filters.inboxIds.includes(inbox.id)}
-                onChange={(checked) =>
-                  set(
-                    'inboxIds',
-                    checked
-                      ? [...props.filters.inboxIds, inbox.id]
-                      : props.filters.inboxIds.filter((id) => id !== inbox.id)
-                  )
-                }
-              />
-            )}
-          </For>
-        </Section>
-      </Show>
-
-      <Section label={t('emailViews.also')}>
-        <Toggle
-          label={t('emailViews.starred')}
-          checked={props.filters.starred}
-          onChange={(checked) => set('starred', checked)}
-        />
-        <Toggle
-          label={t('emailViews.calendarInvite')}
-          checked={props.filters.calendarInvite}
-          onChange={(checked) => set('calendarInvite', checked)}
-        />
-        <For
-          each={
-            [
-              ['attachment-pdf', t('emailViews.hasPdf')],
-              ['attachment-image', t('emailViews.hasImage')],
-              ['attachment-document', t('emailViews.hasDocument')],
-            ] as const
-          }
+      <div class="flex flex-col">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          class="self-start"
+          aria-expanded={advancedOpen()}
+          aria-controls={advancedId}
+          onClick={() => setAdvancedOpen((open) => !open)}
         >
-          {([id, label]) => (
-            <Toggle
-              label={label}
-              checked={props.filters.attachments.includes(id)}
-              onChange={(checked) => toggleAttachment(id, checked)}
+          {t('emailViews.advancedSettings')}
+          <CaretDownIcon
+            class={cn(
+              'size-3 transition-transform',
+              !advancedOpen() && '-rotate-90'
+            )}
+          />
+        </Button>
+        <CollapseTransition open={advancedOpen()}>
+          <div id={advancedId} class="flex flex-col gap-5 pt-4">
+            <Choice
+              label={t('emailViews.importance')}
+              value={props.filters.importance ?? 'any'}
+              options={[
+                { value: 'signal', label: t('emailViews.signal') },
+                { value: 'noise', label: t('emailViews.noise') },
+              ]}
+              onChange={(value) =>
+                set('importance', value === 'any' ? undefined : value)
+              }
             />
-          )}
-        </For>
-      </Section>
+            <Choice
+              label={t('emailViews.status')}
+              value={props.filters.read ?? 'any'}
+              options={[
+                { value: 'unread', label: t('emailViews.unread') },
+                { value: 'read', label: t('emailViews.read') },
+              ]}
+              onChange={(value) =>
+                set('read', value === 'any' ? undefined : value)
+              }
+            />
+            <Choice
+              label={t('emailViews.done')}
+              value={props.filters.done ?? 'any'}
+              options={[
+                { value: 'not-done', label: t('emailViews.notDone') },
+                { value: 'done', label: t('emailViews.doneOnly') },
+              ]}
+              onChange={(value) =>
+                set('done', value === 'any' ? undefined : value)
+              }
+            />
+            <Choice
+              label={t('emailViews.received')}
+              value={String(props.filters.receivedWithinDays ?? 'any')}
+              options={EMAIL_RECEIVED_WITHIN_DAYS.map((days) => ({
+                value: String(days),
+                label: t('emailViews.lastDays', { count: days }),
+              }))}
+              onChange={(value) =>
+                set(
+                  'receivedWithinDays',
+                  EMAIL_RECEIVED_WITHIN_DAYS.find(
+                    (days) => String(days) === value
+                  )
+                )
+              }
+            />
+
+            <Show when={props.inboxes.length > 1}>
+              <Section label={t('emailViews.inboxes')}>
+                <p class="text-xs text-ink-muted">
+                  {t('emailViews.inboxesHint')}
+                </p>
+                <For each={props.inboxes}>
+                  {(inbox) => (
+                    <Toggle
+                      label={inbox.label}
+                      checked={props.filters.inboxIds.includes(inbox.id)}
+                      onChange={(checked) =>
+                        set(
+                          'inboxIds',
+                          checked
+                            ? [...props.filters.inboxIds, inbox.id]
+                            : props.filters.inboxIds.filter(
+                                (id) => id !== inbox.id
+                              )
+                        )
+                      }
+                    />
+                  )}
+                </For>
+              </Section>
+            </Show>
+
+            <Section label={t('emailViews.also')}>
+              <Toggle
+                label={t('emailViews.starred')}
+                checked={props.filters.starred}
+                onChange={(checked) => set('starred', checked)}
+              />
+              <Toggle
+                label={t('emailViews.calendarInvite')}
+                checked={props.filters.calendarInvite}
+                onChange={(checked) => set('calendarInvite', checked)}
+              />
+              <For
+                each={
+                  [
+                    ['attachment-pdf', t('emailViews.hasPdf')],
+                    ['attachment-image', t('emailViews.hasImage')],
+                    ['attachment-document', t('emailViews.hasDocument')],
+                  ] as const
+                }
+              >
+                {([id, label]) => (
+                  <Toggle
+                    label={label}
+                    checked={props.filters.attachments.includes(id)}
+                    onChange={(checked) => toggleAttachment(id, checked)}
+                  />
+                )}
+              </For>
+            </Section>
+          </div>
+        </CollapseTransition>
+      </div>
     </div>
   );
 }

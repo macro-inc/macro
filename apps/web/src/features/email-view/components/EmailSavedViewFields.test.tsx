@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   EMPTY_EMAIL_SAVED_VIEW_FILTERS,
   type EmailSavedViewFilters,
@@ -18,12 +18,24 @@ const SUGGESTIONS: EmailParticipantSuggestion[] = [
   { type: 'address', email: 'bo@example.com', name: 'Bo' },
 ];
 
-afterEach(cleanup);
-
-function renderFields() {
-  const [filters, setFilters] = createSignal<EmailSavedViewFilters>(
-    EMPTY_EMAIL_SAVED_VIEW_FILTERS
+// The Advanced settings disclosure measures its body.
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
   );
+});
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+function renderFields(initial = EMPTY_EMAIL_SAVED_VIEW_FILTERS) {
+  const [filters, setFilters] = createSignal<EmailSavedViewFilters>(initial);
   render(() => (
     <EmailSavedViewFields
       filters={filters()}
@@ -82,5 +94,39 @@ describe('EmailSavedViewFields people and companies', () => {
       { type: 'domain', domain: 'vendor.example' },
       { type: 'domain', domain: 'site.example' },
     ]);
+  });
+});
+
+describe('EmailSavedViewFields advanced settings', () => {
+  const importance = () =>
+    screen.queryByRole('tablist', { name: 'Importance' }) ??
+    screen.queryByRole('radiogroup', { name: 'Importance' });
+
+  it('keeps the other filters behind Advanced settings', async () => {
+    const user = userEvent.setup();
+    renderFields();
+    const toggle = screen.getByRole('button', { name: 'Advanced settings' });
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(importance()).toBeNull();
+    expect(
+      screen.getByRole('textbox', { name: 'Subject contains' })
+    ).toBeTruthy();
+
+    await user.click(toggle);
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(importance()).not.toBeNull();
+  });
+
+  it('starts open when the view already uses one of them', () => {
+    renderFields({ ...EMPTY_EMAIL_SAVED_VIEW_FILTERS, read: 'unread' });
+
+    expect(
+      screen
+        .getByRole('button', { name: 'Advanced settings' })
+        .getAttribute('aria-expanded')
+    ).toBe('true');
+    expect(importance()).not.toBeNull();
   });
 });

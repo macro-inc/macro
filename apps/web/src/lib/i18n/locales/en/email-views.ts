@@ -37,6 +37,7 @@ export default {
     other: '{{count}} contacts',
   },
   matchFrom: 'Match from',
+  advancedSettings: 'Advanced settings',
   fieldFrom: 'From',
   fieldTo: 'To',
   fieldCc: 'Cc',
