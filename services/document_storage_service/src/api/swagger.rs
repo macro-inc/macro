@@ -253,6 +253,7 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::get_location::get_location_v3_handler,
         documents_hex::inbound::axum_router::get_text::get_text_handler,
         documents_hex::inbound::axum_router::ai_edit::ai_edit_handler,
+        documents_hex::inbound::axum_router::comment_on_text::comment_on_text_handler,
         documents_hex::inbound::axum_router::get_branch_name::get_branch_name_handler,
         documents_hex::inbound::axum_router::get_github_pull_requests::get_github_pull_requests_handler,
         documents_hex::inbound::axum_router::get_github_pull_request_tasks::get_github_pull_request_tasks_handler,

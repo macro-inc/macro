@@ -1436,12 +1436,13 @@ pub async fn run() -> anyhow::Result<()> {
     );
     let admission = macro_agent_tool_context.admission.clone();
     // Document AI edits over HTTP share the channel agent's admission.
-    let document_ai_editing = Arc::new(documents_hex::domain::ai_editing::AiEditingService::new(
-        Arc::new(
-            documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
-                AiEditingWorkerUrl::new()?.to_string(),
-            ),
+    let document_editing_worker = Arc::new(
+        documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+            AiEditingWorkerUrl::new()?.to_string(),
         ),
+    );
+    let document_ai_editing = Arc::new(documents_hex::domain::ai_editing::AiEditingService::new(
+        document_editing_worker.clone(),
         admission.clone(),
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
     ));
@@ -2390,6 +2391,8 @@ pub async fn run() -> anyhow::Result<()> {
             lexical_client: lexical_client.clone(),
             creator: document_creator,
             ai_editing: document_ai_editing,
+            editing_worker: document_editing_worker,
+            messages: message_service.clone(),
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
             non_user_owners,
         },

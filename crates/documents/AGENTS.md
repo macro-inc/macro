@@ -44,6 +44,11 @@ word docs, Illustrator/Photoshop files).
   `edit_refused` is the worker's clarification, 502 `edit_failed` may have
   partly applied, and a client disconnect drops the worker call (never spawn
   it).
+- `src/domain/text_comment.rs`: a comment thread anchored to quoted text, shared
+  by the `CommentOnText` tool and `POST /{id}/comments/text` (the SDK's
+  `Document.commentOnText`). Markdown places the mark first and removes it if
+  the post fails; 422 `quote_not_placed` is an ambiguous or missing quote. Word
+  posts with the quote for the editor to place.
 
 ## Scope
 
