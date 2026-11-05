@@ -540,7 +540,7 @@ The seeded persona login links embed the frontend port. If you switch ports, run
 
 ## What the Stack Rebuilds
 
-The Rust services are built on the host with `cargo zigbuild`. The binaries are mounted into a shared runtime image. Docker does not compile these services during a normal `run_local`.
+The Rust services are built on the host with `cargo zigbuild`. The binaries are mounted into a runtime image tagged by the Dockerfile and target-platform content hash. Generated compose files use that exact tag, so another worktree rebuilding a different runtime recipe cannot replace a running stack's image. The recipe includes git for agent workspace repositories. Docker does not compile these services during a normal `run_local`.
 
 Press `r` to rebuild the binaries. Only the services whose binaries changed restart.
 

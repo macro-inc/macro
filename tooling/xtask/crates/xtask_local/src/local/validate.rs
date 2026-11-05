@@ -7,7 +7,7 @@
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
-use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
+use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{self, Computers, Fleet};
 use super::instance::Port;
 use super::inventory::services_for_mode;
@@ -91,6 +91,7 @@ fn local_compose_flavor(
         bail!("rendered compose has no services");
     };
 
+    let runtime_image = runtime_image_tag(super::arch::detect()?)?;
     let mut failures: Vec<String> = Vec::new();
     for svc in services_for_mode(mode) {
         let Some(node) = services.get(svc.compose_name) else {
@@ -107,9 +108,9 @@ fn local_compose_flavor(
             ));
         }
         match node.get("image").and_then(Value::as_str) {
-            Some(img) if img == RUNTIME_IMAGE_TAG => {}
+            Some(img) if img == runtime_image => {}
             other => failures.push(format!(
-                "'{}' image is {:?}, expected {RUNTIME_IMAGE_TAG}",
+                "'{}' image is {:?}, expected {runtime_image}",
                 svc.compose_name, other
             )),
         }

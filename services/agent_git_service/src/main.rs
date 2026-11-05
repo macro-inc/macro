@@ -25,6 +25,7 @@ use sqlx::postgres::PgPoolOptions;
 use tower_http::trace::TraceLayer;
 
 mod config;
+mod git_runtime;
 
 const PORT: u16 = 8080;
 /// Prefix the shared gateway forwards unchanged.
@@ -40,6 +41,7 @@ async fn main() -> Result<(), rootcause::Report> {
 }
 
 async fn run() -> Result<(), rootcause::Report> {
+    git_runtime::check(std::path::Path::new("git"))?;
     let config = macro_config::ConfigLoader::load::<config::Config>()?;
 
     let pool = PgPoolOptions::new()

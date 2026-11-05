@@ -2,7 +2,7 @@
 #
 # Minimal runtime image for locally-built service binaries.
 #
-# Built by `cargo x runtime-image` (xtask) and tagged `macro-local-runtime:dev`.
+# Built by `cargo x runtime-image` (xtask) and tagged `macro-local-runtime:<recipe-and-platform-hash>`.
 # Service binaries are NOT baked in — they are bind-mounted read-only at
 # /app/out by the generated compose override, so this image never needs
 # rebuilding when Rust code changes. This is the `base` stage of docker/Dockerfile.dev

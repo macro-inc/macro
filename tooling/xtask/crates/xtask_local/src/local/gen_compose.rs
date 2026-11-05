@@ -21,7 +21,7 @@ use indexmap::IndexMap;
 use serde_yaml::Value;
 use serde_yaml::value::{Tag, TaggedValue};
 
-use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
+use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{self, Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::inventory::{RustService, services_for_mode};
@@ -83,11 +83,12 @@ pub fn generate(
     super::tls::issue(instance)?;
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
     let mounts = binaries.compose_mounts();
+    let runtime_image = runtime_image_tag(super::arch::detect()?)?;
 
     // 1. Rust services → runtime image + mounted binaries.
     for svc in services_for_mode(mode) {
         let mut s = dct::Service {
-            image: Some(RUNTIME_IMAGE_TAG.to_string()),
+            image: Some(runtime_image.clone()),
             volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
             environment: kv(&[("PORT", "8080")]),
             ..Default::default()
@@ -126,7 +127,7 @@ pub fn generate(
         services.insert(
             "gmail_forwarder".to_string(),
             Some(dct::Service {
-                image: Some(RUNTIME_IMAGE_TAG.to_string()),
+                image: Some(runtime_image.clone()),
                 volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
                 command: Some(dct::Command::Args(
                     [

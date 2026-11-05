@@ -22,6 +22,8 @@ Composition root for `crates/agent_git`: hosts each agent's workspace repo
 
 ## Gotchas
 
+- Startup checks `git --version` and the `git-http-backend` executable before
+  opening the health listener, failing loudly if the image lacks either.
 - The image needs `git` (`git http-backend`); `REPO_STORAGE_ROOT` must exist
   (EFS in AWS, the `agent-git-repos` docker volume locally) or startup fails.
 - Run a single task: the push rate limiter is in memory.

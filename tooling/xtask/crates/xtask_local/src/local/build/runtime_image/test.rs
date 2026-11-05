@@ -29,3 +29,25 @@ fn content_key_is_platform_specific() {
         content_key(target("aarch64")).unwrap()
     );
 }
+
+#[test]
+fn another_worktrees_recipe_cannot_replace_the_same_runtime_reference() {
+    let platform = target("x86_64");
+    let without_git = recipe_key(
+        platform,
+        b"FROM debian:trixie-slim\nRUN apt-get install curl",
+    );
+    let with_git = recipe_key(
+        platform,
+        b"FROM debian:trixie-slim\nRUN apt-get install curl git",
+    );
+    assert_ne!(without_git, with_git);
+    assert_ne!(
+        format!("macro-local-runtime:{without_git}"),
+        format!("macro-local-runtime:{with_git}")
+    );
+    assert_eq!(
+        runtime_image_tag(platform).unwrap(),
+        format!("macro-local-runtime:{}", content_key(platform).unwrap())
+    );
+}
