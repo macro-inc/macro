@@ -3,13 +3,16 @@ set -euo pipefail
 
 # Keep a copy of /nix with the dev shell in Namespace's HTTP cache. A job on an empty
 # volume restores it instead of installing Nix and downloading the shell, which takes
-# about 50 s longer and depends on cache.nixos.org.
+# about a minute longer and depends on cache.nixos.org. It is split into shards because
+# one stream from the cache varies between 70 and 190 MB/s, and because unpacking
+# in parallel is faster.
 
 action="$1"
+shards=8
 
 credentials="$(mktemp "$RUNNER_TEMP/nix-seed.XXXXXX")"
-archive="$RUNNER_TEMP/nix-seed.tar.zst"
-trap 'rm -f "$credentials" "$archive"' EXIT
+work="$(mktemp -d "$RUNNER_TEMP/nix-seed-shards.XXXXXX")"
+trap 'rm -rf "$credentials" "$work"' EXIT
 
 # Forks have no remote cache credentials.
 nsc cache sccache setup --cache_name "$NIX_SEED_CACHE" > "$credentials"
@@ -17,7 +20,7 @@ endpoint="$(sed -n 's/^SCCACHE_WEBDAV_ENDPOINT=//p' "$credentials")"
 token="$(sed -n 's/^SCCACHE_WEBDAV_TOKEN=//p' "$credentials")"
 echo "::add-mask::$token"
 
-url="$endpoint/nix-seed/$NIX_SEED_KEY.tar.zst"
+base="$endpoint/nix-seed/$NIX_SEED_KEY"
 
 # The token goes through a config descriptor so it stays out of curl's arguments.
 cache_request() {
@@ -25,9 +28,54 @@ cache_request() {
     -K <(printf 'header = "Authorization: Bearer %s"\n' "$token") "$@"
 }
 
+wait_all() {
+  local failed=0 pid
+  for pid in "$@"; do
+    wait "$pid" || failed=1
+  done
+
+  return "$failed"
+}
+
+restore() {
+  local pids=() shard
+  for shard in $(seq 0 $((shards - 1))); do
+    (cache_request "$base/$shard" | zstd -d -T2 | sudo tar -xf - -C /) &
+    pids+=("$!")
+  done
+
+  wait_all "${pids[@]}"
+}
+
+# Largest entries first, dealt in turn, so the shards come out about the same size.
+# .links only holds hard links to files that are in the store anyway.
+split_store() {
+  sudo find /nix /nix/store -mindepth 1 -maxdepth 1 ! -path /nix/store ! -path /nix/store/.links -print0 \
+    | sudo xargs -0 du -s \
+    | sort -rn \
+    | cut -f2- \
+    | sed 's#^/##' \
+    | awk -v shards="$shards" -v work="$work" '{ print > (work "/" (NR % shards)) }'
+}
+
+save() {
+  local pids=() shard
+  split_store
+
+  for shard in $(seq 0 $((shards - 1))); do
+    (
+      sudo tar -C / -cf - -T "$work/$shard" | zstd -T2 -3 -q -o "$work/$shard.tar.zst"
+      cache_request --upload-file "$work/$shard.tar.zst" "$base/$shard"
+    ) &
+    pids+=("$!")
+  done
+
+  wait_all "${pids[@]}"
+}
+
 case "$action" in
   restore)
-    if cache_request "$url" | zstd -d -T0 | sudo tar -xf - -C /; then
+    if restore; then
       echo "Restored /nix from the seed"
       exit 0
     fi
@@ -44,8 +92,7 @@ case "$action" in
     ;;
   save)
     # Nothing writes to the store between the dev shell and this step.
-    sudo tar -C / -cf - nix | zstd -T0 -3 -o "$archive"
-    cache_request --upload-file "$archive" "$url"
+    save
     echo "Saved /nix to the seed"
     ;;
 esac
