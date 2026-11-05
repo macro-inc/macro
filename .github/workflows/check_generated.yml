@@ -1,15 +1,8 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/check_generated.rs
 name: check generated workflows
-'on':
-  pull_request:
-    branches:
-    - main
-    paths:
-    - tooling/xtask/**
-    - crates/macro_event_topics/**
-    - '.github/workflows/**'
-    - '.github/kafka-cluster-topics.json'
+on:
+  workflow_dispatch: {}
 jobs:
   check-workflows:
     runs-on: namespace-profile-linux-small

@@ -1,14 +1,7 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/build_cef_codecs.rs
 name: Build CEF with codecs
-'on':
-  pull_request:
-    branches:
-    - main
-    paths:
-    - apps/web/tauri/desktop-cef/cef-codecs.json
-    - tooling/xtask/crates/xtask_workflows/src/workflows/scripts/build_cef_codecs.sh
-    - '.github/workflows/build_cef_codecs.yml'
+on:
   workflow_dispatch: {}
 permissions:
   contents: write
