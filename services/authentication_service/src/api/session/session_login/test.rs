@@ -97,14 +97,22 @@ async fn a_failed_refresh_leaves_the_code_for_a_retry() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn redemption_telemetry_carries_no_code_or_token() {
+    // Fails a refresh (the code is restored), redeems the code, replays it,
+    // then redeems another one.
+    async fn every_outcome(cache: &MacroCache, codes: &[String; 2]) {
+        let _ = redeem_session_code(cache, &codes[0], refresh_fails).await;
+        let _ = redeem_session_code(cache, &codes[0], refreshes).await;
+        let _ = redeem_session_code(cache, &codes[0], refreshes).await;
+        let _ = redeem_session_code(cache, &codes[1], refreshes).await;
+    }
     let cache = cache();
+    let warm_up = [stored_code(&cache).await, stored_code(&cache).await];
     let codes = [stored_code(&cache).await, stored_code(&cache).await];
 
     let (traces, _guard) = crate::api::trace_capture::capture_traces();
-    let _ = redeem_session_code(&cache, &codes[0], refresh_fails).await;
-    let _ = redeem_session_code(&cache, &codes[0], refreshes).await;
-    let _ = redeem_session_code(&cache, &codes[0], refreshes).await;
-    let _ = redeem_session_code(&cache, &codes[1], refreshes).await;
+    every_outcome(&cache, &warm_up).await;
+    traces.rearm();
+    every_outcome(&cache, &codes).await;
     let text = traces.text();
 
     for outcome in ["refresh_failed", "redeemed", "invalid"] {

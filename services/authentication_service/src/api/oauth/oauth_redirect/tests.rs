@@ -194,24 +194,26 @@ fn html_redirect_works() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn redirect_telemetry_carries_no_session_code() {
+    let state = Some(SsoState {
+        // A code left over from an earlier attempt rides in on the state.
+        original_url: Some(
+            "https://macro.com/app/login?token=stale-code"
+                .parse()
+                .unwrap(),
+        ),
+        is_mobile: true,
+        referral_code: None,
+        is_agent: false,
+    });
     let (traces, _guard) = crate::api::trace_capture::capture_traces();
     let mut dummy = DummyCb::default();
-    let url = get_redirect_url(
-        &Some(SsoState {
-            // A code left over from an earlier attempt rides in on the state.
-            original_url: Some(
-                "https://macro.com/app/login?token=stale-code"
-                    .parse()
-                    .unwrap(),
-            ),
-            is_mobile: true,
-            referral_code: None,
-            is_agent: false,
-        }),
-        async |x| dummy.cb(x).await,
-    )
-    .await
-    .unwrap();
+    get_redirect_url(&state, async |x| dummy.cb(x).await)
+        .await
+        .unwrap();
+    traces.rearm();
+    let url = get_redirect_url(&state, async |x| dummy.cb(x).await)
+        .await
+        .unwrap();
     let code = url
         .query_pairs()
         .find(|(k, _)| k == "token")

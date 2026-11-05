@@ -11,6 +11,15 @@ impl CapturedTraces {
     pub(crate) fn text(&self) -> String {
         String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
     }
+
+    /// Call after running the code under test once. Another test's thread can
+    /// register a callsite first, with no subscriber, and cache a "never"
+    /// interest for it; recomputing interest once every callsite exists makes
+    /// the next run reach this subscriber. Clears what the warm-up captured.
+    pub(crate) fn rearm(&self) {
+        tracing::callsite::rebuild_interest_cache();
+        self.0.lock().unwrap().clear();
+    }
 }
 
 impl std::io::Write for CapturedTraces {
@@ -34,7 +43,8 @@ impl<'a> MakeWriter<'a> for CapturedTraces {
 
 /// Installs a TRACE-level subscriber for the current thread. Spans print
 /// their fields when opened, recorded and closed; `#[instrument(ret)]` and
-/// `err` events print too. Use with a current-thread runtime.
+/// `err` events print too. Use with a current-thread runtime: run the code
+/// once, call [`CapturedTraces::rearm`], then run it again and assert.
 pub(crate) fn capture_traces() -> (CapturedTraces, tracing::subscriber::DefaultGuard) {
     let captured = CapturedTraces::default();
     let subscriber = tracing_subscriber::fmt()
@@ -44,8 +54,5 @@ pub(crate) fn capture_traces() -> (CapturedTraces, tracing::subscriber::DefaultG
         .with_writer(captured.clone())
         .finish();
     let guard = tracing::subscriber::set_default(subscriber);
-    // Callsites registered by another test's subscriber may have cached a
-    // "never" interest; recompute it for this one.
-    tracing::callsite::rebuild_interest_cache();
     (captured, guard)
 }
