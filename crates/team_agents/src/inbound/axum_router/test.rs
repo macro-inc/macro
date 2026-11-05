@@ -45,6 +45,8 @@ fn agent() -> TeamAgent {
         status_reason: None,
         setup: None,
         last_turn_at: None,
+        retryable: false,
+        payment: None,
         created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
     }
 }
@@ -346,7 +348,7 @@ async fn an_admin_invites_an_agent() {
     assert_eq!(response.status(), StatusCode::CREATED);
     assert_eq!(
         body_text(response).await,
-        r#"{"userId":"macro|sam@agents.example.com","teamId":"00000000-0000-0000-0000-00000000002a","name":"Sam","email":"sam@agents.example.com","createdBy":"macro|admin@example.com","computerId":null,"status":"provisioning","statusReason":null,"setup":null,"lastTurnAt":null,"createdAt":"2023-11-14T22:13:20Z"}"#
+        r#"{"userId":"macro|sam@agents.example.com","teamId":"00000000-0000-0000-0000-00000000002a","name":"Sam","email":"sam@agents.example.com","createdBy":"macro|admin@example.com","computerId":null,"status":"provisioning","statusReason":null,"retryable":false,"payment":null,"setup":null,"lastTurnAt":null,"createdAt":"2023-11-14T22:13:20Z"}"#
     );
     assert_eq!(
         *service.calls.lock().expect("lock"),

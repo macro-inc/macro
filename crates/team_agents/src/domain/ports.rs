@@ -158,8 +158,9 @@ pub trait Computers: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ComputerQuote, TeamAgentError>> + Send;
 
     /// Buys a computer with one Stripe update that also adds
-    /// `extra_items`. Ambiguous billing/storage failures must return
-    /// `ComputerPurchaseUncertain`; callers must preserve the agent then.
+    /// `extra_items`. Recover a saved purchase's identity after billing/storage
+    /// errors so its durable payment status can resolve normally. If identity
+    /// recovery fails, return `ComputerIdentityUnavailable` to retain the agent.
     fn purchase(
         &self,
         purchase: ComputerPurchase,

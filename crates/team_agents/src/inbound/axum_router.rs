@@ -126,7 +126,7 @@ impl IntoResponse for TeamAgentError {
             TeamAgentError::EmailProvider(_)
             | TeamAgentError::ComputerProvider(_)
             | TeamAgentError::RepoProvider(_) => StatusCode::BAD_GATEWAY,
-            TeamAgentError::Internal(_) | TeamAgentError::ComputerPurchaseUncertain { .. } => {
+            TeamAgentError::Internal(_) | TeamAgentError::ComputerIdentityUnavailable => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };

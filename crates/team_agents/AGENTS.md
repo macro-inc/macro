@@ -15,10 +15,12 @@ email over `/team_agents` in the auth service.
 item) → user API key → workspace repo (`agent_git`) → `Computers::purchase`
 with the persona and the seat item, so seat and computer share one Stripe
 update. Failures known to precede billing undo the repo, membership, account
-and mailbox. An ambiguous purchase outcome retains those resources and records
-the agent as `failed` with a billing-reconciliation reason; the adapter recovers
-the reserved computer ID from the team's saved agent persona when storage allows.
-After a confirmed purchase the agent exists and its
+and mailbox. Purchase errors recover the durable computer ID from the team's
+saved agent persona. Its payment outbox resolves unknown outcomes idempotently;
+the agent remains `provisioning` at setup step `paying` ("Confirming payment").
+A definite `payment_failed` computer retains its agent as `failed` with reason
+`payment failed`. The response exposes durable `payment` (`pending`, `paid`,
+`unbilled`), or null when its computer cannot be read. The agent exists and its
 `status` (`provisioning` → `running` | `failed`) is refreshed from the
 computer on `GET /team_agents` and `GET /team_agents/me`.
 
@@ -73,8 +75,9 @@ from the hosted-runtimes size catalog alongside the seat and computer price.
 - The computer adapter reads health through the harness domain repository using
   the saved computer's `harness_id`, matching team ownership, computer identity,
   and the enrolled persona OS user; it never reads another persona's report.
-- Quote reports billing-provider outages as 502. An ambiguous purchase returns
-  the retained failed agent, without exposing provider details in its reason.
+- Quote reports billing-provider outages as 502. Saved purchases retain their
+  agent and bootstrap credentials through payment resolution. Provider details
+  are never exposed in the agent's failure reason.
 - Delete runs computer → repo → seat → mailbox → account; the row goes last
   so a retry after a partial failure still finds the agent.
 - Without `DEAD_SIMPLE_MAIL_API_KEY` agents get an `@agents.macro.invalid`
@@ -93,8 +96,16 @@ from the hosted-runtimes size catalog alongside the seat and computer price.
 ## Provisioning recovery
 
 `POST /team_agents/{agent_user_id}/retry` requires a team admin receipt and checks
-that the agent belongs to that team. Non-failed computers return their current
-agent unchanged. Failed computers reuse the saved computer ID, persona bootstrap
+that the agent belongs to that team. Pending or unbilled payments return 409;
+other non-failed computers return their current agent unchanged. `retryable` is
+true only for failed computer provisioning with a paid purchase;
+pending payments, payment failures, released computers and brain-health failures
+do not offer Retry. A `payment_failed` retry returns 409 before repo recovery;
+admins release that agent or re-invite. Deletion returns 409 while payment is
+pending. Hosted runtimes' durable payment fact survives release and partial
+deletion: membership undo removes an unbilled agent without decrementing a paid
+seat. Paid deletion releases the computer and removes the billed agent seat.
+Failed computers reuse the saved computer ID, persona bootstrap
 credentials, and `team_agents.persona_seed`; recovery never buys another computer,
 adds a seat, creates an account, or mints an API key. Repo recovery calls the git
 service's `ensure` API, which preserves live tokens and repo contents. A missing
@@ -109,15 +120,13 @@ job, personality and optional creator user ID. New seeds set `creator_id` from
 the creating admin; older saved JSON defaults it to absent and retry recovers it
 from the account's `created_by` before repo recovery.
 
-An uncertain purchase may leave the computer `Reserved` (setup step `Paying`)
-even after Stripe succeeded. Status refresh preserves the agent's failure reason
-then and through reservation expiry/release, and retry and delete return 409
-pending billing reconciliation. Only confirmed provisioning progress clears the
-uncertainty. No second purchase,
-payment-confirmation event, or Stripe update is attempted. If recovering the
-computer ID also fails, the retained failed agent has no computer link and retry
-returns 409 until that link is reconciled. If saving the agent-computer link fails
-after a successful purchase, the retained account is also marked failed.
+`PendingPayment` is durable before Stripe and has no reservation-expiry timer.
+Hosted runtimes replays its original payment effect with the original idempotency
+key and extra seat item. Status refresh follows these phases without an
+agent-side reconciliation override or a second purchase. If identity recovery
+or saving the computer link fails, the retained agent is marked failed with a
+link-recovery reason. Retry and delete require that missing link to be recovered
+first, preserving the account, credentials and repo while payment may resolve.
 
 ## Standalone brain gateway
 

@@ -111,6 +111,8 @@ impl TeamAgentRepository for FakeRepository {
                 status_reason: agent.status_reason.clone(),
                 setup: None,
                 last_turn_at: None,
+                retryable: false,
+                payment: None,
                 created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
             }))
     }
@@ -315,9 +317,7 @@ impl Computers for FakeComputers {
         self.journal.record("computer.purchase")?;
         self.purchases.lock().expect("lock").push(purchase);
         if self.journal.fail_at == Some("computer.purchase.uncertain") {
-            return Err(TeamAgentError::ComputerPurchaseUncertain {
-                computer_id: Some(Uuid::parse_str(COMPUTER_ID).expect("uuid")),
-            });
+            return Err(TeamAgentError::ComputerIdentityUnavailable);
         }
         Ok(Uuid::parse_str(COMPUTER_ID).expect("uuid"))
     }
@@ -350,6 +350,7 @@ impl Computers for FakeComputers {
     ) -> Result<ComputerStatus, TeamAgentError> {
         self.journal.record("computer.retry")?;
         Ok(ComputerStatus {
+            payment: ComputerPayment::Paid,
             brain: None,
             status: ComputerStatusKind::SettingUp,
             setup: Some(SetupProgress {
@@ -433,6 +434,7 @@ impl Default for Setup {
             }),
             computer_interval: BillingInterval::Month,
             computer_status: ComputerStatus {
+                payment: ComputerPayment::Pending,
                 brain: None,
                 status: ComputerStatusKind::SettingUp,
                 setup: Some(SetupProgress {
@@ -523,8 +525,14 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
             computer_id: Some(Uuid::parse_str(COMPUTER_ID).expect("uuid")),
             status: TeamAgentStatus::Provisioning,
             status_reason: None,
-            setup: None,
+            setup: Some(SetupProgress {
+                step: SetupStep::Paying,
+                position: 1,
+                total: 5
+            }),
             last_turn_at: None,
+            retryable: false,
+            payment: Some(ComputerPayment::Pending),
             created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
         }
     );
@@ -862,6 +870,7 @@ async fn quote_refuses_a_seat_and_computer_on_different_intervals() {
 async fn listing_shows_setup_progress_while_the_computer_comes_up() {
     let (service, _journal) = build(Setup {
         computer_status: ComputerStatus {
+            payment: ComputerPayment::Paid,
             brain: None,
             status: ComputerStatusKind::SettingUp,
             setup: Some(SetupProgress {
@@ -894,6 +903,7 @@ async fn listing_shows_setup_progress_while_the_computer_comes_up() {
 async fn a_ready_computer_makes_the_agent_running() {
     let (service, _journal) = build(Setup {
         computer_status: ComputerStatus {
+            payment: ComputerPayment::Paid,
             brain: Some(healthy_brain()),
             status: ComputerStatusKind::Ready,
             setup: None,
@@ -915,6 +925,7 @@ async fn a_ready_computer_makes_the_agent_running() {
 async fn a_running_agent_reflects_a_later_computer_failure() {
     let (mut service, _journal) = build(Setup {
         computer_status: ComputerStatus {
+            payment: ComputerPayment::Paid,
             brain: Some(healthy_brain()),
             status: ComputerStatusKind::Ready,
             setup: Some(SetupProgress {
@@ -934,6 +945,7 @@ async fn a_running_agent_reflects_a_later_computer_failure() {
         TeamAgentStatus::Running
     );
     service.computers.status = ComputerStatus {
+        payment: ComputerPayment::Paid,
         brain: None,
         status: ComputerStatusKind::Failed,
         setup: None,
@@ -948,6 +960,7 @@ async fn a_running_agent_reflects_a_later_computer_failure() {
 async fn listing_takes_a_failure_from_the_computer() {
     let (service, _journal) = build(Setup {
         computer_status: ComputerStatus {
+            payment: ComputerPayment::Paid,
             brain: None,
             status: ComputerStatusKind::Failed,
             setup: None,
@@ -982,7 +995,19 @@ async fn listing_takes_a_failure_from_the_computer() {
 
 #[tokio::test]
 async fn delete_releases_the_computer_and_removes_the_agent_last() {
-    let (service, journal) = build(Setup::default());
+    let (service, journal) = build(Setup {
+        computer_status: ComputerStatus {
+            payment: ComputerPayment::Paid,
+            brain: None,
+            status: ComputerStatusKind::SettingUp,
+            setup: Some(SetupProgress {
+                step: SetupStep::Creating,
+                position: 2,
+                total: 5,
+            }),
+        },
+        ..Setup::default()
+    });
     service
         .create(receipt(TEAM_ID), request())
         .await
@@ -1060,6 +1085,7 @@ fn slug_is_a_valid_os_user_name() {
 async fn retry_reuses_the_seed_computer_and_credentials_without_purchasing() {
     let (service, journal) = build(Setup {
         computer_status: ComputerStatus {
+            payment: ComputerPayment::Paid,
             brain: None,
             status: ComputerStatusKind::Failed,
             // Failures must override stale setup progress.
@@ -1072,6 +1098,7 @@ async fn retry_reuses_the_seed_computer_and_credentials_without_purchasing() {
         ..Setup::default()
     });
     service.create(receipt(TEAM_ID), request()).await.unwrap();
+    assert!(service.me(&user(AGENT)).await.unwrap().retryable);
     // Older persisted seeds did not contain the creator. Recovery uses the
     // account's original creator without minting any new credentials.
     service.repository.agents.lock().unwrap()[0]
@@ -1092,7 +1119,6 @@ async fn retry_reuses_the_seed_computer_and_credentials_without_purchasing() {
     assert_eq!(
         journal.steps(),
         vec![
-            "account.set_status",
             "computer.persona",
             "repo.ensure",
             "computer.retry",
@@ -1106,6 +1132,7 @@ async fn retry_reuses_the_seed_computer_and_credentials_without_purchasing() {
 async fn retry_checks_team_ownership_and_leaves_a_running_agent_alone() {
     let (service, journal) = build(Setup {
         computer_status: ComputerStatus {
+            payment: ComputerPayment::Paid,
             brain: Some(healthy_brain()),
             status: ComputerStatusKind::Ready,
             setup: None,
@@ -1121,7 +1148,7 @@ async fn retry_checks_team_ownership_and_leaves_a_running_agent_alone() {
     assert!(journal.steps().is_empty());
     let agent = service.retry(receipt(TEAM_ID), &user(AGENT)).await.unwrap();
     assert_eq!(agent.status, TeamAgentStatus::Running);
-    assert_eq!(journal.steps(), vec!["account.set_status"]);
+    assert!(journal.steps().is_empty());
 }
 
 #[tokio::test]
@@ -1129,6 +1156,7 @@ async fn failed_computer_retry_preserves_the_agent_for_another_attempt() {
     let (service, journal) = build(Setup {
         fail_at: Some("computer.retry"),
         computer_status: ComputerStatus {
+            payment: ComputerPayment::Paid,
             brain: None,
             status: ComputerStatusKind::Failed,
             setup: None,
@@ -1144,12 +1172,7 @@ async fn failed_computer_retry_preserves_the_agent_for_another_attempt() {
     );
     assert_eq!(
         journal.steps(),
-        vec![
-            "account.set_status",
-            "computer.persona",
-            "repo.ensure",
-            "computer.retry"
-        ]
+        vec!["computer.persona", "repo.ensure", "computer.retry"]
     );
     journal.steps.lock().unwrap().clear();
     assert!(service.retry(receipt(TEAM_ID), &user(AGENT)).await.is_err());
@@ -1180,6 +1203,7 @@ async fn retry_does_not_purchase_a_missing_computer() {
 async fn retry_rejects_released_computers_before_repo_recovery() {
     let (service, journal) = build(Setup {
         computer_status: ComputerStatus {
+            payment: ComputerPayment::Paid,
             brain: None,
             status: ComputerStatusKind::Released,
             setup: None,
@@ -1196,7 +1220,7 @@ async fn retry_rejects_released_computers_before_repo_recovery() {
 }
 
 #[tokio::test]
-async fn uncertain_purchase_keeps_a_failed_agent_and_blocks_another_purchase() {
+async fn missing_purchase_identity_keeps_credentials_and_a_failed_agent() {
     let (service, journal) = build(Setup {
         fail_at: Some("computer.purchase.uncertain"),
         ..Setup::default()
@@ -1205,12 +1229,10 @@ async fn uncertain_purchase_keeps_a_failed_agent_and_blocks_another_purchase() {
     assert_eq!(agent.status, TeamAgentStatus::Failed);
     assert_eq!(
         agent.status_reason.as_deref(),
-        Some(PURCHASE_UNCERTAIN_REASON)
+        Some(COMPUTER_LINK_FAILED_REASON)
     );
-    assert_eq!(
-        agent.computer_id,
-        Some(Uuid::parse_str(COMPUTER_ID).unwrap())
-    );
+    assert_eq!(agent.computer_id, None);
+    assert!(!agent.retryable);
     assert!(
         !journal
             .steps()
@@ -1218,10 +1240,13 @@ async fn uncertain_purchase_keeps_a_failed_agent_and_blocks_another_purchase() {
             .any(|step| step.ends_with("delete") || *step == "team.undo")
     );
     let listed = service.list(receipt(TEAM_ID)).await.unwrap();
-    assert_eq!(listed.agents[0].status, TeamAgentStatus::Failed);
-    assert_eq!(listed.agents[0].status_reason, agent.status_reason);
+    assert_eq!(listed.agents[0], agent);
     assert!(matches!(
         service.retry(receipt(TEAM_ID), &agent.user_id).await,
+        Err(TeamAgentError::RetryUnavailable(_))
+    ));
+    assert!(matches!(
+        service.delete(receipt(TEAM_ID), &agent.user_id).await,
         Err(TeamAgentError::RetryUnavailable(_))
     ));
     assert_eq!(service.computers.purchases.lock().unwrap().len(), 1);
@@ -1229,23 +1254,86 @@ async fn uncertain_purchase_keeps_a_failed_agent_and_blocks_another_purchase() {
 }
 
 #[tokio::test]
-async fn released_uncertain_purchase_keeps_its_reason_and_cannot_be_deleted() {
+async fn pending_payment_clears_legacy_failure_and_waits_without_another_purchase() {
     let (service, journal) = build(Setup {
-        fail_at: Some("computer.purchase.uncertain"),
         computer_status: ComputerStatus {
+            payment: ComputerPayment::Pending,
             brain: None,
-            status: ComputerStatusKind::Released,
+            status: ComputerStatusKind::SettingUp,
+            setup: Some(SetupProgress {
+                step: SetupStep::Paying,
+                position: 1,
+                total: 5,
+            }),
+        },
+        ..Setup::default()
+    });
+    let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
+    service
+        .repository
+        .set_status(
+            &agent.user_id,
+            TeamAgentStatus::Failed,
+            Some("old purchase reconciliation reason"),
+        )
+        .await
+        .unwrap();
+    let listed = service.list(receipt(TEAM_ID)).await.unwrap();
+    let pending = &listed.agents[0];
+    assert_eq!(pending.status, TeamAgentStatus::Provisioning);
+    assert_eq!(pending.status_reason, None);
+    assert_eq!(pending.setup.as_ref().unwrap().step, SetupStep::Paying);
+    assert!(!pending.retryable);
+    let before = journal.steps();
+    assert!(matches!(
+        service.retry(receipt(TEAM_ID), &agent.user_id).await,
+        Err(TeamAgentError::RetryUnavailable(_))
+    ));
+    assert_eq!(journal.steps(), before);
+    assert_eq!(service.computers.purchases.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn payment_failed_retains_agent_rejects_retry_and_allows_release() {
+    let (service, journal) = build(Setup {
+        computer_status: ComputerStatus {
+            payment: ComputerPayment::Unbilled,
+            brain: None,
+            status: ComputerStatusKind::Failed,
             setup: None,
         },
         ..Setup::default()
     });
     let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
-    let listed = service.list(receipt(TEAM_ID)).await.unwrap();
-    assert_eq!(listed.agents[0].status, TeamAgentStatus::Failed);
-    assert_eq!(
-        listed.agents[0].status_reason.as_deref(),
-        Some(PURCHASE_UNCERTAIN_REASON)
+    assert_eq!(agent.status, TeamAgentStatus::Failed);
+    assert_eq!(agent.status_reason.as_deref(), Some("payment failed"));
+    assert!(!agent.retryable);
+    assert!(agent.computer_id.is_some());
+    let before = journal.steps();
+    assert!(matches!(
+        service.retry(receipt(TEAM_ID), &agent.user_id).await,
+        Err(TeamAgentError::RetryUnavailable(_))
+    ));
+    assert!(
+        journal.steps()[before.len()..]
+            .iter()
+            .all(|step| *step == "account.set_status")
     );
+    assert_eq!(service.computers.purchases.lock().unwrap().len(), 1);
+    service
+        .delete(receipt(TEAM_ID), &agent.user_id)
+        .await
+        .unwrap();
+    assert!(journal.steps().contains(&"computer.release"));
+    assert!(journal.steps().contains(&"team.undo"));
+    assert!(!journal.steps().contains(&"team.remove"));
+    assert!(service.repository.agents.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn pending_payment_cannot_be_deleted_while_the_outbox_can_still_charge() {
+    let (service, journal) = build(Setup::default());
+    let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
     let before = journal.steps();
     assert!(matches!(
         service.delete(receipt(TEAM_ID), &agent.user_id).await,
@@ -1253,6 +1341,79 @@ async fn released_uncertain_purchase_keeps_its_reason_and_cannot_be_deleted() {
     ));
     assert_eq!(journal.steps(), before);
     assert_eq!(service.repository.agents.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn partial_payment_failed_deletion_never_removes_a_billed_seat() {
+    let (mut service, journal) = build(Setup {
+        fail_at: Some("repo.delete"),
+        computer_status: ComputerStatus {
+            payment: ComputerPayment::Unbilled,
+            brain: None,
+            status: ComputerStatusKind::Failed,
+            setup: None,
+        },
+        ..Setup::default()
+    });
+    let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
+    assert!(
+        service
+            .delete(receipt(TEAM_ID), &agent.user_id)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        service.me(&agent.user_id).await.unwrap().payment,
+        Some(ComputerPayment::Unbilled)
+    );
+    service.computers.status.status = ComputerStatusKind::Released;
+    // A list refresh may replace the display reason; billing provenance stays.
+    service.list(receipt(TEAM_ID)).await.unwrap();
+    service.repos.journal = Arc::new(Journal::default());
+    service
+        .delete(receipt(TEAM_ID), &agent.user_id)
+        .await
+        .unwrap();
+    assert!(journal.steps().contains(&"team.undo"));
+    assert!(!journal.steps().contains(&"team.remove"));
+}
+
+#[tokio::test]
+async fn external_release_preserves_payment_authority_for_membership_cleanup() {
+    for (payment, reason, expected, forbidden) in [
+        (
+            ComputerPayment::Paid,
+            "the computer was released",
+            "team.remove",
+            "team.undo",
+        ),
+        (
+            ComputerPayment::Unbilled,
+            "payment failed",
+            "team.undo",
+            "team.remove",
+        ),
+    ] {
+        let (service, journal) = build(Setup {
+            computer_status: ComputerStatus {
+                payment,
+                status: ComputerStatusKind::Released,
+                brain: None,
+                setup: None,
+            },
+            ..Setup::default()
+        });
+        let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
+        assert_eq!(agent.payment, Some(payment));
+        assert_eq!(agent.status_reason.as_deref(), Some(reason));
+        assert!(!agent.retryable);
+        service
+            .delete(receipt(TEAM_ID), &agent.user_id)
+            .await
+            .unwrap();
+        assert!(journal.steps().contains(&expected));
+        assert!(!journal.steps().contains(&forbidden));
+    }
 }
 
 fn healthy_brain() -> super::super::models::BrainHealth {
@@ -1322,6 +1483,7 @@ async fn running_requires_a_ready_computer_and_live_healthy_persona() {
         let expected_turn = brain.as_ref().and_then(|brain| brain.last_turn_at);
         let (service, _) = build(Setup {
             computer_status: ComputerStatus {
+                payment: ComputerPayment::Paid,
                 status,
                 brain,
                 setup: None,
@@ -1333,6 +1495,7 @@ async fn running_requires_a_ready_computer_and_live_healthy_persona() {
         assert_eq!(me.status, expected);
         assert_eq!(me.status_reason.as_deref(), reason);
         assert_eq!(me.last_turn_at, expected_turn);
+        assert!(!me.retryable);
         let listed = service.list(receipt(TEAM_ID)).await.unwrap();
         assert_eq!(listed.agents[0], me);
     }
@@ -1342,6 +1505,7 @@ async fn running_requires_a_ready_computer_and_live_healthy_persona() {
 async fn health_failure_diagnostics_are_updated_and_recovery_clears_them() {
     let (mut service, _) = build(Setup {
         computer_status: ComputerStatus {
+            payment: ComputerPayment::Paid,
             status: ComputerStatusKind::Ready,
             setup: None,
             brain: None,

@@ -60,6 +60,10 @@ pub struct TeamAgent {
     pub status: TeamAgentStatus,
     /// Why the status is `failed`.
     pub status_reason: Option<String>,
+    /// Whether failed computer provisioning can be retried without purchasing.
+    pub retryable: bool,
+    /// Durable billing outcome, absent only when no computer can be read.
+    pub payment: Option<ComputerPayment>,
     /// Where the computer's setup is, while `provisioning` and once fetched.
     pub setup: Option<SetupProgress>,
     /// Most recent completed brain turn, from its harness health report.
@@ -249,6 +253,19 @@ pub struct ComputerPurchase {
     pub extra_items: Vec<SubscriptionItem>,
 }
 
+/// Durable payment outcome supplied by hosted runtimes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ComputerPayment {
+    /// The original payment effect is still resolving; no new purchase is safe.
+    Pending,
+    /// The bundled computer and seat purchase succeeded.
+    Paid,
+    /// Billing definitely refused the purchase; no item was billed.
+    Unbilled,
+}
+
 /// The coarse status a team sees (`hosted_runtimes::ComputerStatusKind`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComputerStatusKind {
@@ -305,6 +322,8 @@ pub struct SetupProgress {
 /// `hosted_runtimes::ComputerStatus` this crate reads.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComputerStatus {
+    /// Survives lifecycle transitions, including release.
+    pub payment: ComputerPayment,
     /// Coarse status.
     pub status: ComputerStatusKind,
     /// Present until the computer first connects.
@@ -485,12 +504,9 @@ pub enum TeamAgentError {
     /// The computer can't be bought right now (sold out, no subscription).
     #[error("the computer can't be bought: {0}")]
     ComputerUnavailable(String),
-    /// A purchase may have charged; keep the agent for reconciliation.
-    #[error("the computer purchase needs billing reconciliation")]
-    ComputerPurchaseUncertain {
-        /// Reserved computer, if storage was available to recover its identity.
-        computer_id: Option<Uuid>,
-    },
+    /// A saved purchase could not be identified; preserve its agent resources.
+    #[error("the computer identity is unavailable")]
+    ComputerIdentityUnavailable,
     /// Saved provisioning state cannot be retried.
     #[error("the agent can't be retried: {0}")]
     RetryUnavailable(String),

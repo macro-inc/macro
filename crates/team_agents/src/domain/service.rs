@@ -9,10 +9,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    AgentRepo, ComputerPurchase, ComputerSize, ComputerStatus, ComputerStatusKind, CreateTeamAgent,
-    Credential, EmailMessage, EmailMessages, MAX_NAME_CHARS, MAX_PROFILE_CHARS, NewAgentAccount,
-    Persona, PersonaSeed, PersonaService, SendEmail, SentEmail, TeamAgent, TeamAgentError,
-    TeamAgentQuote, TeamAgentStatus, TeamAgents,
+    AgentRepo, ComputerPayment, ComputerPurchase, ComputerSize, ComputerStatus, ComputerStatusKind,
+    CreateTeamAgent, Credential, EmailMessage, EmailMessages, MAX_NAME_CHARS, MAX_PROFILE_CHARS,
+    NewAgentAccount, Persona, PersonaSeed, PersonaService, SendEmail, SentEmail, TeamAgent,
+    TeamAgentError, TeamAgentQuote, TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
     AgentApiKeys, AgentRepos, Computers, Mailboxes, TeamAgentRepository, TeamAgentService,
@@ -34,9 +34,8 @@ const BRAIN_EXEC: &str = "/opt/macro/brain run";
 /// Loopback health endpoint, shared with the macrod persona supervisor.
 const BRAIN_HEALTH_PORT: &str = "7801";
 
-const PURCHASE_UNCERTAIN_REASON: &str = "computer purchase outcome is uncertain; billing reconciliation is required before provisioning can be retried";
 const COMPUTER_LINK_FAILED_REASON: &str =
-    "computer was purchased but its agent link could not be saved; reconciliation is required";
+    "computer identity is unavailable; the agent link must be recovered before retrying";
 
 /// Config drive keys the brain reads from its environment file.
 pub mod config_keys {
@@ -427,78 +426,65 @@ where
         agent: TeamAgent,
         computer: ComputerStatus,
     ) -> Result<TeamAgent, TeamAgentError> {
-        if agent.status_reason.as_deref() == Some(PURCHASE_UNCERTAIN_REASON) {
-            // A reservation can expire, or PurchaseFailed can release it,
-            // without establishing whether the subscription update committed.
-            let payment_confirmed = match computer.status {
-                ComputerStatusKind::SettingUp => computer
-                    .setup
-                    .as_ref()
-                    .is_some_and(|setup| setup.step != super::models::SetupStep::Paying),
-                ComputerStatusKind::Ready
-                | ComputerStatusKind::Asleep
+        let (status, reason) = if computer.payment == ComputerPayment::Pending {
+            (TeamAgentStatus::Provisioning, None)
+        } else if computer.payment == ComputerPayment::Unbilled {
+            (TeamAgentStatus::Failed, Some("payment failed".to_string()))
+        } else {
+            match computer.status {
+                _ if computer.status != ComputerStatusKind::Failed
+                    && computer.status != ComputerStatusKind::Released
+                    && computer
+                        .setup
+                        .as_ref()
+                        .is_some_and(|setup| setup.step != super::models::SetupStep::Ready) =>
+                {
+                    (TeamAgentStatus::Provisioning, None)
+                }
+                ComputerStatusKind::SettingUp => (TeamAgentStatus::Provisioning, None),
+                ComputerStatusKind::Failed => (
+                    TeamAgentStatus::Failed,
+                    Some("the computer failed to start".to_string()),
+                ),
+                ComputerStatusKind::Released => (
+                    TeamAgentStatus::Failed,
+                    Some("the computer was released".to_string()),
+                ),
+                ComputerStatusKind::Ready => {
+                    let unhealthy = match computer.brain.as_ref() {
+                        None => Some("brain health has not been reported".to_string()),
+                        Some(brain) if !brain.connected => {
+                            Some("the harness is disconnected".to_string())
+                        }
+                        Some(brain)
+                            if {
+                                let age = chrono::Utc::now() - brain.checked_at;
+                                age < chrono::Duration::zero() || age > chrono::Duration::minutes(2)
+                            } =>
+                        {
+                            Some("the brain health report is stale".to_string())
+                        }
+                        Some(brain) if !brain.healthy => Some(
+                            brain
+                                .last_error
+                                .clone()
+                                .unwrap_or_else(|| "the brain is not healthy".to_string()),
+                        ),
+                        Some(_) => None,
+                    };
+                    match unhealthy {
+                        Some(reason) => (
+                            TeamAgentStatus::Failed,
+                            Some(format!("unhealthy: {reason}")),
+                        ),
+                        None => (TeamAgentStatus::Running, None),
+                    }
+                }
+                ComputerStatusKind::Asleep
                 | ComputerStatusKind::Waking
                 | ComputerStatusKind::Stopping
-                | ComputerStatusKind::Stopped => true,
-                ComputerStatusKind::Failed | ComputerStatusKind::Released => false,
-            };
-            if !payment_confirmed {
-                return Ok(agent);
+                | ComputerStatusKind::Stopped => (TeamAgentStatus::Provisioning, None),
             }
-        }
-        let (status, reason) = match computer.status {
-            _ if computer.status != ComputerStatusKind::Failed
-                && computer.status != ComputerStatusKind::Released
-                && computer
-                    .setup
-                    .as_ref()
-                    .is_some_and(|setup| setup.step != super::models::SetupStep::Ready) =>
-            {
-                (TeamAgentStatus::Provisioning, None)
-            }
-            ComputerStatusKind::SettingUp => (TeamAgentStatus::Provisioning, None),
-            ComputerStatusKind::Failed => (
-                TeamAgentStatus::Failed,
-                Some("the computer failed to start".to_string()),
-            ),
-            ComputerStatusKind::Released => (
-                TeamAgentStatus::Failed,
-                Some("the computer was released".to_string()),
-            ),
-            ComputerStatusKind::Ready => {
-                let unhealthy = match computer.brain.as_ref() {
-                    None => Some("brain health has not been reported".to_string()),
-                    Some(brain) if !brain.connected => {
-                        Some("the harness is disconnected".to_string())
-                    }
-                    Some(brain)
-                        if {
-                            let age = chrono::Utc::now() - brain.checked_at;
-                            age < chrono::Duration::zero() || age > chrono::Duration::minutes(2)
-                        } =>
-                    {
-                        Some("the brain health report is stale".to_string())
-                    }
-                    Some(brain) if !brain.healthy => Some(
-                        brain
-                            .last_error
-                            .clone()
-                            .unwrap_or_else(|| "the brain is not healthy".to_string()),
-                    ),
-                    Some(_) => None,
-                };
-                match unhealthy {
-                    Some(reason) => (
-                        TeamAgentStatus::Failed,
-                        Some(format!("unhealthy: {reason}")),
-                    ),
-                    None => (TeamAgentStatus::Running, None),
-                }
-            }
-            ComputerStatusKind::Asleep
-            | ComputerStatusKind::Waking
-            | ComputerStatusKind::Stopping
-            | ComputerStatusKind::Stopped => (TeamAgentStatus::Provisioning, None),
         };
 
         if status != agent.status || reason != agent.status_reason {
@@ -511,6 +497,9 @@ where
         Ok(TeamAgent {
             status,
             status_reason: reason,
+            retryable: computer.payment == ComputerPayment::Paid
+                && computer.status == ComputerStatusKind::Failed,
+            payment: Some(computer.payment),
             setup: computer.setup,
             last_turn_at: computer.brain.and_then(|brain| brain.last_turn_at),
             ..agent
@@ -608,27 +597,21 @@ where
             .await
         {
             Ok(provisioned) => provisioned,
-            Err(TeamAgentError::ComputerPurchaseUncertain { computer_id }) => {
+            Err(TeamAgentError::ComputerIdentityUnavailable) => {
                 let user_id = undo.account.ok_or_else(|| {
                     TeamAgentError::internal_message("purchase attempted without an agent account")
                 })?;
                 // Preserve every resource: billing may already have committed.
-                // Record failure before linking, so a link error cannot leave
-                // the retained agent looking like normal provisioning.
+                // The durable purchase can finish through its payment outbox.
+                // Keep credentials alive until its identity is recoverable.
                 self.repository
                     .set_status(
                         &user_id,
                         TeamAgentStatus::Failed,
-                        Some(PURCHASE_UNCERTAIN_REASON),
+                        Some(COMPUTER_LINK_FAILED_REASON),
                     )
                     .await
                     .map_err(TeamAgentError::internal)?;
-                if let Some(computer_id) = computer_id {
-                    self.repository
-                        .set_computer(&user_id, computer_id)
-                        .await
-                        .map_err(TeamAgentError::internal)?;
-                }
                 return self.agent(&user_id).await;
             }
             Err(error) => {
@@ -637,8 +620,8 @@ where
             }
         };
 
-        // Past the purchase nothing is undone: the agent exists and is paid
-        // for, and its status reports how its computer comes up.
+        // A saved purchase may still be confirming payment. Keep the agent's
+        // resources while the computer's durable payment effect resolves it.
         if let Err(error) = self.repository.set_computer(&user_id, computer_id).await {
             self.repository
                 .set_status(
@@ -651,7 +634,22 @@ where
             return Err(TeamAgentError::internal(error));
         }
 
-        self.agent(&user_id).await
+        let agent = self.agent(&user_id).await?;
+        match self.refresh_status(agent).await {
+            Ok(agent) => Ok(agent),
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not refresh saved computer purchase");
+                self.repository
+                    .set_status(
+                        &user_id,
+                        TeamAgentStatus::Failed,
+                        Some("computer status is unavailable"),
+                    )
+                    .await
+                    .map_err(TeamAgentError::internal)?;
+                self.agent(&user_id).await
+            }
+        }
     }
 
     #[tracing::instrument(skip(self, receipt), err)]
@@ -697,18 +695,24 @@ where
             TeamAgentError::RetryUnavailable("the agent has no saved computer to retry".to_string())
         })?;
         let computer = self.computers.status(agent.team_id, computer_id).await?;
+        if computer.payment == ComputerPayment::Pending {
+            return Err(TeamAgentError::RetryUnavailable(
+                "payment is still being confirmed".to_string(),
+            ));
+        }
         if computer.status == ComputerStatusKind::Released {
             return Err(TeamAgentError::RetryUnavailable(
                 "a released computer cannot be retried".to_string(),
             ));
         }
+        let payment_failed = computer.payment == ComputerPayment::Unbilled;
         let agent = self.apply_computer_status(agent, computer).await?;
-        if agent.status_reason.as_deref() == Some(PURCHASE_UNCERTAIN_REASON) {
+        if payment_failed {
             return Err(TeamAgentError::RetryUnavailable(
-                PURCHASE_UNCERTAIN_REASON.to_string(),
+                "payment failed; re-invite or release the agent".to_string(),
             ));
         }
-        if agent.status != TeamAgentStatus::Failed {
+        if !agent.retryable {
             return Ok(agent);
         }
         let mut seed = self
@@ -760,11 +764,19 @@ where
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), TeamAgentError> {
         let agent = self.team_agent(&receipt, agent_user_id).await?;
-        if let Some(reason @ (PURCHASE_UNCERTAIN_REASON | COMPUTER_LINK_FAILED_REASON)) =
-            agent.status_reason.as_deref()
-        {
-            return Err(TeamAgentError::RetryUnavailable(reason.to_string()));
+        let Some(computer_id) = agent.computer_id else {
+            return Err(TeamAgentError::RetryUnavailable(
+                COMPUTER_LINK_FAILED_REASON.to_string(),
+            ));
+        };
+        let computer = self.computers.status(agent.team_id, computer_id).await?;
+        if computer.payment == ComputerPayment::Pending {
+            return Err(TeamAgentError::RetryUnavailable(
+                "payment is still being confirmed".to_string(),
+            ));
         }
+        let unbilled = computer.payment == ComputerPayment::Unbilled;
+        let agent = self.apply_computer_status(agent, computer).await?;
 
         // The account goes last, so a failed step leaves the row for a retry
         // to find; every earlier step tolerates having already run.
@@ -773,9 +785,15 @@ where
         }
 
         self.repos.delete(&agent.user_id).await?;
-        self.membership
-            .remove_agent(receipt, &agent.user_id)
-            .await?;
+        if unbilled {
+            self.membership
+                .undo_add_agent(receipt, &agent.user_id)
+                .await?;
+        } else {
+            self.membership
+                .remove_agent(receipt, &agent.user_id)
+                .await?;
+        }
 
         let mailbox_id = self
             .repository

@@ -8,7 +8,9 @@ use harnesses::domain::{
 };
 
 use hosted_runtimes::domain::{
-    enrollment, models,
+    enrollment,
+    lifecycle::PaymentOutcome,
+    models,
     ports::{Billing, BillingError, ComputerRepo},
     service::{Clock, ComputerError, ComputerService},
     size,
@@ -16,8 +18,9 @@ use hosted_runtimes::domain::{
 use uuid::Uuid;
 
 use crate::domain::models::{
-    BillingInterval, BrainHealth, ComputerPurchase, ComputerQuote, ComputerSize, ComputerStatus,
-    ComputerStatusKind, Persona, PersonaService, SetupProgress, SetupStep, TeamAgentError,
+    BillingInterval, BrainHealth, ComputerPayment, ComputerPurchase, ComputerQuote, ComputerSize,
+    ComputerStatus, ComputerStatusKind, Persona, PersonaService, SetupProgress, SetupStep,
+    TeamAgentError,
 };
 use crate::domain::ports::Computers;
 
@@ -113,13 +116,11 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo> Compu
             })
             .await;
         match result {
-            Err(
-                source @ (ComputerError::Internal(_)
-                | ComputerError::Billing(BillingError::Provider(_))),
-            ) => {
-                tracing::error!(error = ?source, %team_id, "computer purchase outcome is uncertain");
-                // purchase() does not return its reserved ID on an apply failure.
-                // Recover it only through this team's saved agent persona.
+            Err(source @ (ComputerError::Internal(_) | ComputerError::Billing(_))) => {
+                // The durable row and payment effect precede Stripe. A pending
+                // payment is replayed by hosted runtimes with its original key;
+                // a definite refusal remains visible as PaymentFailed.
+                tracing::warn!(error = ?source, %team_id, "recovering saved computer purchase");
                 let computer_id = match self.repo.list_for_team(team_id).await {
                     Ok(computers) => computers
                         .into_iter()
@@ -135,11 +136,22 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo> Compu
                         })
                         .map(|computer| computer.id),
                     Err(source) => {
-                        tracing::error!(error = ?source, %team_id, "could not recover the reserved computer identity");
+                        tracing::error!(error = ?source, %team_id, "could not recover the saved computer identity");
                         None
                     }
                 };
-                Err(TeamAgentError::ComputerPurchaseUncertain { computer_id })
+                match computer_id {
+                    Some(id) => Ok(id),
+                    None if matches!(
+                        source,
+                        ComputerError::Internal(_)
+                            | ComputerError::Billing(BillingError::Provider(_))
+                    ) =>
+                    {
+                        Err(TeamAgentError::ComputerIdentityUnavailable)
+                    }
+                    None => Err(error(source)),
+                }
             }
             other => other.map_err(error),
         }
@@ -290,6 +302,11 @@ impl<Repo: ComputerRepo, Bill, Time, Harness: HarnessRepo>
 
 fn computer_status(status: models::ComputerStatus) -> ComputerStatus {
     ComputerStatus {
+        payment: match status.payment {
+            PaymentOutcome::Pending => ComputerPayment::Pending,
+            PaymentOutcome::Paid => ComputerPayment::Paid,
+            PaymentOutcome::Unbilled => ComputerPayment::Unbilled,
+        },
         brain: None,
         status: match status.status {
             models::ComputerStatusKind::SettingUp => ComputerStatusKind::SettingUp,
@@ -298,7 +315,9 @@ fn computer_status(status: models::ComputerStatus) -> ComputerStatus {
             models::ComputerStatusKind::Waking => ComputerStatusKind::Waking,
             models::ComputerStatusKind::Stopping => ComputerStatusKind::Stopping,
             models::ComputerStatusKind::Stopped => ComputerStatusKind::Stopped,
-            models::ComputerStatusKind::Failed => ComputerStatusKind::Failed,
+            models::ComputerStatusKind::Failed | models::ComputerStatusKind::PaymentFailed => {
+                ComputerStatusKind::Failed
+            }
             models::ComputerStatusKind::Released => ComputerStatusKind::Released,
         },
         setup: status.setup.map(|setup| SetupProgress {

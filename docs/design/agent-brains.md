@@ -20,9 +20,13 @@ Settings → Members → **Invite agent**: name, role (job description), size.
 4. The computer boots with the persona's config drive, the brain clones the
    repo, connects, and DMs the admin.
 
-Any failure before the Stripe update undoes everything; the Stripe update is
-the commit point. After it, failures surface as the agent's status (`provisioning`,
-`running`, `failed: <reason>`) with a retry, never as silent logs.
+Failures before a saved computer purchase undo the agent resources. The durable
+computer row and payment effect precede Stripe; an unknown billing outcome stays
+`PendingPayment` and replays idempotently, while the agent shows "Confirming
+payment". A definite `PaymentFailed` shows `failed: payment failed` with Retry
+hidden; the admin releases the agent or re-invites. Provisioning failures keep
+the saved computer and credentials, with `retryable: true`. Brain health failures
+surface as status diagnostics without offering a computer provisioning retry.
 
 ## On the computer
 

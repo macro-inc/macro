@@ -47,6 +47,11 @@ struct FakeRepo {
 
 impl ComputerRepo for FakeRepo {
     type Err = FakeError;
+    type PaymentGuard = ();
+
+    async fn lock_payment(&self, _computer_id: Uuid) -> Result<(), FakeError> {
+        Ok(())
+    }
 
     async fn reserve(
         &self,
@@ -56,7 +61,7 @@ impl ComputerRepo for FakeRepo {
         let mut computers = self.computers.lock().unwrap();
         let sold: u32 = computers
             .values()
-            .filter(|existing| existing.state.phase != Phase::Destroyed)
+            .filter(|existing| existing.state.holds_units())
             .map(|existing| existing.size.units())
             .sum();
         if sold + computer.size.units() > self.sold_units {
@@ -284,6 +289,11 @@ impl Billing for FakeBilling {
             .lock()
             .unwrap()
             .push((size, extra_items.to_vec(), idempotency_key.to_owned()));
+        if self.provider_fails {
+            return Err(BillingError::Provider(rootcause::report!(
+                "billing response was lost"
+            )));
+        }
         Ok(())
     }
 
@@ -477,7 +487,7 @@ async fn declined_purchase_reports_unavailable_and_releases_reserved_capacity() 
             .lock()
             .unwrap()
             .values()
-            .all(|row| row.state.phase == Phase::Destroyed)
+            .all(|row| row.state.phase == Phase::PaymentFailed)
     );
 }
 
@@ -503,59 +513,79 @@ async fn billing_provider_failures_remain_upstream_errors() {
 }
 
 #[tokio::test]
-async fn a_storage_failure_after_billing_recovers_the_reserved_computer_identity() {
-    let repo = FakeRepo {
-        sold_units: 4,
-        fail_payment_confirmation: true,
-        ..Default::default()
-    };
-    let billing = FakeBilling::default();
-    let updates = billing.updates.clone();
-    let computers = HostedRuntimesComputers::new(
-        Arc::new(ComputerService::new(repo.clone(), billing, FixedClock)),
-        repo.clone(),
-        harnesses::domain::ports::MockHarnessRepo::new(),
-    );
-    let result = computers
-        .purchase(agent::ComputerPurchase {
-            team_id: TEAM,
-            created_by: "macro|admin@example.com".to_string(),
-            size: agent::ComputerSize::Standard,
-            name: Some("Agent".to_string()),
-            persona: Some(agent::Persona {
-                name: "Agent".to_string(),
-                os_user: "agent".to_string(),
-                extra_service: agent::PersonaService {
-                    unit_name: "brain@agent".to_string(),
-                    exec: "/opt/macro/brain run".to_string(),
-                    env: Default::default(),
-                },
-                config: std::collections::BTreeMap::from([(
-                    "MACRO_AGENT_USER_ID".to_string(),
-                    "macro|agent@example.com".to_string(),
-                )]),
-            }),
-            extra_items: vec![agent::SubscriptionItem {
-                price_id: "price_seat".to_string(),
-                quantity: 1,
-            }],
-        })
-        .await;
-    let agent::TeamAgentError::ComputerPurchaseUncertain {
-        computer_id: Some(id),
-    } = result.unwrap_err()
-    else {
-        panic!("purchase should preserve the reservation");
-    };
-    assert_eq!(updates.lock().unwrap().len(), 1);
-    let saved = repo.get(id).await.unwrap().unwrap();
-    assert_eq!(saved.team_id, TEAM);
-    assert!(matches!(saved.state.phase, Phase::Reserved { .. }));
-    assert!(matches!(
-        computers.retry(TEAM, id).await,
-        Err(agent::TeamAgentError::RetryUnavailable(_))
-    ));
-    assert_eq!(updates.lock().unwrap().len(), 1);
+async fn payment_errors_recover_the_durable_computer_and_its_payment_status() {
+    for (fail_payment_confirmation, decline, provider_fails, expected, update_count) in [
+        (true, false, false, agent::ComputerStatusKind::SettingUp, 1),
+        (false, false, true, agent::ComputerStatusKind::SettingUp, 1),
+        (false, true, false, agent::ComputerStatusKind::Failed, 0),
+    ] {
+        let repo = FakeRepo {
+            sold_units: 4,
+            fail_payment_confirmation,
+            ..Default::default()
+        };
+        let billing = FakeBilling {
+            decline,
+            provider_fails,
+            ..Default::default()
+        };
+        let updates = billing.updates.clone();
+        let computers = HostedRuntimesComputers::new(
+            Arc::new(ComputerService::new(repo.clone(), billing, FixedClock)),
+            repo.clone(),
+            harnesses::domain::ports::MockHarnessRepo::new(),
+        );
+        let result = computers
+            .purchase(agent::ComputerPurchase {
+                team_id: TEAM,
+                created_by: "macro|admin@example.com".to_string(),
+                size: agent::ComputerSize::Standard,
+                name: Some("Agent".to_string()),
+                persona: Some(agent::Persona {
+                    name: "Agent".to_string(),
+                    os_user: "agent".to_string(),
+                    extra_service: agent::PersonaService {
+                        unit_name: "brain@agent".to_string(),
+                        exec: "/opt/macro/brain run".to_string(),
+                        env: Default::default(),
+                    },
+                    config: std::collections::BTreeMap::from([(
+                        "MACRO_AGENT_USER_ID".to_string(),
+                        "macro|agent@example.com".to_string(),
+                    )]),
+                }),
+                extra_items: vec![agent::SubscriptionItem {
+                    price_id: "price_seat".to_string(),
+                    quantity: 1,
+                }],
+            })
+            .await;
+        let id = result.expect("recover the durable purchase");
+        assert_eq!(updates.lock().unwrap().len(), update_count);
+        let saved = repo.get(id).await.unwrap().unwrap();
+        assert_eq!(saved.team_id, TEAM);
+        assert_eq!(computers.status(TEAM, id).await.unwrap().status, expected);
+        if decline {
+            assert_eq!(saved.state.phase, Phase::PaymentFailed);
+        } else {
+            assert!(matches!(saved.state.phase, Phase::PendingPayment { .. }));
+            assert_eq!(
+                computers
+                    .status(TEAM, id)
+                    .await
+                    .unwrap()
+                    .setup
+                    .unwrap()
+                    .step,
+                agent::SetupStep::Paying
+            );
+        }
+        assert!(matches!(
+            computers.retry(TEAM, id).await,
+            Err(agent::TeamAgentError::RetryUnavailable(_))
+        ));
+        assert_eq!(updates.lock().unwrap().len(), update_count);
+    }
 }
 
 #[tokio::test]
@@ -605,6 +635,7 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
             let mut computer = repo
                 .reserve(
                     NewComputer {
+                        extra_items: vec![],
                         id,
                         team_id: TEAM,
                         name: "Agent".to_string(),
