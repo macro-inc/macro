@@ -5,3 +5,5 @@ pub mod inbound;
 pub mod outbound;
 #[cfg(test)]
 pub(crate) mod telemetry_capture;
+
+// ci speed experiment: selects this crate and its dependents
