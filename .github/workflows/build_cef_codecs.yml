@@ -5,6 +5,7 @@ name: Build CEF with codecs
   pull_request:
     branches:
     - main
+    - 'synoet/ci-int-base*'
     paths:
     - apps/web/tauri/desktop-cef/cef-codecs.json
     - tooling/xtask/crates/xtask_workflows/src/workflows/scripts/build_cef_codecs.sh
