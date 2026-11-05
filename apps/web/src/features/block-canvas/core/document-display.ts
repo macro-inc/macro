@@ -61,7 +61,15 @@ export const setDocumentDisplayCommand: GraphicsCommand<{
           ...document.items,
           [id]: {
             ...item,
-            geometry: { ...item.geometry, display },
+            // An artifact card and an artifact page have their own sizes.
+            geometry:
+              item.geometry.fileType === 'artifact'
+                ? {
+                    ...item.geometry,
+                    ...insertedDocumentBox('artifact', display),
+                    display,
+                  }
+                : { ...item.geometry, display },
           },
         },
       },

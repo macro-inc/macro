@@ -156,6 +156,7 @@ function EditableCanvasNext(props: {
   const { openWithSplit } = useSplitLayout();
   const resolveAppLink = useMacroMentionLinkResolver();
   let viewport: HTMLElement | undefined;
+  let disposed = false;
   const center = () =>
     screenToWorld(editor.getCamera(), {
       x: (viewport?.clientWidth ?? 800) / 2,
@@ -167,17 +168,23 @@ function EditableCanvasNext(props: {
     (text, html) => {
       const link = resolvePastedMacroAppUrl(text, resolveAppLink);
       if (link?.id && link.block) {
-        assets.document(
-          {
-            id: link.id,
-            name: 'Document',
-            fileType: link.block,
-            subpath:
-              link.block === 'artifact'
-                ? link.params?.[SCENE_PARAM]
-                : undefined,
-          },
-          center()
+        const id = link.id;
+        const fileType = link.block;
+        const point = center();
+        const subpath =
+          fileType === 'artifact' ? link.params?.[SCENE_PARAM] : undefined;
+        fireAndForget(
+          (async () => {
+            // The card titles itself from its preview; an embed shows this
+            // name. One the viewer can't read still lands, as a no-access card.
+            let name = 'Document';
+            try {
+              name = (await fetchDocumentMetadata(id)).documentName;
+            } catch {}
+            if (disposed) return;
+            assets.document({ id, name, fileType, subpath }, point);
+          })(),
+          'canvas-paste'
         );
         return;
       }
@@ -199,6 +206,7 @@ function EditableCanvasNext(props: {
   );
   props.onFinishReady(state.text.finish);
   onCleanup(() => {
+    disposed = true;
     state.text.finish();
     state.inspector.cancel();
     state.text.cancel();

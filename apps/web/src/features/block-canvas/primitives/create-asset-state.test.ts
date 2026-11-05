@@ -320,3 +320,23 @@ it('places an artifact as a preview card while artifacts are off', () => {
     geometry: { display: 'preview', width: 340, height: 136 },
   });
 });
+
+it('sizes an artifact as a card or a page when its display switches', () => {
+  const { editor, assets } = setup(
+    { upload: vi.fn(async () => media), media: vi.fn(async () => media) },
+    true
+  );
+  assets.document(
+    { id: 'artifact', name: 'Proposals', fileType: 'artifact' },
+    { x: 0, y: 0 }
+  );
+  const id = editor.getSession().selectedId!;
+  editor.execute(setDocumentDisplayCommand, { id, display: 'preview' });
+  expect(editor.document.items[id]).toMatchObject({
+    geometry: { display: 'preview', width: 340, height: 136 },
+  });
+  editor.execute(setDocumentDisplayCommand, { id, display: 'embed' });
+  expect(editor.document.items[id]).toMatchObject({
+    geometry: { display: 'embed', width: 960, height: 600 },
+  });
+});

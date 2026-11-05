@@ -228,9 +228,9 @@ export function CanvasAssetPicker(props: {
                   selected={selected() === itemIndex()}
                   setIndex={setIndex}
                   itemAction={pick}
-                  setOpen={(open) => {
-                    if (!open) props.onClose();
-                  }}
+                  // Picking closes the menu through onSelect, as Enter does;
+                  // an artifact still has its scene step to show.
+                  setOpen={() => {}}
                 />
               </div>
             )}

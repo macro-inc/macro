@@ -307,7 +307,7 @@ export function CanvasView(props: {
                     props.assets.media(asset, location.world),
                     'canvas-assets'
                   );
-                else props.assets.document(asset, location.world, 'preview');
+                else props.assets.document(asset, location.world);
                 props.insert.close();
               }}
               onFiles={(files) => {
@@ -610,6 +610,31 @@ export function CanvasView(props: {
                         }}
                       >
                         Use preview card
+                      </button>
+                    </Show>
+                    <Show
+                      when={(() => {
+                        const item = selectedItem();
+                        return (
+                          item?.type === 'document' &&
+                          item.geometry.fileType === 'artifact' &&
+                          item.geometry.display !== 'embed'
+                        );
+                      })()}
+                    >
+                      <button
+                        type="button"
+                        class="mx-3 mb-3 rounded border border-edge-muted p-2 text-xs hover:bg-hover"
+                        onClick={() => {
+                          const item = selectedItem();
+                          if (item?.type !== 'document') return;
+                          editor.execute(setDocumentDisplayCommand, {
+                            id: item.id,
+                            display: 'embed',
+                          });
+                        }}
+                      >
+                        Show page
                       </button>
                     </Show>
                   </Show>
