@@ -252,6 +252,52 @@ impl SeatPrices {
     }
 }
 
+/// A change to the quantity of one price's item on a subscription. Items
+/// other than seats (computers) are keyed by price alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ItemQuantityChange {
+    /// The Stripe price whose item changes.
+    pub price_id: String,
+    /// Added to the item's quantity: a new item when the price is absent,
+    /// removed when the quantity reaches zero.
+    pub delta: i64,
+}
+
+/// How often a subscription or recurring price bills.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BillingCadence {
+    /// Daily.
+    Day,
+    /// Weekly.
+    Week,
+    /// Monthly.
+    Month,
+    /// Yearly.
+    Year,
+}
+
+/// The billing terms of a subscription.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubscriptionTerms {
+    /// When the current billing period ends.
+    pub current_period_end: DateTime<Utc>,
+    /// How often the subscription bills.
+    pub interval: BillingCadence,
+    /// ISO currency code, lowercase.
+    pub currency: String,
+}
+
+/// What a Stripe price charges.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PriceInfo {
+    /// Per unit, in the currency's smallest unit.
+    pub amount: i64,
+    /// ISO currency code, lowercase.
+    pub currency: String,
+    /// `None` for a one-time price.
+    pub interval: Option<BillingCadence>,
+}
+
 /// Request body for `PATCH /team/members/{member_user_id}/plan`.
 #[derive(Debug, Clone, serde::Deserialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -783,6 +829,13 @@ pub enum CustomerError {
     /// The plan has no Stripe price configured.
     #[error("The {0} plan is not available")]
     PlanUnavailable(SeatPlan),
+    /// The payment for an item change was declined or needs customer action.
+    /// Nothing changed on the subscription.
+    #[error("The payment did not go through")]
+    PaymentFailed,
+    /// An item change would leave a price with a negative quantity.
+    #[error("Price {0} has fewer items than the change removes")]
+    QuantityBelowZero(String),
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),

@@ -30,6 +30,12 @@ event contract (schema, sanitization, delivery semantics).
   `authentication_service`; `teams` cannot depend on `ai_billing`.
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
   deletion side effects (owned-entity transfer, seat release).
+- `src/domain/subscription_items.rs`: `TeamSubscriptionItems`, non-seat items
+  (Macro computers) on the team subscription by price. One Stripe update per
+  change set, under the team billing lock, invoiced now with
+  `error_if_incomplete` (a decline is `CustomerError::PaymentFailed`) and
+  idempotent by key (`macro_item_change` subscription metadata plus Stripe's
+  `Idempotency-Key`). Seat prices passed here change seat items too.
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI
   tool surface.
 - `src/outbound/team_repo.rs`: the Postgres repository; reads use the supplied pool.
