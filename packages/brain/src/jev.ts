@@ -4,6 +4,7 @@
 // has all its questions at or above the threshold. @mentions and DMs skip
 // the model. Every decision is a line in log/decisions.jsonl.
 import type { DecideRequest, DecideResponse } from './macro.ts';
+import { withSpan } from './telemetry.ts';
 
 /** Limits the decide endpoint enforces (crates/agent_brain relevance.rs). */
 export const MAX_QUESTIONS = 32;
@@ -201,15 +202,21 @@ export async function judge(
   candidate: Candidate,
   deps: JevDeps
 ): Promise<Decision> {
-  const decision = await decideCandidate(candidate, deps);
-  await deps.log({
-    at: (deps.now ?? (() => new Date()))().toISOString(),
-    message_id: candidate.messageId,
-    relevant: decision.relevant,
-    reason: decision.reason,
-    p: decision.probabilities,
+  return withSpan('brain.jev.decide', {}, async (span) => {
+    const decision = await decideCandidate(candidate, deps);
+    span.setAttribute('jev.relevant', decision.relevant);
+    span.setAttribute('jev.reason', decision.reason);
+    const scores = Object.values(decision.probabilities);
+    if (scores.length) span.setAttribute('jev.score', Math.max(...scores));
+    await deps.log({
+      at: (deps.now ?? (() => new Date()))().toISOString(),
+      message_id: candidate.messageId,
+      relevant: decision.relevant,
+      reason: decision.reason,
+      p: decision.probabilities,
+    });
+    return decision;
   });
-  return decision;
 }
 
 async function decideCandidate(

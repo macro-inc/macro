@@ -140,12 +140,14 @@ export class MacroClient {
   readonly localPortmap?: LocalPortmap;
 
   private readonly requestedAs?: string;
+  private readonly fetch?: typeof globalThis.fetch;
 
   private selfBotRecord?: Promise<Bot>;
 
   private selfPrincipal?: Promise<string>;
 
   constructor(opts: MacroOpts) {
+    this.fetch = opts.fetch;
     const env = resolveEnv(opts);
     const localPortmap = env === 'local' ? resolveLocalPortmap() : undefined;
     const hosts = { ...HOSTS[env], ...localPortmap?.hosts, ...opts.hosts };
@@ -285,7 +287,7 @@ export class MacroClient {
   }
 
   private makeClient(baseUrl: string) {
-    const c = createClient({ baseUrl });
+    const c = createClient({ baseUrl, fetch: this.fetch });
     c.interceptors.request.use(async (request) => {
       const headers = await requestAuthHeaders(
         this.authConfig,

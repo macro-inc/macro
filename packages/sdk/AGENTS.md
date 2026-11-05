@@ -144,3 +144,6 @@ the existing gateway prefixes.
 
 - Workspace-import report/cancel endpoints remain app-only review plumbing,
   explicitly classified alongside the existing Notion routes in coverage skips.
+
+`MacroOpts.fetch` supplies the HTTP transport for all generated service clients;
+brain tracing uses it to inject W3C context without modifying SDK operations.

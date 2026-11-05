@@ -5,6 +5,7 @@
 // wake-ups start heartbeat turns; hand-offs start work turns. Every turn
 // commits the workspace when it ends.
 import { join } from 'node:path';
+import { SpanStatusCode } from '@opentelemetry/api';
 import { SpendLedger } from './budget.ts';
 import type { Config } from './config.ts';
 import {
@@ -42,6 +43,7 @@ import {
 } from './prompts.ts';
 import type { RunHandle, Runner, Tier } from './runner.ts';
 import { type Routines, Schedules, type Trigger } from './schedules.ts';
+import { startSpan } from './telemetry.ts';
 import { conversationKey, type Tasks, Work } from './work.ts';
 import { type Git, GitWriter, Workspace } from './workspace.ts';
 
@@ -97,6 +99,8 @@ export class Brain implements Control {
     this.ledger = new SpendLedger(this.workspace.path('cache'));
     this.heartbeatStore = new HeartbeatStore(this.workspace.path('cache'));
   }
+
+  private previousHealth: string | undefined;
 
   private log(line: object) {
     this.deps.log(line);
@@ -417,7 +421,8 @@ export class Brain implements Control {
         turnId,
         prompt,
         persona.operating,
-        persona.events.model
+        persona.events.model,
+        lane
       );
     } catch (error) {
       await stopTyping();
@@ -453,12 +458,14 @@ export class Brain implements Control {
     turnId: string,
     prompt: string,
     system: string,
-    model: string
+    model: string,
+    lane?: string
   ) {
     try {
       const handle = await this.pool.start({
         id: turnId,
         tier,
+        lane,
         prompt,
         system,
         model,
@@ -545,6 +552,17 @@ export class Brain implements Control {
   async health(): Promise<Health> {
     const problems = [...this.problems];
     if (!this.connected) problems.push('event stream disconnected');
+    const state = problems.length === 0 ? 'ok' : 'degraded';
+    if (this.previousHealth !== state) {
+      const span = startSpan('brain.health', {
+        'health.state': state,
+        'health.connected': this.connected,
+        'health.problem_count': problems.length,
+      });
+      if (state !== 'ok') span.setStatus({ code: SpanStatusCode.ERROR });
+      span.end();
+      this.previousHealth = state;
+    }
     return {
       status: problems.length === 0 ? 'ok' : 'degraded',
       startedAt: this.startedAt,

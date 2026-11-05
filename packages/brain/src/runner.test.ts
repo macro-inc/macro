@@ -24,6 +24,7 @@ const result = (text: string, cost: number) =>
     result: text,
     total_cost_usd: cost,
     session_id: 'session-1',
+    usage: { input_tokens: 12, output_tokens: 4 },
   }) as SDKMessage;
 
 const RUNNER_OPTIONS = {

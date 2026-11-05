@@ -53,3 +53,9 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
 ## Related
 
 - Docs: `docs/design/agent-brains.md` · Rust predecessor: `crates/agent_brain` on the team-agents branch (PR 9440)
+
+## Observability
+
+Use `src/telemetry.ts` for brain spans and traced transports. Keep attributes to
+categories, counts and opaque IDs; hash email-bearing user IDs. Telemetry is
+opt-in through the persona env file; README documents its endpoint and parent.

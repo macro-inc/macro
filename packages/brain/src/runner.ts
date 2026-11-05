@@ -8,14 +8,18 @@ import type {
   SDKMessage,
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
+import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { match } from 'ts-pattern';
 import { AsyncQueue } from './channel.ts';
+import { startSpan, traceHeaders } from './telemetry.ts';
 
 export type Tier = 'respond' | 'heartbeat' | 'work';
 
 export type Turn = {
   id: string;
   tier: Tier;
+  /** Conversation lane, an opaque channel/thread key. */
+  lane?: string;
   /** The first user message. */
   prompt: string;
   /** Appended to Claude Code's system prompt (persona, charter). */
@@ -82,6 +86,14 @@ export class AgentSdkRunner implements Runner {
   constructor(private readonly options: AgentSdkRunnerOptions) {}
 
   start(turn: Turn): RunHandle {
+    const span = startSpan('brain.turn', {
+      'brain.tier': turn.tier,
+      'gen_ai.request.model': turn.model,
+      'turn.id': turn.id,
+      ...(turn.lane ? { 'brain.lane': turn.lane } : {}),
+    });
+    const parent = trace.setSpan(context.active(), span);
+    const headers = context.with(parent, traceHeaders);
     const input = new AsyncQueue<SDKUserMessage>();
     const events = new AsyncQueue<RunEvent>();
     const abortController = new AbortController();
@@ -98,33 +110,41 @@ export class AgentSdkRunner implements Runner {
     };
     send(turn.prompt);
 
-    const messages = this.options.query({
-      prompt: input,
-      options: {
-        cwd: turn.cwd,
-        model: turn.model,
-        maxBudgetUsd: turn.maxBudgetUsd,
-        abortController,
-        pathToClaudeCodeExecutable: this.options.claudeExecutable,
-        permissionMode: 'bypassPermissions',
-        allowDangerouslySkipPermissions: true,
-        settingSources: ['project'],
-        systemPrompt: {
-          type: 'preset',
-          preset: 'claude_code',
-          append: turn.system,
+    const messages = context.with(parent, () =>
+      this.options.query({
+        prompt: input,
+        options: {
+          cwd: turn.cwd,
+          model: turn.model,
+          maxBudgetUsd: turn.maxBudgetUsd,
+          abortController,
+          pathToClaudeCodeExecutable: this.options.claudeExecutable,
+          permissionMode: 'bypassPermissions',
+          allowDangerouslySkipPermissions: true,
+          settingSources: ['project'],
+          systemPrompt: {
+            type: 'preset',
+            preset: 'claude_code',
+            append: turn.system,
+          },
+          env: {
+            ...this.options.baseEnv,
+            ...turn.env,
+            ANTHROPIC_BASE_URL: this.options.anthropicBaseUrl,
+            ANTHROPIC_AUTH_TOKEN: this.options.anthropicAuthToken,
+            CLAUDE_CONFIG_DIR: this.options.claudeConfigDir,
+            ...(headers.traceparent
+              ? {
+                  ANTHROPIC_CUSTOM_HEADERS: `traceparent: ${headers.traceparent}`,
+                  BRAIN_TURN_TRACEPARENT: headers.traceparent,
+                }
+              : {}),
+          },
         },
-        env: {
-          ...this.options.baseEnv,
-          ...turn.env,
-          ANTHROPIC_BASE_URL: this.options.anthropicBaseUrl,
-          ANTHROPIC_AUTH_TOKEN: this.options.anthropicAuthToken,
-          CLAUDE_CONFIG_DIR: this.options.claudeConfigDir,
-        },
-      },
-    });
+      })
+    );
 
-    const done = (async (): Promise<Outcome> => {
+    const done = context.with(parent, async (): Promise<Outcome> => {
       let outcome: Outcome = {
         status: 'error',
         result: '',
@@ -136,6 +156,18 @@ export class AgentSdkRunner implements Runner {
           for (const event of toEvents(message)) events.push(event);
           if (message.type !== 'result') continue;
 
+          span.setAttribute(
+            'gen_ai.usage.input_tokens',
+            message.usage.input_tokens
+          );
+          span.setAttribute(
+            'gen_ai.usage.output_tokens',
+            message.usage.output_tokens
+          );
+          span.setAttribute('brain.cost_usd', message.total_cost_usd);
+          span.setAttribute('brain.outcome', message.subtype);
+          if (message.subtype !== 'success')
+            span.setStatus({ code: SpanStatusCode.ERROR });
           answered++;
           outcome = match(message)
             .returnType<Outcome>()
@@ -168,16 +200,19 @@ export class AgentSdkRunner implements Runner {
         }
       } catch (error) {
         if (!abortController.signal.aborted) {
+          span.setStatus({ code: SpanStatusCode.ERROR });
           outcome = { ...outcome, status: 'error', result: String(error) };
         }
       } finally {
         input.close();
         events.close();
+        span.setAttribute('brain.aborted', abortController.signal.aborted);
+        span.end();
       }
       return abortController.signal.aborted
         ? { ...outcome, status: 'aborted' }
         : outcome;
-    })();
+    });
 
     return {
       events,

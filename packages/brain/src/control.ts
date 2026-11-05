@@ -5,6 +5,7 @@
 // token the brain hands its turns.
 import { match, P } from 'ts-pattern';
 import type { Trigger } from './schedules.ts';
+import { withRemoteSpan } from './telemetry.ts';
 
 export type Health = {
   status: 'ok' | 'degraded';
@@ -113,112 +114,114 @@ export function controlHandler(
     if (request.headers.get(TOKEN_HEADER) !== token)
       return json({ error: 'forbidden' }, 403);
 
-    try {
-      const body =
-        request.method === 'POST'
-          ? ((await request.json()) as Record<string, unknown>)
-          : {};
-      const turn = optionalText(body.turn);
-      const query = (name: string) => url.searchParams.get(name);
+    return withRemoteSpan(request.headers.get('traceparent'), async () => {
+      try {
+        const body =
+          request.method === 'POST'
+            ? ((await request.json()) as Record<string, unknown>)
+            : {};
+        const turn = optionalText(body.turn);
+        const query = (name: string) => url.searchParams.get(name);
 
-      const unscheduled = /^DELETE \/schedules\/([^/]+)$/.exec(route);
-      if (unscheduled?.[1]) {
-        await control.unschedule(decodeURIComponent(unscheduled[1]));
-        return json({ ok: true });
-      }
-      const secret = /^GET \/secrets\/([^/]+)$/.exec(route);
-      if (secret?.[1]) {
-        return json({
-          value: await control.secret(decodeURIComponent(secret[1])),
-        });
-      }
+        const unscheduled = /^DELETE \/schedules\/([^/]+)$/.exec(route);
+        if (unscheduled?.[1]) {
+          await control.unschedule(decodeURIComponent(unscheduled[1]));
+          return json({ ok: true });
+        }
+        const secret = /^GET \/secrets\/([^/]+)$/.exec(route);
+        if (secret?.[1]) {
+          return json({
+            value: await control.secret(decodeURIComponent(secret[1])),
+          });
+        }
 
-      return await match(route)
-        .with('POST /talk/post', async () =>
-          json(
-            await control.post(
-              turn,
-              text(body.channel, 'channel'),
+        return await match(route)
+          .with('POST /talk/post', async () =>
+            json(
+              await control.post(
+                turn,
+                text(body.channel, 'channel'),
+                text(body.text, 'text')
+              )
+            )
+          )
+          .with('POST /talk/reply', async () =>
+            json(
+              await control.reply(
+                turn,
+                text(body.channel, 'channel'),
+                text(body.root, 'root'),
+                text(body.text, 'text')
+              )
+            )
+          )
+          .with('GET /talk/context', async () =>
+            json(
+              await control.context(
+                text(query('channel'), 'channel'),
+                query('root')
+              )
+            )
+          )
+          .with('POST /handoff', async () => {
+            const conversation = {
+              channel: text(body.channel, 'channel'),
+              root: optionalText(body.root),
+            };
+            return json(
+              await control.handoff(
+                conversation,
+                text(body.label, 'label'),
+                text(body.task, 'task')
+              )
+            );
+          })
+          .with('POST /memory/remember', async () => {
+            await control.remember(
+              text(body.topic, 'topic'),
               text(body.text, 'text')
+            );
+            return json({ ok: true });
+          })
+          .with('GET /memory/recall', async () =>
+            json(await control.recall(text(query('q'), 'q')))
+          )
+          .with('POST /memory/forget', async () => {
+            await control.forget(text(body.topic, 'topic'));
+            return json({ ok: true });
+          })
+          .with('POST /memory/focus', async () => {
+            await control.focus(text(body.focus, 'focus'));
+            return json({ ok: true });
+          })
+          .with('POST /memory/promise', async () => {
+            await control.promise(
+              text(body.what, 'what'),
+              text(body.to, 'to'),
+              optionalText(body.conversation)
+            );
+            return json({ ok: true });
+          })
+          .with('POST /memory/release', async () =>
+            json(await control.release(text(body.match, 'match')))
+          )
+          .with('POST /schedules', async () =>
+            json(
+              await control.schedule(
+                text(body.note, 'note'),
+                trigger(body.trigger)
+              )
             )
           )
-        )
-        .with('POST /talk/reply', async () =>
-          json(
-            await control.reply(
-              turn,
-              text(body.channel, 'channel'),
-              text(body.root, 'root'),
-              text(body.text, 'text')
-            )
-          )
-        )
-        .with('GET /talk/context', async () =>
-          json(
-            await control.context(
-              text(query('channel'), 'channel'),
-              query('root')
-            )
-          )
-        )
-        .with('POST /handoff', async () => {
-          const conversation = {
-            channel: text(body.channel, 'channel'),
-            root: optionalText(body.root),
-          };
-          return json(
-            await control.handoff(
-              conversation,
-              text(body.label, 'label'),
-              text(body.task, 'task')
-            )
-          );
-        })
-        .with('POST /memory/remember', async () => {
-          await control.remember(
-            text(body.topic, 'topic'),
-            text(body.text, 'text')
-          );
-          return json({ ok: true });
-        })
-        .with('GET /memory/recall', async () =>
-          json(await control.recall(text(query('q'), 'q')))
-        )
-        .with('POST /memory/forget', async () => {
-          await control.forget(text(body.topic, 'topic'));
-          return json({ ok: true });
-        })
-        .with('POST /memory/focus', async () => {
-          await control.focus(text(body.focus, 'focus'));
-          return json({ ok: true });
-        })
-        .with('POST /memory/promise', async () => {
-          await control.promise(
-            text(body.what, 'what'),
-            text(body.to, 'to'),
-            optionalText(body.conversation)
-          );
-          return json({ ok: true });
-        })
-        .with('POST /memory/release', async () =>
-          json(await control.release(text(body.match, 'match')))
-        )
-        .with('POST /schedules', async () =>
-          json(
-            await control.schedule(
-              text(body.note, 'note'),
-              trigger(body.trigger)
-            )
-          )
-        )
-        .with('GET /schedules', async () => json(await control.schedules()))
-        .otherwise(async () => json({ error: `no route ${route}` }, 404));
-    } catch (error) {
-      if (error instanceof RequestError || error instanceof SyntaxError)
-        return json({ error: error.message }, 400);
-      log({ control: route, error: String(error) });
-      return json({ error: String(error) }, 500);
-    }
+          .with('GET /schedules', async () => json(await control.schedules()))
+          .otherwise(async () => json({ error: `no route ${route}` }, 404));
+      } catch (error) {
+        if (error instanceof RequestError || error instanceof SyntaxError)
+          return json({ error: error.message }, 400);
+        log({ control: route, error: String(error) });
+        return json({ error: String(error) }, 500);
+      }
+    });
   };
 }
 
@@ -239,7 +242,13 @@ export async function callBrain(
   }
   const response = await fetch(`http://127.0.0.1:${port}${path}`, {
     method,
-    headers: { [TOKEN_HEADER]: token, 'content-type': 'application/json' },
+    headers: {
+      [TOKEN_HEADER]: token,
+      'content-type': 'application/json',
+      ...(env('BRAIN_TURN_TRACEPARENT')
+        ? { traceparent: env('BRAIN_TURN_TRACEPARENT') ?? '' }
+        : {}),
+    },
     body:
       body === undefined
         ? undefined

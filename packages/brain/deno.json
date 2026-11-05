@@ -12,6 +12,12 @@
   "imports": {
     "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk@0.3.318",
     "@macro-inc/sdk": "../sdk/src/macro.ts",
+    "@opentelemetry/api": "npm:@opentelemetry/api@1.9.1",
+    "@opentelemetry/sdk-trace-base": "npm:@opentelemetry/sdk-trace-base@2.9.0",
+    "@opentelemetry/resources": "npm:@opentelemetry/resources@2.9.0",
+    "@opentelemetry/core": "npm:@opentelemetry/core@2.9.0",
+    "@opentelemetry/context-async-hooks": "npm:@opentelemetry/context-async-hooks@2.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "npm:@opentelemetry/exporter-trace-otlp-http@0.220.0",
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "ts-pattern": "npm:ts-pattern@^5.8.0",
     "uuid": "npm:uuid@^11.1.1"

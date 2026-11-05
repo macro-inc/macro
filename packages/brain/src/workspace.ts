@@ -2,9 +2,11 @@
 // read fresh for every turn (the agent edits them); every write and commit
 // goes through one serial writer so two turns never race on the index.
 import { join } from 'node:path';
+import { SpanStatusCode } from '@opentelemetry/api';
 import { type Budget, parseBudget } from './budget.ts';
 import { type EventsConfig, parseEventsConfig } from './events-config.ts';
 import { type JevConfig, parseJevConfig } from './jev.ts';
+import { withSpan } from './telemetry.ts';
 
 /** Paths the repo must never commit: raw history, logs, caches, secrets. */
 export const IGNORED = [
@@ -182,37 +184,44 @@ export class GitWriter {
   }
 
   commit(message: string): Promise<CommitOutcome> {
-    return this.serial(async () => {
-      await this.workspace.enforceGitignore();
-      await this.must(['add', '-A']);
+    return withSpan('brain.git.commit_push', {}, async (span) =>
+      this.serial(async () => {
+        await this.workspace.enforceGitignore();
+        await this.must(['add', '-A']);
 
-      const staged = await this.git(['diff', '--cached', '--quiet']);
-      if (staged.code !== 0) {
-        await this.must([
-          '-c',
-          'commit.gpgsign=false',
-          'commit',
-          '-q',
-          '-m',
-          message,
-        ]);
-      }
-
-      const ahead = await this.git(['rev-list', '--count', '@{u}..HEAD']);
-      if (ahead.code === 0 && ahead.stdout.trim() === '0') return 'clean';
-
-      for (let attempt = 0; attempt < this.pushAttempts; attempt++) {
-        const pushed = await this.git(['push', '-q', 'origin', 'HEAD']);
-        if (pushed.code === 0) return 'pushed';
-
-        const rebased = await this.git(['pull', '--rebase', '-q']);
-        if (rebased.code !== 0) {
-          await this.git(['rebase', '--abort']);
-          return 'push-failed';
+        const staged = await this.git(['diff', '--cached', '--quiet']);
+        if (staged.code !== 0) {
+          await this.must([
+            '-c',
+            'commit.gpgsign=false',
+            'commit',
+            '-q',
+            '-m',
+            message,
+          ]);
         }
-      }
-      return 'push-failed';
-    });
+
+        const ahead = await this.git(['rev-list', '--count', '@{u}..HEAD']);
+        if (ahead.code === 0 && ahead.stdout.trim() === '0') return 'clean';
+
+        for (let attempt = 0; attempt < this.pushAttempts; attempt++) {
+          const pushed = await this.git(['push', '-q', 'origin', 'HEAD']);
+          span.setAttribute('git.push.attempt', attempt + 1);
+          if (pushed.code === 0) return 'pushed';
+
+          const rebased = await this.git(['pull', '--rebase', '-q']);
+          if (rebased.code !== 0) {
+            await this.git(['rebase', '--abort']);
+            span.setStatus({ code: SpanStatusCode.ERROR });
+            span.setAttribute('error.type', 'push_failed');
+            return 'push-failed';
+          }
+        }
+        span.setStatus({ code: SpanStatusCode.ERROR });
+        span.setAttribute('error.type', 'push_failed');
+        return 'push-failed';
+      })
+    );
   }
 
   private async must(args: string[]): Promise<void> {

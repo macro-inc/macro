@@ -6,6 +6,7 @@
 // the brain reads the stream itself.
 import { AsyncQueue } from './channel.ts';
 import type { ListedMessage, Mention, Message } from './macro.ts';
+import { startSpan, withSpan } from './telemetry.ts';
 
 export const MESSAGE_POSTED = 'message.posted';
 export const AGENT_SESSION_OPENED = 'agent_session.opened';
@@ -142,7 +143,17 @@ export function eventStream(
       };
 
       try {
-        const bytes = await deps.open(connection.signal);
+        const bytes = await withSpan(
+          'brain.events.connect',
+          { 'retry.delay_ms': delay, reconnect: connectedBefore },
+          () => deps.open(connection.signal)
+        );
+        if (disconnectedAt) {
+          const gap = startSpan('brain.events.gap', {
+            'gap.duration_ms': now().getTime() - disconnectedAt.getTime(),
+          });
+          gap.end();
+        }
         deps.log({ events: 'connected' });
         if (connectedBefore)
           items.push({

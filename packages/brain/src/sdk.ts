@@ -4,10 +4,12 @@
 import { Macro } from '@macro-inc/sdk';
 import type { Hosts } from './config.ts';
 import type { RoutineRecord, Routines, Trigger } from './schedules.ts';
+import { tracedFetch } from './telemetry.ts';
 import type { CreatedTask, Tasks } from './work.ts';
 
 export function macroSdk(hosts: Hosts, apiKey: string): Macro {
   return new Macro({
+    fetch: tracedFetch(fetch),
     auth: { type: 'user', apiKey },
     hosts: {
       storage: hosts.storage,

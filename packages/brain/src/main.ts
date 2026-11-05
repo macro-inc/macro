@@ -8,6 +8,7 @@ import { MacroHttp } from './macro.ts';
 import { openGatewaySocket } from './presence.ts';
 import { AgentSdkRunner } from './runner.ts';
 import { macroSdk, sdkRoutines, sdkTasks } from './sdk.ts';
+import { initTelemetry, shutdownTelemetry, tracedFetch } from './telemetry.ts';
 import { gitCli } from './workspace.ts';
 
 const USAGE = `usage: brain <command>
@@ -65,9 +66,14 @@ const print = (value: unknown) =>
 
 async function run(): Promise<void> {
   const config = loadConfig(env);
+  await initTelemetry(env);
   // Loaded here so the talk commands a turn runs start fast.
   const { query } = await import('@anthropic-ai/claude-agent-sdk');
-  const http = new MacroHttp(config.hosts, config.macroApiKey, fetch);
+  const http = new MacroHttp(
+    config.hosts,
+    config.macroApiKey,
+    tracedFetch(fetch)
+  );
   const macro = macroSdk(config.hosts, config.macroApiKey);
   const baseEnv: Record<string, string> = {};
   for (const name of ['PATH', 'HOME', 'LANG', 'TZ']) {
@@ -99,7 +105,11 @@ async function run(): Promise<void> {
   const stop = new AbortController();
   for (const signal of ['SIGTERM', 'SIGINT'] as const)
     Deno.addSignalListener(signal, () => stop.abort());
-  await brain.run(stop.signal);
+  try {
+    await brain.run(stop.signal);
+  } finally {
+    await shutdownTelemetry();
+  }
 }
 
 async function health(): Promise<number> {

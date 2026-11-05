@@ -101,3 +101,28 @@ environment only for the exact repo URL. The brain passes these two repo
 variables to git; Claude turns receive neither. Git config stores the helper
 path, identity and repo URL, never the token. Failed clones clean up their
 temporary directory, and subsequent starts keep the existing workspace.
+
+## Telemetry
+
+Set `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` to the full OTLP HTTP traces URL
+(for example, a guest-reachable collector origin plus `/v1/traces`) in the
+persona's `/etc/macro/personas/<os_user>.env`, then restart its brain unit.
+An unset endpoint disables telemetry with one startup log; an empty or malformed
+endpoint or provisioning parent fails startup. Collector failures log a fixed
+`telemetry: export_failed` diagnostic without provider payloads.
+
+`brain.turn` records tier, opaque lane, model, tokens, cost and outcome;
+`brain.jev.decide` records relevance, decision category and maximum score;
+`brain.events.connect`/`brain.events.gap` measure reconnects and missing-stream
+time. `brain.git.commit_push` covers the serialized commit and push, and
+`brain.health` emits only when health changes. No span captures message text,
+prompts, summaries, credentials, URLs or exception text.
+
+Provisioning supplies `BRAIN_PROVISION_TRACEPARENT`, `MACRO_TEAM_ID` and
+`MACRO_COMPUTER_ID` through the persona environment. Health joins that trace;
+later turns link to it. User IDs use lowercase SHA-256 hex (matching backend
+`macro_user_id::telemetry_id`), because the source ID can contain an email.
+The Deno async-local context manager isolates concurrent turns. Macro HTTP and
+SDK calls inject W3C context; Claude receives `ANTHROPIC_CUSTOM_HEADERS` so its
+gateway calls join the turn. Tool subprocesses forward `BRAIN_TURN_TRACEPARENT`
+back to the authenticated control server. Shutdown flushes the exporter.
