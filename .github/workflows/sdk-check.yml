@@ -2,12 +2,6 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/sdk_check.rs
 name: SDK Check
 'on':
-  pull_request:
-    branches:
-    - main
-    paths:
-    - packages/sdk/**
-    - '.github/workflows/sdk-check.yml'
   push:
     branches:
     - main
@@ -42,5 +36,5 @@ jobs:
       run: bun run coverage
       working-directory: packages/sdk
 concurrency:
-  group: sdk-check-${{ github.event.action == 'labeled' && github.run_id || github.ref }}
+  group: sdk-check-${{ github.event_name == 'pull_request' && github.run_id || github.ref }}
   cancel-in-progress: true

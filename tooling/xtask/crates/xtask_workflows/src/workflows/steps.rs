@@ -475,14 +475,13 @@ pub fn show_sccache_stats() -> Step<Run> {
 }
 
 /// Base for jobs gated behind `path-check`: depends on it and runs only where
-/// the path filter matched, on non-draft PRs unless the run was requested with
-/// the `PR CI` label. Shared by `check` and `test`.
+/// the path filter matched. Shared by `check` and `test`.
 pub fn gated_job() -> Job {
     Job::default()
         .needs(vec!["path-check".to_string()])
         .cond(Expression::new(
-        "needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled')",
-    ))
+            "needs.path-check.outputs.should_run == 'true'",
+        ))
 }
 
 // ---------------------------------------------------------------------------
