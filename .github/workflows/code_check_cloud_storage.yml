@@ -257,8 +257,12 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: rust
-        path: /nix
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -426,8 +430,12 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: rust
-        path: /nix
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -546,12 +554,12 @@ jobs:
           POSTGRES_DB: macrodb
         ports:
         - '5432:5432'
-        options: '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5 --shm-size 1g'
+        options: '--health-cmd pg_isready --health-interval 1s --health-timeout 5s --health-retries 30 --shm-size 1g'
       redis:
         image: redis:7
         ports:
         - '6379:6379'
-        options: '--health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5'
+        options: '--health-cmd "redis-cli ping" --health-interval 1s --health-timeout 5s --health-retries 30'
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -561,8 +569,12 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: rust
-        path: /nix
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
