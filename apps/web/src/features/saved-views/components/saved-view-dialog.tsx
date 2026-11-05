@@ -63,7 +63,7 @@ export function SavedViewForm(
     title?: string;
     submitLabel?: string;
     summary?: JSX.Element;
-    /** A consumer's note above the name, such as another way to make the view. */
+    /** A consumer's note under the name, such as another way to make the view. */
     hint?: JSX.Element;
     /** Consumer-owned controls for the definition itself, after the name. */
     fields?: JSX.Element;
@@ -91,7 +91,6 @@ export function SavedViewForm(
         <Dialog.Title class="text-lg font-medium wrap-anywhere">
           {props.title ?? 'Save view'}
         </Dialog.Title>
-        {props.hint}
         <label class="flex flex-col gap-2 text-sm">
           Name
           <Input
@@ -103,6 +102,7 @@ export function SavedViewForm(
             placeholder="e.g. Needs review"
           />
         </label>
+        {props.hint}
         {props.fields}
         <Show when={props.summary}>
           <div class="flex flex-col gap-2 text-xs text-ink-muted">

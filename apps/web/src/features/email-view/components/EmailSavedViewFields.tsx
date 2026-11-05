@@ -175,7 +175,7 @@ const PARTICIPANT_FIELDS: readonly EmailParticipantField[] = [
  * Edits every condition of an email view; the dialog around it owns saving.
  * Typed lists keep their own text, so remount it to show new filters.
  */
-/** Shown over a new view's name: an agent can make the view from a request. */
+/** Shown under a new view's name: an agent can make the view from a request. */
 export function EmailSavedViewAgentHint() {
   return (
     <p class="flex items-start gap-2 rounded-md border border-edge-muted bg-input/50 px-3 py-2 text-sm text-ink-muted">
