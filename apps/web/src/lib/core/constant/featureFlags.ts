@@ -1043,3 +1043,10 @@ export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',
   env: 'ENABLE_WHATSAPP_LINKED',
 });
+
+/** Team admins can invite an agent and purchase its computer together. */
+export const enableTeamAgents = defineFlag({
+  key: 'enable-team-agents',
+  env: 'ENABLE_TEAM_AGENTS',
+  default: onInDev,
+});

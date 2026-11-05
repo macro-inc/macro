@@ -1366,6 +1366,34 @@ export const authServiceClient = {
     );
   },
 
+  listTeamAgents() {
+    return fetchWithAuth<import('./generated/schemas').TeamAgents>(
+      `${authHost}/team_agents`,
+      { method: 'GET' }
+    );
+  },
+
+  quoteTeamAgent(size: import('./generated/schemas').ComputerSize) {
+    return fetchWithAuth<import('./generated/schemas').TeamAgentQuote>(
+      `${authHost}/team_agents/quote?size=${size}`,
+      { method: 'GET' }
+    );
+  },
+
+  createTeamAgent(request: import('./generated/schemas').CreateTeamAgent) {
+    return fetchWithAuth<import('./generated/schemas').TeamAgent>(
+      `${authHost}/team_agents`,
+      { method: 'POST', body: JSON.stringify(request) }
+    );
+  },
+
+  deleteTeamAgent(userId: string) {
+    return fetchWithAuth<{}>(
+      `${authHost}/team_agents/${encodeURIComponent(userId)}`,
+      { method: 'DELETE' }
+    );
+  },
+
   async getTeamInvites() {
     return (
       await fetchWithAuth<TeamInvitesResponse>(`${authHost}/team/invites`, {
