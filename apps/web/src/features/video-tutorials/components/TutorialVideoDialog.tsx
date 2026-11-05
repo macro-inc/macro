@@ -1,9 +1,39 @@
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PlayIcon from '@icon/system/regular/play.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
+
+/**
+ * The big play button: a solid black disc with a filled white triangle. The
+ * triangle's centroid sits on the disc's centre, which is where the eye puts a
+ * play glyph's middle, so it reads as centred without nudging.
+ */
+function PlayButtonGlyph() {
+  return (
+    <svg
+      viewBox="0 0 96 96"
+      aria-hidden="true"
+      class="size-24 rounded-full drop-shadow-2xl outline-offset-4 outline-[white] group-focus-visible/play:outline-2 transition-transform not-touch:group-hover/play:scale-105 mobile:size-16"
+    >
+      <circle
+        cx="48"
+        cy="48"
+        r="47.5"
+        fill="black"
+        stroke="white"
+        stroke-opacity="0.18"
+      />
+      <path
+        d="M37.5 30 L69 48 L37.5 66 Z"
+        fill="white"
+        stroke="white"
+        stroke-width="6"
+        stroke-linejoin="round"
+      />
+    </svg>
+  );
+}
 
 /**
  * The tutorial video at 80% of the window, with a big play button: the video
@@ -88,11 +118,9 @@ export function TutorialVideoDialog(props: {
               type="button"
               onClick={play}
               aria-label={t('tutorials.playVideo')}
-              class="absolute inset-0 grid place-items-center bg-[black]/30 outline-none"
+              class="group/play absolute inset-0 grid place-items-center bg-[black]/30 outline-none"
             >
-              <span class="grid size-24 place-items-center rounded-full bg-[white] text-[black] shadow-2xl transition-transform not-touch:hover:scale-105 mobile:size-16">
-                <PlayIcon class="ml-1.5 size-10 mobile:size-7" />
-              </span>
+              <PlayButtonGlyph />
             </button>
           </Show>
         </div>
