@@ -72,12 +72,12 @@ CI limits Cargo to two concurrent build jobs for tests because linking several
 large service test binaries can exhaust runner memory. Nextest's test worker
 count is configured separately; the build limit does not reduce test coverage.
 
-On a pull request, CI tests the changed packages and their direct dependents, and
-lints every package the change can reach. It doesn't compile or run the tests of
-indirect dependents, so after a change to a widely used crate, also test the
-indirect dependents you expect it to affect. The `cloud storage main check`
-workflow lints and tests the whole workspace on `main` after merge, and alerts on
-failure.
+On a pull request, CI tests the changed packages, their direct dependents, and
+crates whose own third-party dependencies changed, and lints every package the
+change can reach. It doesn't compile or run the tests of indirect dependents, so
+after a change to a widely used crate, also test the indirect dependents you expect
+it to affect. The `cloud storage main check` workflow lints and tests the whole
+workspace on `main` after merge, and alerts on failure. It doesn't block deploys.
 
 Keep tests in a sibling `test.rs` (CS-49). For example, `src/user.rs` declares:
 

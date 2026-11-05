@@ -19,8 +19,9 @@
 //!
 //! Stdout is two lines, each one of `all`, `none` or space-separated names:
 //! - line 1, every affected package: clippy lints these.
-//! - line 2, the changed packages and their direct dependents: pull requests
-//!   test these, and the run on `main` after merge tests everything.
+//! - line 2, the changed packages, their direct dependents, and crates whose own
+//!   dependencies changed: pull requests test these, and the run on `main` after
+//!   merge tests everything.
 //!
 //! `all` means every workspace package. `none` means no changed file mapped to
 //! a package (a top-level JSON, a Nix shell tweak, docs, …); CI must not treat
@@ -87,7 +88,8 @@ impl fmt::Display for PackageSelection {
 struct Selections {
     /// Changed packages plus every reverse dependency.
     affected: PackageSelection,
-    /// Changed packages plus direct dependents, always within `affected`.
+    /// Changed packages, direct dependents, and crates whose own dependencies
+    /// changed, always within `affected`.
     direct: PackageSelection,
 }
 
@@ -402,12 +404,14 @@ fn compute_packages<'g>(
         .filter(|package| package.in_workspace())
         .collect();
     // An edit to `workspace-hack` changes the simulated build of nearly every
-    // crate, so its summary says nothing about which crates the edit is for.
+    // crate, so its summary says nothing about which crates the edit is for. Ask
+    // the graphs instead which crates use a third-party package that really
+    // changed. Features that only unification spreads are left to the run on `main`.
     let hack_changed = path_changed
         .iter()
         .any(|package| package.name() == WORKSPACE_HACK);
     let build_changed = if hack_changed {
-        BTreeSet::new()
+        users_of_changed_third_party(old_graph, new_graph)?
     } else {
         names(&computed.summary_changed_set)
     };
@@ -416,6 +420,45 @@ fn compute_packages<'g>(
         names(&computed.affected_set),
         path_changed,
         build_changed,
+    )
+}
+
+/// Workspace crates that use a third-party package whose version or source differs
+/// between the graphs, directly or through other third-party crates. Stops at
+/// workspace crates, so `workspace-hack` can't spread it to everything.
+fn users_of_changed_third_party(
+    old_graph: &PackageGraph,
+    new_graph: &PackageGraph,
+) -> Result<BTreeSet<String>> {
+    let old_packages: BTreeSet<_> = old_graph
+        .packages()
+        .filter(|package| !package.in_workspace())
+        .map(third_party_key)
+        .collect();
+    let changed: Vec<_> = new_graph
+        .packages()
+        .filter(|package| !package.in_workspace())
+        .filter(|package| !old_packages.contains(&third_party_key(*package)))
+        .map(|package| package.id())
+        .collect();
+    let users = new_graph
+        .query_reverse(changed)
+        .context("querying users of changed third-party packages")?
+        .resolve_with_fn(|_, link| !link.to().in_workspace());
+    Ok(users
+        .packages(DependencyDirection::Forward)
+        .filter(|package| package.in_workspace() && package.name() != WORKSPACE_HACK)
+        .map(|package| package.name().to_owned())
+        .collect())
+}
+
+/// What identifies a third-party package across two checkouts. Its package id
+/// can't, because a path dependency's id contains the checkout's location.
+fn third_party_key<'g>(package: PackageMetadata<'g>) -> (&'g str, String, Option<&'g str>) {
+    (
+        package.name(),
+        package.version().to_string(),
+        package.source().external_source(),
     )
 }
 
