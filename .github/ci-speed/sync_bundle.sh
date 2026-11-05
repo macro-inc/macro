@@ -2,7 +2,7 @@
 # Builds and bundles the worker with wrangler's dry run, then hashes what would upload.
 # No Cloudflare token exists in this job, so nothing can reach Cloudflare's write API.
 set -euo pipefail
-\cd services/sync-service
+cd services/sync-service
 if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then echo "refusing: token present"; exit 9; fi
 start=$(date +%s)
 npm ci --silent

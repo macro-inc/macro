@@ -6,7 +6,7 @@ on:
 permissions: { contents: read }
 jobs:
   bundle:
-    name: ${{ matrix.label }} ${{ matrix.sha }} ${{ matrix.attempt }}
+    name: ${{ matrix.label }} ${{ matrix.attempt }} ${{ matrix.sha }}
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-sync-bench
     timeout-minutes: 45
     strategy:
@@ -14,35 +14,33 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - { label: warmup, sha: 240bc4d6a324, attempt: 0 }
-          - { label: same-worker, sha: 240bc4d6a324, attempt: 1 }
-          - { label: same-worker, sha: 240bc4d6a324, attempt: 2 }
-          - { label: lock-changed, sha: 5a4d56aa13be, attempt: 1 }
-          - { label: none-changed, sha: ce7984a95c8c, attempt: 1 }
-          - { label: lock-toml-changed, sha: 45d9102dd4d9, attempt: 1 }
-          - { label: lock-toml-changed, sha: 1b51727cad95, attempt: 1 }
-          - { label: lock-changed, sha: a701da266b92, attempt: 1 }
-          - { label: worker-changed-before, sha: 70831cf4d5~1, attempt: 1 }
-          - { label: worker-changed-after, sha: 70831cf4d5, attempt: 1 }
+          - { label: warmup, sha: 240bc4d6a32425efaedbb633b7eafd52848e8461, attempt: 0 }
+          - { label: same-worker, sha: 240bc4d6a32425efaedbb633b7eafd52848e8461, attempt: 1 }
+          - { label: same-worker, sha: 240bc4d6a32425efaedbb633b7eafd52848e8461, attempt: 2 }
+          - { label: lock-changed, sha: 5a4d56aa13bee9cb55d948e86d906cc8f09181c6, attempt: 1 }
+          - { label: none-changed, sha: ce7984a95c8cfcefe1d00040cc25c2c90536ca11, attempt: 1 }
+          - { label: lock-toml-changed, sha: 45d9102dd4d95c54608f02c27810f765a4854c55, attempt: 1 }
+          - { label: lock-toml-changed, sha: 1b51727cad9570c734a7eafe64475999c0bacedd, attempt: 1 }
+          - { label: lock-changed, sha: a701da266b9262645eadd65101a745c7f42f4f3d, attempt: 1 }
+          - { label: worker-changed-before, sha: 25f6d1b653145575ce3324da3f9beb41aa99179d, attempt: 1 }
+          - { label: worker-changed-after, sha: 70831cf4d554c40fecfa5c816e86c339ffdfeca9, attempt: 1 }
     env: { LABEL: "${{ matrix.label }}", ATTEMPT: "${{ matrix.attempt }}" }
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with: { persist-credentials: false, path: harness }
+        with: { persist-credentials: false, clean: false, ref: "${{ matrix.sha }}" }
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with: { persist-credentials: false, clean: false, fetch-depth: 0, path: src }
-      - run: git -C src checkout -q "${{ matrix.sha }}"
+        with: { persist-credentials: false, path: harness }
       - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
         with:
           cache: rust
           path: |-
-            ${{ github.workspace }}/src/target
+            ${{ github.workspace }}/target
             /home/runner/.cargo/bin
             /home/runner/.cache/.wasm-pack
         continue-on-error: true
-      - run: |
-          \cd src
-          channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
-          rustup toolchain install "$channel" --profile minimal --target wasm32-unknown-unknown --no-self-update
+      - uses: ./.github/actions/setup-rust
+        with: { sccache: 'false', rust-cache: 'false' }
+      - run: rustup target add wasm32-unknown-unknown
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
-      - run: \cd src && bash "$GITHUB_WORKSPACE/harness/.github/ci-speed/sync_bundle.sh"
+      - run: bash harness/.github/ci-speed/sync_bundle.sh
