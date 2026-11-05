@@ -1,4 +1,6 @@
 import { t } from '@app/lib/i18n';
+import agentsVideo from './assets/agents.mp4';
+import agentsPoster from './assets/agents-poster.jpg';
 import calendarVideo from './assets/calendar.mp4';
 import calendarPoster from './assets/calendar-poster.jpg';
 import callsVideo from './assets/calls.mp4';
@@ -194,5 +196,19 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     },
     videoUrl: whatsappVideo,
     posterUrl: whatsappPoster,
+  },
+  agents: {
+    id: 'agents',
+    get title() {
+      return t('tutorials.agentsTitle');
+    },
+    get snippet() {
+      return t('tutorials.agentsSnippet');
+    },
+    get length() {
+      return t('tutorials.agentsLength');
+    },
+    videoUrl: agentsVideo,
+    posterUrl: agentsPoster,
   },
 };

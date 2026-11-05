@@ -47,4 +47,8 @@ export default {
   whatsappSnippet:
     'Link WhatsApp, bring your chats in, reply, share and mention them in channels',
   whatsappLength: '0:45',
+  agentsTitle: 'Learn how to use Macro Agents',
+  agentsSnippet:
+    'Agents in your channels, tasks for agents, macroD and unified memory',
+  agentsLength: '1:06',
 };
