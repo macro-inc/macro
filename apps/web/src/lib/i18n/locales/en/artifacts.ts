@@ -10,6 +10,7 @@ export default {
 
   // Publisher notice.
   publishedBy: 'Published by {{name}}',
+  agentForUser: '{{agent}} for {{user}}',
   userGenerated: 'User-generated content',
   userGeneratedHint:
     'Made by someone outside your team. Don’t enter passwords or other private information in it.',

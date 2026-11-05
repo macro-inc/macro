@@ -30,7 +30,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal, blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
-import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
@@ -40,7 +39,8 @@ import AppWindow from '@icon/system/regular/app-window.svg';
 import ClockCounterClockwise from '@icon/system/regular/clock-counter-clockwise.svg';
 import FileIcon from '@icon/system/regular/file.svg';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, Show } from 'solid-js';
+import { PublisherName, usePublisherName } from './artifact-publisher';
 import { artifactSearch } from './artifact-route';
 import { PublisherNotice } from './components/publisher-notice';
 import { OVERVIEW_TAB } from './components/scene-switcher';
@@ -52,8 +52,6 @@ import {
 import { isOutsideOwnerTeam, SCENE_PARAM, selectScene } from './core/scenes';
 import { useArtifactQuery, useArtifactVersionsQuery } from './queries/artifact';
 import { ArtifactView } from './views/artifact-view';
-
-const authorName = (userId: string) => getDisplayName(tryMacroId(userId));
 
 export default function ArtifactBlock() {
   useBlockEntityCommands();
@@ -84,15 +82,16 @@ export default function ArtifactBlock() {
     () => documentId,
     () => artifact.isSuccess
   );
-  const versionRows = (): VersionRow[] =>
+  const versionRows = createMemo((): VersionRow[] =>
     versions.isSuccess
       ? versions.data.versions.map((version) => ({
           number: version.number,
           message: version.message ?? undefined,
-          author: authorName(version.created_by),
+          author: <PublisherName publisher={version} />,
           createdAt: version.created_at,
         }))
-      : [];
+      : []
+  );
   const scenes = () => current()?.scenes ?? [];
   const scene = () => selectScene(scenes(), requestedScene());
 
@@ -105,10 +104,7 @@ export default function ArtifactBlock() {
       : [];
     return isOutsideOwnerTeam(ownerId, viewerId(), members);
   };
-  const publisher = () => {
-    const version = current();
-    return version ? authorName(version.created_by) : '';
-  };
+  const publisher = usePublisherName(() => current() ?? undefined);
 
   const permissions = useGetPermissions();
   const openShare = useShareModal(() => ({
