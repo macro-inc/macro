@@ -189,60 +189,30 @@ async fn imported_call_record_reads_source_and_transcript(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("import_users"))
 )]
-async fn an_imported_call_s_people_are_its_owner_and_participants(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let mut call = granola_meeting("import-a");
-    call.participants.push(CallParticipant {
-        id: macro_uuid::generate_uuid_v7(),
-        user_id: None,
-        display_name: Some("Caller".into()),
-        email: None,
-        phone: Some("+1555010".into()),
-        external_id: None,
-        attendance: vec![],
-    });
-    let call_id = PgImportedCallRepository::new(pool.clone())
-        .upsert(call)
-        .await?;
-
-    let people = PgCallRepo::new(pool)
-        .get_call_record_people(&call_id)
-        .await?;
-    assert_eq!(people.user_ids, vec![user("import-a")]);
-    let mut guests: Vec<(Option<String>, Option<String>)> = people
-        .guests
-        .into_iter()
-        .map(|guest| (guest.email, guest.phone))
-        .collect();
-    guests.sort();
-    assert_eq!(
-        guests,
-        vec![
-            (None, Some("+1555010".into())),
-            (Some("ada@example.com".into()), None),
-        ]
-    );
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../fixtures", scripts("import_users"))
-)]
 async fn an_attendee_with_an_account_is_a_participant_not_a_guest(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let mut call = granola_meeting("import-a");
-    call.participants.push(CallParticipant {
-        id: macro_uuid::generate_uuid_v7(),
-        user_id: Some(user("import-a")),
-        display_name: Some("Sam Rep".into()),
-        email: Some("sam@example.com".into()),
-        phone: Some("+1555011".into()),
-        external_id: None,
-        attendance: vec![],
-    });
+    call.participants.extend([
+        CallParticipant {
+            id: macro_uuid::generate_uuid_v7(),
+            user_id: Some(user("import-a")),
+            display_name: Some("Sam Rep".into()),
+            email: Some("sam@example.com".into()),
+            phone: Some("+1555011".into()),
+            external_id: None,
+            attendance: vec![],
+        },
+        CallParticipant {
+            id: macro_uuid::generate_uuid_v7(),
+            user_id: None,
+            display_name: Some("Caller".into()),
+            email: None,
+            phone: Some("+1555010".into()),
+            external_id: None,
+            attendance: vec![],
+        },
+    ]);
     if let Some(transcript) = call.transcript.as_mut() {
         transcript.segments[1].speaker_label = Some("sam rep".into());
     }
@@ -262,12 +232,13 @@ async fn an_attendee_with_an_account_is_a_participant_not_a_guest(
         .map(|p| p.user_id.as_str())
         .collect();
     assert_eq!(participants, vec![owner.as_str()]);
-    let guests: Vec<&str> = record
+    let mut guests: Vec<&str> = record
         .guests
         .iter()
         .map(|g| g.display_name.as_str())
         .collect();
-    assert_eq!(guests, vec!["Ada"]);
+    guests.sort();
+    assert_eq!(guests, vec!["Ada", "Caller"]);
     assert_eq!(
         record.transcript[1].speaker_id, owner,
         "their label names their account"
@@ -277,13 +248,23 @@ async fn an_attendee_with_an_account_is_a_participant_not_a_guest(
         .get_call_records_by_user(user("import-a").copied(), 10, &None, LATEST_FIRST)
         .await?;
     assert_eq!(listed[0].participants.len(), 1);
-    assert_eq!(listed[0].guests.len(), 1);
+    assert_eq!(listed[0].guests.len(), 2);
 
+    // CRM linking sees the owner and the guests, each by email or phone.
     let people = repo.get_call_record_people(&call_id).await?;
-    let emails: Vec<Option<String>> = people.guests.into_iter().map(|g| g.email).collect();
+    assert_eq!(people.user_ids, vec![user("import-a")]);
+    let mut guests: Vec<(Option<String>, Option<String>)> = people
+        .guests
+        .into_iter()
+        .map(|guest| (guest.email, guest.phone))
+        .collect();
+    guests.sort();
     assert_eq!(
-        emails,
-        vec![Some("ada@example.com".into())],
+        guests,
+        vec![
+            (None, Some("+1555010".into())),
+            (Some("ada@example.com".into()), None),
+        ],
         "only guests are matched to CRM records"
     );
     Ok(())

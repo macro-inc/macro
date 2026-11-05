@@ -203,7 +203,16 @@ describe('mixed Agents sidebar', () => {
       screen
         .getAllByRole('heading', { level: 3 })
         .map((heading) => heading.textContent)
-    ).toEqual(['Needs you1', 'Recent1', 'Archived']);
+    ).toEqual(['Needs you1', 'Recent1']);
+    // Archived starts collapsed; its header expands it.
+    const archivedToggle = screen.getByRole('button', { name: /Archived/ });
+    expect(archivedToggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('button', { name: /Old spike/ })).toBeNull();
+    fireEvent.click(archivedToggle);
+    expect(archivedToggle.getAttribute('aria-expanded')).toBe('true');
+    expect(
+      await screen.findByRole('button', { name: /Old spike/ })
+    ).toBeTruthy();
     const chat = screen.getByRole('button', { name: /Plan launch/ });
     expect(chat.getAttribute('data-kind')).toBe('chat');
     expect(chat.getAttribute('aria-current')).toBe('page');

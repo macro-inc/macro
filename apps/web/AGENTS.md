@@ -25,6 +25,13 @@
 
 ## Verifying a change in a real browser
 
+`just test-functional` builds a production-like bundle of its fixtures and runs
+Playwright against it, not a dev server: each page otherwise fetches thousands of
+modules through the test's own routes, which limits how many tests can run at
+once. A fixture that depends on dev-only behavior won't work there. CI sets
+`FUNCTIONAL_TEST_WORKERS` and retries a failed test once; locally it defaults to
+one worker and no retries.
+
 ID-only user mention rendering, name lookup failure, and composer save/reopen
 are covered on desktop/tablet/phone by `user-mentions.browser.e2e.ts` in the
 LexicalMarkdown core browser suite (see its README).
@@ -94,12 +101,9 @@ that coverage proves the meter's layout there, not that touch users can reach it
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
-The Dialpad row in Settings (connect, backfill choice, reconnect, and no requests
-while the feature flag is off) has a
-backend-free browser regression:
+The Dialpad row in Settings (connect with the backfill choice, and reconnect)
+has a backend-free browser regression:
 `bunx playwright test --config src/features/dialpad-connect/browser-test/playwright.config.ts`.
-CRM contact phones (desktop and phone) and call source badges:
-`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts contact-phones.browser.e2e.ts`.
 
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details) have a backend-free
@@ -692,7 +696,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Offer Add channels on manual-section headers and empty states; keep the picker scoped to eligible joined channels, explain scope and assignment moves in concise helper text, and leave smart membership rule-driven.
   Place the smart rule Input below Name contains; show a match count with hover/focus channel preview, and keep preview queries reactive to the selected scope without briefly reporting pending matches as empty.
   Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section.
-  Default Favorites to Custom order and persist drag reordering through the shared favorites mutation; preserve hidden and non-channel favorite positions, disable dragging under automatic sorts, show an insertion line at the actual destination edge, and keep the original rail unchanged.
+  Default Favorites to Custom order and persist drag reordering through the shared favorites mutation; preserve hidden and non-channel favorite positions, disable dragging under automatic sorts, show an insertion line at the actual destination edge, and keep the original rail unchanged. Retain pointer hit-testing coordinates until the drag sensor finishes so intervening scroll updates cannot discard a valid drop.
   Share the sliders-icon section menu's Sort, Filter, and actions with a header context menu; use trailing `SingleSelectCheck` marks for sorting, keep the Unread only label left and its switch right, and keep the filter submenu open when toggled.
   Compose the section click and right-click menus with `ContextMenuContent`, `MenuItem`, `MenuGroup`, and `MenuSeparator`; do not nest padded `Dropdown.Group` elements inside a context-menu surface.
   Keep all section mute, unmute, and snooze actions personal to the viewer; use the complete current membership, not filtered or hydrated rows, and never apply the change to later additions. Resolve built-in membership through the complete channel list, including custom-section assignments and preserving participant checks; Favorites targets channel favorites only. Use the bulk item-preference endpoints and shared snooze picker, applying confirmed changes to the cache once and preserving successful chunks on partial failure.

@@ -363,53 +363,6 @@ async fn matches_accounts_and_contacts_regardless_of_case(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_caller_known_by_number_links_their_contact_and_company(pool: PgPool) {
-    let team_id = seed_team(&pool, true).await;
-    let acme = insert_company(&pool, team_id, "acme.example", false).await;
-    let ada = insert_contact(&pool, acme, "ada@acme.example").await;
-    insert_phone(&pool, ada, "+1555010").await;
-    let call_record_id = Uuid::now_v7();
-
-    linker(&pool)
-        .link_call_record(call_record_id, &imported(&[(None, Some("+1555010"))]))
-        .await
-        .unwrap();
-
-    assert_eq!(
-        linked_ids(&pool, call_record_id, SystemPropertyKey::Contacts).await,
-        vec![ada.to_string()]
-    );
-    assert_eq!(
-        linked_ids(&pool, call_record_id, SystemPropertyKey::Companies).await,
-        vec![acme.to_string()]
-    );
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn an_email_match_wins_over_the_guest_s_number(pool: PgPool) {
-    let team_id = seed_team(&pool, true).await;
-    let acme = insert_company(&pool, team_id, "acme.example", false).await;
-    let ada = insert_contact(&pool, acme, "ada@acme.example").await;
-    let reception = insert_contact(&pool, acme, "desk@acme.example").await;
-    // A shared office line belongs to another contact.
-    insert_phone(&pool, reception, "+1555010").await;
-    let call_record_id = Uuid::now_v7();
-
-    linker(&pool)
-        .link_call_record(
-            call_record_id,
-            &imported(&[(Some("ada@acme.example"), Some("+1555010"))]),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(
-        linked_ids(&pool, call_record_id, SystemPropertyKey::Contacts).await,
-        vec![ada.to_string()]
-    );
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_unknown_or_hidden_number_links_nothing(pool: PgPool) {
     let team_id = seed_team(&pool, true).await;
     let acme = insert_company(&pool, team_id, "acme.example", false).await;

@@ -16,9 +16,21 @@ use rootcause::Report;
 const PROMPTS: &[(&str, &[&str])] = &[
     (
         "What did the design team decide about the Q3 launch?",
-        &["core"],
+        &["search"],
     ),
-    ("Find the contract we sent Acme last month", &["core"]),
+    ("Find the contract we sent Acme last month", &["search"]),
+    (
+        "Search everything tagged Launch for the pricing decision",
+        &["search"],
+    ),
+    (
+        "Catch me up on what changed in my workspace today",
+        &["search"],
+    ),
+    (
+        "What did I ask Macro in my AI chat about the offsite?",
+        &["search"],
+    ),
     (
         "Every Monday at 9, send me a summary of my open tasks",
         &["routines", "tasks"],

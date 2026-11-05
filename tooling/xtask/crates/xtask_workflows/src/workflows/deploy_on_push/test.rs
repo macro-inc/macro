@@ -51,7 +51,7 @@ fn sync_deployment_waits_for_active_objects_before_unblocking_clients() -> Resul
         .expect("worker deployment");
     let wait = steps
         .iter()
-        .position(|step| step["run"].as_str() == Some("sleep 300"))
+        .position(|step| step["run"].as_str() == Some("sleep \"$WAIT_SECONDS\""))
         .expect("the worker job must wait out the default code-update deferral");
     assert!(deploy < wait);
     assert!(steps[wait]["if"].is_null());

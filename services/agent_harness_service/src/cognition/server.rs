@@ -385,6 +385,13 @@ pub async fn build(
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
+    let document_tool_context = match ai_tools::canvas_artifacts_rollout(
+        config.posthog_api_key.value(),
+        config.posthog_host.value(),
+    )? {
+        Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
+        None => document_tool_context,
+    };
 
     tracing::info!("initialized document tool context");
 
@@ -988,6 +995,7 @@ pub async fn build(
         ),
         schedule_tool_context: ai_tools::build_routine_tool_context()?,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        web_search_provider: ai_tools::build_web_search_provider_from_env(),
         admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
@@ -1197,6 +1205,11 @@ pub async fn build(
         ai_stream_registry: service::ai_stream_registry::AiStreamRegistry::new(
             redis_client.clone(),
         ),
+        web_rate_limiter: rate_limit::RateLimitServiceImpl {
+            repo: rate_limit::RedisRateLimitAdapter {
+                redis: (*redis_client).clone(),
+            },
+        },
         mcp_state,
         pipedream_state,
         granola_sync,

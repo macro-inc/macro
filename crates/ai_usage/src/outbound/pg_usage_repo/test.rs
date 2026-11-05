@@ -61,6 +61,10 @@ async fn seeded_pricing_is_available(pool: PgPool) {
         repo.get_pricing("whisper-1").await.unwrap(),
         Some(ModelPricing::Audio { per_minute: 0.006 })
     );
+    assert_eq!(
+        repo.get_pricing("tavily").await.unwrap(),
+        Some(ModelPricing::ProviderCredits { per_credit: 0.008 })
+    );
     let price = repo
         .get_pricing("gemini-2.5-flash-image")
         .await
@@ -638,4 +642,107 @@ async fn accelerated_and_long_context_prices_remain_distinct(pool: PgPool) {
             "{model}"
         );
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn credit_usage_roundtrips_and_reprices_without_affecting_tokens(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool);
+    let mut search = completion(AiFeature::WebSearch, "tavily", 0, 0);
+    let amount = UsageAmount::ProviderCredits { credits: 3 };
+    search.cost.amount = amount;
+    search.cost.price = Price::compute(
+        repo.get_pricing("tavily").await.unwrap().unwrap(),
+        search.cost.amount,
+    );
+    repo.insert_usage(&search, true).await.unwrap();
+    repo.insert_usage(
+        &completion(AiFeature::Chat, "claude-opus-4-8", 1_000_000, 0),
+        true,
+    )
+    .await
+    .unwrap();
+
+    let query = UsageApiParams {
+        features: vec![AiFeature::WebSearch],
+        ..Default::default()
+    };
+    let rows = repo.query_usage(&query).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].cost.amount, amount);
+    let price = rows[0].cost.price.unwrap();
+    assert_eq!(
+        price.pricing,
+        ModelPricing::ProviderCredits { per_credit: 0.008 }
+    );
+    assert!((price.total - 0.024).abs() < 1e-7);
+
+    repo.set_pricing(
+        "tavily",
+        ModelPricing::Tokens {
+            input: 0.0,
+            output: 0.0,
+            cache_read: None,
+            cache_write: None,
+        },
+    )
+    .await
+    .unwrap();
+    let rows = repo.query_usage(&query).await.unwrap();
+    assert_eq!(rows[0].cost.amount, amount);
+    assert!(
+        rows[0].cost.price.is_none(),
+        "token rates must not price credit usage"
+    );
+
+    repo.set_pricing("tavily", ModelPricing::Audio { per_minute: 0.006 })
+        .await
+        .unwrap();
+    let rows = repo.query_usage(&query).await.unwrap();
+    assert!(
+        rows[0].cost.price.is_none(),
+        "audio rates must not price credit usage"
+    );
+
+    repo.set_pricing("tavily", ModelPricing::ProviderCredits { per_credit: 0.01 })
+        .await
+        .unwrap();
+    let rows = repo.query_usage(&query).await.unwrap();
+    assert_eq!(rows[0].cost.amount, amount);
+    let price = rows[0].cost.price.unwrap();
+    assert_eq!(
+        price.pricing,
+        ModelPricing::ProviderCredits { per_credit: 0.01 }
+    );
+    assert!((price.total - 0.03).abs() < 1e-7);
+
+    let chat = repo
+        .query_usage(&UsageApiParams {
+            features: vec![AiFeature::Chat],
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(
+        chat[0].cost.price.is_none(),
+        "repricing another model must not touch chat rows"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn repricing_cannot_apply_credit_rates_to_token_usage(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool);
+    repo.insert_usage(
+        &completion(AiFeature::Chat, "credit-history", 1_000_000, 0),
+        true,
+    )
+    .await
+    .unwrap();
+    repo.set_pricing(
+        "credit-history",
+        ModelPricing::ProviderCredits { per_credit: 0.008 },
+    )
+    .await
+    .unwrap();
+    let rows = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+    assert!(rows[0].cost.price.is_none());
 }

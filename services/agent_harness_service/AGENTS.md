@@ -47,10 +47,15 @@ Pulumi stacks; they do not host extra agent processes.
   in `api.rs` and runs one worker, and Dialpad also mounts its authenticated
   connection routes. Dialpad sync runs only when `CONNECT_CUSTOMER_KEY` is set;
   both seal webhook signing secrets under the MCP credentials key.
+- `crates/web_search` owns `POST /web/search` and `/web/fetch` (mounted in
+  `src/cognition/api.rs`, rate limited per user through cognition's Redis) and the
+  `WebSearch`/`WebFetch` tools; `TAVILY_API_KEY` comes from Doppler `shared_ai`.
 - `crates/universal_input` owns Command K's authenticated `/universal_input/classify`
   and `/universal_input/extract` routes, mounted directly by `src/api.rs`. The root
   composes staged search type/field extraction and Clairic content extraction
   with Nemotron temporal extraction and the shared admission/usage services.
+  It also mounts the internal `/universal_input/thread-due-date` route, which reads
+  a thread's due date for `email_focus_worker` and meters it as `EmailFocus`.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
   domain/adapters live in `crates/scheduled_action`. Its run observers send
   `routine_run_finished` analytics and, for every run, an inbox-only

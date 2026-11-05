@@ -13,8 +13,19 @@ use super::model::CrmError;
 pub const MAX_CONTACT_PHONES: usize = 10;
 
 /// Where a contact's number came from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    utoipa::ToSchema,
+    strum::AsRefStr,
+    strum::EnumString,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum PhoneSource {
     /// Typed on the contact.
     Manual,
@@ -22,32 +33,6 @@ pub enum PhoneSource {
     Csv,
     /// A call whose guest matched the contact by email.
     Call,
-}
-
-impl PhoneSource {
-    /// The stored value.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Manual => "manual",
-            Self::Csv => "csv",
-            Self::Call => "call",
-        }
-    }
-}
-
-impl std::str::FromStr for PhoneSource {
-    type Err = CrmError;
-
-    fn from_str(stored: &str) -> Result<Self, Self::Err> {
-        match stored {
-            "manual" => Ok(Self::Manual),
-            "csv" => Ok(Self::Csv),
-            "call" => Ok(Self::Call),
-            other => Err(CrmError::StorageLayerError(anyhow::anyhow!(
-                "unknown phone source {other}"
-            ))),
-        }
-    }
 }
 
 /// One of a contact's numbers.

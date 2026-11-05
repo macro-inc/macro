@@ -136,6 +136,10 @@ pub type DcsPipedreamRouterState = pipedream_mcp::inbound::PipedreamRouterState<
     DcsAuthorizationService,
 >;
 
+/// Redis-backed rate limiting for the web routes.
+pub type WebRateLimiter =
+    rate_limit::RateLimitServiceImpl<rate_limit::RedisRateLimitAdapter<redis::Client>>;
+
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
     pub db: PgPool,
@@ -177,6 +181,8 @@ pub struct ApiContext {
     pub entity_access_service: Arc<DcsEntityAccessService>,
     pub message_service: Arc<DcsMessageService>,
     pub ai_stream_registry: AiStreamRegistry,
+    /// Per-user limit on `/web/search` and `/web/fetch`.
+    pub web_rate_limiter: WebRateLimiter,
     pub mcp_state: DcsMcpRouterState,
     pub pipedream_state: DcsPipedreamRouterState,
     pub granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>>,
