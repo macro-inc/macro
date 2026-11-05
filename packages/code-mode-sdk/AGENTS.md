@@ -15,7 +15,8 @@ HTML worker belong to `packages/sdk-docs`.
 - `scripts/catalog.ts`: the entity directories agents discover; agent and
   harness docs share a topic, as do native channels, external chats and
   WhatsApp, and cross-type search, workspace browsing and AI chats
-  (`search`, whose guide is the `search` topic). Keep the catalog at 32
+  (`search`, whose guide is the `search` topic), and the web and URL previews
+  (`web`). Keep the catalog at 32
   entities or fewer: Jev ranks them in one 32-question call.
 - Each entity's description is its one `@routing` sentence ("Use when …; not
   …") and its `guide` every `@agent` block, both from the SDK's TSDoc and
