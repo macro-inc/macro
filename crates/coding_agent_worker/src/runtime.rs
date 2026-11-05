@@ -4,6 +4,7 @@
 //! session of every agent bound to this harness.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::watch;
@@ -12,6 +13,7 @@ use tokio_retry::strategy::ExponentialBackoff;
 use tokio_tungstenite::tungstenite;
 use tokio_util::task::AbortOnDropHandle;
 
+use crate::computer::Computer;
 use crate::config::{Harness, HarnessCredentials, MacroApi};
 use crate::harness::{self, BridgeEnd, Handoffs, LineTap};
 use crate::outbound::acp_process::RunningAgent;
@@ -47,6 +49,7 @@ impl Runtime {
         turns: ActiveTurns,
         adopted: Option<RunningAgent>,
         handoffs: Handoffs,
+        computer: Option<Arc<Computer>>,
     ) -> Self {
         let (connected_tx, connected) = watch::channel(false);
         let task = tokio::spawn(serve(
@@ -59,6 +62,7 @@ impl Runtime {
             connected_tx,
             adopted,
             handoffs,
+            computer,
         ));
         Self {
             connected,
@@ -100,6 +104,7 @@ async fn serve(
     connected: watch::Sender<bool>,
     mut adopted: Option<RunningAgent>,
     mut handoffs: Handoffs,
+    computer: Option<Arc<Computer>>,
 ) {
     let mut backoff = reconnect_strategy();
     loop {
@@ -123,6 +128,7 @@ async fn serve(
                     &turns,
                     adopted.take(),
                     &mut handoffs,
+                    computer.clone(),
                 )
                 .await
                 {

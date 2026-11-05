@@ -19,7 +19,7 @@ mod test;
 
 const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 /// The box image's Xvnc display.
-const SCREEN_ADDRESS: &str = "127.0.0.1:5900";
+pub const SCREEN_ADDRESS: &str = "127.0.0.1:5900";
 const PROBE_TIMEOUT: Duration = Duration::from_secs(1);
 const PROBE_INTERVAL: Duration = Duration::from_secs(60);
 const REPORT_TIMEOUT: Duration = Duration::from_secs(10);

@@ -27,6 +27,7 @@ fn start_runtime(listener: &TcpListener) -> Runtime {
         ActiveTurns::default(),
         None,
         crate::harness::Handoffs::channel().0,
+        None,
     )
 }
 

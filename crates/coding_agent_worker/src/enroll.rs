@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 
 use hosted_runtimes::domain::enrollment::{Enrollment, INCUS_ENROLLMENT_KEY, Persona};
 use macro_service_urls::{AgentHarnessServiceUrl, AppServiceUrl, DocumentStorageServiceUrl};
+use rootcause::option_ext::OptionExt as _;
 use rootcause::prelude::ResultExt as _;
 
 use crate::capabilities::ENROLLED_MARKER;
@@ -167,14 +168,19 @@ fn run(program: &str, args: &[&str]) -> rootcause::Result<()> {
     Ok(())
 }
 
-/// Enroll this computer, or do nothing when it already is.
+/// Enroll this computer, or refresh its token helper when already enrolled.
 #[tracing::instrument(skip_all, fields(computer_id = tracing::field::Empty), err)]
 pub async fn run_enroll(options: EnrollOptions) -> rootcause::Result<()> {
+    run_enroll_with_host(options, &SystemHost).await
+}
+
+async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootcause::Result<()> {
     let paths = SystemPaths {
         root: options.root.clone(),
     };
     let marker = paths.at(ENROLLED_MARKER);
     if marker.exists() {
+        install_token_store(&options.config, &paths, host)?;
         tracing::info!(marker = %marker.display(), "already enrolled");
         return Ok(());
     }
@@ -199,19 +205,40 @@ pub async fn run_enroll(options: EnrollOptions) -> rootcause::Result<()> {
     };
     write_config(&options, agent, &enrollment, urls.as_ref())?;
     ensure_credentials(&options.config, &enrollment).await?;
-    own_like_parent(&options.config, &SystemHost)?;
+    own_like_parent(&options.config, host)?;
 
     if let Some(persona) = persona {
-        persona.install(&SystemHost)?;
+        persona.install(host)?;
     }
 
     if let Some(parent) = marker.parent() {
         std::fs::create_dir_all(parent)
             .context(format!("could not create {}", parent.display()))?;
     }
+    install_token_store(&options.config, &paths, host)?;
     std::fs::write(&marker, enrollment.computer_id.to_string())
         .context(format!("could not write {}", marker.display()))?;
     tracing::info!(harness_name = %enrollment.name, "enrolled");
+    Ok(())
+}
+
+/// Keep only the persistence helper privileged; Claude runs as the config owner.
+fn install_token_store(
+    config: &Path,
+    paths: &SystemPaths,
+    host: &impl Host,
+) -> rootcause::Result<()> {
+    let owner = std::fs::metadata(config)
+        .context("could not identify the daemon user")?
+        .uid();
+    let unit = include_str!("computer/token_store.service").replace("{owner}", &owner.to_string());
+    write_file(
+        &paths.at("/etc/systemd/system/macrod-token-store.service"),
+        &unit,
+        0o644,
+    )?;
+    host.systemctl(&["daemon-reload"])?;
+    host.systemctl(&["enable", "--now", "macrod-token-store.service"])?;
     Ok(())
 }
 
@@ -515,6 +542,34 @@ fn unit_value(value: &str) -> rootcause::Result<String> {
         .replace('\\', "\\\\")
         .replace('"', "\\\"")
         .replace('%', "%%"))
+}
+
+/// Write a file only its owner can read.
+pub(crate) fn write_private(path: &Path, contents: &str) -> rootcause::Result<()> {
+    use std::io::Write as _;
+
+    let parent = path
+        .parent()
+        .context("a private file needs a parent directory")?;
+    std::fs::create_dir_all(parent).context("could not create the private directory")?;
+    let temporary = parent.join(format!(".claude-token.{}", uuid::Uuid::now_v7()));
+    let result = (|| -> rootcause::Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temporary)
+            .context("could not create the private token file")?;
+        file.write_all(contents.as_bytes())
+            .context("could not write the token")?;
+        file.sync_all().context("could not sync the token")?;
+        std::fs::rename(&temporary, path).context("could not install the token")?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(temporary);
+    }
+    result
 }
 
 fn write_file(path: &Path, contents: &str, mode: u32) -> rootcause::Result<()> {

@@ -343,19 +343,41 @@ scope = "team"
 }
 
 #[tokio::test]
-async fn an_enrolled_computer_is_left_alone() {
+async fn an_enrolled_computer_refreshes_only_its_privileged_token_store() {
     let directory = tempfile::tempdir().expect("temp dir");
     let marker = directory.path().join("var/lib/macrod/enrolled");
     std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
     std::fs::write(&marker, "done").unwrap();
-    // Neither the enrollment nor the config exist: nothing is read.
-    run_enroll(EnrollOptions {
-        from: EnrollmentSource::File(directory.path().join("missing.json")),
-        config: directory.path().join("missing.toml"),
-        workspace: directory.path().join("work"),
-        agent: "claude-code".to_owned(),
-        root: directory.path().to_owned(),
-    })
+    // The enrollment is never read again; only the existing config's uid is needed.
+    let config = directory.path().join("macrod.toml");
+    std::fs::write(&config, "existing config").unwrap();
+    let host = FakeHost::default();
+    run_enroll_with_host(
+        EnrollOptions {
+            from: EnrollmentSource::File(directory.path().join("missing.json")),
+            config: config.clone(),
+            workspace: directory.path().join("work"),
+            agent: "claude-code".to_owned(),
+            root: directory.path().to_owned(),
+        },
+        &host,
+    )
     .await
     .unwrap();
+    assert_eq!(std::fs::read_to_string(config).unwrap(), "existing config");
+    assert_eq!(
+        host.calls.into_inner(),
+        [
+            "systemctl daemon-reload",
+            "systemctl enable --now macrod-token-store.service",
+        ]
+    );
+    let unit = std::fs::read_to_string(
+        directory
+            .path()
+            .join("etc/systemd/system/macrod-token-store.service"),
+    )
+    .unwrap();
+    assert!(unit.contains("User=root\n"));
+    assert!(unit.contains("computer-token-store --owner "));
 }

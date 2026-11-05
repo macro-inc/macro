@@ -16,6 +16,7 @@
 //! `agent_trigger.existing` deliveries forward follow-up messages.
 
 mod capabilities;
+mod computer;
 mod config;
 mod daemon;
 mod dispatch;
@@ -140,6 +141,14 @@ enum Command {
         #[arg(long, default_value = "/", hide = true)]
         root: std::path::PathBuf,
     },
+    /// Root-only persistence helper installed by computer enrollment.
+    #[cfg(unix)]
+    #[command(hide = true)]
+    ComputerTokenStore {
+        /// Unix uid of the unprivileged macrod service.
+        #[arg(long)]
+        owner: u32,
+    },
     /// List the ACP agents installed on this machine as JSON.
     DetectAgents,
     /// Report the service config's state as JSON without running anything.
@@ -227,6 +236,19 @@ async fn main() -> ExitCode {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(error) => {
                     eprintln!("macrod enroll: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        #[cfg(unix)]
+        Some(Command::ComputerTokenStore { owner }) => {
+            tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .init();
+            return match computer::token_store::run(owner).await {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("computer token store: {error:?}");
                     ExitCode::FAILURE
                 }
             };

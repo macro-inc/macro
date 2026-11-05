@@ -34,6 +34,29 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   exists), reports `HarnessCapabilities` (`screen` = Xvnc on
   `127.0.0.1:5900`) to `PUT /harnesses/me/capabilities` when the serving core
   starts and on change (probed every minute).
+- `src/computer.rs` (`src/computer/`): on an enrolled Macro computer only,
+  the `computerControl` runtime messages and each Claude Code session's env.
+  Credits mode (no token) adds `ANTHROPIC_BASE_URL` (the session's
+  `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),
+  `ANTHROPIC_AUTH_TOKEN` (its bearer) and
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` to `session/new|load|resume`
+  as `_meta.claudeCode.options.env`; own-account mode adds
+  `CLAUDE_CODE_OAUTH_TOKEN` instead, for sessions opened after the switch.
+  `claude_sign_in.rs` drives `claude setup-token` on a hidden PTY (`pty.rs`,
+  rustix): returns its OAuth URL, then types the pasted code or GETs a pasted
+  `http://localhost:<port>/callback?code=` URL inside the box, and stores the
+  `sk-ant-oat01-` token at `/var/lib/macrod/claude-token` (0600);
+  sign-out deletes it. `token_store.rs` keeps disk access in the root-only
+  `macrod-token-store.service`, installed by enrollment. Its Unix socket is
+  0600, owned by the config's uid, verifies peer credentials in both directions,
+  and accepts only bounded load/save/delete requests. macrod and Claude stay
+  unprivileged. On an already enrolled box, rerun `macrod enroll` as root to
+  install the helper without re-pairing; the image's first-boot unit skips an
+  existing marker. ACP trace logs contain only direction and byte counts.
+  `screen.rs`: `screen_open` connects to Xvnc on
+  `127.0.0.1:5900`, then dials its own wss to
+  `<api_url>/harnesses/me/screen?stream=` and relays raw bytes. Spans:
+  `macrod.computer.control`, `macrod.screen.stream`.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,

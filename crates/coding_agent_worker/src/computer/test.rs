@@ -1,0 +1,213 @@
+use serde_json::json;
+
+use super::*;
+
+fn session_new() -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "session/new",
+        "params": {
+            "cwd": "/home/macro/work",
+            "mcpServers": [
+                { "type": "http", "name": "github", "url": "https://example.test/mcp", "headers": [] },
+                {
+                    "type": "http",
+                    "name": "macro_internal",
+                    "url": "https://dev-gateway.macro.com/agent-harness-egress/mcp/internal",
+                    "headers": [{ "name": "Authorization", "value": "Bearer egress-token" }]
+                }
+            ],
+            "_meta": { "claudeCode": { "options": { "env": { "KEEP": "me" } } } }
+        }
+    })
+}
+
+#[test]
+fn credits_point_claude_code_at_the_gateway_of_the_sessions_internal_mcp() {
+    let mut frame = session_new();
+    prepare_session(&mut frame, None).unwrap();
+    assert_eq!(
+        frame["params"]["_meta"]["claudeCode"]["options"]["env"],
+        json!({
+            "KEEP": "me",
+            "ANTHROPIC_BASE_URL": "https://dev-gateway.macro.com/agent-harness-egress/anthropic",
+            "ANTHROPIC_AUTH_TOKEN": "egress-token",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+        })
+    );
+}
+
+#[test]
+fn a_signed_in_account_replaces_the_gateway() {
+    let mut frame = session_new();
+    frame["method"] = json!("session/resume");
+    frame["params"].as_object_mut().unwrap().remove("_meta");
+    prepare_session(&mut frame, Some("sk-ant-oat01-own")).unwrap();
+    assert_eq!(
+        frame["params"]["_meta"],
+        json!({ "claudeCode": { "options": { "env": {
+            "CLAUDE_CODE_OAUTH_TOKEN": "sk-ant-oat01-own"
+        } } } })
+    );
+}
+
+#[test]
+fn only_session_starts_are_touched() {
+    let mut prompt = json!({
+        "jsonrpc": "2.0",
+        "id": 8,
+        "method": "session/prompt",
+        "params": { "sessionId": "s", "prompt": [] }
+    });
+    let before = prompt.clone();
+    prepare_session(&mut prompt, Some("sk-ant-oat01-own")).unwrap();
+    assert_eq!(prompt, before);
+
+    // Without the internal MCP server there is no gateway to point at.
+    let mut bare = json!({
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "session/load",
+        "params": { "sessionId": "s", "cwd": "/", "mcpServers": [] }
+    });
+    let before = bare.clone();
+    assert!(prepare_session(&mut bare, None).is_err());
+    assert_eq!(bare, before);
+}
+
+#[test]
+fn each_attach_refreshes_credentials_and_switches_modes_without_old_env() {
+    let mut frame = session_new();
+    prepare_session(&mut frame, None).unwrap();
+    prepare_session(&mut frame, Some("own-account-token")).unwrap();
+    let env = &frame["params"]["_meta"]["claudeCode"]["options"]["env"];
+    assert_eq!(env["CLAUDE_CODE_OAUTH_TOKEN"], "own-account-token");
+    assert!(env.get("ANTHROPIC_AUTH_TOKEN").is_none());
+    assert!(env.get("ANTHROPIC_BASE_URL").is_none());
+
+    frame["method"] = json!("session/load");
+    frame["params"]["mcpServers"][1]["headers"][0]["value"] = json!("Bearer fresh-token");
+    prepare_session(&mut frame, None).unwrap();
+    let env = &frame["params"]["_meta"]["claudeCode"]["options"]["env"];
+    assert_eq!(env["ANTHROPIC_AUTH_TOKEN"], "fresh-token");
+    assert!(env.get("CLAUDE_CODE_OAUTH_TOKEN").is_none());
+}
+
+#[cfg(unix)]
+mod sign_in {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    use super::super::claude_sign_in::{
+        Pasted, SignIn, oauth_token, sign_in_url, strip_terminal_codes,
+    };
+
+    const URL: &str = "https://claude.ai/oauth/authorize?code=true&client_id=9d1c&redirect_uri=http%3A%2F%2Flocalhost%3A54545%2Fcallback&state=abc";
+
+    #[test]
+    fn the_sign_in_url_and_token_are_found_through_terminal_codes() {
+        let output = format!(
+            "\x1b[2J\x1b[1;1H\x1b[36mBrowser didn't open? Use the url below\x1b[39m\r\n\x1b]8;;{URL}\x07{URL}\x1b]8;;\x07\r\n\x1b[?25lPaste code here if prompted >"
+        );
+        assert_eq!(sign_in_url(&output).as_deref(), Some(URL));
+        assert_eq!(sign_in_url("Opening browser…"), None);
+
+        let done = "\x1b[32m✓ Long-lived authentication token created successfully!\x1b[39m\r\n\r\nYour OAuth token (valid for 1 year):\r\n\r\n\x1b[1msk-ant-oat01-AbC_d-123456789012345678901234\x1b[22m\r\n";
+        assert_eq!(
+            oauth_token(done).as_deref(),
+            Some("sk-ant-oat01-AbC_d-123456789012345678901234")
+        );
+        assert_eq!(oauth_token("sk-ant-oat01-short"), None);
+        assert_eq!(
+            oauth_token("sk-ant-oat01-AbC_d-123456789012345678901234"),
+            None
+        );
+        assert_eq!(
+            sign_in_url("https://claude.ai/oauth/authorize?code=true"),
+            None
+        );
+        assert_eq!(strip_terminal_codes("\x1b[1mbold\x1b[22m"), "bold");
+    }
+
+    #[test]
+    fn pasted_codes_and_localhost_callbacks_are_told_apart() {
+        assert_eq!(
+            Pasted::parse("  AbCdEf123#state-xyz \n").unwrap(),
+            Pasted::Code("AbCdEf123#state-xyz".to_owned())
+        );
+        let callback = "http://localhost:54545/callback?code=AbC&state=xyz";
+        assert_eq!(
+            Pasted::parse(callback).unwrap(),
+            Pasted::Callback(callback.parse().unwrap())
+        );
+        assert!(matches!(
+            Pasted::parse("http://127.0.0.1:1/callback?code=x").unwrap(),
+            Pasted::Callback(_)
+        ));
+        assert!(matches!(
+            Pasted::parse("http://localhost:54545/oauth/complete?code=AbC").unwrap(),
+            Pasted::Callback(_)
+        ));
+        for bad in [
+            "",
+            "two words",
+            "https://localhost:54545/callback?code=AbC",
+            "http://evil.example/callback?code=AbC",
+            "http://localhost:54545/callback?code=",
+            "http://localhost/callback?code=AbC",
+            "http://user@localhost:54545/callback?code=AbC",
+            "http://localhost:54545/callback?state=xyz",
+        ] {
+            assert!(Pasted::parse(bad).is_err(), "`{bad}` was accepted");
+        }
+    }
+
+    #[test]
+    fn token_storage_is_private_and_replaces_without_following_symlinks() {
+        let directory = tempfile::tempdir().unwrap();
+        let token = directory.path().join("claude-token");
+        let unrelated = directory.path().join("unrelated");
+        std::fs::write(&unrelated, "keep").unwrap();
+        std::os::unix::fs::symlink(&unrelated, &token).unwrap();
+        crate::enroll::write_private(&token, "private-token\n").unwrap();
+        assert_eq!(std::fs::read_to_string(&unrelated).unwrap(), "keep");
+        assert_eq!(std::fs::read_to_string(&token).unwrap(), "private-token\n");
+        assert_eq!(
+            std::fs::metadata(&token).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        crate::enroll::write_private(&token, "replacement\n").unwrap();
+        assert_eq!(std::fs::read_to_string(&token).unwrap(), "replacement\n");
+    }
+
+    /// A stand-in for `claude setup-token`: needs a terminal, prints the URL,
+    /// reads one line, and prints a token made from it.
+    const FAKE_SETUP_TOKEN: &str = r#"#!/bin/sh
+[ "$1" = "setup-token" ] || exit 2
+[ -t 0 ] && [ -t 1 ] || { echo "not a terminal"; exit 3; }
+printf '\033[36mVisit https://claude.ai/oauth/authorize?code=true&state=s1\033[39m\r\n'
+printf 'Paste code here if prompted > '
+IFS= read -r code
+code=$(printf '%s' "$code" | tr -d '\r')
+printf '\r\nYour OAuth token:\r\n\033[1msk-ant-oat01-%s-abcdefghijklmnopqrstuvwxyz\033[22m\r\n' "$code"
+IFS= read -r hold
+"#;
+
+    #[tokio::test]
+    async fn sign_in_drives_setup_token_on_a_hidden_terminal() {
+        let directory = tempfile::tempdir().unwrap();
+        let claude = directory.path().join("claude");
+        std::fs::write(&claude, FAKE_SETUP_TOKEN).unwrap();
+        std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let mut sign_in = SignIn::spawn(&claude).unwrap();
+        assert_eq!(
+            sign_in.url().await.unwrap(),
+            "https://claude.ai/oauth/authorize?code=true&state=s1"
+        );
+        assert_eq!(
+            sign_in.complete("pasted42").await.unwrap(),
+            "sk-ant-oat01-pasted42-abcdefghijklmnopqrstuvwxyz"
+        );
+    }
+}

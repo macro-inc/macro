@@ -92,6 +92,19 @@ impl Daemon {
         let turns = ActiveTurns::default();
         let adopted = adopt(inherited, &turns);
         let (handoffs, handoff) = Handoffs::channel();
+        let computer = if crate::capabilities::is_macro_computer() {
+            Some(
+                crate::computer::Computer::load(
+                    &config.macro_api,
+                    &credentials,
+                    &config.harness,
+                    cancel.child_token(),
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
@@ -101,6 +114,7 @@ impl Daemon {
             turns.clone(),
             adopted,
             handoffs,
+            computer,
         );
         let executor = Dispatcher::new(api, runtime, config.workspace.clone());
         #[cfg(unix)]

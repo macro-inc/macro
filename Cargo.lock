@@ -4673,6 +4673,7 @@ dependencies = [
  "eventsource-stream",
  "flate2",
  "futures",
+ "genai_telemetry",
  "harness_id",
  "harnesses",
  "hex",

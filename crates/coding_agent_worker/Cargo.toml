@@ -30,6 +30,7 @@ crossterm = { workspace = true }
 dashmap = { workspace = true }
 eventsource-stream = { workspace = true }
 futures = { workspace = true }
+genai_telemetry = { path = "../genai_telemetry" }
 harness_id = { path = "../harness_id" }
 harnesses = { path = "../harnesses", default-features = false }
 hex = { workspace = true }
@@ -67,7 +68,7 @@ webhook = { path = "../webhook", default-features = false }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true }
+rustix = { workspace = true, features = ["fs", "pty", "termios"] }
 
 # Release archives: tar.gz everywhere but Windows, which gets a zip.
 [target.'cfg(not(windows))'.dependencies]
