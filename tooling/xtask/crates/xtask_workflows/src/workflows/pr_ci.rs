@@ -128,6 +128,7 @@ pub fn pr_ci() -> Workflow {
         .on(Event::default().pull_request(
             PullRequest::default()
                 .add_branch("main")
+                .add_branch("synoet/ci-gate-base")
                 .add_type(PullRequestType::Labeled),
         ))
         .concurrency(

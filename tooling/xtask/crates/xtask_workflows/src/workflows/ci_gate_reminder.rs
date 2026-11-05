@@ -15,6 +15,7 @@ pub fn ci_gate_reminder() -> Workflow {
         .on(Event::default().pull_request(
             PullRequest::default()
                 .add_branch("main")
+                .add_branch("synoet/ci-gate-base")
                 .add_type(PullRequestType::Opened)
                 .add_type(PullRequestType::Synchronize)
                 .add_type(PullRequestType::Reopened),
