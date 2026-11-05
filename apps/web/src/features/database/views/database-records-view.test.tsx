@@ -846,7 +846,7 @@ describe('database table view', () => {
         },
         view: allRecords,
       });
-      const onOpenRecord = vi.fn();
+      const onOpenRecord = vi.fn(() => true);
       render(() => (
         <DatabaseRecordsView
           name="Projects"
@@ -867,6 +867,37 @@ describe('database table view', () => {
     }
   );
 
+  it('opens the record panel when the host cannot open the record elsewhere', async () => {
+    const fixture = createFakeRowsSource({
+      columns,
+      table: {
+        version: 1,
+        rows: [
+          { rowId: 'row', cells: { title: 'Plan launch', status: 'To do' } },
+        ],
+      },
+      view: allRecords,
+    });
+    const onOpenRecord = vi.fn(() => false);
+    render(() => (
+      <DatabaseRecordsView
+        name="Projects"
+        source={fixture.source}
+        canEdit
+        view={allRecords}
+        stored={false}
+        addColumn={() => null}
+        boardPositions={unplacedCards}
+        onOpenRecord={onOpenRecord}
+      />
+    ));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Open Plan launch' })
+    );
+    expect(onOpenRecord).toHaveBeenCalledWith('row');
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+  });
+
   it('keeps a record created on a board in place when the host opens records elsewhere', async () => {
     const fixture = createFakeRowsSource({
       columns,
@@ -874,7 +905,7 @@ describe('database table view', () => {
       view: allRecords,
     });
     fixture.persistWrites();
-    const onOpenRecord = vi.fn();
+    const onOpenRecord = vi.fn(() => true);
     let actions!: DatabaseRecordsActions;
     render(() => (
       <DatabaseRecordsView

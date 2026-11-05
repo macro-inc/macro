@@ -89,8 +89,8 @@ export type DatabaseGridProps = {
   actionsRef?: (actions: DatabaseRecordsActions) => void;
   renderToolbar?: (actions: DatabaseRecordsActions) => JSX.Element;
   onOpenRelated?: (destination: DatabaseRelatedDestination) => void;
-  /** Opens a clicked record somewhere else in place of the record panel. */
-  onOpenRecord?: (rowId: string) => void;
+  /** Opens a clicked record somewhere else in place of the record panel; returns whether it did. */
+  onOpenRecord?: (rowId: string) => boolean;
 };
 
 /** Production composition. A table switch owns a new query/controller lifetime. */

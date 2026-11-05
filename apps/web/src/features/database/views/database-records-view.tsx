@@ -129,8 +129,8 @@ export type DatabaseRecordsViewProps = {
   renderTextValue?: GridCellProps['renderTextValue'];
   renderMentionPicker?: GridCellProps['renderMentionPicker'];
   renderMentionValue?: GridCellProps['renderMentionValue'];
-  /** Opens a record someone clicks somewhere else, in place of the record panel, as a view in a document opens its database. */
-  onOpenRecord?: (rowId: string) => void;
+  /** Opens a record someone clicks somewhere else, in place of the record panel, as a view in a document opens its database; returns whether it did, else the panel opens. */
+  onOpenRecord?: (rowId: string) => boolean;
   /** Opens document/file references in any column, including record panel fields. */
   onOpenDocumentMention?: (id: string) => void;
   /** Opens what a record's title mentions, such as a pipeline row's company, in place of editing it. */
@@ -229,9 +229,9 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
   });
   // Records the view itself opens, such as one just created, stay in its panel.
   function openRecord(rowId: string) {
-    if (!props.onOpenRecord) return records.open(rowId);
     const savedId = draftRows.savedRowId(rowId);
-    if (savedId) props.onOpenRecord(savedId);
+    if (savedId && props.onOpenRecord?.(savedId)) return;
+    records.open(rowId);
   }
   const gridRows = createHeldGridRows({
     rows: () =>
