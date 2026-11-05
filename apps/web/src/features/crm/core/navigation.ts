@@ -6,11 +6,11 @@ export const CRM_RECORDS = [
 
 /** Workspace feeds scoped to CRM-linked content, rather than one record. */
 export const CRM_ACTIVITY_TABS = [
-  { id: 'tasks', label: 'Tasks' },
-  { id: 'email', label: 'Email' },
-  { id: 'notes', label: 'Notes' },
-  { id: 'calls', label: 'Calls' },
-  { id: 'databases', label: 'Databases' },
+  { id: 'tasks', label: 'Sales Tasks' },
+  { id: 'email', label: 'Sales Email' },
+  { id: 'notes', label: 'Sales Notes' },
+  { id: 'calls', label: 'Sales Calls' },
+  { id: 'databases', label: 'Sales Databases' },
 ] as const;
 
 export type CrmActivityTab = (typeof CRM_ACTIVITY_TABS)[number]['id'];

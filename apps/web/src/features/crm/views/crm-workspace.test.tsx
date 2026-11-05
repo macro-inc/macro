@@ -370,21 +370,27 @@ it('omits pipelines and lists when those features are disabled', () => {
   ).toEqual([
     'Companies',
     'People',
-    'Tasks',
-    'Email',
-    'Notes',
-    'Calls',
-    'Databases',
+    'Sales Tasks',
+    'Sales Email',
+    'Sales Notes',
+    'Sales Calls',
+    'Sales Databases',
   ]);
 });
 
 it('opens each CRM activity feed instead of the company list', () => {
   const { activeTab } = setup();
   const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
-  for (const label of ['Tasks', 'Email', 'Notes', 'Calls', 'Databases']) {
+  for (const [label, id] of [
+    ['Sales Tasks', 'tasks'],
+    ['Sales Email', 'email'],
+    ['Sales Notes', 'notes'],
+    ['Sales Calls', 'calls'],
+    ['Sales Databases', 'databases'],
+  ]) {
     fireEvent.click(tabs.getByRole('button', { name: label }));
-    expect(activeTab()).toBe(label.toLowerCase());
-    expect(screen.getByText(`${label.toLowerCase()} feed`)).toBeTruthy();
+    expect(activeTab()).toBe(id);
+    expect(screen.getByText(`${id} feed`)).toBeTruthy();
     expect(screen.queryByText('Record list')).toBeNull();
   }
   fireEvent.click(tabs.getByRole('button', { name: 'Companies' }));
@@ -415,7 +421,12 @@ it('hides activity navigation and leaves its feed when the rollout turns off', (
   expect(screen.queryByText('email feed')).toBeNull();
   expect(screen.getByText('Record list')).toBeTruthy();
   const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
-  for (const name of ['Tasks', 'Email', 'Notes', 'Calls']) {
+  for (const name of [
+    'Sales Tasks',
+    'Sales Email',
+    'Sales Notes',
+    'Sales Calls',
+  ]) {
     expect(tabs.queryByRole('button', { name })).toBeNull();
   }
 });

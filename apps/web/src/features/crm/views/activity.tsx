@@ -14,21 +14,21 @@ import { RecordItemList } from './record-item-list';
 
 const CONTENT = {
   email: {
-    title: 'Email',
+    title: 'Sales Email',
     graphic: EmptyStateEmailGraphic,
     action: 'New email',
     description:
       'Email your CRM companies and people to see those conversations here.',
   },
   notes: {
-    title: 'Notes',
+    title: 'Sales Notes',
     graphic: EmptyStateDocGraphic,
     action: 'New note',
     description:
       'Create a note and link a company or person through its Companies or Contacts property.',
   },
   calls: {
-    title: 'Calls',
+    title: 'Sales Calls',
     graphic: EmptyStateCallsGraphic,
     action: 'New call',
     description:

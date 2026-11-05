@@ -129,7 +129,8 @@ The selected-record fallback survives detail query errors until the record close
 Global task creation snapshots the focused pane's getter before opening, without
 fetching details or capturing navigation history. Record contexts isolate drafts.
 
-`enable-crm-activity` gates workspace activity tabs and whether CRM supplies its
+`enable-crm-activity` gates workspace activity tabs (labelled Sales Tasks, Sales Email,
+Sales Notes, Sales Calls and Sales Databases) and whether CRM supplies its
 composer context. It defaults off everywhere and can be overridden locally with
 `VITE_ENABLE_CRM_ACTIVITY=true`. Off hides activity navigation and skips activity
 queries; saved activity links wait for flag loading, then fall back to Companies.
@@ -210,7 +211,7 @@ source trail without an extra separator; do not duplicate the selected title in
 the prefix. Modified clicks keep their existing split behavior.
 Standalone record previews retain their normal navigation outside the workspace.
 Record-detail lists and activity membership remain unchanged.
-Sidebar Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
+Sales Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
 layouts (subject to the normal feature flags and touch fallback). They use a separate
 CRM persistence scope, and every query, including search and grouped continuation,
 retains the mandatory CRM association. Record-detail Tasks stay unchanged.

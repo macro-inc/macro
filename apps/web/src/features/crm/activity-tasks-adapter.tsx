@@ -111,8 +111,8 @@ function ActivityTasksBody(props: {
             <div class="flex min-w-0 items-center gap-2 px-4 py-2">
               {controls()}
               <SearchBar
-                label="Search tasks"
-                placeholder="Search tasks"
+                label="Search sales tasks"
+                placeholder="Search sales tasks"
                 value={state.search}
                 onValueChange={(search) => setState('search', search)}
                 class="min-w-0 flex-1"
@@ -121,10 +121,10 @@ function ActivityTasksBody(props: {
           </ViewShell.Header>
         }
       >
-        <ListHeader title={props.title ?? 'Tasks'}>
+        <ListHeader title={props.title ?? 'Sales Tasks'}>
           {controls()}
           <ListHeaderSearch
-            label="Search tasks"
+            label="Search sales tasks"
             value={state.search}
             onValueChange={(search) => setState('search', search)}
             onEscape={() => listElement?.focus()}

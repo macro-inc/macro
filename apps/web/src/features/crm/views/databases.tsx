@@ -23,7 +23,7 @@ export function CrmDatabasesView(props: {
       fallback={
         <div class="flex min-h-0 min-w-0 flex-1 flex-col">
           <Show when={!props.scope && !isTouchDevice()}>
-            <ListHeader title={props.title ?? 'Databases'} />
+            <ListHeader title={props.title ?? 'Sales Databases'} />
           </Show>
           <Show
             when={flag().loading}
@@ -74,7 +74,7 @@ function DatabasesList(props: { scope?: CrmRecordScope; title?: JSX.Element }) {
       when={props.scope}
       fallback={
         <ActivitySection
-          label="Databases"
+          label="Sales Databases"
           title={props.title}
           search={search()}
           onSearchChange={setSearch}
