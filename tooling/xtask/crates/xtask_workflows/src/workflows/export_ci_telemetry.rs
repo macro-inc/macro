@@ -37,6 +37,7 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "Pull Request",
     "Pulumi Preview on PR",
     "Push local stack binaries",
+    "Regenerate Generated Code",
     "Release SDK",
     "Reusable Deploy Service",
     "Reusable Preview Service",
