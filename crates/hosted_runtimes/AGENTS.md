@@ -123,6 +123,11 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 
 ## Gotchas
 
+- Demo Incus access uses Wolf's personal Tailscale tailnet; production must use
+  the company tailnet. Admin access is Tailscale SSH via `root@runtime-dev-1`
+  (MagicDNS); serial console is break-glass. See `nix/hosts/README.md` for the
+  last-IAP switch, root-only auth-key file transfer, and tailnet rebuild commands.
+
 - Lifecycle state stores the phase tag at `state.phase.phase`; SQL selectors must read that nested tag.
 - V1 runs one fleet (one host) per control plane; an effect for another host fails.
 - Shared hosts require distinct `COMPUTERS_CONTROL_PLANE_ID` per control plane;

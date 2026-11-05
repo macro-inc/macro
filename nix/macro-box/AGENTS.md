@@ -62,10 +62,9 @@ enrollment bind mount.
 
 ```sh
 nix build .#macro-box-incus
-gcloud compute scp --tunnel-through-iap --project macro-435922 --zone us-east4-b \
-  result/metadata.tar.xz result/disk.qcow2 runtime-dev-1:/tmp/
-gcloud compute ssh runtime-dev-1 --tunnel-through-iap --project macro-435922 --zone us-east4-b \
-  --command 'incus image import /tmp/metadata.tar.xz /tmp/disk.qcow2 --alias macro-box --reuse && rm /tmp/metadata.tar.xz /tmp/disk.qcow2'
+scp result/metadata.tar.xz result/disk.qcow2 root@runtime-dev-1:/tmp/
+ssh root@runtime-dev-1 \
+  'incus image import /tmp/metadata.tar.xz /tmp/disk.qcow2 --alias macro-box --reuse && rm /tmp/metadata.tar.xz /tmp/disk.qcow2'
 ```
 
 Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
