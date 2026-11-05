@@ -63,7 +63,8 @@
       # `whatsmeow_signal` build scripts compile.
       assetFilter =
         path: _type:
-        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
+        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path
+        != null;
       # Rust local HTTP clients embed only the public proxy CA, never its keys.
       localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
@@ -1086,6 +1087,143 @@
           fuse-overlayfs
         ];
 
+      # Every tool here is also in shellTools. CI's BASH_ENV re-applies the shell's
+      # PATH in nested bash, so an extra tool can shadow a test's stub of it.
+      rustCiTools =
+        with pkgs;
+        [
+          rustToolchain
+          sccache
+          cargo-nextest
+          just
+          sqlx-cli
+          postgresql
+          nsc
+          cmake
+          nasm
+          perl
+          pkg-config
+          curl
+          jq
+          openssh
+          python3
+        ]
+        ++ pkgs.lib.optionals isLinux [ mold ];
+
+      rustPkgConfigPath = pkgs.lib.makeSearchPath "lib/pkgconfig" [
+        pkgs.openssl.dev
+      ];
+
+      rustShellArgs = {
+        PKG_CONFIG_PATH = rustPkgConfigPath;
+        # Cargo build scripts use the Nix pkg-config wrapper, which prefers
+        # the target-specific search path when PKG_CONFIG_PATH_FOR_TARGET is set.
+        # librdkafka is built from the bundled sources via rdkafka's
+        # cmake-build feature, so no system librdkafka.pc is needed here.
+        PKG_CONFIG_PATH_FOR_TARGET = rustPkgConfigPath;
+        LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+        RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+        # Local dev shells favor reusable sccache artifacts across JJ
+        # workspaces. CI derivations do not inherit devShell attributes.
+        CARGO_INCREMENTAL = "0";
+        SCCACHE_CACHE_SIZE = "30G";
+        # Namespace CI runners preserve Cargo's ignored target directory.
+        # A flake update can change the Nix C compiler while leaving CMake
+        # configure state behind; CMake then drops its command-line cache
+        # entries while switching compilers, breaking aws-lc and librdkafka.
+        # Remove only caches configured by another compiler so ordinary
+        # shell entry keeps reusable native build state.
+        shellHook = ''
+          if command -v prek >/dev/null 2>&1; then
+            repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+            if [ -n "$repo_root" ] && [ -f "$repo_root/.pre-commit-config.yaml" ]; then
+              # Install into .git/hooks. If Cursor Cloud owns core.hooksPath,
+              # unset it only for this install so we do not overwrite the
+              # dispatcher; git still runs our hook via that dispatcher.
+              hooks_path="$(git -C "$repo_root" config --get core.hooksPath || true)"
+              cursor_hooks=""
+              if [ -n "$hooks_path" ] && [ -f "$hooks_path/.cursor-original-hooks-path" ]; then
+                cursor_hooks="$hooks_path"
+                git -C "$repo_root" config --local --unset-all core.hooksPath || true
+              fi
+              if ! (cd "$repo_root" && prek install --overwrite >/dev/null); then
+                echo "warning: prek hook install failed" >&2
+              fi
+              if [ -n "$cursor_hooks" ]; then
+                git -C "$repo_root" config --local core.hooksPath "$cursor_hooks"
+              fi
+            fi
+          fi
+        ''
+        + pkgs.lib.optionalString isLinux ''
+          target_dir="''${CARGO_TARGET_DIR:-target}"
+          current_cc="$(type -P "''${CC:-cc}" || true)"
+          if [ -n "$current_cc" ] && [ -d "$target_dir" ]; then
+            while IFS= read -r -d "" cache; do
+              cached_cc=""
+              while IFS="=" read -r key value; do
+                case "$key" in
+                  CMAKE_C_COMPILER:*) cached_cc="$value"; break ;;
+                esac
+              done < "$cache"
+              if [ -n "$cached_cc" ] && [ "$cached_cc" != "$current_cc" ]; then
+                dir="$(dirname "$cache")"
+                echo "purging stale CMake state in $dir ($cached_cc != $current_cc)"
+                rm -rf "$dir/CMakeFiles" "$cache"
+              fi
+            done < <(find "$target_dir" -name CMakeCache.txt -print0)
+          fi
+        '';
+        # rdkafka's ssl-vendored feature exists for the Lambda
+        # derivations (see lambdaCommonArgs); local builds keep using
+        # the Nix openssl instead of vendoring, which would need perl
+        # on PATH and a from-source OpenSSL compile.
+        OPENSSL_NO_VENDOR = "1";
+        # Keep local cargo-lambda builds on the same aws-lc-sys path as
+        # the Nix lambda derivations. The default cc builder rejects
+        # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
+        AWS_LC_SYS_CMAKE_BUILDER = "1";
+        # Android builds compile with the NDK's clang, which the cc
+        # builder accepts. The CMake builder needs CMake to locate the
+        # NDK itself, which fails in the tauri-android shell ("Neither
+        # the NDK or a standalone toolchain was found").
+        AWS_LC_SYS_CMAKE_BUILDER_aarch64_linux_android = "0";
+        AWS_LC_SYS_CMAKE_BUILDER_armv7_linux_androideabi = "0";
+        AWS_LC_SYS_CMAKE_BUILDER_i686_linux_android = "0";
+        AWS_LC_SYS_CMAKE_BUILDER_x86_64_linux_android = "0";
+        # cargo-zigbuild compiles C with zig cc, which ignores the Nix
+        # cc-wrapper's NIX_CFLAGS_COMPILE — so the curl.dev headers that
+        # buildInputs provides to host builds (see the note on `libraries`;
+        # librdkafka 2.12 needs curl headers even with WITH_CURL=0) are
+        # invisible to zigbuild cross builds. cc-rs and cmake-rs honor
+        # these target-scoped forms, so only the Linux cross targets get
+        # the include path; host builds keep their Nix cc-wrapper flags.
+        CFLAGS_aarch64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
+        CXXFLAGS_aarch64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
+        CFLAGS_x86_64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
+        CXXFLAGS_x86_64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
+        # Default for local SQLx/cargo workflows so individual crates do
+        # not need their own .env files. The run-local/run-dev env
+        # resolver ignores this localhost default: run-dev needs
+        # Doppler's dev DATABASE_URL, run-local its container-side URL.
+        DATABASE_URL = "postgres://user:password@localhost:5432/macrodb";
+      }
+      // pkgs.lib.optionalAttrs isDarwin {
+        # The bundled librdkafka C++ build is a native macOS build.
+        # cmake-rs supplies an `arm64-apple-macosx` target flag, while
+        # the Nix clang wrapper is configured for `arm64-apple-darwin`.
+        # Passing both through the wrapper makes Apple SDK headers
+        # incompatible with Nix's libc++ headers. Use Apple's compiler
+        # for native host C/C++ builds; Nix still supplies the SDK,
+        # dependency flags, and cross-compilation toolchain.
+        CC = "/usr/bin/clang";
+        CXX = "/usr/bin/clang++";
+      }
+      // pkgs.lib.optionalAttrs isLinux {
+        LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
+        BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
+      };
+
     in
     {
       checks = {
@@ -1189,124 +1327,12 @@
       };
 
       devShells = {
-        default =
-          let
-            pkgConfigPath = pkgs.lib.makeSearchPath "lib/pkgconfig" [
-              pkgs.openssl.dev
-            ];
-          in
-          pkgs.mkShell (
-            {
-              buildInputs = shellTools ++ libraries;
-              PKG_CONFIG_PATH = pkgConfigPath;
-              # Cargo build scripts use the Nix pkg-config wrapper, which prefers
-              # the target-specific search path when PKG_CONFIG_PATH_FOR_TARGET is set.
-              # librdkafka is built from the bundled sources via rdkafka's
-              # cmake-build feature, so no system librdkafka.pc is needed here.
-              PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
-              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-              RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
-              # Local dev shells favor reusable sccache artifacts across JJ
-              # workspaces. CI derivations do not inherit devShell attributes.
-              CARGO_INCREMENTAL = "0";
-              SCCACHE_CACHE_SIZE = "30G";
-              # Namespace CI runners preserve Cargo's ignored target directory.
-              # A flake update can change the Nix C compiler while leaving CMake
-              # configure state behind; CMake then drops its command-line cache
-              # entries while switching compilers, breaking aws-lc and librdkafka.
-              # Remove only caches configured by another compiler so ordinary
-              # shell entry keeps reusable native build state.
-              shellHook = ''
-                if command -v prek >/dev/null 2>&1; then
-                  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-                  if [ -n "$repo_root" ] && [ -f "$repo_root/.pre-commit-config.yaml" ]; then
-                    # Install into .git/hooks. If Cursor Cloud owns core.hooksPath,
-                    # unset it only for this install so we do not overwrite the
-                    # dispatcher; git still runs our hook via that dispatcher.
-                    hooks_path="$(git -C "$repo_root" config --get core.hooksPath || true)"
-                    cursor_hooks=""
-                    if [ -n "$hooks_path" ] && [ -f "$hooks_path/.cursor-original-hooks-path" ]; then
-                      cursor_hooks="$hooks_path"
-                      git -C "$repo_root" config --local --unset-all core.hooksPath || true
-                    fi
-                    if ! (cd "$repo_root" && prek install --overwrite >/dev/null); then
-                      echo "warning: prek hook install failed" >&2
-                    fi
-                    if [ -n "$cursor_hooks" ]; then
-                      git -C "$repo_root" config --local core.hooksPath "$cursor_hooks"
-                    fi
-                  fi
-                fi
-              ''
-              + pkgs.lib.optionalString isLinux ''
-                target_dir="''${CARGO_TARGET_DIR:-target}"
-                current_cc="$(type -P "''${CC:-cc}" || true)"
-                if [ -n "$current_cc" ] && [ -d "$target_dir" ]; then
-                  while IFS= read -r -d "" cache; do
-                    cached_cc=""
-                    while IFS="=" read -r key value; do
-                      case "$key" in
-                        CMAKE_C_COMPILER:*) cached_cc="$value"; break ;;
-                      esac
-                    done < "$cache"
-                    if [ -n "$cached_cc" ] && [ "$cached_cc" != "$current_cc" ]; then
-                      dir="$(dirname "$cache")"
-                      echo "purging stale CMake state in $dir ($cached_cc != $current_cc)"
-                      rm -rf "$dir/CMakeFiles" "$cache"
-                    fi
-                  done < <(find "$target_dir" -name CMakeCache.txt -print0)
-                fi
-              '';
-              # rdkafka's ssl-vendored feature exists for the Lambda
-              # derivations (see lambdaCommonArgs); local builds keep using
-              # the Nix openssl instead of vendoring, which would need perl
-              # on PATH and a from-source OpenSSL compile.
-              OPENSSL_NO_VENDOR = "1";
-              # Keep local cargo-lambda builds on the same aws-lc-sys path as
-              # the Nix lambda derivations. The default cc builder rejects
-              # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
-              AWS_LC_SYS_CMAKE_BUILDER = "1";
-              # Android builds compile with the NDK's clang, which the cc
-              # builder accepts. The CMake builder needs CMake to locate the
-              # NDK itself, which fails in the tauri-android shell ("Neither
-              # the NDK or a standalone toolchain was found").
-              AWS_LC_SYS_CMAKE_BUILDER_aarch64_linux_android = "0";
-              AWS_LC_SYS_CMAKE_BUILDER_armv7_linux_androideabi = "0";
-              AWS_LC_SYS_CMAKE_BUILDER_i686_linux_android = "0";
-              AWS_LC_SYS_CMAKE_BUILDER_x86_64_linux_android = "0";
-              # cargo-zigbuild compiles C with zig cc, which ignores the Nix
-              # cc-wrapper's NIX_CFLAGS_COMPILE — so the curl.dev headers that
-              # buildInputs provides to host builds (see the note on `libraries`;
-              # librdkafka 2.12 needs curl headers even with WITH_CURL=0) are
-              # invisible to zigbuild cross builds. cc-rs and cmake-rs honor
-              # these target-scoped forms, so only the Linux cross targets get
-              # the include path; host builds keep their Nix cc-wrapper flags.
-              CFLAGS_aarch64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
-              CXXFLAGS_aarch64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
-              CFLAGS_x86_64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
-              CXXFLAGS_x86_64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
-              # Default for local SQLx/cargo workflows so individual crates do
-              # not need their own .env files. The run-local/run-dev env
-              # resolver ignores this localhost default: run-dev needs
-              # Doppler's dev DATABASE_URL, run-local its container-side URL.
-              DATABASE_URL = "postgres://user:password@localhost:5432/macrodb";
-            }
-            // pkgs.lib.optionalAttrs isDarwin {
-              # The bundled librdkafka C++ build is a native macOS build.
-              # cmake-rs supplies an `arm64-apple-macosx` target flag, while
-              # the Nix clang wrapper is configured for `arm64-apple-darwin`.
-              # Passing both through the wrapper makes Apple SDK headers
-              # incompatible with Nix's libc++ headers. Use Apple's compiler
-              # for native host C/C++ builds; Nix still supplies the SDK,
-              # dependency flags, and cross-compilation toolchain.
-              CC = "/usr/bin/clang";
-              CXX = "/usr/bin/clang++";
-            }
-            // pkgs.lib.optionalAttrs isLinux {
-              LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
-              BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
-            }
-          );
+        default = pkgs.mkShell (rustShellArgs // { buildInputs = shellTools ++ libraries; });
+
+        # What the Rust check and test jobs run. A runner that gets an empty cache
+        # volume installs this whole closure, so it leaves out the default shell's
+        # browsers, cross compilers and service CLIs.
+        rust-ci = pkgs.mkShell (rustShellArgs // { buildInputs = rustCiTools ++ libraries; });
 
         # Keep release builds independent of optional developer tools in the
         # default shell. In particular, adding Hermes there must not make

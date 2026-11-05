@@ -264,6 +264,8 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
+      with:
+        shell: rust-ci
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -433,6 +435,8 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
+      with:
+        shell: rust-ci
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -568,6 +572,8 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
+      with:
+        shell: rust-ci
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
