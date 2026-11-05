@@ -47,6 +47,7 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "check node_modules nix",
     "check tauri lockfiles",
     "cloud storage code check",
+    "cloud storage main check",
     "conventions code check",
     "deploy pulumi service",
     "iOS App Store Publish",

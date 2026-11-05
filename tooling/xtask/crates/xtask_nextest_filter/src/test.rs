@@ -6,7 +6,9 @@ fn changed_files(paths: &[&str]) -> Vec<PathBuf> {
 
 /// Path-only selection on the real workspace with the repository's rules.
 fn select_in_repo(graph: &PackageGraph, paths: &[&str]) -> PackageSelection {
-    select_by_paths(graph, &changed_files(paths), &repository_rules().unwrap()).unwrap()
+    select_by_paths(graph, &changed_files(paths), &repository_rules().unwrap())
+        .unwrap()
+        .affected
 }
 
 fn selected_packages(selection: &PackageSelection) -> &BTreeSet<String> {
@@ -379,7 +381,8 @@ fn graph_diff_scopes_a_new_member_to_itself() {
         &changed_files(&["Cargo.toml", "c/Cargo.toml", "c/src/lib.rs"]),
         &no_path_rules(),
     )
-    .unwrap();
+    .unwrap()
+    .affected;
     assert_eq!(
         selection,
         PackageSelection::Packages(BTreeSet::from(["c".to_owned()]))
@@ -399,7 +402,8 @@ fn graph_diff_scopes_a_workspace_dependency_change_to_inheritors() {
         &changed_files(&["Cargo.toml"]),
         &no_path_rules(),
     )
-    .unwrap();
+    .unwrap()
+    .affected;
     assert_eq!(
         selection,
         PackageSelection::Packages(BTreeSet::from(["b".to_owned(), "c".to_owned()]))
@@ -435,6 +439,38 @@ fn fast_path_matches_determinator_on_build_edges() {
         PackageSelection::Packages(BTreeSet::from(["a", "b", "d", "e", "h"].map(str::to_owned)));
     let changed = changed_files(&["a/src/lib.rs"]);
     assert_eq!(
+        select_by_paths(&graph, &changed, &no_path_rules())
+            .unwrap()
+            .affected,
+        expected
+    );
+    assert_eq!(
+        compute_packages(&graph, &graph, &changed, &no_path_rules())
+            .unwrap()
+            .affected,
+        expected
+    );
+}
+
+/// Pull requests test one hop: `e` reaches `a` only through `d`, so it stays in
+/// `affected` for clippy and out of `direct`. Both selection routes agree.
+#[test]
+fn direct_selection_stops_after_one_hop() {
+    let workspace = SyntheticWorkspace::with_members(
+        &[
+            ("a", ""),
+            ("d", "[dependencies]\na = { path = \"../a\" }\n"),
+            ("e", "[dependencies]\nd = { path = \"../d\" }\n"),
+        ],
+        "",
+    );
+    let graph = workspace.graph();
+    let changed = changed_files(&["a/src/lib.rs"]);
+    let expected = Selections {
+        affected: PackageSelection::All,
+        direct: PackageSelection::Packages(BTreeSet::from(["a", "d"].map(str::to_owned))),
+    };
+    assert_eq!(
         select_by_paths(&graph, &changed, &no_path_rules()).unwrap(),
         expected
     );
@@ -442,6 +478,89 @@ fn fast_path_matches_determinator_on_build_edges() {
         compute_packages(&graph, &graph, &changed, &no_path_rules()).unwrap(),
         expected
     );
+}
+
+/// A direct edge nobody enables builds nothing, so it stays out of both sets.
+#[test]
+fn direct_selection_skips_edges_outside_the_affected_set() {
+    let workspace = SyntheticWorkspace::with_members(
+        &[
+            ("a", ""),
+            ("b", "[dependencies]\na = { path = \"../a\" }\n"),
+            (
+                "h",
+                "[dependencies]\na = { path = \"../a\", optional = true }\n",
+            ),
+            ("g", "[dependencies]\nh = { path = \"../h\" }\n"),
+        ],
+        "",
+    );
+    let graph = workspace.graph();
+    let selections =
+        select_by_paths(&graph, &changed_files(&["a/src/lib.rs"]), &no_path_rules()).unwrap();
+    assert_eq!(
+        selections.direct,
+        PackageSelection::Packages(BTreeSet::from(["a", "b", "h"].map(str::to_owned)))
+    );
+    assert!(!selected_packages(&selections.affected).contains("g"));
+}
+
+/// A dependency change reaches crates through their builds, with none of their
+/// files touched, so those crates still count as direct.
+#[test]
+fn direct_selection_keeps_crates_whose_build_changed() {
+    let old = SyntheticWorkspace::new(&["a", "b", "c"], "");
+    let new = SyntheticWorkspace::new(&["a", "b", "c"], "\"extra\"");
+    let selections = compute_packages(
+        &old.graph(),
+        &new.graph(),
+        &changed_files(&["Cargo.toml"]),
+        &no_path_rules(),
+    )
+    .unwrap();
+    assert_eq!(selections.direct, selections.affected);
+}
+
+/// Every crate depends on `workspace-hack`, so an edit to it must not select all
+/// of them for testing. Clippy still sees everything through `affected`.
+#[test]
+fn direct_selection_does_not_follow_workspace_hack() {
+    let workspace = SyntheticWorkspace::with_members(
+        &[
+            ("workspace-hack", ""),
+            (
+                "a",
+                "[dependencies]\nworkspace-hack = { path = \"../workspace-hack\" }\n",
+            ),
+            (
+                "b",
+                "[dependencies]\nworkspace-hack = { path = \"../workspace-hack\" }\n",
+            ),
+        ],
+        "",
+    );
+    let graph = workspace.graph();
+    let selections = select_by_paths(
+        &graph,
+        &changed_files(&["workspace-hack/src/lib.rs"]),
+        &no_path_rules(),
+    )
+    .unwrap();
+    assert_eq!(selections.affected, PackageSelection::All);
+    assert_eq!(
+        selections.direct,
+        PackageSelection::Packages(BTreeSet::from(["workspace-hack".to_owned()]))
+    );
+}
+
+/// The workflow reads line 1 for clippy and line 2 for the test job.
+#[test]
+fn selections_print_affected_then_direct() {
+    let selections = Selections {
+        affected: PackageSelection::Packages(BTreeSet::from(["a", "b"].map(str::to_owned))),
+        direct: PackageSelection::Packages(BTreeSet::from(["a".to_owned()])),
+    };
+    assert_eq!(selections.to_string(), "a b\na");
 }
 
 /// Only manifests and lockfiles can change `cargo metadata`; everything else

@@ -17,12 +17,14 @@
 //! `workspace.members` / `workspace.dependencies`; see
 //! [`root_manifest_change_forces_all`].
 //!
-//! Stdout is one of:
-//! - `all` — every workspace package is affected.
-//! - `none` — no changed file mapped to a package (a top-level JSON, a Nix
-//!   shell tweak, docs, …). CI must not treat this as "run everything".
-//! - space-separated package names — pass each as `cargo nextest run -p` /
-//!   `cargo clippy -p`.
+//! Stdout is two lines, each one of `all`, `none` or space-separated names:
+//! - line 1, every affected package: clippy lints these.
+//! - line 2, the changed packages and their direct dependents: pull requests
+//!   test these, and the run on `main` after merge tests everything.
+//!
+//! `all` means every workspace package. `none` means no changed file mapped to
+//! a package (a top-level JSON, a Nix shell tweak, docs, …); CI must not treat
+//! it as "run everything".
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -80,6 +82,31 @@ impl fmt::Display for PackageSelection {
     }
 }
 
+/// What one change selects: the whole reach, and the part pull requests test.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Selections {
+    /// Changed packages plus every reverse dependency.
+    affected: PackageSelection,
+    /// Changed packages plus direct dependents, always within `affected`.
+    direct: PackageSelection,
+}
+
+impl Selections {
+    fn all() -> Self {
+        Self {
+            affected: PackageSelection::All,
+            direct: PackageSelection::All,
+        }
+    }
+}
+
+impl fmt::Display for Selections {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "{}", self.affected)?;
+        write!(f, "{}", self.direct)
+    }
+}
+
 #[cfg(test)]
 impl PackageSelection {
     fn packages(&self) -> Option<&BTreeSet<String>> {
@@ -134,7 +161,7 @@ fn run(changed_files_path: &Path, base_revision: &str) -> Result<()> {
         let old_manifest = read_manifest(base_worktree.path())?;
         let new_manifest = read_manifest(&workspace_dir)?;
         if root_manifest_change_forces_all(&old_manifest, &new_manifest)? {
-            println!("{}", PackageSelection::All);
+            println!("{}", Selections::all());
             return Ok(());
         }
     }
@@ -145,6 +172,7 @@ fn run(changed_files_path: &Path, base_revision: &str) -> Result<()> {
 }
 
 const ROOT_MANIFEST: &str = "Cargo.toml";
+const WORKSPACE_HACK: &str = "workspace-hack";
 
 fn read_manifest(dir: &Path) -> Result<String> {
     let path = dir.join(ROOT_MANIFEST);
@@ -218,7 +246,7 @@ fn select_by_paths(
     graph: &PackageGraph,
     changed_files: &[PathBuf],
     rules: &DeterminatorRules,
-) -> Result<PackageSelection> {
+) -> Result<Selections> {
     let mut determinator = Determinator::new(graph, graph);
     determinator
         .set_rules(rules)
@@ -233,7 +261,7 @@ fn select_by_paths(
             changed.insert(id);
         });
         if matches!(matched, PathMatch::RuleMatchedAll) {
-            return Ok(PackageSelection::All);
+            return Ok(Selections::all());
         }
     }
 
@@ -256,7 +284,43 @@ fn select_by_paths(
             selected.insert(package.name().to_owned());
         }
     }
-    workspace_selection(graph, selected)
+    let seeds = changed
+        .iter()
+        .map(|id| graph.metadata(id))
+        .collect::<Result<Vec<_>, _>>()
+        .context("reading changed package metadata")?;
+    selections(graph, selected, seeds, BTreeSet::new())
+}
+
+/// Build both selections from the affected names, the packages whose own files
+/// changed, and the packages whose own build changed. A direct edge can be
+/// optional and off in every build, so the direct set is clipped to `affected`.
+fn selections<'g>(
+    graph: &'g PackageGraph,
+    affected: BTreeSet<String>,
+    path_changed: impl IntoIterator<Item = PackageMetadata<'g>>,
+    build_changed: BTreeSet<String>,
+) -> Result<Selections> {
+    let mut direct = build_changed;
+    for package in path_changed {
+        direct.insert(package.name().to_owned());
+        // Every crate depends on `workspace-hack`, so following it would turn
+        // each dependency edit into a full-suite run.
+        if package.name() != WORKSPACE_HACK {
+            direct.extend(
+                package
+                    .reverse_direct_links()
+                    .map(|link| link.from())
+                    .filter(|dependent| dependent.in_workspace())
+                    .map(|dependent| dependent.name().to_owned()),
+            );
+        }
+    }
+    direct.retain(|name| affected.contains(name));
+    Ok(Selections {
+        affected: workspace_selection(graph, affected)?,
+        direct: workspace_selection(graph, direct)?,
+    })
 }
 
 /// Whether `package`'s own test build with all its features (dev-dependencies
@@ -302,12 +366,12 @@ fn workspace_selection(
 /// Use determinator to compare both Cargo graphs and return affected package
 /// names. Paths outside Cargo packages contribute nothing, preserving the CI
 /// behavior for Nix-only and other non-Rust changes.
-fn compute_packages(
+fn compute_packages<'g>(
     old_graph: &PackageGraph,
-    new_graph: &PackageGraph,
+    new_graph: &'g PackageGraph,
     changed_files: &[PathBuf],
     rules: &DeterminatorRules,
-) -> Result<PackageSelection> {
+) -> Result<Selections> {
     let mut determinator = Determinator::new(old_graph, new_graph);
     determinator
         .set_rules(rules)
@@ -325,14 +389,33 @@ fn compute_packages(
         }
     }
 
-    let affected = determinator.compute().affected_set;
-    workspace_selection(
-        new_graph,
-        affected
-            .packages(DependencyDirection::Forward)
+    let computed = determinator.compute();
+    let names = |set: &guppy::graph::PackageSet<'g>| -> BTreeSet<String> {
+        set.packages(DependencyDirection::Forward)
             .filter(|package| package.in_workspace())
             .map(|package| package.name().to_owned())
-            .collect(),
+            .collect()
+    };
+    let path_changed: Vec<_> = computed
+        .path_changed_set
+        .packages(DependencyDirection::Forward)
+        .filter(|package| package.in_workspace())
+        .collect();
+    // An edit to `workspace-hack` changes the simulated build of nearly every
+    // crate, so its summary says nothing about which crates the edit is for.
+    let hack_changed = path_changed
+        .iter()
+        .any(|package| package.name() == WORKSPACE_HACK);
+    let build_changed = if hack_changed {
+        BTreeSet::new()
+    } else {
+        names(&computed.summary_changed_set)
+    };
+    selections(
+        new_graph,
+        names(&computed.affected_set),
+        path_changed,
+        build_changed,
     )
 }
 
