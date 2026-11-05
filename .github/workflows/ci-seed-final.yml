@@ -1,0 +1,61 @@
+# Experiment only: the real Setup Nix action with and without the seed, on empty volumes.
+name: CI Seed Final
+
+on:
+  pull_request:
+
+concurrency:
+  group: ci-seed-final-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  make-seed:
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-seed-final-m-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: 'false'
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          path: |-
+            /nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: './.github/actions/setup-nix'
+        with:
+          seed-cache: ci-seed-final
+      - name: Setup Nix dev shell
+        uses: './.github/actions/setup-nix-dev-shell'
+      - run: rustc --version; sccache --version
+
+  arms:
+    needs: make-seed
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        arm: [control, seed]
+        run: [1, 2, 3, 4, 5, 6, 7, 8]
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=ci-seed-final-${{ matrix.arm }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.run }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: 'false'
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          path: |-
+            /nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: './.github/actions/setup-nix'
+        with:
+          seed-cache: ${{ matrix.arm == 'seed' && 'ci-seed-final' || '' }}
+      - name: Setup Nix dev shell
+        uses: './.github/actions/setup-nix-dev-shell'
+      - name: Shell works
+        run: rustc --version; cargo nextest --version; sccache --version; mold --version
+      - name: Store can build
+        run: nix build --no-link --print-out-paths --accept-flake-config .#code-mode-assets 2>&1 | tail -1
