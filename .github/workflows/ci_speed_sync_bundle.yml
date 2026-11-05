@@ -23,6 +23,7 @@ jobs:
           - { label: lock-toml-changed, sha: 1b51727cad9570c734a7eafe64475999c0bacedd, attempt: 1 }
           - { label: lock-changed, sha: a701da266b9262645eadd65101a745c7f42f4f3d, attempt: 1 }
           - { label: worker-changed-before, sha: 25f6d1b653145575ce3324da3f9beb41aa99179d, attempt: 1 }
+          - { label: same-worker-3, sha: 240bc4d6a32425efaedbb633b7eafd52848e8461, attempt: 3 }
           - { label: worker-changed-after, sha: 70831cf4d554c40fecfa5c816e86c339ffdfeca9, attempt: 1 }
     env: { LABEL: "${{ matrix.label }}", ATTEMPT: "${{ matrix.attempt }}" }
     steps:
@@ -44,3 +45,4 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
       - run: bash harness/.github/ci-speed/sync_bundle.sh
+        env: { RUNNER_TEMP_NOTE: key }
