@@ -347,7 +347,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
     ];
   });
   const matches = useHasMatches(displayOptions, searchQuery);
-  const hasMatches = matches;
+  const hasMatches = () => !!props.action || matches();
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
