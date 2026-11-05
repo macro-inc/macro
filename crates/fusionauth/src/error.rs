@@ -59,6 +59,14 @@ pub enum FusionAuthClientError {
     /// The grant is invalid - user may have revoked access.
     #[error("Invalid grant - user may have revoked access")]
     InvalidGrant,
+    /// The provider refused to refresh this user's grant by policy, such as a
+    /// Google Workspace admin not approving Macro. Retrying will not help
+    /// until the user's organization allows access.
+    #[error("access blocked by the user's organization: {code}")]
+    GrantBlocked {
+        /// The provider's OAuth error code, e.g. `access_not_configured`.
+        code: String,
+    },
 }
 
 impl FusionAuthClientError {

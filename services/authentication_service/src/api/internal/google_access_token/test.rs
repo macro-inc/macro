@@ -43,6 +43,17 @@ fn a_revoked_grant_during_refresh_is_still_forbidden() {
 }
 
 #[test]
+fn a_grant_blocked_by_the_users_organization_is_forbidden() {
+    let error = FusionAuthClientError::GrantBlocked {
+        code: "access_not_configured".into(),
+    };
+
+    let response = refresh_error_response(error, USER, IDP);
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[test]
 fn an_unknown_refresh_failure_is_still_internal() {
     let response = refresh_error_response(generic(), USER, IDP);
 

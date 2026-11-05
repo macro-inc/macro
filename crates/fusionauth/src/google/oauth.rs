@@ -103,16 +103,24 @@ async fn refresh_google_token_at(
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unable to read error response".to_string());
+
+            // If the user revoked Macro's access to their account, we get an invalid_grant error here
+            if error_text.contains("invalid_grant") {
+                tracing::warn!(status=?status, error=?error_text, "Google rejected the refresh token");
+                return Err(FusionAuthClientError::InvalidGrant);
+            }
+
+            if let Some(code) = blocked_grant_code(&error_text).filter(|_| status.is_client_error())
+            {
+                tracing::warn!(status=?status, error=?error_text, "Google blocked the grant by policy");
+                return Err(FusionAuthClientError::GrantBlocked { code });
+            }
+
             tracing::error!(
                 status=?status,
                 error=?error_text,
                 "failed to refresh Google access token"
             );
-
-            // If the user revoked Macro's access to their account, we get an invalid_grant error here
-            if error_text.contains("invalid_grant") {
-                return Err(FusionAuthClientError::InvalidGrant);
-            }
 
             if let Some(failure) = UpstreamFailure::from_status(status, &headers) {
                 return Err(FusionAuthClientError::Upstream {
@@ -129,6 +137,29 @@ async fn refresh_google_token_at(
             }))
         }
     }
+}
+
+/// Google OAuth error codes for a grant the user's organization does not let
+/// Macro use, such as a Workspace admin who has not approved the app. Only
+/// that organization can lift them. `invalid_client` and `unauthorized_client`
+/// are deliberately absent: they mean Macro's own OAuth client is broken.
+const BLOCKED_GRANT_CODES: &[&str] = &[
+    "access_not_configured",
+    "admin_policy_enforced",
+    "access_denied",
+];
+
+/// The `error` code of a Google OAuth error body, when it is a policy block.
+fn blocked_grant_code(body: &str) -> Option<String> {
+    #[derive(serde::Deserialize)]
+    struct OAuthError {
+        error: String,
+    }
+
+    let OAuthError { error } = serde_json::from_str(body).ok()?;
+    BLOCKED_GRANT_CODES
+        .contains(&error.as_str())
+        .then_some(error)
 }
 
 #[derive(Debug, serde::Deserialize)]
