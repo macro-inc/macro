@@ -288,7 +288,7 @@ jobs:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci-int-check
     env:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
       RUSTDOCFLAGS: '-Dwarnings'

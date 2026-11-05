@@ -152,7 +152,7 @@ fn generated_code() -> Job {
             "needs.path-check.outputs.codegen_changed == 'true'",
         ))
         .name("Generated Code Check")
-        .runs_on(mid_web_runner())
+        .runs_on(runners::Runner::Large.with_cache_tag("web-ci-int-gen"))
         // The generators run once and are thrown away, so debug info is pure
         // cost: it made the 15 binaries 12.7 GB instead of 466 MB. Job-level,
         // so every cargo call here (the build step, gen-api, the docs and DCS

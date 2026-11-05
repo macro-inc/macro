@@ -114,7 +114,7 @@ fn check() -> Job {
 
 /// `check`'s body on top of `base`, linting `packages`.
 pub(super) fn check_job(base: Job, packages: &str) -> Job {
-    base.runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
+    base.runs_on(runners::Runner::Large.with_cache_tag("sccache-ci-int-check"))
         .map(with_check_env)
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())

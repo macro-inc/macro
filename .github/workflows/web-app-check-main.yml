@@ -351,7 +351,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.codegen_changed == 'true'
     name: Generated Code Check
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=web-ci-int-gen
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'
       RUSTFLAGS: '-C link-arg=-fuse-ld=mold'
