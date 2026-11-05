@@ -5,8 +5,9 @@ import type {
   SubscriptionBillingLineItem,
   TeamAgent,
 } from '@service-auth/generated/schemas';
-import { createMemo, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { formatBillingAmount } from '../core/format-billing-amount';
 import { SettingsCard, SettingsRow, SettingsSection } from '../primitives';
 
 function sizeLabel(size: ComputerSize): string {
@@ -36,23 +37,8 @@ export function TeamBillingBreakdown(props: {
   billing: SubscriptionBilling;
   agents: readonly TeamAgent[];
 }) {
-  const currencyFormat = createMemo(
-    () =>
-      new Intl.NumberFormat(formatLocale(), {
-        style: 'currency',
-        currency: props.billing.currency,
-      })
-  );
-  const money = (amount: number) => {
-    const formatter = currencyFormat();
-    const options = formatter.resolvedOptions();
-    // Stripe retains two-decimal wire amounts for ISK/UGX: https://docs.stripe.com/currencies#special-cases
-    const digits =
-      options.currency === 'ISK' || options.currency === 'UGX'
-        ? 2
-        : (options.maximumFractionDigits ?? 2);
-    return formatter.format(amount / 10 ** digits);
-  };
+  const money = (amount: number) =>
+    formatBillingAmount(amount, props.billing.currency, formatLocale());
   const interval = () =>
     t(
       props.billing.interval === 'month'
@@ -114,6 +100,26 @@ export function TeamBillingBreakdown(props: {
             {money(props.billing.agentSeats.amount)}
           </span>
         </SettingsRow>
+        <Show when={computerLines().length > 0}>
+          <SettingsRow
+            label={t('settingsBilling.computers')}
+            description={t('settingsBilling.computerCount', {
+              count: computerLines().reduce(
+                (quantity, line) => quantity + line.quantity,
+                0
+              ),
+            })}
+          >
+            <span class="text-sm tabular-nums">
+              {money(
+                computerLines().reduce(
+                  (amount, line) => amount + line.amount,
+                  0
+                )
+              )}
+            </span>
+          </SettingsRow>
+        </Show>
         <For each={computerLines()}>
           {(line) => (
             <SettingsRow
