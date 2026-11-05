@@ -242,6 +242,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "DeleteCallRecord"
                 | "ListCalendars"
                 | "ListCalendarEvents"
+                // macro.calendar.createConfirmed runs the tool itself.
+                | "CreateConfirmedCalendarEvent"
                 | "UpdateCalendarEvent"
                 | "DeleteCalendarEvent"
                 | "ListNotifications"

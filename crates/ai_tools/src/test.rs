@@ -155,28 +155,19 @@ fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
 }
 
 #[test]
-fn code_mode_sends_confirmed_email_through_the_sdk_instead_of_the_tool() {
+fn code_mode_runs_confirmed_actions_through_the_sdk_instead_of_the_tools() {
     let tools = tools_for_agent_code_mode();
-    assert!(!tools.toolset.tools.contains_key("SendConfirmedEmail"));
-    assert!(
-        !tools
-            .deferred
-            .iter()
-            .any(|tool| tool.name == "SendConfirmedEmail")
-    );
-    assert!(
-        tools
-            .prompt
-            .to_string()
-            .contains("macro.email.sendConfirmed")
-    );
-    // Calendar creation has no SDK twin yet, so its confirmed tool stays.
-    assert!(
-        tools
-            .toolset
-            .tools
-            .contains_key("CreateConfirmedCalendarEvent")
-    );
+    let prompt = tools.prompt.to_string();
+    for name in ["SendConfirmedEmail", "CreateConfirmedCalendarEvent"] {
+        assert!(!tools.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+        assert!(!prompt.contains(name), "{name}");
+    }
+    assert!(prompt.contains("macro.email.sendConfirmed"));
+    assert!(prompt.contains("macro.calendar.createConfirmed"));
 }
 
 #[test]

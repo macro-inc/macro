@@ -40,6 +40,20 @@ export type DraftOptions = Omit<
   replyingTo?: EmailMessage;
 };
 
+/** Options for sending or scheduling a saved draft. */
+export interface DraftSendOptions {
+  /** `false` leaves the inbox signature off this one email; omit for the inbox's default. */
+  includeSignature?: boolean;
+  /**
+   * The user's own reply approving this send, quoted verbatim. Required from
+   * an agent's program; never the request that asked for the email.
+   */
+  userConfirmation?: string;
+}
+
+/** How far ahead `send` schedules, so the server, which refuses a time already past, accepts it despite clock skew. */
+const DRAFT_SEND_LEAD_MS = 10_000;
+
 /** A draft email. Sending remains an explicit separate operation. */
 export class EmailDraft extends EmailMessage {
   private async draftContext() {
@@ -84,13 +98,13 @@ export class EmailDraft extends EmailMessage {
   }
 
   /**
-   * Schedule this draft for sending; an agent's program is refused (403),
-   * since the draft would go out unseen, and sends through a review instead.
+   * Schedule this draft for sending; an agent's program must quote the user's reply approving this send in `userConfirmation`, or it is refused (403).
+   *
+   * The draft goes out as saved, attachments included, at `sendTime` (ISO
+   * 8601, in the future). Write the draft out for the user and ask before
+   * scheduling it; the request that asked for the email is not the approval.
    */
-  async schedule(
-    sendTime: string,
-    options?: { includeSignature?: boolean },
-  ): Promise<void> {
+  async schedule(sendTime: string, options?: DraftSendOptions): Promise<void> {
     const { headers, query } = await this.draftContext();
     await this.mutate((c) =>
       c.email.upsertScheduledMessage({
@@ -100,8 +114,23 @@ export class EmailDraft extends EmailMessage {
         body: {
           send_time: sendTime,
           include_signature: options?.includeSignature,
+          user_confirmation: options?.userConfirmation,
         },
       }),
+    );
+  }
+
+  /**
+   * Send this draft now, as saved; an agent's program must quote the user's reply approving this send in `userConfirmation`, or it is refused (403).
+   *
+   * The draft is handed to the scheduled sender, which delivers it within
+   * about a minute; until then {@link unschedule} still stops it. Write the
+   * draft out for the user and ask before sending it.
+   */
+  async send(options?: DraftSendOptions): Promise<void> {
+    await this.schedule(
+      new Date(Date.now() + DRAFT_SEND_LEAD_MS).toISOString(),
+      options,
     );
   }
 

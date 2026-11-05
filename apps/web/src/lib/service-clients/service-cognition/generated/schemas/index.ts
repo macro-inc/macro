@@ -93,6 +93,8 @@ export * from './conversationRecord';
 export * from './createChatRequest';
 export * from './createChatRequestName';
 export * from './createChatRequestProjectId';
+export * from './createConfirmedCalendarEvent200';
+export * from './createConfirmedCalendarEventBody';
 export * from './createPipedreamMcpTokenBody';
 export * from './databaseChange';
 export * from './databaseChangeOneOf';

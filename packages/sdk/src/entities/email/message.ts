@@ -15,6 +15,7 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Document } from '../documents/document';
 import { MacroEntity } from '../entity';
+import { EmailAttachment } from './attachment';
 import type { Label } from './label';
 import { Link } from './link';
 import { EmailThread } from './thread';
@@ -78,6 +79,30 @@ export interface ConfirmedEmailOptions {
   userConfirmation: string;
 }
 
+/** A forward the user has approved, for `EmailMessage.forwardDraft` and `forwardConfirmed`. */
+export interface ForwardEmailOptions {
+  /** Recipients. */
+  to: EmailRecipient[];
+  /** Cc recipients. */
+  cc?: EmailRecipient[];
+  /** Bcc recipients. */
+  bcc?: EmailRecipient[];
+  /** A note above the forwarded message, written as Markdown. */
+  body?: string;
+  /** The connected inbox to send from; defaults to the inbox holding the message. */
+  from?: Link;
+  /** `false` leaves the inbox signature off this one email; omit for the inbox's default. */
+  includeSignature?: boolean;
+}
+
+/** The first line of a forwarded message, as the web composer writes it. */
+const FORWARDED_MESSAGE_HEADER = '---------- Forwarded message ----------';
+
+/** Escape text so Markdown renders it literally. */
+function literalMarkdown(text: string): string {
+  return text.replace(/[\\`*_{}[\]<>()#+\-.!|~]/g, '\\$&');
+}
+
 /** A sent email: the message and the thread it belongs to. */
 export interface SentEmail {
   /** The sent message. */
@@ -137,7 +162,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
     client: MacroClient,
     opts: ConfirmedEmailOptions,
   ): Promise<SentEmail> {
-    const email: SendEmail & { userConfirmation: string } = {
+    const email: SendEmail = {
       subject: opts.subject,
       body: opts.body,
       to: opts.to,
@@ -149,10 +174,22 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
       attachments: opts.attachments?.map((document) => ({
         documentId: document.id,
       })),
-      userConfirmation: opts.userConfirmation,
     };
+    return EmailMessage.sendReviewedDraft(client, email, opts.userConfirmation);
+  }
+
+  /** @internal Run the SendConfirmedEmail tool with a SendEmail draft and its approval. */
+  private static async sendReviewedDraft(
+    client: MacroClient,
+    email: SendEmail,
+    userConfirmation: string,
+  ): Promise<SentEmail> {
     const response = sendEmailResponse(
-      unwrap(await client.cognition.sendConfirmedEmail({ body: email })),
+      unwrap(
+        await client.cognition.sendConfirmedEmail({
+          body: { ...email, userConfirmation },
+        }),
+      ),
     );
     if (typeof response === 'string' || !response.sent)
       throw new Error('The confirmed send did not report a sent message');
@@ -160,6 +197,94 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
       message: EmailMessage.byId(client, response.sent.message_id),
       thread: EmailThread.byId(client, response.sent.thread_id),
     };
+  }
+
+  /** The files attached to this message, from its thread's first 100 messages. */
+  async attachments(): Promise<EmailAttachment[]> {
+    const { thread_db_id } = await this.detail.get();
+    const { thread } = unwrap(
+      await this.client.email.getThread({
+        path: { thread_id: thread_db_id },
+        query: { limit: 100 },
+      }),
+    );
+    const message = thread.messages.find((m) => m.db_id === this.id);
+    if (!message)
+      throw new Error(
+        `Message ${this.id} is not among its thread's first 100 messages`,
+      );
+    return message.attachments.map((a) => EmailAttachment.from(this.client, a));
+  }
+
+  /**
+   * This message as a forward: a SendEmail draft with the note, the quoted
+   * message under the forwarded-message header, and its attachments as
+   * Macro documents. Pass it to `execution.reviews.create({kind: 'email'})`
+   * in a session; in a thread, use {@link forwardConfirmed}.
+   */
+  async forwardDraft(opts: ForwardEmailOptions): Promise<SendEmail> {
+    const [message, attachments] = await Promise.all([
+      this.detail.get(),
+      this.attachments(),
+    ]);
+    const documents = await Promise.all(
+      attachments.map((attachment) => attachment.toDocument()),
+    );
+    const inbox = opts.from ?? Link.byId(this.client, message.link_id);
+    const subject = message.subject ?? '';
+    const people = (contacts: EmailMessageData['to']) =>
+      contacts
+        .map((contact) => `${contact.name ?? contact.email} <${contact.email}>`)
+        .join(', ');
+    const header = [
+      FORWARDED_MESSAGE_HEADER,
+      `From: ${message.from ? people([message.from]) : ''}`,
+      `Date: ${message.internal_date_ts ? new Date(message.internal_date_ts).toUTCString() : ''}`,
+      `Subject: ${subject}`,
+      ...(message.to.length > 0 ? [`To: ${people(message.to)}`] : []),
+      ...(message.cc.length > 0 ? [`Cc: ${people(message.cc)}`] : []),
+    ];
+    const quoted = (message.body_parsed ?? '')
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      .map((line) => `> ${literalMarkdown(line)}`)
+      .join('\n>\n');
+    return {
+      subject: /^fwd?:/i.test(subject) ? subject : `Fwd: ${subject}`,
+      body: [
+        ...(opts.body ? [opts.body] : []),
+        header.map(literalMarkdown).join('\n\n'),
+        quoted,
+      ]
+        .filter((part) => part !== '')
+        .join('\n\n'),
+      to: opts.to,
+      cc: opts.cc,
+      bcc: opts.bcc,
+      from: await inbox.emailAddress(),
+      includeSignature: opts.includeSignature,
+      attachments: documents.map((document) => ({ documentId: document.id })),
+    };
+  }
+
+  /**
+   * Forward this message, with its attachments, only after the user replied approving the forward, quoting that reply in `userConfirmation`.
+   *
+   * For a prompt from a channel or document thread: write the forward out
+   * (recipients and note), ask whether to send it, and call this in a later
+   * turn on the user's approving reply. In the agent session view, present
+   * `forwardDraft` as a review instead. The forward is a new email that
+   * quotes this message and carries its attachments; it takes effect at once
+   * and is never retried.
+   */
+  async forwardConfirmed(
+    opts: ForwardEmailOptions & { userConfirmation: string },
+  ): Promise<SentEmail> {
+    return EmailMessage.sendReviewedDraft(
+      this.client,
+      await this.forwardDraft(opts),
+      opts.userConfirmation,
+    );
   }
 
   /** The message's subject line. */

@@ -42,9 +42,12 @@ Pulumi stacks; they do not host extra agent processes.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.
-  `src/cognition/api/email_send.rs` (`POST /cognition/email/send-confirmed`,
-  the SDK's `email.sendConfirmed`) runs the `SendConfirmedEmail` tool as the
-  caller: the only immediate send open to an agent's program.
+  `src/cognition/api/confirmed_actions.rs` runs a confirmed tool as the
+  caller: `POST /cognition/email/send-confirmed` (`SendConfirmedEmail`, the
+  SDK's `email.sendConfirmed` and `EmailMessage.forwardConfirmed`) and
+  `POST /cognition/calendar/events/create-confirmed`
+  (`CreateConfirmedCalendarEvent`, `calendar.createConfirmed`): the only
+  immediate send or create open to an agent's program besides a review.
 - `crates/universal_input` owns Command K's authenticated `/universal_input/classify`
   and `/universal_input/extract` routes, mounted directly by `src/api.rs`. The root
   composes staged search type/field extraction and Clairic content extraction

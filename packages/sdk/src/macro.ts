@@ -305,6 +305,7 @@ export { DocumentVersion } from './entities/documents/version';
 export {
   DraftAttachment,
   type DraftOptions,
+  type DraftSendOptions,
   EmailDraft,
 } from './entities/email/draft';
 export { EmailFilter, type EmailFilterOptions } from './entities/email/filter';
