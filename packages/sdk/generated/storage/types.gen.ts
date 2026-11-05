@@ -6163,6 +6163,10 @@ export type DocumentSyncEditor = {
      * User or bot that performed the edit.
      */
     actor: string;
+    /**
+     * Invocation from the editor's signed document grant.
+     */
+    agent_correlation_id?: string | null;
     on_behalf_of?: null | MacroUserIdStr;
 };
 

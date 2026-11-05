@@ -108,3 +108,5 @@ DMs, and the shared message store other domains discuss things on.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
+
+- Capture agent correlation when spawning mutation side effects and restore it when team events create direct-message channels.

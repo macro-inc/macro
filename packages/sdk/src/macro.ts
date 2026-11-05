@@ -279,6 +279,11 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   }
 }
 
+export {
+  type AgentActivity,
+  type AgentActivityOptions,
+  AgentInvocation,
+} from './entities/agent-sessions/activity';
 export type {
   ArchiveCause,
   AutoArchiveOverrides,
