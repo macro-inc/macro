@@ -1,6 +1,7 @@
 import type { EmailFocus, EntityData } from '@entity';
 import { Badge, cn, TagDot, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { EmailFocusSort } from '../constants';
 import { emailFocusReason } from '../focus-reason';
 
@@ -26,9 +27,28 @@ const IMPORTANCE_LEVELS = [
 
 const BARS = [0, 1, 2, 3, 4] as const;
 
-/** The 0-100 importance score as a number and a five-bar meter. */
+/**
+ * Which way a row's importance is moving, if it is. A trend this build doesn't
+ * know reads as flat, since the server ships separately.
+ */
+const importanceDirection = (trend: EmailFocus['importanceTrend']) =>
+  match(trend)
+    .returnType<'rising' | 'falling' | undefined>()
+    .with('UP', () => 'rising')
+    .with('DOWN', () => 'falling')
+    .with('FLAT', () => undefined)
+    .exhaustive(() => undefined);
+
+/**
+ * The 0-100 importance score as a number and a five-bar meter, with which way it
+ * is moving, if it is, in the label.
+ */
 function ImportanceMeter(props: { focus: EmailFocus }) {
-  const label = () => `Importance ${props.focus.importance} of 100`;
+  const direction = () => importanceDirection(props.focus.importanceTrend);
+  const label = () => {
+    const score = `Importance ${props.focus.importance} of 100`;
+    return direction() ? `${score}, ${direction()}` : score;
+  };
   const level = () =>
     IMPORTANCE_LEVELS.find((band) => props.focus.importance >= band.from) ??
     IMPORTANCE_LEVELS[IMPORTANCE_LEVELS.length - 1];

@@ -27,7 +27,8 @@ mutations, and the realtime subscription.
 
 - Depends on: `notification`, `notification_state` (graphql feature),
   `model_notifications`, `graphql_common`.
-- Used by: `complete_graph` (schema composition), `graphql_work_feed`.
+- Used by: `complete_graph` (schema composition), `graphql_work_feed`,
+  `graphql_notification_inbox`.
 
 ## Recipes
 

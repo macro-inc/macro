@@ -55,6 +55,14 @@ pub struct FocusAnswers {
     pub needs_response: f32,
     /// Is there an open loop the owner should come back to?
     pub needs_follow_up: f32,
+    /// Does it get more pressing the longer it sits untouched? Reads 0 on rows
+    /// stored before Jev was asked, which leaves them flat.
+    #[serde(default)]
+    pub grows_with_time: f32,
+    /// Does it matter less the longer it sits untouched? Reads 0 on rows stored
+    /// before Jev was asked, which leaves them flat.
+    #[serde(default)]
+    pub fades_with_time: f32,
 }
 
 impl FocusAnswers {
@@ -69,6 +77,8 @@ impl FocusAnswers {
             needs_decision,
             needs_response,
             needs_follow_up,
+            grows_with_time,
+            fades_with_time,
         ] = <[f32; FocusQuestion::ALL.len()]>::try_from(probabilities).ok()?;
         Some(Self {
             focus,
@@ -79,6 +89,8 @@ impl FocusAnswers {
             needs_decision,
             needs_response,
             needs_follow_up,
+            grows_with_time,
+            fades_with_time,
         })
     }
 }
@@ -191,8 +203,11 @@ pub struct FocusVerdict {
     pub needs_follow_up: bool,
     /// The owner sent the latest message and expects an answer.
     pub awaiting_reply: bool,
-    /// How much the thread matters, 0 to 100.
+    /// How much the thread matters at its classified message, 0 to 100.
     pub importance: u8,
+    /// How fast importance moves after that message, as a percent of the distance
+    /// left per day: positive towards 100, negative towards 0, 0 is flat.
+    pub importance_rate: i8,
 }
 
 /// One message as the classifier needs it.
@@ -348,16 +363,27 @@ pub struct FocusRecord {
     pub classified_at: DateTime<Utc>,
 }
 
+/// Which way a thread's importance is moving.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportanceTrend {
+    /// Rising, towards 100.
+    Up,
+    /// Falling, towards 0.
+    Down,
+    /// Not moving.
+    Flat,
+}
+
 /// A stored classification as it stands when read: who wrote last, how long the
-/// owner has waited and whether a changed event is over are applied to what was
-/// stored.
+/// owner has waited, whether a changed event is over and how far importance has
+/// moved are applied to what was stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThreadFocus {
     /// Whether the thread belongs in Focus.
     pub is_focus: bool,
     /// The Focus category, or why the thread was left out.
     pub category: FocusCategory,
-    /// How much the thread matters, 0 to 100.
+    /// How much the thread matters right now, 0 to 100.
     pub importance: u8,
     /// The latest message is someone else's and waits on the owner's answer.
     pub needs_reply: bool,
@@ -366,4 +392,6 @@ pub struct ThreadFocus {
     pub needs_follow_up: bool,
     /// When the classification was made.
     pub classified_at: DateTime<Utc>,
+    /// Which way `importance` is moving.
+    pub importance_trend: ImportanceTrend,
 }

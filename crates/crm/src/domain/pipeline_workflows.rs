@@ -300,7 +300,16 @@ where
         let applied = self
             .pipelines
             .apply_ops(receipt, viewer.acting_bot, batch)
-            .await?;
+            .await
+            .map_err(|error| match error {
+                // Treat a refused row as a caller-correctable workflow error.
+                // CSV import retries these individually and reports invalid rows
+                // while still accepting the valid rows in the same batch.
+                super::pipelines::PipelineError::Database(
+                    databases::domain::models::DatabaseError::InvalidOp(refusal),
+                ) => WorkflowError::Invalid(refusal.reason),
+                other => other.into(),
+            })?;
         let version = applied
             .results
             .iter()

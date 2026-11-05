@@ -58,11 +58,18 @@ tools — hexagonal, heavily feature-gated.
   `domain/focus/rule.rs` when either changes, or stored rows keep the old verdict
   until new mail arrives. The worker's sweep re-decides older rows from their
   stored `scores`, without calling Jev. `rule/experiment.csv` holds the expected
-  verdicts for 643 real threads; report how far a rule change moves them.
+  verdicts for 643 real threads; report how far a rule change moves them. A new
+  question's answer is `#[serde(default)]`, so stored `scores` still decode, and
+  needs no bump when it decides nothing at 0.
 - Nothing reclassifies a Focus thread as it ages, so `focus_pg` applies the wait
   and the calendar hold when it reads: `awaiting_reply` and `calendar_hold_until`
   are stored, `FOLLOW_UP_AFTER_DAYS` and the time are passed in. `focus_thread_ids`
   and `focus_for_threads` restate the same tests; change both.
+- `focus_for_threads` also moves importance when it reads, with
+  `domain/focus/importance.rs`: `importance_rate` is stored and the clock starts at
+  `classified_message_ts`. The stored `importance` is the base, and the floors in
+  `domain/focus/rule.rs` only set that base. Importance never decides membership,
+  so `focus_thread_ids` doesn't read it.
 - In Focus, Calendar only means a change whose event isn't over: the read sets it
   from `calendar_hold_until`, and the stored `category` is what the thread reads as
   afterwards. A stored Calendar is a new invite or RSVP left out, and
@@ -95,6 +102,11 @@ tools — hexagonal, heavily feature-gated.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
+- An attachment links to its document before the bytes reach storage, and a link
+  stops sync from offering it again. `AttachmentReadService::document` stores the
+  bytes again when a linked document is still awaiting its upload, and DSS signs a
+  new upload for that reuse; DOCX is left out because it stays pending while it
+  converts.
 - Forwarded attachments register through `domain/draft_attachments.rs` and resolve
   bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
   source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.

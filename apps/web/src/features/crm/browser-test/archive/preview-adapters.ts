@@ -36,7 +36,7 @@ let hold = false;
 const params = new URLSearchParams(location.search);
 let company: CrmCompanyResponse = {
   id: 'company-1',
-  name: 'Example company',
+  name: params.get('companyName') ?? 'Example company',
   teamId: 'team-1',
   hidden: params.has('companyArchived'),
   emailSync: !params.has('companyArchived'),
