@@ -206,12 +206,18 @@ fn a_deduplication_id_suppresses_repeats_within_its_window() {
 }
 
 #[test]
-fn purging_discards_ready_messages_and_commits_past_them() {
+fn purging_discards_ready_and_in_flight_messages_and_commits_past_them() {
     let mut q = queue();
     q.ingest(at(0), envelope("a"));
     q.ingest(at(1), envelope("b"));
+    let held = q.receive(1, 30, T0);
 
     let commits = q.purge();
-    assert_eq!(commits.last().map(|c| c.next_offset), Some(2));
+    assert_eq!(commits.iter().map(|c| c.next_offset).max(), Some(2));
     assert_eq!(q.depth(T0), Depth::default());
+
+    // Nothing comes back, and the old handle is stale.
+    q.expire(T0 + 60_000);
+    assert!(q.receive(10, 30, T0 + 60_000).is_empty());
+    assert_eq!(q.delete(&held[0].receipt_handle), None);
 }

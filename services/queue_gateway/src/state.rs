@@ -290,12 +290,14 @@ impl QueueState {
         self.finish(position)
     }
 
-    /// Discards every message not in flight. Returns the commits this allows.
+    /// Discards every message, in flight too, as SQS does. Returns the commits this
+    /// allows.
     pub fn purge(&mut self) -> Vec<Commit> {
-        let drained: Vec<Held> = self.ready.drain(..).collect();
-        drained
+        let mut positions: Vec<Position> = self.ready.drain(..).map(|m| m.position).collect();
+        positions.extend(self.in_flight.drain().map(|(_, m)| m.held.position));
+        positions
             .into_iter()
-            .filter_map(|held| self.finish(held.position))
+            .filter_map(|position| self.finish(position))
             .collect()
     }
 
