@@ -35,7 +35,11 @@ case "$action" in
     # An interrupted restore leaves a store that looks installed. The job installs
     # from scratch and saves a new seed once its dev shell is ready.
     sudo find /nix -mindepth 1 -delete
-    echo "NIX_SEED_SAVE=true" >> "$GITHUB_ENV"
+    {
+      echo "NIX_SEED_SAVE=true"
+      echo "NIX_SEED_CACHE=$NIX_SEED_CACHE"
+      echo "NIX_SEED_KEY=$NIX_SEED_KEY"
+    } >> "$GITHUB_ENV"
     exit 1
     ;;
   save)
