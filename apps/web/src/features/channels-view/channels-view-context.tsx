@@ -25,11 +25,7 @@ import type { ContextProviderProps } from '@solid-primitives/context';
 import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import { createStore, type Store } from 'solid-js/store';
 import { channelsSearch, channelsSearchCodec } from './channels-route';
-import {
-  CHANNELS_DEFAULT_RAIL_WIDTH,
-  CHANNELS_DEFAULT_SORT_BY,
-  clampChannelsRailWidth,
-} from './constants';
+import { CHANNELS_DEFAULT_SORT_BY } from './constants';
 import { createChannelsViewPersistence } from './persistence';
 import type {
   ChannelListSort,
@@ -76,7 +72,6 @@ export type ChannelsViewContext = {
     preferences: ChannelSectionPreferences
   ) => void;
   setSectionOrder: (sections: ChannelSectionKey[]) => void;
-  setAsideWidth: (width: number) => void;
 };
 
 function createInitialState(
@@ -103,14 +98,11 @@ function createInitialState(
     },
     sectionPreferences: { ...initial.sectionPreferences },
     sectionOrder: initial.sectionOrder ?? [],
-    asideWidth: clampChannelsRailWidth(
-      initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
-    ),
   };
 }
 
 function shouldRestorePreferences(initial: ChannelsViewStateOptions): boolean {
-  return initial.asideWidth === undefined && initial.sortBy === undefined;
+  return initial.sortBy === undefined;
 }
 
 export const [ChannelsViewProvider, useChannelsView] =
@@ -271,8 +263,6 @@ export const [ChannelsViewProvider, useChannelsView] =
             [section]: { ...current[section], ...preferences },
           })),
         setSectionOrder: (sections) => setState('sectionOrder', sections),
-        setAsideWidth: (width) =>
-          setState('asideWidth', clampChannelsRailWidth(width)),
       };
     }
   );
