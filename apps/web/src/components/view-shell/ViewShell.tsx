@@ -137,7 +137,8 @@ export type ViewShellRootProps = Omit<
   /**
    * Sticky navigation visibility and width, scoped to this app type rather
    * than an entry. Only the first split follows the saved visibility; other
-   * splits start collapsed. Every split shares the saved width.
+   * splits start collapsed. Every split opens at the last saved width; a drag
+   * in one split leaves the others' current widths alone.
    */
   asidePreferenceKey?: string;
   /**
