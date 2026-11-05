@@ -327,3 +327,39 @@ fn only_a_dead_owner_is_reported_gone() {
     assert!(process_alive(std::process::id()));
     assert!(!process_alive(i32::MAX as u32));
 }
+
+/// Each Docker bridge adds a host route for its subnet. Counting an instance's
+/// own bridge routes as taken moved every restarted instance off its block.
+#[test]
+fn an_instance_keeps_its_block_despite_its_own_bridge_routes() {
+    let instance = Instance::derive(Some("agent-a"), None).unwrap();
+    let network = |name: &str, cidr: &str| docker::NetworkSubnets {
+        name: name.to_string(),
+        subnets: vec![cidr.to_string()],
+    };
+    let machine = Machine {
+        networks: vec![
+            network("databases-agent-a", "10.254.175.0/26"),
+            network("macro-agent-a_auth-internal", "10.254.175.192/26"),
+            network("databases-agent-b", "10.254.176.0/26"),
+        ],
+        containers: Vec::new(),
+    };
+    // Kernel routes for those three bridges, plus a VPN route.
+    let routes = parse_routes(
+        "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\n\
+         br-1\t00AFFE0A\t00000000\t0001\t0\t0\t0\tC0FFFFFF\n\
+         br-2\tC0AFFE0A\t00000000\t0001\t0\t0\t0\tC0FFFFFF\n\
+         br-3\t00B0FE0A\t00000000\t0001\t0\t0\t0\tC0FFFFFF\n\
+         tun0\t0000FE0A\t00000000\t0001\t0\t0\t0\t00FFFFFF\n",
+    );
+
+    let used = machine.used_subnets(&instance, routes);
+
+    assert_eq!(
+        choose_block("agent-a", Some(175), &used, &BTreeSet::new()),
+        Some(175)
+    );
+    assert!(used.contains(&Ipv4Range::parse("10.254.176.0/26").unwrap()));
+    assert!(used.contains(&Ipv4Range::parse("10.254.0.0/24").unwrap()));
+}
