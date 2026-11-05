@@ -10,4 +10,4 @@ pub mod user_id;
 
 pub use cowlike;
 #[doc(hidden)]
-pub const CI_INTEGRATE_NONCE: &str = "1793891462-1";
+pub const CI_INTEGRATE_NONCE: &str = "1793891928-2";
