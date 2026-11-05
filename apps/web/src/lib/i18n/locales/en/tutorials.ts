@@ -35,4 +35,8 @@ export default {
   schedulingSnippet:
     'Booking links built into your calendar, created by an agent',
   schedulingLength: '0:45',
+  calendarTitle: 'Learn how to use Macro Calendar',
+  calendarSnippet:
+    'Agents that schedule for you, and meetings right in your channels',
+  calendarLength: '0:55',
 };

@@ -1,4 +1,6 @@
 import { t } from '@app/lib/i18n';
+import calendarVideo from './assets/calendar.mp4';
+import calendarPoster from './assets/calendar-poster.jpg';
 import callsVideo from './assets/calls.mp4';
 import callsPoster from './assets/calls-poster.jpg';
 import chatVideo from './assets/chat.mp4';
@@ -146,5 +148,19 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     },
     videoUrl: schedulingVideo,
     posterUrl: schedulingPoster,
+  },
+  calendar: {
+    id: 'calendar',
+    get title() {
+      return t('tutorials.calendarTitle');
+    },
+    get snippet() {
+      return t('tutorials.calendarSnippet');
+    },
+    get length() {
+      return t('tutorials.calendarLength');
+    },
+    videoUrl: calendarVideo,
+    posterUrl: calendarPoster,
   },
 };
