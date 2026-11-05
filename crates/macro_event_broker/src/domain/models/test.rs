@@ -186,14 +186,19 @@ fn exposes_each_declared_topic_in_order() {
 
 #[test]
 fn decodes_each_declared_topic_into_its_enum_variant() {
-    let example_payload = serde_json::to_vec(&example_event()).unwrap();
+    let correlation_id = Uuid::from_u128(42);
+    let mut event = example_event();
+    event.agent_correlation_id = Some(correlation_id);
+    let example_payload = serde_json::to_vec(&event).unwrap();
     let example_message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
         topic: MacroExampleTopic::TOPIC_STR,
         key: Some("example-key"),
         payload: Some(example_payload),
     });
 
-    match example_message.decode_payload().unwrap() {
+    let decoded = example_message.decode_payload().unwrap();
+    assert_eq!(decoded.agent_correlation_id(), Some(correlation_id));
+    match decoded {
         DeclaredMacroEvent::ExampleMacroEvent(event) => {
             assert_eq!(event.key(), "example-key");
         }
@@ -207,7 +212,9 @@ fn decodes_each_declared_topic_into_its_enum_variant() {
         payload: Some(documents_payload),
     });
 
-    match documents_message.decode_payload().unwrap() {
+    let decoded = documents_message.decode_payload().unwrap();
+    assert_eq!(decoded.agent_correlation_id(), None);
+    match decoded {
         DeclaredMacroEvent::DocumentsMacroEvent(event) => {
             assert_eq!(event.key(), "documents-key");
         }

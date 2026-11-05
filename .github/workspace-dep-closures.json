@@ -8683,6 +8683,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -12230,6 +12231,7 @@
     "routine_program": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -12305,6 +12307,7 @@
     "routines": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
