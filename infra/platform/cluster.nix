@@ -59,6 +59,8 @@ let
         file = "/data/.runner";
         capacity = 1;
         timeout = "6h";
+        # `platform mirror` pushes git objects, not LFS ones, and no check reads them.
+        envs.GIT_LFS_SKIP_SMUDGE = "1";
         labels = [ runnerLabel ];
       };
       cache.enabled = true;
