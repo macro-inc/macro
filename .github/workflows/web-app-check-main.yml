@@ -625,7 +625,7 @@ jobs:
         CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       working-directory: apps/web
-    - name: Test Optimistic Mutations in Chromium
+    - name: Functional Browser Tests
       run: bun run test:functional
       env:
         FUNCTIONAL_TEST_WORKERS: '8'
@@ -757,7 +757,8 @@ jobs:
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
-    - name: Configure AWS Credentials
+    - id: preview-credentials
+      name: Configure AWS Credentials
       if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository
       uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
       with:
@@ -767,7 +768,7 @@ jobs:
       continue-on-error: true
     - id: preview-id
       name: Get or create preview ID
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-credentials.outcome == 'success'
       run: |
         PREVIEW_ID=$(bun scripts/preview/get-or-create-id.ts \
           --pr ${{ github.event.pull_request.number }} \
@@ -777,31 +778,33 @@ jobs:
         echo "id=$PREVIEW_ID" >> $GITHUB_OUTPUT
         echo "Preview ID: $PREVIEW_ID"
       env:
-        PREVIEW_BUCKET: deliberately-wrong
+        PREVIEW_BUCKET: macro-preview-assets-dev
       continue-on-error: true
       working-directory: apps/web
-    - name: Validate bucket name
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository
+    - id: preview-bucket
+      name: Validate bucket name
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-id.outcome == 'success'
       run: |
         if [[ "${{ env.PREVIEW_BUCKET }}" != "macro-preview-assets-dev" ]]; then
           echo "ERROR: PREVIEW_BUCKET must be 'macro-preview-assets-dev'"
           exit 1
         fi
       env:
-        PREVIEW_BUCKET: deliberately-wrong
+        PREVIEW_BUCKET: macro-preview-assets-dev
       continue-on-error: true
-    - name: Deploy to S3
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository
+    - id: preview-deploy
+      name: Deploy to S3
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-bucket.outcome == 'success'
       run: |
         bun scripts/preview/deploy.ts \
           --preview-id ${{ steps.preview-id.outputs.id }} \
           --skip-build
       env:
-        PREVIEW_BUCKET: deliberately-wrong
+        PREVIEW_BUCKET: macro-preview-assets-dev
       continue-on-error: true
       working-directory: apps/web
     - name: Comment on PR
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository
+      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-deploy.outcome == 'success'
       run: |
         bun scripts/preview/post-comment.ts \
           --pr ${{ github.event.pull_request.number }} \
@@ -810,7 +813,7 @@ jobs:
           --preview-id ${{ steps.preview-id.outputs.id }} \
           --sha ${{ github.sha }}
       env:
-        PREVIEW_BUCKET: deliberately-wrong
+        PREVIEW_BUCKET: macro-preview-assets-dev
       continue-on-error: true
       working-directory: apps/web
     - name: Teardown Nix
