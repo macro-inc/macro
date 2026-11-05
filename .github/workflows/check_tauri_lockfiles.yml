@@ -1,18 +1,8 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/check_tauri_lockfiles.rs
 name: check tauri lockfiles
-'on':
-  pull_request:
-    branches:
-    - main
-    paths:
-    - apps/web/tauri/**
-    - crates/**/Cargo.toml
-    - Cargo.toml
-    - nix/tauri-desktop.nix
-    - flake.nix
-    - flake.lock
-    - '.github/workflows/check_tauri_lockfiles.yml'
+on:
+  workflow_dispatch: {}
 permissions:
   contents: read
 jobs:

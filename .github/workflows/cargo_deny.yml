@@ -1,23 +1,8 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/cargo_deny.rs
 name: cargo deny check
-'on':
-  pull_request:
-    types:
-    - opened
-    - synchronize
-    - reopened
-    - ready_for_review
-    branches:
-    - main
-    paths:
-    - Cargo.toml
-    - crates/**/Cargo.toml
-    - services/**/Cargo.toml
-    - tooling/xtask/**/Cargo.toml
-    - Cargo.lock
-    - deny.toml
-    - '.github/workflows/cargo_deny.yml'
+on:
+  workflow_dispatch: {}
 jobs:
   cargo-deny:
     runs-on: namespace-profile-linux-small

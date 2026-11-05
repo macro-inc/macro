@@ -1,10 +1,8 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/release_label_check.rs
 name: Release Label Check
-'on':
-  pull_request_target:
-    types:
-    - labeled
+on:
+  workflow_dispatch: {}
 jobs:
   check:
     if: github.event.label.name == 'ios-update' || github.event.label.name == 'android-update'

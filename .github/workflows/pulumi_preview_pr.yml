@@ -2,19 +2,7 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/pulumi_preview_pr.rs
 name: Pulumi Preview on PR
 on:
-  pull_request:
-    branches:
-    - main
-    paths:
-    - infra/**
-    - .github/kafka-cluster-topics.json
-    - .github/services-config.json
-    - .github/workflows/pulumi_preview_pr.yml
-    - .github/workflows/reusable_preview_service.yml
-    - .github/actions/preview-cloud-storage-pulumi/**
-    - .github/actions/setup-nix/**
-    - .github/actions/teardown-nix/**
-    - .github/scripts/build-cloud-storage-lambdas-nix.sh
+  workflow_dispatch: {}
 permissions:
   contents: read
   pull-requests: write

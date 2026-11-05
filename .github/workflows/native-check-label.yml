@@ -1,13 +1,8 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/native_check_label.rs
 name: Native Check Label
-'on':
-  pull_request:
-    types:
-    - labeled
-    - unlabeled
-    branches:
-    - main
+on:
+  workflow_dispatch: {}
 jobs:
   rerun:
     if: (github.event.label.name == 'skip-ios-update' || github.event.label.name == 'skip-android-update') && github.event.pull_request.head.repo.full_name == github.repository

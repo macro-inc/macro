@@ -1,15 +1,8 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
 name: Web App Pr Checks
-'on':
-  pull_request:
-    types:
-    - opened
-    - synchronize
-    - reopened
-    - ready_for_review
-    branches:
-    - main
+on:
+  workflow_dispatch: {}
 jobs:
   path-check:
     runs-on: namespace-profile-linux-tiny-no-cache

@@ -1,10 +1,8 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/android_release_drift.rs
 name: Android Release Drift
-'on':
-  pull_request:
-    types:
-    - synchronize
+on:
+  workflow_dispatch: {}
 jobs:
   drift:
     if: contains(github.event.pull_request.labels.*.name, 'android-update') && github.event.pull_request.head.repo.full_name == github.repository

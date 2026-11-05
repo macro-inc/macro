@@ -1,10 +1,8 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/android_play_release.rs
 name: Android Play Release
-'on':
-  pull_request:
-    types:
-    - labeled
+on:
+  workflow_dispatch: {}
 jobs:
   release:
     if: github.event.label.name == 'android-update' && github.event.pull_request.head.repo.full_name == github.repository
