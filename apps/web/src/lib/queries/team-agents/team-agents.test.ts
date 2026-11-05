@@ -1,4 +1,5 @@
-import { QueryObserver } from '@tanstack/query-core';
+import type { TeamAgent } from '@service-auth/generated/schemas';
+import { focusManager, QueryObserver } from '@tanstack/query-core';
 import { ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -41,22 +42,38 @@ describe('team agents queries', () => {
   });
 });
 
-it('polls a provisioning agent and stops after it starts running', async () => {
+it('refreshes visible agent health after provisioning, recovers failure, and stops on an empty roster', async () => {
   vi.useFakeTimers();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  const agent = {
+  const agent: TeamAgent = {
     userId: 'agent-1',
     teamId: 'team-1',
     name: 'Assistant',
     email: 'agent@example.com',
     createdAt: '2026-01-01',
-    status: 'provisioning' as const,
+    status: 'provisioning',
+    retryable: false,
+    payment: 'paid',
   };
   vi.mocked(authServiceClient.listTeamAgents)
     .mockResolvedValueOnce(ok({ agents: [agent] }))
-    .mockResolvedValue(ok({ agents: [{ ...agent, status: 'running' }] }));
+    .mockResolvedValueOnce(ok({ agents: [{ ...agent, status: 'running' }] }))
+    .mockResolvedValueOnce(
+      ok({
+        agents: [
+          {
+            ...agent,
+            status: 'failed',
+            statusReason: 'Brain unavailable',
+            retryable: false,
+          },
+        ],
+      })
+    )
+    .mockResolvedValueOnce(ok({ agents: [{ ...agent, status: 'running' }] }))
+    .mockResolvedValue(ok({ agents: [] }));
   const options = teamAgentsQueryOptions('team-1');
   const observer = new QueryObserver(client, options);
   const unsubscribe = observer.subscribe(() => {});
@@ -66,11 +83,31 @@ it('polls a provisioning agent and stops after it starts running', async () => {
     await vi.advanceTimersByTimeAsync(3000);
     expect(observer.getCurrentResult().data?.agents[0].status).toBe('running');
     expect(authServiceClient.listTeamAgents).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(6000);
+    await vi.advanceTimersByTimeAsync(29000);
     expect(authServiceClient.listTeamAgents).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(observer.getCurrentResult().data?.agents[0].status).toBe('failed');
+    expect(observer.getCurrentResult().data?.agents[0].retryable).toBe(false);
+    expect(authServiceClient.listTeamAgents).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(observer.getCurrentResult().data?.agents[0].status).toBe('running');
+    expect(authServiceClient.listTeamAgents).toHaveBeenCalledTimes(4);
+    focusManager.setFocused(false);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(authServiceClient.listTeamAgents).toHaveBeenCalledTimes(4);
+    focusManager.setFocused(true);
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(observer.getCurrentResult().data?.agents).toEqual([]);
+    expect(authServiceClient.listTeamAgents).toHaveBeenCalledTimes(5);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(authServiceClient.listTeamAgents).toHaveBeenCalledTimes(5);
+    unsubscribe();
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(authServiceClient.listTeamAgents).toHaveBeenCalledTimes(5);
   } finally {
     unsubscribe();
     client.clear();
+    focusManager.setFocused(undefined);
     vi.useRealTimers();
   }
 });

@@ -21,10 +21,14 @@ export function teamAgentsQueryOptions(teamId: string) {
     queryKey: teamAgentKeys.list(teamId).queryKey,
     queryFn: () => throwOnErr(() => authServiceClient.listTeamAgents()),
     reconcile: 'userId',
-    refetchInterval: (query) =>
-      query.state.data?.agents.some((agent) => agent.status === 'provisioning')
+    refetchInterval: (query) => {
+      const agents = query.state.data?.agents ?? [];
+      if (agents.length === 0) return false;
+      return agents.some((agent) => agent.status === 'provisioning')
         ? 3000
-        : false,
+        : 30000;
+    },
+    refetchIntervalInBackground: false,
   });
 }
 

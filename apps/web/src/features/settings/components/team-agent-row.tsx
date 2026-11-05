@@ -13,12 +13,20 @@ export function AgentStatusPill(props: {
   retryError?: boolean;
   onRetry(): void;
 }) {
-  const status = () =>
+  const computerStatus = () =>
     match(props.agent.status)
       .with('provisioning', () => 'Setting up…')
       .with('running', () => 'Running')
       .with('failed', () => 'Failed')
       .exhaustive(() => 'Status unavailable');
+  const status = () =>
+    match(props.agent.payment)
+      .with('pending', () => 'Confirming payment')
+      .with('unbilled', () => 'Payment failed / not billed')
+      .with('paid', null, undefined, () => computerStatus())
+      .exhaustive(() => computerStatus());
+  const canRetry = () =>
+    props.agent.retryable && props.agent.payment === 'paid';
   const step = () =>
     match(props.agent.setup?.step)
       .with('paying', () => 'Confirming payment')
@@ -39,7 +47,19 @@ export function AgentStatusPill(props: {
       >
         {status()}
       </span>
-      <Show when={props.agent.status === 'provisioning' && props.agent.setup}>
+      <Show when={props.agent.payment === 'paid'}>
+        <span class="text-ink-muted">Billed</span>
+      </Show>
+      <Show
+        when={
+          props.agent.status === 'provisioning' &&
+          !(
+            props.agent.payment === 'pending' &&
+            props.agent.setup?.step === 'paying'
+          ) &&
+          props.agent.setup
+        }
+      >
         {(setup) => (
           <span class="text-ink-muted">
             {step()} ({setup().position}/{setup().total})
@@ -50,11 +70,13 @@ export function AgentStatusPill(props: {
         <span class="text-failure break-words">
           {props.agent.statusReason || 'The computer could not finish setup.'}
         </span>
+      </Show>
+      <Show when={canRetry()}>
         <Button
           variant="ghost"
           size="sm"
           disabled={props.retrying}
-          onClick={props.onRetry}
+          onClick={() => canRetry() && props.onRetry()}
         >
           Retry
         </Button>
@@ -95,20 +117,29 @@ export function TeamAgentRow(props: {
           />
         </div>
       </div>
-      <Dropdown>
-        <Dropdown.Trigger
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t('common.more')}
-        >
-          <DotsIcon class="size-4" />
-        </Dropdown.Trigger>
-        <Dropdown.Content>
-          <Dropdown.Item onSelect={props.onRemove}>
-            {t('common.removeTeamAgent')}
-          </Dropdown.Item>
-        </Dropdown.Content>
-      </Dropdown>
+      <TeamAgentMenu agent={props.agent} onRemove={props.onRemove} />
     </div>
+  );
+}
+
+export function TeamAgentMenu(props: { agent: TeamAgent; onRemove(): void }) {
+  return (
+    <Dropdown>
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-sm"
+        aria-label={t('common.more')}
+      >
+        <DotsIcon class="size-4" />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Item
+          disabled={props.agent.payment === 'pending'}
+          onSelect={() => props.agent.payment !== 'pending' && props.onRemove()}
+        >
+          {t('common.removeTeamAgent')}
+        </Dropdown.Item>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }

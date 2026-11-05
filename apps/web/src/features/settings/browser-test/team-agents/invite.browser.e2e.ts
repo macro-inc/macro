@@ -76,3 +76,41 @@ test('keeps phone actions above the keyboard while long fields scroll', async ({
     page.getByRole('button', { name: 'Confirm and invite' })
   ).toBeInViewport();
 });
+
+test('blocks pending payment actions and permits unbilled removal and paid provisioning retry', async ({
+  page,
+}) => {
+  await page.goto('/?payments');
+  await expect(
+    page.getByText('Confirming payment', { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Retry', exact: true })
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await expect(
+    page.getByRole('menuitem', { name: 'Remove agent' })
+  ).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Set payment failure' }).click();
+  await expect(
+    page.getByText('Payment failed / not billed', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText('payment failed', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Retry', exact: true })
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Remove agent' }).click();
+  await expect(page.getByText('Removals: 1')).toBeVisible();
+  await page.getByRole('button', { name: 'Set paid failure' }).click();
+  await expect(page.getByText('Billed', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(page.getByText('Retry requests: 1')).toBeVisible();
+  await expect(
+    page.getByText('Starting computer (3/5)', { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Retry', exact: true })
+  ).toHaveCount(0);
+});

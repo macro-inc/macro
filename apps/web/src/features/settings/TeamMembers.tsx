@@ -604,7 +604,8 @@ export function TeamMembers(props: { team: TeamSummary }) {
                         if (
                           !canManageAgents() ||
                           retryAgent.isPending ||
-                          agent.status !== 'failed'
+                          !agent.retryable ||
+                          agent.payment !== 'paid'
                         )
                           return;
                         retryAgent.mutate({
@@ -612,7 +613,10 @@ export function TeamMembers(props: { team: TeamSummary }) {
                           userId: agent.userId,
                         });
                       }}
-                      onRemove={() => setRemoveAgent(agent)}
+                      onRemove={() => {
+                        if (canManageAgents() && agent.payment !== 'pending')
+                          setRemoveAgent(agent);
+                      }}
                     />
                   )}
                 </For>
@@ -637,8 +641,14 @@ export function TeamMembers(props: { team: TeamSummary }) {
             tone="danger"
             pending={deleteAgent.isPending}
             onConfirm={() => {
-              const agent = removeAgent();
+              const agent = agents().find(
+                (item) => item.userId === removeAgent()?.userId
+              );
               if (!agent || deleteAgent.isPending || !canManageAgents()) return;
+              if (agent.payment === 'pending') {
+                setRemoveAgent(undefined);
+                return;
+              }
               deleteAgent.mutate(
                 { teamId: props.team.id, userId: agent.userId },
                 { onSuccess: () => setRemoveAgent(undefined) }

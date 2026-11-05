@@ -28,6 +28,8 @@ const failed: TeamAgent = {
   email: 'agent@example.com',
   createdAt: '2026-01-01',
   status: 'failed',
+  retryable: true,
+  payment: 'paid',
   statusReason: 'Computer disconnected',
 };
 
@@ -43,7 +45,7 @@ function RetryHarness() {
       <span role="status">{agent()?.status}</span>
       <span aria-label="Mutation state">{retry.status}</span>
       <button
-        disabled={retry.isPending || agent()?.status !== 'failed'}
+        disabled={retry.isPending || agent()?.retryable !== true}
         onClick={() => retry.mutate({ teamId: 'team-1', userId: 'agent-1' })}
       >
         Retry
@@ -68,7 +70,12 @@ afterEach(() => {
 
 it('retries the existing agent once, invalidates members, and exposes provisioning for polling', async () => {
   let finish: (() => void) | undefined;
-  const provisioning = { ...failed, status: 'provisioning' as const };
+  const provisioning: TeamAgent = {
+    ...failed,
+    status: 'provisioning',
+    retryable: false,
+    payment: 'paid',
+  };
   vi.mocked(authServiceClient.retryTeamAgent).mockImplementation(
     () =>
       new Promise((resolve) => {
@@ -110,7 +117,7 @@ it('refreshes a stale failed row on 409 without replaying the retry request', as
     err([{ code: 'CONFLICT', message: 'Agent is not failed' }])
   );
   vi.mocked(authServiceClient.listTeamAgents).mockResolvedValue(
-    ok({ agents: [{ ...failed, status: 'running' }] })
+    ok({ agents: [{ ...failed, status: 'running', retryable: false }] })
   );
   render(() => (
     <QueryClientProvider client={queryClient}>

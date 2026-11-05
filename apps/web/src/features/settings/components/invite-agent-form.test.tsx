@@ -12,7 +12,7 @@ import {
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type AgentInviteSource, InviteAgentForm } from './invite-agent-form';
-import { AgentStatusPill } from './team-agent-row';
+import { AgentStatusPill, TeamAgentMenu } from './team-agent-row';
 
 afterEach(cleanup);
 const quote: TeamAgentQuote = {
@@ -196,6 +196,8 @@ const agent: TeamAgent = {
   email: 'agent@example.com',
   createdAt: '2026-01-01',
   status: 'provisioning',
+  retryable: false,
+  payment: 'paid',
   setup: { step: 'booting', position: 3, total: 5 },
 };
 it('updates setup to running and failed with the reason and retry action', () => {
@@ -211,6 +213,8 @@ it('updates setup to running and failed with the reason and retry action', () =>
   setValue({
     ...agent,
     status: 'failed',
+    retryable: true,
+    payment: 'paid',
     statusReason: 'Computer disconnected',
   });
   expect(screen.getByRole('status').textContent).toContain(
@@ -218,4 +222,91 @@ it('updates setup to running and failed with the reason and retry action', () =>
   );
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   expect(retry).toHaveBeenCalledTimes(1);
+});
+
+it('keeps a payment failure reason visible without offering provisioning retry', () => {
+  const retry = vi.fn();
+  render(() => (
+    <AgentStatusPill
+      agent={{
+        ...agent,
+        status: 'failed',
+        statusReason: 'payment failed',
+        retryable: false,
+        payment: 'unbilled',
+      }}
+      onRetry={retry}
+    />
+  ));
+  expect(screen.getByRole('status').textContent).toContain('payment failed');
+  expect(screen.getByText('Payment failed / not billed')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  expect(retry).not.toHaveBeenCalled();
+});
+
+it('shows payment progress and withdraws Retry when the server revokes it', () => {
+  const [value, setValue] = createSignal<TeamAgent>({
+    ...agent,
+    status: 'failed',
+    retryable: true,
+    payment: 'paid',
+  });
+  const retry = vi.fn();
+  render(() => <AgentStatusPill agent={value()} onRetry={retry} />);
+  expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  setValue({
+    ...agent,
+    status: 'provisioning',
+    retryable: false,
+    setup: { step: 'paying', position: 1, total: 5 },
+    payment: 'pending',
+  });
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  expect(screen.getByRole('status').textContent).toContain(
+    'Confirming payment'
+  );
+  expect(retry).not.toHaveBeenCalled();
+});
+
+it('labels a paid provisioning failure as billed and keeps unreadable payment unlabeled', () => {
+  const [value, setValue] = createSignal<TeamAgent>({
+    ...agent,
+    payment: 'paid',
+    status: 'failed',
+    retryable: true,
+  });
+  render(() => <AgentStatusPill agent={value()} onRetry={() => {}} />);
+  expect(screen.getByText('Billed')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  setValue({ ...agent, payment: null, status: 'failed', retryable: false });
+  expect(screen.queryByText('Billed')).toBeNull();
+  expect(screen.queryByText('Payment failed / not billed')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+});
+
+it('blocks removal during pending payment and permits clean removal after an unbilled failure', async () => {
+  const [value, setValue] = createSignal<TeamAgent>({
+    ...agent,
+    payment: 'pending',
+  });
+  const remove = vi.fn();
+  render(() => <TeamAgentMenu agent={value()} onRemove={remove} />);
+  fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+    key: 'ArrowDown',
+  });
+  const item = await screen.findByRole('menuitem', { name: 'Remove agent' });
+  expect(item.getAttribute('aria-disabled')).toBe('true');
+  fireEvent.click(item);
+  expect(remove).not.toHaveBeenCalled();
+  setValue({
+    ...agent,
+    payment: 'unbilled',
+    status: 'failed',
+    statusReason: 'payment failed',
+  });
+  const enabledItem = screen.getByRole('menuitem', { name: 'Remove agent' });
+  expect(enabledItem.getAttribute('aria-disabled')).not.toBe('true');
+  enabledItem.focus();
+  fireEvent.keyDown(enabledItem, { key: 'Enter' });
+  await waitFor(() => expect(remove).toHaveBeenCalledTimes(1));
 });

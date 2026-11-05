@@ -240,17 +240,29 @@ its computer together. The existing email invitation flow remains available.
    request is pending. On success the dialog closes and the roster refreshes.
    If confirmation fails, check the roster before starting another invitation:
    the response may have been lost after the purchase completed.
-4. Under **Agent teammates**, the row shows an **Agent** chip and **Setting
-   up…**, including the current setup step when supplied. The roster polls
-   every three seconds while any agent is provisioning, then shows **Running**
-   or **Failed** with its reason. **Retry** re-drives provisioning on the same
-   computer, preserving the agent's workspace and billing. It is disabled while
-   the request runs; failures refresh the status and keep an inline error if
-   the agent is still failed. A stale retry rejected with 409 refreshes the row
-   rather than creating an agent or purchasing another computer.
-5. Open the row's **More** menu and choose **Remove agent**. Confirming releases
-   its computer and seat and permanently deletes its repository. A failed
-   removal keeps the confirmation open for another attempt.
+4. Under **Agent teammates**, the row shows an **Agent** chip and setup or
+   health status. The roster polls every three seconds while any agent is
+   provisioning, then every thirty seconds while the page is visible and the
+   roster is nonempty. Running and failed rows keep refreshing so transient
+   health failures can recover without a manual refresh.
+5. **Retry** appears only when `retryable=true` and payment is **paid**. It
+   re-drives failed provisioning on the same computer, preserving the agent's
+   workspace and billing. Retry is disabled while the request runs. Failures
+   refresh the status and keep an inline error if retry is still available;
+   a stale retry rejected with 409 refreshes the row.
+6. Payment controls what can happen next:
+   - **Pending** shows **Confirming payment** and blocks both Retry and Remove.
+     Wait for payment to settle; do not re-invite while payment is pending.
+   - **Unbilled** shows **Payment failed / not billed**, retains the
+     **payment failed** reason, and offers no Retry. Use **More → Remove agent**
+     for clean removal, then invite another agent if needed.
+   - **Paid** shows **Billed**. **More → Remove agent** releases the computer
+     and removes its billed seat and computer from the subscription.
+   - An unreadable payment state makes no billing claim.
+7. Confirm **Remove agent** to release its resources and permanently delete
+   its repository. Removal remains blocked if payment becomes pending after
+   the confirmation opens. A failed removal keeps the confirmation open for
+   another attempt.
 
 On phones the invitation is a sheet, with its actions pinned above the scrolling
 form. Verify Review and Confirm stay reachable with long descriptions and the
