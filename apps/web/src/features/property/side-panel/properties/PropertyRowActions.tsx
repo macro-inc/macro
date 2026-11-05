@@ -131,11 +131,7 @@ function PropertyRowActionsRoot(props: {
         removeFromEntity,
       }}
     >
-      <Show
-        when={
-          panelCanRemove() || panelCanPin() || canRemove() || canPin()
-        }
-      >
+      <Show when={panelCanRemove() || panelCanPin() || canRemove() || canPin()}>
         <div
           class="flex shrink-0 items-center gap-0.5"
           onMouseDown={stopRowInteraction}
