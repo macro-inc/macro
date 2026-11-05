@@ -463,11 +463,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             ..Default::default()
         };
         let content = self
-            .compose_reply(
-                resolution.session_id,
-                resolution.session_name.clone(),
-                body,
-            )
+            .compose_reply(resolution.session_id, resolution.session_name.clone(), body)
             .await?;
         let patched = match self
             .messages

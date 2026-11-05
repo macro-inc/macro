@@ -582,11 +582,7 @@ impl XmlFormatter for PlainTextFormatter {
         activity: &ParsedAgentActivity<'_>,
         f: &mut Formatter<'_>,
     ) -> std::fmt::Result {
-        let labels: Vec<&str> = activity
-            .rows
-            .iter()
-            .map(|row| row.label.as_ref())
-            .collect();
+        let labels: Vec<&str> = activity.rows.iter().map(|row| row.label.as_ref()).collect();
         write!(f, "{}", labels.join("\n"))
     }
 
