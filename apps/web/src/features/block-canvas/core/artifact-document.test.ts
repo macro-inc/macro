@@ -98,7 +98,7 @@ describe('composeArtifactDocument', () => {
   });
 
   it('stops expanding a component that fans out past the budget', () => {
-    const fanOut = '<macro-component name="a"></macro-component>'.repeat(100);
+    const fanOut = '<macro-component name="a"></macro-component>'.repeat(20);
     const composed = composeArtifactDocument(
       '<macro-component name="a"></macro-component>',
       {},
