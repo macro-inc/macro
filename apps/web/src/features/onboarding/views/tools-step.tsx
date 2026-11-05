@@ -125,12 +125,12 @@ export function ToolsStep(props: { onContinue: () => void }) {
   };
 
   return (
-    <div class="flex flex-col gap-7">
+    <div class="flex flex-col gap-4">
       <section aria-labelledby="suggested-tools-heading" class="flex flex-col">
         <h2 id="suggested-tools-heading" class="sr-only">
           Suggested for you
         </h2>
-        <p class="mx-auto -mt-2 mb-4 max-w-[600px] text-center text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
+        <p class="mx-auto -mt-2 mb-8 max-w-[600px] text-center text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
           We recommend connecting your existing tools to Macro now so that the
           background import process (0-2 hours) can start for each tool.
         </p>
@@ -321,7 +321,7 @@ export function ToolsStep(props: { onContinue: () => void }) {
           </button>
         </p>
       </Show>
-      <div class="sticky bottom-0 z-10 bg-surface pb-[var(--safe-bottom,0px)]">
+      <div class="sticky bottom-0 z-10 -mt-5 bg-surface pb-[var(--safe-bottom,0px)]">
         <ContinueButton
           disabled={busy() !== undefined}
           onClick={props.onContinue}
