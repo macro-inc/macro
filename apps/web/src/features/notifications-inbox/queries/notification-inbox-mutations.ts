@@ -1,4 +1,6 @@
 import {
+  ClearNotificationInboxDocument,
+  type ClearNotificationInboxInput,
   MarkNotificationInboxNotificationDoneDocument,
   MarkNotificationInboxRowsDoneDocument,
   MarkNotificationInboxRowsSeenDocument,
@@ -54,6 +56,28 @@ export async function markInboxNotificationDone(
     );
   }
   return payload;
+}
+
+/**
+ * Clear one batch of the inbox; resolves to how many rows it took, the token
+ * that reverses it, and where the next batch starts.
+ */
+export async function clearInboxBatch(
+  client: Client,
+  input: ClearNotificationInboxInput
+): Promise<{ rowCount: number; undoToken: string; nextCursor: string | null }> {
+  const result = await client
+    .mutation(ClearNotificationInboxDocument, { input })
+    .toPromise();
+  const payload = result.data?.clearNotificationInbox;
+  if (result.error || !payload) {
+    throw result.error ?? new Error('Clearing the inbox failed');
+  }
+  return {
+    rowCount: payload.rowCount,
+    undoToken: payload.undoToken,
+    nextCursor: payload.nextCursor ?? null,
+  };
 }
 
 /** Reverse one done; resolves to the restored entries' places in `scope`. */

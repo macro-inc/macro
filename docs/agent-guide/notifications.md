@@ -79,6 +79,16 @@ switch), and the choice is kept per user across reloads. A row you read under
 Unread, or a stack you're going through, stays until you next switch or reload.
 With nothing unread, Unread shows **You're all caught up**.
 
+**Clear notifications** (double check, beside the filter; a sheet beside the
+filter pill on touch) offers **Clear today** (everything since local midnight,
+the rows under the list's today sections), **Clear all**, and **Clear by kind**
+for each kind the filters show. It acts on the whole inbox, not only the
+loaded rows, and never on a kind the filters hide; under Unread the choices
+read **Clear today's unread** and **Clear all unread** and take unread rows
+only. Clearing marks the rows done, but unlike a row's Mark done it doesn't
+archive email threads. A toast says how many were cleared and offers **Undo**,
+as does `⌘Z`/`Ctrl+Z`.
+
 **Filter notifications** (funnel, or `f`) offers **Type** checkboxes that start
 checked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
 Calendar, Access requests, and Agents. Unchecking a type hides its rows (Mentions
