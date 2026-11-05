@@ -310,12 +310,14 @@ pub async fn fetch_messages_with_labels(
     Ok(processed_messages)
 }
 
-// gets the headers we need for threading messages correctly
+/// The headers a reply needs to thread under `message_id`. The parent may sit
+/// in another inbox than the reply's: another of the sender's own, or the
+/// owner's when its thread was shared with the sender. Callers pass a reply
+/// target that was authorized when its draft was saved.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_message_threading_headers(
     pool: &PgPool,
     message_id: Uuid,
-    link_id: Uuid,
 ) -> anyhow::Result<(Option<String>, Option<String>)> {
     let row_option = sqlx::query!(
         r#"
@@ -325,10 +327,9 @@ pub async fn get_message_threading_headers(
           -- The references header can have multiple IDs, so we just return it raw
           jsonb_path_query_first(headers_jsonb, '$[*] ? (@.name like_regex "references" flag "i").value') #>> '{}' as "references"
         FROM email_messages
-        WHERE id = $1 AND link_id = $2
+        WHERE id = $1
         "#,
-        message_id,
-        link_id
+        message_id
     )
         .fetch_optional(pool)
         .await?;

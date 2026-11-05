@@ -144,6 +144,10 @@ tools — hexagonal, heavily feature-gated.
   queued goes back through `EmailRepo::revert_staged_label_change`, which
   restores the state an older write still on its way left (or the original),
   never a newer write's change.
+- A reply target outside the caller's inboxes is admitted only through
+  `SharedThreadReplyAccess` (edit access to its thread; wired in
+  `document_storage_service` with `with_shared_thread_replies`). The reply
+  starts a thread in the caller's inbox; other hosts keep `NoSharedThreadReplies`.
 - Sender discovery authorizes the inbox first. Gmail aliases use the sender
   provider; Outlook exposes its verified primary address without a Gmail lookup.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
