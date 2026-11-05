@@ -1,5 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
+    retry::resend_on_lost_connection,
     search::{
         self,
         channels::{ChannelSearchArgs, ChannelSearchResults},
@@ -9,9 +10,10 @@ use crate::{
 
 impl OpensearchClient {
     /// Performs a channel content search.
-    #[tracing::instrument(skip(self, args))]
+    #[tracing::instrument(skip(self, args), err)]
     pub async fn search_channel(&self, args: ChannelSearchArgs) -> Result<ChannelSearchResults> {
-        search::channels::search_channel(&self.inner, args).await
+        resend_on_lost_connection(|| search::channels::search_channel(&self.inner, args.clone()))
+            .await
     }
 }
 
@@ -23,11 +25,13 @@ impl OpensearchClient {
         upsert_channel_message_args: &UpsertChannelMessageArgs,
         index_override: Option<&str>,
     ) -> Result<()> {
-        upsert::channel_message::upsert_channel_message(
-            &self.inner,
-            upsert_channel_message_args,
-            index_override,
-        )
+        resend_on_lost_connection(|| {
+            upsert::channel_message::upsert_channel_message(
+                &self.inner,
+                upsert_channel_message_args,
+                index_override,
+            )
+        })
         .await
     }
 
@@ -39,7 +43,10 @@ impl OpensearchClient {
         channel_id: &str,
         index_override: Option<&str>,
     ) -> Result<()> {
-        delete::channel::delete_channel_by_id(&self.inner, channel_id, index_override).await
+        resend_on_lost_connection(|| {
+            delete::channel::delete_channel_by_id(&self.inner, channel_id, index_override)
+        })
+        .await
     }
 
     /// Deletes a channel message from the opensearch channel index
@@ -51,12 +58,14 @@ impl OpensearchClient {
         channel_message_id: &str,
         index_override: Option<&str>,
     ) -> Result<()> {
-        delete::channel::delete_channel_message_by_id(
-            &self.inner,
-            channel_id,
-            channel_message_id,
-            index_override,
-        )
+        resend_on_lost_connection(|| {
+            delete::channel::delete_channel_message_by_id(
+                &self.inner,
+                channel_id,
+                channel_message_id,
+                index_override,
+            )
+        })
         .await
     }
 }

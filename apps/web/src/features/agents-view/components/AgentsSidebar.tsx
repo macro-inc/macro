@@ -87,9 +87,6 @@ export type AgentsSidebarProps = Omit<
   hasNextPage: boolean;
   loadingNextPage: boolean;
   onSearchChange: (search: string) => void;
-  /** Whether the list includes unlisted sessions: routine runs it hides by default. */
-  showUnlistedRuns: boolean;
-  onShowUnlistedRunsChange: (show: boolean) => void;
   onOpenConversation: (
     conversation: AgentConversationEntity,
     event?: MouseEvent
@@ -169,6 +166,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [openPullRequestsOpen, setOpenPullRequestsOpen] = createSignal(true);
   const [conversationsOpen, setConversationsOpen] = createSignal(true);
+  const [archivedOpen, setArchivedOpen] = createSignal(false);
   let searchInput: HTMLInputElement | undefined;
   const factsOf = (conversation: AgentConversationEntity) =>
     conversationFacts(
@@ -388,6 +386,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                 onFilterChange={props.onFilterChange}
                 onClearFilters={props.onClearFilters}
                 onGroupingChange={props.onGroupingChange}
+                showUnlistedRuns={props.showUnlistedRuns}
+                onShowUnlistedRunsChange={props.onShowUnlistedRunsChange}
               />
               <Show when={isTouchDevice()}>
                 <CollapsibleSection.Action
@@ -399,16 +399,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                   <MagnifyingGlassIcon class="size-3.5" />
                 </CollapsibleSection.Action>
               </Show>
-              <CollapsibleSection.Action
-                aria-label="Show hidden routine runs"
-                aria-pressed={props.showUnlistedRuns}
-                class={cn(props.showUnlistedRuns && 'bg-active text-ink')}
-                onClick={() =>
-                  props.onShowUnlistedRunsChange(!props.showUnlistedRuns)
-                }
-              >
-                <RoutineIcon class="size-3.5" />
-              </CollapsibleSection.Action>
             </CollapsibleSection.Header>
             <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col gap-1">
               <Show when={isTouchDevice() && searchOpen()}>
@@ -478,23 +468,34 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
             </CollapsibleSection.Content>
           </CollapsibleSection.Root>
           <Show when={archived().length}>
-            <section
+            <CollapsibleSection.Root
+              open={archivedOpen()}
+              onOpenChange={setArchivedOpen}
+              as="section"
               aria-label="Archived conversations"
-              class="mt-auto flex min-h-0 shrink-0 basis-1/4 flex-col border-t border-edge-muted pt-2"
+              class={cn(
+                'mt-auto flex min-h-0 flex-col border-t border-edge-muted pt-2',
+                archivedOpen() && 'basis-1/4'
+              )}
             >
-              <ViewSidebar.Toolbar class="shrink-0">
-                <h3 class="text-xs font-medium text-ink-muted">Archived</h3>
-                <span class="text-xs text-ink-extra-muted tabular-nums">
-                  {archived().length}
-                </span>
-              </ViewSidebar.Toolbar>
-              <ViewSidebar.Nav
-                class="min-h-0 flex-1 shrink overflow-auto"
-                onScroll={loadMoreNearEnd}
-              >
-                {rows(archived)}
-              </ViewSidebar.Nav>
-            </section>
+              <CollapsibleSection.Header>
+                <CollapsibleSection.Trigger>
+                  <span class="min-w-0 truncate">Archived</span>
+                  <span class="text-ink-extra-muted tabular-nums">
+                    {archived().length}
+                  </span>
+                  <CollapsibleSection.Indicator />
+                </CollapsibleSection.Trigger>
+              </CollapsibleSection.Header>
+              <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col">
+                <ViewSidebar.Nav
+                  class="min-h-0 flex-1 shrink overflow-auto"
+                  onScroll={loadMoreNearEnd}
+                >
+                  {rows(archived)}
+                </ViewSidebar.Nav>
+              </CollapsibleSection.Content>
+            </CollapsibleSection.Root>
           </Show>
         </ViewSidebar.Content>
       </ViewSidebar.Root>

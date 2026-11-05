@@ -23561,7 +23561,7 @@
           },
           "has_agent": {
             "type": "boolean",
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session."
           },
           "id": {
             "$ref": "#/components/schemas/BotId",
@@ -27476,7 +27476,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false."
           },
           "name": {
             "type": "string",
@@ -27696,7 +27696,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false."
           },
           "name": {
             "type": "string",
@@ -39057,7 +39057,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged."
           },
           "name": {
             "type": ["string", "null"],
