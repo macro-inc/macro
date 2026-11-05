@@ -36,7 +36,9 @@ The inspector also adds and edits styles and components shared across the canvas
 HTML uses them with `<macro-style name="…">` and `<macro-component name="…">`.
 **Present** on a node opens the artifacts full screen in presentation order, which
 **Earlier** and **Later** in the inspector change. Check arrow keys and Esc both
-before and after clicking inside the frame.
+before and after clicking inside the frame. For an agent, `ReadCanvas` returns
+`artifactGuide` when the flag is on for the user, and artifact SDK operations in
+`ApplyCanvasEdits` fail without changing anything when it is off.
 
 ## Multiplayer canvas
 

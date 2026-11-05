@@ -145,6 +145,8 @@ function graphicsBackend(
     ) {
       const validated = freezeDocument(next);
       local('local', () => {
+        // Staged first: the mirror commits, and these must share that commit.
+        applyArtifactLibraryEdits(doc, libraryEdits);
         mirror.setState({
           scene: writeScene(
             mirror.getState().scene,
@@ -152,7 +154,6 @@ function graphicsBackend(
             validated
           ),
         });
-        applyArtifactLibraryEdits(doc, libraryEdits);
       });
     },
     artifactLibrary: {

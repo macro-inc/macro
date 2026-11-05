@@ -85,6 +85,9 @@ the component's `<slot>`. They expand when the document is composed, so a librar
 edit updates every artifact using it. JSON export carries only the scene, so a
 downloaded canvas loses its library.
 
+AI can create and edit artifacts and the library for users with the flag. See
+[Canvas architecture](../../../../../docs/architecture/canvas.md#artifacts).
+
 **Present** on a node opens `views/artifact-presentation.tsx`, full screen where the
 browser allows and otherwise covering the window. It steps through artifacts only,
 in `presentOrder`, stopping at each end; new artifacts go last, and the inspector
