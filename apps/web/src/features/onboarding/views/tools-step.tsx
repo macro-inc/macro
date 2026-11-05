@@ -120,27 +120,25 @@ export function ToolsStep(props: { onContinue: () => void }) {
   return (
     <div class="flex flex-col gap-7">
       <section aria-labelledby="suggested-tools-heading" class="flex flex-col">
-        <div class="flex flex-col gap-1 pb-2">
-          <h2 id="suggested-tools-heading" class="text-sm font-medium">
-            Suggested for you
-          </h2>
-          <p class="text-xs text-ink-extra-muted">
-            <Show
-              when={suggestions()}
-              fallback="Checking your inbox for the tools you already use…"
-            >
-              {(list) =>
-                list().some((suggestion) => suggestion.messageCount > 0)
-                  ? 'Based on the tools that emailed you in the last six months.'
-                  : 'Popular tools to connect first.'
-              }
-            </Show>
-          </p>
-        </div>
+        <h2 id="suggested-tools-heading" class="sr-only">
+          Suggested for you
+        </h2>
+        <p class="mx-auto -mt-2 mb-4 max-w-[440px] text-center text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
+          <Show
+            when={suggestions()}
+            fallback="Checking your inbox for the tools you already use…"
+          >
+            {(list) =>
+              list().some((suggestion) => suggestion.messageCount > 0)
+                ? 'Based on the tools that emailed you in the last six months.'
+                : 'Popular tools to connect first.'
+            }
+          </Show>
+        </p>
         <ul
           aria-label="Suggested connections"
           aria-busy={suggestions() === undefined}
-          class="flex flex-col border-t border-ink/10 [&>li:not(:first-child)]:border-t [&>li:not(:first-child)]:border-ink/10"
+          class="flex flex-col [&>li:not(:first-child)]:border-t [&>li:not(:first-child)]:border-ink/10"
         >
           <Show
             when={suggestions()}
