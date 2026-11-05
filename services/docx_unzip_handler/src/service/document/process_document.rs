@@ -37,20 +37,31 @@ pub async fn process(
     )
     .await?;
 
-    if job.is_none() {
-        tracing::info!("no upload job for document, converting without job updates");
-    }
+    let job_id = if let Some((job_id, _)) = job {
+        job_id
+    } else {
+        tracing::warn!("no job id found. making a new uuid");
+        macro_uuid::generate_uuid_v7().to_string()
+    };
 
     // send convert message
     tracing::trace!("queueing convert");
     if let Err(e) = ctx
         .sqs_client
-        .enqueue_convert_queue_message(convert_message(
-            job.map(|(job_id, _)| job_id),
-            bucket,
-            &document_key_parts,
-            &ctx.config.document_storage_bucket,
-        ))
+        .enqueue_convert_queue_message(ConvertQueueMessage {
+            job_id,
+            from_bucket: bucket.clone(),
+            from_key: document_key_parts.to_key(),
+            // The key for storing a converted version of a file is
+            // "{owner}/{document_id}/converted.{file_extension}"
+            to_key: build_docx_to_pdf_converted_document_key(
+                &document_key_parts.owner,
+                &document_key_parts.document_id,
+            ),
+            to_bucket: ctx.config.document_storage_bucket.clone(),
+            from_file_type: None,
+            to_file_type: None,
+        })
         .await
     {
         tracing::error!(error=?e, "unable to send convert message");
@@ -139,35 +150,3 @@ pub async fn process(
 
     Ok(())
 }
-
-/// The message converting an uploaded DOCX to PDF. Only a conversion with an
-/// upload job reports its outcome; one without a job gets a fresh id for
-/// logs and folder names.
-pub(super) fn convert_message(
-    upload_job_id: Option<String>,
-    bucket: &str,
-    document_key_parts: &DocumentKeyParts,
-    document_storage_bucket: &str,
-) -> ConvertQueueMessage {
-    let notify_job = upload_job_id.is_some();
-    let job_id = upload_job_id.unwrap_or_else(|| macro_uuid::generate_uuid_v7().to_string());
-
-    ConvertQueueMessage {
-        job_id,
-        from_bucket: bucket.to_string(),
-        from_key: document_key_parts.to_key(),
-        // The key for storing a converted version of a file is
-        // "{owner}/{document_id}/converted.{file_extension}"
-        to_key: build_docx_to_pdf_converted_document_key(
-            &document_key_parts.owner,
-            &document_key_parts.document_id,
-        ),
-        to_bucket: document_storage_bucket.to_string(),
-        from_file_type: None,
-        to_file_type: None,
-        notify_job,
-    }
-}
-
-#[cfg(test)]
-mod tests;
