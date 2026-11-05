@@ -305,11 +305,7 @@ export class Brain implements Control {
         } else if (event.type === AGENT_SESSION_OPENED) {
           const wake = await this.scheduleBook.wakeFor(event.metadata, this.me);
           if (wake) {
-            if (
-              this.wiring.onSchedule &&
-              (await this.wiring.onSchedule(wake, this)) !== false
-            )
-              continue;
+            if (await this.onSchedule(wake)) continue;
             const reason = wake.schedule
               ? `schedule: ${wake.schedule.note}`
               : `a routine run with no schedule record: ${wake.sessionName}`;
@@ -622,6 +618,14 @@ export class Brain implements Control {
     } finally {
       if (turn) await this.typing.get(turn)?.();
     }
+  }
+
+  /** Return true when a composition handles a routine wake entirely in code. */
+  async onSchedule(wake: import('./schedules.ts').Wake): Promise<boolean> {
+    return (
+      this.wiring.onSchedule !== undefined &&
+      (await this.wiring.onSchedule(wake, this)) !== false
+    );
   }
 
   /** Call adapters dispatch lifecycle events here; transports are supplied separately. */

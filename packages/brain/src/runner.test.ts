@@ -108,3 +108,57 @@ Deno.test('abort stops the run and reports it aborted', async () => {
 
   assertEquals(outcome.status, 'aborted');
 });
+
+Deno.test('composition tools are exposed through a real in-process MCP server', async () => {
+  const { Client } = await import(
+    'npm:@modelcontextprotocol/sdk@1.32.2/client/index.js'
+  );
+  const { InMemoryTransport } = await import(
+    'npm:@modelcontextprotocol/sdk@1.32.2/inMemory.js'
+  );
+  const { tool } = await import('@anthropic-ai/claude-agent-sdk');
+  const { z } = await import('zod');
+  let server:
+    | import('@anthropic-ai/claude-agent-sdk').McpSdkServerConfigWithInstance
+    | undefined;
+  const runner = new AgentSdkRunner({
+    ...RUNNER_OPTIONS,
+    query(params) {
+      const configured = params.options.mcpServers?.brain;
+      if (configured?.type === 'sdk') server = configured;
+      return (async function* () {
+        yield result('done', 0);
+      })();
+    },
+  });
+  const run = runner.start({
+    ...TURN,
+    tools: [
+      tool(
+        'echo',
+        'Echo a value',
+        { value: z.string() },
+        async ({ value }) => ({
+          content: [{ type: 'text', text: `echo:${value}` }],
+        })
+      ),
+    ],
+  });
+  if (!server) throw new Error('in-process MCP server was not supplied');
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: 'test', version: '1.0.0' });
+  try {
+    await server.instance.connect(serverTransport);
+    await client.connect(clientTransport);
+    const response = await client.callTool({
+      name: 'echo',
+      arguments: { value: 'release' },
+    });
+    assertEquals(response.content, [{ type: 'text', text: 'echo:release' }]);
+    await run.done;
+  } finally {
+    await client.close();
+    await server.instance.close();
+  }
+});

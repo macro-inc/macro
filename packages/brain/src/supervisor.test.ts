@@ -1,6 +1,6 @@
+import { assertEquals, assertRejects } from '@std/assert';
 import { Brain } from './brain.ts';
 import { dryRun } from './dry-run.ts';
-import { assertEquals, assertRejects } from '@std/assert';
 import {
   checkWorkspace,
   permissions,
@@ -167,17 +167,29 @@ Deno.test('sandbox denies out-of-scope filesystem, network and environment', asy
 Deno.test('call adapters dispatch typed lifecycle events to the composition hook', async () => {
   const root = await Deno.makeTempDir({ prefix: 'brain-call-hook-' });
   try {
-    const copied = await new Deno.Command('cp', { args: ['-r', `${new URL('../template/', import.meta.url).pathname}.`, root], clearEnv: true, env: { PATH: Deno.env.get('PATH') ?? '' } }).output();
+    const copied = await new Deno.Command('cp', {
+      args: [
+        '-r',
+        `${new URL('../template/', import.meta.url).pathname}.`,
+        root,
+      ],
+      clearEnv: true,
+      env: { PATH: Deno.env.get('PATH') ?? '' },
+    }).output();
     assertEquals(copied.code, 0);
     const phases: string[] = [];
     await dryRun(async (deps) => {
-      const brain = new Brain(deps, { onCall: async (call, runtime) => {
-        phases.push(call.phase);
-        await runtime.remember('calls', call.id);
-      } });
+      const brain = new Brain(deps, {
+        onCall: async (call, runtime) => {
+          phases.push(call.phase);
+          await runtime.remember('calls', call.id);
+        },
+      });
       await brain.onCall({ id: 'call-test', phase: 'incoming', metadata: {} });
       return brain;
     }, root);
     assertEquals(phases, ['incoming']);
-  } finally { await Deno.remove(root, { recursive: true }); }
+  } finally {
+    await Deno.remove(root, { recursive: true });
+  }
 });
