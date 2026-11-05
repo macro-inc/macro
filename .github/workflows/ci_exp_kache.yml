@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arm: [sccache, kache]
+        arm: [kache]
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-exp-kache-${{ matrix.arm }}
     services:
       postgres:
