@@ -746,6 +746,19 @@ in
     health = "/api/health";
   };
   unfurl-service = rustService { bin = "unfurl_service"; };
+  # Background workers: no HTTP surface, and idle until their feature is configured.
+  agent-trigger-service = rustService {
+    bin = "agent_trigger_service";
+    ports = [ ];
+  };
+  email-focus-worker = rustService {
+    bin = "email_focus_worker";
+    ports = [ ];
+  };
+  slack-import-worker = rustService {
+    bin = "slack_import_worker";
+    ports = [ ];
+  };
   image-proxy-service = rustService { bin = "image_proxy_service"; };
 
   # ── Node services (host-built bundles; present once `platform up` built them)

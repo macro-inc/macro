@@ -246,8 +246,13 @@ fn write_state(instance: &Instance, state: &State) -> Result<()> {
     Ok(())
 }
 
-/// The queue backend every instance runs: workload and bin (services/queue_gateway).
-const QUEUE_GATEWAY: (&str, &str) = ("queue-gateway", "queue_gateway");
+/// Workloads only instances run, outside the local stack's inventory: workload -> bin.
+const PLATFORM_WORKLOADS: &[(&str, &str)] = &[
+    ("queue-gateway", "queue_gateway"),
+    ("agent-trigger-service", "agent_trigger_service"),
+    ("email-focus-worker", "email_focus_worker"),
+    ("slack-import-worker", "slack_import_worker"),
+];
 
 /// Lambda handlers the instance runs behind lambda-runner: workload -> bin
 /// (`lambdaHandlers` in infra/platform/components.nix).
@@ -281,10 +286,11 @@ pub fn rust_workloads() -> BTreeMap<String, &'static str> {
             )
         })
         .chain(LAMBDA_HANDLERS.iter().map(|(w, b)| ((*w).to_owned(), *b)))
-        .chain(std::iter::once((
-            QUEUE_GATEWAY.0.to_owned(),
-            QUEUE_GATEWAY.1,
-        )))
+        .chain(
+            PLATFORM_WORKLOADS
+                .iter()
+                .map(|(w, b)| ((*w).to_owned(), *b)),
+        )
         .collect()
 }
 
