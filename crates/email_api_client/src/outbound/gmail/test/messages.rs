@@ -299,7 +299,10 @@ async fn sender_domain_count_searches_the_domain_since_the_window_start() {
     let (server, repository) = repository().await;
     Mock::given(method("GET"))
         .and(path("/users/me/messages"))
-        .and(query_param("q", "from:linear.app after:1762300800"))
+        .and(query_param(
+            "q",
+            "from:linear.app after:1762300800 -category:promotions",
+        ))
         .and(query_param("maxResults", "1"))
         .respond_with(
             ResponseTemplate::new(200)

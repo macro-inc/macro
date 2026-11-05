@@ -76,8 +76,13 @@ impl MailboxSenderActivityClient for GmailApiClientRepository {
 
 /// Gmail search for mail from `domain` (and its subdomains) received after
 /// `since`, as epoch seconds so the window doesn't depend on Gmail's time zone.
+/// Promotions are left out: a vendor's newsletters say nothing about whether
+/// the person uses its product.
 fn sender_domain_query(domain: &SenderDomain, since: DateTime<Utc>) -> String {
-    format!("from:{domain} after:{}", since.timestamp())
+    format!(
+        "from:{domain} after:{} -category:promotions",
+        since.timestamp()
+    )
 }
 
 fn collect_calendar_parts(root: &MessagePart) -> Result<Vec<CalendarPart>, EmailApiError> {
