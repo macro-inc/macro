@@ -10,7 +10,7 @@ import { type Accessor, untrack } from 'solid-js';
 import type { ArtifactTheme } from '../core/frame-message';
 import { viewUrlRefreshDelay } from '../core/view-url';
 
-export const artifactKeys = createQueryKeys('artifacts', {
+const artifactKeys = createQueryKeys('artifacts', {
   detail: (documentId: string) => ({ queryKey: [documentId] }),
   versions: (documentId: string) => ({ queryKey: [documentId] }),
   version: (documentId: string, number: number) => ({

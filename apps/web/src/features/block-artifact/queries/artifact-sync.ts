@@ -10,7 +10,7 @@ import { invalidateArtifact } from './artifact';
  * Document storage pings the artifact's document subscribers after a publish
  * or restore, so open frames follow the current version.
  */
-export const ARTIFACT_PUBLISHED_MESSAGE_TYPE = 'artifact_published';
+const ARTIFACT_PUBLISHED_MESSAGE_TYPE = 'artifact_published';
 const artifactPublishedSchema = z.object({ documentId: z.string() });
 
 /**

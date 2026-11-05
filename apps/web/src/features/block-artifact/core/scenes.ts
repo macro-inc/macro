@@ -2,7 +2,7 @@
 export const SCENE_PARAM = 'scene';
 
 /** More scenes than this switch from tabs to a select. */
-export const MAX_SCENE_TABS = 6;
+const MAX_SCENE_TABS = 6;
 
 /**
  * The scene to show: the requested one when the version has it, otherwise
