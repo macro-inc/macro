@@ -14,6 +14,10 @@ pub mod invitation_pg;
 pub mod read_receipts_pg;
 #[cfg(feature = "s3")]
 mod s3_draft_attachment_storage;
+#[cfg(feature = "outbound")]
+mod shared_thread_replies;
+#[cfg(feature = "sqs")]
+mod sqs_enqueuer;
 
 #[cfg(feature = "outbound")]
 pub use email_pg_repo::{EmailPgRepo, PgSequenceSteps};
@@ -29,3 +33,5 @@ pub use gmail_sender_provider::GmailSenderProvider;
 pub use gmail_token_provider::GmailTokenProviderImpl;
 #[cfg(feature = "s3")]
 pub use s3_draft_attachment_storage::S3DraftAttachmentStorage;
+#[cfg(feature = "outbound")]
+pub use shared_thread_replies::EntityAccessSharedThreadReplies;

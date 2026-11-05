@@ -310,13 +310,16 @@ pub async fn fetch_messages_with_labels(
     Ok(processed_messages)
 }
 
-/// The headers a reply threads under. A parent Macro sent that inbox sync
-/// hasn't stored yet has no Message-ID header; its delivery minted one.
+/// The headers a reply needs to thread under `message_id`. The parent may sit
+/// in another inbox than the reply's: another of the sender's own, or the
+/// owner's when its thread was shared with the sender. Callers pass a reply
+/// target that was authorized when its draft was saved. A parent Macro sent
+/// that inbox sync hasn't stored yet has no Message-ID header; its delivery
+/// minted one.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_message_threading_headers(
     pool: &PgPool,
     message_id: Uuid,
-    link_id: Uuid,
 ) -> anyhow::Result<(Option<String>, Option<String>)> {
     let row_option = sqlx::query!(
         r#"
@@ -327,10 +330,9 @@ pub async fn get_message_threading_headers(
           jsonb_path_query_first(m.headers_jsonb, '$[*] ? (@.name like_regex "references" flag "i").value') #>> '{}' as "references"
         FROM email_messages m
         LEFT JOIN email_scheduled_messages s ON s.message_id = m.id AND s.link_id = m.link_id
-        WHERE m.id = $1 AND m.link_id = $2
+        WHERE m.id = $1
         "#,
-        message_id,
-        link_id
+        message_id
     )
         .fetch_optional(pool)
         .await?;

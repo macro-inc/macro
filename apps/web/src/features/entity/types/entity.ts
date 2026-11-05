@@ -311,6 +311,8 @@ export type EmailFocus = {
   needsReply: boolean;
   needsFollowUp: boolean;
   importanceTrend: GraphqlEmailImportanceTrend;
+  /** The day the thread's mail says it is due, as a `YYYY-MM-DD` calendar date. */
+  dueOn?: string | null;
 };
 
 // We spread ApiThreadPreviewCursor into the email entity, should we explcitly include all those fields here, or only add them as needed?

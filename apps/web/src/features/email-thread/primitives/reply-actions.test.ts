@@ -3,8 +3,9 @@ import { message } from '../tests/fixtures';
 import type { EmailThreadState } from './email-thread-state';
 import { openEmailReplyComposerForMessage } from './reply-actions';
 
-function setup() {
+function setup(permissions = { isOwner: true, canReply: true }) {
   const ctx = {
+    permissions: () => permissions,
     replyRequest: { set: vi.fn() },
     mobileReplyComposer: { openForMessage: vi.fn() },
     messages: {
@@ -49,5 +50,37 @@ describe('openEmailReplyComposerForMessage', () => {
 
     expect(ctx.mobileReplyComposer.openForMessage).not.toHaveBeenCalled();
     expect(ctx.messages.setBottomReplyOpen).toHaveBeenCalledWith(true);
+  });
+
+  it('lets an edit recipient of a shared thread reply but not forward', () => {
+    const { ctx, state } = setup({ isOwner: false, canReply: true });
+    const open = (replyType: 'reply-all' | 'forward') =>
+      openEmailReplyComposerForMessage({
+        ctx: state,
+        isTouch: false,
+        message: message('last'),
+        replyType,
+        isLastMessage: true,
+      });
+
+    expect(open('forward')).toBe(false);
+    expect(ctx.replyRequest.set).not.toHaveBeenCalled();
+    expect(open('reply-all')).toBe(true);
+    expect(ctx.replyRequest.set).toHaveBeenCalledWith('last', 'reply-all');
+  });
+
+  it('opens nothing for a view-only recipient', () => {
+    const { ctx, state } = setup({ isOwner: false, canReply: false });
+
+    const opened = openEmailReplyComposerForMessage({
+      ctx: state,
+      isTouch: true,
+      message: message('last'),
+      replyType: 'reply-all',
+      isLastMessage: true,
+    });
+
+    expect(opened).toBe(false);
+    expect(ctx.mobileReplyComposer.openForMessage).not.toHaveBeenCalled();
   });
 });
