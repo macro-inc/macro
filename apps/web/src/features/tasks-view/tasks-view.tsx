@@ -129,7 +129,14 @@ function TasksViewRoot() {
           <div class="min-h-0 flex-1">
             <TasksContent
               ref={setListElement}
-              listStart={<TutorialRow tutorial="tasks" />}
+              listStart={
+                // Task rows lead with priority and status icons; the inset
+                // puts the play icon over the status icon and the label
+                // over the task titles.
+                <div class="pl-9">
+                  <TutorialRow tutorial="tasks" />
+                </div>
+              }
             />
           </div>
         </Show>

@@ -164,7 +164,13 @@ export function OwnerSettingsSection(props: {
                 )}
               </Show>
               <EventTypesPanel
-                listStart={<TutorialRow tutorial="scheduling" />}
+                listStart={
+                  // Booking rows lead with their toggle; the inset puts the
+                  // row's play icon and label over each link's icon and title.
+                  <div class="pl-6">
+                    <TutorialRow tutorial="scheduling" />
+                  </div>
+                }
                 owner={scope()}
                 search={props.search ?? ''}
                 events={p().eventTypes}
