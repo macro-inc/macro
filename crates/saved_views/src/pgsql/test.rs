@@ -1,9 +1,14 @@
 use super::PgViewStorage;
-use crate::domain::{Error, MembershipPort, SavedViewService};
+use crate::domain::{
+    ChangeNotifier, Error, MembershipPort, SavedViewService, ShareChange, Update, ViewsChanged,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use serde_json::json;
 use sqlx::PgPool;
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
 use uuid::{Uuid, uuid};
 
 const OWNER: &str = "macro|owner@example.com";
@@ -25,14 +30,45 @@ impl MembershipPort for FixtureTeam {
     }
 }
 
-fn service(pool: PgPool) -> SavedViewService<PgViewStorage, FixtureTeam> {
-    SavedViewService::new(PgViewStorage::new(pool), FixtureTeam)
+/// Keeps every change signal the service sends.
+#[derive(Clone, Default)]
+struct Recorder(Arc<Mutex<Vec<ViewsChanged>>>);
+
+impl Recorder {
+    fn take(&self) -> Vec<ViewsChanged> {
+        std::mem::take(&mut self.0.lock().unwrap())
+    }
 }
 
-async fn names(
-    service: &SavedViewService<PgViewStorage, FixtureTeam>,
-    viewer: &str,
-) -> Vec<String> {
+impl ChangeNotifier for Recorder {
+    async fn views_changed(&self, change: ViewsChanged) {
+        self.0.lock().unwrap().push(change);
+    }
+}
+
+type Service = SavedViewService<PgViewStorage, FixtureTeam, Recorder>;
+
+fn service(pool: PgPool) -> Service {
+    recorded(pool).0
+}
+
+fn recorded(pool: PgPool) -> (Service, Recorder) {
+    let changes = Recorder::default();
+    (
+        SavedViewService::new(PgViewStorage::new(pool), FixtureTeam, changes.clone()),
+        changes,
+    )
+}
+
+fn changed(kind: &str, user: &str, teams: Vec<Uuid>) -> ViewsChanged {
+    ViewsChanged {
+        kind: Some(kind.to_owned()),
+        user: user.to_owned(),
+        teams,
+    }
+}
+
+async fn names(service: &Service, viewer: &str) -> Vec<String> {
     service
         .list(viewer, Some("email"), None, 50)
         .await
@@ -235,4 +271,101 @@ async fn deleting_a_placed_view_removes_its_position(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(positions, 0);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("users"))
+)]
+async fn committed_writes_signal_their_kind_and_audience(pool: PgPool) {
+    let (service, changes) = recorded(pool);
+    let id = uuid!("00000000-0000-7000-8000-000000000031");
+
+    let created = service
+        .create(
+            OWNER,
+            id,
+            "Mine".to_owned(),
+            json!({ "kind": "email" }),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(changes.take(), vec![changed("email", OWNER, vec![])]);
+
+    let shared = service
+        .update(
+            OWNER,
+            id,
+            created.revision,
+            Update {
+                name: None,
+                config: None,
+                share: ShareChange::Team(TEAM),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(changes.take(), vec![changed("email", OWNER, vec![TEAM])]);
+
+    service.reorder(VIEWER, "email", vec![id]).await.unwrap();
+    assert_eq!(changes.take(), vec![changed("email", VIEWER, vec![])]);
+
+    service.delete(OWNER, id, shared.revision).await.unwrap();
+    assert_eq!(changes.take(), vec![changed("email", OWNER, vec![TEAM])]);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("users"))
+)]
+async fn writes_that_change_nothing_send_no_signal(pool: PgPool) {
+    let (service, changes) = recorded(pool);
+    let id = uuid!("00000000-0000-7000-8000-000000000032");
+    let created = service
+        .create(
+            OWNER,
+            id,
+            "Mine".to_owned(),
+            json!({ "kind": "email" }),
+            None,
+        )
+        .await
+        .unwrap();
+    changes.take();
+
+    // A retried create returns the existing view.
+    service
+        .create(
+            OWNER,
+            id,
+            "Mine".to_owned(),
+            json!({ "kind": "email" }),
+            None,
+        )
+        .await
+        .unwrap();
+    let stale = service
+        .update(
+            OWNER,
+            id,
+            created.revision + 1,
+            Update {
+                name: Some("Renamed".to_owned()),
+                config: None,
+                share: ShareChange::Unchanged,
+            },
+        )
+        .await;
+    assert!(matches!(stale, Err(Error::Conflict)));
+    assert!(matches!(
+        service.delete(OWNER, id, created.revision + 1).await,
+        Err(Error::Conflict)
+    ));
+    service.delete(OWNER, id, created.revision).await.unwrap();
+    changes.take();
+    // Deleting again is harmless and changes nothing.
+    service.delete(OWNER, id, created.revision).await.unwrap();
+
+    assert_eq!(changes.take(), vec![]);
 }

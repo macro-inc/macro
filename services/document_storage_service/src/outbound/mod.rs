@@ -5,3 +5,4 @@ pub mod agent_dm_authorizer;
 pub mod calendar_refresh;
 pub mod docx_export;
 pub mod entity_mutation;
+pub mod saved_view_changes;

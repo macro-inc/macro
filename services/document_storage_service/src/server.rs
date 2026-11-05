@@ -2149,7 +2149,20 @@ pub async fn run() -> anyhow::Result<()> {
 
     let sync_sessions =
         sync_router::session::SyncSessionFactory::new(SyncServiceUrl::new()?.as_ref().parse()?)?;
+    // GraphQL and REST share one saved-view service; each committed write
+    // pushes a change to the pages that show those views.
+    let saved_views = Arc::new(crate::service::saved_views::service(
+        db.clone(),
+        crate::outbound::saved_view_changes::ConnectionGatewaySavedViewChanges::new(
+            (*conn_gateway_client).clone(),
+            Arc::new(crate::service::saved_views::Membership(
+                teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+            )),
+            event_broker_tracker.clone(),
+        ),
+    ));
     let api_context = ApiContext {
+        saved_views,
         sync_sessions,
         dictation_state,
         graphql_work_feed_context,

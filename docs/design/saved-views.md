@@ -343,9 +343,14 @@ mutation-policy machinery, not a second TanStack persistence path for Tasks.
 
 Mutation responses use primary-backed data. Membership evidence also requires
 authoritative reads, not a stale replica or browser cache. Revalidate collections
-on opening/foregrounding the surface. V1 does not introduce a dedicated realtime
-subscription; cross-client changes appear on revalidation. Every server operation
-still checks current access, irrespective of cached UI state.
+on opening/foregrounding the surface and after a gateway reconnect. Writes made
+outside the open page (an agent's program, the SDK, another tab) reach it as a
+bare `saved_views_changed` connection-gateway push with the changed `kind`, sent
+after commit to the author and to members of the teams the views were shared
+with before or after the change; readers of that kind, or of every kind when it
+is `null`, re-read. No definition travels in the push. Legacy CRM writes send
+none. Every server operation still checks current access, irrespective of cached
+UI state.
 
 ## UI and navigation
 
@@ -472,7 +477,8 @@ contents, or person identifiers.
   compiled Soup AST or the entire Task view state.
 - Team visibility follows current owner and viewer membership, matching existing
   sharing patterns rather than introducing membership lifetimes.
-- Cross-client changes revalidate rather than using a new realtime subscription.
+- Cross-client changes revalidate on a bare gateway push rather than through a
+  GraphQL subscription that carries definitions.
 - No existing CRM views are migrated or reinterpreted in this feature.
 
 ## Email consumer

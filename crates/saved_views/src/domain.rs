@@ -144,6 +144,34 @@ pub trait MembershipPort: Send + Sync {
     ) -> impl Future<Output = Result<HashSet<String>, Self::Err>> + Send;
 }
 
+/// A committed change to saved views, for pages that show them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ViewsChanged {
+    /// The changed views' `kind`, such as `email`; `None` when it is unknown
+    /// or changed, so every kind's readers re-read.
+    pub kind: Option<String>,
+    /// Who made the change: the owner, or for a reorder the viewer whose order it is.
+    pub user: String,
+    /// Teams the views were shared with before or after the change; their
+    /// members may see them.
+    pub teams: Vec<Uuid>,
+}
+
+/// Tells open pages that saved views changed. Called after the write commits;
+/// best effort, since pages also re-read when they regain focus.
+pub trait ChangeNotifier: Send + Sync {
+    /// Signal one committed change.
+    fn views_changed(&self, change: ViewsChanged) -> impl Future<Output = ()> + Send;
+}
+
+/// The `kind` a configuration names.
+fn kind_of(config: &Value) -> Option<String> {
+    config
+        .get("kind")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+}
+
 /// Caller-meaningful saved-view failures.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -177,15 +205,20 @@ pub struct Page {
 }
 
 /// Owns authorization, visibility, write policy and pagination.
-pub struct SavedViewService<R, M> {
+pub struct SavedViewService<R, M, N> {
     repo: R,
     membership: M,
+    notifier: N,
 }
 
-impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
+impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R, M, N> {
     /// Construct the saved-view service from its ports.
-    pub fn new(repo: R, membership: M) -> Self {
-        Self { repo, membership }
+    pub fn new(repo: R, membership: M, notifier: N) -> Self {
+        Self {
+            repo,
+            membership,
+            notifier,
+        }
     }
 
     fn validate(name: &str, config: &Value) -> Result<(), Error> {
@@ -373,6 +406,13 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
             .set_positions(viewer, kind, &ids)
             .await
             .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?;
+        self.notifier
+            .views_changed(ViewsChanged {
+                kind: Some(kind.to_owned()),
+                user: viewer.to_owned(),
+                teams: Vec::new(),
+            })
+            .await;
         Ok(ids.iter().filter_map(|id| visible.remove(id)).collect())
     }
 
@@ -420,6 +460,13 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
         if created.user_id != viewer {
             return Err(Error::NotFound);
         }
+        self.notifier
+            .views_changed(ViewsChanged {
+                kind: kind_of(&created.config),
+                user: viewer.to_owned(),
+                teams: created.shared_team_id.into_iter().collect(),
+            })
+            .await;
         self.get(viewer, id).await
     }
 
@@ -478,18 +525,45 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
             .await
             .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?
             .ok_or(Error::Conflict)?;
+        let kind =
+            kind_of(&current.config).filter(|kind| kind_of(&saved.config).as_ref() == Some(kind));
+        let mut teams: Vec<Uuid> = current.shared_team_id.into_iter().chain(team).collect();
+        teams.dedup();
+        self.notifier
+            .views_changed(ViewsChanged {
+                kind,
+                user: viewer.to_owned(),
+                teams,
+            })
+            .await;
         self.get(viewer, saved.id).await
     }
 
     /// Delete an owned definition, harmless on a repeated deletion.
     #[tracing::instrument(name = "saved_view.delete", skip_all, fields(view_id = %id, revision), err)]
     pub async fn delete(&self, viewer: &str, id: Uuid, revision: i64) -> Result<Uuid, Error> {
-        if !self
+        // Read first: the change signal names the deleted view's kind and team.
+        let deleting = self
+            .repo
+            .get(id)
+            .await
+            .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?;
+        if self
             .repo
             .delete(id, viewer, revision)
             .await
             .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?
         {
+            if let Some(view) = deleting {
+                self.notifier
+                    .views_changed(ViewsChanged {
+                        kind: kind_of(&view.config),
+                        user: viewer.to_owned(),
+                        teams: view.shared_team_id.into_iter().collect(),
+                    })
+                    .await;
+            }
+        } else {
             let current = self
                 .repo
                 .get(id)
@@ -610,7 +684,9 @@ pub trait SavedViewApi: Send + Sync {
 }
 
 #[async_trait::async_trait]
-impl<R: ViewRepository, M: MembershipPort> SavedViewApi for SavedViewService<R, M> {
+impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewApi
+    for SavedViewService<R, M, N>
+{
     async fn get(&self, viewer: &str, id: Uuid) -> Result<View, Error> {
         SavedViewService::get(self, viewer, id).await
     }

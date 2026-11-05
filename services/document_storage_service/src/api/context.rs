@@ -960,6 +960,9 @@ pub(crate) struct ApiContext {
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
+    /// The saved-view service behind GraphQL, the REST definitions routes and
+    /// the legacy `/saved_views` routes.
+    pub saved_views: Arc<crate::service::saved_views::DssSavedViewService>,
     pub sync_service_client: Arc<SyncServiceClient>,
     pub sync_sessions: sync_router::session::SyncSessionFactory,
     pub system_properties_service: Arc<SystemPropertiesService>,
@@ -1051,9 +1054,7 @@ impl From<&ApiContext> for SearchHandlerState {
 
 impl FromRef<ApiContext> for crate::api::saved_views::definitions::SavedViewDefinitionsState {
     fn from_ref(ctx: &ApiContext) -> Self {
-        Self(Arc::new(crate::service::saved_views::service(
-            ctx.db.clone(),
-        )))
+        Self(ctx.saved_views.clone())
     }
 }
 
