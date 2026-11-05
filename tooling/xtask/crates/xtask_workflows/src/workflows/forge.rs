@@ -60,8 +60,9 @@ pub const PORTED: &[Ported] = &[
     },
     Ported {
         file_name: "web-app-check-main.yml",
-        // Needs a macOS runner.
-        dropped_jobs: &["ios-native-check"],
+        // iOS needs a macOS runner; Android calls GitHub's CLI and Google's auth. The
+        // status job requires the Android result; each remaining job reports itself.
+        dropped_jobs: &["ios-native-check", "android-native-check", "status-check"],
     },
 ];
 
