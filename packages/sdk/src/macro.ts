@@ -30,11 +30,13 @@ import { ProjectNamespace } from './entities/projects/namespace';
 import { PropertiesNamespace } from './entities/properties/namespace';
 import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
+import { SearchNamespace } from './entities/search/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
 import type { User } from './entities/users/user';
+import { WebNamespace } from './entities/web/namespace';
 import { WebhooksNamespace } from './entities/webhooks/namespace';
 import { WhatsAppNamespace } from './entities/whatsapp/namespace';
 import { WorkspaceNamespace } from './entities/workspace/namespace';
@@ -94,6 +96,11 @@ export {
   wrapXml,
 } from './mentions';
 export type { RequestActivity } from './utils/activity';
+/**
+ * The authenticated SDK client; every namespace hangs off it.
+ *
+ * @routing Use when a request is only about the Macro SDK client itself or its shared plumbing, such as live events or an item's access requests; not any request about the user's content, people or settings.
+ */
 export class Macro<T extends MacroOpts = MacroOpts> {
   /** routines resources and operations. */
   readonly routines: RoutineNamespace;
@@ -162,6 +169,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Generate images with AI and attach them to messages. */
   readonly images: ImagesNamespace;
+  /** Search the public web and read web pages. */
+  readonly web: WebNamespace;
   /** Your own profile: set your name and profile picture. */
   readonly me: MeNamespace;
 
@@ -177,6 +186,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   readonly referrals: ReferralNamespace;
 
   readonly tasks: TaskNamespace;
+
+  /** Search every kind of item at once: documents, email, channels, calls, events, sessions and chats. */
+  readonly search: SearchNamespace;
 
   readonly teams: TeamNamespace;
 
@@ -229,11 +241,13 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
     this.images = new ImagesNamespace(client);
+    this.web = new WebNamespace(client);
     this.notifications = new NotificationNamespace(client);
     this.pins = new PinsNamespace(client);
     this.projects = new ProjectNamespace(client);
     this.properties = new PropertiesNamespace(client);
     this.referrals = new ReferralNamespace(client);
+    this.search = new SearchNamespace(client);
     this.tasks = new TaskNamespace(client);
     this.teams = new TeamNamespace(client);
     this.users = new UserNamespace(client);
@@ -360,10 +374,25 @@ export {
   RoutineExecution,
   type RoutineOptions,
 } from './entities/routines/routine';
+export type { SearchOn, SearchOpts } from './entities/search/options';
+export type {
+  SearchOptions,
+  SearchPage,
+  SearchPageOptions,
+  SearchResult,
+  SearchType,
+} from './entities/search/types';
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
+export type {
+  WebFetchOptions,
+  WebFetchResponse,
+  WebSearchOptions,
+  WebSearchResult,
+  WebSearchTopic,
+} from './entities/web/namespace';
 export { WhatsAppAccount } from './entities/whatsapp/account';
 export {
   WhatsAppChat,

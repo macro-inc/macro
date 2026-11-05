@@ -61,8 +61,6 @@ export type MacrodInspection = {
 export type MacrodStartOptions = {
   agent?: string;
   workspace?: string;
-  scope?: 'private' | 'team';
-  allowPermissionBypass?: boolean;
 };
 
 export function macrodSupport(): Promise<MacrodSupport> {

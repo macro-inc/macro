@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_thread_focus (\n                thread_id, link_id, classified_message_id, classified_message_ts, is_focus,\n                category, importance, needs_reply, needs_follow_up, scores, model, classified_at,\n                rule_version, pinned, awaiting_reply, calendar_hold_until, importance_rate, due_on\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)\n            ON CONFLICT (thread_id) DO UPDATE SET\n                link_id = EXCLUDED.link_id,\n                classified_message_id = EXCLUDED.classified_message_id,\n                classified_message_ts = EXCLUDED.classified_message_ts,\n                is_focus = EXCLUDED.is_focus,\n                category = EXCLUDED.category,\n                importance = EXCLUDED.importance,\n                needs_reply = EXCLUDED.needs_reply,\n                needs_follow_up = EXCLUDED.needs_follow_up,\n                scores = EXCLUDED.scores,\n                model = EXCLUDED.model,\n                classified_at = EXCLUDED.classified_at,\n                rule_version = EXCLUDED.rule_version,\n                pinned = EXCLUDED.pinned,\n                awaiting_reply = EXCLUDED.awaiting_reply,\n                calendar_hold_until = EXCLUDED.calendar_hold_until,\n                importance_rate = EXCLUDED.importance_rate,\n                due_on = EXCLUDED.due_on\n            WHERE email_thread_focus.classified_message_ts <= EXCLUDED.classified_message_ts\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Bool",
+        "Text",
+        "Int2",
+        "Bool",
+        "Bool",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Int2",
+        "Bool",
+        "Bool",
+        "Timestamptz",
+        "Int2",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f81843f7c930120149386e79cd3c453ccb1fb5503b9fd671453b151b4707872c"
+}

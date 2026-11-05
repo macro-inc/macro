@@ -84,7 +84,17 @@ new page cursor before deciding whether to request another page.
 
 An empty human DM shows the centered conversations illustration and “Say hello”
 above the composer. The copy explains that recipients without a Macro account
-receive the message by email. Opening the DM sends nothing. Sending a human
+receive the message by email. Opening the DM sends nothing.
+
+Opening a person you have no DM with shows this same empty DM, with their name
+and avatar in the header, under a temporary `pending-dm-` id kept only in that
+tab. Nothing exists on the server, so the DM is in neither person's list until
+the first message creates it and the view becomes the real conversation. Check
+that leaving without sending creates nothing, that the other person's list gains
+the DM only after the send, and that reloading a `pending-dm-` URL opens the
+Chat list on desktop and closes the pane on touch.
+
+Sending a human
 message queues an immediate email for nonusers, including follow-up messages,
 replies, and mentions; registered users retain their notification preferences.
 Check narrow and wide panes: the composer stays usable, and the empty state
@@ -576,7 +586,7 @@ for the user to confirm a composer card). For an event with attendees the bot is
 ask for confirmation in the thread first, since Google sends the invitations the moment the
 event is created — no invitation goes out from the initial request. It cannot draft or send
 email at all. A bot or agent reply posted for a person shares, as that person, the linked items
-(chips or attachments) that the replying bot created for them while answering: those with a
+(chips, attachments, or forms presented as cards in the reply's steps) that the replying bot created for them while answering: those with a
 `created` activity row by that bot on the person's behalf since the person's latest message in
 the thread before the reply, or, for a bot message that starts its own thread (a poll card
 posted top-level), their latest message in the channel. Forms and databases an agent creates
@@ -1186,8 +1196,10 @@ move it to that position; an accent insertion line shows the exact destination
 above or below the target row. The order saves through the shared favorites API
 and survives reloads. Hidden favorites and favorites of other entity types keep
 their positions. **Sort → Custom order** restores dragging after choosing an
-automatic sort. Dropping a favorite does not open its conversation or move it
-into a custom section. Failed saves roll back and show an error toast.
+automatic sort. Releasing over a favorite preserves the drop target through
+scroll updates; releasing outside the list leaves the order unchanged. Dropping
+a favorite does not open its conversation or move it into a custom section.
+Failed saves roll back and show an error toast.
 
 ### Sections
 

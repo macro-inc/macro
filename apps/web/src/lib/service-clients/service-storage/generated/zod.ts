@@ -301,7 +301,7 @@ export const listAgentsResponseItem = zod
         has_agent: zod
           .boolean()
           .describe(
-            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
           ),
         id: zod.string(),
         kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -602,7 +602,7 @@ export const updateAgentResponse = zod
         has_agent: zod
           .boolean()
           .describe(
-            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
           ),
         id: zod.string(),
         kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -1039,7 +1039,7 @@ export const getSelfBotResponse = zod
     has_agent: zod
       .boolean()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
       ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -4384,7 +4384,7 @@ export const createChannelScopedBotBody = zod
       .boolean()
       .nullish()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.'
       ),
     name: zod.string().describe('Display name.'),
     team_id: zod
@@ -28348,12 +28348,6 @@ it, and creation is throttled in the domain service.
  */
 export const createHarnessPairingBody = zod
   .object({
-    allow_permission_bypass: zod
-      .boolean()
-      .nullish()
-      .describe(
-        'Daemon operator consent ceiling. Omitted by older clients; web approval decides.'
-      ),
     host: zod
       .string()
       .nullish()
@@ -28365,16 +28359,6 @@ export const createHarnessPairingBody = zod
       .describe(
         "Requested harness display name (typically the machine's hostname)."
       ),
-    scope: zod
-      .union([
-        zod.null(),
-        zod
-          .enum(['private', 'team'])
-          .describe(
-            "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership."
-          ),
-      ])
-      .optional(),
   })
   .describe(
     'Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.'
@@ -28396,25 +28380,9 @@ export const getHarnessPairingResponse = zod
       .string()
       .nullish()
       .describe('Display-only description of the machine.'),
-    requested_allow_permission_bypass: zod
-      .boolean()
-      .nullish()
-      .describe(
-        'Daemon operator consent ceiling; false forbids bypass at approval.'
-      ),
     requested_name: zod
       .string()
       .describe('Harness display name the daemon asked for.'),
-    requested_scope: zod
-      .union([
-        zod.null(),
-        zod
-          .enum(['private', 'team'])
-          .describe(
-            "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership."
-          ),
-      ])
-      .optional(),
   })
   .describe('A pending pairing, as shown to the approving user.');
 
@@ -28703,6 +28671,71 @@ export const listHarnessSessionsResponse = zod.array(
 export const deleteHarnessParams = zod.object({
   harness_id: zod.string().describe('Harness ID'),
 });
+
+/**
+ * @summary Handler for `PATCH /harnesses/{harness_id}`.
+ */
+export const patchHarnessParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
+
+export const patchHarnessBody = zod
+  .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.\nLive sessions pick the change up at their next turn.'
+      ),
+    name: zod.string().nullish().describe('New display name.'),
+  })
+  .describe(
+    'Request to change a registered harness. Omitted fields stay as they are.'
+  );
+
+export const patchHarnessResponse = zod
+  .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('User-owned (private) harness.'),
+        zod
+          .object({
+            team_id: zod.uuid().describe('Owner team id.'),
+            type: zod.enum(['team']),
+          })
+          .describe('Team-owned harness, usable by every team member.'),
+      ])
+      .describe(
+        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Gets the users history

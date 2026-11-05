@@ -179,8 +179,22 @@ impl<Store: InboundStore> InboundSink for InboundGate<Store> {
                 InboundKind::Left => "left",
             },
             observed,
+            chat_kind = address_kind(&event.group_jid),
+            history = tracing::field::Empty,
+            sender_address = tracing::field::Empty,
+            sender_alternate = tracing::field::Empty,
+            sender_named = tracing::field::Empty,
             outcome = tracing::field::Empty,
         );
+        // The sender's shape, never who they are: which address WhatsApp
+        // named them by, whether the other is known, whether a name came.
+        if let InboundKind::Message(message) = &event.kind {
+            let sender = &message.sender;
+            span.record("history", message.history);
+            span.record("sender_address", address_kind(&sender.jid));
+            span.record("sender_alternate", sender.alternate_jid.is_some());
+            span.record("sender_named", sender.display_name.is_some());
+        }
         if !observed {
             span.record("outcome", "dropped");
             tracing::debug!(
@@ -230,5 +244,16 @@ impl<Store: InboundStore> InboundSink for InboundGate<Store> {
                 false
             }
         }
+    }
+}
+
+/// Which kind of WhatsApp address a JID is, for spans: never the address.
+/// A chat is `group`, or direct by `phone` or `lid`.
+fn address_kind(jid: &str) -> &'static str {
+    match jid.rsplit_once('@').map(|(_, server)| server) {
+        Some("lid") => "lid",
+        Some("s.whatsapp.net") => "phone",
+        Some("g.us") => "group",
+        _ => "other",
     }
 }
