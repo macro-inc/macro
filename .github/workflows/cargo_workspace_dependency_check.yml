@@ -10,6 +10,7 @@ name: cargo workspace dependency check
     - ready_for_review
     branches:
     - main
+    - 'synoet/ci-int-base*'
     paths:
     - Cargo.toml
     - crates/**/Cargo.toml
