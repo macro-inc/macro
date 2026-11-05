@@ -23,6 +23,7 @@ outbound = [
   "dep:cursor_api_key",
   "dep:fusionauth",
   "dep:sqlx",
+  "dep:upstream_error",
   "dep:zeroize",
 ]
 
@@ -51,6 +52,7 @@ thiserror = { workspace = true }
 tower = { workspace = true, features = ["util"], optional = true }
 tower-http = { workspace = true, optional = true }
 tracing = { workspace = true }
+upstream_error = { path = "../../crates/upstream_error", default-features = false, optional = true }
 url = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true }

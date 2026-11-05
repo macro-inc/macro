@@ -8,8 +8,8 @@ use std::time::Duration;
 use askama::Template;
 use axum::{
     Router,
-    extract::{Query, RawQuery, State},
-    http::{HeaderMap, HeaderName, Method, header},
+    extract::{Query, RawQuery, State, rejection::FormRejection},
+    http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header},
     middleware as axum_mw,
     response::{Html, IntoResponse, Json, Redirect, Response},
     routing,
@@ -25,6 +25,7 @@ use crate::domain::{
         AuthorizationStart, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
         ConsentPrompt, RevocationRequest, TokenRequest, UserConsent,
     },
+    ports::UpstreamGrantError,
     service::{
         CompleteCallbackError, InflightAuthStore, McpAuthProxyService, McpAuthProxyServiceImpl,
         RegisterClientError, RevokeTokenError, StartAuthorizationError, TokenExchangeError,
@@ -434,10 +435,32 @@ async fn oauth_callback<I: InflightAuthStore + 'static>(
             )
                 .into_response()
         }
-        Err(CompleteCallbackError::AuthorizationCodeExchangeFailed(error)) => {
-            tracing::error!(error=?error, "upstream authorization code grant failed");
+        Err(CompleteCallbackError::AuthorizationCodeExchangeFailed(
+            error @ UpstreamGrantError::InvalidGrant { .. },
+        )) => {
+            tracing::warn!(%error, "upstream refused the authorization code");
             (
-                axum::http::StatusCode::BAD_GATEWAY,
+                StatusCode::BAD_REQUEST,
+                "sign-in could not be completed; start the connection again",
+            )
+                .into_response()
+        }
+        Err(CompleteCallbackError::AuthorizationCodeExchangeFailed(
+            error @ UpstreamGrantError::Unavailable { .. },
+        )) => {
+            tracing::error!(%error, "upstream authorization code grant failed");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "the sign-in service is temporarily unavailable; try again shortly",
+            )
+                .into_response()
+        }
+        Err(CompleteCallbackError::AuthorizationCodeExchangeFailed(
+            error @ UpstreamGrantError::Failed(_),
+        )) => {
+            tracing::error!(%error, "upstream authorization code grant failed");
+            (
+                StatusCode::BAD_GATEWAY,
                 "authorization code exchange failed",
             )
                 .into_response()
@@ -445,89 +468,132 @@ async fn oauth_callback<I: InflightAuthStore + 'static>(
     }
 }
 
+/// An RFC 6749 section 5.2 error response.
+fn oauth_error(status: StatusCode, error: &str, description: &str) -> Response {
+    (
+        status,
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(serde_json::json!({ "error": error, "error_description": description })),
+    )
+        .into_response()
+}
+
+/// Token endpoint. Errors use the RFC 6749 section 5.2 JSON shape so clients
+/// can tell a grant they must discard (`invalid_grant`, 400) from a fault
+/// worth retrying (5xx).
 async fn token<I: InflightAuthStore + 'static>(
     State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
-    axum::Form(params): axum::Form<TokenRequest>,
+    params: Result<axum::Form<TokenRequest>, FormRejection>,
 ) -> Response {
-    match auth_proxy.exchange_token(params).await {
-        Ok(response) => Json(response).into_response(),
+    let Ok(axum::Form(params)) = params else {
+        return oauth_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "the request must be a form with a grant_type",
+        );
+    };
+    let (status, error, description) = match auth_proxy.exchange_token(params).await {
+        Ok(response) => return Json(response).into_response(),
         Err(TokenExchangeError::UnsupportedGrantType) => (
-            axum::http::StatusCode::BAD_REQUEST,
+            StatusCode::BAD_REQUEST,
+            "unsupported_grant_type",
             "unsupported grant_type",
-        )
-            .into_response(),
+        ),
         Err(TokenExchangeError::CodeRequired) => {
-            (axum::http::StatusCode::BAD_REQUEST, "code required").into_response()
+            (StatusCode::BAD_REQUEST, "invalid_request", "code required")
         }
-        Err(TokenExchangeError::InvalidOrExpiredCode) => (
-            axum::http::StatusCode::BAD_REQUEST,
-            "invalid or expired code",
-        )
-            .into_response(),
-        Err(TokenExchangeError::RedirectUriMismatch) => {
-            (axum::http::StatusCode::BAD_REQUEST, "redirect_uri mismatch").into_response()
-        }
-        Err(TokenExchangeError::RedirectUriRequired) => {
-            (axum::http::StatusCode::BAD_REQUEST, "redirect_uri required").into_response()
-        }
+        Err(TokenExchangeError::RedirectUriRequired) => (
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "redirect_uri required",
+        ),
         Err(TokenExchangeError::CodeVerifierRequired) => (
-            axum::http::StatusCode::BAD_REQUEST,
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
             "code_verifier required",
-        )
-            .into_response(),
-        Err(TokenExchangeError::PkceVerificationFailed) => (
-            axum::http::StatusCode::BAD_REQUEST,
-            "PKCE verification failed",
-        )
-            .into_response(),
+        ),
         Err(TokenExchangeError::RefreshTokenRequired) => (
-            axum::http::StatusCode::BAD_REQUEST,
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
             "refresh_token required",
-        )
-            .into_response(),
-        Err(TokenExchangeError::ClientIdRequired) => {
-            (axum::http::StatusCode::BAD_REQUEST, "client_id required").into_response()
-        }
+        ),
+        Err(TokenExchangeError::ClientIdRequired) => (
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "client_id required",
+        ),
+        Err(TokenExchangeError::InvalidOrExpiredCode) => (
+            StatusCode::BAD_REQUEST,
+            "invalid_grant",
+            "invalid or expired code",
+        ),
+        Err(TokenExchangeError::RedirectUriMismatch) => (
+            StatusCode::BAD_REQUEST,
+            "invalid_grant",
+            "redirect_uri mismatch",
+        ),
+        Err(TokenExchangeError::PkceVerificationFailed) => (
+            StatusCode::BAD_REQUEST,
+            "invalid_grant",
+            "PKCE verification failed",
+        ),
         Err(TokenExchangeError::ClientMismatch) => (
-            axum::http::StatusCode::BAD_REQUEST,
+            StatusCode::BAD_REQUEST,
+            "invalid_grant",
             "grant was not issued to this client",
-        )
-            .into_response(),
+        ),
         Err(TokenExchangeError::UnboundRefreshToken) => (
-            axum::http::StatusCode::BAD_REQUEST,
+            StatusCode::BAD_REQUEST,
+            "invalid_grant",
             "refresh token is not bound to a client",
-        )
-            .into_response(),
+        ),
         Err(TokenExchangeError::RevokedGrant) => (
-            axum::http::StatusCode::BAD_REQUEST,
+            StatusCode::BAD_REQUEST,
+            "invalid_grant",
             "refresh token has been revoked",
-        )
-            .into_response(),
+        ),
+        Err(TokenExchangeError::RefreshFailed(UpstreamGrantError::InvalidGrant { .. })) => (
+            StatusCode::BAD_REQUEST,
+            "invalid_grant",
+            "refresh token is no longer valid; authorize again",
+        ),
+        Err(TokenExchangeError::RefreshFailed(UpstreamGrantError::Unavailable { retry_after })) => {
+            let mut response = oauth_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "temporarily_unavailable",
+                "the sign-in service is temporarily unavailable; try again shortly",
+            );
+            if let Some(retry_after) = retry_after {
+                response.headers_mut().insert(
+                    header::RETRY_AFTER,
+                    HeaderValue::from(retry_after.as_secs()),
+                );
+            }
+            return response;
+        }
+        Err(TokenExchangeError::RefreshFailed(UpstreamGrantError::Failed(_))) => (
+            StatusCode::BAD_GATEWAY,
+            "server_error",
+            "refresh token exchange failed",
+        ),
         Err(TokenExchangeError::InflightStore(error)) => {
             tracing::error!(error=?error, "failed to access inflight auth state");
             (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "server_error",
                 "failed to access inflight auth state",
             )
-                .into_response()
         }
         Err(TokenExchangeError::RefreshTokenBindingStore(error)) => {
             tracing::error!(error=?error, "failed to access refresh token bindings");
             (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "server_error",
                 "failed to access refresh token bindings",
             )
-                .into_response()
         }
-        Err(TokenExchangeError::RefreshFailed(error)) => {
-            tracing::error!(error=?error, "upstream refresh token exchange failed");
-            (
-                axum::http::StatusCode::BAD_GATEWAY,
-                "refresh token exchange failed",
-            )
-                .into_response()
-        }
-    }
+    };
+    oauth_error(status, error, description)
 }
 
 /// RFC 7009 revocation endpoint. Errors use the RFC 6749 section 5.2 JSON
@@ -575,11 +641,7 @@ async fn revoke<I: InflightAuthStore + 'static>(
             )
         }
     };
-    (
-        status,
-        Json(serde_json::json!({ "error": error, "error_description": description })),
-    )
-        .into_response()
+    oauth_error(status, error, description)
 }
 
 /// Builds the unauthenticated OAuth broker routes: discovery metadata,
