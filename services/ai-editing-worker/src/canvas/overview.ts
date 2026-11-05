@@ -30,7 +30,10 @@ export function canvasOverview(document: GraphicsDocument, itemIds?: string[]) {
         ? richTextPlainText(content).replace(/\s+/g, ' ')
         : '';
     if (plainText.length > 100) labelsTruncated = true;
-    const label = plainText.slice(0, 100);
+    const label =
+      item.type === 'artifact'
+        ? item.geometry.title.slice(0, 100)
+        : plainText.slice(0, 100);
     if (item.type === 'connector') {
       const start = item.geometry.start.binding?.targetId;
       const end = item.geometry.end.binding?.targetId;

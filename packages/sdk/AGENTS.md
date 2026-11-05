@@ -33,6 +33,10 @@ enforced by the ordinary backend APIs.
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
   { images })` and `thread.reply` as `static/image` attachments.
+- `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
+  `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
+  metered against the user's AI allowance; code mode hides the `WebSearch` /
+  `WebFetch` tools in their favour.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 
 ## Boundaries
@@ -121,6 +125,9 @@ the existing gateway prefixes.
   that as `false`. A 204 from `GET /team` (no team) parses as an empty
   object, not `undefined`.
 - Keep access-request resolution snapshots: resolved requests leave pending lists.
+- `CrmPipeline.stageRequirements()` and `setStageRequirements()` use pipeline
+  column and option handles; `PipelineColumn.options()` supplies stable options.
+  Stage requirements are enforced on every pipeline operation batch.
 - Pipeline schema reads share the parent's cache; successful op batches clear it.
 - Email sends and other writes against hosted data are real actions; use mocks
   for automated SDK mutation tests.

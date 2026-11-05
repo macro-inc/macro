@@ -1,5 +1,7 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DocumentPreviewContent } from '@core/component/DocumentPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { enableCanvasArtifacts } from '@core/constant/featureFlags';
 import type { GraphicsEditor } from '@macro-inc/graphics';
 import type { GraphicsPresence } from '@macro-inc/graphics/loro';
 import {
@@ -14,6 +16,8 @@ import {
   TextView,
 } from '@macro-inc/graphics/solid';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { ArtifactPresentation } from './artifact-presentation';
+import { CanvasArtifactView } from './artifact-view';
 import { CanvasDrawingToolbar, CanvasZoomToolbar } from './canvas-toolbars';
 import { CanvasMediaView } from './embedded-items';
 import { CanvasTextContent } from './text-content';
@@ -25,6 +29,9 @@ export function CanvasReadOnlyView(props: {
   fitOnLoad?: boolean;
 }) {
   const [tool, setTool] = createSignal<'select' | 'pan'>('select');
+  const [activeArtifact, setActiveArtifact] = createSignal<string>();
+  const [presenting, setPresenting] = createSignal<string>();
+  const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
   const [scale, setScale] = createSignal(props.editor.getCamera().scale);
   const [hasSelection, setHasSelection] = createSignal(
     props.editor.getSession().selectedIds.length > 0
@@ -107,6 +114,15 @@ export function CanvasReadOnlyView(props: {
         }}
         gridColor="transparent"
         renderers={{
+          artifact: (p) => (
+            <CanvasArtifactView
+              {...p}
+              active={activeArtifact() === p.item.id}
+              onEnter={() => setActiveArtifact(p.item.id)}
+              onExit={() => setActiveArtifact(undefined)}
+              onPresent={() => setPresenting(p.item.id)}
+            />
+          ),
           connector: (p) => (
             <ConnectorView {...p} contentView={CanvasTextContent} />
           ),
@@ -140,6 +156,18 @@ export function CanvasReadOnlyView(props: {
           <GraphicsPresenceOverlay
             editor={props.editor}
             presence={presence()}
+          />
+        )}
+      </Show>
+      <Show when={artifactsFlag().enabled ? presenting() : undefined} keyed>
+        {(startId) => (
+          <ArtifactPresentation
+            editor={props.editor}
+            startId={startId}
+            onExit={() => {
+              setPresenting(undefined);
+              focus();
+            }}
           />
         )}
       </Show>

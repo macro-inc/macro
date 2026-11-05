@@ -17,6 +17,7 @@ import {
   useAvailableSectionChannelsQuery,
   useChannelLabelsData,
   useChannelLabelsQuery,
+  useRenameChannelLabelMutation,
   useSetChannelLabelMutation,
   useSmartTagPreviewQuery,
 } from './channel-labels';
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   preview: vi.fn(),
   assign: vi.fn(),
+  rename: vi.fn(),
   channels: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -42,6 +44,7 @@ vi.mock('@service-storage/client', () => ({
       list: mocks.list,
       preview: mocks.preview,
       setChannelLabel: mocks.assign,
+      rename: mocks.rename,
     },
   },
 }));
@@ -70,6 +73,7 @@ let client: QueryClient;
 beforeEach(() => {
   mocks.userId = () => 'viewer';
   mocks.assign.mockReset().mockResolvedValue(ok(undefined));
+  mocks.rename.mockReset();
   mocks.channels.mockReset().mockResolvedValue([]);
   mocks.list.mockReset().mockResolvedValue(ok(labels));
   mocks.preview
@@ -388,6 +392,102 @@ describe('channel tag query rollout', () => {
       ).toEqual(labels)
     );
     expect(data()).toEqual([]);
+  });
+
+  it('moves the same section between caches and reconciles destination assignments', async () => {
+    const section = labels.labels[0];
+    const moved = { ...section, name: 'Moved', teamId: 'team' };
+    const personalKey = channelLabelKeys.list('personal', 'viewer').queryKey;
+    const teamKey = channelLabelKeys.list(undefined, 'viewer').queryKey;
+    client.setQueryData(personalKey, labels);
+    client.setQueryData<ChannelLabelsList>(teamKey, {
+      scope: 'team',
+      teamId: 'team',
+      labels: [
+        {
+          ...section,
+          id: 'existing',
+          channelIds: ['channel-1', 'channel-2'],
+          channelCount: 2,
+        },
+      ],
+    });
+    mocks.rename.mockResolvedValue(ok(moved));
+    let rename!: ReturnType<typeof useRenameChannelLabelMutation>;
+    const Probe = () => {
+      rename = useRenameChannelLabelMutation('personal');
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+
+    await rename.mutateAsync({
+      actorId: 'viewer',
+      labelId: section.id,
+      name: 'Moved',
+      targetScope: 'team',
+    });
+
+    expect(mocks.rename).toHaveBeenCalledWith(
+      section.id,
+      { name: 'Moved', rule: undefined, targetScope: 'team' },
+      'personal'
+    );
+    expect(client.getQueryData<ChannelLabelsList>(personalKey)?.labels).toEqual(
+      []
+    );
+    expect(client.getQueryData<ChannelLabelsList>(teamKey)?.labels).toEqual([
+      {
+        ...section,
+        id: 'existing',
+        channelIds: ['channel-2'],
+        channelCount: 1,
+      },
+      moved,
+    ]);
+  });
+
+  it('does not publish a scope change after the acting account changes', async () => {
+    const [userId, setUserId] = createSignal('viewer');
+    mocks.userId = userId;
+    const section = labels.labels[0];
+    const personalKey = channelLabelKeys.list('personal', 'viewer').queryKey;
+    const teamKey = channelLabelKeys.list(undefined, 'viewer').queryKey;
+    client.setQueryData(personalKey, labels);
+    client.setQueryData(teamKey, { scope: 'team', teamId: 'team', labels: [] });
+    let finish!: (result: Ok<typeof section, never>) => void;
+    mocks.rename.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    let rename!: ReturnType<typeof useRenameChannelLabelMutation>;
+    const Probe = () => {
+      rename = useRenameChannelLabelMutation('personal');
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+    const request = rename.mutateAsync({
+      actorId: 'viewer',
+      labelId: section.id,
+      name: section.name,
+      targetScope: 'team',
+    });
+    await waitFor(() => expect(mocks.rename).toHaveBeenCalledTimes(1));
+    setUserId('another-viewer');
+    finish(ok({ ...section, teamId: 'team' }));
+    await request;
+
+    expect(client.getQueryData<ChannelLabelsList>(personalKey)).toEqual(labels);
+    expect(client.getQueryData<ChannelLabelsList>(teamKey)?.labels).toEqual([]);
   });
 
   it('rejects queued assignments after an account change', async () => {

@@ -98,6 +98,8 @@ use utoipa::OpenApi;
             confirmed_actions::send_confirmed_email,
             confirmed_actions::create_confirmed_calendar_event,
             image_generation_api::generate_image_handler,
+            web_search::inbound::axum_router::search_handler,
+            web_search::inbound::axum_router::fetch_handler,
             database_query::generate_database_query,
             memory_api::get_memory_handler,
             import_api::get_state_handler,
@@ -213,6 +215,13 @@ use utoipa::OpenApi;
                 image_generation_api::GenerateImageErrorBody,
                 image_generation_api::GenerateImageAspectRatio,
                 image_generation_api::GenerateImageReference,
+                web_search::domain::models::WebSearch,
+                web_search::domain::models::WebSearchResponse,
+                web_search::domain::models::WebSearchResult,
+                web_search::domain::models::WebSearchTopic,
+                web_search::domain::models::WebFetch,
+                web_search::domain::models::WebFetchResponse,
+                web_search::inbound::axum_router::WebErrorBody,
                 agent::structured_output::DynamicSchema,
 
                 // Memory

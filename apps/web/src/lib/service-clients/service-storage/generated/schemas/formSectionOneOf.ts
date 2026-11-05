@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { FilterGroup } from './filterGroup';
 import type { FormSectionOneOfKind } from './formSectionOneOfKind';
 import type { QuestionLayout } from './questionLayout';
 
@@ -18,6 +20,11 @@ export type FormSectionOneOf = {
   kind: FormSectionOneOfKind;
   /** Its questions, in order. */
   questions: QuestionLayout[];
+  /** When to show it: the rules answers of earlier shown sections must
+pass, naming only their columns. A section whose rules fail is
+skipped: its questions are not required and their answers are
+not written. Absent, it is always shown. */
+  showWhen?: FilterGroup;
   /** Its title; may be empty. */
   title: string;
 };

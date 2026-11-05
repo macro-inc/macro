@@ -47,6 +47,8 @@ export function mapEmailFocus(data: EmailFocusQuery): EmailEntity[] {
         importance: thread.focus.importance,
         needsReply: thread.focus.needsReply,
         needsFollowUp: thread.focus.needsFollowUp,
+        importanceTrend: thread.focus.importanceTrend,
+        dueOn: thread.focus.dueOn,
       },
     });
   }

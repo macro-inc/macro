@@ -84,3 +84,23 @@ Test the comparison logic without a backend or model credentials:
 ```sh
 python3 -m unittest discover -s crates/universal_input/eval -p 'test_*.py'
 ```
+
+## Thread due dates
+
+`thread_due_dates.json` holds 20 synthetic threads and the due date a reader would
+give each: explicit dates, "by Friday", "EOD tomorrow", an older message's relative
+date, "next week sometime", meeting times, past dates, dates under discussion,
+quoted old mail, closed deadlines and injection attempts. Every message carries the
+day it was written, so the suite needs no fixed clock.
+
+With the model router's provider keys in the environment, run it through the real
+prompt, schema, model and resolver:
+
+```sh
+cargo run -p universal_input --example thread_due_date_eval
+```
+
+It prints each case's result and the precision and recall, and needs no running
+service. An answer that fails validation stores no date, so it scores as no date.
+Tune for precision: a wrong date is worse than a missing one. As above, do not
+change an expectation to accommodate a prediction, and never add real mail.

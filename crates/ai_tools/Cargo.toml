@@ -127,6 +127,7 @@ tracing.workspace = true
 unicode-segmentation.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
+web_search = { path = "../web_search" }
 remote_env_var = { path = "../remote_env_var" }
 macro_env = { path = "../macro_env" }
 secretsmanager_client = { path = "../secretsmanager_client" }
