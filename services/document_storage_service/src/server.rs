@@ -215,6 +215,7 @@ pub fn run() -> impl Future<Output = anyhow::Result<()>> {
 }
 
 async fn run_server() -> anyhow::Result<()> {
+    ci_break_overflow::<u8>(0);
     let env = Environment::new_or_prod();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -2498,3 +2499,10 @@ async fn run_server() -> anyhow::Result<()> {
 }
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Deliberate break: only instantiating this can find the overflow.
+fn ci_break_overflow<T>(depth: u32) {
+    if depth > 0 {
+        ci_break_overflow::<Option<T>>(depth - 1);
+    }
+}
