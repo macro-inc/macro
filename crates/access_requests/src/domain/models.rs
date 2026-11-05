@@ -51,7 +51,7 @@ impl From<ShareEntityType> for EntityType {
 pub struct ShareEntity {
     /// Canonical entity kind.
     pub entity_type: ShareEntityType,
-    /// Entity identifier.
+    /// Entity identifier, changed to prove a stale schema fails the check.
     pub entity_id: Uuid,
 }
 /// Durable outcome; reading a notification never changes it.
