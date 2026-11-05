@@ -143,9 +143,13 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
         'notifications'
       );
     })
-    .with({ tag: 'channel_invite' }, () => {
-      refreshChannel(notification);
-    })
+    .with(
+      { tag: 'channel_invite' },
+      { tag: 'channel_access_requested' },
+      () => {
+        refreshChannel(notification);
+      }
+    )
     .with({ tag: 'channel_message_send' }, () => {
       refreshChannel(notification);
     })

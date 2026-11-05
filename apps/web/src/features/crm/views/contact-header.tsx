@@ -1,4 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { propertyPillClasses } from '@app/features/property/extractors/property-pill-classes';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isMobile } from '@core/mobile/isMobile';
@@ -62,9 +63,12 @@ function CompanyPill(props: {
     <button
       type="button"
       onClick={openCompany}
-      class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
+      class={propertyPillClasses({
+        class:
+          "touch:min-h-6 touch:min-w-11 touch:my-2.5 touch:before:absolute touch:before:-inset-x-px touch:before:top-1/2 touch:before:h-11 touch:before:-translate-y-1/2 touch:before:content-['']",
+      })}
     >
-      <EntityIcon targetType="crm_company" size="xs" />
+      <EntityIcon targetType="crm_company" size="fill" class="size-3" />
       {company()?.name ?? 'Open company'}
     </button>
   );
@@ -204,7 +208,7 @@ export function ContactHeader(props: {
           >
             <Show when={contact().email}>
               {(email) => (
-                <Badge variant="outline" size="sm">
+                <Badge variant="ghost" size="sm">
                   <EnvelopeIcon class="size-3" />
                   {email()}
                 </Badge>
@@ -220,7 +224,7 @@ export function ContactHeader(props: {
               )}
             </Show>
             <Tooltip label={formatDateAndTime(contact().lastInteraction)}>
-              <Badge variant="outline" size="sm">
+              <Badge variant="ghost" size="sm">
                 <ClockIcon class="size-3" />
                 Last interacted{' '}
                 {formatRelativeTimestamp(contact().lastInteraction)}
