@@ -17,7 +17,7 @@ jobs:
       max-parallel: 6
       matrix:
         service: [dss, ahs]
-        runner: [linux-mid, linux-large-build]
+        runner: [linux-mid]
         attempt: [1, 2, 3, 4, 5]
     env: { ATTEMPT: "${{ matrix.attempt }}" }
     steps:
@@ -32,6 +32,8 @@ jobs:
           nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - run: bash .github/ci-speed/nix-arm.sh "exp-${{ matrix.service }}-control"
+      # The layer isn't in the shared cache with lto=off, so build it first and time only the service.
+      - run: nix build --max-jobs auto --no-link .#noLtoDeps
+      - run: bash .github/ci-speed/nix-arm.sh "exp-${{ matrix.service }}-nolto"
       - if: always()
         uses: ./.github/actions/teardown-nix

@@ -663,6 +663,14 @@
         cgu64 = "--config profile.release.package.${package}.codegen-units=64";
         cgu256 = "--config profile.release.package.${package}.codegen-units=256";
       };
+      # lto=off has to apply to the layer too, or every dependency misses.
+      noLtoDeps = deployCargoArtifacts.overrideAttrs (_: { CARGO_PROFILE_RELEASE_LTO = "off"; });
+      expNoLto =
+        def:
+        (deployServiceBinaryPackage (def // { expArgs = ""; inherit expNonce; })).overrideAttrs (old: {
+          CARGO_PROFILE_RELEASE_LTO = "off";
+          cargoArtifacts = noLtoDeps;
+        });
       expPackages =
         expService "dss" {
           serviceName = "document-storage-service";
@@ -1211,6 +1219,19 @@
       }
       // dopplerConfigBinPackages
       // expPackages
+      // {
+        inherit noLtoDeps;
+        exp-dss-nolto = expNoLto {
+          serviceName = "document-storage-service";
+          packageName = "document_storage_service";
+          binaries = [ "document_storage_service" ];
+        };
+        exp-ahs-nolto = expNoLto {
+          serviceName = "agent-harness-service";
+          packageName = "agent_harness_service";
+          binaries = [ "agent_harness_service" ];
+        };
+      }
       // deployServiceBinaryPackages
       // {
         deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
