@@ -916,6 +916,7 @@
       "crates/static_file",
       "crates/static_file_service_client",
       "crates/stream",
+      "crates/stripe_price_id",
       "crates/sync_service",
       "crates/sync_service_client",
       "crates/system_properties",
@@ -2633,6 +2634,7 @@
       "crates/sqs_client",
       "crates/sqs_worker",
       "crates/static_file_service_client",
+      "crates/stripe_price_id",
       "crates/sync_service",
       "crates/sync_service_client",
       "crates/system_properties",
@@ -4019,6 +4021,7 @@
       "crates/sqs_worker",
       "crates/static_file",
       "crates/static_file_service_client",
+      "crates/stripe_price_id",
       "crates/sync_service",
       "crates/sync_service_client",
       "crates/system_properties",
@@ -9670,6 +9673,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/stripe_price_id",
       "crates/workspace-hack"
     ],
     "image_generation": [
@@ -14488,6 +14492,10 @@
       "crates/cowlike",
       "crates/model-entity",
       "crates/stream",
+      "crates/workspace-hack"
+    ],
+    "stripe_price_id": [
+      "crates/stripe_price_id",
       "crates/workspace-hack"
     ],
     "sync_router": [
