@@ -178,6 +178,12 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
     instance.artifact_dir().join("frontend")
 }
 
+/// Tells the app its backend is a self-contained local stack, whose proxy keeps
+/// each instance's cookies apart (see `proxy::cookie_rewrites`). SSO there
+/// redeems a session code through the proxy. `run_dev`'s proxy doesn't rewrite
+/// cookies, so it leaves this unset.
+const LOCAL_STACK_ENV: &str = "VITE_LOCAL_STACK";
+
 /// Build the app bundle for headless serving and stage it into the instance
 /// dir. The build mirrors `just build-dev`
 /// (dev-mode bundle, production optimizations), except the backend origin is
@@ -210,6 +216,10 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
         .env("VITE_LOCAL_ONLY", "true");
     if mode.spec().runs_local_infra {
         cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
+    }
+    // Part of the bundle cache key, like every `VITE_*` variable on `cmd`.
+    if mode == Mode::Local {
+        cmd.env(LOCAL_STACK_ENV, "true");
     }
     if stage.is_dry_run() {
         return stage.run("Building frontend bundle", &mut cmd);
@@ -307,6 +317,9 @@ fn dev_env(instance: &Instance, mode: Mode, traces_enabled: bool) -> Result<Vec<
             "VITE_AI_EDITING_WORKER_URL".to_string(),
             "/ai-editing".to_string(),
         ));
+    }
+    if mode == Mode::Local {
+        env.push((LOCAL_STACK_ENV.to_string(), "true".to_string()));
     }
     if traces_enabled {
         env.push((
