@@ -73,6 +73,6 @@ export default {
   driveTitle: 'Learn how to use Macro Drive',
   driveBlock: 'Macro Drive',
   driveSnippet:
-    'Drag files into folders, open anything, @mention any file, ask your files',
-  driveLength: '1:01',
+    'Files from channels, DMs and email in one place, linked to everything else',
+  driveLength: '1:29',
 };
