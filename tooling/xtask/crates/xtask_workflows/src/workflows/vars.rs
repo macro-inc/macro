@@ -81,12 +81,6 @@ pub const NIX_CHECKS_CACHE_TAG: &str = "nix-checks";
 /// a different workload and runner profile.
 pub const WEB_SCCACHE_NAME: &str = "web-ci";
 
-/// Namespace cache tag for `path-check`, which keeps its release
-/// `xtask_nextest_filter` binary on the volume. Without a fixed tag the small
-/// profile's volume is scoped per branch and PR runs never persisted, so every
-/// run rebuilt the filter.
-pub const NEXTEST_FILTER_CACHE_TAG: &str = "nextest-filter";
-
 /// Namespace cache tag for the sync-service worker deploy. Its own pool: this
 /// job compiles for `wasm32-unknown-unknown`, so nothing in the host-target
 /// volumes ([`CI_CACHE_TAG`]) would serve it anyway.
