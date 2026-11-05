@@ -19,9 +19,10 @@ fi
 
 cache_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$assets").closure.gz"
 
+# The token goes through a config descriptor so it stays out of curl's arguments.
 cache_request() {
   curl --fail --silent --show-error --max-time 30 --retry 2 \
-    --header "Authorization: Bearer $SCCACHE_WEBDAV_TOKEN" "$@"
+    -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$@"
 }
 
 if cache_request "$cache_url" | gunzip | nix-store --import; then
