@@ -21125,6 +21125,7 @@ dependencies = [
  "tracing",
  "url",
  "utoipa",
+ "wiremock",
  "workspace-hack",
 ]
 

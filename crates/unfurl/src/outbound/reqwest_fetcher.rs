@@ -16,6 +16,9 @@ use super::http_safety::{
 use super::resolver::PrivateIpFilteringResolver;
 use crate::domain::ports::UnfurlFetcher;
 
+#[cfg(test)]
+mod test;
+
 /// 1 MB cap on HTML response size for meta-tag extraction.
 const MAX_HTML_SIZE: u64 = 1024 * 1024;
 
@@ -28,6 +31,10 @@ const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 
 /// Default connect timeout for an unfurl fetch.
 const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Identifies the fetcher to the sites it reads. Some sites refuse requests
+/// that carry no user agent, and reqwest sends none by default.
+const USER_AGENT: &str = "Mozilla/5.0 (compatible; MacroBot/1.0; +https://macro.com)";
 
 /// Concrete [`UnfurlFetcher`] backed by a `reqwest::Client` and the
 /// `scraper` HTML parser.
@@ -60,6 +67,7 @@ impl ReqwestUnfurlFetcher {
             .dns_resolver(Arc::new(PrivateIpFilteringResolver))
             .timeout(REQUEST_TIMEOUT)
             .connect_timeout(CONNECT_TIMEOUT)
+            .user_agent(USER_AGENT)
             .build()?;
         Ok(Self { client })
     }
@@ -224,54 +232,4 @@ fn find_favicon(document: &Html, base_url: &Url) -> Option<String> {
     }
 
     None
-}
-
-#[cfg(test)]
-mod tests {
-    use std::str::FromStr;
-
-    use super::*;
-
-    #[test]
-    fn test_parse_document_extracts_og_title() {
-        let document_content = [
-            "<html>",
-            "<head>",
-            "<meta property=\"og:title\" content=\"hello\" />",
-            "</head>",
-            "</html>",
-        ]
-        .join("\n");
-        let url = Url::from_str("http://example.com").unwrap();
-        let tags = parse_document(&document_content, &url).unwrap();
-
-        assert_eq!(
-            tags.get("property:og:title").map(String::as_str),
-            Some("hello")
-        );
-    }
-
-    #[test]
-    fn test_parse_document_extracts_title_tag() {
-        let document_content = [
-            "<html>",
-            "<head>",
-            "<title>Website Title</title>",
-            "</head>",
-            "</html>",
-        ]
-        .join("\n");
-        let url = Url::from_str("http://example.com").unwrap();
-        let tags = parse_document(&document_content, &url).unwrap();
-        assert_eq!(tags.get("title").map(String::as_str), Some("Website Title"));
-    }
-
-    #[test]
-    fn test_is_html_content_type() {
-        assert!(is_html_content_type("text/html"));
-        assert!(is_html_content_type("text/html; charset=utf-8"));
-        assert!(is_html_content_type("application/xhtml+xml"));
-        assert!(!is_html_content_type("image/png"));
-        assert!(!is_html_content_type("application/json"));
-    }
 }

@@ -35,6 +35,8 @@ favicon) with SSRF protections.
 
 - Any change to URL validation or redirect handling must keep private/loopback
   IPs blocked — see `src/outbound/http_safety.rs`'s doc comment.
+- The fetcher's client sends a named `User-Agent`; keep it on any new client.
+  Many sites answer 403 to requests without one, and reqwest sends none.
 
 ## Related
 
