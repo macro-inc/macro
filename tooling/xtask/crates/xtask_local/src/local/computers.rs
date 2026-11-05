@@ -60,6 +60,10 @@ pub const COMPUTER_ID_LABEL: &str = "macro.computer_id";
 /// only prints links to it, which open in the developer's browser.
 const MACROD_SERVICES: &[(&str, Option<Port>)] = &[
     (
+        "OVERRIDE_AGENT_HARNESS_EGRESS_URL",
+        Some(Port::AgentHarnessEgress),
+    ),
+    (
         "OVERRIDE_AGENT_HARNESS_SERVICE_URL",
         Some(Port::AgentHarness),
     ),

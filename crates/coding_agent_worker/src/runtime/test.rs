@@ -8,6 +8,7 @@ use tokio_tungstenite::accept_async;
 fn start_runtime(listener: &TcpListener) -> Runtime {
     Runtime::start(
         &MacroApi {
+            egress_url: None,
             api_url: format!("http://{}", listener.local_addr().unwrap()),
             storage_url: "http://unused".to_owned(),
             web_url: "http://unused".to_owned(),

@@ -25,8 +25,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   Reads the `hosted_runtimes` `Enrollment` (Incus guest API
   `/dev/incus/sock`, key `user.macro.enrollment`, or a file), writes
   `macrod.toml` with the deployment URLs resolved from its
-  `macro_service_urls` `OVERRIDE_*` values (the three macrod calls, all or
-  none; macrod.toml stays the one URL source at runtime), claims the
+  `macro_service_urls` `OVERRIDE_*` values (API, storage and app together, plus an optional
+  computer-reachable egress URL; macrod.toml stays the one URL source at runtime), claims the
   pre-approved pairing, chowns the config to its directory's owner, installs
   the persona (useradd, `/etc/macro/personas/<os_user>.env` 0600,
   `/etc/systemd/system/<unit>.service`, `enable --now`), then writes
@@ -175,3 +175,8 @@ external chat replies depend on it. Direct session controls still mint IDs.
   update it alongside `src/herdr/` changes.
 - MCP server selection is supplied by `agent_harness` when the session binds;
   native launch forwards that list, with credentials refreshed on launch/resume.
+
+Macro computers replace the managed `/workspace` placeholder with their configured
+workspace on session start. Enrollment’s `OVERRIDE_AGENT_HARNESS_EGRESS_URL` is
+stored as `[macro].egress_url`; computer sessions route first-party MCP and
+Anthropic requests through it without changing custom external MCP addresses.

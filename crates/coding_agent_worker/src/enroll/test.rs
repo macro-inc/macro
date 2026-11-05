@@ -13,6 +13,7 @@ const ENROLLMENT_JSON: &str = r#"{
     "name": "Standard computer",
     "service_url_overrides": {
         "OVERRIDE_AGENT_HARNESS_SERVICE_URL": "http://10.200.0.1:41009/agent-harness/",
+        "OVERRIDE_AGENT_HARNESS_EGRESS_URL": "http://10.200.0.1:41027",
         "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL": "http://10.200.0.1:41009/dss",
         "OVERRIDE_APP_SERVICE_URL": "http://10.200.0.1:41000"
     },
@@ -86,6 +87,7 @@ fn deployment_urls_come_from_the_three_overrides_macrod_calls() {
     assert_eq!(
         urls,
         Some(DeploymentUrls {
+            egress_url: Some("http://10.200.0.1:41027".to_owned()),
             api_url: "http://10.200.0.1:41009/agent-harness".to_owned(),
             storage_url: "http://10.200.0.1:41009/dss".to_owned(),
             web_url: "http://10.200.0.1:41000/app".to_owned(),
@@ -316,6 +318,10 @@ scope = "team"
     assert_eq!(
         loaded.macro_api.api_url,
         "http://10.200.0.1:41009/agent-harness"
+    );
+    assert_eq!(
+        loaded.macro_api.egress_url.as_deref(),
+        Some("http://10.200.0.1:41027")
     );
     assert_eq!(loaded.macro_api.storage_url, "http://10.200.0.1:41009/dss");
     assert_eq!(loaded.macro_api.web_url, "http://10.200.0.1:41000/app");

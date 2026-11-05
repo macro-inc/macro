@@ -382,6 +382,11 @@ impl ConfigForm {
         self.set_string("macro", "web_url", web_url);
     }
 
+    /// Set the computer-reachable egress base from enrollment.
+    pub fn set_egress_url(&mut self, url: &str) {
+        self.set_string("macro", "egress_url", url);
+    }
+
     /// Persist the credential minted by pairing in this config document.
     pub fn persist_credentials(
         &mut self,

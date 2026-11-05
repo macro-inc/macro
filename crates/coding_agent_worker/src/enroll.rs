@@ -14,7 +14,9 @@ use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use hosted_runtimes::domain::enrollment::{Enrollment, INCUS_ENROLLMENT_KEY, Persona};
-use macro_service_urls::{AgentHarnessServiceUrl, AppServiceUrl, DocumentStorageServiceUrl};
+use macro_service_urls::{
+    AgentHarnessEgressUrl, AgentHarnessServiceUrl, AppServiceUrl, DocumentStorageServiceUrl,
+};
 use rootcause::option_ext::OptionExt as _;
 use rootcause::prelude::ResultExt as _;
 
@@ -291,6 +293,7 @@ async fn read_incus_enrollment(socket: &Path) -> rootcause::Result<String> {
 /// `macro_service_urls` overrides.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DeploymentUrls {
+    egress_url: Option<String>,
     api_url: String,
     storage_url: String,
     web_url: String,
@@ -316,6 +319,9 @@ impl DeploymentUrls {
         match (api, storage, app) {
             (None, None, None) => Ok(None),
             (Some(api), Some(storage), Some(app)) => Ok(Some(Self {
+                egress_url: overrides
+                    .get(AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME)
+                    .cloned(),
                 api_url: api.trim_end_matches('/').to_owned(),
                 storage_url: storage.trim_end_matches('/').to_owned(),
                 // macrod links into the web app's routes, below `/app`.
@@ -353,6 +359,9 @@ fn write_config(
     if let Some(urls) = urls {
         let mut form = ConfigForm::load(&options.config)?;
         form.set_deployment_urls(&urls.api_url, &urls.storage_url, &urls.web_url);
+        if let Some(egress) = &urls.egress_url {
+            form.set_egress_url(egress);
+        }
         form.save()?;
     }
     Ok(())

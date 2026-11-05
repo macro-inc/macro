@@ -446,13 +446,17 @@ sidecars relay the tunnel into Compose over a unix socket:
 `computers_incus_uplink` (host network) and `computers_incus_relay`
 (`computers-incus:8443`), which is the harness's `COMPUTERS_INCUS_URL`.
 
+Enrollment stores the fleet-reachable egress URL in macrod’s config. Computer
+sessions use it for first-party MCP servers and the Anthropic gateway, while
+other paired runtimes keep the stack’s external egress URL.
+
 Boxes reach the stack at `10.210.0.1:<host port>` through the reverse tunnel.
-Startup prints the command with this instance's ports (agent harness, document
+Startup prints the command with this instance's ports (agent egress, agent harness, document
 storage, and auth), for example:
 
 ```bash
-nix/hosts/computers-tunnels.sh reverse <harness> <storage> <auth>   # Incus tunnel already running
-nix/hosts/computers-tunnels.sh all <harness> <storage> <auth>       # neither tunnel running
+nix/hosts/computers-tunnels.sh reverse <egress> <harness> <storage> <auth>   # Incus tunnel already running
+nix/hosts/computers-tunnels.sh all <egress> <harness> <storage> <auth>       # neither tunnel running
 ```
 
 Run it under `systemd-run --user -p Restart=always` to keep it up. Starting

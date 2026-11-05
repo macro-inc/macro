@@ -40,6 +40,8 @@ const SESSION_METHODS: &[&str] = &["session/new", "session/load", "session/resum
 
 /// A Macro computer's runtime-side state, shared by every bridge.
 pub struct Computer {
+    workspace: PathBuf,
+    egress_url: Option<String>,
     #[cfg(unix)]
     token_store: token_store::TokenStore,
     /// The signed-in Claude account's token, when there is one.
@@ -58,6 +60,7 @@ impl Computer {
         macro_api: &MacroApi,
         credentials: &HarnessCredentials,
         harness: &Harness,
+        workspace: &std::path::Path,
         cancel: CancellationToken,
     ) -> rootcause::Result<Arc<Self>> {
         #[cfg(unix)]
@@ -72,6 +75,8 @@ impl Computer {
             .get("CLAUDE_CODE_EXECUTABLE")
             .map_or_else(|| PathBuf::from("claude"), PathBuf::from);
         Ok(Arc::new(Self {
+            workspace: workspace.to_owned(),
+            egress_url: macro_api.egress_url.clone(),
             #[cfg(unix)]
             token_store,
             oauth_token: RwLock::new(oauth_token),
@@ -114,7 +119,12 @@ impl Computer {
             .read()
             .map(|token| token.clone())
             .unwrap_or_else(|poisoned| poisoned.into_inner().clone());
-        prepare_session(frame, token.as_deref())
+        prepare_session(
+            frame,
+            token.as_deref(),
+            &self.workspace,
+            self.egress_url.as_deref(),
+        )
     }
 
     async fn open_screen(&self, stream_id: &str) -> rootcause::Result<ComputerControlResult> {
@@ -207,7 +217,12 @@ fn root_message(error: &rootcause::Report) -> String {
 
 /// Merge the session env into a session-starting request's
 /// `params._meta.claudeCode.options.env`.
-fn prepare_session(frame: &mut Value, oauth_token: Option<&str>) -> rootcause::Result<()> {
+fn prepare_session(
+    frame: &mut Value,
+    oauth_token: Option<&str>,
+    workspace: &std::path::Path,
+    egress_url: Option<&str>,
+) -> rootcause::Result<()> {
     let is_session_start = frame
         .get("method")
         .and_then(Value::as_str)
@@ -219,6 +234,15 @@ fn prepare_session(frame: &mut Value, oauth_token: Option<&str>) -> rootcause::R
         .get_mut("params")
         .and_then(Value::as_object_mut)
         .ok_or_else(|| rootcause::report!("a session start needs params"))?;
+    if params.get("cwd").and_then(Value::as_str) == Some("/workspace") {
+        params.insert(
+            "cwd".to_owned(),
+            Value::from(workspace.to_string_lossy().as_ref()),
+        );
+    }
+    if let Some(egress_url) = egress_url {
+        route_egress(params, egress_url);
+    }
     let env = match oauth_token {
         Some(token) => Map::from_iter([("CLAUDE_CODE_OAUTH_TOKEN".to_owned(), Value::from(token))]),
         None => gateway_env(params.get("mcpServers")).ok_or_else(|| {
@@ -292,4 +316,30 @@ fn gateway_env(mcp_servers: Option<&Value>) -> Option<Map<String, Value>> {
             Value::from("1"),
         ),
     ]))
+}
+
+/// Keep first-party MCP and inference requests on the enrolled computer route.
+fn route_egress(params: &mut Map<String, Value>, egress_url: &str) {
+    let Some(servers) = params.get_mut("mcpServers").and_then(Value::as_array_mut) else {
+        return;
+    };
+    let base = servers
+        .iter()
+        .find(|server| server.get("name").and_then(Value::as_str) == Some(INTERNAL_MCP_NAME))
+        .and_then(|server| server.get("url"))
+        .and_then(Value::as_str)
+        .and_then(|url| url.strip_suffix(INTERNAL_MCP_PATH))
+        .map(str::to_owned);
+    let Some(base) = base else {
+        return;
+    };
+    for server in servers {
+        let Some(url) = server.get("url").and_then(Value::as_str) else {
+            continue;
+        };
+        if let Some(path) = url.strip_prefix(&base).filter(|path| path.starts_with('/')) {
+            let routed = format!("{}{path}", egress_url.trim_end_matches('/'));
+            server["url"] = Value::from(routed);
+        }
+    }
 }

@@ -5,6 +5,7 @@
 # containing a bearer token to this file. Keep the resulting config private.
 
 [macro]
+# Macro computer enrollment may set egress_url to its fleet-reachable gateway.
 # Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
 # gateway the daemon connects to on startup.
 api_url = "http://localhost:50009/agent-harness"

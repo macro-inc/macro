@@ -37,6 +37,10 @@ fn docker_computers_dial_the_stack_in_network() {
         overrides,
         BTreeMap::from([
             (
+                "OVERRIDE_AGENT_HARNESS_EGRESS_URL".to_owned(),
+                "http://agent-harness-service:8102".to_owned()
+            ),
+            (
                 "OVERRIDE_AGENT_HARNESS_SERVICE_URL".to_string(),
                 "http://agent-harness-service:8080".to_string(),
             ),
@@ -89,6 +93,7 @@ fn incus_computers_dial_the_stack_through_the_box_bridge() {
     assert_eq!(
         computers.tunnel_ports(),
         vec![
+            instance.port(Port::AgentHarnessEgress),
             instance.port(Port::AgentHarness),
             instance.port(Port::DocStorage),
             instance.port(Port::Auth),

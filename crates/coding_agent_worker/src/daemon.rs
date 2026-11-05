@@ -98,6 +98,7 @@ impl Daemon {
                     &config.macro_api,
                     &credentials,
                     &config.harness,
+                    &config.workspace.path,
                     cancel.child_token(),
                 )
                 .await?,

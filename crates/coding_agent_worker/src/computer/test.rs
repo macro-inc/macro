@@ -26,7 +26,13 @@ fn session_new() -> Value {
 #[test]
 fn credits_point_claude_code_at_the_gateway_of_the_sessions_internal_mcp() {
     let mut frame = session_new();
-    prepare_session(&mut frame, None).unwrap();
+    prepare_session(
+        &mut frame,
+        None,
+        std::path::Path::new("/home/macro/work"),
+        None,
+    )
+    .unwrap();
     assert_eq!(
         frame["params"]["_meta"]["claudeCode"]["options"]["env"],
         json!({
@@ -43,7 +49,13 @@ fn a_signed_in_account_replaces_the_gateway() {
     let mut frame = session_new();
     frame["method"] = json!("session/resume");
     frame["params"].as_object_mut().unwrap().remove("_meta");
-    prepare_session(&mut frame, Some("sk-ant-oat01-own")).unwrap();
+    prepare_session(
+        &mut frame,
+        Some("sk-ant-oat01-own"),
+        std::path::Path::new("/home/macro/work"),
+        None,
+    )
+    .unwrap();
     assert_eq!(
         frame["params"]["_meta"],
         json!({ "claudeCode": { "options": { "env": {
@@ -61,7 +73,13 @@ fn only_session_starts_are_touched() {
         "params": { "sessionId": "s", "prompt": [] }
     });
     let before = prompt.clone();
-    prepare_session(&mut prompt, Some("sk-ant-oat01-own")).unwrap();
+    prepare_session(
+        &mut prompt,
+        Some("sk-ant-oat01-own"),
+        std::path::Path::new("/home/macro/work"),
+        None,
+    )
+    .unwrap();
     assert_eq!(prompt, before);
 
     // Without the internal MCP server there is no gateway to point at.
@@ -72,15 +90,35 @@ fn only_session_starts_are_touched() {
         "params": { "sessionId": "s", "cwd": "/", "mcpServers": [] }
     });
     let before = bare.clone();
-    assert!(prepare_session(&mut bare, None).is_err());
+    assert!(
+        prepare_session(
+            &mut bare,
+            None,
+            std::path::Path::new("/home/macro/work"),
+            None
+        )
+        .is_err()
+    );
     assert_eq!(bare, before);
 }
 
 #[test]
 fn each_attach_refreshes_credentials_and_switches_modes_without_old_env() {
     let mut frame = session_new();
-    prepare_session(&mut frame, None).unwrap();
-    prepare_session(&mut frame, Some("own-account-token")).unwrap();
+    prepare_session(
+        &mut frame,
+        None,
+        std::path::Path::new("/home/macro/work"),
+        None,
+    )
+    .unwrap();
+    prepare_session(
+        &mut frame,
+        Some("own-account-token"),
+        std::path::Path::new("/home/macro/work"),
+        None,
+    )
+    .unwrap();
     let env = &frame["params"]["_meta"]["claudeCode"]["options"]["env"];
     assert_eq!(env["CLAUDE_CODE_OAUTH_TOKEN"], "own-account-token");
     assert!(env.get("ANTHROPIC_AUTH_TOKEN").is_none());
@@ -88,7 +126,13 @@ fn each_attach_refreshes_credentials_and_switches_modes_without_old_env() {
 
     frame["method"] = json!("session/load");
     frame["params"]["mcpServers"][1]["headers"][0]["value"] = json!("Bearer fresh-token");
-    prepare_session(&mut frame, None).unwrap();
+    prepare_session(
+        &mut frame,
+        None,
+        std::path::Path::new("/home/macro/work"),
+        None,
+    )
+    .unwrap();
     let env = &frame["params"]["_meta"]["claudeCode"]["options"]["env"];
     assert_eq!(env["ANTHROPIC_AUTH_TOKEN"], "fresh-token");
     assert!(env.get("CLAUDE_CODE_OAUTH_TOKEN").is_none());
@@ -210,4 +254,53 @@ IFS= read -r hold
             "sk-ant-oat01-pasted42-abcdefghijklmnopqrstuvwxyz"
         );
     }
+}
+
+#[test]
+fn computer_sessions_use_the_guest_workspace_and_egress_route() {
+    for method in SESSION_METHODS {
+        let mut frame = session_new();
+        frame["method"] = json!(method);
+        frame["params"]["cwd"] = json!("/workspace");
+        frame["params"]["mcpServers"].as_array_mut().unwrap().push(json!({
+            "type": "http", "name": "macro-preview", "url": "https://dev-gateway.macro.com/agent-harness-egress/mcp-preview", "headers": []
+        }));
+        prepare_session(
+            &mut frame,
+            None,
+            std::path::Path::new("/home/macro/work"),
+            Some("http://10.210.0.1:41027/"),
+        )
+        .unwrap();
+        assert_eq!(frame["params"]["cwd"], "/home/macro/work");
+        assert_eq!(
+            frame["params"]["mcpServers"][0]["url"],
+            "https://example.test/mcp"
+        );
+        assert_eq!(
+            frame["params"]["mcpServers"][1]["url"],
+            "http://10.210.0.1:41027/mcp/internal"
+        );
+        assert_eq!(
+            frame["params"]["mcpServers"][2]["url"],
+            "http://10.210.0.1:41027/mcp-preview"
+        );
+        assert_eq!(
+            frame["params"]["_meta"]["claudeCode"]["options"]["env"]["ANTHROPIC_BASE_URL"],
+            "http://10.210.0.1:41027/anthropic"
+        );
+        assert_eq!(
+            frame["params"]["_meta"]["claudeCode"]["options"]["env"]["ANTHROPIC_AUTH_TOKEN"],
+            "egress-token"
+        );
+    }
+    let mut explicit = session_new();
+    prepare_session(
+        &mut explicit,
+        None,
+        std::path::Path::new("/home/macro/other"),
+        None,
+    )
+    .unwrap();
+    assert_eq!(explicit["params"]["cwd"], "/home/macro/work");
 }
