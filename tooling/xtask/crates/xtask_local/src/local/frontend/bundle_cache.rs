@@ -208,7 +208,15 @@ pub fn store(key: &str, dist: &Path) -> Result<PathBuf> {
         std::fs::remove_dir_all(&tmp)?;
     }
     std::fs::create_dir_all(&root).with_context(|| format!("creating {}", root.display()))?;
-    copy_tree(dist, &tmp)?;
+    // A real copy: `dist/` is a build directory something may write into again,
+    // and an entry must never change under a stack that serves it.
+    let status = Command::new("cp")
+        .arg("-a")
+        .arg(dist)
+        .arg(&tmp)
+        .status()
+        .context("running cp -a")?;
+    anyhow::ensure!(status.success(), "cp -a exited with {status}");
     if entry.join("index.html").exists() {
         std::fs::remove_dir_all(&tmp)?;
     } else {
@@ -221,9 +229,9 @@ pub fn store(key: &str, dist: &Path) -> Result<PathBuf> {
     Ok(entry)
 }
 
-/// Copy a bundle, hard-linking its files where the filesystem allows. Bundles
-/// are never written after they are built, so links are safe and make staging
-/// a 240MB bundle nearly free.
+/// Stage a cached bundle, hard-linking its files where the filesystem allows.
+/// Neither the entry nor the staged copy is ever written, so links are safe
+/// and make staging a 240MB bundle nearly free.
 pub fn copy_tree(from: &Path, to: &Path) -> Result<()> {
     let linked = Command::new("cp")
         .arg("-al")
