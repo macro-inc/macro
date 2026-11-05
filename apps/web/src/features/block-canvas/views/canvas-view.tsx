@@ -1,5 +1,7 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSidePanel } from '@components/app/side-panel';
 import { createImageActions } from '@core/component/ImageActions';
+import { enableCanvasArtifacts } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Copy from '@icon/system/regular/copy.svg';
 import DownloadSimple from '@icon/system/regular/download-simple.svg';
@@ -10,6 +12,7 @@ import {
   type DocumentGeometry,
   distributeCommand,
   screenToWorld,
+  setArtifactCommand,
   styleCommand,
 } from '@macro-inc/graphics';
 import { attachConnectorControls } from '@macro-inc/graphics/browser';
@@ -35,6 +38,7 @@ import {
   Show,
 } from 'solid-js';
 import type { CanvasClipboard } from '../clipboard';
+import { ArtifactInspector } from '../components/artifact-inspector';
 import { ConnectorInspector } from '../components/connector-inspector';
 import type { CanvasEmbedViewProps } from '../components/embed-view';
 import { EraserTrail } from '../components/eraser-trail';
@@ -57,6 +61,7 @@ import type {
 import type { CanvasInsertState } from '../primitives/create-insert-state';
 import { attachTextInput } from '../primitives/text-input';
 import { useCanvasMediaSource } from '../queries/media';
+import { CanvasArtifactView } from './artifact-view';
 import { CanvasContextMenu } from './canvas-context-menu';
 import {
   CanvasDrawingToolbar,
@@ -106,6 +111,11 @@ export function CanvasView(props: {
     state.selection().length === 1
       ? state.document.items[state.selection()[0]!]
       : undefined;
+  const selectedArtifact = () => {
+    const item = selectedItem();
+    return item?.type === 'artifact' ? item : undefined;
+  };
+  const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
   const selectedImage = () => {
     const item = selectedItem();
     return item?.type === 'image' ? item : undefined;
@@ -256,6 +266,14 @@ export function CanvasView(props: {
               location={location}
               onClose={props.insert.close}
               onRestoreFocus={focus}
+              onArtifact={
+                artifactsFlag().enabled
+                  ? () => {
+                      props.assets.artifact(location.world);
+                      props.insert.close();
+                    }
+                  : undefined
+              }
               onSelect={(asset, mode) => {
                 if (mode === 'media')
                   fireAndForget(
@@ -427,6 +445,19 @@ export function CanvasView(props: {
                       onChange={state.text.typography}
                       onScrub={() => state.text.scrubFontSize(state.inspector)}
                     />
+                  </Show>
+                  <Show when={artifactsFlag().enabled && selectedArtifact()}>
+                    {(artifact) => (
+                      <ArtifactInspector
+                        item={artifact()}
+                        onChange={(content) =>
+                          editor.execute(setArtifactCommand, {
+                            id: artifact().id,
+                            content,
+                          })
+                        }
+                      />
+                    )}
                   </Show>
                   <Show when={selectedImage()}>
                     <div class="flex flex-col gap-2 p-3">
@@ -620,6 +651,14 @@ export function CanvasView(props: {
                       onStop={props.assets.stopPlayback}
                     />
                   ),
+                  artifact: (itemProps) => (
+                    <CanvasArtifactView
+                      {...itemProps}
+                      active={state.embeds.active() === itemProps.item.id}
+                      onEnter={() => state.embeds.enter(itemProps.item.id)}
+                      onExit={exitEmbed}
+                    />
+                  ),
                   document: (itemProps) => (
                     <CanvasDocumentView
                       {...itemProps}
@@ -659,7 +698,9 @@ export function CanvasView(props: {
                 input={{
                   ignoreTarget: (target) =>
                     target instanceof Element &&
-                    !!target.closest('[data-canvas-document]') &&
+                    !!target.closest(
+                      '[data-canvas-document],[data-canvas-artifact]'
+                    ) &&
                     !!target.closest(
                       'button,a,input,select,textarea,[role="button"]'
                     ),

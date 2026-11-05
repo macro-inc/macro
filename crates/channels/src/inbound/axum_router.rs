@@ -1,6 +1,9 @@
 #[cfg(test)]
 mod test;
 
+/// Requests to join a channel.
+pub mod access_requests;
+pub use access_requests::channel_access_requests_router;
 /// Channel profile-picture HTTP endpoint.
 pub mod profile_picture;
 pub use profile_picture::{SetChannelPictureRequest, set_channel_picture_handler};

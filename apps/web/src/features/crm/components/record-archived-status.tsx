@@ -1,6 +1,6 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Popover } from '@kobalte/core/popover';
-import { Badge, Button, badgeTriggerClasses, Tooltip } from '@ui';
+import { Badge, badgeTriggerClasses, Tooltip } from '@ui';
 import { type JSX, Show } from 'solid-js';
 
 /** The explanation belongs to the chip; Restore is a separate focus target. */
@@ -26,7 +26,7 @@ export function RecordArchivedStatus(props: {
         fallback={
           <Tooltip.Root>
             <Tooltip.Trigger
-              class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
+              class={badgeTriggerClasses({ variant: 'outline', size: 'xs' })}
               aria-label="Archived — details"
             >
               Archived
@@ -41,15 +41,15 @@ export function RecordArchivedStatus(props: {
       >
         <Popover placement="bottom-start" gutter={6} modal={false}>
           <Popover.Trigger
-            as={Button}
-            variant="ghost"
-            size="sm"
-            class="touch:min-h-11"
+            class={badgeTriggerClasses({
+              variant: 'outline',
+              size: 'xs',
+              class:
+                "touch:min-h-6 touch:min-w-11 touch:my-2.5 touch:before:absolute touch:before:-inset-x-px touch:before:top-1/2 touch:before:h-11 touch:before:-translate-y-1/2 touch:before:content-['']",
+            })}
             aria-label="Archived — details"
           >
-            <Badge variant="outline" size="sm">
-              Archived
-            </Badge>
+            Archived
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Content class="menu-surface z-modal w-72 max-w-[calc(100vw-2rem)] p-3">
