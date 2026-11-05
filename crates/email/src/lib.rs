@@ -8,4 +8,4 @@ pub(crate) mod telemetry_capture;
 
 #[doc(hidden)]
 #[allow(dead_code)]
-const CI_SEL2_NONCE: &str = "aeac9de725a3478b904e0a56d0cc585f";
+const CI_SEL2_NONCE: &str = "ba0ab173597b49b7bed55da25a20112a";
