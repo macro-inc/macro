@@ -279,7 +279,8 @@ export type AppEvents = {
       | 'macro-github'
       | 'macro-scheduling'
       | 'macro-whatsapp';
-    action: 'opened' | 'played' | 'dismissed';
+    /** `support_clicked`: the dialog's "Talk to us" link under the video. */
+    action: 'opened' | 'played' | 'dismissed' | 'support_clicked';
   };
 
   // --- Calls ---------------------------------------------------------------

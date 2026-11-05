@@ -1,3 +1,5 @@
+import { registerExternalUrlInterceptor } from '@core/util/url';
+import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import {
   cleanup,
   fireEvent,
@@ -12,11 +14,31 @@ import { TutorialPill, TutorialRow } from './views/BlockTutorial';
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
 
+// The app's channel list and split router, as the dialog's support link reads them.
+const channelList = vi.hoisted(() => ({
+  channels: [] as Pick<ApiChannelWithLatest, 'id' | 'name' | 'owner_id'>[],
+}));
+vi.mock('@core/context/channels', () => ({
+  useChannelsContext: () => ({
+    channels: () => channelList.channels,
+    isLoading: () => false,
+  }),
+}));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|ada@acme.test',
+}));
+const openWithSplit = vi.hoisted(() => vi.fn());
+vi.mock('@components/app/split-layout/layout', () => ({
+  useSplitLayout: () => ({ openWithSplit }),
+}));
+
 const play = vi.fn(() => Promise.resolve());
 const pause = vi.fn();
 
 beforeEach(() => {
   localStorage.clear();
+  channelList.channels = [];
+  openWithSplit.mockClear();
   track.mockClear();
   play.mockClear();
   pause.mockClear();
@@ -36,6 +58,9 @@ afterEach(cleanup);
 const row = () =>
   screen.queryByRole('button', { name: /Learn how to use Macro Mail/ });
 const video = () => document.querySelector('video');
+// jsdom keeps Kobalte's dialog mounted for its exit; it is closed once marked so.
+const dialogClosed = () =>
+  screen.queryByRole('dialog')?.hasAttribute('data-closed') ?? true;
 
 describe('block tutorial row', () => {
   it('opens the video paused and plays it only from the play button', async () => {
@@ -77,12 +102,7 @@ describe('block tutorial row', () => {
     fireEvent.keyDown(video()!, { key: 'Escape' });
 
     expect(pause).toHaveBeenCalled();
-    // jsdom keeps Kobalte's dialog mounted for its exit; it is closed once marked so.
-    await waitFor(() =>
-      expect(
-        screen.queryByRole('dialog')?.hasAttribute('data-closed') ?? true
-      ).toBe(true)
-    );
+    await waitFor(() => expect(dialogClosed()).toBe(true));
   });
 
   it('stays dismissed on this device', () => {
@@ -93,6 +113,70 @@ describe('block tutorial row', () => {
 
     render(() => <TutorialRow tutorial="mail" />);
     expect(row()).toBeNull();
+  });
+});
+
+describe('support link under the video', () => {
+  it("opens the person's support channel and closes the dialog", async () => {
+    channelList.channels = [
+      { id: 'general', name: 'general', owner_id: 'macro|ada@acme.test' },
+      {
+        id: 'someone-elses-support',
+        name: 'Macro Support x grace',
+        owner_id: 'macro|grace@acme.test',
+      },
+      {
+        id: 'support-ada',
+        name: 'Macro Support x ada',
+        owner_id: 'macro|ada@acme.test',
+      },
+    ];
+    render(() => <TutorialPill tutorial="crm" />);
+    fireEvent.click(
+      screen.getByRole('button', { name: /Learn how to use Macro CRM/ })
+    );
+    await screen.findByRole('dialog');
+    screen.getByText('Have questions about Macro CRM?');
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Talk to us in your support channel.',
+      })
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      { type: 'channel', id: 'support-ada' },
+      { activate: true }
+    );
+    expect(track).toHaveBeenCalledWith('tutorial_video', {
+      tutorial: 'macro-crm',
+      action: 'support_clicked',
+    });
+    await waitFor(() => expect(dialogClosed()).toBe(true));
+  });
+
+  it('emails support when the person has no support channel', async () => {
+    const opened: string[] = [];
+    const unregister = registerExternalUrlInterceptor((url) => {
+      opened.push(url);
+      return true;
+    });
+    try {
+      render(() => <TutorialRow tutorial="mail" />);
+      fireEvent.click(row()!);
+      await screen.findByRole('dialog');
+      screen.getByText('Have questions about Macro Mail?');
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Email our support team.' })
+      );
+
+      expect(opened).toEqual(['mailto:support@macro.com']);
+      expect(openWithSplit).not.toHaveBeenCalled();
+      await waitFor(() => expect(dialogClosed()).toBe(true));
+    } finally {
+      unregister();
+    }
   });
 });
 

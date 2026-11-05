@@ -31,6 +31,8 @@ export type Tutorial = {
   id: TutorialId;
   /** "Learn how to use Macro Mail" */
   readonly title: string;
+  /** The block's name in a sentence, like "Macro Mail". */
+  readonly block: string;
   /** One line under the title in a row. */
   readonly snippet: string;
   /** The video's length, like "1:27". */
@@ -50,6 +52,9 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get title() {
       return t('tutorials.mailTitle');
     },
+    get block() {
+      return t('tutorials.mailBlock');
+    },
     get snippet() {
       return t('tutorials.mailSnippet');
     },
@@ -63,6 +68,9 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     id: 'crm',
     get title() {
       return t('tutorials.crmTitle');
+    },
+    get block() {
+      return t('tutorials.crmBlock');
     },
     get snippet() {
       return t('tutorials.crmSnippet');
@@ -78,6 +86,9 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get title() {
       return t('tutorials.githubTitle');
     },
+    get block() {
+      return t('tutorials.githubBlock');
+    },
     get snippet() {
       return t('tutorials.githubSnippet');
     },
@@ -91,6 +102,9 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     id: 'docs',
     get title() {
       return t('tutorials.docsTitle');
+    },
+    get block() {
+      return t('tutorials.docsBlock');
     },
     get snippet() {
       return t('tutorials.docsSnippet');
@@ -106,6 +120,9 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get title() {
       return t('tutorials.tasksTitle');
     },
+    get block() {
+      return t('tutorials.tasksBlock');
+    },
     get snippet() {
       return t('tutorials.tasksSnippet');
     },
@@ -119,6 +136,9 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     id: 'chat',
     get title() {
       return t('tutorials.chatTitle');
+    },
+    get block() {
+      return t('tutorials.chatBlock');
     },
     get snippet() {
       return t('tutorials.chatSnippet');
@@ -134,6 +154,9 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get title() {
       return t('tutorials.callsTitle');
     },
+    get block() {
+      return t('tutorials.callsBlock');
+    },
     get snippet() {
       return t('tutorials.callsSnippet');
     },
@@ -147,6 +170,9 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     id: 'scheduling',
     get title() {
       return t('tutorials.schedulingTitle');
+    },
+    get block() {
+      return t('tutorials.schedulingBlock');
     },
     get snippet() {
       return t('tutorials.schedulingSnippet');
@@ -162,6 +188,9 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get title() {
       return t('tutorials.calendarTitle');
     },
+    get block() {
+      return t('tutorials.calendarBlock');
+    },
     get snippet() {
       return t('tutorials.calendarSnippet');
     },
@@ -175,6 +204,9 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     id: 'home',
     get title() {
       return t('tutorials.homeTitle');
+    },
+    get block() {
+      return t('tutorials.homeBlock');
     },
     get snippet() {
       return t('tutorials.homeSnippet');
@@ -190,6 +222,9 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get title() {
       return t('tutorials.whatsappTitle');
     },
+    get block() {
+      return t('tutorials.whatsappBlock');
+    },
     get snippet() {
       return t('tutorials.whatsappSnippet');
     },
@@ -204,6 +239,9 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     get title() {
       return t('tutorials.agentsTitle');
     },
+    get block() {
+      return t('tutorials.agentsBlock');
+    },
     get snippet() {
       return t('tutorials.agentsSnippet');
     },
@@ -217,6 +255,9 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     id: 'drive',
     get title() {
       return t('tutorials.driveTitle');
+    },
+    get block() {
+      return t('tutorials.driveBlock');
     },
     get snippet() {
       return t('tutorials.driveSnippet');

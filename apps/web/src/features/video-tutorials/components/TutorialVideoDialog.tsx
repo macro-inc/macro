@@ -2,7 +2,7 @@ import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, type JSX, Show } from 'solid-js';
 
 /**
  * The big play button: a solid black disc with a filled white triangle. The
@@ -47,6 +47,11 @@ export function TutorialVideoDialog(props: {
   posterUrl: string;
   /** Called once per opening, when playback really starts. */
   onPlayStarted: () => void;
+  /**
+   * The strip under the video. It gets the dialog's close, so a link in it
+   * can leave the video paused and closed behind it.
+   */
+  footer?: (close: () => void) => JSX.Element;
 }) {
   const [started, setStarted] = createSignal(false);
   let video: HTMLVideoElement | undefined;
@@ -82,7 +87,7 @@ export function TutorialVideoDialog(props: {
       onOpenChange={changeOpen}
       position="center"
       animate
-      class="w-[80vw] max-w-[80vw] mobile:w-full mobile:max-w-full"
+      class="w-[80vw] max-w-[80vw] mobile:w-auto mobile:max-w-none"
     >
       <div class="flex h-[80vh] w-full flex-col mobile:h-auto">
         <div class="flex h-12 shrink-0 items-center gap-2 pr-2 pl-4 mobile:hidden">
@@ -124,6 +129,9 @@ export function TutorialVideoDialog(props: {
             </button>
           </Show>
         </div>
+        <Show when={props.footer}>
+          {(footer) => footer()(() => changeOpen(false))}
+        </Show>
       </div>
     </Dialog>
   );

@@ -5,12 +5,35 @@ import {
   TutorialRowView,
   TutorialSidebarItemView,
 } from '../components/TutorialEntries';
+import { TutorialSupportLip } from '../components/TutorialSupportLip';
 import { TutorialVideoDialog } from '../components/TutorialVideoDialog';
 import type { TutorialId } from '../core/tutorial-id';
+import { createSupportLink } from '../primitives/create-support-link';
 import {
   createTutorialState,
   type TutorialState,
 } from '../primitives/create-tutorial-state';
+
+/**
+ * "Have questions about Macro CRM? Talk to us in your support channel." under
+ * the video. Mounts with the open dialog, so the channel list is read only
+ * then. Following it closes the dialog.
+ */
+function SupportLip(props: { block: string; onFollow: () => void }) {
+  const support = createSupportLink();
+  return (
+    <Show when={support.ready()}>
+      <TutorialSupportLip
+        block={props.block}
+        hasChannel={support.hasChannel()}
+        onSelect={() => {
+          props.onFollow();
+          support.open();
+        }}
+      />
+    </Show>
+  );
+}
 
 function Entry(props: {
   tutorial: Tutorial;
@@ -45,6 +68,15 @@ function Entry(props: {
         videoUrl={props.tutorial.videoUrl}
         posterUrl={props.tutorial.posterUrl}
         onPlayStarted={state.recordPlay}
+        footer={(close) => (
+          <SupportLip
+            block={props.tutorial.block}
+            onFollow={() => {
+              state.recordSupportClick();
+              close();
+            }}
+          />
+        )}
       />
     </Show>
   );

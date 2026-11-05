@@ -26,8 +26,9 @@ export function createTutorialState(id: TutorialId) {
     },
   });
 
-  const track = (action: 'opened' | 'played' | 'dismissed') =>
-    analytics.track('tutorial_video', { tutorial: `macro-${id}`, action });
+  const track = (
+    action: 'opened' | 'played' | 'dismissed' | 'support_clicked'
+  ) => analytics.track('tutorial_video', { tutorial: `macro-${id}`, action });
 
   return {
     open,
@@ -42,6 +43,7 @@ export function createTutorialState(id: TutorialId) {
       setDismissed(true);
     },
     recordPlay: () => track('played'),
+    recordSupportClick: () => track('support_clicked'),
   };
 }
 
