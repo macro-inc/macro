@@ -5,6 +5,11 @@
 //! deploys to dev come through [`crate::workflows::deploy_on_push`] (which owns
 //! deployment ordering) and prod deploys through `release-production`. Generated
 //! into `deploy_sync_service.yml`.
+//!
+//! The job skips migrations, deployment and the wait when the live worker was
+//! built from the same inputs. It compares with the version Cloudflare is
+//! serving, not with the previous push, so runs that were cancelled in the
+//! queue can't make an undeployed change look deployed.
 
 use anyhow::Result;
 use gh_workflow::{
@@ -12,6 +17,9 @@ use gh_workflow::{
 };
 
 use crate::workflows::{runners, steps, vars};
+
+#[cfg(test)]
+mod test;
 
 const ENVIRONMENT: &str = "${{ inputs.environment || 'dev' }}";
 
@@ -78,6 +86,8 @@ fn deploy() -> Job {
         .add_step(setup_node())
         .add_step(install_deps())
         .add_step(check_secrets())
+        .add_step(compute_worker_key())
+        .add_step(read_worker_state())
         .add_step(apply_d1_migrations())
         .add_step(deploy_step())
         .add_step(wait_for_active_objects())
@@ -114,6 +124,27 @@ fn check_secrets() -> Step<Run> {
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }
 
+const WORKER_CHANGED: &str = "${{ steps.worker-state.outputs.unchanged != 'true' }}";
+
+/// A failure here leaves the key empty, which the next step treats as changed.
+fn compute_worker_key() -> Step<Run> {
+    Step::new("Compute worker input key")
+        .run("echo \"key=$(.github/scripts/sync-worker-key.sh)\" >> \"$GITHUB_OUTPUT\"")
+        .id("worker-key")
+        .continue_on_error(true)
+}
+
+fn read_worker_state() -> Step<Run> {
+    Step::new("Compare with the live worker")
+        .run("../../.github/scripts/sync-worker-state.sh")
+        .id("worker-state")
+        .working_directory(xtask_paths::repo_dir!("services/sync-service"))
+        .add_env(("ENVIRONMENT", ENVIRONMENT))
+        .add_env(("WORKER_KEY", "${{ steps.worker-key.outputs.key }}"))
+        .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
+        .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
+}
+
 /// Migrate first: new code against an already-migrated D1 is safe, the reverse
 /// is a live error.
 fn apply_d1_migrations() -> Step<Run> {
@@ -121,6 +152,7 @@ fn apply_d1_migrations() -> Step<Run> {
         .run(format!(
             "npx wrangler d1 migrations apply USER_PEER_MAPPING --env {ENVIRONMENT} --remote"
         ))
+        .if_condition(Expression::new(WORKER_CHANGED))
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
         .add_env(("CI", "true"))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
@@ -129,8 +161,12 @@ fn apply_d1_migrations() -> Step<Run> {
 
 fn deploy_step() -> Step<Run> {
     Step::new("Deploy with wrangler")
-        .run(format!("npx wrangler deploy --env {ENVIRONMENT}"))
+        .run(format!(
+            "npx wrangler deploy --env {ENVIRONMENT} --message \"inputs:$WORKER_KEY\""
+        ))
+        .if_condition(Expression::new(WORKER_CHANGED))
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
+        .add_env(("WORKER_KEY", "${{ steps.worker-key.outputs.key }}"))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }
@@ -138,6 +174,13 @@ fn deploy_step() -> Step<Run> {
 /// Active Durable Objects can defer code adoption for 300 seconds by default.
 /// Keep dependent clients behind that window without forcing sessions to reset
 /// early. Keep this delay aligned with any future `code_update_strategy` change.
+/// `sync-worker-state.sh` holds the 300 seconds; a skipped deployment waits only
+/// for what remains since the live version was deployed.
 fn wait_for_active_objects() -> Step<Run> {
-    Step::new("Wait for active Durable Objects to update").run("sleep 300")
+    Step::new("Wait for active Durable Objects to update")
+        .run("sleep \"$WAIT_SECONDS\"")
+        .add_env((
+            "WAIT_SECONDS",
+            "${{ steps.worker-state.outputs.wait_seconds }}",
+        ))
 }
