@@ -24,7 +24,7 @@ import uuid
 
 API_PREFIX = "/2018-06-01/runtime"
 RUNTIME_ADDRESS = ("127.0.0.1", 9001)
-SQS_ENDPOINT = os.environ.get("LAMBDA_SQS_ENDPOINT", "http://elasticmq:9324")
+SQS_ENDPOINT = os.environ.get("LAMBDA_SQS_ENDPOINT", "http://queue-gateway:9324")
 ACCOUNT_ID = "000000000000"
 REGION = "us-east-1"
 BATCH_SIZE = 10

@@ -246,6 +246,9 @@ fn write_state(instance: &Instance, state: &State) -> Result<()> {
     Ok(())
 }
 
+/// The queue backend every instance runs: workload and bin (services/queue_gateway).
+const QUEUE_GATEWAY: (&str, &str) = ("queue-gateway", "queue_gateway");
+
 /// Lambda handlers the instance runs behind lambda-runner: workload -> bin
 /// (`lambdaHandlers` in infra/platform/components.nix).
 const LAMBDA_HANDLERS: &[(&str, &str)] = &[
@@ -278,6 +281,10 @@ pub fn rust_workloads() -> BTreeMap<String, &'static str> {
             )
         })
         .chain(LAMBDA_HANDLERS.iter().map(|(w, b)| ((*w).to_owned(), *b)))
+        .chain(std::iter::once((
+            QUEUE_GATEWAY.0.to_owned(),
+            QUEUE_GATEWAY.1,
+        )))
         .collect()
 }
 
@@ -571,7 +578,10 @@ fn chart(args: &ChartArgs) -> Result<()> {
     );
     let selfhost = InstanceName::parse("selfhost")?;
     push_images(&stage, &selfhost, &state, None)?;
-    let expr = format!("(({}).chart {{ }})", instance_expr(&selfhost, &state, "{ }")?);
+    let expr = format!(
+        "(({}).chart {{ }})",
+        instance_expr(&selfhost, &state, "{ }")?
+    );
     let built = nix_build(&stage, "Building the chart (nix)", &expr)?
         .into_iter()
         .next()

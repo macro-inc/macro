@@ -15992,6 +15992,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "queue_gateway"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "http 1.4.0",
+ "kafka_util",
+ "macro_config",
+ "macro_entrypoint",
+ "macro_env",
+ "md-5 0.10.6",
+ "rdkafka",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -97,16 +97,16 @@ let
       proxy_request_buffering off;
       proxy_buffering off;
       map "$http_x_amz_target|$http_authorization|$arg_x_amz_credential" $aws_backend {
-        ~^AmazonSQS              elasticmq;
+        ~^AmazonSQS              queues;
         ~^DynamoDB_              extenddb;
         ~^TrentService           kms;
-        ~/sqs/aws4_request       elasticmq;
+        ~/sqs/aws4_request       queues;
         ~/dynamodb/aws4_request  extenddb;
         ~/kms/aws4_request       kms;
         default                  s3;
       }
       upstream s3 { server rustfs:9000; }
-      upstream elasticmq { server elasticmq:9324; }
+      upstream queues { server queue-gateway:9324; }
       upstream extenddb { server extenddb:18443; }
       upstream kms { server kms:8080; }
       server {
@@ -155,13 +155,12 @@ let
       };
     };
 
-  # Transitional: RustFS delivers bucket events to webhooks, not SQS ARNs.
-  # This forwards each S3-format event, unchanged, into the queue the upload
-  # finalizer reads. Removed when the finalizer consumes Kafka.
+  # RustFS delivers bucket events to webhooks, not SQS ARNs. This forwards each
+  # S3-format event, unchanged, into the queue the upload finalizer reads.
   s3EventsBridge = pkgs.writeText "s3-events.py" ''
-    import http.server, urllib.parse, urllib.request
+    import http.server, json, urllib.request
 
-    QUEUE = "http://elasticmq:9324/000000000000/document-upload-finalizer-queue"
+    QUEUE = "http://queue-gateway:9324/000000000000/document-upload-finalizer-queue"
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_HEAD(self):
@@ -170,10 +169,15 @@ let
 
         def do_POST(self):
             body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
-            form = urllib.parse.urlencode(
-                {"Action": "SendMessage", "MessageBody": body.decode()}
-            ).encode()
-            urllib.request.urlopen(urllib.request.Request(QUEUE, data=form)).read()
+            request = urllib.request.Request(
+                "http://queue-gateway:9324/",
+                data=json.dumps({"QueueUrl": QUEUE, "MessageBody": body.decode()}).encode(),
+                headers={
+                    "Content-Type": "application/x-amz-json-1.0",
+                    "X-Amz-Target": "AmazonSQS.SendMessage",
+                },
+            )
+            urllib.request.urlopen(request).read()
             self.send_response(200)
             self.end_headers()
 
@@ -482,25 +486,24 @@ in
     infra = true;
   };
 
-  elasticmq = {
+  # The SQS API, on Kafka, so an instance runs one messaging system. See
+  # services/queue_gateway.
+  queue-gateway = {
     image = image {
-      name = "elasticmq";
-      contents = [ pkgs.elasticmq-server-bin ];
-      entrypoint = sh ''
-        cat > /tmp/elasticmq.conf <<EOF
-        include classpath("application.conf")
-        node-address { protocol = http, host = localstack, port = 4566, context-path = "" }
-        rest-sqs { enabled = true, bind-port = 9324, bind-hostname = "0.0.0.0" }
-        messages-storage { enabled = true, uri = "jdbc:h2:/data/elasticmq" }
-        queues-storage { enabled = true, path = "/data/queues.conf" }
-        EOF
-        exec elasticmq-server -Dconfig.file=/tmp/elasticmq.conf
-      '';
+      name = "queue_gateway";
+      contents = [ macro.binaries.queue_gateway ];
+      entrypoint = [ "/bin/queue_gateway" ];
     };
+    sharedEnv = true;
+    env.PORT = "9324";
     user = 1000;
     ports = [ 9324 ];
-    volumes.data = "/data";
-    readiness.tcp = 9324;
+    # Consumers own in-flight messages; two replicas would split a queue's state.
+    singleton = true;
+    readiness = {
+      http = "/health";
+      port = 9324;
+    };
     infra = true;
   };
 
