@@ -1,7 +1,7 @@
 # @macro-inc/brain
 
 The brain of an agent teammate: a long-running TypeScript program on Deno,
-shipped as one `deno compile` binary, that listens to Macro as the agent,
+shipped as a versioned composition library and a thin supervisor, that listens to Macro as the agent,
 decides what is for it, and runs Claude turns in the agent's workspace repo.
 Design: [`docs/design/agent-brains.md`](../../docs/design/agent-brains.md).
 Reference implementation: `macro-inc/tod`.
@@ -9,12 +9,12 @@ Reference implementation: `macro-inc/tod`.
 ## Run it
 
 ```sh
-deno task compile                     # dist/brain
+# The image ships the brain CLI, Deno and an offline library cache.
 MACRO_API_KEY=mak_... MACRO_GATEWAY=https://dev-gateway.macro.com \
 BRAIN_WORKSPACE=/home/ada/workspace BRAIN_HEALTH_PORT=7801 \
 ANTHROPIC_BASE_URL=... ANTHROPIC_AUTH_TOKEN=... \
-  dist/brain run
-dist/brain health                     # what macrod polls, as JSON; exit 1 unless ok
+  brain run
+brain health                     # what macrod polls, as JSON; exit 1 unless ok
 ```
 
 Every variable is required; a missing one fails startup with its name. Claude
@@ -38,6 +38,7 @@ every turn ─▶ commit `turn <id>: <summary>` ─▶ pull --rebase ─▶ push
 
 | Module | Does |
 | --- | --- |
+| `style.ts` | Re-read every Markdown communication guide under `prompts/style/`, except README.md, for all tiers. |
 | `workspace.ts` | Persona files, `.gitignore` enforcement, the single-writer commit + push queue. |
 | `events.ts` | SSE on `{dss}/webhook/events/stream`, idle watchdog, doubling reconnect, catch-up since the drop. |
 | `jev.ts` | `config/jev.json` (Tod's format plus `wakeIf`), the decide call with fallbacks, `log/decisions.jsonl`. |
@@ -49,7 +50,10 @@ every turn ─▶ commit `turn <id>: <summary>` ─▶ pull --rebase ─▶ push
 | `memory.ts` | `memory/notes/<topic>.md` and `memory/self.json` (focus, commitments, last things said). |
 | `control.ts` | `127.0.0.1:$BRAIN_HEALTH_PORT`: `/health` for macrod, token-guarded routes for turns. |
 | `presence.ts` | Online (pinged connection-gateway websocket) and typing. |
-| `brain.ts`, `main.ts` | Wiring and the `brain` CLI. |
+| `mod.ts` | Stable public library API, documented for agents in `template/docs/brain-api.md`. |
+| `brain.ts`, `main.ts` | Default composition and the `brain` CLI. |
+| `supervisor.ts`, `host.ts` | Checked main-only activation, permissioned child, draining and last-known-good recovery. |
+| `runtime.ts`, `dry-run.ts` | Scoped live adapters and fake-event boot adapters. |
 
 Turns never get the Macro key. They call the `brain` binary (`post`, `reply`,
 `context`, `handoff`, `remember`, `recall`, `forget`, `focus`, `promise`,
@@ -64,28 +68,52 @@ per use and are never written to disk.
 The repo server (`crates/agent_git`) embeds `template/` to seed a new repo: `OPERATING.md`
 (charter, behaviour and voice, with `{{name}}`, `{{job_description}}`,
 `{{personality}}` and `{{creator}}` for the server to fill), `prompts/`,
-`config/{jev,events,budget}.json`, `memory/self.json`, `brain.lock` and
+`config/{jev,events,budget}.json`, `memory/self.json`, exact-version `brain.lock`, agent-owned `brain.ts`,
+`docs/brain-api.md` and
 the server's `template/gitignore`. `{{creator}}` is the creating admin's Macro
 user ID, so rule changes can be checked against message sender IDs.
 `history/`, `log/`, `cache/` (lanes, spend ledger, heartbeat
 state, Claude's config) and `work/` stay on the computer.
+
+The template is embedded recursively by `agent_git/build.rs`, without a file
+manifest. `prompts/style/README.md` indexes the communication craft library.
+Every respond, heartbeat and work turn receives all its Markdown guides in the
+system text after the charter, in stable path order. The initial 21 guides are
+about 2,500 words (roughly 4,000 tokens); loading all avoids a selector missing
+sensitive context such as frustration or discretion. The index is excluded.
+Guides are re-read from the main workspace each turn, so edits and new nested
+guides need no restart or loader change. Agents may improve their copies within
+the charter; only the creator changes the rules or persona.
 
 ## Develop
 
 ```sh
 deno task test      # no network: fetch, the runner and Routines/Tasks are injected
 deno task check
-deno task compile
 ```
 
 ## Computer image
 
-`nix build .#macro-brain` compiles the binary offline from a hash-pinned Deno
-cache, using nixpkgs' matching `denort`. Deno compilation is not byte
-reproducible, so the compiled output also has a fixed-output hash. Both `macro-box-incus` and
-`macro-box-docker` include it at `/opt/macro/brain` through their shared rootfs.
-See [`nix/macro-box/AGENTS.md`](../../nix/macro-box/AGENTS.md) for cache hash
-regeneration and the service contract.
+`nix build .#macro-brain` ships the thin runner, Deno, versioned library/SDK
+source and hash-pinned frozen dependencies. Both image formats include the CLI
+at `/opt/macro/brain`. No compilation or library downloads happen at runtime.
+See [`nix/macro-box/AGENTS.md`](../../nix/macro-box/AGENTS.md) for dependency hashes
+and the service contract.
+
+The workspace owns composition in `brain.ts` and `brain/*.ts`; imports resolve
+only to the exact installed version in `brain.lock`. Run `brain check` in a work
+branch before merging to main: typecheck, own tests, fake-event boot. The runner
+rechecks a committed main snapshot, drains existing turns, activates and requires
+continuous healthy probation (`BRAIN_HEALTH_MINUTES`, default five) before saving
+`cache/wiring/last-good`. Failure restores wiring and records memory plus a
+`cache/rewiring-notice` added to subsequent turn instructions. Remove that notice
+after reading it. Ordinary memory/prompt commits do not reload wiring.
+
+Direct Deno capabilities restrict read/write to workspace and `/tmp`, net to the
+gateway, Anthropic proxy and local control port, and run to git/claude. The child
+receives a cleared environment; scoped credentials enter the library bootstrap
+through stdin and stay in adapter closures. Permitted subprocesses retain their
+OS capabilities; persona identity and systemd hardening are the outer boundary.
 
 Enrollment creates the persona's OS user and writes
 `/etc/macro/personas/<os_user>.env`. The image's `brain@` template drop-in also
@@ -126,3 +154,7 @@ The Deno async-local context manager isolates concurrent turns. Macro HTTP and
 SDK calls inject W3C context; Claude receives `ANTHROPIC_CUSTOM_HEADERS` so its
 gateway calls join the turn. Tool subprocesses forward `BRAIN_TURN_TRACEPARENT`
 back to the authenticated control server. Shutdown flushes the exporter.
+
+Supervised children relay spans through stdout to the trusted supervisor, which
+exports to the configured collector. This preserves trace IDs without giving
+workspace code collector network permissions or collector credentials.

@@ -3,7 +3,14 @@
 // the spend caps. A turn waits for its slots, runs with the smaller of its
 // tier's per-run cap and what is left of the day, and records its cost.
 import type { Budget, SpendLedger } from './budget.ts';
-import type { RunHandle, Runner, Tier, Turn } from './runner.ts';
+import type {
+  Outcome,
+  RunHandle,
+  Runner,
+  Tier,
+  Turn,
+  TurnRequest,
+} from './runner.ts';
 
 /** A FIFO counting semaphore. */
 export class Semaphore {
@@ -39,6 +46,9 @@ const SPEAKING: Record<Tier, boolean> = {
 
 export type PoolDeps = {
   runner: Runner;
+  speaking?: Record<Tier, boolean>;
+  beforeTurn?(turn: TurnRequest): TurnRequest | Promise<TurnRequest>;
+  afterTurn?(turn: Turn, outcome: Outcome): void | Promise<void>;
   limits: Record<Tier, number>;
   budget(): Promise<Budget>;
   ledger: SpendLedger;
@@ -55,11 +65,12 @@ export class Pool {
   >();
 
   constructor(private readonly deps: PoolDeps) {
-    this.tiers = {
-      respond: new Semaphore(deps.limits.respond),
-      heartbeat: new Semaphore(deps.limits.heartbeat),
-      work: new Semaphore(deps.limits.work),
-    };
+    this.tiers = Object.fromEntries(
+      Object.entries(deps.limits).map(([tier, limit]) => [
+        tier,
+        new Semaphore(limit),
+      ])
+    );
   }
 
   /** Latest completed turn across all tiers, for the computer health report. */
@@ -83,11 +94,15 @@ export class Pool {
   }
 
   /** Wait for slots, then start the turn under the budget. Throws `BudgetExceeded` when the day is spent. */
-  async start(turn: Omit<Turn, 'maxBudgetUsd'>): Promise<RunHandle> {
-    const releaseTier = await this.tiers[turn.tier].acquire();
-    const releaseSpeaking = SPEAKING[turn.tier]
-      ? await this.speaking.acquire()
-      : () => {};
+  async start(request: TurnRequest): Promise<RunHandle> {
+    const turn = (await this.deps.beforeTurn?.(request)) ?? request;
+    const semaphore = this.tiers[turn.tier];
+    if (!semaphore) throw new Error(`unconfigured tier: ${turn.tier}`);
+    const releaseTier = await semaphore.acquire();
+    const releaseSpeaking =
+      (this.deps.speaking?.[turn.tier] ?? SPEAKING[turn.tier])
+        ? await this.speaking.acquire()
+        : () => {};
     const release = () => {
       releaseSpeaking();
       releaseTier();
@@ -95,6 +110,7 @@ export class Pool {
     };
 
     let handle: RunHandle;
+    let admitted: Turn;
     try {
       const budget = await this.deps.budget();
       const remaining =
@@ -104,8 +120,17 @@ export class Pool {
           `daily budget of $${budget.perDayUsd} is spent`
         );
       }
-      const maxBudgetUsd = Math.min(budget.perRunUsd[turn.tier], remaining);
-      handle = this.deps.runner.start({ ...turn, maxBudgetUsd });
+      const cap = budget.perRunUsd[turn.tier];
+      if (!cap || cap <= 0)
+        throw new Error(`missing budget for tier: ${turn.tier}`);
+      if (
+        turn.maxBudgetUsd !== undefined &&
+        (!Number.isFinite(turn.maxBudgetUsd) || turn.maxBudgetUsd <= 0)
+      )
+        throw new Error('turn budget must be positive and finite');
+      const maxBudgetUsd = Math.min(cap, remaining, turn.maxBudgetUsd ?? cap);
+      admitted = { ...turn, maxBudgetUsd };
+      handle = this.deps.runner.start(admitted);
     } catch (error) {
       release();
       throw error;
@@ -117,21 +142,34 @@ export class Pool {
     });
     const done = handle.done.then(
       async (outcome) => {
-        this.lastCompletedAt = new Date().toISOString();
-        release();
-        const spent = await this.deps.ledger.record(outcome.costUsd);
-        this.deps.log({
-          turn: turn.id,
-          tier: turn.tier,
-          status: outcome.status,
-          cost_usd: outcome.costUsd,
-          spent_today_usd: spent,
-        });
-        return outcome;
+        try {
+          const spent = await this.deps.ledger.record(outcome.costUsd);
+          this.deps.log({
+            turn: turn.id,
+            tier: turn.tier,
+            status: outcome.status,
+            cost_usd: outcome.costUsd,
+            spent_today_usd: spent,
+          });
+          await this.deps.afterTurn?.(admitted, outcome);
+          return outcome;
+        } finally {
+          this.lastCompletedAt = new Date().toISOString();
+          release();
+        }
       },
-      (error) => {
-        this.lastCompletedAt = new Date().toISOString();
-        release();
+      async (error) => {
+        try {
+          await this.deps.afterTurn?.(admitted, {
+            status: 'error',
+            result: '',
+            costUsd: 0,
+            sessionId: null,
+          });
+        } finally {
+          this.lastCompletedAt = new Date().toISOString();
+          release();
+        }
         throw error;
       }
     );

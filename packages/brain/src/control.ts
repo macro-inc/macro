@@ -6,6 +6,7 @@
 import { match, P } from 'ts-pattern';
 import type { Trigger } from './schedules.ts';
 import { withRemoteSpan } from './telemetry.ts';
+import type { PostResult } from './wiring.ts';
 
 export type Health = {
   status: 'ok' | 'degraded';
@@ -29,17 +30,13 @@ export type Conversation = { channel: string; root: string | null };
 /** What the control routes do; the brain implements it. */
 export interface Control {
   health(): Promise<Health>;
-  post(
-    turn: string | null,
-    channel: string,
-    text: string
-  ): Promise<{ id: string }>;
+  post(turn: string | null, channel: string, text: string): Promise<PostResult>;
   reply(
     turn: string | null,
     channel: string,
     root: string,
     text: string
-  ): Promise<{ id: string }>;
+  ): Promise<PostResult>;
   context(channel: string, root: string | null): Promise<unknown[]>;
   handoff(
     conversation: Conversation,

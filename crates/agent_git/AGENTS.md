@@ -18,7 +18,7 @@ enforces limits, and hands the request to `git http-backend` (CGI, both bodies
 streamed).
 
 Embed every file the brain reads before starting: its charter, prompts, JSON
-configuration, lock and initial self memory. `creator_id` records the creating
+configuration, exact library lock, composition (`brain.ts`), API reference and initial self memory. `creator_id` records the creating
 admin's Macro user ID; older saved seeds may omit it and use the team owner.
 Render relevance questions through JSON values, bounding persona substitutions
 to the brain's 500 UTF-16-unit question limit. Keep the canonical template in

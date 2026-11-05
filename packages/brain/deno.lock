@@ -8,7 +8,7 @@
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@^1.1.6": "1.1.6",
     "jsr:@std/testing@1": "1.0.21",
-    "npm:@anthropic-ai/claude-agent-sdk@0.3.318": "0.3.318_zod@4.1.12",
+    "npm:@anthropic-ai/claude-agent-sdk@0.3.318": "0.3.318_zod@4.6.7",
     "npm:@livekit/rtc-node@1.2.1": "1.2.1",
     "npm:@opentelemetry/api@1.9.1": "1.9.1",
     "npm:@opentelemetry/context-async-hooks@2.9.0": "2.9.0_@opentelemetry+api@1.9.1",
@@ -20,7 +20,7 @@
     "npm:ts-pattern@^5.8.0": "5.9.2",
     "npm:uuid@^11.1.1": "11.1.1",
     "npm:ws@8.18.3": "8.18.3",
-    "npm:zod@4.1.12": "4.1.12"
+    "npm:zod@4.6.7": "4.6.7"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -95,7 +95,7 @@
       "os": ["win32"],
       "cpu": ["x64"]
     },
-    "@anthropic-ai/claude-agent-sdk@0.3.318_zod@4.1.12": {
+    "@anthropic-ai/claude-agent-sdk@0.3.318_zod@4.6.7": {
       "integrity": "sha512-z5WHCUeW52SKQ3rnvI3zt8X5h2QQ5o3Cgg5xarO5Rimfe67f3pOJt2aOh00S8t/nRzqfs+8nCb9o1EoXe+yccA==",
       "dependencies": [
         "@anthropic-ai/sdk",
@@ -113,7 +113,7 @@
         "@anthropic-ai/claude-agent-sdk-win32-x64"
       ]
     },
-    "@anthropic-ai/sdk@1.4.0_zod@4.1.12": {
+    "@anthropic-ai/sdk@1.4.0_zod@4.6.7": {
       "integrity": "sha512-tyuibnhQL57kLOx5oomY4Ld7jOVOPNC5v3IiyRtR3l+Friv66tI4VbuZYF2NMel/T0WMuQMBFOMKDBUbUh8gPA==",
       "dependencies": [
         "json-schema-to-ts",
@@ -195,7 +195,7 @@
     "@livekit/typed-emitter@3.0.0": {
       "integrity": "sha512-9bl0k4MgBPZu3Qu3R3xy12rmbW17e3bE9yf4YY85gJIQ3ezLEj/uzpKHWBsLaDoL5Mozz8QCgggwIBudYQWeQg=="
     },
-    "@modelcontextprotocol/sdk@1.32.2_zod@4.1.12": {
+    "@modelcontextprotocol/sdk@1.32.2_zod@4.6.7": {
       "integrity": "sha512-SWsVtH/0vULSQStoZ6xxH2K09Li8fXYTMC64ZeogCdpZ3XSi1eCPOByV1OpuJxuI3OcmHhosDWYyii07tpPsLw==",
       "dependencies": [
         "@hono/node-server",
@@ -982,14 +982,14 @@
     "ws@8.18.3": {
       "integrity": "sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg=="
     },
-    "zod-to-json-schema@3.25.2_zod@4.1.12": {
+    "zod-to-json-schema@3.25.2_zod@4.6.7": {
       "integrity": "sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==",
       "dependencies": [
         "zod"
       ]
     },
-    "zod@4.1.12": {
-      "integrity": "sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ=="
+    "zod@4.6.7": {
+      "integrity": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="
     }
   },
   "workspace": {
@@ -1007,7 +1007,7 @@
       "npm:ts-pattern@^5.8.0",
       "npm:uuid@^11.1.1",
       "npm:ws@8.18.3",
-      "npm:zod@4.1.12"
+      "npm:zod@4.6.7"
     ]
   }
 }

@@ -6,6 +6,7 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import { type Budget, parseBudget } from './budget.ts';
 import { type EventsConfig, parseEventsConfig } from './events-config.ts';
 import { type JevConfig, parseJevConfig } from './jev.ts';
+import { readStyle } from './style.ts';
 import { traceHeaders, withSpan } from './telemetry.ts';
 
 /** Paths the repo must never commit: raw history, logs, caches, secrets. */
@@ -56,8 +57,14 @@ export class Workspace {
       }
     };
 
+    let notice = '';
+    try {
+      notice = await Deno.readTextFile(this.path('cache', 'rewiring-notice'));
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) throw error;
+    }
     return {
-      operating: await this.read('OPERATING.md'),
+      operating: `${await this.read('OPERATING.md')}\n${await readStyle(this.path('prompts/style'))}\n${notice}`,
       prompts: {
         respond: await this.read('prompts/respond.md'),
         heartbeat: await this.read('prompts/heartbeat.md'),
@@ -113,10 +120,13 @@ export type Git = (args: string[]) => Promise<GitResult>;
  * environment (only git receives the repo token; Deno refuses to
  * pass loader variables such as LD_LIBRARY_PATH to a permitted subprocess).
  */
-export function gitCli(cwd: string): Git {
+export function gitCli(
+  cwd: string,
+  readEnv: (name: string) => string | undefined = (name) => Deno.env.get(name)
+): Git {
   const env: Record<string, string> = { GIT_TERMINAL_PROMPT: '0' };
   for (const name of ['PATH', 'HOME', 'MACRO_REPO_URL', 'MACRO_REPO_TOKEN']) {
-    const value = Deno.env.get(name);
+    const value = readEnv(name);
     if (value) env[name] = value;
   }
   return async (args) => {

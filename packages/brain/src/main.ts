@@ -1,19 +1,12 @@
 // `brain`: the daemon (`brain run`), its health probe (`brain health`), and
 // the commands a turn uses to talk and remember through the running brain.
 import { match, P } from 'ts-pattern';
-import { Brain } from './brain.ts';
-import { loadConfig } from './config.ts';
 import { callBrain } from './control.ts';
-import { MacroHttp } from './macro.ts';
-import { openGatewaySocket } from './presence.ts';
-import { AgentSdkRunner } from './runner.ts';
-import { macroSdk, sdkRoutines, sdkTasks } from './sdk.ts';
-import { initTelemetry, shutdownTelemetry, tracedFetch } from './telemetry.ts';
-import { gitCli } from './workspace.ts';
 
 const USAGE = `usage: brain <command>
   run                                      run the brain (env: MACRO_API_KEY, MACRO_GATEWAY, BRAIN_WORKSPACE,
                                            BRAIN_HEALTH_PORT, ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN)
+  check                                    typecheck, tests, fake-event boot of this workspace
   health                                   print the running brain's health; exit 1 unless ok
 inside a turn:
   post <channel> <text|->                  reply <channel> <root> <text|->
@@ -65,51 +58,8 @@ const print = (value: unknown) =>
   );
 
 async function run(): Promise<void> {
-  const config = loadConfig(env);
-  await initTelemetry(env);
-  // Loaded here so the talk commands a turn runs start fast.
-  const { query } = await import('@anthropic-ai/claude-agent-sdk');
-  const http = new MacroHttp(
-    config.hosts,
-    config.macroApiKey,
-    tracedFetch(fetch)
-  );
-  const macro = macroSdk(config.hosts, config.macroApiKey);
-  const baseEnv: Record<string, string> = {};
-  for (const name of ['PATH', 'HOME', 'LANG', 'TZ']) {
-    const value = env(name);
-    if (value) baseEnv[name] = value;
-  }
-
-  const brain = new Brain({
-    config,
-    http,
-    tasks: sdkTasks(macro),
-    routines: sdkRoutines(macro),
-    runner: new AgentSdkRunner({
-      query,
-      claudeExecutable: 'claude',
-      anthropicBaseUrl: config.anthropicBaseUrl,
-      anthropicAuthToken: config.anthropicAuthToken,
-      claudeConfigDir: `${config.workspace}/cache/claude`,
-      baseEnv,
-    }),
-    git: gitCli(config.workspace),
-    openSocket: openGatewaySocket,
-    exe: Deno.execPath(),
-    baseEnv,
-    log: (line) =>
-      console.error(JSON.stringify({ at: new Date().toISOString(), ...line })),
-  });
-
-  const stop = new AbortController();
-  for (const signal of ['SIGTERM', 'SIGINT'] as const)
-    Deno.addSignalListener(signal, () => stop.abort());
-  try {
-    await brain.run(stop.signal);
-  } finally {
-    await shutdownTelemetry();
-  }
+  const { supervise } = await import('./supervisor.ts');
+  await supervise();
 }
 
 async function health(): Promise<number> {
@@ -130,6 +80,10 @@ async function command(args: string[]): Promise<number> {
 
   await match(name ?? 'help')
     .with('run', run)
+    .with('check', async () => {
+      const { checkWorkspace } = await import('./supervisor.ts');
+      await checkWorkspace(Deno.cwd());
+    })
     .with('health', async () => {
       Deno.exitCode = await health();
     })
