@@ -11,6 +11,8 @@ import crmVideo from './assets/crm.mp4';
 import crmPoster from './assets/crm-poster.jpg';
 import docsVideo from './assets/docs.mp4';
 import docsPoster from './assets/docs-poster.jpg';
+import driveVideo from './assets/drive.mp4';
+import drivePoster from './assets/drive-poster.jpg';
 import githubVideo from './assets/github.mp4';
 import githubPoster from './assets/github-poster.jpg';
 import homeVideo from './assets/home.mp4';
@@ -210,5 +212,19 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     },
     videoUrl: agentsVideo,
     posterUrl: agentsPoster,
+  },
+  drive: {
+    id: 'drive',
+    get title() {
+      return t('tutorials.driveTitle');
+    },
+    get snippet() {
+      return t('tutorials.driveSnippet');
+    },
+    get length() {
+      return t('tutorials.driveLength');
+    },
+    videoUrl: driveVideo,
+    posterUrl: drivePoster,
   },
 };

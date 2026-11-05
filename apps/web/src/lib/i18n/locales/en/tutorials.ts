@@ -51,4 +51,8 @@ export default {
   agentsSnippet:
     'Agents in your channels, tasks for agents, macroD and unified memory',
   agentsLength: '1:06',
+  driveTitle: 'Learn how to use Macro Drive',
+  driveSnippet:
+    'Drag files into folders, open anything, @mention any file, ask your files',
+  driveLength: '1:01',
 };
