@@ -38,6 +38,16 @@ pub struct ResolvedEnv {
     pub generated_path: PathBuf,
 }
 
+/// Options controlling environment layers and local runtime wiring.
+pub struct ResolveOptions<'a> {
+    pub no_doppler: bool,
+    pub env_file: Option<&'a Path>,
+    pub static_frontend: bool,
+    pub tunnels: Tunnels<'a>,
+    pub wire_otel: bool,
+    pub computers: &'a Computers,
+}
+
 /// Resolve and materialize the environment for `mode`/`instance`.
 // The process-env layer reads the host environment directly (xtask is tooling,
 // not a service reading APP_SECRETS_JSON).
@@ -45,13 +55,17 @@ pub struct ResolvedEnv {
 pub fn resolve(
     mode: Mode,
     instance: &Instance,
-    no_doppler: bool,
-    env_file: Option<&Path>,
-    static_frontend: bool,
-    tunnels: Tunnels<'_>,
-    wire_otel: bool,
-    computers: &Computers,
+    options: ResolveOptions<'_>,
 ) -> Result<ResolvedEnv> {
+    let ResolveOptions {
+        no_doppler,
+        env_file,
+        static_frontend,
+        tunnels,
+        wire_otel,
+        computers,
+    } = options;
+
     // Base = Doppler (`lcl_personal`/`dev_personal`); it supplies the
     // integration/secret config services require. For local we then overlay the
     // typed `LocalEnv` ON TOP, so code is the AUTHORITATIVE source for local

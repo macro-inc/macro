@@ -691,12 +691,14 @@ fn prepare(
     let env = env_layer::resolve(
         mode,
         instance,
-        args.env.no_doppler,
-        args.env.env_file.as_deref(),
-        static_frontend,
-        tunnels,
-        args.traces.enabled(),
-        computers,
+        env_layer::ResolveOptions {
+            no_doppler: args.env.no_doppler,
+            env_file: args.env.env_file.as_deref(),
+            static_frontend,
+            tunnels,
+            wire_otel: args.traces.enabled(),
+            computers,
+        },
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
     sandbox_image::ensure(stage, &env.merged, args.build.no_build)?;

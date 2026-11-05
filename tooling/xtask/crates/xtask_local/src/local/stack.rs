@@ -368,14 +368,16 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
     let env = env_layer::resolve(
         mode,
         &instance,
-        args.env.no_doppler,
-        args.env.env_file.as_deref(),
-        state.frontend == "static",
-        Tunnels::default(),
-        // `update` doesn't know the original `--traces` choice; keep the
-        // running stack's wiring keyed on the port probe as before.
-        true,
-        &state.computers(mode, &instance),
+        env_layer::ResolveOptions {
+            no_doppler: args.env.no_doppler,
+            env_file: args.env.env_file.as_deref(),
+            static_frontend: state.frontend == "static",
+            tunnels: Tunnels::default(),
+            // `update` doesn't know the original `--traces` choice; keep the
+            // running stack's wiring keyed on the port probe as before.
+            wire_otel: true,
+            computers: &state.computers(mode, &instance),
+        },
     )?;
     let remounted = if let Some(source) = args.binaries_dir.as_deref() {
         let new = super::build::BinariesDir::classify(source)?;

@@ -53,12 +53,14 @@ fn local_compose_flavor(
     let resolved = env_layer::resolve(
         mode,
         instance,
-        true,
-        None,
-        static_frontend,
-        Tunnels::default(),
-        true,
-        computers,
+        env_layer::ResolveOptions {
+            no_doppler: true,
+            env_file: None,
+            static_frontend,
+            tunnels: Tunnels::default(),
+            wire_otel: true,
+            computers,
+        },
     )?;
     let gmail_forwarder = resolved
         .merged
@@ -288,13 +290,15 @@ fn local_env_flavor(
     let resolved = env_layer::resolve(
         mode,
         instance,
-        no_doppler,
-        env_file,
-        static_frontend,
-        Tunnels::default(),
-        true,
-        // run_local's default fleet, which needs no host state to resolve.
-        &Computers::new(mode, Fleet::Docker, instance),
+        env_layer::ResolveOptions {
+            no_doppler,
+            env_file,
+            static_frontend,
+            tunnels: Tunnels::default(),
+            wire_otel: true,
+            // run_local's default fleet, which needs no host state to resolve.
+            computers: &Computers::new(mode, Fleet::Docker, instance),
+        },
     )?;
     let env = &resolved.merged;
     let mut failures: Vec<String> = Vec::new();
