@@ -128,6 +128,41 @@ jobs:
             cache_request "$url" | zstd -d -T0 | tar -xf - -C target
             echo "stream_restore_s=$(( $(date +%s)-s )) rc=${PIPESTATUS[*]}"
             ;;
+          reshard)
+            cache_request "$url" | zstd -d -T0 | tar -xf - -C target
+            python3 - <<'SPLIT'
+        import os
+        items=[]
+        os.chdir('target')
+        items.append(('.rustc_info.json',os.path.getsize('.rustc_info.json')))
+        def tree(p):
+            n=0
+            for r,_,fs in os.walk(p):
+                for f in fs:
+                    try: n+=os.path.getsize(os.path.join(r,f))
+                    except OSError: pass
+            return n
+        for d in ('debug/incremental','debug/build','debug/.fingerprint'):
+            for e in os.listdir(d):
+                items.append((f'{d}/{e}',tree(f'{d}/{e}')))
+        for e in os.listdir('debug/deps'):
+            items.append((f'debug/deps/{e}',tree(f'debug/deps/{e}') if os.path.isdir(f'debug/deps/{e}') else os.path.getsize(f'debug/deps/{e}')))
+        items.sort(key=lambda x:-x[1])
+        bins=[[0,[]] for _ in range(8)]
+        for path,size in items:
+            b=min(bins,key=lambda x:x[0]); b[0]+=size; b[1].append(path)
+        for i,(n,paths) in enumerate(bins):
+            open(f'../shard{i}.list','w').write('\n'.join(paths)+'\n'); print('shard',i,round(n/1e9,1),'GB',len(paths))
+        SPLIT
+            u=$(date +%s)
+            for i in 0 1 2 3 4 5 6 7; do ( tar -C target -cf - -T "shard$i.list" | zstd -T2 -3 -q -o "$RUNNER_TEMP/shard$i.tar.zst"; cache_request --upload-file "$RUNNER_TEMP/shard$i.tar.zst" "$url.shard$i"; echo "shard$i bytes=$(stat -c %s "$RUNNER_TEMP/shard$i.tar.zst")"; rm -f "$RUNNER_TEMP/shard$i.tar.zst" ) & done; wait
+            rm -f shard*.list
+            echo "reshard_upload_s=$(( $(date +%s)-u ))"
+            ;;
+          restore-shards)
+            for i in 0 1 2 3 4 5 6 7; do ( cache_request "$url.shard$i" | zstd -d -T2 | tar -xf - -C target; echo "shard$i rc=${PIPESTATUS[*]} s=$(( $(date +%s)-s ))" ) & done; wait
+            echo "shards_restore_s=$(( $(date +%s)-s ))"
+            ;;
           restore-gh)
             GH_TOKEN="${{ github.token }}" LD_LIBRARY_PATH= gh run download "$(cat .ci-gen-exp-seed-run)" -R "${{ github.repository }}" -n gen-snapshot -D "$RUNNER_TEMP/snap" || exit 0
             d=$(date +%s); echo "gh_download_s=$((d-s))"
