@@ -69,7 +69,7 @@ use teams::inbound::toolset::team_toolset;
 pub use build_context::build_anthropic_tool_context_test;
 pub use build_context::{
     build_anthropic_tool_context, build_cognition_tool_context, build_image_generator_from_env,
-    build_tool_service_context_from_env,
+    build_tool_service_context_from_env, build_web_search_provider_from_env,
 };
 pub use deferred::{DeferredToolSet, deferred_tools};
 pub use import_jobs::{IMPORT_JOBS_HANDOVER_TIMEOUT, ImportJobs};
@@ -203,6 +203,9 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolDatabasesSqlToolContext>(databases_sql_toolset())
         .add_subtoolset::<ToolSkillToolContext>(skill_toolset())
         .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
+        .add_subtoolset::<web_search::inbound::toolset::WebToolContext>(
+            web_search::inbound::toolset::web_toolset(),
+        )
 }
 
 /// The host a toolset is assembled for.
