@@ -16,6 +16,7 @@ companies remain open.
 | Standalone manual contact UI, HTTP, CreateContact tool | Change | Name required; email and company optional. `POST /crm/contacts` adds a contact without a company. Personal email and mismatched domains are accepted. |
 | Pipeline contact form | Keep | Name, email and an explicitly selected company are required. A domain match offers a suggestion; accepting it is a separate action. |
 | Duplicate company domain | Keep | Team-scoped case-insensitive conflict. Company names are labels and may repeat. |
+| Editing existing contacts | Change | Email and company remain optional single values. Setters preserve the contact ID, owning team, discussions, references, interaction dates and archive flag; explicit changes protect the row from source cleanup. Current-address email activity and independent sync tuple inference remain unchanged. |
 | Duplicate contact email | Keep for this stage | Unique within the company, and within the team for contacts without a company; duplicates return conflict. Contacts without an email never conflict. No silent merge or cross-team lookup. |
 | CSV company import | Keep | Domain remains its matching key; name-only import needs a durable identifier contract. |
 | CSV contact import | Keep for this stage | Existing contacts are found by email; missing contacts use domain inference. Personal-address creation through import remains follow-on work. |

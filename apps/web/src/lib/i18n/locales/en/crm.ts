@@ -1,4 +1,27 @@
 export default {
+  email: 'Email',
+  editContactEmail: 'Edit contact email',
+  addEmail: 'Add email',
+  removeEmail: 'Remove email',
+  contactEmailPlaceholder: 'person@example.com',
+  saveContact: 'Save',
+  savingContact: 'Saving…',
+  cancel: 'Cancel',
+  company: 'Company',
+  loadingCompanies: 'Loading companies…',
+  retryContact: 'Retry',
+  addCompany: 'Add company',
+  editContactCompany: 'Change contact company',
+  noCompany: 'No company',
+  goToCompany: 'Go to company',
+  searchCompanies: 'Search companies…',
+  contactEditFailed: 'Could not save this change. Try again.',
+  contactEditConflict:
+    'This change conflicts with an existing record or an archived company.',
+  contactEditUnavailable:
+    'This contact or company is no longer available to edit.',
+  contactEditInvalid: 'Check the email address, then try again.',
+
   stageRequirements: 'Stage requirements',
   stageRequirementsDescription:
     'Choose fields that must be filled before a deal enters a stage.',

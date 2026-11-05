@@ -193,11 +193,33 @@ forward instead. Touch devices keep the standalone record pages; a Customers
 record URL redirects there unless it opens a linked item inside Customers.
 Each record opened from the details appends a breadcrumb and a history entry: a
 contact from a company's Team tab gives `Companies > <company> > <contact>`, and
-a person's Company link gives `People > <contact> > <company>`. Opening a record
+a person's **Go to company** action gives `People > <contact> > <company>`. Opening a record
 already in the trail (such as the contact's own company from `Companies >
 <company> > <contact>`) returns to it instead of adding a duplicate. Back and
 Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 <record>`. The CRM sidebar stays visible throughout.
+Contact email and company are editable property pills in both the header and
+**Record details**. **Add email** opens an empty email editor; click an existing
+email to replace it, or choose **Remove email** to clear it. Save commits the
+change; Cancel or Escape discards the draft. Invalid email input stays open.
+The company pill opens the Tasks entity picker: choose a company to replace the
+single relation, or **No company** to leave the same contact standalone. On touch,
+select a company then **Done**; Cancel keeps the original relation. The separate
+**Go to company** action opens the saved company without editing, and Shift-click
+opens a separate split on desktop. It disappears when the relation is cleared.
+Pending controls prevent duplicate saves; rejected edits retain the draft and
+show an error for retry. A duplicate address within the target company (or the
+standalone team's contacts) is rejected rather than merged. Companies in another
+team and new links to archived companies are rejected by the server.
+
+Edits preserve the contact ID, team, discussions, references, interaction dates
+and archive flag. A visible child beneath an archived company must be restored
+through its company before moving or unlinking. Manually edited contacts survive
+mailbox-source cleanup. Email activity uses the current address; replacing or
+clearing it changes that activity filter. The existing sync inference may create
+a separate contact for a former company/email pair; it never moves the edited
+contact back. No extra email identities are stored.
+
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
 On phones and tablets, the current section appears as a labeled header island

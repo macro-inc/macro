@@ -11,6 +11,10 @@ import {
   useSetEmailSyncMutation,
 } from '../../queries/companies';
 import {
+  useSetContactCompanyMutation,
+  useSetContactEmailMutation,
+} from '../../queries/contact-edit';
+import {
   useContactQuery,
   useSetContactHiddenMutation,
   useSetContactNameMutation,
@@ -23,10 +27,13 @@ export async function invalidateCachedCrmContacts() {}
 export const prepareCrmVisibilityWrite = () => ({
   isCurrent: () => true,
   async commit() {},
+  async invalidate() {},
 });
+export const prepareCrmContactEdit = prepareCrmVisibilityWrite;
 export const client = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 });
+export const [selectedContact, selectContact] = createSignal('contact-1');
 export const [role, setRole] = createSignal('admin');
 export const [writes, setWrites] = createSignal(0);
 export const [message, setMessage] = createSignal('');
@@ -36,7 +43,7 @@ let hold = false;
 const params = new URLSearchParams(location.search);
 let company: CrmCompanyResponse = {
   id: 'company-1',
-  name: 'Example company',
+  name: params.has('shortCompany') ? 'I' : 'Example company',
   teamId: 'team-1',
   hidden: params.has('companyArchived'),
   emailSync: !params.has('companyArchived'),
@@ -55,9 +62,9 @@ let company: CrmCompanyResponse = {
 let contacts: CrmContactResponse[] = ['Example person', 'Second person'].map(
   (name, index) => ({
     id: `contact-${index + 1}`,
-    companyId: company.id,
+    companyId: params.has('empty') ? null : company.id,
     name,
-    email: `person${index + 1}@example.com`,
+    email: params.has('empty') ? null : `person${index + 1}@example.com`,
     hidden:
       params.has('legacyParent') && index === 0
         ? false
@@ -82,13 +89,47 @@ async function save() {
   return true;
 }
 export const storageServiceClient = {
-  async getCompany() {
+  async getCompany({ companyId }) {
+    const selected =
+      companyId === 'company-2'
+        ? { ...company, id: companyId, name: 'Second company' }
+        : company;
     return ok({
-      ...company,
-      contacts: contacts.map((contact) => ({ ...contact })),
+      ...selected,
+      contacts: contacts
+        .filter((contact) => contact.companyId === companyId)
+        .map((contact) => ({ ...contact })),
     });
   },
   async getContact({ contactId }) {
+    return ok({ ...contacts.find((contact) => contact.id === contactId)! });
+  },
+  async setContactEmail({ contactId, email }) {
+    if (!(await save()))
+      return err([{ code: 'CONFLICT', message: 'Save rejected' }]);
+    contacts = contacts.map((contact) =>
+      contact.id === contactId
+        ? {
+            ...contact,
+            email: email?.trim().toLowerCase() ?? null,
+            updatedAt: new Date().toISOString(),
+          }
+        : contact
+    );
+    return ok({ ...contacts.find((contact) => contact.id === contactId)! });
+  },
+  async setContactCompany({ contactId, companyId }) {
+    if (!(await save()))
+      return err([{ code: 'FORBIDDEN', message: 'Save rejected' }]);
+    contacts = contacts.map((contact) =>
+      contact.id === contactId
+        ? {
+            ...contact,
+            companyId: companyId ?? null,
+            updatedAt: new Date().toISOString(),
+          }
+        : contact
+    );
     return ok({ ...contacts.find((contact) => contact.id === contactId)! });
   },
   async setContactHidden({ contactId, hidden }) {
@@ -126,6 +167,8 @@ export const storageServiceClient = {
   },
 } satisfies Pick<
   typeof Storage,
+  | 'setContactEmail'
+  | 'setContactCompany'
   | 'getCompany'
   | 'getContact'
   | 'setCompanyHidden'
@@ -147,10 +190,12 @@ export const useCrmContext = () => ({
   hideContact: () => useSetContactHiddenMutation(deps),
   renameCompany: () => useSetCompanyNameMutation(deps),
   renameContact: () => useSetContactNameMutation(deps),
+  editContactEmail: () => useSetContactEmailMutation(deps),
+  editContactCompany: () => useSetContactCompanyMutation(deps),
   setEmailSync: () => useSetEmailSyncMutation(deps),
   createNavigation: () => ({
-    openWithSplit() {
-      location.search = '?kind=company&companyArchived';
+    openWithSplit(target: { id: string }) {
+      location.search = `?kind=company&companyArchived&opened=${target.id}`;
     },
   }),
   copyRecordLink: async () => true,
@@ -174,6 +219,7 @@ Object.assign(window, {
       release?.();
     },
     setRole,
+    selectContact,
     writes,
     snapshot: () => ({ company, contacts }),
   },
@@ -188,6 +234,7 @@ declare global {
       holdNext(): void;
       release(): void;
       setRole(value: string): void;
+      selectContact(value: string): void;
       writes(): number;
       snapshot(): {
         company: CrmCompanyResponse;

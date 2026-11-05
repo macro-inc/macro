@@ -74,6 +74,17 @@ A person under an archived company routes to that company before restoration.
 Both information panels start with Record details and References; company-only
 Properties, Lists and Email sharing follow, with no duplicate visibility toggle.
 
+Contact headers and Record details share `ContactEmailField` and
+`ContactCompanyField`. Their Tasks-style pills edit the existing optional email
+and singleton company; the separate Go to button navigates without selecting.
+Keep these property controls at a 24px visible face with 12px type/icons;
+reserve separate 44px touch targets with transparent expansion and margins.
+Desktop uses the property popover and entity picker; touch uses the shared dialog
+and picker sheet. Drafts remain visible on rejection, pending saves cannot be
+repeated, and record identity keys retire drafts when the record changes.
+Only committed responses update contact details, both company lists, address
+lookups and normalized contact fields, with session and stale-response fences.
+
 People, Companies and company Team use an exclusive Visible/Archived filter.
 `people-visibility` keeps the workspace choice local to the account/team/role/view,
 preserves search and other display choices, and sanitizes shared/persisted contact
