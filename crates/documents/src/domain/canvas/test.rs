@@ -396,3 +396,50 @@ async fn invalid_direct_revision_never_reads_storage_or_calls_worker() {
             .is_err()
     );
 }
+
+#[tokio::test]
+async fn the_artifacts_rollout_reaches_the_worker_only_when_set() {
+    for (service_setting, expected) in [(None, false), (Some(false), false), (Some(true), true)] {
+        let mut worker = MockEditingWorkerService::new();
+        worker
+            .expect_canvas()
+            .times(1)
+            .returning(move |_, _, _, artifacts| {
+                assert_eq!(artifacts, expected);
+                Box::pin(async {
+                    Ok(CanvasResult {
+                        failure: None,
+                        response: CanvasResponse {
+                            render: None,
+                            canvas: Some("scene".into()),
+                            operations_applied: 0,
+                            summary: "Read".into(),
+                            clarification: None,
+                        },
+                        usage: vec![],
+                    })
+                })
+            });
+        let mut service = CanvasService::new(
+            Arc::new(documents("canvas")),
+            Arc::new(worker),
+            SECRET.into(),
+            Arc::new(Admission(Err(AiAdmissionError::Unavailable))),
+            Arc::new(Recorder::default()),
+        );
+        if let Some(artifacts) = service_setting {
+            service = service.with_artifacts(artifacts);
+        }
+
+        service
+            .read(
+                receipt(AccessLevel::View),
+                &user(),
+                "macro|ai@macro.com",
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+    }
+}
