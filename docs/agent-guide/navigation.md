@@ -449,7 +449,9 @@ saved wide-layout preference. Widening restores that preference, including in
 Home and Chat: navigation returns unless explicitly hidden at desktop width.
 Shrinking again starts with the overlay closed. Chat is the exception while no
 conversation is selected: its navigation stays docked with no **Hide
-navigation** control, and narrow Chat opens the overlay on its own (see
+navigation** control. Views whose sidebar is their list (Chat, Notifications)
+skip the overlay when narrow: the list fills the split until something opens,
+which then fills it with **Back** in place of the hamburger (see
 [Chat navigation rail](channels.md#chat-navigation-rail)).
 Settings navigation always stays docked at desktop width with no **Hide
 navigation** control; only its narrow overlay opens and closes.
