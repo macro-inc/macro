@@ -374,7 +374,6 @@ it('omits pipelines and lists when those features are disabled', () => {
     'Sales Email',
     'Sales Notes',
     'Sales Calls',
-    'Sales Databases',
   ]);
 });
 
@@ -386,7 +385,6 @@ it('opens each CRM activity feed instead of the company list', () => {
     ['Sales Email', 'email'],
     ['Sales Notes', 'notes'],
     ['Sales Calls', 'calls'],
-    ['Sales Databases', 'databases'],
   ]) {
     fireEvent.click(tabs.getByRole('button', { name: label }));
     expect(activeTab()).toBe(id);

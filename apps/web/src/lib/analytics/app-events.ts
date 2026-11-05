@@ -379,7 +379,7 @@ export type AppEvents = {
    */
   crm_pipeline_entries_edited: {
     pipelineId: string;
-    recordType?: 'company' | 'contact';
+    recordType?: 'company' | 'contact' | 'generic';
     /** The pipeline editor or the record page's pipeline cards. */
     surface: 'pipeline' | 'record';
     insertedRows: number;

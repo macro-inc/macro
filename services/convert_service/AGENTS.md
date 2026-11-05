@@ -48,6 +48,11 @@ synchronously via HTTP or asynchronously via SQS.
 - The convert queue's visibility timeout (`infra/stacks/convert-service`)
   must stay above `conversion_timeout`; failed messages go to the DLQ after
   their second receive.
+- DOCX conversions report `Completed`/`Failed` to the job update Lambda
+  (`WEB_SOCKET_RESPONSE_LAMBDA`) only when the message's `notify_job` is set
+  (`job_update` in `src/process/convert.rs`). The Lambda fails on job ids it
+  doesn't track, and async invocation retries each failure twice, so a
+  producer that mints its own `job_id` must send `notify_job: false`.
 
 ## Related
 

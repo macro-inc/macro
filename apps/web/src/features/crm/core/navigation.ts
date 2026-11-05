@@ -42,16 +42,9 @@ export const CRM_ACTIVITY_TABS = [
       return t('crm.salesCalls');
     },
   },
-  {
-    id: 'databases',
-    get label() {
-      return t('crm.salesDatabases');
-    },
-  },
 ] as const;
 
 export type CrmActivityTab = (typeof CRM_ACTIVITY_TABS)[number]['id'];
-export type CrmSoupActivityTab = Exclude<CrmActivityTab, 'databases'>;
 
 export function isCrmActivityTab(value: string): value is CrmActivityTab {
   return CRM_ACTIVITY_TABS.some((tab) => tab.id === value);

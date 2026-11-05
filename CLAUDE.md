@@ -80,6 +80,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
   per-fix confirmation.
 - Keep each feature's development, validation, and local preview on one branch/worktree.
 - Flag real risks; once the user decides, act on it.
+- When the user gives improvement advice that applies beyond the current task, update the agent guidance it belongs in, in the same change (see **Keeping guidance current**).
 - Disagree when they're wrong. No flattery.
 - Answer simple questions directly.
 - For UI work, ask how it should behave on mobile unless that's obvious.
