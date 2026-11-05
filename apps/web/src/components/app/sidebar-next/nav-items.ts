@@ -52,6 +52,18 @@ export type SidebarNextMenuItem = Omit<
   'iconActive' | 'hotkeyToken'
 >;
 
+export const HOME_NAV_ITEM = {
+  id: 'home',
+  get label() {
+    return t('nav.home');
+  },
+  href: LIST_VIEW_PATHS.home,
+  icon: HouseIcon,
+  iconActive: HouseFillIcon,
+  hotkey: 'h',
+  hotkeyToken: TOKENS.sidebar.goTo.home,
+} satisfies SidebarNextNavItem;
+
 /**
  * SidebarRail's nav buttons, in default render order.
  *
@@ -63,17 +75,7 @@ export type SidebarNextMenuItem = Omit<
  * reaches Drive. These tokens only label the tooltips.
  */
 export const SIDEBAR_NEXT_NAV_ITEMS = [
-  {
-    id: 'home',
-    get label() {
-      return t('nav.home');
-    },
-    href: LIST_VIEW_PATHS.home,
-    icon: HouseIcon,
-    iconActive: HouseFillIcon,
-    hotkey: 'h',
-    hotkeyToken: TOKENS.sidebar.goTo.home,
-  },
+  HOME_NAV_ITEM,
   {
     id: 'notifications',
     get label() {
@@ -283,7 +285,7 @@ export const orderNavItems = (
 
 /**
  * Available items in customize-menu order — includes both shown and hidden.
- * Home is always first.
+ * Home is always first, whether shown or hidden.
  */
 export const customizableNavItems = (
   gates: NavItemGates
@@ -295,9 +297,7 @@ export const customizableNavItems = (
 
 /** Hidden rail items, available for quick open in the More menu. */
 export const moreMenuItems = (gates: NavItemGates): SidebarNextMenuItem[] =>
-  customizableNavItems(gates).filter(
-    (item) => item.id !== 'home' && gates.prefs.hidden.has(item.id)
-  );
+  customizableNavItems(gates).filter((item) => gates.prefs.hidden.has(item.id));
 
 /**
  * The nav buttons currently on the outer rail.
@@ -309,5 +309,12 @@ export const moreMenuItems = (gates: NavItemGates): SidebarNextMenuItem[] =>
  */
 export const visibleNavItems = (gates: NavItemGates): SidebarNextNavItem[] =>
   customizableNavItems(gates).filter(
-    (item) => item.id === 'home' || !gates.prefs.hidden.has(item.id)
+    (item) => !gates.prefs.hidden.has(item.id)
   );
+
+/**
+ * The view the app lands on: the first button on the rail, which is Home
+ * unless the user hid it. With every button hidden, Home is still the default.
+ */
+export const defaultNavItem = (gates: NavItemGates): SidebarNextNavItem =>
+  visibleNavItems(gates)[0] ?? HOME_NAV_ITEM;

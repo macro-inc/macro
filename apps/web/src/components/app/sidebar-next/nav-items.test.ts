@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   customizableNavItems,
+  defaultNavItem,
   moreMenuItems,
   type NavItemGates,
   orderNavItems,
@@ -90,15 +91,18 @@ describe('sidebar visibility preferences', () => {
     expect(items.some((item) => item.id === 'reviews')).toBe(false);
   });
 
-  it('never hides home from the rail', () => {
-    const items = visibleNavItems(
-      defaultGates({
-        prefs: defaultPrefs({ hidden: new Set(['home', 'tasks']) }),
-      })
-    );
+  it('moves a hidden Home from the rail to the more menu', () => {
+    const gates = defaultGates({
+      prefs: defaultPrefs({ hidden: new Set(['home', 'tasks']) }),
+    });
 
-    expect(items.some((item) => item.id === 'home')).toBe(true);
-    expect(items.some((item) => item.id === 'tasks')).toBe(false);
+    expect(visibleNavItems(gates).some((item) => item.id === 'home')).toBe(
+      false
+    );
+    expect(moreMenuItems(gates).map((item) => item.id)).toEqual([
+      'home',
+      'tasks',
+    ]);
   });
 
   it('lists shown and hidden items in the customize menu', () => {
@@ -195,5 +199,41 @@ describe('orderNavItems', () => {
       'mail',
       'documents',
     ]);
+  });
+});
+
+describe('defaultNavItem', () => {
+  it('lands on Home while it is on the rail', () => {
+    expect(defaultNavItem(defaultGates()).id).toBe('home');
+  });
+
+  it('lands on the first rail item when Home is hidden', () => {
+    const gates = defaultGates({
+      prefs: defaultPrefs({
+        hidden: new Set(['home', 'tasks']),
+        order: ['tasks', 'mail', 'documents'],
+      }),
+    });
+
+    expect(defaultNavItem(gates).id).toBe('mail');
+  });
+
+  it('skips a first item whose feature is off', () => {
+    const gates = defaultGates({
+      showNotifications: false,
+      prefs: defaultPrefs({ hidden: new Set(['home']) }),
+    });
+
+    expect(defaultNavItem(gates).id).toBe('documents');
+  });
+
+  it('falls back to Home when every item is hidden', () => {
+    const gates = defaultGates({
+      prefs: defaultPrefs({
+        hidden: new Set(SIDEBAR_NEXT_NAV_ITEMS.map((item) => item.id)),
+      }),
+    });
+
+    expect(defaultNavItem(gates).id).toBe('home');
   });
 });

@@ -121,13 +121,13 @@ export const ListNav = (props: ListNavProps) => {
       // The trigger defaults to `w-full h-7`, which clips the round button.
       triggerClass="size-10"
       additionalActions={
-        <Show when={props.item.id !== 'home'}>
+        <>
           <MenuSeparator />
           <MenuItem
             text={t('nav.hideFromSidebar')}
             onClick={() => hideSidebarItem(props.item.id)}
           />
-        </Show>
+        </>
       }
     >
       <Button

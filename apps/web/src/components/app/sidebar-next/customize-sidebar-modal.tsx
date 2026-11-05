@@ -161,7 +161,6 @@ function CustomizeNavRow(props: {
 
       <Checkbox
         checked={props.checked}
-        disabled={isHome()}
         onChange={(checked) => setSidebarItemVisible(props.item.id, checked)}
         class="min-w-0 flex-1 cursor-default"
       >
@@ -237,9 +236,7 @@ export function CustomizeSidebarModal(props: {
               {(item, index) => (
                 <CustomizeNavRow
                   item={item}
-                  checked={
-                    item.id === 'home' || !props.gates.prefs.hidden.has(item.id)
-                  }
+                  checked={!props.gates.prefs.hidden.has(item.id)}
                   index={index()}
                   count={items().length}
                   onMove={(direction) => moveByDirection(item.id, direction)}

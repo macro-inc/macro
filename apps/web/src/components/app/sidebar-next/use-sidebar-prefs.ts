@@ -1,5 +1,5 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { createSignal, onMount } from 'solid-js';
+import { createSignal } from 'solid-js';
 
 const STORAGE_KEY = 'macro:sidebar:prefs';
 const LEGACY_PINNED_KEY = 'macro:sidebar:pinned-items';
@@ -13,7 +13,7 @@ export const DEFAULT_HIDDEN_IDS = [
 ] as const;
 
 export type SidebarPrefs = {
-  /** Item ids hidden from the outer rail. Home is never included. */
+  /** Item ids hidden from the outer rail. */
   hidden: Set<string>;
   /** Custom rail order. Missing ids fall back to the default catalog order. */
   order: string[];
@@ -32,12 +32,13 @@ function defaultPrefs(): SidebarPrefs {
   };
 }
 
-function loadPrefs(): SidebarPrefs {
+/** The saved preferences, read straight from storage for decisions made outside the provider. */
+export function readSidebarPrefs(): SidebarPrefs {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as StoredPrefs;
-      const hidden = (parsed.hidden ?? []).filter((id) => id !== 'home');
+      const hidden = parsed.hidden ?? [];
       // Scheduling was previously More-only, before it became customizable.
       if (parsed.version === undefined && !hidden.includes('booking-links')) {
         hidden.push('booking-links');
@@ -75,7 +76,7 @@ function savePrefs(prefs: SidebarPrefs): void {
   try {
     const payload: StoredPrefs = {
       version: 2,
-      hidden: [...prefs.hidden].filter((id) => id !== 'home'),
+      hidden: [...prefs.hidden],
       order: prefs.order,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -86,8 +87,7 @@ function savePrefs(prefs: SidebarPrefs): void {
 
 export const [SidebarPrefsProvider, useSidebarPrefs] =
   createAssertedContextProvider('SidebarPrefs', () => {
-    const [prefs, setPrefs] = createSignal<SidebarPrefs>(defaultPrefs());
-    onMount(() => setPrefs(loadPrefs()));
+    const [prefs, setPrefs] = createSignal<SidebarPrefs>(readSidebarPrefs());
 
     function updatePrefs(
       mutator: (current: SidebarPrefs) => SidebarPrefs
@@ -99,9 +99,8 @@ export const [SidebarPrefsProvider, useSidebarPrefs] =
       });
     }
 
-    /** Hide an item from the outer rail (Home is ignored). */
+    /** Hide an item from the outer rail. */
     function hideSidebarItem(itemId: string): void {
-      if (itemId === 'home') return;
       updatePrefs((current) => {
         const hidden = new Set(current.hidden);
         hidden.add(itemId);
