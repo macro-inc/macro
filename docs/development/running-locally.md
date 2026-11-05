@@ -352,13 +352,17 @@ infra/local/generated/<instance>
 
 Instances on one machine do not share sessions, even though browsers ignore the
 port when they scope cookies. The HTTPS proxy stores each instance's cookies
-under its own prefix (`macro-<instance>--local-macro-access-token`) and shows a
-service only that instance's cookies, under their real names, so services and the
-app behave as usual on `localhost`, the machine hostname, a tailnet name, or a
-tunnel. It drops the prefix-less `local-macro-*` tokens that older stacks and
-direct service ports set, because no instance can claim them. That includes the
-SSO callback on the auth service's own port, so SSO against a local stack hands
-the app a session code, which it redeems through the proxy.
+under its own prefix, after any `__Host-` or `__Secure-`
+(`macro-<instance>--local-macro-access-token`,
+`__Host-macro-<instance>--macro_mcp_oauth`). It forwards a service only that
+instance's cookies, under their real names, so services and the app behave as
+usual on `localhost`, the machine hostname, a tailnet name, or a tunnel. Every
+other cookie stays in the browser: other instances' cookies, and unprefixed ones
+such as tokens from older stacks or a service's own host port, which no instance
+can claim, and cookies the app's JavaScript sets, which no service reads. That
+includes the SSO callback on the auth service's own port, so SSO against a local
+stack hands the app a session code, which it redeems through the proxy. `run_dev`
+keeps hosted-style cookies and the usual SSO return.
 localStorage and IndexedDB were already separate, since they key on the port.
 
 An existing stack keeps its data. `just stack update` recreates its proxy with
@@ -366,6 +370,10 @@ these rules; sign in once more afterwards. A client that calls the proxy with a
 hard-coded cookie name should send `Authorization: Bearer` instead or use the
 prefixed name. FusionAuth's own cookies stay unprefixed, as its port is published
 directly; they only hold its hosted-login session, not your Macro session.
+
+After changing the cookie rules (`cookie_rewrites` in `xtask_local`'s
+`proxy.rs`), also run them in a real Caddy, which CI doesn't have: from
+`tooling/xtask`, `nix shell nixpkgs#caddy -c cargo test -p xtask_local -- --ignored real_caddy`.
 
 ### Access a remote dev server through one URL
 

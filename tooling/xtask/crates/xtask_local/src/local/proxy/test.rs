@@ -275,14 +275,12 @@ fn stacks_never_see_each_others_cookies() {
     let set_cookie = "local-macro-access-token=tok; Path=/; Secure; HttpOnly; SameSite=None";
 
     // Same service response, different names in the shared jar.
-    let in_jar_a = apply(&a.set_cookie, set_cookie);
-    let in_jar_b = apply(&b.set_cookie, set_cookie);
     assert_eq!(
-        in_jar_a,
+        apply(&a.set_cookie, set_cookie),
         "macro-agent-a--local-macro-access-token=tok; Path=/; Secure; HttpOnly; SameSite=None"
     );
     assert_eq!(
-        in_jar_b,
+        apply(&b.set_cookie, set_cookie),
         "macro-agent-b--local-macro-access-token=tok; Path=/; Secure; HttpOnly; SameSite=None"
     );
 
@@ -291,50 +289,142 @@ fn stacks_never_see_each_others_cookies() {
                macro-agent-b--local-macro-access-token=from-b; login=true";
     assert_eq!(
         apply(&a.cookie, jar),
-        "local-macro-access-token=from-a; local-macro-refresh-token=refresh-a; login=true"
+        "local-macro-access-token=from-a; local-macro-refresh-token=refresh-a"
     );
-    assert_eq!(
-        apply(&b.cookie, jar),
-        "local-macro-access-token=from-b; login=true"
-    );
+    assert_eq!(apply(&b.cookie, jar), "local-macro-access-token=from-b");
 }
 
 #[test]
 fn a_stack_signed_out_of_its_own_session_sends_no_foreign_token() {
     let a = cookie_rewrites(&Instance::derive(Some("agent-a"), Some(41_000)).unwrap());
 
-    for (jar, reaches_service) in [
-        ("macro-agent-b--local-macro-access-token=from-b", ""),
-        (
-            "macro-agent-b--local-macro-access-token=from-b; login=true",
-            "login=true",
-        ),
-        // Tokens from before namespacing belong to no particular instance.
-        ("local-macro-access-token=old; login=true", "login=true"),
-        ("login=true; local-macro-refresh-token=old", "login=true"),
+    for jar in [
+        "macro-agent-b--local-macro-access-token=from-b",
+        "macro-agent-b--local-macro-access-token=from-b; login=true",
+        // Tokens from before namespacing, or set on a service's own port.
+        "local-macro-access-token=old; login=true",
+        "login=true; local-macro-refresh-token=old",
         // A longer instance name that starts with this one is still foreign.
-        ("macro-agent-a-2--local-macro-access-token=other", ""),
+        "macro-agent-a-2--local-macro-access-token=other",
+        "__Host-macro-agent-a-2--macro_mcp_oauth=other",
+    ] {
+        assert_eq!(apply(&a.cookie, jar), "", "jar: {jar}");
+    }
+}
+
+/// Browsers reject a `__Host-` or `__Secure-` cookie unless the name starts
+/// with that prefix, so the instance prefix goes after it.
+#[test]
+fn prefixed_cookie_names_keep_their_browser_prefix() {
+    let a = cookie_rewrites(&test_instance());
+
+    for (from_service, in_jar) in [
+        (
+            "__Host-macro_mcp_oauth=bind; Path=/; Secure",
+            "__Host-macro-agent-a--macro_mcp_oauth=bind; Path=/; Secure",
+        ),
+        (
+            "__Secure-session=s; Path=/; Secure",
+            "__Secure-macro-agent-a--session=s; Path=/; Secure",
+        ),
+        // Leading underscores without a browser prefix are ordinary names.
+        ("_ga=1; Path=/", "macro-agent-a--_ga=1; Path=/"),
+        ("__other=1", "macro-agent-a--__other=1"),
+    ] {
+        let jar = apply(&a.set_cookie, from_service);
+        assert_eq!(jar, in_jar);
+        let name_value = jar.split(';').next().unwrap();
+        assert_eq!(
+            apply(&a.cookie, name_value),
+            from_service.split(';').next().unwrap()
+        );
+    }
+}
+
+/// A bare copy of a name the stack sets, from an older stack or a service's
+/// own port, would otherwise reach the service next to the stack's own cookie,
+/// and cookie jars keep the last cookie of a name.
+#[test]
+fn a_bare_copy_never_shadows_the_stacks_own_cookie() {
+    let a = cookie_rewrites(&test_instance());
+
+    for (jar, reaches_service) in [
+        (
+            "__Host-macro-agent-a--macro_mcp_oauth=mine; __Host-macro_mcp_oauth=bare",
+            "__Host-macro_mcp_oauth=mine",
+        ),
+        (
+            "__Host-macro-preview=bare; __Host-macro-agent-a--macro-preview=mine",
+            "__Host-macro-preview=mine",
+        ),
+        (
+            "local-macro-access-token=bare; macro-agent-a--local-macro-access-token=mine",
+            "local-macro-access-token=mine",
+        ),
+        // JavaScript-set and analytics cookies aren't for services.
+        (
+            "_ga=1; macro-agent-a--local-macro-access-token=mine; __Secure-x=1",
+            "local-macro-access-token=mine",
+        ),
     ] {
         assert_eq!(apply(&a.cookie, jar), reaches_service, "jar: {jar}");
     }
 }
 
-/// Browsers reject a `__Host-` cookie unless the name starts with that prefix.
+/// The request rules work on cookie boundaries only.
 #[test]
-fn host_prefixed_cookies_keep_their_prefix_in_the_browser() {
-    let a = cookie_rewrites(&Instance::derive(Some("agent-a"), Some(41_000)).unwrap());
+fn request_rules_respect_cookie_boundaries() {
+    let a = cookie_rewrites(&test_instance());
 
+    for (jar, reaches_service) in [
+        // A value that looks like a prefix is left alone.
+        (
+            "macro-agent-a--x=__Host-macro-agent-a--y",
+            "x=__Host-macro-agent-a--y",
+        ),
+        (
+            "macro-agent-a--x=macro-agent-a--y; macro-agent-a--z=1",
+            "x=macro-agent-a--y; z=1",
+        ),
+        // A nameless cookie is dropped without taking its neighbour along.
+        ("local-macro-flag; macro-agent-a--login=true", "login=true"),
+        (
+            "macro-agent-a--a=1; nameless; macro-agent-a--b=2",
+            "a=1; b=2",
+        ),
+        // Cookies joined without a space, or with extra whitespace.
+        (
+            "macro-agent-a--a=1;macro-agent-b--b=2;macro-agent-a--c=3",
+            "a=1; c=3",
+        ),
+        ("  macro-agent-a--a=1 ;\tlocal-macro-x=2", "a=1 "),
+        ("", ""),
+    ] {
+        assert_eq!(apply(&a.cookie, jar), reaches_service, "jar: {jar:?}");
+    }
+}
+
+/// A service deletes a cookie by setting it empty and expired; the deletion
+/// has to name the prefixed cookie the browser holds.
+#[test]
+fn deleting_a_cookie_deletes_the_prefixed_copy() {
+    let a = cookie_rewrites(&test_instance());
     assert_eq!(
-        apply(&a.set_cookie, "__Host-macro_mcp_oauth=bind; Path=/; Secure"),
-        "__Host-macro-agent-a--macro_mcp_oauth=bind; Path=/; Secure"
+        apply(
+            &a.set_cookie,
+            "local-macro-access-token=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+        ),
+        "macro-agent-a--local-macro-access-token=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
     );
     assert_eq!(
         apply(
-            &a.cookie,
-            "__Host-macro-agent-a--macro_mcp_oauth=bind; __Host-macro-agent-b--macro_mcp_oauth=other"
+            &a.set_cookie,
+            "__Host-macro-preview=; Path=/; Secure; Max-Age=0"
         ),
-        "__Host-macro_mcp_oauth=bind"
+        "__Host-macro-agent-a--macro-preview=; Path=/; Secure; Max-Age=0"
     );
+    // A nameless Set-Cookie has nothing to prefix and is left as sent.
+    assert_eq!(apply(&a.set_cookie, "flag; Path=/"), "flag; Path=/");
 }
 
 /// Caddy treats an empty replacement as "set the header to the pattern", which
@@ -350,9 +440,131 @@ fn no_cookie_rewrite_has_an_empty_replacement() {
 #[test]
 fn only_local_stacks_namespace_cookies() {
     let local = caddyfile(&test_instance(), Mode::Local, true);
-    assert!(local.contains("request_header Cookie \"(^|; )macro-agent-a--\" \"$1\""));
-    assert!(local.contains("Set-Cookie \"^__Host-\" \"__Host-macro-agent-a--\""));
+    assert!(
+        local.contains("request_header Cookie \"; (__Host-|__Secure-)?macro-agent-a--\" \";!$1\"")
+    );
+    assert!(local.contains("Set-Cookie \"^macro-agent-a--__Host-\" \"__Host-macro-agent-a--\""));
 
     // `run_dev` shares cookies with the dev gateway's own services.
     assert!(!caddyfile(&test_instance(), Mode::Dev, true).contains("Set-Cookie"));
+}
+
+/// Runs the generated cookie block in a real Caddy in front of a stub service
+/// that sets cookies and echoes the `Cookie` header it receives. CI has no
+/// Caddy binary, so run it with
+/// `nix shell nixpkgs#caddy -c cargo test -p xtask_local -- --ignored real_caddy`.
+#[test]
+#[ignore = "needs a caddy binary on PATH"]
+fn real_caddy_applies_the_generated_cookie_rules() {
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::process::{Child, Command, Stdio};
+
+    struct Kill(Child);
+    impl Drop for Kill {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let free_port = || {
+        TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port()
+    };
+    let (service, proxy) = (free_port(), free_port());
+
+    let caddyfile = format!(
+        "{{\n    admin off\n    auto_https off\n}}\n\n\
+         http://127.0.0.1:{service} {{\n    header {{\n\
+         +Set-Cookie \"local-macro-access-token=tok; Path=/; Secure; HttpOnly\"\n\
+         +Set-Cookie \"__Host-macro_mcp_oauth=bind; Path=/; Secure\"\n\
+         +Set-Cookie \"__Secure-s=1; Path=/; Secure\"\n\
+         +Set-Cookie \"_ga=1; Path=/\"\n\
+         +Set-Cookie \"local-macro-refresh-token=; Path=/; Max-Age=0\"\n\
+         }}\n    respond \"{{http.request.header.Cookie}}\" 200\n}}\n\n\
+         http://127.0.0.1:{proxy} {{\n{block}    reverse_proxy 127.0.0.1:{service}\n}}\n",
+        block = cookie_block(&test_instance()),
+    );
+    let dir = std::env::temp_dir().join(format!("xtask-real-caddy-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let config = dir.join("Caddyfile");
+    std::fs::write(&config, caddyfile).unwrap();
+
+    let mut child = Command::new("caddy")
+        .args(["run", "--adapter", "caddyfile", "--config"])
+        .arg(&config)
+        .env("HOME", &dir)
+        .env("XDG_DATA_HOME", &dir)
+        .env("XDG_CONFIG_HOME", &dir)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("caddy on PATH");
+    let stderr = child.stderr.take().unwrap();
+    let _caddy = Kill(child);
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            if line.contains("serving initial configuration") {
+                let _ = ready_tx.send(());
+            }
+        }
+    });
+    ready_rx
+        .recv_timeout(std::time::Duration::from_secs(20))
+        .expect("caddy started");
+
+    let request = |cookie: &str| {
+        let mut stream = TcpStream::connect(("127.0.0.1", proxy)).unwrap();
+        write!(
+            stream,
+            "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nCookie: {cookie}\r\nConnection: close\r\n\r\n"
+        )
+        .unwrap();
+        let mut response = String::new();
+        stream.read_to_string(&mut response).unwrap();
+        let (head, body) = response.split_once("\r\n\r\n").unwrap();
+        let set_cookies: Vec<String> = head
+            .lines()
+            .filter_map(|line| line.strip_prefix("Set-Cookie: ").map(str::to_owned))
+            .collect();
+        (set_cookies, body.to_owned())
+    };
+
+    let (set_cookies, _) = request("x=1");
+    assert_eq!(
+        set_cookies,
+        [
+            "macro-agent-a--local-macro-access-token=tok; Path=/; Secure; HttpOnly",
+            "__Host-macro-agent-a--macro_mcp_oauth=bind; Path=/; Secure",
+            "__Secure-macro-agent-a--s=1; Path=/; Secure",
+            "macro-agent-a--_ga=1; Path=/",
+            "macro-agent-a--local-macro-refresh-token=; Path=/; Max-Age=0",
+        ]
+    );
+
+    for (jar, reaches_service) in [
+        (
+            "macro-agent-a--local-macro-access-token=mine; macro-agent-b--local-macro-access-token=theirs; login=true",
+            "local-macro-access-token=mine",
+        ),
+        (
+            "__Host-macro-agent-a--macro_mcp_oauth=mine; __Host-macro_mcp_oauth=bare",
+            "__Host-macro_mcp_oauth=mine",
+        ),
+        (
+            "local-macro-flag; macro-agent-a--x=__Host-macro-agent-a--y;macro-agent-a--z=1",
+            "x=__Host-macro-agent-a--y; z=1",
+        ),
+        (
+            "macro-agent-b--local-macro-access-token=theirs; local-macro-access-token=old",
+            "",
+        ),
+    ] {
+        assert_eq!(request(jar).1, reaches_service, "jar: {jar}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }
