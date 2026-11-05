@@ -4760,6 +4760,11 @@ type GraphqlEmailThreadFocus {
 	Which way `importance` is moving.
 	"""
 	importanceTrend: GraphqlEmailImportanceTrend!
+	"""
+	The day the thread's mail says it is due, as `YYYY-MM-DD`: a calendar date
+	the viewer's time zone never shifts. Absent when it names no open deadline.
+	"""
+	dueOn: String
 }
 
 """

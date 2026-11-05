@@ -44,7 +44,7 @@ gmail_token = ["dep:authentication_service_client", "dep:google_token", "dep:red
 http_client = ["dep:reqwest", "ports"]
 inbound = ["ports"]
 outbound = ["dep:calendar_events", "dep:sqlx", "ports"]
-ports = ["crm/ports", "dep:tokio", "frecency/ports"]
+ports = ["crm/ports", "dep:chrono-tz", "dep:tokio", "frecency/ports"]
 # The S3 adapter for staged draft attachments.
 s3 = ["dep:aws-sdk-s3", "ports"]
 
@@ -110,13 +110,14 @@ redis = { workspace = true, features = ["tokio-rustls-comp"], optional = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros"], optional = true }
+tokio = { workspace = true, features = ["macros", "time"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 models_email = { path = "../models_email" }
 email_db_client = { path = "../email_db_client" }
 crm = { path = "../crm", features = ["outbound"] }
