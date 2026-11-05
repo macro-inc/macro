@@ -134,7 +134,7 @@ use github::outbound::pull_request_diff::GithubPullRequestDiffClient;
 use github_pull_requests::domain::service::GithubPullRequestChangesetStore;
 use github_pull_requests::outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo;
 use github_pull_requests::outbound::s3_patch_store::S3GithubPullRequestPatchStore;
-use harness_bindings::{PgHarnessBindings, PgHarnessPresence};
+use harness_bindings::{PgHarnessBindings, PgHarnessPresence, RUNTIME_CONNECTION_RENEW_EVERY};
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
@@ -1212,9 +1212,10 @@ async fn run() -> anyhow::Result<()> {
     // the harness loads once it exists below.
     let (live_sessions, mut live_session_reports) = tokio::sync::mpsc::unbounded_channel();
     let runtimes = RuntimeRegistry::with_presence(
-        Arc::new(PgHarnessPresence::new(pool.clone())),
+        Arc::new(PgHarnessPresence::new(pool.clone(), replica)),
         live_sessions,
     );
+    let presence_runtimes = Arc::clone(&runtimes);
     // Read once, here, rather than at every session this deployment opens: a
     // URL that names no repository is a misconfiguration of the deployment,
     // and refusing it at startup is the difference between one loud failure
@@ -1809,6 +1810,18 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
+    // Keeps vouching for the runtime connections this process holds, including
+    // while it drains: they stay live until their sockets close. When this stops
+    // in a crash, the leases lapse and those harnesses read offline.
+    let presence_renewal = tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(RUNTIME_CONNECTION_RENEW_EVERY);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            ticker.tick().await;
+            presence_runtimes.renew_presence().await;
+        }
+    });
+
     // Viewers drop a typing indicator nobody refreshes after a few seconds;
     // every turn running here keeps its agent's indicator alive until it ends.
     let typing_harness = harness.clone();
@@ -2188,6 +2201,7 @@ async fn run() -> anyhow::Result<()> {
     trigger.abort();
     egress_http.abort();
     heartbeat.abort();
+    presence_renewal.abort();
     dm_recovery.abort();
     typing_heartbeat.abort();
     recovery.abort();
