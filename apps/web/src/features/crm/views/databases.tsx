@@ -76,6 +76,7 @@ function DatabasesList(props: { scope?: CrmRecordScope; title?: JSX.Element }) {
       fallback={
         <ActivitySection
           label={t('crm.salesDatabases')}
+          searchLabel={t('crm.searchSalesDatabases')}
           title={props.title}
           search={search()}
           onSearchChange={setSearch}

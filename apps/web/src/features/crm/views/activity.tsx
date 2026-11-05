@@ -18,6 +18,9 @@ const CONTENT = {
     get title() {
       return t('crm.salesEmail');
     },
+    get searchLabel() {
+      return t('crm.searchSalesEmail');
+    },
     graphic: EmptyStateEmailGraphic,
     action: 'New email',
     description:
@@ -27,6 +30,9 @@ const CONTENT = {
     get title() {
       return t('crm.salesNotes');
     },
+    get searchLabel() {
+      return t('crm.searchSalesNotes');
+    },
     graphic: EmptyStateDocGraphic,
     action: 'New note',
     description:
@@ -35,6 +41,9 @@ const CONTENT = {
   calls: {
     get title() {
       return t('crm.salesCalls');
+    },
+    get searchLabel() {
+      return t('crm.searchSalesCalls');
     },
     graphic: EmptyStateCallsGraphic,
     action: 'New call',
@@ -92,6 +101,7 @@ function ActivityList(props: {
   return (
     <ActivitySection
       label={content().title}
+      searchLabel={content().searchLabel}
       title={props.title}
       search={state.search}
       onSearchChange={(search) => setState('search', search)}
