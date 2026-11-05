@@ -695,3 +695,45 @@ fn ios_gate_status_and_comment_scenarios() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+fn build_job(yaml: &str) -> &str {
+    yaml.split("\n  build:\n")
+        .nth(1)
+        .and_then(|rest| rest.split("\n  ios-native-check:").next())
+        .expect("build job")
+}
+
+/// A failed preview must not read as a failed build or block a merge, and a
+/// `[no preview]` title or a fork skips it.
+#[test]
+fn preview_steps_follow_the_build_and_cannot_fail_it() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let build = build_job(&yaml);
+    let build_at = build.find("just build-dev").expect("bundle");
+    let deploy_at = build.find("scripts/preview/deploy.ts").expect("deploy");
+    assert!(
+        build_at < deploy_at,
+        "the deploy reuses the bundle: {build}"
+    );
+    assert!(
+        build.contains("--skip-build"),
+        "the deploy must not rebuild: {build}"
+    );
+    for name in [
+        "Configure AWS Credentials",
+        "Get or create preview ID",
+        "Validate bucket name",
+        "Deploy to S3",
+        "Comment on PR",
+    ] {
+        let step = build
+            .split(&format!("name: {name}"))
+            .nth(1)
+            .and_then(|rest| rest.split("\n    - ").next())
+            .unwrap_or_else(|| panic!("{name} step: {build}"));
+        assert!(step.contains("continue-on-error: true"), "{name}: {step}");
+        assert!(step.contains("[no preview]"), "{name}: {step}");
+        assert!(step.contains("web_artifact_changed"), "{name}: {step}");
+        assert!(step.contains("head.repo.full_name"), "{name}: {step}");
+    }
+}

@@ -2,8 +2,8 @@
 //! Generated into `web-app-check-main.yml`.
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, PullRequest, PullRequestType, Run, Step, Strategy, Use,
-    Workflow,
+    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,
+    Step, Strategy, Use, Workflow,
 };
 
 use crate::workflows::{
@@ -14,6 +14,7 @@ use crate::workflows::{
 
 mod android_native_check;
 mod ios_native_check;
+mod preview;
 #[cfg(test)]
 mod test;
 
@@ -75,6 +76,10 @@ fn path_check() -> Job {
         .add_output(
             "codegen_changed",
             "${{ steps.filter.outputs.codegen_changed }}",
+        )
+        .add_output(
+            "web_artifact_changed",
+            "${{ steps.filter.outputs.web_artifact_changed }}",
         )
         .add_output("i18n_changed", "${{ steps.filter.outputs.i18n_changed }}")
         .add_output(
@@ -248,9 +253,15 @@ fn cycles() -> Job {
 }
 
 fn build() -> Job {
-    gated_web_job("Build")
+    let (preview_credentials, preview_steps) = preview::steps();
+    let job = gated_web_job("Build")
         // Match preview/deploy capacity for Vite's chunk-rendering memory peak.
         .runs_on(mid_web_runner())
+        .permissions(
+            Permissions::default()
+                .contents(Level::Read)
+                .pull_requests(Level::Write),
+        )
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_build_check_cache_volume())
         .add_step(steps::setup_nix())
@@ -259,6 +270,10 @@ fn build() -> Job {
         .add_step(steps::start_sccache_server())
         .add_step(run_build())
         .add_step(steps::show_sccache_stats())
+        .add_step(preview_credentials);
+    preview_steps
+        .into_iter()
+        .fold(job, Job::add_step)
         .add_step(steps::teardown_nix())
 }
 
@@ -332,7 +347,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
         ))
 }
@@ -558,7 +573,7 @@ fn collaboration_cycles_import_check() -> Step<Run> {
 }
 
 /// Whole-program LTO costs the fig, psd and ai engines about 40 s each and only
-/// makes them faster to run, which a PR's tests don't need. Deploys
+/// makes them faster to run, which a PR's tests and preview don't need. Deploys
 /// keep it. The wasm package cache doesn't key on these, so only PR jobs, which
 /// all set them, may read it.
 const PR_WASM_ENV: [(&str, &str); 6] = [
@@ -578,10 +593,13 @@ fn with_pr_wasm_env(step: Step<Run>) -> Step<Run> {
 }
 
 fn run_build() -> Step<Run> {
-    with_pr_wasm_env(
-        Step::new("Build")
-            .run("just build-dev")
-            .working_directory(xtask_paths::repo_dir!("apps/web")),
+    preview::build_env().into_iter().fold(
+        with_pr_wasm_env(
+            Step::new("Build")
+                .run("just build-dev")
+                .working_directory(xtask_paths::repo_dir!("apps/web")),
+        ),
+        Step::add_env,
     )
 }
 
