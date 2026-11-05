@@ -34,10 +34,8 @@ fn a_detached_process_leaves_the_callers_tree_and_session() {
             .success()
     );
 
-    let script = format!(
-        "echo \"$PPID $(ps -o sid= -p $$) $$\" > {}; exec 0<&-",
-        fifo.display()
-    );
+    // /proc rather than ps, which minimal CI images don't ship.
+    let script = format!("cat /proc/$$/stat > {}; exec 0<&-", fifo.display());
     spawn_detached(
         Path::new("sh"),
         &["-c".to_owned(), script],
@@ -46,14 +44,16 @@ fn a_detached_process_leaves_the_callers_tree_and_session() {
     .unwrap();
 
     // Blocks until the detached process writes, so no polling.
-    let report = std::fs::read_to_string(&fifo).unwrap();
-    let fields: Vec<u32> = report
-        .split_whitespace()
-        .map(|field| field.parse().unwrap())
-        .collect();
-    let [parent, session, pid] = fields[..] else {
-        panic!("unexpected report: {report}");
+    let stat = std::fs::read_to_string(&fifo).unwrap();
+    // pid (comm) state ppid pgrp session ...; comm is `sh`, so no spaces in it.
+    let fields: Vec<&str> = stat.split_whitespace().collect();
+    let parse = |index: usize| -> u32 {
+        fields
+            .get(index)
+            .and_then(|field| field.parse().ok())
+            .unwrap_or_else(|| panic!("unexpected stat: {stat}"))
     };
+    let (pid, parent, session) = (parse(0), parse(3), parse(5));
     assert_ne!(parent, std::process::id());
     assert_eq!(session, pid, "it must lead its own session");
     std::fs::remove_dir_all(&dir).unwrap();
