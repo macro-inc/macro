@@ -478,7 +478,9 @@ If you started without the flag and suspect a stale image, press `q`. Then start
 
 Both headless and attached startup prepare the browser WebAssembly packages
 through `bun run dev:prepare`. A fresh worktree builds them before serving the app;
-later starts reuse the generated packages when they are current. See
+later starts reuse the generated packages when they are current. Instances
+started from one worktree share those packages and `apps/web/dist`, so their
+frontend builds take turns: a start that has to wait says so. See
 [Integration Secrets](#integration-secrets) for credential-free startup limitations.
 
 ```bash
