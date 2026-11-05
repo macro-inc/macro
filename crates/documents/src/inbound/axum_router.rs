@@ -23,6 +23,8 @@ mod tests;
 
 #[cfg(feature = "ai_tools")]
 pub mod ai_edit;
+#[cfg(feature = "ai_tools")]
+pub mod canvas;
 pub mod content_uploaded;
 pub mod copy_document;
 #[cfg(feature = "document_create")]
@@ -198,10 +200,31 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     /// EditDocument's AI-editing use case, with the host's admission and metering.
     #[cfg(feature = "ai_tools")]
     pub ai_editing: Arc<crate::domain::ai_editing::AiEditingService<DefaultEditingWorker>>,
+    /// The Canvas tools' worker, admission, metering and rollout, for the
+    /// SDK's canvas routes.
+    #[cfg(feature = "ai_tools")]
+    pub canvas: CanvasRouteDeps,
     /// JWT secret for signing document permission tokens.
     pub document_permission_jwt_secret: String,
     /// Whether a team bot with no acting user may own what it creates.
     pub non_user_owners: NonUserOwners,
+}
+
+/// What the canvas routes need beyond the document service: the editing
+/// worker, AI admission and metering, the artifacts rollout and image storage.
+#[cfg(feature = "ai_tools")]
+#[derive(Clone)]
+pub struct CanvasRouteDeps {
+    /// The live canvas editing peer.
+    pub worker: Arc<DefaultEditingWorker>,
+    /// AI admission for edits by instructions.
+    pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
+    /// Records model usage of edits by instructions.
+    pub recorder: Arc<dyn ai_usage::UsageRecorder>,
+    /// Whether a user has the Canvas artifacts rollout.
+    pub artifacts: crate::domain::canvas::CanvasArtifactsRollout,
+    /// Keeps rendered images as the caller's static files.
+    pub images: Arc<dyn crate::domain::canvas::CanvasImageStore>,
 }
 
 // Manual Clone impl so T, Svc, and Auth don't need to be Clone.
@@ -218,6 +241,8 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             creator: self.creator.clone(),
             #[cfg(feature = "ai_tools")]
             ai_editing: self.ai_editing.clone(),
+            #[cfg(feature = "ai_tools")]
+            canvas: self.canvas.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             non_user_owners: self.non_user_owners,
         }
@@ -320,10 +345,27 @@ where
         );
 
     #[cfg(feature = "ai_tools")]
-    let document_id_routes = document_id_routes.route(
-        "/{document_id}/ai-edit",
-        axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
-    );
+    let document_id_routes = document_id_routes
+        .route(
+            "/{document_id}/ai-edit",
+            axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/canvas/scene",
+            axum::routing::post(canvas::canvas_scene_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/canvas/render",
+            axum::routing::post(canvas::render_canvas_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/canvas/edits",
+            axum::routing::post(canvas::apply_canvas_edits_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/canvas/ai-edit",
+            axum::routing::post(canvas::edit_canvas_with_ai_handler::<T, Svc, Auth>),
+        );
 
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(
         state.clone(),

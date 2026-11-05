@@ -20,6 +20,7 @@ purge = [
 ]
 ai_tools = [
   "dep:ai_billing",
+  "dep:base64",
   "dep:ai_engine",
   "dep:ai_toolset",
   "dep:ai_usage",

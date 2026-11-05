@@ -44,6 +44,13 @@ word docs, Illustrator/Photoshop files).
   `edit_refused` is the worker's clarification, 502 `edit_failed` may have
   partly applied, and a client disconnect drops the worker call (never spawn
   it).
+- `src/inbound/axum_router/canvas.rs`: the SDK's canvas routes,
+  `POST /{id}/canvas/{scene,render,edits,ai-edit}`, over `CanvasService` with
+  `CanvasRouteDeps`. Calls run as `CanvasCaller` (the acting user, plus the bot
+  as token actor). `edits` answers 409 `revision_conflict` and 422
+  `edit_rejected` when nothing committed, 502 `edit_failed` when it may have;
+  `render` stores the PNG through the `CanvasImageStore` port (DSS adapter:
+  `outbound/canvas_images.rs`).
 
 ## Scope
 

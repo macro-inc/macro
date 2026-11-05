@@ -1435,16 +1435,33 @@ pub async fn run() -> anyhow::Result<()> {
         ),
     );
     let admission = macro_agent_tool_context.admission.clone();
-    // Document AI edits over HTTP share the channel agent's admission.
-    let document_ai_editing = Arc::new(documents_hex::domain::ai_editing::AiEditingService::new(
-        Arc::new(
-            documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
-                AiEditingWorkerUrl::new()?.to_string(),
-            ),
+    // Document and canvas AI edits over HTTP share the channel agent's admission.
+    let editing_worker = Arc::new(
+        documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+            AiEditingWorkerUrl::new()?.to_string(),
         ),
+    );
+    let editing_usage =
+        ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement);
+    let document_ai_editing = Arc::new(documents_hex::domain::ai_editing::AiEditingService::new(
+        editing_worker.clone(),
         admission.clone(),
-        ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
+        editing_usage.clone(),
     ));
+    let canvas_routes = documents_hex::inbound::axum_router::CanvasRouteDeps {
+        worker: editing_worker,
+        admission: admission.clone(),
+        recorder: editing_usage,
+        // Off when PostHog isn't configured, as for the agents' Canvas tools.
+        artifacts: ai_tools::canvas_artifacts_rollout_from_env()?
+            .unwrap_or_else(|| Arc::new(|_| Box::pin(async { false }))),
+        images: Arc::new(crate::outbound::canvas_images::StaticFileCanvasImages(
+            static_file_service_client::StaticFileServiceClient::new(
+                config.internal_api_key.to_string(),
+                StaticFileServiceUrl::new()?.to_string(),
+            ),
+        )),
+    };
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new_with_admission(
         message_service.clone(),
         conversation_access.clone(),
@@ -2390,6 +2407,7 @@ pub async fn run() -> anyhow::Result<()> {
             lexical_client: lexical_client.clone(),
             creator: document_creator,
             ai_editing: document_ai_editing,
+            canvas: canvas_routes,
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
             non_user_owners,
         },

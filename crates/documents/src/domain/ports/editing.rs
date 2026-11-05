@@ -83,7 +83,9 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         document_token: &DocumentPermissionToken,
         request: &crate::domain::canvas::CanvasRequest,
         artifacts: bool,
-    ) -> impl Future<Output = anyhow::Result<crate::domain::canvas::CanvasResult>> + Send;
+    ) -> impl Future<
+        Output = Result<crate::domain::canvas::CanvasResult, crate::domain::canvas::CanvasError>,
+    > + Send;
 
     /// Run a deterministic spreadsheet operation with a scoped document token.
     #[cfg(feature = "ai_tools")]
