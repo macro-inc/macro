@@ -18,6 +18,8 @@ outbound = [
   "dep:agent_git",
   "dep:agent_secrets",
   "dep:hosted_runtimes",
+  "dep:harnesses",
+  "dep:harness_id",
   "dep:reqwest",
   "dep:sqlx",
   "dep:teams",
@@ -32,6 +34,8 @@ chrono = { workspace = true, features = ["serde"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 feature_flags = { path = "../feature_flags" }
 hosted_runtimes = { path = "../hosted_runtimes", optional = true, default-features = false, features = ["ports"] }
+harnesses = { path = "../harnesses", optional = true, default-features = false, features = ["ports"] }
+harness_id = { path = "../harness_id", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response", optional = true }
@@ -49,6 +53,7 @@ uuid = { workspace = true, features = ["serde", "v7"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+harnesses = { path = "../harnesses", default-features = false, features = ["test-utils"] }
 axum = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }

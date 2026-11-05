@@ -110,6 +110,7 @@ impl TeamAgentRepository for FakeRepository {
                 status: agent.status,
                 status_reason: agent.status_reason.clone(),
                 setup: None,
+                last_turn_at: None,
                 created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
             }))
     }
@@ -349,6 +350,7 @@ impl Computers for FakeComputers {
     ) -> Result<ComputerStatus, TeamAgentError> {
         self.journal.record("computer.retry")?;
         Ok(ComputerStatus {
+            brain: None,
             status: ComputerStatusKind::SettingUp,
             setup: Some(SetupProgress {
                 step: SetupStep::Creating,
@@ -431,6 +433,7 @@ impl Default for Setup {
             }),
             computer_interval: BillingInterval::Month,
             computer_status: ComputerStatus {
+                brain: None,
                 status: ComputerStatusKind::SettingUp,
                 setup: Some(SetupProgress {
                     step: SetupStep::Paying,
@@ -520,6 +523,7 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
             status: TeamAgentStatus::Provisioning,
             status_reason: None,
             setup: None,
+            last_turn_at: None,
             created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
         }
     );
@@ -850,6 +854,7 @@ async fn quote_refuses_a_seat_and_computer_on_different_intervals() {
 async fn listing_shows_setup_progress_while_the_computer_comes_up() {
     let (service, _journal) = build(Setup {
         computer_status: ComputerStatus {
+            brain: None,
             status: ComputerStatusKind::SettingUp,
             setup: Some(SetupProgress {
                 step: SetupStep::Booting,
@@ -881,6 +886,7 @@ async fn listing_shows_setup_progress_while_the_computer_comes_up() {
 async fn a_ready_computer_makes_the_agent_running() {
     let (service, _journal) = build(Setup {
         computer_status: ComputerStatus {
+            brain: Some(healthy_brain()),
             status: ComputerStatusKind::Ready,
             setup: None,
         },
@@ -901,6 +907,7 @@ async fn a_ready_computer_makes_the_agent_running() {
 async fn a_running_agent_reflects_a_later_computer_failure() {
     let (mut service, _journal) = build(Setup {
         computer_status: ComputerStatus {
+            brain: Some(healthy_brain()),
             status: ComputerStatusKind::Ready,
             setup: Some(SetupProgress {
                 step: SetupStep::Ready,
@@ -919,6 +926,7 @@ async fn a_running_agent_reflects_a_later_computer_failure() {
         TeamAgentStatus::Running
     );
     service.computers.status = ComputerStatus {
+        brain: None,
         status: ComputerStatusKind::Failed,
         setup: None,
     };
@@ -932,6 +940,7 @@ async fn a_running_agent_reflects_a_later_computer_failure() {
 async fn listing_takes_a_failure_from_the_computer() {
     let (service, _journal) = build(Setup {
         computer_status: ComputerStatus {
+            brain: None,
             status: ComputerStatusKind::Failed,
             setup: None,
         },
@@ -1043,6 +1052,7 @@ fn slug_is_a_valid_os_user_name() {
 async fn retry_reuses_the_seed_computer_and_credentials_without_purchasing() {
     let (service, journal) = build(Setup {
         computer_status: ComputerStatus {
+            brain: None,
             status: ComputerStatusKind::Failed,
             // Failures must override stale setup progress.
             setup: Some(SetupProgress {
@@ -1082,6 +1092,7 @@ async fn retry_reuses_the_seed_computer_and_credentials_without_purchasing() {
 async fn retry_checks_team_ownership_and_leaves_a_running_agent_alone() {
     let (service, journal) = build(Setup {
         computer_status: ComputerStatus {
+            brain: Some(healthy_brain()),
             status: ComputerStatusKind::Ready,
             setup: None,
         },
@@ -1104,6 +1115,7 @@ async fn failed_computer_retry_preserves_the_agent_for_another_attempt() {
     let (service, journal) = build(Setup {
         fail_at: Some("computer.retry"),
         computer_status: ComputerStatus {
+            brain: None,
             status: ComputerStatusKind::Failed,
             setup: None,
         },
@@ -1154,6 +1166,7 @@ async fn retry_does_not_purchase_a_missing_computer() {
 async fn retry_rejects_released_computers_before_repo_recovery() {
     let (service, journal) = build(Setup {
         computer_status: ComputerStatus {
+            brain: None,
             status: ComputerStatusKind::Released,
             setup: None,
         },
@@ -1206,6 +1219,7 @@ async fn released_uncertain_purchase_keeps_its_reason_and_cannot_be_deleted() {
     let (service, journal) = build(Setup {
         fail_at: Some("computer.purchase.uncertain"),
         computer_status: ComputerStatus {
+            brain: None,
             status: ComputerStatusKind::Released,
             setup: None,
         },
@@ -1225,4 +1239,128 @@ async fn released_uncertain_purchase_keeps_its_reason_and_cannot_be_deleted() {
     ));
     assert_eq!(journal.steps(), before);
     assert_eq!(service.repository.agents.lock().unwrap().len(), 1);
+}
+
+fn healthy_brain() -> super::super::models::BrainHealth {
+    super::super::models::BrainHealth {
+        connected: true,
+        checked_at: Utc::now(),
+        healthy: true,
+        last_error: None,
+        last_turn_at: Some(Utc.timestamp_opt(1_700_000_000, 0).unwrap()),
+    }
+}
+
+#[tokio::test]
+async fn running_requires_a_ready_computer_and_live_healthy_persona() {
+    let healthy = healthy_brain();
+    let mut unhealthy = healthy.clone();
+    unhealthy.healthy = false;
+    unhealthy.last_error = Some("brain process exited".to_string());
+    let mut disconnected = healthy.clone();
+    disconnected.connected = false;
+    let mut stale = healthy.clone();
+    stale.checked_at = Utc::now() - chrono::Duration::minutes(3);
+    for (status, brain, expected, reason) in [
+        (
+            ComputerStatusKind::Ready,
+            Some(healthy.clone()),
+            TeamAgentStatus::Running,
+            None,
+        ),
+        (
+            ComputerStatusKind::Ready,
+            Some(unhealthy),
+            TeamAgentStatus::Failed,
+            Some("unhealthy: brain process exited"),
+        ),
+        (
+            ComputerStatusKind::Ready,
+            None,
+            TeamAgentStatus::Failed,
+            Some("unhealthy: brain health has not been reported"),
+        ),
+        (
+            ComputerStatusKind::Ready,
+            Some(disconnected),
+            TeamAgentStatus::Failed,
+            Some("unhealthy: the harness is disconnected"),
+        ),
+        (
+            ComputerStatusKind::Ready,
+            Some(stale),
+            TeamAgentStatus::Failed,
+            Some("unhealthy: the brain health report is stale"),
+        ),
+        (
+            ComputerStatusKind::Asleep,
+            Some(healthy.clone()),
+            TeamAgentStatus::Provisioning,
+            None,
+        ),
+        (
+            ComputerStatusKind::Stopped,
+            Some(healthy.clone()),
+            TeamAgentStatus::Provisioning,
+            None,
+        ),
+    ] {
+        let expected_turn = brain.as_ref().and_then(|brain| brain.last_turn_at);
+        let (service, _) = build(Setup {
+            computer_status: ComputerStatus {
+                status,
+                brain,
+                setup: None,
+            },
+            ..Setup::default()
+        });
+        service.create(receipt(TEAM_ID), request()).await.unwrap();
+        let me = service.me(&user(AGENT)).await.unwrap();
+        assert_eq!(me.status, expected);
+        assert_eq!(me.status_reason.as_deref(), reason);
+        assert_eq!(me.last_turn_at, expected_turn);
+        let listed = service.list(receipt(TEAM_ID)).await.unwrap();
+        assert_eq!(listed.agents[0], me);
+    }
+}
+
+#[tokio::test]
+async fn health_failure_diagnostics_are_updated_and_recovery_clears_them() {
+    let (mut service, _) = build(Setup {
+        computer_status: ComputerStatus {
+            status: ComputerStatusKind::Ready,
+            setup: None,
+            brain: None,
+        },
+        ..Setup::default()
+    });
+    service.create(receipt(TEAM_ID), request()).await.unwrap();
+    assert_eq!(
+        service.me(&user(AGENT)).await.unwrap().status,
+        TeamAgentStatus::Failed
+    );
+    let mut brain = healthy_brain();
+    brain.healthy = false;
+    brain.last_error = Some("workspace clone failed".to_string());
+    service.computers.status.brain = Some(brain);
+    let failed = service.me(&user(AGENT)).await.unwrap();
+    assert_eq!(
+        failed.status_reason.as_deref(),
+        Some("unhealthy: workspace clone failed")
+    );
+    assert_eq!(
+        service
+            .repository
+            .get(&user(AGENT))
+            .await
+            .unwrap()
+            .unwrap()
+            .status_reason,
+        failed.status_reason
+    );
+    service.computers.status.brain = Some(healthy_brain());
+    let recovered = service.me(&user(AGENT)).await.unwrap();
+    assert_eq!(recovered.status, TeamAgentStatus::Running);
+    assert_eq!(recovered.status_reason, None);
+    assert!(recovered.last_turn_at.is_some());
 }

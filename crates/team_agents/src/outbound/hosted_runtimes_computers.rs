@@ -2,6 +2,11 @@
 
 use std::sync::Arc;
 
+use harnesses::domain::{
+    models::{HarnessOwner, PersonaHealth},
+    ports::HarnessRepo,
+};
+
 use hosted_runtimes::domain::{
     enrollment, models,
     ports::{Billing, BillingError, ComputerRepo},
@@ -11,7 +16,7 @@ use hosted_runtimes::domain::{
 use uuid::Uuid;
 
 use crate::domain::models::{
-    BillingInterval, ComputerPurchase, ComputerQuote, ComputerSize, ComputerStatus,
+    BillingInterval, BrainHealth, ComputerPurchase, ComputerQuote, ComputerSize, ComputerStatus,
     ComputerStatusKind, Persona, PersonaService, SetupProgress, SetupStep, TeamAgentError,
 };
 use crate::domain::ports::Computers;
@@ -20,21 +25,30 @@ use crate::domain::ports::Computers;
 mod test;
 
 /// Buys and manages computers using the same service as the team computers API.
-pub struct HostedRuntimesComputers<Repo, Bill, Time> {
+pub struct HostedRuntimesComputers<Repo, Bill, Time, Harness> {
     service: Arc<ComputerService<Repo, Bill, Time>>,
     repo: Repo,
+    harnesses: Harness,
 }
 
-impl<Repo, Bill, Time> HostedRuntimesComputers<Repo, Bill, Time> {
+impl<Repo, Bill, Time, Harness> HostedRuntimesComputers<Repo, Bill, Time, Harness> {
     /// Shares the computer service and a clone of its repository.
     /// The repository supplies saved bootstrap personas for recovery.
-    pub fn new(service: Arc<ComputerService<Repo, Bill, Time>>, repo: Repo) -> Self {
-        Self { service, repo }
+    pub fn new(
+        service: Arc<ComputerService<Repo, Bill, Time>>,
+        repo: Repo,
+        harnesses: Harness,
+    ) -> Self {
+        Self {
+            service,
+            repo,
+            harnesses,
+        }
     }
 }
 
-impl<Repo: ComputerRepo, Bill: Billing, Time: Clock> Computers
-    for HostedRuntimesComputers<Repo, Bill, Time>
+impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo> Computers
+    for HostedRuntimesComputers<Repo, Bill, Time, Harness>
 {
     #[tracing::instrument(skip_all, fields(%team_id, ?size), err)]
     async fn quote(
@@ -142,7 +156,16 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock> Computers
             .status(team_id, computer_id)
             .await
             .map_err(error)?;
-        Ok(computer_status(status))
+        let mut status = computer_status(status);
+        match self.brain_health(team_id, computer_id).await {
+            Ok(brain) => status.brain = brain,
+            Err(source) => {
+                // Missing/unavailable observations must never reuse a stored
+                // healthy status. The domain projects missing health as failed.
+                tracing::error!(error = ?source, %computer_id, "could not read brain health");
+            }
+        }
+        Ok(status)
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
@@ -178,8 +201,8 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock> Computers
         self.service
             .retry(team_id, computer_id)
             .await
-            .map(computer_status)
-            .map_err(error)
+            .map_err(error)?;
+        self.status(team_id, computer_id).await
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
@@ -203,8 +226,71 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock> Computers
     }
 }
 
+impl<Repo: ComputerRepo, Bill, Time, Harness: HarnessRepo>
+    HostedRuntimesComputers<Repo, Bill, Time, Harness>
+{
+    #[tracing::instrument(skip(self), fields(%team_id, %computer_id), err)]
+    async fn brain_health(
+        &self,
+        team_id: Uuid,
+        computer_id: Uuid,
+    ) -> Result<Option<BrainHealth>, TeamAgentError> {
+        let Some(computer) = self
+            .repo
+            .get(computer_id)
+            .await
+            .map_err(TeamAgentError::internal)?
+            .filter(|computer| computer.team_id == team_id)
+        else {
+            return Ok(None);
+        };
+        let (Some(harness_id), Some(persona)) = (computer.harness_id, computer.persona) else {
+            return Ok(None);
+        };
+        let Some(harness) = self
+            .harnesses
+            .get_harness(harness_id::HarnessId::new_from_uuid(harness_id))
+            .await
+            .map_err(|_| TeamAgentError::internal_message("harness health is unavailable"))?
+            .filter(|harness| {
+                harness.computer_id == Some(computer_id)
+                    && harness.owner == HarnessOwner::Team { team_id }
+            })
+        else {
+            return Ok(None);
+        };
+        let Some(health) = harness.capabilities.personas.get(&persona.os_user) else {
+            return Ok(None);
+        };
+        let (checked_at, last_turn_at, healthy, last_error) = match health {
+            PersonaHealth::Healthy {
+                checked_at,
+                last_turn_at,
+            } => (*checked_at, *last_turn_at, true, None),
+            PersonaHealth::Unhealthy {
+                checked_at,
+                last_turn_at,
+                last_error,
+            }
+            | PersonaHealth::Missing {
+                checked_at,
+                last_turn_at,
+                last_error,
+            } => (*checked_at, *last_turn_at, false, Some(last_error.clone())),
+        };
+        Ok(Some(BrainHealth {
+            connected: harness.connected,
+            checked_at,
+            healthy,
+            last_error,
+            last_turn_at,
+        }))
+    }
+}
+
 fn computer_status(status: models::ComputerStatus) -> ComputerStatus {
     ComputerStatus {
+        brain: None,
         status: match status.status {
             models::ComputerStatusKind::SettingUp => ComputerStatusKind::SettingUp,
             models::ComputerStatusKind::Ready => ComputerStatusKind::Ready,

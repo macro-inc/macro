@@ -11121,6 +11121,11 @@
             "type": "string",
             "description": "The agent's email address."
           },
+          "lastTurnAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Most recent completed brain turn, from its harness health report."
+          },
           "name": {
             "type": "string",
             "description": "Display name."

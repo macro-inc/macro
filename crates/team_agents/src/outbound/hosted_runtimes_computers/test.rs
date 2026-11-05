@@ -317,6 +317,7 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
     let service = HostedRuntimesComputers::new(
         Arc::new(ComputerService::new(repo.clone(), billing, FixedClock)),
         repo,
+        harnesses::domain::ports::MockHarnessRepo::new(),
     );
     let persona = agent::Persona {
         name: "Agent".to_string(),
@@ -456,6 +457,7 @@ async fn declined_purchase_reports_unavailable_and_releases_reserved_capacity() 
             FixedClock,
         )),
         repo,
+        harnesses::domain::ports::MockHarnessRepo::new(),
     );
     assert!(matches!(
         service
@@ -492,6 +494,7 @@ async fn billing_provider_failures_remain_upstream_errors() {
             FixedClock,
         )),
         repo,
+        harnesses::domain::ports::MockHarnessRepo::new(),
     );
     assert!(matches!(
         service.quote(TEAM, agent::ComputerSize::Standard).await,
@@ -511,6 +514,7 @@ async fn a_storage_failure_after_billing_recovers_the_reserved_computer_identity
     let computers = HostedRuntimesComputers::new(
         Arc::new(ComputerService::new(repo.clone(), billing, FixedClock)),
         repo.clone(),
+        harnesses::domain::ports::MockHarnessRepo::new(),
     );
     let result = computers
         .purchase(agent::ComputerPurchase {
@@ -552,4 +556,132 @@ async fn a_storage_failure_after_billing_recovers_the_reserved_computer_identity
         Err(agent::TeamAgentError::RetryUnavailable(_))
     ));
     assert_eq!(updates.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness() {
+    use harnesses::domain::{
+        models::{ClaudeMode, Harness, HarnessCapabilities, HarnessOwner, PersonaHealth},
+        ports::MockHarnessRepo,
+    };
+    use hosted_runtimes::domain::enrollment;
+    let checked_at = Utc::now();
+    let last_turn_at = Some(checked_at - chrono::Duration::seconds(10));
+    for (health, healthy, error) in [
+        (
+            PersonaHealth::Healthy {
+                checked_at,
+                last_turn_at,
+            },
+            true,
+            None,
+        ),
+        (
+            PersonaHealth::Unhealthy {
+                checked_at,
+                last_turn_at,
+                last_error: "brain exited".to_string(),
+            },
+            false,
+            Some("brain exited"),
+        ),
+        (
+            PersonaHealth::Missing {
+                checked_at,
+                last_turn_at,
+                last_error: "unit missing".to_string(),
+            },
+            false,
+            Some("unit missing"),
+        ),
+    ] {
+        for matching_owner in [true, false] {
+            let repo = FakeRepo {
+                sold_units: 4,
+                ..Default::default()
+            };
+            let id = Uuid::now_v7();
+            let harness_id = "00000000-0000-4000-8000-0000000000aa".parse().unwrap();
+            let mut computer = repo
+                .reserve(
+                    NewComputer {
+                        id,
+                        team_id: TEAM,
+                        name: "Agent".to_string(),
+                        size: ComputerSize::Standard,
+                        created_by: "macro|admin@example.com".to_string(),
+                        persona: Some(enrollment::Persona {
+                            name: "Agent".to_string(),
+                            os_user: "agent-slug".to_string(),
+                            extra_service: enrollment::PersonaService {
+                                unit_name: "brain@agent-slug".to_string(),
+                                exec: "/opt/macro/brain run".to_string(),
+                                env: Default::default(),
+                            },
+                            config: Default::default(),
+                        }),
+                    },
+                    now(),
+                )
+                .await
+                .unwrap();
+            computer.state.phase = Phase::Running { host: HOST };
+            computer.enrolled_at = Some(now());
+            computer.harness_id = Some(harness_id);
+            repo.computers.lock().unwrap().insert(id, computer);
+            let harness = Harness {
+                allow_permission_bypass: false,
+                id: harness_id::HarnessId::new_from_uuid(harness_id),
+                kind: "macrod".to_string(),
+                name: "Computer".to_string(),
+                owner: HarnessOwner::Team {
+                    team_id: if matching_owner { TEAM } else { Uuid::now_v7() },
+                },
+                created_by: "macro|admin@example.com".to_string(),
+                created_at: now(),
+                updated_at: now(),
+                connected: true,
+                last_connected_at: Some(now()),
+                capabilities: HarnessCapabilities {
+                    screen: false,
+                    personas: std::collections::BTreeMap::from([
+                        ("agent-slug".to_string(), health.clone()),
+                        (
+                            "another-agent".to_string(),
+                            PersonaHealth::Healthy {
+                                checked_at,
+                                last_turn_at: None,
+                            },
+                        ),
+                    ]),
+                },
+                computer_id: Some(id),
+                claude_mode: ClaudeMode::MacroCredits,
+            };
+            let mut harnesses = MockHarnessRepo::new();
+            harnesses
+                .expect_get_harness()
+                .times(1)
+                .withf(move |id| id.as_uuid() == harness_id)
+                .return_once(move |_| Box::pin(async move { Ok(Some(harness)) }));
+            let adapter = HostedRuntimesComputers::new(
+                Arc::new(ComputerService::new(
+                    repo.clone(),
+                    FakeBilling::default(),
+                    FixedClock,
+                )),
+                repo,
+                harnesses,
+            );
+            let report = adapter.status(TEAM, id).await.unwrap();
+            if matching_owner {
+                let brain = report.brain.unwrap();
+                assert_eq!(brain.healthy, healthy);
+                assert_eq!(brain.last_error.as_deref(), error);
+                assert_eq!(brain.last_turn_at, last_turn_at);
+            } else {
+                assert_eq!(report.brain, None);
+            }
+        }
+    }
 }

@@ -6,6 +6,7 @@
  */
 import type { TeamAgentComputerId } from './teamAgentComputerId';
 import type { TeamAgentCreatedBy } from './teamAgentCreatedBy';
+import type { TeamAgentLastTurnAt } from './teamAgentLastTurnAt';
 import type { TeamAgentSetup } from './teamAgentSetup';
 import type { TeamAgentStatus } from './teamAgentStatus';
 import type { TeamAgentStatusReason } from './teamAgentStatusReason';
@@ -22,6 +23,8 @@ export interface TeamAgent {
   createdBy?: TeamAgentCreatedBy;
   /** The agent's email address. */
   email: string;
+  /** Most recent completed brain turn, from its harness health report. */
+  lastTurnAt?: TeamAgentLastTurnAt;
   /** Display name. */
   name: string;
   setup?: TeamAgentSetup;

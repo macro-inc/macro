@@ -80,6 +80,7 @@ impl TryFrom<AgentRow> for TeamAgent {
             status,
             status_reason: row.status_reason,
             setup: None,
+            last_turn_at: None,
             created_at: row.created_at,
         })
     }

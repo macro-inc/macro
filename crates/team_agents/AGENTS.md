@@ -22,6 +22,17 @@ After a confirmed purchase the agent exists and its
 `status` (`provisioning` → `running` | `failed`) is refreshed from the
 computer on `GET /team_agents` and `GET /team_agents/me`.
 
+`running` requires a Ready computer and its enrolled persona's healthy harness
+report. Reports are live only while the harness is connected and `checked_at`
+is no more than two minutes old (future observations are rejected). A Ready
+computer with unhealthy, missing, disconnected, stale or unavailable health is
+`failed` with `statusReason: "unhealthy: <diagnostic>"`. Other non-failed computer
+states remain `provisioning`; sleeping/stopped computers are not running agents.
+`lastTurnAt` carries the persona's last reported completed turn, including from
+unhealthy/missing reports. It is computed from harness capabilities, not stored
+in the team-agent row. Updated diagnostics are persisted even when status stays
+failed. Status refresh clears them when the brain recovers.
+
 `GET /team_agents/quote?size=` includes `vcpus`, `memoryGb`, and `diskGb`
 from the hosted-runtimes size catalog alongside the seat and computer price.
 
@@ -57,6 +68,9 @@ from the hosted-runtimes size catalog alongside the seat and computer price.
   its purchase forwards the persona and seat in `extra_items` for one Stripe
   update. Tests keep the fake `Computers` port. The persona (name, job,
   personality) is written into the repo's `OPERATING.md` by `agent_git`.
+- The computer adapter reads health through the harness domain repository using
+  the saved computer's `harness_id`, matching team ownership, computer identity,
+  and the enrolled persona OS user; it never reads another persona's report.
 - Quote reports billing-provider outages as 502. An ambiguous purchase returns
   the retained failed agent, without exposing provider details in its reason.
 - Delete runs computer → repo → seat → mailbox → account; the row goes last

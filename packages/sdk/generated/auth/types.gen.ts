@@ -2293,6 +2293,10 @@ export type TeamAgent = {
      */
     email: string;
     /**
+     * Most recent completed brain turn, from its harness health report.
+     */
+    lastTurnAt?: string | null;
+    /**
      * Display name.
      */
     name: string;

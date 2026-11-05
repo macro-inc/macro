@@ -713,6 +713,7 @@ pub async fn run() -> anyhow::Result<()> {
         team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers::new(
             computer_service.clone(),
             computer_repo,
+            harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(db.clone()),
         ),
         team_agents::outbound::agent_git_repos::AgentGitRepos::new(
             agent_git::client::AgentGitClient::new(

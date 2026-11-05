@@ -447,14 +447,43 @@ where
                 TeamAgentStatus::Failed,
                 Some("the computer was released".to_string()),
             ),
-            ComputerStatusKind::Ready
-            | ComputerStatusKind::Asleep
+            ComputerStatusKind::Ready => {
+                let unhealthy = match computer.brain.as_ref() {
+                    None => Some("brain health has not been reported".to_string()),
+                    Some(brain) if !brain.connected => {
+                        Some("the harness is disconnected".to_string())
+                    }
+                    Some(brain)
+                        if {
+                            let age = chrono::Utc::now() - brain.checked_at;
+                            age < chrono::Duration::zero() || age > chrono::Duration::minutes(2)
+                        } =>
+                    {
+                        Some("the brain health report is stale".to_string())
+                    }
+                    Some(brain) if !brain.healthy => Some(
+                        brain
+                            .last_error
+                            .clone()
+                            .unwrap_or_else(|| "the brain is not healthy".to_string()),
+                    ),
+                    Some(_) => None,
+                };
+                match unhealthy {
+                    Some(reason) => (
+                        TeamAgentStatus::Failed,
+                        Some(format!("unhealthy: {reason}")),
+                    ),
+                    None => (TeamAgentStatus::Running, None),
+                }
+            }
+            ComputerStatusKind::Asleep
             | ComputerStatusKind::Waking
             | ComputerStatusKind::Stopping
-            | ComputerStatusKind::Stopped => (TeamAgentStatus::Running, None),
+            | ComputerStatusKind::Stopped => (TeamAgentStatus::Provisioning, None),
         };
 
-        if status != agent.status {
+        if status != agent.status || reason != agent.status_reason {
             self.repository
                 .set_status(&agent.user_id, status, reason.as_deref())
                 .await
@@ -465,6 +494,7 @@ where
             status,
             status_reason: reason,
             setup: computer.setup,
+            last_turn_at: computer.brain.and_then(|brain| brain.last_turn_at),
             ..agent
         })
     }
@@ -623,9 +653,13 @@ where
         for agent in stored {
             // One computer the status lookup fails for keeps its last known
             // status rather than failing the whole list.
-            let fallback = agent.clone();
+            let mut fallback = agent.clone();
             let agent = self.refresh_status(agent).await.unwrap_or_else(|error| {
                 tracing::error!(error = ?error, agent_user_id = %fallback.user_id, "could not refresh a team agent's computer status");
+                if fallback.status == TeamAgentStatus::Running {
+                    fallback.status = TeamAgentStatus::Failed;
+                    fallback.status_reason = Some("unhealthy: computer status is unavailable".to_string());
+                }
                 fallback
             });
             agents.push(agent);

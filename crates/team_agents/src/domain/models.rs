@@ -31,9 +31,9 @@ pub const MAX_PROFILE_CHARS: usize = 4000;
 pub enum TeamAgentStatus {
     /// The computer is bought and booting.
     Provisioning,
-    /// The computer is up.
+    /// The computer is ready and its brain is healthy.
     Running,
-    /// The computer could not be provisioned; `statusReason` says why.
+    /// Provisioning or brain health failed; `statusReason` says why.
     Failed,
 }
 
@@ -62,6 +62,8 @@ pub struct TeamAgent {
     pub status_reason: Option<String>,
     /// Where the computer's setup is, while `provisioning` and once fetched.
     pub setup: Option<SetupProgress>,
+    /// Most recent completed brain turn, from its harness health report.
+    pub last_turn_at: Option<DateTime<Utc>>,
     /// When the agent was created.
     pub created_at: DateTime<Utc>,
 }
@@ -307,6 +309,23 @@ pub struct ComputerStatus {
     pub status: ComputerStatusKind,
     /// Present until the computer first connects.
     pub setup: Option<SetupProgress>,
+    /// Latest observation for this computer's enrolled persona.
+    pub brain: Option<BrainHealth>,
+}
+
+/// A persona's health observation from its computer's harness.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrainHealth {
+    /// Whether the reporting harness is still connected.
+    pub connected: bool,
+    /// When macrod checked the brain.
+    pub checked_at: DateTime<Utc>,
+    /// Whether the brain reported healthy.
+    pub healthy: bool,
+    /// Last bounded macrod diagnostic for an unhealthy or missing brain.
+    pub last_error: Option<String>,
+    /// Most recent completed brain turn, including on unhealthy probes.
+    pub last_turn_at: Option<DateTime<Utc>>,
 }
 
 /// What the agent's workspace repo starts from.

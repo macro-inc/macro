@@ -190,6 +190,7 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 - Rules: `.agents/rules/config-and-service-urls.md`,
   `.agents/rules/rust/security.md` · Skill: `new-service`
 
-- Team agent retry is admin-only and reuses the original computer and persona;
-  its adapter also receives the same computer repository for scoped bootstrap
-  reads. Repo recovery uses the internal git `ensure` API without token rotation.
+- Team agent retry is admin-only and reuses the original computer and persona.
+  Its adapter receives the same computer repository for scoped bootstrap reads
+  and the harness domain repository for enrolled-persona health and last-turn
+  time. Repo recovery uses the internal git `ensure` API without token rotation.

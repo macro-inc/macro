@@ -288,6 +288,7 @@ export * from './team';
 export * from './teamAgent';
 export * from './teamAgentComputerId';
 export * from './teamAgentCreatedBy';
+export * from './teamAgentLastTurnAt';
 export * from './teamAgentQuote';
 export * from './teamAgentSetup';
 export * from './teamAgentStatus';
