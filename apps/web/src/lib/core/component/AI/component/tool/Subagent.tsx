@@ -88,9 +88,10 @@ const handler = createToolRenderer({
           <Tooltip
             label={subagentTitle(ctx.tool.data)}
             as="span"
-            class="min-w-0 flex-1 truncate"
+            class="min-w-0 flex-1"
           >
-            {subagentTitle(ctx.tool.data)}
+            {/* The trigger is a flex box, whose own text never ellipsizes. */}
+            <span class="min-w-0 truncate">{subagentTitle(ctx.tool.data)}</span>
           </Tooltip>
           <Tool.ResultToggle
             expanded={isExpanded()}
