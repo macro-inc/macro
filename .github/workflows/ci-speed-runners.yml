@@ -18,16 +18,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - leg: large-32cpu-j32-t32
-          shape: large
-          runner: namespace-profile-linux-large-build;overrides.cache-tag=ci-speed-runners-32
-          jobs: 32
-          threads: 32
-          salt_file: crates/macro_user_id/src/lib.rs
-        - leg: small-16cpu-j16-t32
+        - leg: small-8cpu-j2-t32
           shape: small
-          runner: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-runners-16
-          jobs: 16
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 2
           threads: 32
           salt_file: services/notification_service/src/main.rs
         - leg: small-8cpu-j8-t32
@@ -36,6 +30,66 @@ jobs:
           jobs: 8
           threads: 32
           salt_file: services/notification_service/src/main.rs
+        - leg: small-16cpu-j16-t32
+          shape: small
+          runner: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-runners-16
+          jobs: 16
+          threads: 32
+          salt_file: services/notification_service/src/main.rs
+        - leg: small-32cpu-j32-t32
+          shape: small
+          runner: namespace-profile-linux-large-build;overrides.cache-tag=ci-speed-runners-32
+          jobs: 32
+          threads: 32
+          salt_file: services/notification_service/src/main.rs
+        - leg: medium-8cpu-j2-t32
+          shape: medium
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 2
+          threads: 32
+          salt_file: crates/email/src/lib.rs
+        - leg: medium-8cpu-j8-t32
+          shape: medium
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 8
+          threads: 32
+          salt_file: crates/email/src/lib.rs
+        - leg: medium-16cpu-j16-t32
+          shape: medium
+          runner: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-runners-16
+          jobs: 16
+          threads: 32
+          salt_file: crates/email/src/lib.rs
+        - leg: medium-32cpu-j32-t32
+          shape: medium
+          runner: namespace-profile-linux-large-build;overrides.cache-tag=ci-speed-runners-32
+          jobs: 32
+          threads: 32
+          salt_file: crates/email/src/lib.rs
+        - leg: large-8cpu-j2-t32
+          shape: large
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 2
+          threads: 32
+          salt_file: crates/macro_user_id/src/lib.rs
+        - leg: large-8cpu-j8-t32
+          shape: large
+          runner: namespace-profile-linux-rust-ci;overrides.cache-tag=ci-speed-runners-8
+          jobs: 8
+          threads: 32
+          salt_file: crates/macro_user_id/src/lib.rs
+        - leg: large-16cpu-j16-t32
+          shape: large
+          runner: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-runners-16
+          jobs: 16
+          threads: 32
+          salt_file: crates/macro_user_id/src/lib.rs
+        - leg: large-32cpu-j32-t32
+          shape: large
+          runner: namespace-profile-linux-large-build;overrides.cache-tag=ci-speed-runners-32
+          jobs: 32
+          threads: 32
+          salt_file: crates/macro_user_id/src/lib.rs
     runs-on: ${{ matrix.runner }}
     env:
       NEXTEST_TEST_THREADS: ${{ matrix.threads }}
