@@ -534,3 +534,7 @@ for (const mode of ['cached', 'disabled'] as const) {
     expect(server.unexpected).toEqual([]);
   });
 }
+
+test('deliberate failure for CI proof', () => {
+  expect(1).toBe(2);
+});
