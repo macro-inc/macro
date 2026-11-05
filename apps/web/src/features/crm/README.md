@@ -63,8 +63,13 @@ its own collection state to the shared collection renderer. Shared collection co
 CRM-specific state again.
 
 Visible contact and company toolbars put the archive-system icon beside Copy link.
-Archived identities group one Archived chip with a borderless Restore action; on
-phones the group wraps beneath the name and Restore retains a 44px touch target.
+Archived identities group one Archived chip with a flat secondary Restore button;
+on phones the group wraps beneath the name. Keep identity actions and metadata at
+the compact property scale: 24px visible height, 12px text and 12px icons.
+Interactive controls reserve 10px above and below their touch faces for separate
+44px targets; transparent extensions receive those taps without enlarging the paint.
+Use flat controls here because the glass finish owns its own press pseudo-elements.
+Top-toolbar controls retain their separate navigation scale.
 The chip owns hover/focus/tap explanation; Restore does not trigger that explanation.
 `RecordVisibilityAction` handles confirmation, pending, cancellation and retry.
 Only admins/owners can change visibility. Company archive cascades to all people
@@ -226,3 +231,15 @@ When changing behavior, test the responsible primitive or pure function. When
 moving behavior, retain query keys, persistence keys, mutation ordering, loading
 boundaries, routes, and markup. Run CRM tests plus affected shared collection and
 user-card tests, TypeScript checking, `just check`, and the real CRM browser flows.
+
+Pipeline stage requirements are CRM policy over the shared database editor.
+Remove a required field's rules before deleting its options, since option
+deletion clears values even on rows outside the submitted operation batch.
+`queries/stage-requirements.ts` adapts the pipeline-authorized rules; the toolbar
+opens the shared-control dialog, and Add deal derives its required fields from
+stable option/column IDs. Keep drafts on a refused save. The server is authoritative
+for table, board, timeline, agent and import writes. Board and timeline creation
+use the host composer so stage and date-range defaults reach Add deal. CSV writes split refused batches,
+commit valid entries, and show record-specific failures; option labels enter the
+local cache only after their batch commits. The backend-free regression is
+`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts stage-requirements.browser.e2e.ts`.

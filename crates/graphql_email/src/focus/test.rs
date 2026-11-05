@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema};
-use chrono::{TimeZone, Utc};
+use chrono::{NaiveDate, TimeZone, Utc};
 
 use super::*;
 
@@ -59,6 +59,8 @@ fn focus(importance: u8) -> ThreadFocus {
         needs_reply: true,
         needs_follow_up: false,
         classified_at: Utc.with_ymd_and_hms(2026, 10, 9, 12, 0, 0).unwrap(),
+        importance_trend: ImportanceTrend::Flat,
+        due_on: None,
     }
 }
 
@@ -142,6 +144,50 @@ async fn focus_edge_maps_stored_classifications() {
 }
 
 #[tokio::test]
+async fn focus_edge_says_which_way_importance_is_moving() {
+    let threads = [Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()];
+    let trends = [
+        ImportanceTrend::Up,
+        ImportanceTrend::Down,
+        ImportanceTrend::Flat,
+    ];
+    let reader = Arc::new(FakeReader {
+        stored: threads
+            .into_iter()
+            .zip(trends)
+            .map(|(thread, importance_trend)| {
+                (
+                    thread,
+                    ThreadFocus {
+                        importance_trend,
+                        ..focus(50)
+                    },
+                )
+            })
+            .collect(),
+        ordered: Vec::new(),
+        calls: Mutex::default(),
+        failing: false,
+    });
+    let schema = Schema::build(
+        Query {
+            threads: threads.to_vec(),
+        },
+        EmptyMutation,
+        EmptySubscription,
+    )
+    .data(email_thread_focus_loader(user(), reader))
+    .finish();
+
+    let response = schema.execute("{ focus { importanceTrend } }").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["focus"][0]["importanceTrend"], "UP");
+    assert_eq!(data["focus"][1]["importanceTrend"], "DOWN");
+    assert_eq!(data["focus"][2]["importanceTrend"], "FLAT");
+}
+
+#[tokio::test]
 async fn a_failed_lookup_errors_only_the_focus_field() {
     let thread = Uuid::new_v4();
     let reader = Arc::new(FakeReader {
@@ -187,4 +233,42 @@ async fn focus_is_absent_where_it_is_not_served() {
     let data = response.data.into_json().unwrap();
     assert!(data["focus"][0].is_null());
     assert_eq!(data["ids"], serde_json::json!([]));
+}
+
+#[tokio::test]
+async fn due_on_reads_as_a_plain_date_or_null() {
+    let due = Uuid::now_v7();
+    let open_ended = Uuid::now_v7();
+    let reader = Arc::new(FakeReader {
+        stored: HashMap::from([
+            (
+                due,
+                ThreadFocus {
+                    due_on: NaiveDate::from_ymd_opt(2026, 11, 6),
+                    ..focus(50)
+                },
+            ),
+            (open_ended, focus(50)),
+        ]),
+        ordered: vec![],
+        calls: Mutex::default(),
+        failing: false,
+    });
+    let schema = Schema::build(
+        Query {
+            threads: vec![due, open_ended],
+        },
+        EmptyMutation,
+        EmptySubscription,
+    )
+    .data(email_thread_focus_loader(user(), reader.clone()))
+    .data(EmailFocusContext(reader))
+    .finish();
+
+    let response = schema.execute("{ focus { dueOn } }").await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["focus"][0]["dueOn"], "2026-11-06");
+    assert!(data["focus"][1]["dueOn"].is_null());
 }

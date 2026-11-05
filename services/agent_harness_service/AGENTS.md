@@ -46,6 +46,8 @@ Pulumi stacks; they do not host extra agent processes.
   and `/universal_input/extract` routes, mounted directly by `src/api.rs`. The root
   composes staged search type/field extraction and Clairic content extraction
   with Nemotron temporal extraction and the shared admission/usage services.
+  It also mounts the internal `/universal_input/thread-due-date` route, which reads
+  a thread's due date for `email_focus_worker` and meters it as `EmailFocus`.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
   domain/adapters live in `crates/scheduled_action`. Its run observers send
   `routine_run_finished` analytics and, for every run, an inbox-only

@@ -56,12 +56,7 @@ export function readScene(forest: CanvasForest, rootId: string) {
           ...spatial,
           ...shapePayload(
             kind,
-            restoreText(
-              kind,
-              pose.geometry,
-              node.data.textContent ?? null,
-              node.data.labelStyle ?? null
-            )
+            restoreRegisters(kind, pose.geometry, node.data)
           ),
           appearance: {
             fill,
@@ -88,24 +83,39 @@ function textContent(node: GraphicsItem | undefined): string | null {
 function poseGeometry(node: GraphicsItem | undefined) {
   if (!isShape(node)) return null;
   if (node.type === 'text') return { ...node.geometry, content: '' };
+  if (node.type === 'artifact') {
+    const { html: _html, presentOrder: _order, ...pose } = node.geometry;
+    return pose;
+  }
   if (canLabel(node)) {
     const { label: _label, ...box } = node.geometry;
     return box;
   }
   return node.geometry;
 }
-function restoreText(
-  kind: ShapeKind,
-  geometry: object,
-  content: string | null,
-  labelStyle: NodeData['labelStyle']
-) {
+function restoreRegisters(kind: ShapeKind, geometry: object, data: NodeData) {
+  const content = data.textContent ?? null;
+  const labelStyle = data.labelStyle ?? null;
   if (kind === 'text') return { ...geometry, content };
+  if (kind === 'artifact')
+    return {
+      ...geometry,
+      html: data.html ?? '',
+      presentOrder: data.presentOrder ?? '',
+    };
   if (kind === 'rectangle' || kind === 'ellipse' || kind === 'connector')
     return content !== null && labelStyle
       ? { ...geometry, label: { ...labelStyle, content } }
       : geometry;
   return geometry;
+}
+
+function artifactRegisters(node: GraphicsItem) {
+  if (node.type !== 'artifact') return { html: null, presentOrder: null };
+  return {
+    html: node.geometry.html,
+    presentOrder: node.geometry.presentOrder,
+  };
 }
 
 function labelStyle(node: GraphicsItem | undefined): NodeData['labelStyle'] {
@@ -183,6 +193,7 @@ export function writeScene(
             textContent: textContent(node),
             labelStyle: labelStyle(node),
             ...appearance,
+            ...artifactRegisters(node),
           };
       if (poseChanged)
         nextData.pose = {
@@ -193,28 +204,34 @@ export function writeScene(
         };
       nextData.textContent = textContent(node);
       nextData.labelStyle = labelStyle(node);
-      if (isShape(node)) {
-        const oldAppearance = isShape(old)
-          ? resolveAppearance(old.appearance)
-          : undefined;
-        if (!oldAppearance || oldAppearance.fill !== appearance.fill)
-          nextData.fill = appearance.fill;
-        if (!oldAppearance || oldAppearance.stroke !== appearance.stroke)
-          nextData.stroke = appearance.stroke;
-        if (
-          !oldAppearance ||
-          oldAppearance.strokeStyle !== appearance.strokeStyle
-        )
-          nextData.strokeStyle = appearance.strokeStyle;
-        for (const key of ['strokeWidth', 'opacity', 'cornerRadius'] as const) {
-          if (!oldAppearance || oldAppearance[key] !== appearance[key])
-            nextData[key] = appearance[key];
-        }
-      }
+      if (node.type === 'artifact')
+        Object.assign(nextData, artifactRegisters(node));
+      if (isShape(node)) writeChangedAppearance(nextData, old, appearance);
       return { data: nextData, children: project(id) };
     });
   }
   return project(next.rootId);
+}
+
+/** Write only changed style registers, so concurrent restyles merge per field. */
+function writeChangedAppearance(
+  nextData: NodeData,
+  old: GraphicsItem | undefined,
+  appearance: ReturnType<typeof resolveAppearance>
+) {
+  const oldAppearance = isShape(old)
+    ? resolveAppearance(old.appearance)
+    : undefined;
+  if (!oldAppearance || oldAppearance.fill !== appearance.fill)
+    nextData.fill = appearance.fill;
+  if (!oldAppearance || oldAppearance.stroke !== appearance.stroke)
+    nextData.stroke = appearance.stroke;
+  if (!oldAppearance || oldAppearance.strokeStyle !== appearance.strokeStyle)
+    nextData.strokeStyle = appearance.strokeStyle;
+  for (const key of ['strokeWidth', 'opacity', 'cornerRadius'] as const) {
+    if (!oldAppearance || oldAppearance[key] !== appearance[key])
+      nextData[key] = appearance[key];
+  }
 }
 
 const isNewerKind = (node: CanvasForest[number]) =>

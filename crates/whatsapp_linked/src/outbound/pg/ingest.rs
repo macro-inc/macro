@@ -152,18 +152,35 @@ pub(super) async fn reserve_in(
     .await
     .map_err(failure)?;
     let person = people.first().copied().unwrap_or_else(Uuid::now_v7);
-    sqlx::query!(
+    let stored = sqlx::query!(
         r#"INSERT INTO external_chat_person (id, chat_id, user_id, display_name) VALUES ($1, $2, $3, $4)
         ON CONFLICT (id) DO UPDATE SET display_name = COALESCE(excluded.display_name, external_chat_person.display_name),
-            user_id = COALESCE(excluded.user_id, external_chat_person.user_id)"#,
+            user_id = COALESCE(excluded.user_id, external_chat_person.user_id)
+        RETURNING xmax = 0 AS "created!", display_name IS NOT NULL AS "named!", user_id IS NOT NULL AS "macro_user!""#,
         person,
         binding.id,
         associated_user,
         sender.display_name
     )
-    .execute(&mut **tx)
+    .fetch_one(&mut **tx)
     .await
     .map_err(failure)?;
+    // The person's shape after this message, never who they are: whether
+    // the row is new and whether it has a name to show.
+    tracing::info_span!(
+        "whatsapp.ingest.person",
+        chat_id = %binding.id,
+        chat_kind = binding.kind.as_ref(),
+        sender_lid = sender.jid.ends_with("@lid"),
+        sender_alternate = sender.alternate_jid.is_some(),
+        message_named = sender.display_name.is_some(),
+        history = message.history,
+        from_me = message.from_me,
+        person_created = stored.created,
+        person_named = stored.named,
+        macro_user = stored.macro_user,
+    )
+    .in_scope(|| {});
     for alias in &aliases {
         sqlx::query!(
             r#"INSERT INTO whatsapp_identity_alias (chat_id, jid, person_id, evidence_account_id, verified_at)
