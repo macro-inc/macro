@@ -90,6 +90,7 @@ members = [
   "crates/graphql_scheduled_action",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/graphql_registered_work",
   "crates/graphql_work_feed",
   "crates/gtm_invite",
   "crates/harness_id",

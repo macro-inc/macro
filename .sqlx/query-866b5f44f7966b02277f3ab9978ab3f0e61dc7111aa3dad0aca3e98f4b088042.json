@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            DELETE FROM mcp_oauth_pending_authorizations\n            WHERE session_id = $1\n            RETURNING client_id, code_challenge, client_state, client_redirect_uri,\n                browser_binding_digest, expires_at\n            ",
+  "query": "\n            SELECT client_id, code_challenge, client_state, client_redirect_uri,\n                browser_binding_digest, deliver_manually\n            FROM mcp_oauth_pending_authorizations\n            WHERE session_id = $1 AND expires_at > now()\n            ",
   "describe": {
     "columns": [
       {
@@ -30,8 +30,8 @@
       },
       {
         "ordinal": 5,
-        "name": "expires_at",
-        "type_info": "Timestamptz"
+        "name": "deliver_manually",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -48,5 +48,5 @@
       false
     ]
   },
-  "hash": "6c40270a0bb3310a7931300af4ddb135fb32ab143952dfae06da1f3871a3c9a2"
+  "hash": "866b5f44f7966b02277f3ab9978ab3f0e61dc7111aa3dad0aca3e98f4b088042"
 }

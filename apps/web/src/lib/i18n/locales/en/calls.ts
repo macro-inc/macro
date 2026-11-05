@@ -41,4 +41,6 @@ export default {
     'Macro needs Screen Recording access. Turn on Macro in System Settings › Privacy & Security › Screen & System Audio Recording, then reopen Macro.',
   share: 'Share',
   shareFailed: "Couldn't share your screen. Try again.",
+  maximizeScreenShare: 'Maximize screen share',
+  restoreScreenShare: 'Show participants',
 };

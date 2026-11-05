@@ -1,5 +1,6 @@
 export default {
   add: 'Add',
+  back: 'Back',
   addProperty: 'Add property',
   addTags: 'Add tags',
   emptyCollection: 'No items added yet',
