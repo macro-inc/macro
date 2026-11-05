@@ -110,6 +110,29 @@ jobs:
         env | grep -E '^(CARGO_INCREMENTAL|RUSTC_WRAPPER|SCCACHE_C)' | cut -d= -f1,2 | cut -c 1-60 || true
         case "$mode" in seed|cold) exit 0;; esac
         url="$SCCACHE_WEBDAV_ENDPOINT/gen-incremental/snapshot.tar.zst"
+        if [[ "$mode" == seed-age:* ]]; then
+          old=${mode#seed-age:}
+          LD_LIBRARY_PATH= git fetch --no-tags --depth=1 origin "$old"
+          LD_LIBRARY_PATH= git checkout FETCH_HEAD -- . ':!.github' ':!.ci-gen-exp-mode' ':!.ci-gen-exp-split.py'
+          (
+            unset CARGO_INCREMENTAL; export CARGO_PROFILE_DEV_INCREMENTAL=true
+            read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
+            s0=$(date +%s)
+            SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas 2>&1 | tail -2
+            echo "age_seed_build_s=$(( $(date +%s)-s0 ))"
+            ( cd apps/web && just gen-agent-fold-types && just gen-database-sql-types && just gen-dynamic-ui-types && just gen-agent-review-types ) >/dev/null 2>&1 || echo "specta seed step failed"
+            echo "age_seed_total_s=$(( $(date +%s)-s0 ))"
+          )
+          LD_LIBRARY_PATH= git checkout HEAD -- .
+          LD_LIBRARY_PATH= git clean -fdq -e target -e node_modules -e .ci-gen-exp-mode
+          find target/debug -maxdepth 1 -type f -delete
+          find target/debug/deps -maxdepth 1 -type f -executable ! -name '*.so' -delete
+          python3 .ci-gen-exp-split.py
+          cache_put() { curl --fail --silent --show-error --max-time 300 -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") --upload-file "$1" "$2"; }
+          for i in 0 1 2 3 4 5 6 7; do ( tar -C target -cf - -T "shard$i.list" | zstd -T2 -3 -q -o "$RUNNER_TEMP/shard$i.tar.zst"; cache_put "$RUNNER_TEMP/shard$i.tar.zst" "$url.shard$i"; rm -f "$RUNNER_TEMP/shard$i.tar.zst" ) & done; wait
+          rm -f shard*.list; rm -rf target; mkdir target
+          mode=restore-shards
+        fi
         cache_request() {
           curl --fail --silent --show-error --max-time 300 -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$@"
         }
@@ -130,37 +153,41 @@ jobs:
             ;;
           reshard)
             cache_request "$url" | zstd -d -T0 | tar -xf - -C target
-            python3 - <<'SPLIT'
-        import os
-        items=[]
-        os.chdir('target')
-        items.append(('.rustc_info.json',os.path.getsize('.rustc_info.json')))
-        def tree(p):
-            n=0
-            for r,_,fs in os.walk(p):
-                for f in fs:
-                    try: n+=os.path.getsize(os.path.join(r,f))
-                    except OSError: pass
-            return n
-        for d in ('debug/incremental','debug/build','debug/.fingerprint'):
-            for e in os.listdir(d):
-                items.append((f'{d}/{e}',tree(f'{d}/{e}')))
-        for e in os.listdir('debug/deps'):
-            items.append((f'debug/deps/{e}',tree(f'debug/deps/{e}') if os.path.isdir(f'debug/deps/{e}') else os.path.getsize(f'debug/deps/{e}')))
-        items.sort(key=lambda x:-x[1])
-        bins=[[0,[]] for _ in range(8)]
-        for path,size in items:
-            b=min(bins,key=lambda x:x[0]); b[0]+=size; b[1].append(path)
-        for i,(n,paths) in enumerate(bins):
-            open(f'../shard{i}.list','w').write('\n'.join(paths)+'\n'); print('shard',i,round(n/1e9,1),'GB',len(paths))
-        SPLIT
+            python3 .ci-gen-exp-split.py
+            mkdir -p "$RUNNER_TEMP/out"
             u=$(date +%s)
-            for i in 0 1 2 3 4 5 6 7; do ( tar -C target -cf - -T "shard$i.list" | zstd -T2 -3 -q -o "$RUNNER_TEMP/shard$i.tar.zst"; cache_request --upload-file "$RUNNER_TEMP/shard$i.tar.zst" "$url.shard$i"; echo "shard$i bytes=$(stat -c %s "$RUNNER_TEMP/shard$i.tar.zst")"; rm -f "$RUNNER_TEMP/shard$i.tar.zst" ) & done; wait
+            for i in 0 1 2 3 4 5 6 7; do ( tar -C target -cf - -T "shard$i.list" | zstd -T2 -3 -q -o "$RUNNER_TEMP/shard$i.tar.zst"; cache_request --upload-file "$RUNNER_TEMP/shard$i.tar.zst" "$url.shard$i"; echo "shard$i bytes=$(stat -c %s "$RUNNER_TEMP/shard$i.tar.zst")"; echo "shard$i $(sha256sum "$RUNNER_TEMP/shard$i.tar.zst" | cut -d' ' -f1)" >> "$RUNNER_TEMP/out/manifest.part$i"; rm -f "$RUNNER_TEMP/shard$i.tar.zst" ) & done; wait
+            cat "$RUNNER_TEMP"/out/manifest.part* > "$RUNNER_TEMP/out/manifest.txt"; rm -f "$RUNNER_TEMP"/out/manifest.part*
             rm -f shard*.list
             echo "reshard_upload_s=$(( $(date +%s)-u ))"
             ;;
-          restore-shards)
-            for i in 0 1 2 3 4 5 6 7; do ( cache_request "$url.shard$i" | zstd -d -T2 | tar -xf - -C target; echo "shard$i rc=${PIPESTATUS[*]} s=$(( $(date +%s)-s ))" ) & done; wait
+          restore-shards|restore-verified|poison)
+            if [ "$mode" != restore-shards ]; then
+              GH_TOKEN="${{ github.token }}" LD_LIBRARY_PATH= gh run download "$(cat .ci-gen-exp-seed-run)" -R "${{ github.repository }}" -n gen-manifest -D "$RUNNER_TEMP/manifest"
+              echo "manifest_s=$(( $(date +%s)-s ))"
+              if [ "$mode" = poison ]; then
+                # Same as a PR overwriting a shard: this job's own copy is what it will restore.
+                purl="$SCCACHE_WEBDAV_ENDPOINT/gen-incremental/poison.shard3"
+                head -c 1048576 /dev/urandom | zstd -q -c | cache_request --upload-file - "$purl"
+              fi
+            fi
+            rm -f "$RUNNER_TEMP"/got.*
+            for i in 0 1 2 3 4 5 6 7; do (
+              src="$url.shard$i"
+              [ "$mode" = poison ] && [ "$i" = 3 ] && src="$SCCACHE_WEBDAV_ENDPOINT/gen-incremental/poison.shard3"
+              cache_request "$src" | tee >(sha256sum | cut -d' ' -f1 > "$RUNNER_TEMP/got.$i") | zstd -d -T2 | tar -xf - -C target
+              echo "shard$i rc=${PIPESTATUS[*]} s=$(( $(date +%s)-s ))"
+            ) & done; wait
+            sleep 1
+            if [ "$mode" != restore-shards ]; then
+              bad=0
+              for i in 0 1 2 3 4 5 6 7; do
+                want=$(sed -n "s/^shard$i //p" "$RUNNER_TEMP/manifest/manifest.txt"); have=$(cat "$RUNNER_TEMP/got.$i" 2>/dev/null)
+                [ -n "$want" ] && [ "$want" = "$have" ] || { echo "shard$i hash mismatch"; bad=1; }
+              done
+              echo "verified bad=$bad"
+              if [ "$bad" != 0 ]; then rm -rf target; mkdir -p target; echo "snapshot rejected, building cold"; fi
+            fi
             echo "shards_restore_s=$(( $(date +%s)-s ))"
             ;;
           restore-gh)
@@ -234,6 +261,14 @@ jobs:
         echo "nsc_upload_s=$(( $(date +%s)-p ))"
         echo "probe" > "$RUNNER_TEMP/probe.txt"
         nsc artifact upload "$RUNNER_TEMP/probe.txt" ci-speed/gen-incremental/main-path-write-probe.txt --expires_in=24h && echo "pr_can_write_any_artifact_path=yes" || echo "pr_can_write_any_artifact_path=no"
+    - name: Upload the manifest as a GitHub artifact
+      if: success()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: gen-manifest
+        path: ${{ runner.temp }}/out/manifest.txt
+        retention-days: 1
+        if-no-files-found: ignore
     - name: Upload snapshot as a GitHub artifact
       if: success()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

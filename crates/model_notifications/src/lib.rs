@@ -434,4 +434,4 @@ impl NotificationTitle for NotifEvent {
 
 #[doc(hidden)]
 #[allow(dead_code)]
-const CI_INTEGRATE_NONCE: &str = "848c601be25e41aebcd0afa328e767f2";
+const CI_INTEGRATE_NONCE: &str = "896b00f551e24f0bb4ef79e1cb6beb87";
