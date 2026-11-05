@@ -79,7 +79,8 @@ jobs:
     - name: Build schema binaries
       run: |
         set -euo pipefail
-        read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
+        bins="$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
+        read -ra openapi_bins <<< "$bins"
         SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas
     - name: Generate API Types
       run: bun run gen-api

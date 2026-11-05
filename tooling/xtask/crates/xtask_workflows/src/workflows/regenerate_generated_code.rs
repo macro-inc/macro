@@ -103,7 +103,8 @@ fn checkout() -> Step<Use> {
 fn build_schema_binaries() -> Step<Run> {
     Step::new("Build schema binaries").run(indoc::indoc! {r#"
         set -euo pipefail
-        read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
+        bins="$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
+        read -ra openapi_bins <<< "$bins"
         SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas
     "#})
 }
