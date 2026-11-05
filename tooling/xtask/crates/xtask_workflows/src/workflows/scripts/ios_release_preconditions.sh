@@ -46,7 +46,7 @@ while true; do
   gate=$(jq -r '[.[] | select(.name == "CI gate") | .description][0] // ""' <<<"$all_checks")
   case "$gate" in
     "" | "Not run on this commit."*)
-      echo "CI has not run on ${head_sha:0:10}. Run it (gh pr edit ${PR_NUMBER} --add-label run-ci), then re-add ios-update once it passes." >&2
+      echo "CI has not run on ${head_sha:0:10}. Run it (gh api repos/${GH_REPO}/issues/${PR_NUMBER}/labels -f "labels[]=run-ci"), then re-add ios-update once it passes." >&2
       exit 1
       ;;
     "Running on"* | "Passed on"* | "Failed:"*) ;;

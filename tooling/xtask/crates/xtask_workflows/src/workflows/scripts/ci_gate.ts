@@ -55,8 +55,9 @@ const repo = () => env('GITHUB_REPOSITORY');
 const context = () => env('CI_GATE_CONTEXT');
 const label = () => env('CI_GATE_LABEL');
 
-export function runCommand(pr: string, labelName: string): string {
-  return `gh pr edit ${pr} --add-label ${labelName}`;
+/// REST, because `gh pr edit` fails on older gh releases.
+export function runCommand(repository: string, pr: string, labelName: string): string {
+  return `gh api repos/${repository}/issues/${pr}/labels -f "labels[]=${labelName}"`;
 }
 
 /// The finished run's verdict from `toJSON(needs)`. Start must have succeeded;
@@ -80,7 +81,13 @@ export function gateOutcome(needs: Needs, head: string): Outcome {
 
 /// A fork run's verdict from its jobs. Null when the run was not a request
 /// (unrelated label) or did not finish (cancelled).
-export function forkOutcome(jobs: RunJob[], head: string, pr: string, labelName: string): Outcome {
+export function forkOutcome(
+  jobs: RunJob[],
+  head: string,
+  repository: string,
+  pr: string,
+  labelName: string,
+): Outcome {
   const start = jobs.find((job) => job.name === START_JOB);
   const gate = jobs.find((job) => job.name === GATE_JOB);
 
@@ -91,7 +98,7 @@ export function forkOutcome(jobs: RunJob[], head: string, pr: string, labelName:
   if (start.conclusion !== 'success') {
     return {
       state: 'failure',
-      description: `Could not start on ${head.slice(0, 7)}. Run: ${runCommand(pr, labelName)}`,
+      description: `Could not start on ${head.slice(0, 7)}. Run: ${runCommand(repository, pr, labelName)}`,
     };
   }
 
@@ -141,7 +148,7 @@ async function remind() {
   await setStatus(
     head,
     'pending',
-    `Not run on this commit. Run: ${runCommand(pr, label())}`,
+    `Not run on this commit. Run: ${runCommand(repo(), pr, label())}`,
     env('CI_GATE_DOCS_URL'),
   );
 }
@@ -163,7 +170,7 @@ async function start() {
   const parents: string[] = merge.parents.map((parent: { sha: string }) => parent.sha);
 
   if (!parents.includes(head)) {
-    const description = `The merge commit did not include ${head.slice(0, 7)} yet. Run again: ${runCommand(pr, label())}`;
+    const description = `The merge commit did not include ${head.slice(0, 7)} yet. Run again: ${runCommand(repo(), pr, label())}`;
     if (sameRepo) {
       await setStatus(head, 'failure', description, runUrl);
     }
@@ -232,7 +239,7 @@ async function fork() {
     }
   }
 
-  const outcome = forkOutcome(jobs, head, String(pull.number), label());
+  const outcome = forkOutcome(jobs, head, repo(), String(pull.number), label());
   await removeLabel(String(pull.number));
 
   if (outcome) {

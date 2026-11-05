@@ -61,6 +61,7 @@ describe('forkOutcome', () => {
         { name: GATE_JOB, conclusion: 'skipped' },
       ],
       HEAD,
+      'acme/repo',
       '12',
       'run-ci',
     );
@@ -75,6 +76,7 @@ describe('forkOutcome', () => {
         { name: GATE_JOB, conclusion: 'cancelled' },
       ],
       HEAD,
+      'acme/repo',
       '12',
       'run-ci',
     );
@@ -90,6 +92,7 @@ describe('forkOutcome', () => {
         { name: GATE_JOB, conclusion: 'success' },
       ],
       HEAD,
+      'acme/repo',
       '12',
       'run-ci',
     );
@@ -99,6 +102,7 @@ describe('forkOutcome', () => {
         { name: GATE_JOB, conclusion: 'failure' },
       ],
       HEAD,
+      'acme/repo',
       '12',
       'run-ci',
     );
@@ -114,13 +118,14 @@ describe('forkOutcome', () => {
         { name: GATE_JOB, conclusion: 'failure' },
       ],
       HEAD,
+      'acme/repo',
       '12',
       'run-ci',
     );
 
     assert.deepEqual(outcome, {
       state: 'failure',
-      description: 'Could not start on 0123456. Run: gh pr edit 12 --add-label run-ci',
+      description: 'Could not start on 0123456. Run: gh api repos/acme/repo/issues/12/labels -f "labels[]=run-ci"',
     });
   });
 });
