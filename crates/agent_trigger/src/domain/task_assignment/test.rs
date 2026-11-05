@@ -167,6 +167,7 @@ fn discussion(assignment: &TaskAssignment) -> messages::domain::models::Message 
         attachments: Vec::new(),
         reactions: Vec::new(),
         mentions: Vec::new(),
+        link_previews: vec![],
     }
 }
 

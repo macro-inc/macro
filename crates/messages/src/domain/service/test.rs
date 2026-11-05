@@ -7,6 +7,7 @@ mod call_retries;
 mod event_posts;
 mod guest_chat;
 mod initiative;
+mod link_previews;
 
 #[derive(Clone)]
 struct Repo {
@@ -21,6 +22,7 @@ struct Repo {
     file_type: Option<String>,
     concurrent_create: bool,
     client_message_id: Option<Uuid>,
+    link_preview_writes: Arc<Mutex<Vec<Vec<LinkPreview>>>>,
 }
 
 impl Repo {
@@ -228,6 +230,28 @@ impl MessageRepository for Repo {
     ) -> Result<Option<Uuid>, MessageError> {
         unimplemented!()
     }
+    async fn replace_link_previews(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+        content: &str,
+        previews: &[LinkPreview],
+    ) -> Result<Option<Message>, MessageError> {
+        let Some(message) = self.get(parent, id).await? else {
+            return Ok(None);
+        };
+        if message.content != content || message.deleted_at.is_some() {
+            return Ok(None);
+        }
+        self.link_preview_writes
+            .lock()
+            .unwrap()
+            .push(previews.to_vec());
+        Ok(Some(Message {
+            link_previews: previews.to_vec(),
+            ..message
+        }))
+    }
 }
 
 #[derive(Clone, Default)]
@@ -263,6 +287,7 @@ fn fixture() -> Repo {
             deleted_at: None,
             attachments: vec![],
             reactions: vec![],
+            link_previews: vec![],
         },
         state: ThreadState {
             root_id: id,
@@ -285,6 +310,7 @@ fn fixture() -> Repo {
         file_type: Some("md".into()),
         concurrent_create: false,
         client_message_id: None,
+        link_preview_writes: Arc::default(),
     }
 }
 
@@ -1408,6 +1434,17 @@ impl MessageRepository for StrictRepo {
         is_thread: bool,
     ) -> Result<Option<Uuid>, MessageError> {
         self.inner.resolve_legacy(parent, id, is_thread).await
+    }
+    async fn replace_link_previews(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+        content: &str,
+        previews: &[LinkPreview],
+    ) -> Result<Option<Message>, MessageError> {
+        self.inner
+            .replace_link_previews(parent, id, content, previews)
+            .await
     }
 }
 

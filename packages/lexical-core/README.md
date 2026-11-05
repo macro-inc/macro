@@ -26,6 +26,11 @@ normal link using the normalized URL. Removed labels that contain no URL export
 as ordinary formatted text. Ordinary link payloads are unchanged. External Markdown exports
 removed links as escaped literal text.
 
+`utils/link-previews.ts` picks the links a channel message shows preview cards
+for: web links in text order, without repeats, at most three, excluding
+removed links, email addresses, and links into the Macro app. The lexical
+service serves it at `/link-previews` for the server that stores previews.
+
 Before this marker existed, removed links could be saved as plain URL text or as
 ordinary link payloads. Their original intent cannot be recovered; legacy bare
 URLs follow the automatic-linking policy.

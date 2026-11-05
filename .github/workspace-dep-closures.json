@@ -2576,6 +2576,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "broadcast": [
@@ -2804,6 +2805,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "calendar_scheduling": [
@@ -3060,6 +3062,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "call_recording_preview_handler": [
@@ -3367,6 +3370,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "chat": [
@@ -3928,6 +3932,7 @@
       "crates/sync_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -4001,6 +4006,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "complete_graph": [
@@ -5901,6 +5907,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "email_db_client": [
@@ -6558,6 +6565,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/email_suppression_handler"
@@ -7276,6 +7284,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "graphql_activity": [
@@ -7402,6 +7411,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "graphql_channel": [
@@ -7475,6 +7485,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "graphql_common": [
@@ -9271,6 +9282,7 @@
       "crates/secretsmanager_client",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/image_proxy_service"
@@ -9606,6 +9618,7 @@
       "crates/sync_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -9836,6 +9849,7 @@
       "crates/share_permission_db_utils",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "lexical_mention_extractor": [
@@ -9905,6 +9919,7 @@
       "crates/share_permission_db_utils",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "load-test": [
@@ -10054,6 +10069,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -10157,6 +10173,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -10533,6 +10550,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "microsoft_oauth_grant_db_utils": [
@@ -10992,6 +11010,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "native_app_server": [
@@ -11366,6 +11385,7 @@
       "crates/share_permission_db_utils",
       "crates/sns_client",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/notification_service"
@@ -12609,6 +12629,7 @@
       "crates/sync_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack",
@@ -13819,6 +13840,7 @@
       "crates/system_properties",
       "crates/task_dedup",
       "crates/trigger_context",
+      "crates/unfurl",
       "crates/workspace-hack"
     ],
     "teams": [
@@ -14207,6 +14229,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/user_link_cleanup_handler"

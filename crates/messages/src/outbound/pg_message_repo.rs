@@ -168,6 +168,28 @@ impl PgMessageRepository {
                FROM comms_reactions WHERE message_id = ANY($1) GROUP BY message_id, emoji ORDER BY emoji"#,
             &ids,
         ).fetch_all(&mut *connection).await.map_err(database_error)?;
+        let link_previews = sqlx::query!(
+            r#"SELECT message_id, url, title, description, image_url, favicon_url
+               FROM comms_message_link_previews WHERE message_id = ANY($1)
+               ORDER BY message_id, position"#,
+            &ids,
+        )
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(database_error)?;
+        let mut link_preview_map: HashMap<Uuid, Vec<LinkPreview>> = HashMap::new();
+        for preview in link_previews {
+            link_preview_map
+                .entry(preview.message_id)
+                .or_default()
+                .push(LinkPreview {
+                    url: preview.url,
+                    title: preview.title,
+                    description: preview.description,
+                    image_url: preview.image_url,
+                    favicon_url: preview.favicon_url,
+                });
+        }
         let mut attachment_map: HashMap<Uuid, Vec<MessageAttachment>> = HashMap::new();
         for a in attachments {
             attachment_map
@@ -276,6 +298,11 @@ impl PgMessageRepository {
                         vec![]
                     } else {
                         reaction_map.remove(&r.id).unwrap_or_default()
+                    },
+                    link_previews: if deleted {
+                        vec![]
+                    } else {
+                        link_preview_map.remove(&r.id).unwrap_or_default()
                     },
                 })
             })
@@ -808,6 +835,73 @@ impl MessageRepository for PgMessageRepository {
         let message = Self::require_message_in(&mut tx, parent, id).await?;
         tx.commit().await.map_err(database_error)?;
         Ok(message)
+    }
+
+    async fn replace_link_previews(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+        content: &str,
+        previews: &[LinkPreview],
+    ) -> Result<Option<Message>, MessageError> {
+        let mut tx = self.pool.begin().await.map_err(database_error)?;
+        // The row lock orders this write against an edit: an edit that commits
+        // first fails the content check, one that waits replaces these previews
+        // with its own refresh.
+        let current = sqlx::query_scalar!(
+            r#"SELECT id FROM comms_messages
+               WHERE id = $1 AND parent_entity_type = $2 AND parent_entity_id = $3
+                   AND content = $4 AND deleted_at IS NULL
+               FOR UPDATE"#,
+            id,
+            parent.entity_type(),
+            parent.entity_id(),
+            content,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(database_error)?;
+        if current.is_none() {
+            return Ok(None);
+        }
+
+        sqlx::query!(
+            "DELETE FROM comms_message_link_previews WHERE message_id = $1",
+            id
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(database_error)?;
+        let positions = (0..previews.len())
+            .map(i16::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| MessageError::Repository(rootcause::Report::new(e).into()))?;
+        let urls: Vec<_> = previews.iter().map(|p| p.url.clone()).collect();
+        let titles: Vec<_> = previews.iter().map(|p| p.title.clone()).collect();
+        let descriptions: Vec<_> = previews.iter().map(|p| p.description.clone()).collect();
+        let image_urls: Vec<_> = previews.iter().map(|p| p.image_url.clone()).collect();
+        let favicon_urls: Vec<_> = previews.iter().map(|p| p.favicon_url.clone()).collect();
+        sqlx::query!(
+            r#"INSERT INTO comms_message_link_previews
+                   (message_id, position, url, title, description, image_url, favicon_url)
+               SELECT $1, * FROM UNNEST(
+                   $2::smallint[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[]
+               )"#,
+            id,
+            &positions,
+            &urls,
+            &titles,
+            &descriptions as &[Option<String>],
+            &image_urls as &[Option<String>],
+            &favicon_urls as &[Option<String>],
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(database_error)?;
+
+        let message = Self::require_message_in(&mut tx, parent, id).await?;
+        tx.commit().await.map_err(database_error)?;
+        Ok(Some(message))
     }
 
     async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
