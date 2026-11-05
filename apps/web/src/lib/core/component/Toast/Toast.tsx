@@ -327,7 +327,7 @@ export function ToastContent(props: {
         <div
           class={cn(
             'macro-toast-content min-w-0',
-            showCloseButton() && 'pr-10'
+            showCloseButton() && (hasActions() ? 'pr-7' : 'pr-10')
           )}
         >
           <Show
@@ -416,7 +416,7 @@ export function ToastContent(props: {
           <Show when={showCloseButton()}>
             <Toast.CloseButton
               as={Button}
-              variant="ghost"
+              variant={hasActions() ? 'secondary' : 'ghost'}
               size="icon-sm"
               aria-label={t('common.close')}
               class={cn(
