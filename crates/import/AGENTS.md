@@ -76,7 +76,12 @@ from this import's other databases into it are not linked.
 - `src/inbound/toolset.rs`: the AI-chat-facing import tools
   (`toolset/import_from_notion.rs` is the workspace import tool).
 - `src/inbound/axum_router.rs`: the `/import/*` routes (state, accept/decline,
-  Slack discovery, the Notion import report and cancel).
+  Slack discovery, the Notion import report and cancel, and workspace
+  plan/report/cancel); `axum_router/ledger.rs` serves the ledger
+  (`/import/entities`) and single Notion page imports for the SDK's
+  `macro.imports`, the code-mode replacement for the import tools. Errors
+  the caller can fix (sharing not chosen, not connected, not ready) answer 409
+  with an `ImportErrorBody` code.
 
 ## Scope
 
@@ -192,7 +197,7 @@ from this import's other databases into it are not linked.
 Hosts register their read-only `import_linear`/`import_jira` connections with
 `with_tracker_connections`. `WorkspaceImporter` scopes every operation to the
 selected source; `/import/workspaces/{source}` and its `/cancel` route back the
-review card. The legacy Notion method and repository names remain for callers.
+review card, and `/plan` stages a plan for the SDK. The legacy Notion method and repository names remain for callers.
 
 Plans retain complete issue/group snapshots. The decision model triages groups;
 issues inherit copy/skip/hand and sharing. Issues become tasks through ordinary

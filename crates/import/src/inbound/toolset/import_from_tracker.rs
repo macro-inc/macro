@@ -5,13 +5,13 @@ use crate::domain::{
     ports::ImportError,
     service::WorkspaceImporter,
 };
+use crate::inbound::PLAN_WAIT;
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
 };
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 /// Plan, inspect or cancel a read-only Linear workspace import.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -109,7 +109,7 @@ async fn call<T: WorkspaceImporter>(
     let service = context.require_service()?;
     let user = &request.user_id;
     let report = match action {
-        NotionImportAction::Plan => service.prepare_workspace_import(user, source, sharing, Duration::from_secs(5)).await,
+        NotionImportAction::Plan => service.prepare_workspace_import(user, source, sharing, PLAN_WAIT).await,
         NotionImportAction::Status => service.workspace_import_report(user, source).await,
         NotionImportAction::Cancel => match service.cancel_workspace_import(user, source).await {
             Ok(_) => service.workspace_import_report(user, source).await,
