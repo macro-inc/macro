@@ -47,8 +47,8 @@ deploy repo, which Argo CD syncs.
   it to `xtask_workflows/src/workflows/forge.rs`; never add one that deploys.
 - See what is deployed: `https://argocd.localhost:9443/` (user `admin`; password
   in `argocd-initial-admin-secret`). The forge login is in `forge/forge-admin`.
-- Build the self-host chart: `cargo x platform chart`, then `helm install`. It needs
-  the `macro-env` and `fusionauth-kickstart` Secrets first (see its README).
+- Build the self-host chart: `cargo x platform chart --release`, then `helm install`.
+  It needs the `macro-env` and `fusionauth-kickstart` Secrets first (see its README).
 - Add a workload: add it to `components.nix`, using a Service name that matches
   what `local_env.rs` dials. Mark data-plane pieces `infra = true` so they
   sync before provisioning (`wave` overrides the default).

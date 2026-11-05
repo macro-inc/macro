@@ -184,6 +184,8 @@ def main():
     (out / "templates" / "NOTES.txt").write_text(
         "This chart is a preview and is not safe for production: see the chart README.\n"
         "Macro is starting at https://{{ .Values.host }}/app/\n"
+        "A first install takes around ten minutes. Services restart until provisioning\n"
+        "finishes, so CrashLoopBackOff is expected until then.\n"
         "It needs the `macro-env` Secret and the `fusionauth-kickstart` Secret in this\n"
         "namespace first; see the chart README.\n"
     )

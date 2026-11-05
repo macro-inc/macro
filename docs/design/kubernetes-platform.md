@@ -370,11 +370,12 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
   Valkey for Redis; provisioning as in-cluster Jobs; eleven Lambda handlers,
   unmodified, behind `lambda-runner`. Search indexing has not been verified.
 - **Phase 5, in part:** Gitea, its runners, and CI checks. See CI status below.
-- **Phase 7, in part:** `cargo x platform chart` builds the Helm chart from an
-  instance's manifests. A plain `helm install` into an empty namespace on this
-  cluster, with no Argo CD or forge in the path, provisioned itself and reached a
-  browser sign-up in about two minutes. It reused this cluster's ingress and
-  registry, and dev-sized images.
+- **Phase 7, in part:** `cargo x platform chart --release` builds the Helm chart and
+  release images from an instance's manifests. A plain `helm install` on a stock kind
+  cluster, with no Argo CD, forge, or ingress in the path, provisioned itself, served the
+  app, and delivered a login email to Mailpit. It takes about 11 minutes to settle: the
+  chart has no sync waves, so services restart until provisioning finishes, and backoff
+  adds to the wait.
 - **Generated credentials:** a new instance bootstraps from nothing with its own, reaches
   sign-up, and rejects the old development values.
 - **Rust E2E suite:** 16 pass, on queues in Kafka and with generated credentials. One assertion in
@@ -409,14 +410,13 @@ Not built yet:
   `dataloss_prevention_handler`, `email_suppression_handler`,
   `upload_extractor_lambda_trigger`).
 - The rest of phase 7: publishing the images and chart per release, a generator for
-  the Secrets a self-hoster must supply, a production-sized install, and a run on a
-  stock cluster such as kind. **The chart is a preview, not safe for real data**, and
+  the Secrets a self-hoster must supply, and a production-sized install. **The chart is a preview, not safe for real data**, and
   says so in its README: it ships `local-kms` despite the rule above (OpenBao needs a KMS
   adapter first), mail goes to Mailpit, Kafka and OpenSearch have no authentication
   inside the namespace, and the API-token and CloudFront signing keys are still the
   fixed development keys.
-- Release images from crane. Every image today wraps a host-built debug binary with
-  debug info stripped.
+- Release images on our own instances, which still wrap host-built debug binaries with
+  debug info stripped, for the fast loop.
 - Mirroring from GitHub automatically, which needs a credential decision.
 
 Deviations from the decisions above, to revisit in the AWS phase:
