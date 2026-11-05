@@ -73,6 +73,22 @@ export function SignupJourneyView(props: {
         journey.step() === 'security' || journey.step() === 'work' ? (
           <OnboardingTrustDetails
             topic={journey.step() === 'security' ? 'security' : 'google'}
+            legal={
+              journey.step() === 'work' ? (
+                <>
+                  Your work email becomes your Macro sign-in. By continuing, you
+                  agree to our{' '}
+                  <a href="/terms" class="underline underline-offset-2">
+                    terms
+                  </a>{' '}
+                  and{' '}
+                  <a href="/privacy" class="underline underline-offset-2">
+                    privacy policy
+                  </a>
+                  .
+                </>
+              ) : undefined
+            }
           />
         ) : undefined
       }
@@ -125,18 +141,6 @@ export function SignupJourneyView(props: {
               {props.emailForm}
             </div>
           </Show>
-          <p class="mx-auto max-w-xs text-center text-xs leading-5 text-ink-extra-muted">
-            Your work email becomes your Macro sign-in. By continuing, you agree
-            to our{' '}
-            <a href="/terms" class="underline underline-offset-2">
-              terms
-            </a>{' '}
-            and{' '}
-            <a href="/privacy" class="underline underline-offset-2">
-              privacy policy
-            </a>
-            .
-          </p>
         </Show>
       </div>
     </OnboardingShell>

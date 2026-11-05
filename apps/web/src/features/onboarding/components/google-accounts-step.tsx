@@ -70,11 +70,18 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
             : 'Google email and calendar.'}
         </h1>
         <p class="mt-7 max-w-[440px] font-[Inter_Variable] text-sm font-normal leading-6 text-ink-muted sm:text-[15px] [text-wrap:balance]">
-          {withMicrosoft()
-            ? 'Sign up with your Google or Microsoft work account to bring email and calendars into Macro.'
-            : personal()
-              ? 'Add a personal account for email and calendar in Macro. This is optional; your Macro sign-in stays the same. Agents ask for approval before sending email, and you can disconnect anytime.'
-              : 'Connect through Google to read, send, and organize email and manage your calendars in Macro. Agents ask for your approval before sending email. Your password stays with Google, and you can disconnect anytime.'}
+          {withMicrosoft() ? (
+            // Line 2 stays 60–80% of line 1; the break hides where line 1 can't fit.
+            <>
+              Connect your Google or Microsoft account
+              <br class="max-[359px]:hidden" /> to bring email/calendar to
+              Macro.
+            </>
+          ) : personal() ? (
+            'Add a personal account for email and calendar in Macro. This is optional; your Macro sign-in stays the same. Agents ask for approval before sending email, and you can disconnect anytime.'
+          ) : (
+            'Connect through Google to read, send, and organize email and manage your calendars in Macro. Agents ask for your approval before sending email. Your password stays with Google, and you can disconnect anytime.'
+          )}
         </p>
       </header>
 
@@ -143,7 +150,7 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
             type="button"
             disabled={blocked()}
             onClick={() => props.onConnectMicrosoft?.()}
-            class="flex min-h-14 w-full items-center justify-center gap-3 rounded-full border border-edge bg-surface px-6 py-4 text-base font-medium text-ink transition-colors hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
+            class="flex min-h-14 w-full items-center justify-center gap-3 rounded-full border border-edge bg-surface px-6 py-4 text-base font-medium text-ink transition-colors hover:bg-ink/5 dark-mode:border-[#ffffff14] dark-mode:bg-[oklch(0.17_0.002_250)] dark-mode:shadow-[inset_1px_1px_0_#ffffff12,0_10px_40px_-8px_#0004] dark-mode:hover:bg-[oklch(0.2_0.002_250)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
           >
             <Show
               when={props.microsoftConnecting}
