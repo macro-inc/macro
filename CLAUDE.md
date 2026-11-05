@@ -122,8 +122,8 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
   reads it too.
 - Open pull requests ready for review. If one is created as a draft, mark it
   ready for review before handing off.
-- Get CI passing on the latest commit before handing off: add the `run-ci`
-  label after pushing (`run-ci` skill). A pull request whose `CI gate` is
+- Get CI passing on the latest commit before handing off. CI runs only when
+  asked: add the `run-ci` label after pushing (`run-ci` skill). A pull request whose `CI gate` is
   failing, still running, or not run is not done.
 - Test the affected packages/services individually before committing. Use the
   relevant guide for setup; there is no root `just test` recipe.

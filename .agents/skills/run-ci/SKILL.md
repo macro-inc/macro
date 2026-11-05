@@ -60,9 +60,3 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 A maintainer adds the label after reading the diff: the run uses the fork's
 workflow files. The fork's token can't set statuses, so `CI Gate for Forks`
 removes the label and sets `CI gate` after the run finishes.
-
-## While the switch is in progress
-
-The checks still run on every push as well, and `main` still requires their
-old status checks (`Web App Status Check`, `Cloud Storage Status Check`,
-`Infra Status Check`) until its ruleset requires `CI gate`.
