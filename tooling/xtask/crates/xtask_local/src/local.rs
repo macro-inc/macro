@@ -260,10 +260,11 @@ pub(crate) fn bring_up(
     // Run the teardown in the BACKGROUND: tearing the old stack down is
     // independent of the host-side build, so the two overlap instead of summing
     // (stopping ~20 containers is otherwise the slow part of a re-run).
-    let teardown = (plan.start == Start::Fresh && !stage.is_dry_run()).then(|| {
-        let instance = instance.clone();
-        std::thread::spawn(move || teardown_commands(&instance))
-    });
+    let teardown = if plan.start == Start::Fresh {
+        BackgroundTeardown::start(stage, instance)
+    } else {
+        None
+    };
 
     // Sharing posture (`--with-cf-tunnel`, local only): besides the tunnels,
     // the proxy additionally serves the headless static bundle, because that
@@ -403,11 +404,8 @@ pub(crate) fn bring_up(
     // surfaced as a live spinner so it's clear what we're blocked on. It
     // overlapped the build above, so this is just whatever's left of stopping the
     // old containers — instant if it already finished.
-    if let Some(handle) = teardown {
-        stage.run_step("Tearing down previous stack", move || {
-            let _ = handle.join();
-            Ok(())
-        })?;
+    if let Some(teardown) = teardown {
+        teardown.finish(stage)?;
     }
     // Both modes run at least Redis + LocalStack locally, and those reference the
     // instance's `external` volumes/networks — which must exist before compose
@@ -1460,6 +1458,42 @@ fn teardown(stage: &Stage, instance: &Instance) -> Result<()> {
         teardown_commands(instance);
         Ok(())
     })
+}
+
+/// [`teardown_commands`] on a background thread, overlapping a start's build.
+/// Dropping it waits for the teardown, so a start that fails before joining
+/// can't exit halfway through and leave some of the instance's networks behind.
+struct BackgroundTeardown(Option<std::thread::JoinHandle<()>>);
+
+impl BackgroundTeardown {
+    /// `None` on a dry run, which tears nothing down.
+    fn start(stage: &Stage, instance: &Instance) -> Option<Self> {
+        (!stage.is_dry_run()).then(|| {
+            let instance = instance.clone();
+            Self(Some(std::thread::spawn(move || {
+                teardown_commands(&instance)
+            })))
+        })
+    }
+
+    /// Wait for what's left of the teardown, shown as a step.
+    fn finish(mut self, stage: &Stage) -> Result<()> {
+        let handle = self.0.take();
+        stage.run_step("Tearing down previous stack", move || {
+            if let Some(handle) = handle {
+                let _ = handle.join();
+            }
+            Ok(())
+        })
+    }
+}
+
+impl Drop for BackgroundTeardown {
+    fn drop(&mut self) {
+        if let Some(handle) = self.0.take() {
+            let _ = handle.join();
+        }
+    }
 }
 
 /// Create the per-instance external networks and volumes the compose files
