@@ -303,7 +303,9 @@ invites, emails up to 25 of the creator's same-domain contacts who are not on
 Macro, invited, or already sent a notice (`POST /team/domain-notice`). The
 notice switch is disabled and reads off while domain join is off, because the
 server sends nothing to a team without an auto-join domain; turning domain
-join back on restores its earlier setting. Creating the team does not leave the step: it
+join back on restores its earlier setting. Each switch has an info button
+beside it that explains the setting in a tooltip on hover or focus, and in a
+popover on tap on touch devices; pressing it never toggles the switch. Creating the team does not leave the step: it
 switches to the **You're on <team>** confirmation, the same panel members who
 were already on a team (auto-joined or invite-accepted) see. That panel has
 **Copy invite link** beside **Continue**; it copies the team's

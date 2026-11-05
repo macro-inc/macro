@@ -157,6 +157,32 @@ describe('onboarding flow', () => {
     );
   });
 
+  it('explains each domain switch without toggling it', async () => {
+    setup({ resume: 'team' });
+    await heading('Built for teams.');
+    await screen.findByDisplayValue('Acme');
+
+    const domainJoin = screen.getByRole('switch', {
+      name: /^Allow @acme.com emails to join/,
+    }) as HTMLInputElement;
+    const joinInfo = screen.getByRole('button', { name: 'About domain join' });
+    expect(joinInfo.getAttribute('aria-description')).toMatch(
+      /joins this team automatically/
+    );
+    expect(
+      screen
+        .getByRole('button', { name: 'About the team email' })
+        .getAttribute('aria-description')
+    ).toMatch(/up to 25/);
+
+    fireEvent.click(joinInfo);
+    expect(domainJoin.checked).toBe(true);
+    // The info button stays out of the switch's accessible name.
+    expect(
+      screen.queryByRole('switch', { name: /About domain join/ })
+    ).toBeNull();
+  });
+
   it('notifies the domain only while domain join is on', async () => {
     const { fake } = setup({ resume: 'team' });
     await heading('Built for teams.');
