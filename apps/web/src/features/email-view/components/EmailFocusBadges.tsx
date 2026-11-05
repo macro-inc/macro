@@ -2,7 +2,6 @@ import type { EmailFocus, EntityData } from '@entity';
 import { Badge, cn, TagDot, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import type { EmailFocusSort } from '../constants';
 import { emailFocusDue } from '../focus-due';
 import { emailFocusReason } from '../focus-reason';
 
@@ -76,16 +75,10 @@ function ImportanceMeter(props: { focus: EmailFocus }) {
   );
 }
 
-/**
- * A Focus row's importance meter, only while the list is sorted by importance:
- * there it explains the order, and elsewhere it only draws the eye.
- */
-export function EmailFocusScore(props: {
-  entity: EntityData;
-  sort: EmailFocusSort;
-}) {
+/** A Focus row's importance meter, shown on every sort. */
+export function EmailFocusScore(props: { entity: EntityData }) {
   return (
-    <Show when={props.sort === 'importance' && emailFocusOf(props.entity)}>
+    <Show when={emailFocusOf(props.entity)}>
       {(focus) => <ImportanceMeter focus={focus()} />}
     </Show>
   );
@@ -150,13 +143,10 @@ export function EmailFocusReason(props: { entity: EntityData }) {
 }
 
 /** Both on one line, for stacked rows, which have no metadata column. */
-export function EmailFocusPreviewLeading(props: {
-  entity: EntityData;
-  sort: EmailFocusSort;
-}) {
+export function EmailFocusPreviewLeading(props: { entity: EntityData }) {
   return (
     <>
-      <EmailFocusScore entity={props.entity} sort={props.sort} />
+      <EmailFocusScore entity={props.entity} />
       <EmailFocusReason entity={props.entity} />
     </>
   );

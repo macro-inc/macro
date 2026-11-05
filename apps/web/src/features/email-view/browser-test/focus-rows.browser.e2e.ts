@@ -127,12 +127,9 @@ for (const size of WIDTHS) {
       if (size.stacked) {
         expect(await subjectWidth('reply')).toBe(await subjectWidth('other'));
       }
-      // One-line rows keep a readable subject beside the pills, and the meter too.
+      // One-line rows keep a readable subject beside the pills and the meter.
       else {
-        expect(await subjectWidth('due-soon')).toBeGreaterThanOrEqual(200);
-        await page.getByRole('button', { name: 'Importance' }).click();
         expect(await subjectWidth('due-soon')).toBeGreaterThanOrEqual(130);
-        await page.getByRole('button', { name: 'Most recent' }).click();
       }
 
       const horizontalOverflow = await page.evaluate(
@@ -143,28 +140,23 @@ for (const size of WIDTHS) {
       expect(horizontalOverflow).toBe(false);
     });
 
-    test('a due date shows beside the reason, on both sorts', async ({
-      page,
-    }) => {
+    test('a due date shows beside the reason', async ({ page }) => {
       await open(page);
       const pill = (id: string, label: string | RegExp) =>
         page.getByTestId(`row-${id}`).getByText(label, { exact: true });
 
-      for (const sort of ['Most recent', 'Importance']) {
-        await page.getByRole('button', { name: sort }).click();
-        await expect(
-          pill('due-soon', /^Due (Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/)
-        ).toBeVisible();
-        await expect(pill('due-today', 'Due today')).toBeVisible();
-        await expect(pill('due-tomorrow', 'Due tomorrow')).toBeVisible();
-        await expect(pill('overdue', 'Overdue')).toBeVisible();
-        await expect(
-          pill('due-no-reason', /^Due [A-Z][a-z]{2} \d{1,2}(, \d{4})?$/)
-        ).toBeVisible();
-        await expect(
-          page.getByTestId('row-reply').getByText(/^(Due|Overdue)/)
-        ).toHaveCount(0);
-      }
+      await expect(
+        pill('due-soon', /^Due (Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/)
+      ).toBeVisible();
+      await expect(pill('due-today', 'Due today')).toBeVisible();
+      await expect(pill('due-tomorrow', 'Due tomorrow')).toBeVisible();
+      await expect(pill('overdue', 'Overdue')).toBeVisible();
+      await expect(
+        pill('due-no-reason', /^Due [A-Z][a-z]{2} \d{1,2}(, \d{4})?$/)
+      ).toBeVisible();
+      await expect(
+        page.getByTestId('row-reply').getByText(/^(Due|Overdue)/)
+      ).toHaveCount(0);
 
       // The warning tone sets an overdue row apart from one that is only due.
       const border = (id: string, label: string | RegExp) =>
@@ -174,16 +166,13 @@ for (const size of WIDTHS) {
       );
     });
 
-    test('the meter shows only under the importance sort, in its band color', async ({
+    test('the meter shows on every row, in its band color', async ({
       page,
     }) => {
       await open(page);
       const meters = page.getByRole('img', {
         name: /^Importance \d+ of 100(, (rising|falling))?$/,
       });
-      await expect(meters).toHaveCount(0);
-
-      await page.getByRole('button', { name: 'Importance' }).click();
       await expect(meters).toHaveCount(Object.keys(REASONS).length);
       const reply = page.getByTestId('row-reply');
       await expect(
@@ -203,16 +192,12 @@ for (const size of WIDTHS) {
         return [...colors];
       });
       expect(firstBarColors).toHaveLength(6);
-
-      await page.getByRole('button', { name: 'Most recent' }).click();
-      await expect(meters).toHaveCount(0);
     });
 
     test('the label says which way importance is moving, with no icon', async ({
       page,
     }) => {
       await open(page);
-      await page.getByRole('button', { name: 'Importance' }).click();
       const labels: Record<string, string> = {
         reply: 'Importance 92 of 100, rising',
         'follow-up': 'Importance 71 of 100, falling',

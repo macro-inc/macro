@@ -94,10 +94,8 @@ searches, and picks by keyboard:
 Focus rows have a backend-free browser regression over the real row and mapping
 at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
 extra height or lost subject, touch rows of at least 44px, and the importance
-meter only under its sort, with the direction in its label while importance moves:
+meter on every row, with the direction in its label while importance moves:
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
-The fixture has its own sort buttons: the real touch layouts have no sort menu, so
-that coverage proves the meter's layout there, not that touch users can reach it.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.

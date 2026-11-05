@@ -215,9 +215,8 @@ when: `Due today`, `Due tomorrow`, a weekday for the week ahead (`Due Fri`), or 
 date (`Due Nov 12`), on either sort, with the full date in its tooltip. A date
 before the viewer's local today reads `Overdue` with a warning dot and border. A
 thread classified before due dates shipped shows none until new mail arrives, and
-mail naming no firm date shows none. While the list is sorted by Importance, the
-0-100 score and five bars colored by band join it, red through green; Most recent
-hides them. The meter's tooltip and label add `rising` or `falling` while a thread's
+mail naming no firm date shows none. Every row also shows the 0-100 score and five
+bars colored by band, red through green, on either sort. The meter's tooltip and label add `rising` or `falling` while a thread's
 importance is moving: Jev judges per thread whether it gets more pressing or matters
 less as it sits, and the read moves the score from the time of its classified
 message until newer mail arrives. Threads classified before those questions stay
@@ -227,8 +226,8 @@ and all of it ahead of the preview, so a narrow desktop window still shows the m
 header's sort dropdown (`Sort Focus`, among the view options) switches between
 **Most recent**, the default, and **Importance**, which
 is flat with no day headers. Touch layouts, phone or tablet, have no dropdown and
-keep the saved order: Most recent, which shows no meter, unless that browser had
-already saved Importance. A saved order
+keep the saved order: Most recent, unless that browser had already saved
+Importance. A saved order
 that no longer exists restores as Most recent. The filter menu adds a Focus group (Reply
 needed, Follow up) on this tab only and has no Status or Done group there. The
 list is one `user.emailFocus` GraphQL read filtered on the client. New mail
