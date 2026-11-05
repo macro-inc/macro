@@ -41,6 +41,7 @@ macro_event_topics = { path = "../macro_event_topics" }
 messages = { path = "../messages", features = ["broker", "outbound"] }
 models_properties = { path = "../models_properties" }
 properties = { path = "../properties", default-features = false, features = ["outbound"] }
+routine_program = { path = "../routine_program", features = ["schema"] }
 system_properties = { path = "../system_properties" }
 trigger_context = { path = "../trigger_context" }
 rdkafka = { workspace = true }
@@ -79,6 +80,7 @@ utoipa-swagger-ui = { workspace = true }
 tower = { workspace = true }
 
 macro_cors = { path = "../macro_cors" }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_auth = { path = "../macro_auth" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 

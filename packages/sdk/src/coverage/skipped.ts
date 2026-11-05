@@ -279,6 +279,9 @@ export const propertiesBacklog =
   [] as const satisfies readonly (keyof PropertiesSdk)[];
 
 export const scheduledActionExcluded = [
+  'draftRoutine', // The routine editor's AI drafting; agents use CreateRoutine.
+  'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
+  'routineCodeStarters', // The new-routine flow's starter code steps.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 

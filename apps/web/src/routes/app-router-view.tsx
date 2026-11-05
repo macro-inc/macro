@@ -66,7 +66,6 @@ import {
   RecentRouteView,
   ReviewsPrDetailRouteView,
   ReviewsRouteView,
-  RoutineCreateRouteView,
   SearchRouteView,
   SettingsRouteView,
   TasksDetailRouteView,
@@ -339,7 +338,8 @@ export function AppRouterView() {
         <Route definition={settingsRoute} component={SettingsRouteView} />
         <Route
           definition={routineCreateRoute}
-          component={RoutineCreateRouteView}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
         />
         <Route
           definition={routineDetailRoute}
