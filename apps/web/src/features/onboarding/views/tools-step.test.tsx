@@ -202,7 +202,12 @@ it('suggests the tools the inbox shows, with why, and always another inbox', asy
     'Connect Linear',
     'Add another inbox',
   ]);
-  expect(within(list).getByText('31 emails in your inbox')).toBeTruthy();
+  expect(within(list).getAllByText('mcp')).toHaveLength(4);
+  expect(
+    within(list).getByText(
+      'Import Linear issues into Macro tasks, and let agents create and update issues.'
+    )
+  ).toBeTruthy();
   expect(within(list).getByText('ada@acme.com connected')).toBeTruthy();
   // Suggested tools aren't repeated in the full catalog.
   fireEvent.click(

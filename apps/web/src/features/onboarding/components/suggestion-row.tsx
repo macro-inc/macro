@@ -1,13 +1,16 @@
 import CheckIcon from '@icon/system/regular/check.svg';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import { Badge } from '@ui';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 
 /** One recommended connection: what it is, why to connect it, and the action. */
 export function SuggestionRow(props: {
   icon: JSX.Element;
   name: string;
-  /** Why this is suggested to this person, e.g. how much mail it sends. */
-  evidence?: string;
+  /** How it reaches Macro, labelled as in Settings → Integrations. */
+  kind: 'native' | 'mcp';
+  /** Context after the badge, e.g. the inbox already connected. */
+  detail?: string;
   reason: string;
   state: 'available' | 'busy' | 'connected' | 'unavailable';
   /** The button's text while it can be pressed. */
@@ -27,15 +30,27 @@ export function SuggestionRow(props: {
         {props.icon}
       </span>
       <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
+        <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <span class="font-medium text-ink">{props.name}</span>
-          <Show when={props.evidence}>
-            <span class="ph-no-capture text-xs text-ink-extra-muted">
-              {props.evidence}
+          <Badge
+            variant="outline"
+            size="xs"
+            class="shrink-0 text-ink-muted"
+            title={
+              props.kind === 'mcp'
+                ? 'Agents use it through an MCP server'
+                : 'Built into Macro'
+            }
+          >
+            {props.kind}
+          </Badge>
+          <Show when={props.detail}>
+            <span class="ph-no-capture min-w-0 truncate text-xs text-ink-extra-muted">
+              {props.detail}
             </span>
           </Show>
         </div>
-        <p class="text-sm text-ink-muted">{props.reason}</p>
+        <p class="text-xs leading-relaxed text-ink-muted">{props.reason}</p>
       </div>
       <button
         type="button"
@@ -51,7 +66,7 @@ export function SuggestionRow(props: {
         onClick={() => props.onConnect()}
         class="flex min-h-9 shrink-0 items-center gap-1.5 self-center rounded-full px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
         classList={{
-          'border border-edge bg-surface text-ink shadow-sm transition-colors hover:bg-ink/5 disabled:opacity-40':
+          'border border-edge bg-surface text-ink shadow-[0_2px_10px_-3px_rgb(0_0_0/0.07)] transition-colors hover:bg-ink/5 disabled:opacity-40':
             props.state !== 'connected',
           'text-ink-muted': props.state === 'connected',
         }}

@@ -86,32 +86,41 @@ const TOOL_SENDER_DOMAINS: Readonly<Record<string, readonly string[]>> = {
   trello: ['trello.com'],
 };
 
-/** Why connecting the tool to Macro is worth it. */
+/**
+ * What connecting the tool does in Macro: Macro's own import (Settings →
+ * Integrations and the import catalog), then what agents can do with it.
+ */
 const TOOL_REASONS: Readonly<Record<string, string>> = {
   linear:
-    'Turn emails and chats into issues, and let agents update them for you.',
-  notion: 'Search your Notion pages from Macro and use them in agent answers.',
+    'Import Linear issues into Macro tasks, and let agents create and update issues.',
+  notion:
+    'Import pages and wikis into your Macro Drive, and let agents search them.',
   slack:
-    'Search Slack next to your email, and let agents read and post in channels.',
-  posthog: 'Ask about product usage, funnels and trends in plain language.',
-  stripe:
-    'Look up customers, payments and subscriptions without switching apps.',
+    'Import channels into Macro, and let agents search conversations and post updates.',
   github:
-    'Review pull requests and track issues beside the threads about them.',
-  figma: 'Bring designs and their comments into your docs and chats.',
-  intercom: 'See customer conversations alongside the rest of your inbox.',
-  hubspot: 'Keep contacts and deals in step with the email you send.',
-  airtable_oauth: 'Let agents read and update your bases.',
-  quickbooks: 'Ask about invoices, bills and cash flow in plain language.',
-  xero_accounting_api:
-    'Ask about invoices, bills and cash flow in plain language.',
-  shopify: 'Ask about orders, products and customers from anywhere in Macro.',
-  mailchimp: 'Check campaigns and audiences without leaving your inbox.',
-  zendesk: 'See support tickets next to the customer’s email.',
-  calendly_v2: 'See bookings and share scheduling links from the composer.',
-  asana: 'Turn emails into tasks and keep projects up to date.',
-  trello: 'Turn emails into cards and keep boards up to date.',
+    'Review pull requests in Macro, import issues into tasks, and give agents repository access.',
+  asana:
+    'Import tasks into Macro tasks, and let agents create and update them.',
+  trello: 'Import cards into Macro tasks, and let agents update your boards.',
+  hubspot:
+    'Import companies and contacts into the Macro CRM, and let agents work with your deals.',
+  airtable_oauth:
+    'Import records into the Macro CRM, and let agents read and update your bases.',
+  posthog:
+    'Let agents answer questions about product usage, funnels and trends.',
+  stripe: 'Let agents look up customers, payments and subscriptions.',
+  figma: 'Let agents read your designs and their comments.',
+  intercom: 'Let agents look up customer conversations and contacts.',
+  quickbooks: 'Let agents look up invoices, bills and payments.',
+  xero_accounting_api: 'Let agents look up invoices, bills and payments.',
+  shopify: 'Let agents look up orders, products and customers.',
+  mailchimp: 'Let agents check your campaigns and audiences.',
+  zendesk: 'Let agents look up and update support tickets.',
+  calendly_v2: 'Let agents look up your bookings and event types.',
 };
+
+/** Built into Macro, as Settings → Integrations labels it; the rest are MCP. */
+const NATIVE_TOOLS: ReadonlySet<string> = new Set(['github']);
 
 /** Every sender domain the inbox check asks the mail provider about. */
 export const ONBOARDING_SENDER_DOMAINS: readonly string[] =
@@ -125,6 +134,8 @@ export const SUGGESTED_TOOL_LIMIT = 4;
 
 export type SuggestedTool = {
   tool: { slug: string; name: string; iconUrl: string | null };
+  /** How it reaches Macro: built in, or as tools agents call over MCP. */
+  kind: 'native' | 'mcp';
   reason: string;
   /** Recent messages from the tool; 0 when it is a default pick. */
   messageCount: number;
@@ -139,6 +150,7 @@ export function rankSuggestedTools(
 ): SuggestedTool[] {
   const suggestions = ONBOARDING_FEATURED_TOOLS.map((tool) => ({
     tool,
+    kind: NATIVE_TOOLS.has(tool.slug) ? ('native' as const) : ('mcp' as const),
     reason: TOOL_REASONS[tool.slug] ?? '',
     messageCount: (TOOL_SENDER_DOMAINS[tool.slug] ?? []).reduce(
       (sum, domain) => sum + (counts[domain] ?? 0),

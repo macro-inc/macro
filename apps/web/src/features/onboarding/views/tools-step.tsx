@@ -109,7 +109,7 @@ export function ToolsStep(props: { onContinue: () => void }) {
     return 'available';
   };
 
-  const inboxEvidence = () => {
+  const inboxDetail = () => {
     const accounts = emailAccounts.accounts();
     if (accounts.t !== 'ready' || accounts.value.length === 0) return undefined;
     return accounts.value.length === 1
@@ -162,11 +162,7 @@ export function ToolsStep(props: { onContinue: () => void }) {
                       />
                     }
                     name={suggestion.tool.name}
-                    evidence={
-                      suggestion.messageCount > 0
-                        ? `${suggestion.messageCount.toLocaleString()} ${suggestion.messageCount === 1 ? 'email' : 'emails'} in your inbox`
-                        : undefined
-                    }
+                    kind={suggestion.kind}
                     reason={suggestion.reason}
                     state={rowState(suggestion.tool.slug)}
                     actionLabel={
@@ -192,8 +188,9 @@ export function ToolsStep(props: { onContinue: () => void }) {
           <SuggestionRow
             icon={<EnvelopeIcon class="size-6 text-ink-muted" />}
             name="Add another inbox"
-            evidence={inboxEvidence()}
-            reason="Bring personal or other work email into the same inbox, search and agents."
+            kind="native"
+            detail={inboxDetail()}
+            reason="Sync another email account into the same inbox, search and agents."
             state={busy() === ADD_INBOX ? 'busy' : 'available'}
             actionLabel="Add"
             actionName="Add another inbox"
