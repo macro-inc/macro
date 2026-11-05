@@ -79,6 +79,9 @@ export type EmailThreadState = {
   thread: Accessor<EmailThread | undefined>;
   permissions: Accessor<{
     isOwner: boolean;
+    /** Owners, and recipients the thread was shared with at edit access,
+     *  who reply from their own inbox. */
+    canReply: boolean;
   }>;
 
   query: {
@@ -353,7 +356,13 @@ export function createEmailThreadState(
         setReplyRequest(undefined);
       },
     },
-    permissions: () => ({ isOwner: selected()?.access_level === 'owner' }),
+    permissions: () => {
+      const accessLevel = selected()?.access_level;
+      return {
+        isOwner: accessLevel === 'owner',
+        canReply: accessLevel === 'owner' || accessLevel === 'edit',
+      };
+    },
     initialLoadComplete: hasHandledTarget,
     onInitialDataLoad,
     isScrollingToMessage,

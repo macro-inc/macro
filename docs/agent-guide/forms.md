@@ -26,11 +26,10 @@ decides who may respond.
 - In a channel composer, `/form` creates a form and opens the builder beside
   the channel; its card joins the draft once the builder saves a question.
   `/poll` opens the poll dialog (question, at least two options, **Multiple
-  answers**, **Show results to respondents**, **Share responses with team**,
-  **Anonymous**); **Post poll** puts the poll's card in the message and sends
-  it. Closing the dialog while it posts sends nothing and trashes the poll.
-  With results hidden, respondents answer without counts and editors review
-  votes in the Responses tab. **Share responses with team** lets everyone who
+  answers**, **Share responses with team**, **Anonymous**); **Post poll** puts
+  the poll's card in the message and sends it. Closing the dialog while it
+  posts sends nothing and trashes the poll. Everyone who can vote sees the
+  counts. **Share responses with team** lets everyone who
   can vote open that table. **Anonymous** makes votes anonymous to everyone
   in Macro, the poll's owner included: the server keeps who voted apart from
   what they chose, so each person still votes once, but no vote can be
@@ -38,7 +37,10 @@ decides who may respond.
   vote times keep only the day, and a vote can't be changed.
 - Asked for a poll, or for a form for a channel, the Macro agent makes a poll
   and posts it as its card in one message (its channel reply), the same card
-  `/poll` posts.
+  `/poll` posts. A form the agent made for the request and presented as a card
+  in its reply's steps is shared with the channel the same way, so everyone in
+  the channel, people outside the team included, can respond to a
+  members-only form.
 
 ## The form page
 
@@ -151,8 +153,8 @@ submitting are not recorded; answers stay in the browser until Submit.
 
 **Who can respond**: Invited people (sign in, one response each, editable
 while open) or Anyone with the link (anonymous; no file questions). The
-respond link with Copy, Accepting responses, Close automatically, Show results
-to respondents, Share responses with team, Anonymous (locked, with a tooltip
+respond link with Copy, Accepting responses, Close automatically, Share
+responses with team, Anonymous (locked, with a tooltip
 saying why, once anyone has responded), Confirmation message, **Branding**, and **Manage access** (the
 share dialog, which also shows the audience panel). Branding (editors) sets a
 logo (**Upload**/**Replace**/**Remove**, shown above the title), a cover image

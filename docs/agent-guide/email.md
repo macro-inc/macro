@@ -210,20 +210,27 @@ is someone else's. A thread holding only the owner's sent mail is not listed: it
 has no inbox state, so Mark Done could not remove it. Each row says why it is
 there with one tag pill: `Reply needed`, else `Follow up`, else its category as
 `Calendar change`, `Customer`, `Teammate` or `Contact`; other categories show no
-pill. While the list is sorted by Importance, the 0-100 score and five bars
-colored by band join it, red through green; Most recent hides them. The meter's
-tooltip and label add `rising` or `falling` while a thread's importance is moving:
-Jev judges per thread whether it gets more pressing or matters less as it sits, and
-the read moves the score from the time of its classified message until newer mail
-arrives. Threads classified before those questions stay flat until their next
-message. Rows at least 40rem wide keep both just before the date. Narrower Focus
-rows stack, on touch too, with the subject on its own line and both ahead of the
-preview, so a narrow desktop window still shows the meter. The desktop
+pill. When a thread's mail names an open deadline, a second pill beside it says
+when: `Due today`, `Due tomorrow`, a weekday for the week ahead (`Due Fri`), or a
+date (`Due Nov 12`), on either sort, with the full date in its tooltip. A date
+before the viewer's local today reads `Overdue` with a warning dot and border. A
+thread classified before due dates shipped shows none until new mail arrives, and
+mail naming no firm date shows none. Every row also shows the 0-100 score and five
+bars colored by band, red through green, on either sort, except on phones (touch
+and under 640px), which leave it out so the reason and due date fit. The meter's
+tooltip and label add `rising` or `falling` while a thread's
+importance is moving: Jev judges per thread whether it gets more pressing or matters
+less as it sits, and the read moves the score from the time of its classified
+message until newer mail arrives. Threads classified before those questions stay
+flat until their next message. Rows at least 45rem wide keep all of it just before
+the date. Narrower Focus rows stack, on touch too, with the subject on its own line
+and all of it ahead of the preview, so a narrow desktop window still shows the
+meter. The desktop
 header's sort dropdown (`Sort Focus`, among the view options) switches between
 **Most recent**, the default, and **Importance**, which
 is flat with no day headers. Touch layouts, phone or tablet, have no dropdown and
-keep the saved order: Most recent, which shows no meter, unless that browser had
-already saved Importance. A saved order
+keep the saved order: Most recent, unless that browser had already saved
+Importance. A saved order
 that no longer exists restores as Most recent. The filter menu adds a Focus group (Reply
 needed, Follow up) on this tab only and has no Status or Done group there. The
 list is one `user.emailFocus` GraphQL read filtered on the client. New mail
@@ -682,6 +689,21 @@ scrolls it into view, and briefly highlights it. For navigation regressions,
 exercise both a recent message and one outside the first page. Open another
 target while loading or highlighting: the previous request must not scroll the
 new thread or clear its highlight. Closing the split cancels pending positioning.
+### Sharing a thread
+
+The thread's **Share** dialog forwards it to people or channels at **Can edit**
+by default; its access dropdown also offers **Can view**, and the People tab
+changes an existing recipient between the two. Edit lets a recipient reply:
+they get Reply, Reply all, and the inline reply box, sending from an inbox of
+their own (their primary unless they pick another in From), never the owner's.
+Forward stays with the owner, since it re-sends attachments held in the
+owner's inbox. The reply starts a thread in their inbox and threads under the original
+for every other participant through `In-Reply-To`/`References`; the owner's
+thread is untouched. View recipients read without a reply box, and only the
+owner keeps tags and side-panel edits. To verify, share a thread from one
+account at each level, open it from a second account under Shared, reply at
+edit, and check the reply arrives in the first account's conversation.
+
 The load gate and message body share one live thread source in both hosts. Cached
 body rendering should not wait for a second thread fetch, optional References,
 or inbox metadata. Inbox-dependent actions stay gated while ownership is unknown;

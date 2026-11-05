@@ -8,7 +8,7 @@ import {
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { Team } from '../teams/team';
 import {
   CrmComment,

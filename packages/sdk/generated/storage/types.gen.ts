@@ -1409,7 +1409,7 @@ export type Bot = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session.
      */
     has_agent: boolean;
     /**
@@ -4025,7 +4025,7 @@ export type CreateBotRequest = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
      */
     has_agent?: boolean | null;
     /**
@@ -4158,7 +4158,7 @@ export type CreateChannelScopedBotRequest = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
      */
     has_agent?: boolean | null;
     /**
@@ -4537,10 +4537,6 @@ export type CreateMeetingRequest = {
  */
 export type CreatePairingRequest = {
     /**
-     * Daemon operator consent ceiling. Omitted by older clients; web approval decides.
-     */
-    allow_permission_bypass?: boolean | null;
-    /**
      * Display-only description of the machine, e.g. `eric@macbook / darwin`.
      */
     host?: string | null;
@@ -4548,21 +4544,18 @@ export type CreatePairingRequest = {
      * Requested harness display name (typically the machine's hostname).
      */
     name: string;
-    scope?: null | RequestedHarnessScope;
 };
 
 /**
- * Request to create an empty pipeline with the standard CRM columns.
+ * Request to create an empty pipeline: the standard CRM columns for a tracked
+ * record, or one Name column, like a new database, for a generic pipeline.
  */
 export type CreatePipeline = {
     /**
      * Pipeline name.
      */
     name: string;
-    /**
-     * Company or contact entries.
-     */
-    recordType: PipelineRecordType;
+    recordType?: null | PipelineRecordType;
     /**
      * Defaults to private.
      */
@@ -11403,14 +11396,9 @@ export type PairingDetails = {
      */
     host?: string | null;
     /**
-     * Daemon operator consent ceiling; false forbids bypass at approval.
-     */
-    requested_allow_permission_bypass?: boolean | null;
-    /**
      * Harness display name the daemon asked for.
      */
     requested_name: string;
-    requested_scope?: null | RequestedHarnessScope;
 };
 
 /**
@@ -11455,7 +11443,7 @@ export type PatchBotRequest = {
      */
     handle?: string | null;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.
      */
     has_agent?: boolean | null;
     /**
@@ -11483,6 +11471,21 @@ export type PatchChannelRequest = {
      * converts a team channel to a private channel.
      */
     convert_to_team_channel?: boolean | null;
+};
+
+/**
+ * Request to change a registered harness. Omitted fields stay as they are.
+ */
+export type PatchHarnessRequest = {
+    /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     * Live sessions pick the change up at their next turn.
+     */
+    allow_permission_bypass?: boolean | null;
+    /**
+     * New display name.
+     */
+    name?: string | null;
 };
 
 /**
@@ -11663,13 +11666,11 @@ export type Pipeline = {
      */
     name: string;
     /**
-     * Protected primary column.
+     * A tracked pipeline's protected record reference. A generic pipeline's
+     * Name, which names no column once someone deletes it.
      */
     primaryColumnId: string;
-    /**
-     * Kind of the primary reference.
-     */
-    recordType: PipelineRecordType;
+    recordType: null | PipelineRecordType;
     /**
      * Whether the pipeline has a team grant.
      */
@@ -12366,14 +12367,6 @@ export type RequestAccess = {
  * Durable outcome; reading a notification never changes it.
  */
 export type RequestStatus = 'pending' | 'granted' | 'denied' | 'cancelled';
-
-/**
- * The ownership scope a daemon's config asks for.
- *
- * Advisory, not binding: the approving user confirms it in the dialog, which
- * arrives preselected to this. Approval is what actually sets ownership.
- */
-export type RequestedHarnessScope = 'private' | 'team';
 
 /**
  * A layout as an op asks for it: a board or timeline may leave its title
@@ -16368,6 +16361,20 @@ export type UploadExtractFolderRequest = {
     name?: string | null;
     parentId?: string | null;
     sha: string;
+};
+
+/**
+ * The document created from the uploaded bytes.
+ */
+export type UploadFileResponse = {
+    /**
+     * The new document.
+     */
+    documentId: string;
+    /**
+     * Number of bytes stored.
+     */
+    sizeBytes: number;
 };
 
 export type UploadFolderRequest = {
@@ -21829,6 +21836,58 @@ export type GetSystemSkillsHandlerResponses = {
 
 export type GetSystemSkillsHandlerResponse = GetSystemSkillsHandlerResponses[keyof GetSystemSkillsHandlerResponses];
 
+export type UploadFileData = {
+    /**
+     * The file's bytes, at most 25 MiB.
+     */
+    body: Blob | File;
+    path?: never;
+    query: {
+        /**
+         * Filename including its extension, such as `report.pdf`; the extension
+         * sets the file type. No directory components.
+         */
+        fileName: string;
+        /**
+         * Destination project. Requires edit access; omit for top-level files.
+         */
+        projectId?: string;
+    };
+    url: '/documents/upload';
+};
+
+export type UploadFileErrors = {
+    /**
+     * Invalid filename or content
+     */
+    400: ErrorResponse;
+    /**
+     * No edit access to the destination project
+     */
+    401: ErrorResponse;
+    /**
+     * The caller cannot create documents
+     */
+    403: unknown;
+    /**
+     * The file exceeds 25 MiB
+     */
+    413: unknown;
+    /**
+     * Document name exceeds the maximum length
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UploadFileError = UploadFileErrors[keyof UploadFileErrors];
+
+export type UploadFileResponses = {
+    200: UploadFileResponse;
+};
+
+export type UploadFileResponse2 = UploadFileResponses[keyof UploadFileResponses];
+
 export type DeleteDocumentData = {
     body?: never;
     path: {
@@ -23880,6 +23939,33 @@ export type DeleteHarnessResponses = {
 };
 
 export type DeleteHarnessResponse = DeleteHarnessResponses[keyof DeleteHarnessResponses];
+
+export type PatchHarnessData = {
+    body: PatchHarnessRequest;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}';
+};
+
+export type PatchHarnessErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchHarnessError = PatchHarnessErrors[keyof PatchHarnessErrors];
+
+export type PatchHarnessResponses = {
+    200: Harness;
+};
+
+export type PatchHarnessResponse = PatchHarnessResponses[keyof PatchHarnessResponses];
 
 export type HealthHandlerData = {
     body?: never;

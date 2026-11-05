@@ -240,6 +240,59 @@
         }
       }
     },
+    "/calendar/events/create-confirmed": {
+      "post": {
+        "tags": ["confirmed_actions"],
+        "summary": "Create a calendar event the user approved in conversation, quoting their approval.",
+        "operationId": "create_confirmed_calendar_event",
+        "requestBody": {
+          "description": "CreateConfirmedCalendarEvent arguments: CreateCalendarEvent's, plus userConfirmation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ToolCalendarEvent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed, or missing userConfirmation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Not created: a blank confirmation, a calendar the user cannot write, or a provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/chat/{chat_id}": {
       "delete": {
         "tags": ["chats"],
@@ -1214,6 +1267,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DecisionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/send-confirmed": {
+      "post": {
+        "tags": ["confirmed_actions"],
+        "summary": "Send an email the user approved in conversation, quoting their approval.",
+        "operationId": "send_confirmed_email",
+        "requestBody": {
+          "description": "SendConfirmedEmail arguments: SendEmail's, plus userConfirmation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SendEmailResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed, or missing userConfirmation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Not sent: a blank confirmation, an inbox or attachment the user cannot use, or a delivery failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
                 }
               }
             }
@@ -2804,6 +2910,166 @@
           }
         }
       }
+    },
+    "/web/fetch": {
+      "post": {
+        "tags": ["web"],
+        "summary": "Read one public web page as Markdown. Charged to the acting user's AI allowance.",
+        "operationId": "fetch_web_page",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebFetch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The page text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebFetchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid URL or length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The page could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-user hourly rate limit exceeded"
+          },
+          "502": {
+            "description": "The fetch provider failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Web fetch unconfigured, busy, or usage validation unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/web/search": {
+      "post": {
+        "tags": ["web"],
+        "summary": "Search the public web. Charged to the acting user's AI allowance.",
+        "operationId": "search_web",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebSearch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Results, best match first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query or filters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-user hourly rate limit exceeded"
+          },
+          "502": {
+            "description": "The search provider failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Web search unconfigured, busy, or usage validation unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2847,7 +3113,8 @@
           "agent_mode_choice",
           "dictation",
           "image_generation",
-          "email_focus"
+          "email_focus",
+          "web_search"
         ]
       },
       "AssistantMessagePart": {
@@ -5677,27 +5944,32 @@
           "price_per_audio_minute": {
             "type": ["number", "null"],
             "format": "float",
-            "description": "Price per audio minute (USD), absent for token billing."
+            "description": "Price per audio minute (USD), absent for token and credit billing."
           },
           "price_per_million_cache_read": {
             "type": ["number", "null"],
             "format": "float",
-            "description": "Price per million cache-read input tokens (USD), absent when the model\nhas no published rate and for audio billing."
+            "description": "Price per million cache-read input tokens (USD), absent when the model\nhas no published rate and for audio and credit billing."
           },
           "price_per_million_cache_write": {
             "type": ["number", "null"],
             "format": "float",
-            "description": "Price per million cache-write input tokens (USD), absent when the model\nhas no published rate and for audio billing."
+            "description": "Price per million cache-write input tokens (USD), absent when the model\nhas no published rate and for audio and credit billing."
           },
           "price_per_million_in": {
             "type": "number",
             "format": "float",
-            "description": "Price per million input tokens (USD); zero for audio billing."
+            "description": "Price per million input tokens (USD); zero for audio and credit billing."
           },
           "price_per_million_out": {
             "type": "number",
             "format": "float",
-            "description": "Price per million output tokens (USD); zero for audio billing."
+            "description": "Price per million output tokens (USD); zero for audio and credit billing."
+          },
+          "price_per_provider_credit": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per vendor credit (USD), absent for token and audio billing."
           },
           "total": {
             "type": "number",
@@ -5960,6 +6232,11 @@
             "type": ["number", "null"],
             "format": "float",
             "description": "New price per million output tokens (USD). Required for token pricing."
+          },
+          "price_per_provider_credit": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per vendor credit (USD), or null unless the model bills in credits."
           }
         }
       },
@@ -6553,18 +6830,18 @@
           "audio_seconds": {
             "type": ["number", "null"],
             "format": "double",
-            "description": "Audio duration in seconds, absent for token billing."
+            "description": "Audio duration in seconds, absent for token and credit billing."
           },
           "cache_read_input_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Input tokens read from a prompt cache; zero for audio billing.",
+            "description": "Input tokens read from a prompt cache; zero for audio and credit billing.",
             "minimum": 0
           },
           "cache_write_input_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Input tokens written to a prompt cache; zero for audio billing.",
+            "description": "Input tokens written to a prompt cache; zero for audio and credit billing.",
             "minimum": 0
           },
           "created_at": {
@@ -6575,7 +6852,7 @@
           "input_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Uncached input tokens; zero for audio billing.",
+            "description": "Uncached input tokens; zero for audio and credit billing.",
             "minimum": 0
           },
           "model": {
@@ -6585,7 +6862,7 @@
           "output_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Output tokens; zero for audio billing.",
+            "description": "Output tokens; zero for audio and credit billing.",
             "minimum": 0
           },
           "price": {
@@ -6598,6 +6875,12 @@
                 "description": "Applied pricing, if known."
               }
             ]
+          },
+          "provider_credits": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Vendor credits consumed, absent for token and audio billing.",
+            "minimum": 0
           }
         }
       },
@@ -6727,6 +7010,158 @@
             "description": "The URL of the citation."
           }
         }
+      },
+      "WebErrorBody": {
+        "type": "object",
+        "description": "Machine-readable failure of a web request.",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable failure code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Explanation without provider diagnostics."
+          }
+        }
+      },
+      "WebFetch": {
+        "type": "object",
+        "description": "Read one public web page.",
+        "required": ["url"],
+        "properties": {
+          "maxChars": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Most characters of page text to return, 1 to 100,000 (default 20,000).",
+            "minimum": 0
+          },
+          "url": {
+            "type": "string",
+            "description": "The `http` or `https` URL of the page."
+          }
+        }
+      },
+      "WebFetchResponse": {
+        "type": "object",
+        "description": "The text of a fetched page.",
+        "required": ["url", "content", "truncated"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The page text as Markdown, cut to `maxChars`."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "The page title, when the provider reports one."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Whether `content` was cut to `maxChars`."
+          },
+          "url": {
+            "type": "string",
+            "description": "The URL that was read."
+          }
+        }
+      },
+      "WebSearch": {
+        "type": "object",
+        "description": "Search the public web.",
+        "required": ["query"],
+        "properties": {
+          "domains": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Only return pages from these domains, e.g. `[\"docs.rs\", \"github.com\"]`."
+          },
+          "excludeDomains": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Never return pages from these domains."
+          },
+          "includeContent": {
+            "type": ["boolean", "null"],
+            "description": "Also return each page's text as Markdown (up to 8,000 characters per result)."
+          },
+          "maxResults": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "How many results to return, 1 to 20 (default 5).",
+            "minimum": 0
+          },
+          "query": {
+            "type": "string",
+            "description": "What to search for, in natural language or keywords (at most 400 characters)."
+          },
+          "since": {
+            "type": ["string", "null"],
+            "format": "date",
+            "description": "Only return pages published on or after this date (`YYYY-MM-DD`)."
+          },
+          "topic": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WebSearchTopic",
+                "description": "`news` for recent articles with publication dates; `general` (the default) otherwise."
+              }
+            ]
+          }
+        }
+      },
+      "WebSearchResponse": {
+        "type": "object",
+        "description": "The pages a search found, best match first.",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebSearchResult"
+            },
+            "description": "Results, best match first. Empty when nothing matched."
+          }
+        }
+      },
+      "WebSearchResult": {
+        "type": "object",
+        "description": "One page a search found.",
+        "required": ["title", "url", "snippet"],
+        "properties": {
+          "content": {
+            "type": ["string", "null"],
+            "description": "The page text as Markdown, when `includeContent` was set."
+          },
+          "publishedAt": {
+            "type": ["string", "null"],
+            "description": "When the page was published, as the search provider reports it."
+          },
+          "snippet": {
+            "type": "string",
+            "description": "The part of the page most relevant to the query."
+          },
+          "title": {
+            "type": "string",
+            "description": "The page title."
+          },
+          "url": {
+            "type": "string",
+            "description": "The page URL; cite it when you use the result."
+          }
+        }
+      },
+      "WebSearchTopic": {
+        "type": "string",
+        "description": "The kind of results a search favours.",
+        "enum": ["general", "news"]
       },
       "WithChatId": {
         "type": "object",
