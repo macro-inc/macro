@@ -567,6 +567,8 @@
           packageName,
           binaries,
           featureArgs ? "",
+          expArgs ? "",
+          expNonce ? null,
         }:
         craneLib.buildPackage (
           commonArgs
@@ -585,10 +587,13 @@
             cargoExtraArgs =
               "--locked --package ${packageName} "
               + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") binaries
-              + pkgs.lib.optionalString (featureArgs != "") " ${featureArgs}";
+              + pkgs.lib.optionalString (featureArgs != "") " ${featureArgs}"
+              + pkgs.lib.optionalString (expNonce != null) " --timings ${expArgs}";
             CARGO_PROFILE = "release";
+            EXP_NONCE = expNonce;
             installPhaseCommand = ''
               mkdir -p $out/bin
+              ${pkgs.lib.optionalString (expNonce != null) "mkdir -p $out/timings; cp target/cargo-timings/cargo-timing.html $out/timings/ || true"}
               for binary in ${pkgs.lib.concatStringsSep " " binaries}; do
                 cp target/release/$binary $out/bin/$binary
                 ${pkgs.binutils}/bin/strip $out/bin/$binary || true
@@ -642,6 +647,33 @@
           cp ${deployServiceBinaryPackages.deploy-service-binaries-email-focus-worker}/bin/* $out/bin/
           ${checkBinaries}
         '';
+
+      # ci-speed experiment only: one service, forced to rebuild per job by the nonce.
+      expNonce = builtins.readFile ../.github/ci-speed/nonce;
+      expService =
+        name: def: arms:
+        pkgs.lib.mapAttrs' (arm: args: {
+          name = "exp-${name}-${arm}";
+          value = deployServiceBinaryPackage (def // { expArgs = args; inherit expNonce; });
+        }) arms;
+      expArms = package: {
+        control = "";
+        o2 = "--config profile.release.package.${package}.opt-level=2";
+        o1 = "--config profile.release.package.${package}.opt-level=1";
+        cgu64 = "--config profile.release.package.${package}.codegen-units=64";
+        cgu256 = "--config profile.release.package.${package}.codegen-units=256";
+      };
+      expPackages =
+        expService "dss" {
+          serviceName = "document-storage-service";
+          packageName = "document_storage_service";
+          binaries = [ "document_storage_service" ];
+        } (expArms "document_storage_service")
+        // expService "ahs" {
+          serviceName = "agent-harness-service";
+          packageName = "agent_harness_service";
+          binaries = [ "agent_harness_service" ];
+        } (expArms "agent_harness_service");
 
       localStackBinaryPackages = pkgs.lib.listToAttrs (
         map (def: {
@@ -1178,6 +1210,7 @@
         code-mode-assets = codeModeAssets;
       }
       // dopplerConfigBinPackages
+      // expPackages
       // deployServiceBinaryPackages
       // {
         deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
