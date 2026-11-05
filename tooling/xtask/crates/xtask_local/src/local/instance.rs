@@ -3,15 +3,13 @@
 //! The default instance is named `macro` and keeps the exact resource names
 //! and host ports the repo uses today, so existing worktrees and muscle memory
 //! are untouched. A named instance (`--instance agent-a`) derives a disjoint
-//! set of project name, networks, volumes, and a deterministic high port window
-//! so two stacks can run concurrently without clobbering each other.
-
-use std::net::TcpListener;
+//! set of project name, networks, and volumes. Its port window and Docker
+//! subnet come from [`super::allocator`], so concurrent stacks can't collide.
 
 use anyhow::{Context, Result, bail};
 use strum::{EnumIter, IntoEnumIterator};
 
-use super::repo_root;
+use super::{allocator, repo_root};
 
 /// The reserved default instance name. Maps to today's frozen `macro` Compose
 /// project and the fixed base ports.
@@ -20,9 +18,9 @@ pub const DEFAULT_NAME: &str = "macro";
 /// Start of the non-default port window. Keep the entire allocation below
 /// Linux's default ephemeral range (32768-60999), otherwise an ordinary
 /// outbound connection can intermittently occupy a Compose host port.
-const WINDOW_START: u32 = 20_000;
-const STRIDE: u32 = 100;
-const BUCKETS: u32 = 120; // 20000..=31999
+pub(super) const WINDOW_START: u32 = 20_000;
+pub(super) const STRIDE: u32 = 100;
+pub(super) const BUCKETS: u32 = 120; // 20000..=31999
 
 /// A validated instance name: lowercase ASCII alphanumerics, hyphen, and
 /// underscore, starting alphanumeric, non-empty, <= 40 chars. The newtype
@@ -142,6 +140,15 @@ impl Port {
     pub fn all() -> impl Iterator<Item = Port> {
         Port::iter()
     }
+
+    /// Whether anything still listens on this port. Retired variants keep their
+    /// offset, but something else on their port doesn't stop a stack starting.
+    pub fn is_bound(self) -> bool {
+        !matches!(
+            self,
+            Port::AgentProxy | Port::DocCognition | Port::PreviewControl
+        )
+    }
 }
 
 /// A resolved instance: its identity plus the derived resource names and port
@@ -151,11 +158,23 @@ pub struct Instance {
     name: InstanceName,
     project_name: String,
     port_base: u16,
+    subnet_block: Option<u8>,
 }
 
 impl Instance {
-    /// Derive the instance from the `--instance`/`--port-base` flags. `None`
-    /// (or `--instance macro`) is the default instance.
+    /// Find an instance a command acts on without starting it: the window its
+    /// containers or allocation hold, so no `--port-base` needs repeating.
+    pub fn resolve(instance: Option<&str>, port_base: Option<u16>) -> Result<Self> {
+        Ok(allocator::resolve(
+            Self::derive(instance, port_base)?,
+            port_base.is_some(),
+        ))
+    }
+
+    /// Derive the instance from the `--instance`/`--port-base` flags, with the
+    /// name's hashed window. `None` (or `--instance macro`) is the default
+    /// instance. Start flows use [`allocator::allocate`], other commands
+    /// [`Instance::resolve`].
     pub fn derive(instance: Option<&str>, port_base: Option<u16>) -> Result<Self> {
         let name = match instance {
             None | Some(DEFAULT_NAME) => InstanceName(DEFAULT_NAME.to_string()),
@@ -171,7 +190,17 @@ impl Instance {
             name,
             project_name,
             port_base,
+            subnet_block: None,
         })
+    }
+
+    /// This instance on an allocated port window and subnet block.
+    pub(super) fn with_allocation(self, port_base: u16, subnet_block: Option<u8>) -> Self {
+        Instance {
+            port_base,
+            subnet_block,
+            ..self
+        }
     }
 
     pub fn name(&self) -> &str {
@@ -208,6 +237,41 @@ impl Instance {
     /// External `auth` network name.
     pub fn network_auth(&self) -> String {
         self.suffixed_dash("auth")
+    }
+
+    /// The `services` network's Docker name.
+    pub fn network_services(&self) -> String {
+        format!("{}_services", self.project_name)
+    }
+
+    /// The FusionAuth `auth-internal` network's Docker name.
+    pub fn network_auth_internal(&self) -> String {
+        format!("{}_auth-internal", self.project_name)
+    }
+
+    /// The networks this instance creates itself, each with the subnet its
+    /// allocation assigns. The default instance's `services` and `auth-internal`
+    /// stay Compose-managed: the machine-wide collectors share `macro_services`.
+    pub fn networks(&self) -> Vec<(String, Option<String>)> {
+        let mut names = vec![self.network_databases(), self.network_auth()];
+        if !self.is_default() {
+            names.push(self.network_services());
+            names.push(self.network_auth_internal());
+        }
+        names
+            .into_iter()
+            .enumerate()
+            .map(|(index, name)| {
+                let subnet = self.subnet_block.map(|block| {
+                    format!(
+                        "{}.{block}.{}/26",
+                        allocator::SUBNET_PREFIX,
+                        index * allocator::NETWORK_BLOCK_SIZE
+                    )
+                });
+                (name, subnet)
+            })
+            .collect()
     }
 
     pub fn volume_postgres(&self) -> String {
@@ -258,20 +322,6 @@ impl Instance {
         }
     }
 
-    /// Probe every allocated host port with a TCP bind. Returns the host ports
-    /// that are already in use. Advisory-only; surfaced as a warning in doctor.
-    pub fn busy_ports(&self) -> Vec<u16> {
-        Port::all()
-            .filter_map(|p| {
-                let host_port = self.port(p);
-                match TcpListener::bind(("127.0.0.1", host_port)) {
-                    Ok(_) => None,
-                    Err(_) => Some(host_port),
-                }
-            })
-            .collect()
-    }
-
     /// Create the instance's generated-artifact directory.
     pub fn ensure_artifact_dir(&self) -> Result<std::path::PathBuf> {
         let dir = self.artifact_dir();
@@ -288,7 +338,7 @@ fn derive_port_base(name: &InstanceName) -> u16 {
     (WINDOW_START + (fnv1a(name.as_str()) % BUCKETS) * STRIDE) as u16
 }
 
-fn fnv1a(s: &str) -> u32 {
+pub(super) fn fnv1a(s: &str) -> u32 {
     let mut h: u32 = 0x811c_9dc5;
     for b in s.bytes() {
         h ^= b as u32;
