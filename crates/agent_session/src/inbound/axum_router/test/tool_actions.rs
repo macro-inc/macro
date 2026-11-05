@@ -368,7 +368,7 @@ async fn session_activity_requires_view_access_and_valid_pagination_before_readi
     use std::sync::atomic::{AtomicUsize, Ordering};
     let reads = Arc::new(AtomicUsize::new(0));
     for (level, query, expected) in [
-        (None, "", StatusCode::FORBIDDEN),
+        (None, "", StatusCode::UNAUTHORIZED),
         (Some(AccessLevel::View), "", StatusCode::OK),
         (
             Some(AccessLevel::View),
