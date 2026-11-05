@@ -163,6 +163,12 @@ impl std::io::Write for CapturedLogs {
 
 #[tokio::test]
 async fn refresh_grant_never_records_the_refresh_token_in_logs() {
+    let refusal = || {
+        ResponseTemplate::new(400).set_body_json(json!({
+            "error": "invalid_grant",
+            "error_reason": "refresh_token_not_found",
+        }))
+    };
     let logs = CapturedLogs::default();
     let writer = logs.clone();
     let subscriber = tracing_subscriber::fmt()
@@ -172,12 +178,17 @@ async fn refresh_grant_never_records_the_refresh_token_in_logs() {
         .finish();
     let _guard = tracing::subscriber::set_default(subscriber);
 
-    refresh_answering(ResponseTemplate::new(400).set_body_json(json!({
-        "error": "invalid_grant",
-        "error_reason": "refresh_token_not_found",
-    })))
-    .await
-    .expect_err("a 400 is a refusal");
+    // While this is the only subscriber, a callsite first hit on another test's
+    // thread is cached as disabled, because that thread has no subscriber. Hit
+    // the callsites so they exist, then recompute them on this thread.
+    refresh_answering(refusal())
+        .await
+        .expect_err("a 400 is a refusal");
+    tracing::callsite::rebuild_interest_cache();
+
+    refresh_answering(refusal())
+        .await
+        .expect_err("a 400 is a refusal");
 
     let logs = String::from_utf8(logs.0.lock().expect("log buffer").clone()).expect("utf-8 logs");
     assert!(
