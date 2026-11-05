@@ -1,7 +1,8 @@
 use async_graphql::{Enum, ID, InputObject};
 use attention_feed::domain::models::{FeedPosition, FeedRevision};
+use chrono::{DateTime, Utc};
 use notification_inbox::domain::models::{
-    InboxQuery, InboxRowId, InboxRowTarget, InboxRowType, InboxScope,
+    InboxClearRequest, InboxQuery, InboxRowId, InboxRowTarget, InboxRowType, InboxScope,
 };
 use uuid::Uuid;
 
@@ -140,6 +141,53 @@ impl NotificationInboxInput {
             .map_err(|_| async_graphql::Error::new("invalid notification inbox cursor"))?;
         Ok(InboxQuery {
             scope: self.scope.unwrap_or_default().into_scope(),
+            limit: u16::try_from(limit).expect("limit is capped below u16::MAX"),
+            after,
+        })
+    }
+}
+
+/// Groups one clear batch reads when no limit is given.
+pub const DEFAULT_CLEAR_LIMIT: i32 = 100;
+/// Most groups one clear batch may read.
+pub const MAX_CLEAR_LIMIT: i32 = 200;
+
+/// One batch of clearing the viewer's notification inbox.
+#[derive(InputObject, Default)]
+pub struct ClearNotificationInboxInput {
+    /// Which rows are cleared; the inbox the caller shows.
+    pub scope: Option<NotificationInboxScopeInput>,
+    /// Clear only unread rows.
+    pub unread_only: Option<bool>,
+    /// RFC 3339 time; clear only rows whose newest notification arrived at or
+    /// after it.
+    pub since: Option<String>,
+    /// Groups read in this batch; defaults to 100, capped at 200.
+    pub limit: Option<i32>,
+    /// Opaque cursor from the previous batch's `nextCursor`; absent for the
+    /// first. Send it with the same scope, filters and `since`.
+    pub cursor: Option<String>,
+}
+
+impl ClearNotificationInboxInput {
+    /// Validate and convert into the domain request.
+    pub(crate) fn into_request(self) -> async_graphql::Result<InboxClearRequest> {
+        let limit = graphql_common::parse_limit(self.limit, DEFAULT_CLEAR_LIMIT, MAX_CLEAR_LIMIT)?;
+        let after = self
+            .cursor
+            .map(|cursor| FeedPosition::decode(&cursor))
+            .transpose()
+            .map_err(|_| async_graphql::Error::new("invalid notification inbox cursor"))?;
+        let since = self
+            .since
+            .map(|since| DateTime::parse_from_rfc3339(&since))
+            .transpose()
+            .map_err(|_| async_graphql::Error::new("invalid notification inbox clear time"))?
+            .map(|since| since.with_timezone(&Utc));
+        Ok(InboxClearRequest {
+            scope: self.scope.unwrap_or_default().into_scope(),
+            unread_only: self.unread_only.unwrap_or(false),
+            since,
             limit: u16::try_from(limit).expect("limit is capped below u16::MAX"),
             after,
         })
