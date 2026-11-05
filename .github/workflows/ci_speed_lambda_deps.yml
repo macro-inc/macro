@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       max-parallel: 5
       matrix:
-        arm: [fix]
+        arm: [ctl, fix]
         attempt: [1, 2, 3, 4, 5]
         shape:
           - { name: dss, handlers: "delete_chat_handler docx_unzip_handler document_upload_finalizer_handler" }
@@ -38,9 +38,13 @@ jobs:
       - if: always()
         uses: ./.github/actions/teardown-nix
   all-handlers:
-    name: every handler builds with the fix
+    name: every handler ${{ matrix.arm }}
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=ci-speed-deploy-lambda
-    timeout-minutes: 60
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [ctl, fix]
     env: { ATTEMPT: all }
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -54,8 +58,9 @@ jobs:
           nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - run: nix build --max-jobs auto --no-link .#lambdaDepsStable
-      - run: bash .github/ci-speed/lambda-arm.sh fix $(jq -r '[.services[].deploy_lambdas // []] | add | unique | join(" ")' .github/services-config.json)
+      - if: matrix.arm == 'fix'
+        run: nix build --max-jobs auto --no-link .#lambdaDepsStable
+      - run: bash .github/ci-speed/lambda-arm.sh ${{ matrix.arm }} $(jq -r '[.services[].deploy_lambdas // []] | add | unique | join(" ")' .github/services-config.json)
       - if: always()
         uses: ./.github/actions/teardown-nix
   broken:

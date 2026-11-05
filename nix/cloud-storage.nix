@@ -861,16 +861,18 @@
           doCheck = false;
           cargoCheckCommand = "true";
           cargoBuildCommand = "cargo zigbuild --release";
+          # Select with --bin, as the handlers do, so features resolve the same
+          # way and the layer's units match theirs.
           cargoExtraArgs =
             "--locked --target ${lambdaZigTarget} "
-            + pkgs.lib.concatMapStringsSep " " (n: "--package ${n}") lambdaNames;
+            + pkgs.lib.concatMapStringsSep " " (n: "--bin ${n}") lambdaNames;
         }
       );
       expLambda =
         arm: lambdaName:
         (deployLambdaPackageWith (if arm == "fix" || arm == "fixexplain" then stableZigArgs else lambdaCommonArgs)
           (if arm == "fix" || arm == "fixexplain" then lambdaDepsStable else lambdaDeployCargoArtifacts)
-          (if arm == "fix" || arm == "fixexplain" then "--package ${lambdaName}" else "")
+          ""
           lambdaName
         ).overrideAttrs
           (_: {
