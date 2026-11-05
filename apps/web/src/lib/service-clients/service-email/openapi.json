@@ -2813,6 +2813,66 @@
         }
       }
     },
+    "/email/senders/domain-counts": {
+      "post": {
+        "tags": ["Senders"],
+        "summary": "Count mail received in the last 180 days from each sender domain, summed\nacross the caller's own inboxes and read live from Gmail or Outlook.",
+        "description": "Counts rank senders: Gmail's are estimates and Outlook's stop at 50 per\ninbox. A domain a provider failed on, or did not answer within about five\nseconds, counts as 0, as does every domain when the caller has no inbox.",
+        "operationId": "count_sender_domains",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SenderDomainCountsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SenderDomainCountsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/settings": {
       "patch": {
         "tags": ["Settings"],
@@ -7387,6 +7447,49 @@
           "message": {
             "$ref": "#/components/schemas/ApiDraftOutput",
             "description": "The created message."
+          }
+        }
+      },
+      "SenderDomainCount": {
+        "type": "object",
+        "description": "Recent mail from one sender domain, summed over the caller's inboxes.",
+        "required": ["domain", "messageCount"],
+        "properties": {
+          "domain": {
+            "type": "string",
+            "example": "linear.app"
+          },
+          "messageCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Messages received in the last 180 days. Gmail estimates it and Outlook\ncounts at most 50 per inbox, so use it to rank, not as a total. A\nprovider that failed or did not answer in time counts as zero.",
+            "minimum": 0
+          }
+        }
+      },
+      "SenderDomainCountsRequest": {
+        "type": "object",
+        "required": ["domains"],
+        "properties": {
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "1 to 40 lowercase host names, such as `linear.app`."
+          }
+        }
+      },
+      "SenderDomainCountsResponse": {
+        "type": "object",
+        "required": ["counts"],
+        "properties": {
+          "counts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SenderDomainCount"
+            },
+            "description": "One entry per requested domain, in request order."
           }
         }
       },
