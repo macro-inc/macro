@@ -183,7 +183,7 @@ where
             && let Some(state) = outlook_mailbox_state(name, self.add)
         {
             let action = state?;
-            service_context
+            let changed = service_context
                 .service
                 .change_thread_mailbox_state(
                     MacroUserIdStr((*request_context.user_id).clone()),
@@ -196,7 +196,7 @@ where
                     internal_error: e.into(),
                 })?;
             return Ok(UpdateThreadLabelsResponse {
-                successful_count: 1,
+                successful_count: changed,
                 failed_count: 0,
                 summary: format!("{} the thread.", outlook_done(name, self.add)),
             });
