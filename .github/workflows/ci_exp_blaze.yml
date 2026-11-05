@@ -67,6 +67,8 @@ jobs:
         until docker exec "$postgres_container" pg_isready -U user -d macrodb; do sleep 1; done
     - name: prepare tests
       run: just setup_test_envs && just initialize_dbs && just setup_test_template
+    - name: fetch crates
+      run: cargo fetch --locked
     - name: 'arm 1: unmodified workspace, blaze defaults'
       continue-on-error: true
       env:
