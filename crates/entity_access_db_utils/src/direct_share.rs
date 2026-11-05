@@ -38,15 +38,12 @@ pub async fn facts(
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.macro_id, "Email thread".into(), None)),
         EntityType::Call => {
             let live = sqlx::query!("SELECT created_by FROM calls WHERE id = $1 FOR SHARE", id).fetch_optional(tx.as_mut()).await?;
-            let archived = match live { Some(_) => None, None => sqlx::query!("SELECT created_by, custom_name FROM call_records WHERE id = $1 FOR SHARE", id)
-                .fetch_optional(tx.as_mut()).await? };
-            match (live, archived) {
-                (Some(r), _) => Some((r.created_by, "Call".into(), None)),
-                (None, Some(r)) => Some((r.created_by, r.custom_name.unwrap_or_else(|| "Call".into()), None)),
-                // Imported calls never had a room, so they live only in `call_entities`.
-                (None, None) => sqlx::query!("SELECT user_id, title FROM call_entities WHERE id = $1 FOR SHARE", id)
-                    .fetch_optional(tx.as_mut()).await?.map(|r| (r.user_id, r.title.unwrap_or_else(|| "Call".into()), None)),
-            }
+            if let Some(r) = live { Some((r.created_by, "Call".into(), None)) }
+            else if let Some(r) = sqlx::query!("SELECT created_by, custom_name FROM call_records WHERE id = $1 FOR SHARE", id)
+                .fetch_optional(tx.as_mut()).await? { Some((r.created_by, r.custom_name.unwrap_or_else(|| "Call".into()), None)) }
+            // Imported calls never had a room, so they live only in `call_entities`.
+            else { sqlx::query!("SELECT user_id, title FROM call_entities WHERE id = $1 FOR SHARE", id)
+                .fetch_optional(tx.as_mut()).await?.map(|r| (r.user_id, r.title.unwrap_or_else(|| "Call".into()), None)) }
         }
         _ => None,
     };
