@@ -51,3 +51,8 @@ build:clippy --output_groups=clippy_checks
 build:clippy --@rules_rust//rust/settings:clippy.toml=//:clippy.toml
 build:clippy --@rules_rust//rust/settings:clippy_flag=-Dwarnings
 build:clippy --@rules_rust//rust/settings:clippy_flag=-Dclippy::disallowed_methods
+
+# Reproducible outputs, so the remote cache can reuse them. Sandbox paths are random and end up in
+# C debug info, CMake files and env!() values; `built` reads the epoch for its timestamp.
+build --spawn_strategy=local
+build --action_env=SOURCE_DATE_EPOCH=0
