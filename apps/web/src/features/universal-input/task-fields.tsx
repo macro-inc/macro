@@ -68,6 +68,7 @@ export function TaskFields(props: {
         <Show when={showCustomerContact}>
           <CustomerContactPill
             values={props.values}
+            disabled={props.disabled}
             onChange={(values) =>
               props.onChange(
                 JSON.stringify({

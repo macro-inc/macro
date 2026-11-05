@@ -20,6 +20,7 @@ const ENTITY_TYPES: EntityType[] = ['COMPANY', 'CONTACT'];
 export function CustomerContactPill(props: {
   values: Record<string, PropertyApiValues>;
   onChange: (values: Record<string, PropertyApiValues>) => void;
+  disabled?: boolean;
   /** The editor the pill opens; `Property.SheetEditor` inside a touch sheet. */
   editor: typeof Property.PopoverEditor;
 }) {
@@ -46,7 +47,11 @@ export function CustomerContactPill(props: {
   };
 
   return (
-    <Property.Root property={property()} canEdit onSave={save}>
+    <Property.Root
+      property={property()}
+      canEdit={!props.disabled}
+      onSave={save}
+    >
       {(shown) => (
         <>
           {/* The hover card names both records, as the pill shows only one. */}

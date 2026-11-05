@@ -18,8 +18,8 @@ it again can retry. Marking read does not mark the notification done.
 
 **Rollout:** Tasks, Email, Notes, Calls and Databases require PostHog `enable-crm-activity`
 (off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
-this flag to decide whether to supply its task-composer preset; the shared
-composer itself is not feature-flagged. With it off, only Companies and People
+this flag to decide whether to supply its task-composer preset, and with
+`enable-crm` to show the Customer / Contact pill when creating any task. With it off, only Companies and People
 appear in Records, activity queries do not run, and activity deep links return to
 Companies after flags finish loading. Global task creation uses the standard
 composer; record-level New task still associates the new task with that record.

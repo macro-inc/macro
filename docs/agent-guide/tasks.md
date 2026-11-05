@@ -848,7 +848,7 @@ The app shell's creation-context provider snapshots the focused pane's preset
 before the composer opens. It reads the layout's existing focus accessor, not a
 global context registry; no detail fetch or navigation-state capture is needed.
 Without a preset, the standard property row and draft are used. The shared
-composer is not feature-flagged. Create-menu actions, shortcuts, and pane buttons
+composer's only flag gate is the Customer / Contact pill below. Create-menu actions, shortcuts, and pane buttons
 capture the provider during setup and read the preset when invoked.
 
 With PostHog `enable-crm` and `enable-crm-activity` both on, every opening of the
