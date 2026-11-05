@@ -297,6 +297,10 @@ struct FakeComputers {
 }
 
 impl Computers for FakeComputers {
+    fn sizes(&self) -> Vec<crate::domain::models::ComputerSizeSpec> {
+        vec![]
+    }
+
     async fn quote(
         &self,
         _team_id: Uuid,
@@ -786,6 +790,7 @@ async fn create_and_quote_need_the_flag_on_for_the_admin() {
             .await,
         Err(TeamAgentError::NotEnabled)
     ));
+    assert!(service.sizes(receipt(TEAM_ID)).await.is_ok());
     assert_eq!(journal.steps(), Vec::<&str>::new());
 
     let mut on = FakeFeatureFlags::default();

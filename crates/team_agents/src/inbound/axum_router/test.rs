@@ -56,6 +56,7 @@ fn agent() -> TeamAgent {
 struct FakeService {
     calls: Mutex<Vec<String>>,
     create_error: Mutex<Option<TeamAgentError>>,
+    quote_error: Mutex<Option<TeamAgentError>>,
     retry_error: Mutex<Option<TeamAgentError>>,
 }
 
@@ -66,12 +67,23 @@ impl FakeService {
 }
 
 impl TeamAgentService for FakeService {
+    async fn sizes(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<TeamAgentSizes, TeamAgentError> {
+        self.record(format!("sizes {}", receipt.entity().entity_id));
+        Ok(TeamAgentSizes { sizes: vec![] })
+    }
+
     async fn quote(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
         size: ComputerSize,
     ) -> Result<TeamAgentQuote, TeamAgentError> {
         self.record(format!("quote {} {size:?}", receipt.entity().entity_id));
+        if let Some(error) = self.quote_error.lock().expect("lock").take() {
+            return Err(error);
+        }
         Ok(TeamAgentQuote {
             vcpus: 8,
             memory_gb: 16,
@@ -489,7 +501,7 @@ async fn a_computer_that_cannot_be_bought_answers_conflict() {
     assert_eq!(response.status(), StatusCode::CONFLICT);
     assert_eq!(
         body_text(response).await,
-        r#"{"message":"the computer can't be bought: sold out"}"#
+        r#"{"code":"computer_unavailable","message":"the computer can't be bought: sold out"}"#
     );
 }
 
@@ -558,5 +570,44 @@ async fn retry_returns_conflict_when_the_computer_is_not_failed() {
         body_text(response)
             .await
             .contains("only failed computers can be retried")
+    );
+}
+
+#[tokio::test]
+async fn sizes_require_admin_but_no_quote_or_subscription() {
+    let service = Arc::new(FakeService::default());
+    *service.quote_error.lock().unwrap() = Some(TeamAgentError::NoSubscription);
+    for (role, expected) in [
+        (TeamRole::Admin, StatusCode::OK),
+        (TeamRole::Member, StatusCode::UNAUTHORIZED),
+    ] {
+        let response = router(service.clone(), role)
+            .oneshot(
+                Request::get("/sizes")
+                    .header(header::AUTHORIZATION, "Bearer admin")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+    }
+    assert_eq!(
+        *service.calls.lock().unwrap(),
+        vec![format!("sizes {TEAM_ID}")]
+    );
+    let response = router(service, TeamRole::Admin)
+        .oneshot(
+            Request::get("/quote?size=standard")
+                .header(header::AUTHORIZATION, "Bearer admin")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        body_text(response).await,
+        r#"{"code":"no_subscription","message":"the team needs an active subscription"}"#
     );
 }

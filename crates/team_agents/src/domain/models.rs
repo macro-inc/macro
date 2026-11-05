@@ -480,6 +480,29 @@ pub struct SentEmail {
     pub message_id: String,
 }
 
+/// Computer specifications, available independently of subscription pricing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ComputerSizeSpec {
+    /// Catalog size.
+    pub size: ComputerSize,
+    /// Virtual CPU count.
+    pub vcpus: u32,
+    /// Memory in GB.
+    pub memory_gb: u32,
+    /// Disk capacity in GB.
+    pub disk_gb: u32,
+}
+
+/// The computer catalog for inviting team agents.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct TeamAgentSizes {
+    /// Available sizes in catalog order.
+    pub sizes: Vec<ComputerSizeSpec>,
+}
+
 /// Errors from team agent operations.
 #[derive(Debug, thiserror::Error)]
 pub enum TeamAgentError {
@@ -501,7 +524,10 @@ pub enum TeamAgentError {
     /// Team agents aren't available to the caller yet (feature flag).
     #[error("team agents aren't available for this account yet")]
     NotEnabled,
-    /// The computer can't be bought right now (sold out, no subscription).
+    /// The team must start or renew its subscription before purchasing.
+    #[error("the team needs an active subscription")]
+    NoSubscription,
+    /// The computer can't be bought right now (sold out or unavailable price).
     #[error("the computer can't be bought: {0}")]
     ComputerUnavailable(String),
     /// A saved purchase could not be identified; preserve its agent resources.

@@ -23,7 +23,7 @@ use serde::Deserialize;
 
 use crate::domain::models::{
     ComputerSize, CreateTeamAgent, EmailMessage, EmailMessages, SendEmail, SentEmail, TeamAgent,
-    TeamAgentError, TeamAgentQuote, TeamAgents,
+    TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgents,
 };
 use crate::domain::ports::TeamAgentService;
 
@@ -67,6 +67,7 @@ impl<S, Eas, Auth> FromRef<TeamAgentsRouterState<S, Eas, Auth>> for MacroAuthori
 
 /// Builds the team agents router:
 ///
+/// - `GET /sizes` — specifications without billing.
 /// - `GET /quote?size=` — a team admin prices an agent and its computer.
 /// - `POST /` — a team admin invites an agent and buys its computer.
 /// - `GET /` — a team admin lists the team's agents.
@@ -83,6 +84,7 @@ where
     T: Send + Sync + 'static,
 {
     Router::new()
+        .route("/sizes", get(get_team_agent_sizes_handler::<S, Eas, Auth>))
         .route("/quote", get(quote_team_agent_handler::<S, Eas, Auth>))
         .route(
             "/",
@@ -113,16 +115,53 @@ where
         .with_state(state)
 }
 
+/// Stable conflict codes for invitation and provisioning failures.
+#[derive(serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TeamAgentConflictCode {
+    /// The team has no active plan.
+    NoSubscription,
+    /// This computer cannot currently be purchased.
+    ComputerUnavailable,
+    /// This provisioning state cannot be retried.
+    RetryUnavailable,
+}
+
+/// A conflict the client can handle without inspecting error messages.
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct TeamAgentConflict {
+    /// Machine-readable reason.
+    pub code: TeamAgentConflictCode,
+    /// Human-readable explanation.
+    pub message: String,
+}
+
 impl IntoResponse for TeamAgentError {
     fn into_response(self) -> Response {
+        let conflict = match &self {
+            Self::NoSubscription => Some(TeamAgentConflictCode::NoSubscription),
+            Self::ComputerUnavailable(_) => Some(TeamAgentConflictCode::ComputerUnavailable),
+            Self::RetryUnavailable(_) => Some(TeamAgentConflictCode::RetryUnavailable),
+            _ => None,
+        };
+        if let Some(code) = conflict {
+            return (
+                StatusCode::CONFLICT,
+                Json(TeamAgentConflict {
+                    code,
+                    message: self.to_string(),
+                }),
+            )
+                .into_response();
+        }
         let status = match &self {
             TeamAgentError::BadRequest(_) => StatusCode::BAD_REQUEST,
             TeamAgentError::NotAnAgent | TeamAgentError::NotFound => StatusCode::NOT_FOUND,
             TeamAgentError::EmailUnavailable => StatusCode::SERVICE_UNAVAILABLE,
             TeamAgentError::Forbidden | TeamAgentError::NotEnabled => StatusCode::FORBIDDEN,
-            TeamAgentError::ComputerUnavailable(_) | TeamAgentError::RetryUnavailable(_) => {
-                StatusCode::CONFLICT
-            }
+            TeamAgentError::NoSubscription
+            | TeamAgentError::ComputerUnavailable(_)
+            | TeamAgentError::RetryUnavailable(_) => StatusCode::CONFLICT,
             TeamAgentError::EmailProvider(_)
             | TeamAgentError::ComputerProvider(_)
             | TeamAgentError::RepoProvider(_) => StatusCode::BAD_GATEWAY,
@@ -161,6 +200,32 @@ impl IntoResponse for TeamAgentError {
     }
 }
 
+/// Computer specifications for team admins, independent of billing or rollout.
+#[utoipa::path(
+    get, tag = "team-agents", operation_id = "get_team_agent_sizes",
+    path = "/team_agents/sizes",
+    responses(
+        (status = 200, body = TeamAgentSizes),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(skip_all, err)]
+pub async fn get_team_agent_sizes_handler<S, Eas, Auth>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+) -> Result<Json<TeamAgentSizes>, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    Ok(Json(
+        state.service.sizes(access.entity_access_receipt).await?,
+    ))
+}
+
 /// Query for pricing an agent.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
@@ -182,7 +247,7 @@ pub struct QuoteQuery {
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
-        (status = 409, body = ErrorResponse),
+        (status = 409, body = TeamAgentConflict),
         (status = 500, body = ErrorResponse),
         (status = 502, body = ErrorResponse),
     )
@@ -219,7 +284,7 @@ where
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
-        (status = 409, body = ErrorResponse),
+        (status = 409, body = TeamAgentConflict),
         (status = 500, body = ErrorResponse),
         (status = 502, body = ErrorResponse),
     )
@@ -291,7 +356,7 @@ pub struct AgentPath {
         (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
-        (status = 409, body = ErrorResponse),
+        (status = 409, body = TeamAgentConflict),
         (status = 500, body = ErrorResponse),
         (status = 502, body = ErrorResponse),
     )
@@ -332,6 +397,7 @@ where
         (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 409, body = TeamAgentConflict),
         (status = 500, body = ErrorResponse),
         (status = 502, body = ErrorResponse),
     )

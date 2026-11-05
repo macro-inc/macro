@@ -12,7 +12,7 @@ use super::models::{
     AgentRepo, ComputerPayment, ComputerPurchase, ComputerSize, ComputerStatus, ComputerStatusKind,
     CreateTeamAgent, Credential, EmailMessage, EmailMessages, MAX_NAME_CHARS, MAX_PROFILE_CHARS,
     NewAgentAccount, Persona, PersonaSeed, PersonaService, SendEmail, SentEmail, TeamAgent,
-    TeamAgentError, TeamAgentQuote, TeamAgentStatus, TeamAgents,
+    TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
     AgentApiKeys, AgentRepos, Computers, Mailboxes, TeamAgentRepository, TeamAgentService,
@@ -536,6 +536,17 @@ where
     Repos: AgentRepos,
     Flags: FeatureFlags + 'static,
 {
+    #[tracing::instrument(skip_all, err)]
+    async fn sizes(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<TeamAgentSizes, TeamAgentError> {
+        team_id(&receipt)?;
+        Ok(TeamAgentSizes {
+            sizes: self.computers.sizes(),
+        })
+    }
+
     #[tracing::instrument(skip(self, receipt), fields(team_agents.flag), err)]
     async fn quote(
         &self,

@@ -255,12 +255,16 @@ impl ComputerRepo for FakeRepo {
 struct FakeBilling {
     decline: bool,
     provider_fails: bool,
+    no_subscription: bool,
     updates: Arc<Mutex<Vec<(ComputerSize, Vec<SubscriptionItem>, String)>>>,
     removals: Mutex<Vec<(ComputerSize, String)>>,
 }
 
 impl Billing for FakeBilling {
     async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
+        if self.no_subscription {
+            return Err(BillingError::NoSubscription);
+        }
         if self.provider_fails {
             return Err(BillingError::Provider(rootcause::report!(
                 "billing is unreachable"
@@ -736,4 +740,34 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
             }
         }
     }
+}
+
+#[tokio::test]
+async fn catalog_is_available_without_billing_and_quote_preserves_no_subscription() {
+    let repo = FakeRepo::default();
+    let service = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            FakeBilling {
+                no_subscription: true,
+                ..Default::default()
+            },
+            FixedClock,
+        )),
+        repo,
+        harnesses::domain::ports::MockHarnessRepo::new(),
+    );
+    let specs = service.sizes();
+    assert_eq!(specs.len(), ComputerSize::ALL.len());
+    for (spec, size) in specs.iter().zip(ComputerSize::ALL) {
+        assert_eq!(super::computer_size(spec.size), size);
+        assert_eq!(
+            (spec.vcpus, spec.memory_gb, spec.disk_gb),
+            (size.vcpus(), size.memory_gb(), size.disk_gb())
+        );
+    }
+    assert!(matches!(
+        service.quote(TEAM, agent::ComputerSize::Standard).await,
+        Err(agent::TeamAgentError::NoSubscription)
+    ));
 }

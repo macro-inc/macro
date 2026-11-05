@@ -19,8 +19,8 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     BillingInterval, BrainHealth, ComputerPayment, ComputerPurchase, ComputerQuote, ComputerSize,
-    ComputerStatus, ComputerStatusKind, Persona, PersonaService, SetupProgress, SetupStep,
-    TeamAgentError,
+    ComputerSizeSpec, ComputerStatus, ComputerStatusKind, Persona, PersonaService, SetupProgress,
+    SetupStep, TeamAgentError,
 };
 use crate::domain::ports::Computers;
 
@@ -53,6 +53,22 @@ impl<Repo, Bill, Time, Harness> HostedRuntimesComputers<Repo, Bill, Time, Harnes
 impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo> Computers
     for HostedRuntimesComputers<Repo, Bill, Time, Harness>
 {
+    fn sizes(&self) -> Vec<ComputerSizeSpec> {
+        size::ComputerSize::ALL
+            .into_iter()
+            .map(|size| ComputerSizeSpec {
+                size: match size {
+                    size::ComputerSize::Standard => ComputerSize::Standard,
+                    size::ComputerSize::Large => ComputerSize::Large,
+                    size::ComputerSize::Xl => ComputerSize::Xl,
+                },
+                vcpus: size.vcpus(),
+                memory_gb: size.memory_gb(),
+                disk_gb: size.disk_gb(),
+            })
+            .collect()
+    }
+
     #[tracing::instrument(skip_all, fields(%team_id, ?size), err)]
     async fn quote(
         &self,
@@ -347,12 +363,11 @@ fn error(source: ComputerError) -> TeamAgentError {
         ComputerError::NotFound => TeamAgentError::NotFound,
         ComputerError::BadRequest(message) => TeamAgentError::BadRequest(message),
         ComputerError::NotFailed => TeamAgentError::RetryUnavailable(source.to_string()),
+        ComputerError::Billing(BillingError::NoSubscription) => TeamAgentError::NoSubscription,
         ComputerError::SoldOut
-        | ComputerError::Billing(
-            BillingError::NoSubscription
-            | BillingError::IntervalNotSold(_)
-            | BillingError::PaymentFailed,
-        ) => TeamAgentError::ComputerUnavailable(source.to_string()),
+        | ComputerError::Billing(BillingError::IntervalNotSold(_) | BillingError::PaymentFailed) => {
+            TeamAgentError::ComputerUnavailable(source.to_string())
+        }
         ComputerError::Billing(BillingError::Provider(report)) => {
             TeamAgentError::ComputerProvider(report)
         }

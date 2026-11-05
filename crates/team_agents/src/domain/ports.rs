@@ -7,10 +7,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    AgentRepo, ComputerPurchase, ComputerQuote, ComputerSize, ComputerStatus, CreateTeamAgent,
-    Credential, EmailMessage, EmailMessages, Mailbox, NewAgentAccount, Persona, PersonaSeed,
-    SeatQuote, SendEmail, SentEmail, SubscriptionItem, TeamAgent, TeamAgentError, TeamAgentQuote,
-    TeamAgentStatus, TeamAgents,
+    AgentRepo, ComputerPurchase, ComputerQuote, ComputerSize, ComputerSizeSpec, ComputerStatus,
+    CreateTeamAgent, Credential, EmailMessage, EmailMessages, Mailbox, NewAgentAccount, Persona,
+    PersonaSeed, SeatQuote, SendEmail, SentEmail, SubscriptionItem, TeamAgent, TeamAgentError,
+    TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
 };
 
 /// Storage for agent accounts and their provisioning status.
@@ -150,6 +150,9 @@ pub trait Mailboxes: Send + Sync + 'static {
 
 /// Macro computers (hosted runtimes) bought on a team's subscription.
 pub trait Computers: Send + Sync + 'static {
+    /// Catalog specifications, without consulting billing.
+    fn sizes(&self) -> Vec<ComputerSizeSpec>;
+
     /// What a computer of `size` costs the team.
     fn quote(
         &self,
@@ -225,6 +228,12 @@ pub trait AgentRepos: Send + Sync + 'static {
 
 /// Inbound port: what drivers (HTTP) can ask of team agents.
 pub trait TeamAgentService: Send + Sync + 'static {
+    /// Catalog specifications for any team admin, regardless of subscription.
+    fn sizes(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> impl Future<Output = Result<TeamAgentSizes, TeamAgentError>> + Send;
+
     /// What inviting an agent with a computer of `size` adds to the bill.
     fn quote(
         &self,

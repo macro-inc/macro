@@ -35,7 +35,11 @@ unhealthy/missing reports. It is computed from harness capabilities, not stored
 in the team-agent row. Updated diagnostics are persisted even when status stays
 failed. Status refresh clears them when the brain recovers.
 
-`GET /team_agents/quote?size=` includes `vcpus`, `memoryGb`, and `diskGb`
+`GET /team_agents/sizes` returns the hosted-runtimes size catalog to any team
+admin, without consulting billing or feature flags. Use it for the size picker.
+`GET /team_agents/quote?size=` returns HTTP 409 with `code: "no_subscription"`
+when the team lacks an active subscription; other conflicts have their own
+`computer_unavailable` or `retry_unavailable` codes. The quote includes `vcpus`, `memoryGb`, and `diskGb`
 from the hosted-runtimes size catalog alongside the seat and computer price.
 
 ## Start here
