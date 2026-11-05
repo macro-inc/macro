@@ -237,6 +237,13 @@ fn tests_build_dependencies_without_debug_info() {
 }
 
 #[test]
+fn test_job_builds_workspace_crates_without_debug_info() {
+    let job = serde_json::to_value(test()).unwrap();
+    assert_eq!(job["env"]["CARGO_PROFILE_DEV_DEBUG"], "0");
+    assert_eq!(job["env"]["CARGO_PROFILE_TEST_DEBUG"], "0");
+}
+
+#[test]
 fn test_job_keeps_one_sccache_server_for_the_whole_run() {
     let job = serde_json::to_value(test()).unwrap();
     assert_eq!(job["env"]["SCCACHE_IDLE_TIMEOUT"], "0");
