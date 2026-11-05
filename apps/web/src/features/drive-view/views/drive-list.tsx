@@ -377,7 +377,9 @@ export function DriveList() {
               <Match when={true}>
                 <div
                   ref={setViewport}
-                  class="min-h-0 flex-1 overflow-auto overscroll-none"
+                  // `soup-list` lets the tutorial row above the rows quiet
+                  // the cursor row while it is hovered (TutorialEntries.css).
+                  class="soup-list min-h-0 flex-1 overflow-auto overscroll-none"
                 >
                   {/* Outside the virtualized rows, so list focus skips it. */}
                   <div ref={setListStart}>

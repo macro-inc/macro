@@ -1,3 +1,4 @@
+import './TutorialEntries.css';
 import { ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -68,7 +69,10 @@ function DismissButton(props: { onDismiss: () => void }) {
  */
 export function TutorialRowView(props: EntryProps) {
   return (
-    <div class="soup-row-wide group/tutorial relative mx-(--soup-row-gutter) flex min-h-10 w-[calc(100%-2*var(--soup-row-gutter))] items-center rounded-xl not-touch:hover:bg-list-hover touch:min-h-[44px]">
+    <div
+      data-tutorial-row
+      class="soup-row-wide group/tutorial relative mx-(--soup-row-gutter) flex min-h-10 w-[calc(100%-2*var(--soup-row-gutter))] items-center rounded-xl not-touch:hover:bg-list-hover touch:min-h-[44px]"
+    >
       <button
         type="button"
         onClick={props.onOpen}
