@@ -8,8 +8,8 @@ concurrency:
   cancel-in-progress: false
 env:
   CARGO_INCREMENTAL: '0'
-  CARGO_PROFILE_DEV_DEBUG: limited
-  CARGO_PROFILE_TEST_DEBUG: limited
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
   RUST_BACKTRACE: '1'
   RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
   CARGO_BUILD_JOBS: '8'
@@ -94,6 +94,10 @@ jobs:
           echo "KACHE_LOCAL_ONLY=1"
         } >> "$GITHUB_ENV"
         "$dir/kache" --version
+    - name: Report cache state at start
+      run: |
+        du -sh /home/runner/.cache/kache/store 2>/dev/null || echo 'kache store: empty'
+        du -sh /nix 2>/dev/null || true
     - name: Build code-mode assets
       run: |
         assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
