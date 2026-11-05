@@ -29,8 +29,10 @@ releases fail on a Projects (classic) error before adding the label.
   is cancelled.
 - Draft PRs run too.
 - Other labels never start or cancel CI.
-- If the label went on before GitHub rebuilt the PR's merge commit after a
-  push, `Start` fails within seconds and `CI gate` says to add the label again.
+- A label added within seconds of a push can reach GitHub before the push
+  does. `Start` then fails within seconds and `CI gate` says to add the label
+  again. To avoid it, add the label once `gh pr view <pr> --json headRefOid`
+  shows the commit you pushed.
 
 ## Wait for it
 
@@ -46,7 +48,7 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 | pending, `Running on <sha>` | A run is going | Wait |
 | pass, `Passed on <sha>` | Every check passed or was path-skipped | Done |
 | fail, `Failed: <jobs>` | Those called workflows failed | Open the linked run, fix, push, run again |
-| fail, `The merge commit did not include ...` | Labelled too soon after a push | Add the label again |
+| fail, `The PR moved on ...` or `The merge commit did not include ...` | Labelled too soon after a push | Add the label again |
 | missing | A fork PR, before its first run | A maintainer adds the label |
 
 ## Fix a failure
@@ -60,6 +62,8 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 
 ## Fork PRs
 
-A maintainer adds the label after reading the diff: the run uses the fork's
-workflow files. The fork's token can't set statuses, so `CI Gate for Forks`
-removes the label and sets `CI gate` after the run finishes.
+A maintainer adds the label after reading the diff, workflow files included:
+the run uses the fork's copies. The fork's token can't set statuses, so
+`CI Gate for Forks` removes the label and sets `CI gate` to `Running on <sha>`
+on the head the label went on, then copies the run's verdict onto that head.
+Re-running a fork's failed jobs doesn't update `CI gate`; add the label again.

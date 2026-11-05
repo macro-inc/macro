@@ -24,6 +24,7 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "Build Web App",
     "Build macOS DMG",
     "CI Gate Reminder",
+    "CI Gate for Forks",
     "CLA",
     "Cancel Stuck Cloud Storage Deploys",
     "Cleanup Preview",
