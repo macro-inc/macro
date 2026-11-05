@@ -163,6 +163,16 @@ export type ActiveMeetingsResponse = {
 export type ActivityType = 'view' | 'interact';
 
 /**
+ * Request to add a bot to a channel.
+ */
+export type AddChannelBotRequest = {
+    /**
+     * Bot id.
+     */
+    bot_id: BotId;
+};
+
+/**
  * Request body for favoriting an entity.
  */
 export type AddFavoriteRequest = {
@@ -1409,7 +1419,7 @@ export type Bot = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session.
      */
     has_agent: boolean;
     /**
@@ -4025,7 +4035,7 @@ export type CreateBotRequest = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
      */
     has_agent?: boolean | null;
     /**
@@ -4036,6 +4046,34 @@ export type CreateBotRequest = {
      * Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.
      */
     team_id?: string | null;
+};
+
+/**
+ * Request to create a bot token.
+ */
+export type CreateBotTokenRequest = {
+    /**
+     * Optional expiration timestamp.
+     */
+    expires_at?: string | null;
+    /**
+     * Token label.
+     */
+    label?: string | null;
+};
+
+/**
+ * Response containing a newly minted token.
+ */
+export type CreateBotTokenResponse = {
+    /**
+     * Raw bearer token.
+     */
+    bearer_token: string;
+    /**
+     * Token metadata.
+     */
+    token: BotToken;
 };
 
 export type CreateBulkDocumentResponse = {
@@ -4158,7 +4196,7 @@ export type CreateChannelScopedBotRequest = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
      */
     has_agent?: boolean | null;
     /**
@@ -4547,17 +4585,15 @@ export type CreatePairingRequest = {
 };
 
 /**
- * Request to create an empty pipeline with the standard CRM columns.
+ * Request to create an empty pipeline: the standard CRM columns for a tracked
+ * record, or one Name column, like a new database, for a generic pipeline.
  */
 export type CreatePipeline = {
     /**
      * Pipeline name.
      */
     name: string;
-    /**
-     * Company or contact entries.
-     */
-    recordType: PipelineRecordType;
+    recordType?: null | PipelineRecordType;
     /**
      * Defaults to private.
      */
@@ -11445,7 +11481,7 @@ export type PatchBotRequest = {
      */
     handle?: string | null;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.
      */
     has_agent?: boolean | null;
     /**
@@ -11668,13 +11704,11 @@ export type Pipeline = {
      */
     name: string;
     /**
-     * Protected primary column.
+     * A tracked pipeline's protected record reference. A generic pipeline's
+     * Name, which names no column once someone deletes it.
      */
     primaryColumnId: string;
-    /**
-     * Kind of the primary reference.
-     */
-    recordType: PipelineRecordType;
+    recordType: null | PipelineRecordType;
     /**
      * Whether the pipeline has a team grant.
      */
@@ -16367,6 +16401,20 @@ export type UploadExtractFolderRequest = {
     sha: string;
 };
 
+/**
+ * The document created from the uploaded bytes.
+ */
+export type UploadFileResponse = {
+    /**
+     * The new document.
+     */
+    documentId: string;
+    /**
+     * Number of bytes stored.
+     */
+    sizeBytes: number;
+};
+
 export type UploadFolderRequest = {
     /**
      * The content of the folder
@@ -17391,6 +17439,47 @@ export type CreateAnchorResponses = {
 
 export type CreateAnchorResponse = CreateAnchorResponses[keyof CreateAnchorResponses];
 
+export type ListBotsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/bots';
+};
+
+export type ListBotsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListBotsError = ListBotsErrors[keyof ListBotsErrors];
+
+export type ListBotsResponses = {
+    200: Array<Bot>;
+};
+
+export type ListBotsResponse = ListBotsResponses[keyof ListBotsResponses];
+
+export type CreateBotData = {
+    body: CreateBotRequest;
+    path?: never;
+    query?: never;
+    url: '/bots';
+};
+
+export type CreateBotErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateBotError = CreateBotErrors[keyof CreateBotErrors];
+
+export type CreateBotResponses = {
+    201: Bot;
+};
+
+export type CreateBotResponse = CreateBotResponses[keyof CreateBotResponses];
+
 export type GetSelfBotData = {
     body?: never;
     path?: never;
@@ -17438,6 +17527,85 @@ export type GetBotOwnerProfilesResponses = {
 };
 
 export type GetBotOwnerProfilesResponse = GetBotOwnerProfilesResponses[keyof GetBotOwnerProfilesResponses];
+
+export type DeleteBotData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}';
+};
+
+export type DeleteBotErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteBotError = DeleteBotErrors[keyof DeleteBotErrors];
+
+export type DeleteBotResponses = {
+    204: void;
+};
+
+export type DeleteBotResponse = DeleteBotResponses[keyof DeleteBotResponses];
+
+export type GetBotData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}';
+};
+
+export type GetBotErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetBotError = GetBotErrors[keyof GetBotErrors];
+
+export type GetBotResponses = {
+    200: Bot;
+};
+
+export type GetBotResponse = GetBotResponses[keyof GetBotResponses];
+
+export type PatchBotData = {
+    body: PatchBotRequest;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}';
+};
+
+export type PatchBotErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchBotError = PatchBotErrors[keyof PatchBotErrors];
+
+export type PatchBotResponses = {
+    200: Bot;
+};
+
+export type PatchBotResponse = PatchBotResponses[keyof PatchBotResponses];
 
 export type ListBotChannelsData = {
     body?: never;
@@ -17494,6 +17662,89 @@ export type RemoveBotFromChannelByBotResponses = {
 };
 
 export type RemoveBotFromChannelByBotResponse = RemoveBotFromChannelByBotResponses[keyof RemoveBotFromChannelByBotResponses];
+
+export type ListBotTokensData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}/tokens';
+};
+
+export type ListBotTokensErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListBotTokensError = ListBotTokensErrors[keyof ListBotTokensErrors];
+
+export type ListBotTokensResponses = {
+    200: Array<BotToken>;
+};
+
+export type ListBotTokensResponse = ListBotTokensResponses[keyof ListBotTokensResponses];
+
+export type CreateBotTokenData = {
+    body: CreateBotTokenRequest;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}/tokens';
+};
+
+export type CreateBotTokenErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateBotTokenError = CreateBotTokenErrors[keyof CreateBotTokenErrors];
+
+export type CreateBotTokenResponses = {
+    201: CreateBotTokenResponse;
+};
+
+export type CreateBotTokenResponse2 = CreateBotTokenResponses[keyof CreateBotTokenResponses];
+
+export type RevokeBotTokenData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+        /**
+         * Token ID
+         */
+        token_id: string;
+    };
+    query?: never;
+    url: '/bots/{bot_id}/tokens/{token_id}';
+};
+
+export type RevokeBotTokenErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RevokeBotTokenError = RevokeBotTokenErrors[keyof RevokeBotTokenErrors];
+
+export type RevokeBotTokenResponses = {
+    204: void;
+};
+
+export type RevokeBotTokenResponse = RevokeBotTokenResponses[keyof RevokeBotTokenResponses];
 
 export type ListOccurrencesData = {
     body?: never;
@@ -19308,6 +19559,58 @@ export type GetChannelAttachmentsResponses = {
 };
 
 export type GetChannelAttachmentsResponse = GetChannelAttachmentsResponses[keyof GetChannelAttachmentsResponses];
+
+export type ListChannelBotsData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/bots';
+};
+
+export type ListChannelBotsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListChannelBotsError = ListChannelBotsErrors[keyof ListChannelBotsErrors];
+
+export type ListChannelBotsResponses = {
+    200: Array<Bot>;
+};
+
+export type ListChannelBotsResponse = ListChannelBotsResponses[keyof ListChannelBotsResponses];
+
+export type AddChannelBotData = {
+    body: AddChannelBotRequest;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/bots';
+};
+
+export type AddChannelBotErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AddChannelBotError = AddChannelBotErrors[keyof AddChannelBotErrors];
+
+export type AddChannelBotResponses = {
+    204: void;
+};
+
+export type AddChannelBotResponse = AddChannelBotResponses[keyof AddChannelBotResponses];
 
 export type CreateChannelScopedBotData = {
     body: CreateChannelScopedBotRequest;
@@ -21825,6 +22128,58 @@ export type GetSystemSkillsHandlerResponses = {
 };
 
 export type GetSystemSkillsHandlerResponse = GetSystemSkillsHandlerResponses[keyof GetSystemSkillsHandlerResponses];
+
+export type UploadFileData = {
+    /**
+     * The file's bytes, at most 25 MiB.
+     */
+    body: Blob | File;
+    path?: never;
+    query: {
+        /**
+         * Filename including its extension, such as `report.pdf`; the extension
+         * sets the file type. No directory components.
+         */
+        fileName: string;
+        /**
+         * Destination project. Requires edit access; omit for top-level files.
+         */
+        projectId?: string;
+    };
+    url: '/documents/upload';
+};
+
+export type UploadFileErrors = {
+    /**
+     * Invalid filename or content
+     */
+    400: ErrorResponse;
+    /**
+     * No edit access to the destination project
+     */
+    401: ErrorResponse;
+    /**
+     * The caller cannot create documents
+     */
+    403: unknown;
+    /**
+     * The file exceeds 25 MiB
+     */
+    413: unknown;
+    /**
+     * Document name exceeds the maximum length
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UploadFileError = UploadFileErrors[keyof UploadFileErrors];
+
+export type UploadFileResponses = {
+    200: UploadFileResponse;
+};
+
+export type UploadFileResponse2 = UploadFileResponses[keyof UploadFileResponses];
 
 export type DeleteDocumentData = {
     body?: never;

@@ -54,6 +54,9 @@ for this message before deploying clients that send it; the dev push and
 production release workflows enforce this order while building the web app in
 parallel. The worker deployment job waits 300 seconds after deployment for
 [active Durable Objects to adopt the new code](https://developers.cloudflare.com/durable-objects/deployments/durable-objects-code-updates/).
+When the live version was built from the same inputs, recorded in its deployment
+message, the job skips migrations and deployment and waits only for what remains
+of those 300 seconds.
 Manual deployments must preserve the same order and wait at least five minutes
 before publishing clients. Keep the workflow wait aligned with any future
 `code_update_strategy` change. Older workers refuse

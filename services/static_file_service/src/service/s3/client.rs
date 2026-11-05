@@ -17,13 +17,23 @@ impl S3Client {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn put_presigned_url(&self, key: String, content_type: String) -> Result<String> {
+    pub async fn put_presigned_url(
+        &self,
+        key: String,
+        content_type: String,
+        content_length: Option<u64>,
+    ) -> Result<String> {
         let duration = Duration::from_secs(2 * 60);
+        let content_length = content_length
+            .map(i64::try_from)
+            .transpose()
+            .context("content length is out of range")?;
         let presigned_url = self
             .inner
             .put_object()
             .key(key)
             .content_type(content_type)
+            .set_content_length(content_length)
             .bucket(self.storage_bucket.clone())
             .presigned(PresigningConfig::expires_in(duration)?)
             .await
@@ -196,5 +206,45 @@ impl S3Client {
         }
 
         all_results
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
+
+    use super::*;
+
+    fn client() -> S3Client {
+        let config = aws_sdk_s3::Config::builder()
+            .behavior_version(BehaviorVersion::latest())
+            .region(Region::new("us-east-1"))
+            .credentials_provider(Credentials::new("id", "secret", None, None, "test"))
+            .build();
+        S3Client::new(aws_sdk_s3::Client::from_conf(config), "bucket".to_string())
+    }
+
+    #[tokio::test]
+    async fn a_declared_length_is_signed_so_storage_rejects_other_sizes() {
+        let url = client()
+            .put_presigned_url("key".to_string(), "image/png".to_string(), Some(5))
+            .await
+            .unwrap();
+
+        assert!(
+            url.to_lowercase()
+                .contains("x-amz-signedheaders=content-length"),
+            "{url}"
+        );
+    }
+
+    #[tokio::test]
+    async fn no_declared_length_leaves_the_size_unsigned() {
+        let url = client()
+            .put_presigned_url("key".to_string(), "image/png".to_string(), None)
+            .await
+            .unwrap();
+
+        assert!(!url.to_lowercase().contains("content-length"), "{url}");
     }
 }

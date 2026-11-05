@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT r.id AS \"id!\", r.action_id AS \"action_id!\", r.resource_id,\n                   r.start_time AS \"start_time!\", r.end_time AS \"end_time!\",\n                   r.is_success AS \"is_success!\", r.result AS \"result!\",\n                   r.created_at AS \"created_at!\"\n            FROM UNNEST($1::uuid[]) AS ids(action_id)\n            CROSS JOIN LATERAL (\n                SELECT id, action_id, resource_id, start_time, end_time, is_success,\n                       result, created_at\n                FROM action_execution_record\n                WHERE action_execution_record.action_id = ids.action_id\n                ORDER BY start_time DESC\n                LIMIT 1\n            ) AS r\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "action_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "resource_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "start_time!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "end_time!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_success!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "result!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c4f278879761e85f73b9b52fab5507145c1d3838526d11c88ffdc1d881446689"
+}

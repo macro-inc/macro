@@ -2,11 +2,15 @@ use std::time::{Duration, SystemTime};
 
 use super::*;
 use crate::{
-    domain::models::{AccessToken, ClientRegistrationRequest},
+    domain::{
+        browser_binding::BrowserBinding,
+        models::{AccessToken, ClientRegistrationRequest},
+    },
     test_support::{
-        ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, FakeOAuthProvider, Harness,
-        LOOPBACK_REDIRECT_URI, REFRESHED_ACCESS_TOKEN, TRUSTED_REDIRECT_URI, UPSTREAM_ACCESS_TOKEN,
-        UPSTREAM_EXPIRES_IN, UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER, code_challenge_for,
+        ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, FakeOAuthProvider, GATEWAY_REDIRECT_URI,
+        Harness, LOOPBACK_REDIRECT_URI, REFRESHED_ACCESS_TOKEN, TRUSTED_REDIRECT_URI,
+        UPSTREAM_ACCESS_TOKEN, UPSTREAM_EXPIRES_IN, UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER,
+        code_challenge_for,
     },
 };
 
@@ -28,17 +32,32 @@ async fn registration_persists_the_submitted_redirect_uris() {
 }
 
 #[tokio::test]
-async fn registration_rejects_an_untrusted_https_redirect_uri() {
+async fn registration_accepts_an_unlisted_https_redirect_uri() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[GATEWAY_REDIRECT_URI]).await;
+
+    let stored = harness
+        .registry
+        .find_client(&client_id)
+        .await
+        .expect("lookup should succeed")
+        .expect("client should be persisted");
+
+    assert_eq!(stored.redirect_uris, vec![GATEWAY_REDIRECT_URI]);
+}
+
+#[tokio::test]
+async fn registration_rejects_a_non_loopback_http_redirect_uri() {
     let harness = Harness::new();
 
     let error = harness
         .service
         .register_client(ClientRegistrationRequest {
             client_name: None,
-            redirect_uris: vec![ATTACKER_REDIRECT_URI.to_owned()],
+            redirect_uris: vec!["http://gateway.example/oauth/callback".to_owned()],
         })
         .await
-        .expect_err("an untrusted host must not be registrable");
+        .expect_err("plain http off loopback must not be registrable");
 
     assert!(matches!(
         error,
@@ -70,11 +89,15 @@ async fn authorize_rejects_an_unknown_client_id() {
 
     let error = harness
         .service
-        .start_authorization(harness.authorize_request(
-            "never-registered",
-            LOOPBACK_REDIRECT_URI,
-            &code_challenge_for(VICTIM_CODE_VERIFIER),
-        ))
+        .start_authorization(
+            harness.authorize_request(
+                "never-registered",
+                LOOPBACK_REDIRECT_URI,
+                &code_challenge_for(VICTIM_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::NotAsked,
+        )
         .await
         .expect_err("an unregistered client_id must be rejected");
 
@@ -88,11 +111,15 @@ async fn authorize_rejects_a_redirect_uri_the_client_did_not_register() {
 
     let error = harness
         .service
-        .start_authorization(harness.authorize_request(
-            &client_id,
-            "https://claude.ai/some/other/path",
-            &code_challenge_for(VICTIM_CODE_VERIFIER),
-        ))
+        .start_authorization(
+            harness.authorize_request(
+                &client_id,
+                "https://claude.ai/some/other/path",
+                &code_challenge_for(VICTIM_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::NotAsked,
+        )
         .await
         .expect_err("a redirect_uri outside the registration must be rejected");
 
@@ -103,62 +130,289 @@ async fn authorize_rejects_a_redirect_uri_the_client_did_not_register() {
 }
 
 #[tokio::test]
-async fn authorize_rejects_an_attacker_controlled_redirect_uri() {
+async fn authorize_rejects_an_unregistered_attacker_redirect_uri() {
     let harness = Harness::new();
     let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
 
     let error = harness
         .service
-        .start_authorization(harness.authorize_request(
-            &client_id,
-            ATTACKER_REDIRECT_URI,
-            &code_challenge_for(ATTACKER_CODE_VERIFIER),
-        ))
+        .start_authorization(
+            harness.authorize_request(
+                &client_id,
+                ATTACKER_REDIRECT_URI,
+                &code_challenge_for(ATTACKER_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::Approved,
+        )
         .await
-        .expect_err("an untrusted host must be rejected at authorize");
+        .expect_err("a callback the client did not register must be rejected");
+
+    assert!(matches!(
+        error,
+        StartAuthorizationError::UnregisteredRedirectUri
+    ));
+    assert!(!harness.inflight.has_pending());
+}
+
+#[tokio::test]
+async fn authorize_rejects_a_redirect_uri_the_policy_refuses() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+
+    let error = harness
+        .service
+        .start_authorization(
+            harness.authorize_request(
+                &client_id,
+                "http://attacker.example/steal",
+                &code_challenge_for(ATTACKER_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::Approved,
+        )
+        .await
+        .expect_err("plain http off loopback must be rejected at authorize");
 
     assert!(matches!(error, StartAuthorizationError::InvalidRedirectUri));
 }
 
-/// The reported attack: an attacker registers a client, crafts an authorize
-/// link carrying a redirect URI and PKCE challenge of their own, and gets a
-/// victim to follow it. Every check the broker makes at token exchange
-/// compares the attacker's values against the attacker's values, so the flow
-/// has to fail before a code is ever issued.
 #[tokio::test]
-async fn authorization_code_interception_fails_at_authorize() {
+async fn authorize_for_an_unlisted_host_asks_for_consent_and_stores_nothing() {
     let harness = Harness::new();
+    let client_id = harness.register(&[GATEWAY_REDIRECT_URI]).await;
 
-    let attacker_registration = harness
+    let start = harness
         .service
-        .register_client(ClientRegistrationRequest {
-            client_name: Some("totally-legitimate-client".to_owned()),
-            redirect_uris: vec![ATTACKER_REDIRECT_URI.to_owned()],
-        })
-        .await;
-    assert!(
-        attacker_registration.is_err(),
-        "the attacker must not be able to register their callback"
-    );
-
-    // Registration refused, so the attacker reuses a real client's id and
-    // supplies their own callback on the authorize request instead.
-    let victim_client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
-    let error = harness
-        .service
-        .start_authorization(harness.authorize_request(
-            &victim_client_id,
-            ATTACKER_REDIRECT_URI,
-            &code_challenge_for(ATTACKER_CODE_VERIFIER),
-        ))
+        .start_authorization(
+            harness.authorize_request(
+                &client_id,
+                GATEWAY_REDIRECT_URI,
+                &code_challenge_for(VICTIM_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::NotAsked,
+        )
         .await
-        .expect_err("the crafted authorize request must fail");
+        .expect("authorize should succeed");
 
-    assert!(matches!(error, StartAuthorizationError::InvalidRedirectUri));
+    assert_eq!(
+        start,
+        AuthorizationStart::ConsentRequired(ConsentPrompt {
+            client_name: "test-client".to_owned(),
+            redirect_host: "gateway.example".to_owned(),
+        })
+    );
     assert!(
         !harness.inflight.has_pending(),
-        "no handshake state may be created for a rejected authorize request"
+        "nothing may be stored before the user answers"
     );
+}
+
+#[tokio::test]
+async fn authorize_for_a_trusted_host_signs_in_without_consent() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+
+    let start = harness
+        .service
+        .start_authorization(
+            harness.authorize_request(
+                &client_id,
+                TRUSTED_REDIRECT_URI,
+                &code_challenge_for(VICTIM_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::NotAsked,
+        )
+        .await
+        .expect("authorize should succeed");
+
+    assert!(matches!(start, AuthorizationStart::SignIn(_)));
+}
+
+#[tokio::test]
+async fn approved_client_on_an_unlisted_host_completes_the_flow() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[GATEWAY_REDIRECT_URI]).await;
+
+    let start = harness
+        .service
+        .start_authorization(
+            harness.authorize_request(
+                &client_id,
+                GATEWAY_REDIRECT_URI,
+                &code_challenge_for(VICTIM_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::Approved,
+        )
+        .await
+        .expect("authorize should succeed");
+    assert!(matches!(start, AuthorizationStart::SignIn(_)));
+
+    let redirect = harness
+        .service
+        .complete_callback(
+            upstream_callback(&harness.inflight.only_pending_session_id()),
+            Some(harness.browser.clone()),
+        )
+        .await
+        .expect("callback should succeed");
+
+    assert!(
+        redirect.starts_with(&format!("{GATEWAY_REDIRECT_URI}?code=")),
+        "unexpected redirect: {redirect}"
+    );
+}
+
+/// The attack the consent screen alone does not stop: an attacker approves
+/// their own client, takes the upstream sign-in URL that produces, and sends
+/// it to a victim, whose existing upstream session completes it silently. The
+/// callback arrives in the victim's browser, which does not hold the binding
+/// the flow was started with, so no code is issued.
+#[tokio::test]
+async fn a_flow_started_in_another_browser_cannot_be_completed() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[ATTACKER_REDIRECT_URI]).await;
+    let attacker_browser = BrowserBinding::generate();
+
+    harness
+        .service
+        .start_authorization(
+            harness.authorize_request(
+                &client_id,
+                ATTACKER_REDIRECT_URI,
+                &code_challenge_for(ATTACKER_CODE_VERIFIER),
+            ),
+            attacker_browser,
+            UserConsent::Approved,
+        )
+        .await
+        .expect("the attacker can approve their own client");
+    let session_id = harness.inflight.only_pending_session_id();
+
+    let error = harness
+        .service
+        .complete_callback(
+            upstream_callback(&session_id),
+            Some(harness.browser.clone()),
+        )
+        .await
+        .expect_err("the victim's browser must not complete the attacker's flow");
+
+    assert!(matches!(error, CompleteCallbackError::DifferentBrowser));
+    assert!(!harness.inflight.holds_any_issued_code());
+}
+
+#[tokio::test]
+async fn a_callback_without_the_binding_cookie_is_refused() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+
+    harness
+        .service
+        .start_authorization(
+            harness.authorize_request(
+                &client_id,
+                TRUSTED_REDIRECT_URI,
+                &code_challenge_for(VICTIM_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::NotAsked,
+        )
+        .await
+        .expect("authorize should succeed");
+
+    let error = harness
+        .service
+        .complete_callback(
+            upstream_callback(&harness.inflight.only_pending_session_id()),
+            None,
+        )
+        .await
+        .expect_err("a callback without the cookie must be refused");
+
+    assert!(matches!(error, CompleteCallbackError::DifferentBrowser));
+}
+
+/// A flow stored by the build before browser binding carries no digest. That
+/// build only accepted trusted redirect URIs, so only those may complete
+/// unbound.
+#[tokio::test]
+async fn an_unbound_pending_flow_completes_only_to_a_trusted_redirect_uri() {
+    let harness = Harness::new();
+
+    for (redirect_uri, completes) in [(TRUSTED_REDIRECT_URI, true), (GATEWAY_REDIRECT_URI, false)] {
+        let session_id = format!("legacy-{completes}");
+        harness
+            .inflight
+            .insert_pending(
+                &session_id,
+                PendingAuthorization {
+                    client_id: "legacy-client".to_owned(),
+                    code_challenge: code_challenge_for(VICTIM_CODE_VERIFIER),
+                    client_state: "client-state".to_owned(),
+                    client_redirect_uri: redirect_uri.to_owned(),
+                    browser_binding_digest: None,
+                },
+            )
+            .await
+            .expect("insert should succeed");
+
+        let result = harness
+            .service
+            .complete_callback(upstream_callback(&session_id), None)
+            .await;
+
+        assert_eq!(result.is_ok(), completes, "redirect_uri {redirect_uri}");
+    }
+}
+
+#[tokio::test]
+async fn consent_prompt_strips_formatting_tricks_from_the_client_name() {
+    let harness = Harness::new();
+    let registration = harness
+        .service
+        .register_client(ClientRegistrationRequest {
+            client_name: Some(format!(
+                "Claude\u{202E}moc.elgoog\u{200B}\n{}",
+                "x".repeat(100)
+            )),
+            redirect_uris: vec!["https://xn--claud-7ra.example:8443/callback".to_owned()],
+        })
+        .await
+        .expect("registration should succeed");
+
+    let start = harness
+        .service
+        .start_authorization(
+            harness.authorize_request(
+                &registration.client_id,
+                "https://xn--claud-7ra.example:8443/callback",
+                &code_challenge_for(VICTIM_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::NotAsked,
+        )
+        .await
+        .expect("authorize should succeed");
+
+    let AuthorizationStart::ConsentRequired(prompt) = start else {
+        panic!("an unlisted host must ask for consent");
+    };
+    let expected_name = format!("Claudemoc.elgoog{}\u{2026}", "x".repeat(48));
+    assert_eq!(prompt.client_name, expected_name);
+    assert_eq!(prompt.redirect_host, "xn--claud-7ra.example:8443");
+}
+
+fn upstream_callback(session_id: &str) -> CallbackRequest {
+    CallbackRequest {
+        code: Some("upstream-code".to_owned()),
+        state: Some(session_id.to_owned()),
+        error: None,
+        error_description: None,
+    }
 }
 
 // --- Token exchange ----------------------------------------------------
@@ -482,6 +736,118 @@ async fn revoked_refresh_token_cannot_mint_access_tokens() {
 }
 
 #[tokio::test]
+async fn a_refresh_token_the_upstream_refuses_is_an_invalid_grant() {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_refresh(|| {
+        UpstreamGrantError::InvalidGrant {
+            detail: "invalid_grant (refresh_token_not_found)".to_owned(),
+        }
+    }));
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+
+    let error = harness
+        .service
+        .exchange_token(refresh_request(refresh_token, &client_id))
+        .await
+        .expect_err("a refused refresh token must not mint an access token");
+
+    match error {
+        TokenExchangeError::RefreshFailed(UpstreamGrantError::InvalidGrant { detail }) => {
+            assert_eq!(detail, "invalid_grant (refresh_token_not_found)");
+        }
+        other => panic!("expected an upstream invalid grant, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn an_upstream_outage_during_refresh_is_reported_as_unavailable() {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_refresh(|| {
+        UpstreamGrantError::Unavailable {
+            retry_after: Some(Duration::from_secs(30)),
+        }
+    }));
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+
+    let error = harness
+        .service
+        .exchange_token(refresh_request(refresh_token, &client_id))
+        .await
+        .expect_err("an outage must fail the refresh");
+
+    assert!(matches!(
+        error,
+        TokenExchangeError::RefreshFailed(UpstreamGrantError::Unavailable {
+            retry_after: Some(retry_after),
+        }) if retry_after == Duration::from_secs(30)
+    ));
+}
+
+#[tokio::test]
+async fn a_failed_upstream_refresh_keeps_its_cause() {
+    let harness = Harness::with_provider(
+        FakeOAuthProvider::new()
+            .failing_refresh(|| UpstreamGrantError::Failed(anyhow::anyhow!("unexpected 500"))),
+    );
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+
+    let error = harness
+        .service
+        .exchange_token(refresh_request(refresh_token, &client_id))
+        .await
+        .expect_err("an upstream failure must fail the refresh");
+
+    assert!(matches!(
+        error,
+        TokenExchangeError::RefreshFailed(UpstreamGrantError::Failed(_))
+    ));
+    assert!(
+        error.to_string().contains("unexpected 500"),
+        "the cause must survive into the message: {error}"
+    );
+}
+
+#[tokio::test]
+async fn a_refused_upstream_code_fails_the_callback_without_issuing_a_code() {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_code_exchange(|| {
+        UpstreamGrantError::InvalidGrant {
+            detail: "invalid_request (auth_code_not_found)".to_owned(),
+        }
+    }));
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    harness
+        .service
+        .start_authorization(
+            harness.authorize_request(
+                &client_id,
+                TRUSTED_REDIRECT_URI,
+                &code_challenge_for(VICTIM_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::NotAsked,
+        )
+        .await
+        .expect("authorize should succeed");
+
+    let error = harness
+        .service
+        .complete_callback(
+            upstream_callback(&harness.inflight.only_pending_session_id()),
+            Some(harness.browser.clone()),
+        )
+        .await
+        .expect_err("a refused upstream code must fail the callback");
+
+    assert!(matches!(
+        error,
+        CompleteCallbackError::AuthorizationCodeExchangeFailed(
+            UpstreamGrantError::InvalidGrant { .. }
+        )
+    ));
+}
+
+#[tokio::test]
 async fn revoking_twice_succeeds() {
     let harness = Harness::new();
     let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
@@ -649,22 +1015,29 @@ async fn callback_redirect_preserves_a_query_on_the_registered_redirect_uri() {
 
     harness
         .service
-        .start_authorization(harness.authorize_request(
-            &client_id,
-            redirect_uri,
-            &code_challenge_for(VICTIM_CODE_VERIFIER),
-        ))
+        .start_authorization(
+            harness.authorize_request(
+                &client_id,
+                redirect_uri,
+                &code_challenge_for(VICTIM_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::NotAsked,
+        )
         .await
         .expect("authorize should succeed");
 
     let redirect = harness
         .service
-        .complete_callback(CallbackRequest {
-            code: Some("upstream-code".to_owned()),
-            state: Some(harness.inflight.only_pending_session_id()),
-            error: None,
-            error_description: None,
-        })
+        .complete_callback(
+            CallbackRequest {
+                code: Some("upstream-code".to_owned()),
+                state: Some(harness.inflight.only_pending_session_id()),
+                error: None,
+                error_description: None,
+            },
+            Some(harness.browser.clone()),
+        )
         .await
         .expect("callback should succeed");
 
@@ -821,22 +1194,29 @@ async fn callback_records_upstream_expiry_on_the_issued_code() {
 
     harness
         .service
-        .start_authorization(harness.authorize_request(
-            &client_id,
-            TRUSTED_REDIRECT_URI,
-            &code_challenge_for(VICTIM_CODE_VERIFIER),
-        ))
+        .start_authorization(
+            harness.authorize_request(
+                &client_id,
+                TRUSTED_REDIRECT_URI,
+                &code_challenge_for(VICTIM_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::NotAsked,
+        )
         .await
         .expect("authorize should succeed");
 
     harness
         .service
-        .complete_callback(CallbackRequest {
-            code: Some("upstream-code".to_owned()),
-            state: Some(harness.inflight.only_pending_session_id()),
-            error: None,
-            error_description: None,
-        })
+        .complete_callback(
+            CallbackRequest {
+                code: Some("upstream-code".to_owned()),
+                state: Some(harness.inflight.only_pending_session_id()),
+                error: None,
+                error_description: None,
+            },
+            Some(harness.browser.clone()),
+        )
         .await
         .expect("callback should succeed");
 
