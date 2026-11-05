@@ -1049,6 +1049,14 @@ impl From<&ApiContext> for SearchHandlerState {
     }
 }
 
+impl FromRef<ApiContext> for crate::api::saved_views::definitions::SavedViewDefinitionsState {
+    fn from_ref(ctx: &ApiContext) -> Self {
+        Self(Arc::new(crate::service::saved_views::service(
+            ctx.db.clone(),
+        )))
+    }
+}
+
 impl FromRef<ApiContext> for SearchHandlerState {
     fn from_ref(ctx: &ApiContext) -> Self {
         SearchHandlerState::from(ctx)

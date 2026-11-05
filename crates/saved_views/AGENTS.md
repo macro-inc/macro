@@ -2,7 +2,7 @@
 
 ## Scope
 
-This crate owns saved-view definitions, revisions, effective team sharing, and legacy personal REST storage. Consumers own their versioned JSON configuration; saved views do not execute entity queries.
+This crate owns saved-view definitions, revisions, effective team sharing, and legacy personal REST storage. Consumers own their versioned JSON configuration; saved views do not execute entity queries. `SavedViewApi` is the one contract both transports use: GraphQL for the app, and document storage's `/saved_views/definitions` REST routes for the SDK.
 
 ## Start here
 

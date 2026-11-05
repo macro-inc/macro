@@ -19,6 +19,10 @@ use crate::api::ApiContext;
 use crate::api::context::AuthorizationService;
 use crate::service::saved_views::service;
 
+pub mod definitions;
+#[cfg(test)]
+mod test;
+
 pub fn router() -> Router<ApiContext> {
     Router::new()
         .route("/", get(get_views_handler))
@@ -26,6 +30,7 @@ pub fn router() -> Router<ApiContext> {
         .route("/{saved_view_id}", delete(delete_view_handler))
         .route("/{saved_view_id}", patch(patch_view_handler))
         .route("/exclude_default", post(exclude_default_view_handler))
+        .nest("/definitions", definitions::router())
 }
 
 #[derive(Debug, Error)]

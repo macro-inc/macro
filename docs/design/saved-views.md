@@ -303,6 +303,13 @@ Expose reads under the authenticated `user`, following the
 | `deleteSavedView` | ID and expected revision; returns the deleted ID. |
 | `reorderSavedViews` | Kind and ordered IDs; sets the viewer's order and returns the views. |
 
+The SDK reaches the same domain service through REST routes under
+`/saved_views/definitions` in document storage, as email drafts and filters
+are reached by both transports: `GET` (kind, `first`, `after`), `POST`, `GET`,
+`PATCH` and `DELETE` (with `expectedRevision`) on `/{id}`, and `PUT /order`.
+Their cursors use the GraphQL encoding. The legacy `/saved_views` routes keep
+serving CRM's personal views unchanged.
+
 The normalized output object has `id: ID!`, owner ID, name, config, effective
 shared team ID, revision, and timestamps. Generate the GraphQL envelope types and
 SDL; the frontend-owned JSON schema is not a second handwritten GraphQL DTO.
