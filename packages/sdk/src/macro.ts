@@ -307,6 +307,11 @@ export {
   EditOutcomeUnknownError,
 } from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
+export {
+  CommentQuoteNotPlacedError,
+  type TextComment,
+  type TextCommentOptions,
+} from './entities/documents/text-comment';
 export { DocumentVersion } from './entities/documents/version';
 export {
   DraftAttachment,

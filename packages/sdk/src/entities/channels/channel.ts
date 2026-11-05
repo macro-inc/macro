@@ -12,7 +12,6 @@ import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentConversation } from '../agent-sessions/conversation';
 import { PropertiedEntity } from '../entity';
-import type { StaticImage } from '../images/image';
 import {
   MessageThread,
   type TimelineOptions,
@@ -25,7 +24,7 @@ import { ChannelAccessRequest } from './access-request';
 import { ChannelActivity } from './activity';
 import { Message } from './message';
 import type { ChannelPicture } from './picture';
-import { postToChannel } from './post';
+import { type ChannelAttachments, postToChannel } from './post';
 import type { Thread } from './thread';
 
 type ChannelDetail = GetChannelResponses[200];
@@ -166,23 +165,32 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   readonly type = this.field('channel_type');
 
   /**
-   * Post a message. Plain text, or a rich body composed with `msg`.
+   * Post a message, optionally in a thread, with images or Macro documents attached below the text.
+   *
    * `images` attaches static images, such as one from
-   * `macro.images.generate()`, below the text.
+   * `macro.images.generate()`; `documents` attaches Macro documents as cards
+   * readers can open, and needs the sender to be able to view each one. At
+   * most 10 attachments per message.
    *
    * Works with a channel webhook token as well as a normal one — see
    * {@link postToChannel} for which endpoint that picks and what it costs.
-   * The webhook endpoint takes no images.
+   * The webhook endpoint takes no attachments.
+   *
+   * @example
+   * const plan = macro.documents.byId(planId);
+   * await channel.send('The launch plan is ready for review.', {
+   *   documents: [plan],
+   * });
    */
   async send(
     body: string | RichMessage,
-    opts?: { thread?: Thread; images?: StaticImage[] },
+    opts?: { thread?: Thread } & ChannelAttachments,
   ): Promise<Message> {
     const id = await postToChannel(
       this.client,
       opts?.thread ?? this,
       toBody(body),
-      opts?.images,
+      opts,
     );
     return Message.byId(this.client, this.id, id);
   }

@@ -1,10 +1,9 @@
 import { type RichMessage, toBody } from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import type { StaticImage } from '../images/image';
 import { Channel } from './channel';
 import { Message } from './message';
-import { postToChannel } from './post';
+import { type ChannelAttachments, postToChannel } from './post';
 
 /**
  * A thread within a channel, rooted at a top-level message. Replies and
@@ -55,18 +54,14 @@ export class Thread {
    * @param body - Plain text, or a rich body composed with {@link msg}.
    * @param opts.images - Static images to attach, such as one from
    *   `macro.images.generate()`.
+   * @param opts.documents - Macro documents to attach as cards.
    * @returns The created reply.
    */
   async reply(
     body: string | RichMessage,
-    opts?: { images?: StaticImage[] },
+    opts?: ChannelAttachments,
   ): Promise<Message> {
-    const id = await postToChannel(
-      this.client,
-      this,
-      toBody(body),
-      opts?.images,
-    );
+    const id = await postToChannel(this.client, this, toBody(body), opts);
     return Message.byId(this.client, this.channelId, id);
   }
 }
