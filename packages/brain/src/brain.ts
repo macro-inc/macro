@@ -40,7 +40,7 @@ import {
   talkCommands,
   workPrompt,
 } from './prompts.ts';
-import type { Runner, Tier } from './runner.ts';
+import type { RunHandle, Runner, Tier } from './runner.ts';
 import { type Routines, Schedules, type Trigger } from './schedules.ts';
 import { conversationKey, type Tasks, Work } from './work.ts';
 import { type Git, GitWriter, Workspace } from './workspace.ts';
@@ -396,13 +396,8 @@ export class Brain implements Control {
       inFlight: this.work.inFlight(),
     });
 
-    const handle = await this.startTurn(
-      'respond',
-      turnId,
-      prompt,
-      persona.operating,
-      persona.events.model
-    );
+    // Typing starts before the turn so even its first post finds it on; the
+    // post stops it, and so does the turn ending.
     const stopTyping = startTyping(
       (active) =>
         this.deps.http.typing(
@@ -415,6 +410,20 @@ export class Brain implements Control {
       }
     );
     this.typing.set(turnId, stopTyping);
+    let handle: RunHandle;
+    try {
+      handle = await this.startTurn(
+        'respond',
+        turnId,
+        prompt,
+        persona.operating,
+        persona.events.model
+      );
+    } catch (error) {
+      await stopTyping();
+      this.typing.delete(turnId);
+      throw error;
+    }
     const timeout = setTimeout(
       () => handle.abort(),
       persona.events.respondTimeoutMinutes * 60_000
