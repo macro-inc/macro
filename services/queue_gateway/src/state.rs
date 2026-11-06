@@ -163,6 +163,11 @@ impl QueueState {
         true
     }
 
+    /// Lets a deduplication id be sent again, after a send that did not reach Kafka.
+    pub fn forget_send(&mut self, dedup: &str) {
+        self.dedup_seen.remove(dedup);
+    }
+
     /// Holds a record consumed from Kafka.
     pub fn ingest(&mut self, position: Position, envelope: Envelope) {
         self.outstanding

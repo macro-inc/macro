@@ -16,9 +16,9 @@ use rdkafka::{
     types::RDKafkaErrorCode,
 };
 use rootcause::{Report, bail};
-use tokio::sync::{Mutex, Notify, RwLock, mpsc};
+use tokio::sync::{Mutex, Notify, RwLock, mpsc, watch};
 
-use crate::state::{Commit, Envelope, Position, QueueState, Settings};
+use crate::state::{Commit, DeadLetter, Envelope, Position, QueueState, Settings};
 
 /// Holds each queue's settings, keyed by queue name.
 const SETTINGS_TOPIC: &str = "queue-gateway.settings";
@@ -45,6 +45,10 @@ pub struct Queue {
     pub state: Mutex<QueueState>,
     pub arrived: Notify,
     commits: mpsc::UnboundedSender<Commit>,
+    /// Ends the queue's consumer, which otherwise outlives its deletion in the group.
+    stop: watch::Sender<bool>,
+    /// Dead letters whose redrive failed, retried on the next expiry tick.
+    stranded: Mutex<Vec<DeadLetter>>,
 }
 
 impl Queue {
@@ -61,6 +65,8 @@ pub struct Queues {
     brokers: String,
     producer: KafkaEventProducer,
     queues: RwLock<HashMap<String, Arc<Queue>>>,
+    /// Held across a create, so concurrent ones cannot open a queue twice.
+    creating: Mutex<()>,
 }
 
 impl Queues {
@@ -71,6 +77,7 @@ impl Queues {
             brokers,
             producer,
             queues: RwLock::new(HashMap::new()),
+            creating: Mutex::new(()),
         });
         queues.create_settings_topic().await?;
         for (name, settings) in queues.read_settings().await? {
@@ -92,6 +99,7 @@ impl Queues {
 
     /// Creates a queue, or returns the one that exists.
     pub async fn create(&self, name: &str, settings: Settings) -> Result<Arc<Queue>, Report> {
+        let _creating = self.creating.lock().await;
         if let Some(queue) = self.get(name).await {
             return Ok(queue);
         }
@@ -107,7 +115,9 @@ impl Queues {
     }
 
     pub async fn delete(&self, name: &str) -> Result<(), Report> {
-        self.queues.write().await.remove(name);
+        if let Some(queue) = self.queues.write().await.remove(name) {
+            queue.stop.send_replace(true);
+        }
         self.producer.send(SETTINGS_TOPIC, name, b"").await?;
         Ok(())
     }
@@ -130,14 +140,23 @@ impl Queues {
     async fn open(&self, name: &str, settings: Settings) -> Result<Arc<Queue>, Report> {
         self.create_topic(&topic(name), false).await?;
         let (commits, commits_rx) = mpsc::unbounded_channel();
+        let (stop, stop_rx) = watch::channel(false);
         let queue = Arc::new(Queue {
             state: Mutex::new(QueueState::new(name.to_owned(), settings)),
             arrived: Notify::new(),
             commits,
+            stop,
+            stranded: Mutex::new(Vec::new()),
         });
         let consumer = self.consumer(&format!("queue-gateway.{name}"))?;
         consumer.subscribe(&[&topic(name)])?;
-        tokio::spawn(consume(queue.clone(), consumer, topic(name), commits_rx));
+        tokio::spawn(consume(
+            queue.clone(),
+            consumer,
+            topic(name),
+            commits_rx,
+            stop_rx,
+        ));
         self.queues
             .write()
             .await
@@ -219,7 +238,8 @@ impl Queues {
     }
 
     async fn expire(&self, queue: &Queue) {
-        let dead = queue.state.lock().await.expire(now_ms());
+        let mut dead = std::mem::take(&mut *queue.stranded.lock().await);
+        dead.extend(queue.state.lock().await.expire(now_ms()));
         queue.arrived.notify_waiters();
         for letter in dead {
             match self.send(&letter.queue, &letter.envelope).await {
@@ -227,12 +247,16 @@ impl Queues {
                     let commit = queue.state.lock().await.dead_lettered(letter.position);
                     queue.commit(commit);
                 }
-                // Left uncommitted, so it comes back when this process restarts.
-                Err(error) => tracing::error!(
-                    ?error,
-                    dead_letter_queue = letter.queue,
-                    "failed to redrive a message"
-                ),
+                // It is in neither `ready` nor `in_flight` now, and holds back its
+                // partition's commits until it lands.
+                Err(error) => {
+                    tracing::error!(
+                        ?error,
+                        dead_letter_queue = letter.queue,
+                        "failed to redrive a message"
+                    );
+                    queue.stranded.lock().await.push(letter);
+                }
             }
         }
     }
@@ -244,11 +268,13 @@ async fn consume(
     consumer: StreamConsumer,
     topic: String,
     mut commits: mpsc::UnboundedReceiver<Commit>,
+    mut stop: watch::Receiver<bool>,
 ) {
     loop {
         let room = queue.state.lock().await.held() < MAX_HELD;
         tokio::select! {
             biased;
+            _ = stop.changed() => return,
             commit = commits.recv() => {
                 let Some(commit) = commit else { return };
                 let mut offsets = TopicPartitionList::new();

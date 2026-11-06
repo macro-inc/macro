@@ -198,6 +198,14 @@ fn a_delayed_message_waits_for_its_due_time() {
 }
 
 #[test]
+fn a_forgotten_deduplication_id_can_be_sent_again() {
+    let mut q = queue();
+    assert!(q.first_send("x", T0));
+    q.forget_send("x");
+    assert!(q.first_send("x", T0 + 1_000));
+}
+
+#[test]
 fn a_deduplication_id_suppresses_repeats_within_its_window() {
     let mut q = QueueState::new("work.fifo".into(), Settings::default());
     assert!(q.first_send("x", T0));

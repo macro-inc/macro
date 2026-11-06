@@ -332,7 +332,7 @@ async fn send_one(
         .map(str::to_owned)
         .or_else(|| settings.content_based_dedup.then(|| md5_hex(&body)));
     let digest = md5_hex(&body);
-    let message_id = uuid::Uuid::new_v4().to_string();
+    let message_id = uuid::Uuid::now_v7().to_string();
     tracing::Span::current().record("message_id", &message_id);
     let duplicate = match &dedup {
         Some(id) => !queue.state.lock().await.first_send(id, now),
@@ -347,12 +347,18 @@ async fn send_one(
                 .filter(|attributes| !attributes.is_null())
                 .cloned(),
             group: entry["MessageGroupId"].as_str().map(str::to_owned),
-            dedup,
+            dedup: dedup.clone(),
             traceparent: traceparent.map(str::to_owned),
             sent_ms: now,
             not_before_ms: now + delay * 1000,
         };
-        queues.send(name, &envelope).await?;
+        if let Err(error) = queues.send(name, &envelope).await {
+            // The caller's retry carries the same id and must not be taken for a duplicate.
+            if let Some(id) = &dedup {
+                queue.state.lock().await.forget_send(id);
+            }
+            return Err(error);
+        }
     }
     Ok(json!({ "MessageId": message_id, "MD5OfMessageBody": digest }))
 }
