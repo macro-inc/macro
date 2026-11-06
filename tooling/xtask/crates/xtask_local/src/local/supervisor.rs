@@ -289,8 +289,11 @@ impl Job {
 
     /// Best effort: a status file that can't be written must not fail the work
     /// it describes, and the waiting foreground reports a dead job anyway.
+    /// Holds the record's lock through the write: background lanes record their
+    /// steps from other threads, and two writes through the one temp file could
+    /// rename a half-written record into place.
     fn save(&self) {
-        let record = self.record().clone();
+        let record = self.record();
         if let Err(error) = write_job(&self.path, &record) {
             eprintln!("could not record job state: {error:#}");
         }

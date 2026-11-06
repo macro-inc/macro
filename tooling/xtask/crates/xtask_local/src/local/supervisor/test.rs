@@ -172,3 +172,41 @@ fn an_error_between_steps_is_placed_after_the_last_step() {
             .contains("failed after 'Waiting for backend (proxy /auth/health)'")
     );
 }
+
+/// Background lanes record their steps from other threads while the caller
+/// polls the record, so every read must see a whole record.
+#[test]
+fn concurrent_steps_never_leave_a_half_written_record() {
+    let dir = std::env::temp_dir().join(format!("supervisor-job-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("job.json");
+    let job = Arc::new(Job {
+        path: path.clone(),
+        record: Mutex::new(JobRecord::new(JobKind::Up, None)),
+        lock: Mutex::new(None),
+    });
+    job.save();
+
+    let writers: Vec<_> = (0..8)
+        .map(|lane| {
+            let job = Arc::clone(&job);
+            std::thread::spawn(move || {
+                for step in 0..200 {
+                    job.step_started(&format!("lane {lane} step {step}"));
+                }
+            })
+        })
+        .collect();
+    let mut unreadable = 0;
+    while writers.iter().any(|writer| !writer.is_finished()) {
+        let raw = std::fs::read_to_string(&path).unwrap_or_default();
+        if serde_json::from_str::<JobRecord>(&raw).is_err() {
+            unreadable += 1;
+        }
+    }
+    for writer in writers {
+        writer.join().unwrap();
+    }
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert_eq!(unreadable, 0, "reads that found a half-written record");
+}
