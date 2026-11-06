@@ -1,5 +1,6 @@
 export default {
   layout: 'Layout',
+  audioOutput: 'Audio output',
   reactions: 'Reactions',
   fullscreen: 'Full screen',
   exitFullscreen: 'Exit full screen',

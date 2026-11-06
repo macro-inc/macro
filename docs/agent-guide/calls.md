@@ -305,6 +305,12 @@ until the user retries or chooses None. The screen uses a gray join
 button. In a channel's Call tab, the header shows the live waveform and duration,
 then an icon-only meeting link and Invite. The link is fetched only when copied.
 Active phone calls fill the viewport and retain Back, channel title and live status.
+The speaker button sits before the live time in channel and standalone call headers.
+It opens Audio output with the available routes and a check on the active one.
+Native channel calls use their system routes; connecting or removing a headset updates
+that check and the native video speaker toggle. Browser calls show the button only
+when `setSinkId` supports output selection, using the same Speaker devices as
+call settings. Older native builds without the route commands hide the button.
 The header shows the current local time before the call name. Owners can click the name
 to rename it, then Save or press Enter; Cancel or Escape discards the edit. Guests and other participants see a
 read-only name.
@@ -344,7 +350,7 @@ header; Invite remains available on setup screens, desktop, and tablets. Back
 returns to the app without hanging up; when a channel has no navigation history, Back opens its
 Messages tab instead. Only **Leave call** ends participation.
 
-On desktop, pin a participant, yourself, or a shared screen to take the stage; see [Pinning call tiles on desktop](#pinning-call-tiles-on-desktop). A phone tap does not pin; long-press support belongs to the next call update.
+On desktop, pin a participant, yourself, or a shared screen to take the stage; see [Pinning call tiles on desktop](#pinning-call-tiles-on-desktop). A phone tap does not pin; hold a tile for its Pin/Unpin menu.
 A talking participant has a success-colored border above their video or avatar.
 Camera-off tiles are flat and show a neutral initial, never a profile-color gradient.
 On desktop the self view stays at the bottom-right beside the controls, or above

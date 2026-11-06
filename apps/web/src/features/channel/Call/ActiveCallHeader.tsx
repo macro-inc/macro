@@ -8,6 +8,7 @@ import { Show } from 'solid-js';
 import { ActiveCallLink } from './ActiveCallLink';
 import { CallLiveChip } from './CallLiveChip';
 import { getCallJoinTab } from './call-tabs';
+import { PhoneAudioOutput } from './PhoneAudioOutput';
 import { useParticipantSpeaking } from './use-call-speaking';
 
 function CallHeaderPill(props: { channelId: string; startedAt?: string }) {
@@ -42,6 +43,7 @@ export function ActiveCallHeader(props: { channelId: string; link?: boolean }) {
   const active = useActiveCallQuery(() => props.channelId);
   return (
     <>
+      <PhoneAudioOutput />
       <CallHeaderPill
         channelId={props.channelId}
         startedAt={active.isSuccess ? active.data?.createdAt : undefined}

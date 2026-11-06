@@ -59,6 +59,18 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     private var lastAudioEngineOutputAvailable: Bool?
     private let audioEngineLogger = CallKitAudioEngineLogger()
     private let audioRouteController = CallAudioRouteController()
+    var onAudioOutputChanged: (([String: Any]) -> Void)?
+
+    func audioOutputState() -> [String: Any]? {
+        guard let callId = activeCallUUID?.uuidString else { return nil }
+        return audioRouteController.outputState(callId: callId)
+    }
+
+    func selectAudioOutput(_ id: String) -> Bool {
+        guard activeCallUUID != nil else { return false }
+        didApplyDefaultSpeakerRoute = true
+        return audioRouteController.selectOutput(id)
+    }
 
     init(
         onSnapshotChanged: @escaping (ActiveCallSnapshot?) -> Void,
@@ -121,6 +133,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             self.lastAudioEngineInputAvailable = inputAvailable
             self.lastAudioEngineOutputAvailable = outputAvailable
             self.videoOverlay.setAudioRoute(route)
+            if let state = self.audioOutputState() { self.onAudioOutputChanged?(state) }
             guard self.activeCallUUID != nil else { return }
 
             let routeChanged = previousRoute != route

@@ -947,6 +947,7 @@ parameter typed as a union of literals. Commands that published plugins' own
 JavaScript packages call are not covered. Before adding a command to the list,
 raise `min-native-build.json` to the first build with it, or handle
 `Command … not found` in the caller (see the src-tauri README).
+Keep phone call audio-output commands optional for older native binaries, register their mobile capability, and fence route updates by call ID.
 
 ## Desktop release builds: generated WASM
 
