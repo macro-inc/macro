@@ -24,7 +24,7 @@ default = [
 ]
 document = []
 document_text_extractor = []
-email = ["uuid", "models_email", "gmail"]
+email = ["uuid", "models_email", "gmail", "dep:opentelemetry", "dep:tracing-opentelemetry"]
 gmail = ["model", "models_email", "uuid"]
 organization_retention = []
 search = ["chrono", "model", "uuid", "futures"]
@@ -33,6 +33,8 @@ sfs_uploader = []
 upload_extractor = []
 
 [dependencies]
+opentelemetry = { workspace = true, features = ["trace"], optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
 anyhow = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 chrono = { workspace = true, optional = true }
