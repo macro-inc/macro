@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -257,6 +258,10 @@ def manifests(config, namespace, slot):
             aliases.update(dns(a) for a in (network or {}).get('aliases', []))
         for alias in aliases:
             spec = {'selector': labels, 'ports': [{'name': f'p{port}', 'port': port, 'targetPort': port} for port in sorted(ports)]}
+            if key == 'kafka':
+                # KRaft connects to its controller through this DNS name before
+                # the broker can pass its readiness probe.
+                spec['publishNotReadyAddresses'] = True
             objects.append({'apiVersion': 'v1', 'kind': 'Service',
                             'metadata': {'name': alias, 'namespace': namespace}, 'spec': spec})
         if key == 'proxy':
@@ -363,7 +368,19 @@ def up(args):
             flags += ['--binaries-dir', args.binaries_dir]
         if args.env_file:
             flags += ['--env-file', args.env_file]
-        xtask('kubernetes-prepare', *flags)
+        if args.frontend_dir:
+            source = Path(args.frontend_dir).resolve(strict=True)
+            if not (source / 'index.html').is_file():
+                raise RuntimeError('frontend directory must contain a same-origin development bundle with index.html')
+            staged = directory / 'frontend'
+            if source == staged.resolve():
+                raise RuntimeError('frontend source must differ from the instance staging directory')
+            xtask('kubernetes-prepare', *flags, '--no-frontend')
+            if staged.exists():
+                shutil.rmtree(staged)
+            shutil.copytree(source, staged)
+        else:
+            xtask('kubernetes-prepare', *flags)
         command, env, config = compose(args.name)
         services = {k: v for k, v in config['services'].items() if not v.get('profiles')}
         builds = [k for k, v in services.items() if v.get('build')]
@@ -398,6 +415,7 @@ def main():
     parser.add_argument('command', choices=['cluster', 'up', 'stop', 'down', 'status', 'roll'])
     parser.add_argument('name', nargs='?')
     parser.add_argument('--slot', type=int, choices=[0, 1], default=0)
+    parser.add_argument('--frontend-dir', help='reuse an already-built same-origin development frontend bundle')
     parser.add_argument('--binaries-dir')
     parser.add_argument('--env-file', help='same optional dotenv overlay as run_local')
     parser.add_argument('--service', help='Compose service name for roll; build the binary before rolling')

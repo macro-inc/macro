@@ -15,7 +15,16 @@ just kube-local up kube-b --slot 1
 ```
 
 The first run builds the same Rust binaries, auxiliary images and frontend as
-the Compose launcher. To use Nix-built binaries for both runtimes:
+the Compose launcher. Pass `--frontend-dir apps/web/dist` to reuse a prepared
+same-origin development bundle across instances. Build it once with:
+
+```sh
+MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL \
+VITE_LOCAL_BACKEND_ORIGIN=same-origin VITE_LOCAL_ONLY=true \
+VITE_AI_EDITING_WORKER_URL=/ai-editing bun run --cwd apps/web --bun build
+```
+
+To use Nix-built binaries for both runtimes:
 
 ```sh
 nix build .#local-stack-binaries --out-link infra/local/generated/kubernetes/binaries
@@ -69,6 +78,8 @@ remain identical to Compose. Auxiliary images are loaded into kind's containerd.
 Compose underscore service hostnames become hyphens for Kubernetes DNS.
 Application Deployments use rolling updates; single-replica backing stores use
 Recreate and persistent claims. This is a development adapter, not an EKS stack.
+Kafka publishes its service endpoints before readiness so its KRaft controller
+can connect during bootstrap.
 The existing deployed ECS runtime and its AWS backing services are unchanged.
 
 ## Host compatibility

@@ -19,7 +19,11 @@ pub fn prepare(args: &RunArgs) -> Result<()> {
         false,
         Tunnels::default(),
     )?;
-    super::frontend::build_static(&stage, &instance, Mode::Local)
+    if args.no_frontend {
+        Ok(())
+    } else {
+        super::frontend::build_static(&stage, &instance, Mode::Local)
+    }
 }
 
 /// Initialize pods using the same host-facing ports as the Compose instance.
