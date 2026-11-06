@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 /// A wall-clock window in an availability schedule.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TimeWindow {
@@ -16,6 +17,7 @@ pub struct TimeWindow {
 }
 /// Availability for one weekday.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct WeeklyDay {
     /// Sunday is zero.
@@ -25,6 +27,7 @@ pub struct WeeklyDay {
 }
 /// Replacement availability for one date.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DateOverride {
     /// Local date in the schedule zone.
@@ -34,6 +37,7 @@ pub struct DateOverride {
 }
 /// Reusable hours, with DST interpreted in an IANA zone.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Schedule {
@@ -43,6 +47,7 @@ pub struct Schedule {
     pub name: String,
     /// IANA time zone.
     #[cfg_attr(feature = "ai_tools", schemars(with = "String"))]
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub time_zone: chrono_tz::Tz,
     /// Weekly windows.
     pub weekly: Vec<WeeklyDay>,
@@ -51,6 +56,7 @@ pub struct Schedule {
 }
 /// Team host assignment policy.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SchedulingMode {
@@ -63,6 +69,7 @@ pub enum SchedulingMode {
 }
 /// A question on the booking form.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Question {
     /// Stable identity.
@@ -74,6 +81,9 @@ pub struct Question {
 }
 /// A reusable booking link.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+// Calendar events already publish an `EventType` schema.
+#[cfg_attr(feature = "schema", schema(as = BookingEventType))]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct EventType {
@@ -123,6 +133,7 @@ pub struct EventType {
 }
 /// Editable configuration for a person or team.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
@@ -154,6 +165,7 @@ pub struct OwnedProfile {
 }
 /// Booking lifecycle state.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BookingStatus {
@@ -170,6 +182,7 @@ pub enum BookingStatus {
 }
 /// Attendance recorded by an assigned host or profile administrator after a meeting.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BookingAttendance {
@@ -185,6 +198,7 @@ pub enum BookingAttendance {
 }
 /// Public booking details, also visible to authorized profile members.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Booking {
@@ -204,6 +218,7 @@ pub struct Booking {
     pub ends_at: DateTime<Utc>,
     /// Booker's display time zone.
     #[cfg_attr(feature = "ai_tools", schemars(with = "String"))]
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub time_zone: chrono_tz::Tz,
     /// Assigned hosts.
     pub hosts: Vec<String>,
@@ -287,6 +302,7 @@ pub struct BusyRange {
 }
 /// Available slot and the hosts who can satisfy it.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Slot {

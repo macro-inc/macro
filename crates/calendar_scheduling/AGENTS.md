@@ -17,6 +17,11 @@ MacroDB migrations.
 - `src/domain/availability.rs`: weekly schedules, date overrides, and conflict
   resolution across connected calendars.
 - `src/outbound/postgres.rs`: storage (feature `postgres`).
+- `src/inbound/router.rs`: HTTP routes (feature `inbound`). The management
+  routes (settings, links, bookings, insights, change, reschedule slots) carry
+  `utoipa` paths in the calendar service's OpenAPI document, which generates
+  the web client and the SDK's `macro.bookings`; domain types derive
+  `ToSchema` under feature `schema`.
 - `src/outbound/macro_services.rs`, `src/outbound/meeting_links.rs`: calendar/team
   domain ports and Macro-call meeting links (feature `calendar`).
 
@@ -43,6 +48,8 @@ MacroDB migrations.
 ## Checks
 
 - `cargo test -p calendar_scheduling` (`SQLX_OFFLINE` unset).
+- After changing an annotated route or schema: `bun run --cwd apps/web gen-api calendar-service`,
+  then `bun run sync-specs && bun run generate` in `packages/sdk`.
 
 ## Gotchas
 

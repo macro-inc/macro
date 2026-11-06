@@ -3928,6 +3928,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
  "wiremock",
  "workspace-hack",

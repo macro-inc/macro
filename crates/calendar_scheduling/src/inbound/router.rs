@@ -1,5 +1,6 @@
 //! Thin HTTP routes; membership, availability, and write policy live in the service.
 use crate::domain::{
+    booking_links::{BookingLink, BookingLinkDraft, BookingLinkListing, BookingLinks},
     insights::{BookingInsights, InsightQuery},
     management::BookingChange,
     models::*,
@@ -11,13 +12,14 @@ use axum::{
     extract::{DefaultBodyLimit, FromRef, Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, post, put},
 };
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 /// Scheduling service and authentication state.
@@ -57,12 +59,20 @@ pub fn router<
     Router::new()
         .route(
             "/settings",
-            get(settings::<R, C, D, A>).put(save::<R, C, D, A>),
+            get(get_booking_settings::<R, C, D, A>).put(save_booking_settings::<R, C, D, A>),
         )
-        .route("/bookings", get(bookings::<R, C, D, A>))
-        .route("/insights", post(insights::<R, C, D, A>))
-        .route("/bookings/{id}/change", post(change::<R, C, D, A>))
-        .route("/bookings/{id}/slots", get(host_slots::<R, C, D, A>))
+        .route(
+            "/links",
+            get(list_booking_links::<R, C, D, A>).post(create_booking_link::<R, C, D, A>),
+        )
+        .route("/links/{id}", put(edit_booking_link::<R, C, D, A>))
+        .route("/bookings", get(list_bookings::<R, C, D, A>))
+        .route("/insights", post(get_booking_insights::<R, C, D, A>))
+        .route("/bookings/{id}/change", post(change_booking::<R, C, D, A>))
+        .route(
+            "/bookings/{id}/slots",
+            get(list_booking_reschedule_slots::<R, C, D, A>),
+        )
         .route("/bookings/{id}/manage", get(manage::<R, C, D, A>))
         .route("/bookings/{id}/approve", post(approve::<R, C, D, A>))
         .route("/bookings/{id}/attendance", post(attendance::<R, C, D, A>))
@@ -87,16 +97,34 @@ pub fn router<
         .layer(axum::middleware::from_fn(no_store))
         .with_state(state)
 }
-#[derive(Deserialize)]
+/// Personal scheduling, or a team's when `teamId` is set.
+#[derive(Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]
-struct Scope {
+#[into_params(parameter_in = Query)]
+pub struct Scope {
+    /// Team whose booking page to act on; omit for the caller's personal page.
     team_id: Option<Uuid>,
 }
-#[derive(Deserialize)]
+/// Booking-link search within a personal or team page.
+#[derive(Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]
-struct BookingRange {
+#[into_params(parameter_in = Query)]
+pub struct LinkSearch {
+    /// Team whose links to list; omit for the caller's personal links.
     team_id: Option<Uuid>,
+    /// Text to match in a link's title, slug or description; omit for every link.
+    query: Option<String>,
+}
+/// Half-open range of booking start times.
+#[derive(Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct BookingRange {
+    /// Team whose bookings to read; omit for the caller's personal bookings.
+    team_id: Option<Uuid>,
+    /// Inclusive earliest start. Give both ends or neither.
     from: Option<chrono::DateTime<chrono::Utc>>,
+    /// Exclusive latest start, at most 733 days after `from`.
     to: Option<chrono::DateTime<chrono::Utc>>,
 }
 #[derive(Deserialize)]
@@ -109,9 +137,21 @@ struct SlotQuery {
     date: chrono::NaiveDate,
     time_zone: Option<chrono_tz::Tz>,
 }
-#[derive(Deserialize)]
-struct ReplacementQuery {
+/// Day to search for replacement times.
+#[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct ReplacementQuery {
+    /// Date in the booking schedule's time zone.
     date: chrono::NaiveDate,
+}
+/// A full edited draft at the revision it was read at.
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EditBookingLinkRequest {
+    /// Profile revision the draft was read at; a stale revision conflicts.
+    expected_revision: i64,
+    /// The link's complete new configuration.
+    draft: BookingLinkDraft,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,17 +163,35 @@ struct RescheduleRequest {
 struct Token {
     token: Uuid,
 }
-#[derive(Serialize)]
-struct ProfileResponse {
+/// Saved booking-page settings.
+#[derive(Serialize, ToSchema)]
+pub struct ProfileResponse {
+    /// Full settings, including the revision for the next save.
     profile: Profile,
 }
-#[derive(Serialize)]
-struct BookingsResponse {
+/// Bookings in the requested range.
+#[derive(Serialize, ToSchema)]
+pub struct BookingsResponse {
+    /// Every matching booking.
     bookings: Vec<Booking>,
 }
-#[derive(Serialize)]
-struct BookingResponse {
+/// One booking after a change.
+#[derive(Serialize, ToSchema)]
+pub struct BookingResponse {
+    /// The booking as saved.
     booking: Booking,
+}
+/// One saved booking link.
+#[derive(Serialize, ToSchema)]
+pub struct BookingLinkResponse {
+    /// The link as saved, with the revision for its next edit.
+    link: BookingLink,
+}
+/// A scheduling failure.
+#[derive(Serialize, ToSchema)]
+pub struct SchedulingApiError {
+    /// What went wrong, safe to show the user.
+    message: String,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -142,15 +200,18 @@ struct ReceiptResponse {
     token: Uuid,
     schedule_time_zone: chrono_tz::Tz,
 }
-#[derive(Serialize)]
-struct SlotsResponse {
+/// Available start times.
+#[derive(Serialize, ToSchema)]
+pub struct SlotsResponse {
+    /// Every available slot, earliest first.
     slots: Vec<Slot>,
 }
 #[derive(Serialize)]
 struct PublicResponse {
     profile: PublicProfile,
 }
-struct ApiError(Error);
+/// A scheduling failure, rendered as [`SchedulingApiError`].
+pub struct ApiError(Error);
 impl From<Error> for ApiError {
     fn from(e: Error) -> Self {
         Self(e)
@@ -168,7 +229,9 @@ impl IntoResponse for ApiError {
         };
         let mut response = (
             status,
-            Json(serde_json::json!({"message": self.0.to_string()})),
+            Json(SchedulingApiError {
+                message: self.0.to_string(),
+            }),
         )
             .into_response();
         if status == StatusCode::TOO_MANY_REQUESTS {
@@ -180,7 +243,25 @@ impl IntoResponse for ApiError {
         response
     }
 }
-async fn settings<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
+/// Read the personal or team booking page settings without creating them.
+#[utoipa::path(
+    get,
+    path = "/scheduling/settings",
+    tag = "calendar_scheduling",
+    params(Scope),
+    responses(
+        (status = 200, description = "Current settings", body = ProfileResponse),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "The caller may not manage this page", body = SchedulingApiError),
+        (status = 503, description = "Scheduling is temporarily unavailable", body = SchedulingApiError),
+    )
+)]
+pub async fn get_booking_settings<
+    R: Repository,
+    C: Calendars,
+    D: Directory,
+    A: MacroAuthorizationService,
+>(
     State(s): State<RouterState<R, C, D, A>>,
     user: MacroAuthorizationExtractor<A, UserOrInternal>,
     Query(q): Query<Scope>,
@@ -192,7 +273,28 @@ async fn settings<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizati
             .await?,
     }))
 }
-async fn save<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
+/// Save booking page settings at the revision they were read at.
+#[utoipa::path(
+    put,
+    path = "/scheduling/settings",
+    tag = "calendar_scheduling",
+    params(Scope),
+    request_body = Profile,
+    responses(
+        (status = 200, description = "Saved settings", body = ProfileResponse),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "The caller may not manage this page", body = SchedulingApiError),
+        (status = 400, description = "Invalid settings", body = SchedulingApiError),
+        (status = 409, description = "The settings changed since they were read", body = SchedulingApiError),
+        (status = 503, description = "Scheduling is temporarily unavailable", body = SchedulingApiError),
+    )
+)]
+pub async fn save_booking_settings<
+    R: Repository,
+    C: Calendars,
+    D: Directory,
+    A: MacroAuthorizationService,
+>(
     State(s): State<RouterState<R, C, D, A>>,
     user: MacroAuthorizationExtractor<A, UserOrInternal>,
     Query(q): Query<Scope>,
@@ -209,7 +311,26 @@ async fn save<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationSe
             .await?,
     }))
 }
-async fn bookings<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
+/// Read every booking starting in a half-open range, or fail when too many match.
+#[utoipa::path(
+    get,
+    path = "/scheduling/bookings",
+    tag = "calendar_scheduling",
+    params(BookingRange),
+    responses(
+        (status = 200, description = "Matching bookings", body = BookingsResponse),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "The caller may not manage this page", body = SchedulingApiError),
+        (status = 400, description = "Invalid or oversized range", body = SchedulingApiError),
+        (status = 503, description = "Scheduling is temporarily unavailable", body = SchedulingApiError),
+    )
+)]
+pub async fn list_bookings<
+    R: Repository,
+    C: Calendars,
+    D: Directory,
+    A: MacroAuthorizationService,
+>(
     State(s): State<RouterState<R, C, D, A>>,
     user: MacroAuthorizationExtractor<A, UserOrInternal>,
     Query(q): Query<BookingRange>,
@@ -377,7 +498,27 @@ async fn manage<R: Repository, C: Calendars, D: Directory, A: MacroAuthorization
     }))
 }
 
-async fn insights<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
+/// Booking statistics for a local-date period and the equally long period before it.
+#[utoipa::path(
+    post,
+    path = "/scheduling/insights",
+    tag = "calendar_scheduling",
+    params(Scope),
+    request_body = InsightQuery,
+    responses(
+        (status = 200, description = "Current and previous period statistics", body = BookingInsights),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "The caller may not manage this page", body = SchedulingApiError),
+        (status = 400, description = "Invalid period", body = SchedulingApiError),
+        (status = 503, description = "Scheduling is temporarily unavailable", body = SchedulingApiError),
+    )
+)]
+pub async fn get_booking_insights<
+    R: Repository,
+    C: Calendars,
+    D: Directory,
+    A: MacroAuthorizationService,
+>(
     State(s): State<RouterState<R, C, D, A>>,
     user: MacroAuthorizationExtractor<A, UserOrInternal>,
     Query(scope): Query<Scope>,
@@ -393,7 +534,29 @@ async fn insights<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizati
             .await?,
     ))
 }
-async fn change<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
+/// Cancel, approve, record attendance on, or reschedule a booking.
+#[utoipa::path(
+    post,
+    path = "/scheduling/bookings/{id}/change",
+    tag = "calendar_scheduling",
+    params(("id" = Uuid, Path, description = "Booking id")),
+    request_body = BookingChange,
+    responses(
+        (status = 200, description = "The booking as saved", body = BookingResponse),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "The caller may not manage this page", body = SchedulingApiError),
+        (status = 400, description = "The change is not allowed now", body = SchedulingApiError),
+        (status = 404, description = "No such booking", body = SchedulingApiError),
+        (status = 409, description = "The time is no longer available", body = SchedulingApiError),
+        (status = 503, description = "Scheduling is temporarily unavailable", body = SchedulingApiError),
+    )
+)]
+pub async fn change_booking<
+    R: Repository,
+    C: Calendars,
+    D: Directory,
+    A: MacroAuthorizationService,
+>(
     State(s): State<RouterState<R, C, D, A>>,
     user: MacroAuthorizationExtractor<A, UserOrInternal>,
     Path(id): Path<Uuid>,
@@ -406,7 +569,26 @@ async fn change<R: Repository, C: Calendars, D: Directory, A: MacroAuthorization
             .await?,
     }))
 }
-async fn host_slots<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
+/// Replacement start times for a booking on one date in its schedule zone.
+#[utoipa::path(
+    get,
+    path = "/scheduling/bookings/{id}/slots",
+    tag = "calendar_scheduling",
+    params(("id" = Uuid, Path, description = "Booking id"), ReplacementQuery),
+    responses(
+        (status = 200, description = "Available replacement slots", body = SlotsResponse),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "The caller may not manage this page", body = SchedulingApiError),
+        (status = 404, description = "No such booking", body = SchedulingApiError),
+        (status = 503, description = "Scheduling is temporarily unavailable", body = SchedulingApiError),
+    )
+)]
+pub async fn list_booking_reschedule_slots<
+    R: Repository,
+    C: Calendars,
+    D: Directory,
+    A: MacroAuthorizationService,
+>(
     State(s): State<RouterState<R, C, D, A>>,
     user: MacroAuthorizationExtractor<A, UserOrInternal>,
     Path(id): Path<Uuid>,
@@ -419,6 +601,120 @@ async fn host_slots<R: Repository, C: Calendars, D: Directory, A: MacroAuthoriza
                 user.authorization.user.macro_user_id.as_ref(),
                 id,
                 query.date,
+            )
+            .await?,
+    }))
+}
+
+/// List booking links with their full drafts, plus the page's reusable schedules.
+#[utoipa::path(
+    get,
+    path = "/scheduling/links",
+    tag = "calendar_scheduling",
+    params(LinkSearch),
+    responses(
+        (status = 200, description = "Matching links and reusable availability", body = BookingLinkListing),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "The caller may not manage this page", body = SchedulingApiError),
+        (status = 503, description = "Scheduling is temporarily unavailable", body = SchedulingApiError),
+    )
+)]
+pub async fn list_booking_links<
+    R: Repository,
+    C: Calendars,
+    D: Directory,
+    A: MacroAuthorizationService,
+>(
+    State(s): State<RouterState<R, C, D, A>>,
+    user: MacroAuthorizationExtractor<A, UserOrInternal>,
+    Query(q): Query<LinkSearch>,
+) -> Result<Json<BookingLinkListing>, ApiError> {
+    Ok(Json(
+        s.service
+            .list_links(
+                user.authorization.user.macro_user_id.as_ref(),
+                q.team_id,
+                q.query.as_deref(),
+            )
+            .await?,
+    ))
+}
+/// Create a booking link; an identical draft at the same slug returns the saved link.
+#[utoipa::path(
+    post,
+    path = "/scheduling/links",
+    tag = "calendar_scheduling",
+    params(Scope),
+    request_body = BookingLinkDraft,
+    responses(
+        (status = 200, description = "The saved link", body = BookingLinkResponse),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "The caller may not manage this page", body = SchedulingApiError),
+        (status = 400, description = "Invalid draft", body = SchedulingApiError),
+        (status = 409, description = "A different link already uses this slug", body = SchedulingApiError),
+        (status = 503, description = "Scheduling is temporarily unavailable", body = SchedulingApiError),
+    )
+)]
+pub async fn create_booking_link<
+    R: Repository,
+    C: Calendars,
+    D: Directory,
+    A: MacroAuthorizationService,
+>(
+    State(s): State<RouterState<R, C, D, A>>,
+    user: MacroAuthorizationExtractor<A, UserOrInternal>,
+    Query(q): Query<Scope>,
+    Json(draft): Json<BookingLinkDraft>,
+) -> Result<Json<BookingLinkResponse>, ApiError> {
+    Ok(Json(BookingLinkResponse {
+        link: s
+            .service
+            .create_link(
+                user.authorization.user.macro_user_id.as_ref(),
+                q.team_id,
+                draft,
+            )
+            .await?,
+    }))
+}
+/// Replace one booking link's draft; other links and schedules keep their settings.
+#[utoipa::path(
+    put,
+    path = "/scheduling/links/{id}",
+    tag = "calendar_scheduling",
+    params(("id" = Uuid, Path, description = "Booking link id"), Scope),
+    request_body = EditBookingLinkRequest,
+    responses(
+        (status = 200, description = "The saved link", body = BookingLinkResponse),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "The caller may not manage this page", body = SchedulingApiError),
+        (status = 400, description = "Invalid draft", body = SchedulingApiError),
+        (status = 404, description = "No such link", body = SchedulingApiError),
+        (status = 409, description = "The page changed since the link was read", body = SchedulingApiError),
+        (status = 503, description = "Scheduling is temporarily unavailable", body = SchedulingApiError),
+    )
+)]
+pub async fn edit_booking_link<
+    R: Repository,
+    C: Calendars,
+    D: Directory,
+    A: MacroAuthorizationService,
+>(
+    State(s): State<RouterState<R, C, D, A>>,
+    user: MacroAuthorizationExtractor<A, UserOrInternal>,
+    Path(id): Path<Uuid>,
+    Query(q): Query<Scope>,
+    Json(request): Json<EditBookingLinkRequest>,
+) -> Result<Json<BookingLinkResponse>, ApiError> {
+    Ok(Json(BookingLinkResponse {
+        link: s
+            .service
+            .edit_link(
+                user.authorization.user.macro_user_id.as_ref(),
+                q.team_id,
+                id,
+                request.expected_revision,
+                request.draft,
             )
             .await?,
     }))

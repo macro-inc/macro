@@ -9,7 +9,8 @@ client = ["dep:reqwest"]
 default = []
 ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:anyhow"]
 postgres = ["dep:sqlx"]
-inbound = ["dep:axum", "dep:macro_authorization"]
+inbound = ["dep:axum", "dep:macro_authorization", "schema"]
+schema = ["dep:utoipa"]
 calendar = ["dep:calendar_events", "dep:teams", "dep:macro_user_id", "dep:reqwest"]
 
 [dependencies]
@@ -29,6 +30,7 @@ thiserror = { workspace = true }
 rootcause = { workspace = true }
 tracing = { workspace = true }
 axum = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
 calendar_events = { path = "../calendar_events", optional = true }

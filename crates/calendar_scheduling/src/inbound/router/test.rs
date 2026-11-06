@@ -278,3 +278,164 @@ async fn http_booking_receipt_recovery_reschedule_cancel_and_team_auth(pool: sql
     );
     task.abort();
 }
+
+#[sqlx::test(migrations = false)]
+async fn http_booking_links_create_list_and_edit_at_a_revision(pool: sqlx::PgPool) {
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::raw_sql("CREATE TABLE \"User\" (id text PRIMARY KEY); CREATE TABLE team (id uuid PRIMARY KEY); INSERT INTO \"User\" VALUES ('macro|host@example.test');").execute(&pool).await.unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../../macro_db_client/migrations/20260918164303_calendar_scheduling.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../../macro_db_client/migrations/20260918175703_scheduling_recovery.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let app: Router = router(RouterState::new(
+        Arc::new(Service::new(
+            PostgresRepository::new(pool.clone()),
+            Calendar(AtomicBool::new(false)),
+            People,
+        )),
+        MacroAuthorizationState::new(Arc::new(Identity)),
+    ));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let client = reqwest::Client::new();
+    let draft = serde_json::json!({
+        "event": {
+            "title": "Intro call",
+            "slug": "intro",
+            "description": "A first conversation",
+            "durationMinutes": 30,
+            "location": "",
+            "googleMeet": false,
+            "enabled": true,
+            "mode": "individual",
+            "hosts": ["macro|host@example.test"],
+            "beforeMinutes": 0,
+            "afterMinutes": 0,
+            "noticeMinutes": 60,
+            "horizonDays": 30,
+            "intervalMinutes": 30,
+            "dailyLimit": null,
+            "requiresConfirmation": false,
+            "questions": []
+        },
+        "schedule": {
+            "name": "Working hours",
+            "timeZone": "America/New_York",
+            "weekly": [
+                {"day": 0, "windows": []},
+                {"day": 1, "windows": [{"start": "09:00", "end": "17:00"}]},
+                {"day": 2, "windows": [{"start": "09:00", "end": "17:00"}]},
+                {"day": 3, "windows": [{"start": "09:00", "end": "17:00"}]},
+                {"day": 4, "windows": [{"start": "09:00", "end": "17:00"}]},
+                {"day": 5, "windows": [{"start": "09:00", "end": "17:00"}]},
+                {"day": 6, "windows": []}
+            ],
+            "overrides": []
+        }
+    });
+
+    assert_eq!(
+        client
+            .post(format!("{base}/links"))
+            .json(&draft)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    let created: serde_json::Value = client
+        .post(format!("{base}/links"))
+        .bearer_auth("host")
+        .json(&draft)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let link = &created["link"];
+    assert_eq!(link["draft"], draft);
+    let id = link["eventTypeId"].as_str().unwrap().to_owned();
+    let revision = link["revision"].as_i64().unwrap();
+
+    let replayed: serde_json::Value = client
+        .post(format!("{base}/links"))
+        .bearer_auth("host")
+        .json(&draft)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(replayed["link"], *link);
+
+    let listing: serde_json::Value = client
+        .get(format!("{base}/links?query=first"))
+        .bearer_auth("host")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(listing["userId"], "macro|host@example.test");
+    assert_eq!(listing["links"], serde_json::json!([link]));
+    let unmatched: serde_json::Value = client
+        .get(format!("{base}/links?query=nothing"))
+        .bearer_auth("host")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(unmatched["links"], serde_json::json!([]));
+
+    let mut longer = draft.clone();
+    longer["event"]["durationMinutes"] = 45.into();
+    let edited: serde_json::Value = client
+        .put(format!("{base}/links/{id}"))
+        .bearer_auth("host")
+        .json(&serde_json::json!({"expectedRevision": revision, "draft": longer}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(edited["link"]["eventTypeId"], id.as_str());
+    assert_eq!(edited["link"]["draft"]["event"]["durationMinutes"], 45);
+    assert!(edited["link"]["revision"].as_i64().unwrap() > revision);
+
+    let mut shorter = draft.clone();
+    shorter["event"]["durationMinutes"] = 15.into();
+    let stale = client
+        .put(format!("{base}/links/{id}"))
+        .bearer_auth("host")
+        .json(&serde_json::json!({"expectedRevision": revision, "draft": shorter}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stale.status(), 409);
+    assert_eq!(
+        stale.json::<serde_json::Value>().await.unwrap()["message"],
+        "This time or configuration has changed. Refresh and try again."
+    );
+    task.abort();
+}
