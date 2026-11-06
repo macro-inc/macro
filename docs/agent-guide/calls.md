@@ -103,8 +103,9 @@ composer while the viewer is outside the call, independent of scroll position.
 
 In the call, the panel opens on desktop and tablet, closed on phones. Its first tab is **Chat**.
 On phones, Chat and People fill the shared sheet's tab row; the sheet opens at 64% height. It shows the channel up to the call's row, opened on the blank slate when the thread is empty
-and at the newest message otherwise. The composer is pinned to the call thread and returns there
-after replying elsewhere; nothing posts top-level from the panel. A popup counts top-level messages
+and at the newest message otherwise. The composer opens as a plain message input bound to the call discussion. Reply
+mode appears only after choosing Reply on a message; closing or sending that reply
+returns to the plain call composer. Nothing posts top-level from the panel. A popup counts top-level messages
 others have sent to the channel since you joined, and **View** swaps to the Messages tab with the
 call still connected. On the meeting page it navigates to the channel.
 

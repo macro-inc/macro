@@ -1276,9 +1276,10 @@ export function Channel(props: ChannelProps) {
                                   (messageById().get(threadId)?.thread
                                     .reply_count ?? 0) > 0
                                 }
-                                pinnedLabel={
-                                  threadId === callPanel?.rootId
-                                    ? () => t('calls.replyingInCallThread')
+                                replying={unifiedInput.isReplying()}
+                                placeholder={
+                                  callPanel && !unifiedInput.isReplying()
+                                    ? 'Message this call…'
                                     : undefined
                                 }
                                 onNavigateToTarget={() =>

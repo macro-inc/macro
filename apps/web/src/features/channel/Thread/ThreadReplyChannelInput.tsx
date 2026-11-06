@@ -40,6 +40,9 @@ type ThreadReplyChannelInputProps = {
   /** Where the reply input is hosted. Defaults to 'inline' (in the thread). */
   host?: 'inline' | 'unified';
   collapsible?: boolean;
+  /** Plain discussion composers still send into this thread. */
+  mode?: 'channel' | 'reply';
+  placeholder?: string;
   /** Observe the mounted input's handle (e.g. for entity drops). */
   onReady?: (handle: InputHandle) => void;
 };
@@ -101,10 +104,12 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
       parent={props.parent}
       input={{
         id: `thread-reply-input-${props.threadId}`,
-        placeholder: 'Send a reply',
+        placeholder: props.placeholder ?? 'Send a reply',
         value: props.replyInputState()?.value,
         attachments: props.replyInputState()?.attachments,
-        mode: 'reply',
+        get mode() {
+          return props.mode ?? 'reply';
+        },
         host: props.host,
       }}
       collapsible={props.collapsible}

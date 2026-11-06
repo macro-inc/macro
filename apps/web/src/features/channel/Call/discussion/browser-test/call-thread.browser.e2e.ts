@@ -219,9 +219,7 @@ test('sending from the panel replies in the call thread, never to the channel', 
   test.skip(testInfo.project.name === 'phone');
   const { posted } = await open(page, 'panel', { status: { state: 'live' } });
 
-  await expect(page.getByText('Replying in the call thread')).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(page.getByText('Replying in the call thread')).toHaveCount(0);
   const composer = page.locator('[data-markdown-editable]');
   await composer.click();
   await page.keyboard.type('From the call');
@@ -231,7 +229,7 @@ test('sending from the panel replies in the call thread, never to the channel', 
   expect(posted[0]).toMatchObject({ thread_id: CALL_ID });
 
   // The composer stays on the call thread, empty and ready for the next one.
-  await expect(page.getByText('Replying in the call thread')).toBeVisible();
+  await expect(page.getByText('Replying in the call thread')).toHaveCount(0);
   await expect(composer).toHaveText('');
 });
 

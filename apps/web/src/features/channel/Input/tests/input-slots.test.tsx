@@ -892,6 +892,31 @@ describe('Input slots', () => {
     expect(flatRoot?.classList).toContain('mb-0');
   });
 });
+it('switches a discussion composer to reply mode without replacing its draft', async () => {
+  const [mode, setMode] = createSignal<'channel' | 'reply'>('channel');
+  const onExit = vi.fn();
+  let handle: InputHandle | undefined;
+  render(() => (
+    <ThreadReplyChannelInput
+      parent={{ type: 'channel', id: 'channel-1' }}
+      threadId="call-1"
+      mode={mode()}
+      replyInputState={() => undefined}
+      setReplyInputState={() => undefined}
+      onReady={(value) => {
+        handle = value;
+      }}
+      onExit={onExit}
+    />
+  ));
+  editorMocks.emitChange?.('draft in the call');
+  const originalHandle = handle;
+  setMode('reply');
+  expect(handle).toBe(originalHandle);
+  expect(handle?.snapshot().value).toBe('draft in the call');
+  await fireEvent.click(screen.getByRole('button', { name: 'Delete reply' }));
+  expect(onExit).toHaveBeenCalledOnce();
+});
 
 /**
  * Mention people reach the shared input from its `parent`, so every composer

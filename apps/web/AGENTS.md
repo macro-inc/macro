@@ -100,7 +100,8 @@ importance moves:
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the
-blank slate, composer pinning, quote replies and the outside-message popup:
+blank slate, a plain composer bound to the call discussion, explicit quote replies
+and the outside-message popup:
 `bunx playwright test --config src/features/channel/Call/discussion/browser-test/playwright.config.ts`.
 On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
 Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
