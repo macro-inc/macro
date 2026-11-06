@@ -4,17 +4,14 @@ import {
   SearchBar,
   ViewSidebar,
 } from '@app/components/view-shell';
-import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
 import { createFolderDropTargets } from '@app/features/next-soup/actions';
 import { TutorialSidebarItem } from '@app/features/video-tutorials';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useFavoriteDisplayName } from '@app/util/favorites';
-import { enableDatabases } from '@core/constant/featureFlags';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import DatabaseIcon from '@icon/system/regular/database.svg';
@@ -301,21 +298,17 @@ function DriveImportPromotion() {
  * names its block.
  */
 function DriveTutorials() {
-  const spreadsheets = useSpreadsheetAccess();
-  const databases = useFeatureFlag(enableDatabases);
-  const several = () => spreadsheets() || databases().enabled;
+  const { tutorials } = useDriveView();
   return (
     <ViewSidebar.Nav
       aria-label={t('tutorials.watchTutorial')}
       class="empty:hidden"
     >
-      <TutorialSidebarItem tutorial="docs" named={several()} />
-      <Show when={spreadsheets()}>
-        <TutorialSidebarItem tutorial="spreadsheets" named />
-      </Show>
-      <Show when={databases().enabled}>
-        <TutorialSidebarItem tutorial="databases" named />
-      </Show>
+      <For each={tutorials()}>
+        {(id) => (
+          <TutorialSidebarItem tutorial={id} named={tutorials().length > 1} />
+        )}
+      </For>
     </ViewSidebar.Nav>
   );
 }
