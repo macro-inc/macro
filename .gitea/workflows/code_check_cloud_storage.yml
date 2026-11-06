@@ -127,7 +127,7 @@ jobs:
           /home/runner/.cache/macro-nextest-filter
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
-        key: forge-path-check-${{ github.run_id }}
+        key: forge-path-check-${{ hashFiles('**/bun.lock', '**/Cargo.lock') }}
         restore-keys: forge-path-check-
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
@@ -337,12 +337,10 @@ jobs:
       continue-on-error: true
       with:
         path: |-
-          /nix
-          ./target
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
           /home/runner/.cargo/.global-cache
-        key: forge-check-${{ github.run_id }}
+        key: forge-check-${{ hashFiles('**/bun.lock', '**/Cargo.lock') }}
         restore-keys: forge-check-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
@@ -581,12 +579,10 @@ jobs:
       continue-on-error: true
       with:
         path: |-
-          /nix
-          ./target
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
           /home/runner/.cargo/.global-cache
-        key: forge-test-${{ github.run_id }}
+        key: forge-test-${{ hashFiles('**/bun.lock', '**/Cargo.lock') }}
         restore-keys: forge-test-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
@@ -867,12 +863,10 @@ jobs:
       continue-on-error: true
       with:
         path: |-
-          /nix
-          ./target
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
           /home/runner/.cargo/.global-cache
-        key: forge-build-service-bins-${{ github.run_id }}
+        key: forge-build-service-bins-${{ hashFiles('**/bun.lock', '**/Cargo.lock') }}
         restore-keys: forge-build-service-bins-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix

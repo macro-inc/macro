@@ -100,6 +100,10 @@ deploy repo, which Argo CD syncs.
   thresholds misfire on a shared pool. big-pickle sets absolute ones.
 - CI jobs reach the forge at its in-cluster address (`http://gitea-http:3000`, the
   runner's instance URL), so they need no route to `git.localhost` or the dev CA.
+- Forge runners keep Docker images and the jobs' Nix store on their volumes; the
+  `janitor` container prunes them, or the shared pool fills and the kubelet evicts
+  every workload on the node. A failed CronJob run marks its instance Degraded until
+  it expires a day later.
 - The forge's Docker MTU is below the overlay's: Docker's default of 1500 makes
   small requests work and large downloads hang.
 - A copied store path keeps RUNPATHs to the original. On a Nix host the files are

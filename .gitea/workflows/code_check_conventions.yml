@@ -52,7 +52,7 @@ jobs:
       continue-on-error: true
       with:
         path: /home/runner/.bun/install/cache
-        key: forge-ast-grep-${{ github.run_id }}
+        key: forge-ast-grep-${{ hashFiles('**/bun.lock', '**/Cargo.lock') }}
         restore-keys: forge-ast-grep-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix

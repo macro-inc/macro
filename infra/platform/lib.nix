@@ -302,6 +302,9 @@ rec {
           concurrencyPolicy = "Forbid";
           jobTemplate.spec = {
             backoffLimit = 2;
+            # A failed run keeps the instance Degraded while it exists; a day surfaces
+            # it without one transient failure lasting until the next one.
+            ttlSecondsAfterFinished = 86400;
             template = {
               metadata.labels = labels;
               spec = podSpec // {

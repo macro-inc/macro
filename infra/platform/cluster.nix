@@ -52,6 +52,8 @@ let
   # one job at a time because the job's Nix daemon owns the shared /nix volume;
   # scale with `replicas`, each with its own Docker data and Nix store.
   runnerLabel = "linux-ci:docker://catthehacker/ubuntu:act-24.04";
+  # Each runner's Docker data, past which the janitor drops the jobs' Nix store.
+  runnerDiskBudgetMiB = 40 * 1024;
   runnerConfig = pkgs.writeText "act-runner.yaml" (
     builtins.toJSON {
       log.level = "info";
@@ -278,6 +280,40 @@ let
                   name = "data";
                   mountPath = "/var/lib/docker";
                   subPath = "docker";
+                }
+                {
+                  name = "docker-socket";
+                  mountPath = "/var/run";
+                }
+              ];
+            };
+            # Jobs leave images, build cache, and Nix store paths behind, and the
+            # volume shares the host's pool with everything else. Prunes what no job
+            # holds, and drops the jobs' Nix store past a size; Docker refuses while a
+            # job uses it, and the next job refills it from the binary cache.
+            janitor = {
+              image = "docker:29-cli";
+              command = [
+                "/bin/sh"
+                "-c"
+                ''
+                  while true; do
+                    sleep 1800
+                    docker system prune --force --filter until=24h >/dev/null 2>&1
+                    used=$(du -sm /var/lib/docker | cut -f1)
+                    if [ "$used" -gt ${toString runnerDiskBudgetMiB} ]; then
+                      docker volume rm nix >/dev/null 2>&1 \
+                        && echo "dropped the jobs' Nix store at $used MiB"
+                    fi
+                  done
+                ''
+              ];
+              volumeMounts = [
+                {
+                  name = "data";
+                  mountPath = "/var/lib/docker";
+                  subPath = "docker";
+                  readOnly = true;
                 }
                 {
                   name = "docker-socket";

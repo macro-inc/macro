@@ -123,26 +123,41 @@ pub fn port(yaml: &str, dropped: &[&str], paths: &[String]) -> Result<String> {
                 .context("parsing the PATH step")?,
             );
             // Namespace keeps these paths on a volume across runs; the forge's runner
-            // cache keeps them instead. Vitest's module cache is what keeps lazily
-            // imported components inside a test's time limit.
+            // cache keeps the home-directory ones instead. Vitest's module cache is what
+            // keeps lazily imported components inside a test's time limit. The jobs'
+            // `/nix` is already a volume every job shares, and build output is too large
+            // to archive per job.
             for step in steps.iter_mut() {
                 let namespace = step
                     .get("uses")
                     .and_then(Value::as_str)
                     .is_some_and(|uses| uses.starts_with("namespacelabs/nscloud-cache-action"));
-                if let Some(path) = namespace
-                    .then(|| step.get("with").and_then(|with| with.get("path")).cloned())
+                let path = namespace
+                    .then(|| step.get("with").and_then(|with| with.get("path")))
                     .flatten()
-                {
+                    .and_then(Value::as_str)
+                    .map(|paths| {
+                        paths
+                            .lines()
+                            .map(str::trim)
+                            .filter(|path| path.starts_with("/home/runner/"))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    })
+                    .filter(|paths| !paths.is_empty());
+                if let Some(path) = path {
                     *step = serde_yaml::from_str(&format!(
                         "{{ name: Restore caches, uses: '{CACHE_ACTION}', continue-on-error: true }}"
                     ))
                     .context("parsing the cache step")?;
                     let mut with = serde_yaml::Mapping::new();
-                    with.insert(Value::from("path"), path);
+                    with.insert(Value::from("path"), Value::from(path));
+                    // A new copy only when dependencies change, not on every run.
                     with.insert(
                         Value::from("key"),
-                        Value::from(format!("forge-{name}-${{{{ github.run_id }}}}")),
+                        Value::from(format!(
+                            "forge-{name}-${{{{ hashFiles('**/bun.lock', '**/Cargo.lock') }}}}"
+                        )),
                     );
                     with.insert(
                         Value::from("restore-keys"),
@@ -211,8 +226,13 @@ jobs:
     steps:
     - uses: namespacelabs/nscloud-cache-action@abc
       with:
-        path: /home/runner/.cache/vitest-modules
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cache/vitest-modules
     - uses: namespacelabs/nscloud-cache-action@abc
+      with:
+        path: /nix
     - uses: actions/checkout@abc
     - id: preview-credentials
       uses: aws-actions/configure-aws-credentials@abc
@@ -242,7 +262,10 @@ jobs:
         let cache = &build["steps"][1];
         assert_eq!(cache["uses"], CACHE_ACTION);
         assert_eq!(cache["with"]["path"], "/home/runner/.cache/vitest-modules");
-        assert_eq!(cache["with"]["key"], "forge-build-${{ github.run_id }}");
+        assert_eq!(
+            cache["with"]["key"],
+            "forge-build-${{ hashFiles('**/bun.lock', '**/Cargo.lock') }}"
+        );
         assert_eq!(cache["with"]["restore-keys"], "forge-build-");
         assert!(ported["jobs"].get("ios").is_none());
         let paths = &ported["jobs"]["paths"]["steps"];
