@@ -129,9 +129,8 @@ unchanged. See the [selection-control API contract](../../.agents/rules/web/ui-p
 ## Multiselect dropdowns
 
 Use `Dropdown.MultiSelectItem` for filter options, not independent settings.
-Clicking the left checkbox toggles only that option and keeps the menu open.
-Clicking the rest of the row adds the option and closes the whole dropdown;
-clicking an already-selected row leaves it selected. Shift-click or **Only**
+Clicking an option's row or its checkbox toggles only that option and keeps
+the menu open. Shift-click or **Only**
 replaces that group's selection with the option and keeps the menu open, even
 when it is already the sole selection. Other filter groups stay unchanged.
 Only also clears persisted selections missing from the current options. Dynamic

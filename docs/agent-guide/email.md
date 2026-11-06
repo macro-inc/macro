@@ -263,9 +263,10 @@ Their triggers are icon-only buttons matching the surrounding view controls;
 Clear/Reset filters and the mobile Clear all action use destructive text styling.
 Both layouts show a small accent dot beside categories with active refinements;
 default All selections are not marked.
-Email Read status and Done are single choices; Has (Starred, Calendar invite,
-PDFs, Images, Documents) takes several. Every pick closes the menu. Ticked Has
-items all apply, except attachment kinds, which match any one. Tags supports
+Email Read status and Done are single choices that close the menu; Has
+(Starred, Calendar invite, PDFs, Images, Documents) takes several and stays
+open while you tick them. Ticked Has items all apply, except attachment kinds,
+which match any one. Tags supports
 search, pins selected tags first on opening, and is omitted when no tags exist.
 **f** opens the filter menu.
 

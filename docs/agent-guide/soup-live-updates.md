@@ -136,8 +136,8 @@ registration/layout measurement.
 
 Shared list-filter menus in Home, Tasks, Drive, Email, Reviews, and CRM, plus
 searchable filter dropdowns, use the [multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
-checkbox toggles stay open, row activation adds and closes, and Shift/Only
-replaces the current group's selection without closing. Single-select controls,
+clicking a row or its checkbox toggles and stays open, Enter adds and closes,
+and Shift/Only replaces the current group's selection without closing. Single-select controls,
 independent settings, and mobile filter drawers retain their existing behavior.
 
 Channels use the same general Soup reconciliation path, not a separate local page
