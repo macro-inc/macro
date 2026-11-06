@@ -21,7 +21,11 @@ or exact-reference ambiguity evidence. The matching/recent-first contract is app
 - [x] Local-only browser/native policy-5 cutover. Consumers preserve the returned
   personal order; interactive server fallback and the old person scorer are removed.
   Exact-reference APIs retain their independent policy-4 contract.
-- [ ] Full browser/native/OPFS correctness and fresh 1k/100k performance comparison.
+- [x] Browser/native/OPFS correctness and fresh persistent-profile 1k/100k comparison
+  for `94dce7c0`. Common 100k queries/paging are near the 1k controls, with measured
+  index/write costs.
+  Remaining surfaces, in-place lifecycle performance and physical devices are not
+  covered by this synthetic acceptance.
 
 `Engine::search_people` now uses `NameSearchRead` and the indexed storage path.
 Suggestions never call server search or downgrade to generic text search. Partial
