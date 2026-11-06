@@ -212,7 +212,7 @@ export function ChannelAvatar(props: {
             sizeClass()
           )}
         >
-          <CallWaveform class="size-full" channelId={props.channel.id} />
+          <CallWaveform live class="size-full" channelId={props.channel.id} />
         </span>
       </Match>
       <Match when={isDirectMessage(props.channel)}>

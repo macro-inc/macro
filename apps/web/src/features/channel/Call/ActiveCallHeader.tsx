@@ -28,6 +28,7 @@ function CallHeaderPill(props: { channelId: string; startedAt?: string }) {
       }}
     >
       <CallLiveChip
+        live
         bare
         channelId={props.channelId}
         startedAt={props.startedAt}

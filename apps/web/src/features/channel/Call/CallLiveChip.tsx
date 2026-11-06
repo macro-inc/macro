@@ -9,6 +9,7 @@ export function CallLiveChip(
     startedAt?: string;
     bare?: boolean;
     hideWave?: boolean;
+    live?: boolean;
   }
 ) {
   const [now, setNow] = createSignal(Date.now());
@@ -25,6 +26,7 @@ export function CallLiveChip(
       <Show when={!props.hideWave}>
         <CallWaveform
           class="size-3.5"
+          live={props.live}
           callId={props.callId}
           channelId={props.channelId}
         />

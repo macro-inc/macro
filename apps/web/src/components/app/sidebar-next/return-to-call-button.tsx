@@ -64,6 +64,7 @@ function ReturnToCallButtonContent() {
           data-sidebar-next-item="active-call"
         >
           <CallWaveform
+            live
             class="size-5"
             callId={call?.activeCallId() ?? undefined}
           />
