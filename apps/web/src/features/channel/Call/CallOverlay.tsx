@@ -404,7 +404,7 @@ export function CallOverlay(props: {
     <Button
       ref={panelButton}
       class="relative"
-      variant="secondary"
+      variant={panelOpen() ? 'accent' : 'secondary'}
       size={isMobile() ? 'icon-xl' : 'icon-lg'}
       aria-label={panelOpen() ? t('calls.closePanel') : t('calls.openPanel')}
       tooltip={{
@@ -752,8 +752,11 @@ export function CallOverlay(props: {
                 inert={controlsHidden()}
                 data-holds-prompts={isTouchDevice() ? undefined : ''}
               >
-                <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:px-[max(16px,var(--mobile-chrome-gutter))] mobile:@max-[26rem]/call-stage:grid-cols-1 mobile:@max-[21rem]/call-stage:gap-1 @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
-                  <div class="min-w-0 max-w-48 mobile:hidden">
+                <div class="grid w-fit max-w-full grid-cols-[3.5rem_auto_3.5rem] items-center gap-3 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:gap-2 mobile:px-[max(16px,var(--mobile-chrome-gutter))]">
+                  <div
+                    aria-hidden={!props.footerLeading}
+                    class="w-14 mobile:hidden"
+                  >
                     {props.footerLeading}
                   </div>
                   <div class="flex min-w-0 justify-center">
@@ -773,7 +776,7 @@ export function CallOverlay(props: {
                       </Show>
                     </CallControls>
                   </div>
-                  <div class="flex justify-end">
+                  <div class="menu-surface flex justify-center rounded-full p-1.5">
                     <PanelToggle />
                   </div>
                 </div>

@@ -320,6 +320,9 @@ separate on the right with a 48px tap target and the row keeps its side gutters.
 On phones at most 416px wide, the sidebar button moves below the bar so the
 additional screen-share settings control fits without clipping. Controls wrap
 on smaller available widths without shrinking their split-button segments.
+The desktop control bar is centered beneath the tiles, with an equal-width
+balance slot on the left and a separate round chat toggle on the right. The
+toggle uses accent while open; existing discussion/Work updates retain their dot.
 On desktop channel calls, the meeting-link action lives in the header, not the
 footer. Phones retain their channel header islands. Media controls occupy a
 separate row below the video, never over it. Controls remain visible while idle;
