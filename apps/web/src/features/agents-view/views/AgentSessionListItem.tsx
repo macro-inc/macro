@@ -1,4 +1,5 @@
 import { parseGithubPrUrl, prHtmlUrl } from '@app/features/block-pr/util/prKey';
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import type { AgentSessionEntity } from '@entity';
@@ -108,7 +109,7 @@ export function AgentSessionListItem(props: Props) {
           <Show when={agents() && isSessionArchived(props.entity)}>
             <ArchiveIcon
               aria-hidden={false}
-              aria-label="Archived"
+              aria-label={t('viewMenus.archived')}
               class="size-3.5 shrink-0 text-ink-extra-muted"
             />
           </Show>
