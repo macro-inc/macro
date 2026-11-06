@@ -172,7 +172,6 @@ export const cognitionExcluded = [
   'deleteMcpServer',
   'getBatchPreview',
   'getChatHistoryBatchMessagesHandler',
-  'getChatPermissions',
   'getChatsForAttachmentHandler',
   'getCitationHandler',
   'getMemoryHandler',
@@ -322,13 +321,10 @@ export const storageExcluded = [
   'registerSlackImportUploads',
   'bulkWakeupSyncServiceDocuments',
   'callWebhook',
-  'checkActiveCall',
   'createChannelScopedBot',
   'createCollabSurfaceToken',
   'createInstructionsHandler',
   'createViewHandler',
-  // Declining a ringing call is a live-device session flow, like leaving.
-  'declineCall',
   'declineRing',
   'deleteCollabSurface',
   'ensureCollabSurface',
@@ -344,7 +340,6 @@ export const storageExcluded = [
   'entityMessageLegacy',
   'excludeDefaultViewHandler',
   'getAttachmentReferences',
-  'getBatchCallRecordPreview',
   'getBatchChannelPreview',
   'getActiveCalls',
   'getBatchProjectPreview',
@@ -362,6 +357,7 @@ export const storageExcluded = [
   'getInstructionsHandler',
   'getItemsSoup',
   'getLocationHandler',
+  // Legacy GET can start and ring a call; SDK starts use POST.
   'getOrCreateCall',
   'getPendingProjectsHandler',
   'getProjectsHandler',
@@ -378,14 +374,13 @@ export const storageExcluded = [
   'installSync',
   'jobProcessingResultHandler',
   'joinChannelByCode',
+  // Legacy channel-scoped leave could leave a newer call; SDK leaves by call id.
   'leaveOrEndCall',
-  // Live meeting admission and participant previews are app session flows.
-  'meetingGuestJoin',
+  // Live participant previews and browser session cleanup remain app flows.
   // Browser setup reserves an empty RTC room before creating a meeting.
   'meetingPrepare',
   'meetingCancelPreparation',
   'meetingGuestParticipants',
-  'meetingJoin',
   'meetingLeave',
   'meetingParticipants',
   'mentionPreviews',

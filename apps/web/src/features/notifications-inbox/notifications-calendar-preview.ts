@@ -9,6 +9,7 @@ import {
 import type { CalendarPreviewSelection } from '@app/features/next-soup/utils';
 import {
   createSearchParams,
+  type SerializedSearchParams,
   useNavigate,
   useRouteParams,
 } from '@app/lib/split-router';
@@ -26,6 +27,12 @@ import { Telemetry } from '@macro-inc/observability';
 import deepEqual from 'fast-deep-equal';
 import { createSignal } from 'solid-js';
 
+/** The rest of the history entry: other search it writes, and whether it replaces. */
+export type CalendarPreviewNavigation = {
+  search?: Record<string, SerializedSearchParams | undefined>;
+  replace?: boolean;
+};
+
 /**
  * Shows calendar events in the Notifications view's content area: the
  * Calendar view under the view's own calendar route, aimed at the event.
@@ -39,7 +46,10 @@ export function useNotificationsCalendarPreview() {
   const isOpen = () => typeof params.period === 'string';
 
   /** Aim the inline Calendar at the event; false when it can't show it. */
-  const open = (entity: CalendarPreviewSelection) => {
+  const open = (
+    entity: CalendarPreviewSelection,
+    navigation: CalendarPreviewNavigation = {}
+  ) => {
     if (!isFeatureEnabled(enableCalendarUi)) return false;
     const target = previewCalendarTarget(entity);
     if (!target.eventId) return false;
@@ -53,21 +63,29 @@ export function useNotificationsCalendarPreview() {
           search,
           calendarTargetSearch(calendarSearchTarget(openSearch))
         );
+      const period = params.period ?? getPreferredCalendarPeriodView();
       if (shown) {
         setRefocus((count) => count + 1);
         span.setAttr('calendar.destination', 'refocus');
+        // The Calendar keeps its place; only the row that chose it changes.
+        if (navigation.search) {
+          fireAndForget(
+            navigate(
+              { route: notificationsCalendarRoute, params: { period } },
+              { replace: navigation.replace, search: navigation.search }
+            ),
+            'notifications-inbox'
+          );
+        }
         return true;
       }
       fireAndForget(
         navigate(
+          { route: notificationsCalendarRoute, params: { period } },
           {
-            route: notificationsCalendarRoute,
-            params: {
-              period: params.period ?? getPreferredCalendarPeriodView(),
-            },
-          },
-          {
+            replace: navigation.replace,
             search: {
+              ...navigation.search,
               [CALENDAR_SEARCH_NAMESPACE]:
                 calendarSearchCodec.serialize(search),
             },
@@ -83,16 +101,22 @@ export function useNotificationsCalendarPreview() {
   };
 
   /** Leave the inline Calendar, when it is open. */
-  const close = () => {
+  const close = (navigation: CalendarPreviewNavigation = {}) => {
     if (!isOpen()) return;
     fireAndForget(
       navigate(
         { route: notificationsRoute, params: {} },
-        { search: { [CALENDAR_SEARCH_NAMESPACE]: undefined } }
+        {
+          replace: navigation.replace,
+          search: {
+            ...navigation.search,
+            [CALENDAR_SEARCH_NAMESPACE]: undefined,
+          },
+        }
       ),
       'notifications-inbox'
     );
   };
 
-  return { open, close, refocus };
+  return { open, close, refocus, isOpen };
 }

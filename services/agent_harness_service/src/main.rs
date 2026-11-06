@@ -100,6 +100,7 @@ use agent_runtime_directory::PgAgentRuntimeDirectory;
 use agent_session::domain::model::{AgentMcpServers, ReplicaId};
 use agent_session::domain::ports::{NoOpRealtime, SessionOwnership as _};
 use agent_session::domain::service::{AgentSessionService, AgentSessionServiceImpl};
+use agent_session::domain::work_registration::{WorkRegistrationRealtime, WorkRegistrationService};
 use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
 };
@@ -136,7 +137,7 @@ use github::outbound::pull_request_diff::GithubPullRequestDiffClient;
 use github_pull_requests::domain::service::GithubPullRequestChangesetStore;
 use github_pull_requests::outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo;
 use github_pull_requests::outbound::s3_patch_store::S3GithubPullRequestPatchStore;
-use harness_bindings::{PgHarnessBindings, PgHarnessPresence};
+use harness_bindings::{PgHarnessBindings, PgHarnessPresence, RUNTIME_CONNECTION_RENEW_EVERY};
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
@@ -322,6 +323,20 @@ async fn run() -> anyhow::Result<()> {
             .context("failed to create kafka event publisher")?,
         macro_event_broker::GlobalSpawner,
     );
+    // Registered work viewers hear session changes as Soup patches, which the GraphQL process
+    // already streams to each of them. Signals run off the publishing task.
+    let work_registration_signal =
+        soup_realtime::outbound::agent_sessions::SoupWorkRegistrationSignal(Arc::new(
+            soup_realtime::domain::service::SoupRealtimeServiceImpl::new(
+                soup_realtime::outbound::entity_access::EntityAccessExpander::new(
+                    (*entity_access).clone(),
+                ),
+                soup_realtime::outbound::kafka_publisher::KafkaSoupRealtimePublisher::new(
+                    broker.clone(),
+                ),
+            ),
+        ));
+    let work_registration_tasks = tokio_util::task::TaskTracker::new();
     let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
         queue: notification::outbound::queue::SqsQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),
@@ -386,12 +401,17 @@ async fn run() -> anyhow::Result<()> {
         // Frames reach this process's viewers through the gateway and every
         // other process's through the Redis log stream (the GraphQL log
         // subscription).
-        RedisLogStreamRealtime::new(
-            ConnectionGatewayAgentSessionRealtime::new(
-                connection_gateway.clone(),
-                session_audience.clone(),
+        WorkRegistrationRealtime::new(
+            RedisLogStreamRealtime::new(
+                ConnectionGatewayAgentSessionRealtime::new(
+                    connection_gateway.clone(),
+                    session_audience.clone(),
+                ),
+                redis.clone(),
             ),
-            redis.clone(),
+            session_repo.clone(),
+            work_registration_signal.clone(),
+            work_registration_tasks.clone(),
         ),
         // After each finished turn Jev decides whether a generated name has
         // stopped fitting; only then does Haiku propose a new one. Without a
@@ -748,6 +768,9 @@ async fn run() -> anyhow::Result<()> {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
+                    correlations: agent_correlation::outbound::PgCorrelationRepository(
+                        pool.clone(),
+                    ),
                     signer: MacroApiTokenSigner::new(
                         pool.clone(),
                         config.macro_api_token_issuer.as_ref(),
@@ -823,6 +846,7 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(agent_code_mode::domain::CodeModeService::new(
             code_executor,
             Arc::new(code_mode::RunCredentials {
+                correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
                 signer: MacroApiTokenSigner::new(
                     pool.clone(),
                     config.macro_api_token_issuer.as_ref(),
@@ -834,9 +858,14 @@ async fn run() -> anyhow::Result<()> {
             execution_store,
             execution_turns,
         ));
-    let session_metadata_realtime = ConnectionGatewayAgentSessionRealtime::new(
-        connection_gateway.clone(),
-        session_audience.clone(),
+    let session_metadata_realtime = WorkRegistrationRealtime::new(
+        ConnectionGatewayAgentSessionRealtime::new(
+            connection_gateway.clone(),
+            session_audience.clone(),
+        ),
+        session_repo.clone(),
+        work_registration_signal.clone(),
+        work_registration_tasks.clone(),
     );
     let auto_archive_settings = agent_session::domain::auto_archive::AutoArchiveService::new(
         session_repo.clone(),
@@ -1283,9 +1312,10 @@ async fn run() -> anyhow::Result<()> {
     // the harness loads once it exists below.
     let (live_sessions, mut live_session_reports) = tokio::sync::mpsc::unbounded_channel();
     let runtimes = RuntimeRegistry::with_presence(
-        Arc::new(PgHarnessPresence::new(pool.clone())),
+        Arc::new(PgHarnessPresence::new(pool.clone(), replica)),
         live_sessions,
     );
+    let presence_runtimes = Arc::clone(&runtimes);
     // Read once, here, rather than at every session this deployment opens: a
     // URL that names no repository is a misconfiguration of the deployment,
     // and refusing it at startup is the difference between one loud failure
@@ -1601,9 +1631,14 @@ async fn run() -> anyhow::Result<()> {
         AgentSessionServiceImpl::new(
             session_repo.clone(),
             FoldedMessageService::new(session_repo.clone()),
-            ConnectionGatewayAgentSessionRealtime::new(
-                connection_gateway.clone(),
-                session_audience.clone(),
+            WorkRegistrationRealtime::new(
+                ConnectionGatewayAgentSessionRealtime::new(
+                    connection_gateway.clone(),
+                    session_audience.clone(),
+                ),
+                session_repo.clone(),
+                work_registration_signal.clone(),
+                work_registration_tasks.clone(),
             ),
             NoOpAgentSessionNameGenerator,
             Arc::new(NoOpTurnObserver),
@@ -1746,6 +1781,21 @@ async fn run() -> anyhow::Result<()> {
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),
     );
+    let work_registrations_service = WorkRegistrationService::new(
+        session_repo.clone(),
+        Arc::new(
+            agent_session::domain::audience::EntityAccessSessionView::new((*entity_access).clone()),
+        ),
+        work_registration_signal.clone(),
+    );
+    let work_registrations =
+        agent_session::inbound::axum_router::work_registration::work_registration_router(
+            AgentSessionRouterState::new(
+                work_registrations_service.clone(),
+                entity_access.clone(),
+                MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+            ),
+        );
     let code_executions = agent_code_mode::inbound::axum_router::code_execution_router(
         agent_code_mode::inbound::axum_router::CodeExecutionRouterState::new(
             code_mode,
@@ -1804,6 +1854,17 @@ async fn run() -> anyhow::Result<()> {
             service: notification_service,
         },
     );
+    let correlation = agent_correlation::inbound::CorrelationState::new(
+        pool.clone(),
+        JwtValidationArgs::new_with_secret_manager(config.environment, &secrets).await?,
+    );
+    let agent_activity = agent_session::inbound::axum_router::activity::router(
+        agent_session::inbound::axum_router::activity::AgentActivityState::new(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(pool.clone()),
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let http_shutdown = service_shutdown.clone();
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
@@ -1816,6 +1877,8 @@ async fn run() -> anyhow::Result<()> {
                 repositories_state,
                 changes_state,
             )
+            .with_agent_correlation(correlation)
+            .with_activity(agent_activity)
             .with_sharing(sharing)
             .with_routine_sessions(routine_sessions)
             .with_conversations(conversations)
@@ -1824,6 +1887,7 @@ async fn run() -> anyhow::Result<()> {
             .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
             .with_auto_archive(auto_archive)
+            .with_work_registrations(work_registrations)
             .with_tool_approvals(tool_approval_answers)
             .with_app_connections(app_connections)
             .with_code_executions(code_executions)
@@ -1878,6 +1942,18 @@ async fn run() -> anyhow::Result<()> {
             if let Err(error) = heartbeat_repo.heartbeat(replica, None).await {
                 tracing::warn!(error = ?error, %replica, "failed to heartbeat harness replica");
             }
+        }
+    });
+
+    // Keeps vouching for the runtime connections this process holds, including
+    // while it drains: they stay live until their sockets close. When this stops
+    // in a crash, the leases lapse and those harnesses read offline.
+    let presence_renewal = tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(RUNTIME_CONNECTION_RENEW_EVERY);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            ticker.tick().await;
+            presence_runtimes.renew_presence().await;
         }
     });
 
@@ -1938,9 +2014,14 @@ async fn run() -> anyhow::Result<()> {
     // A hard abort cannot emit a disconnect. Reconcile expired leases so
     // viewers stop showing a turn as working without issuing another command.
     let recovery_repo = session_repo.clone();
-    let recovery_realtime = ConnectionGatewayAgentSessionRealtime::new(
-        connection_gateway.clone(),
-        session_audience.clone(),
+    let recovery_realtime = WorkRegistrationRealtime::new(
+        ConnectionGatewayAgentSessionRealtime::new(
+            connection_gateway.clone(),
+            session_audience.clone(),
+        ),
+        session_repo.clone(),
+        work_registration_signal.clone(),
+        work_registration_tasks.clone(),
     );
     let recovery = tokio::spawn(async move {
         let mut ticker =
@@ -1983,12 +2064,26 @@ async fn run() -> anyhow::Result<()> {
         },
     ));
 
+    let work_registration_sweep = work_registrations_service.clone();
+    let work_registration_sweep_shutdown = service_shutdown.clone();
+    tokio::spawn(async move {
+        agent_session::inbound::work_registration_sweep::run_work_registration_sweep(
+            &work_registration_sweep,
+            agent_session::inbound::work_registration_sweep::WORK_REGISTRATION_SWEEP_INITIAL_DELAY,
+            agent_session::inbound::work_registration_sweep::WORK_REGISTRATION_SWEEP_INTERVAL,
+            work_registration_sweep_shutdown.cancelled_owned(),
+        )
+        .await;
+    });
+
+    let pull_request_work_registrations = work_registrations_service;
     let pull_request_archive_shutdown = service_shutdown.clone();
     let pull_request_archive_brokers = config.kafka_brokers.as_ref().to_owned();
     tokio::spawn(async move {
         if let Err(error) = pull_request_archive::run(
             &pull_request_archive_brokers,
             &pull_request_archive,
+            &pull_request_work_registrations,
             pull_request_archive_shutdown.clone(),
         )
         .await
@@ -2256,10 +2351,13 @@ async fn run() -> anyhow::Result<()> {
     notification_tasks.wait().await;
     auto_archive_tasks.close();
     auto_archive_tasks.wait().await;
+    work_registration_tasks.close();
+    work_registration_tasks.wait().await;
     http.abort();
     trigger.abort();
     egress_http.abort();
     heartbeat.abort();
+    presence_renewal.abort();
     dm_recovery.abort();
     typing_heartbeat.abort();
     recovery.abort();

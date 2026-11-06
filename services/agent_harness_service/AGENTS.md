@@ -23,7 +23,9 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose
-  linked pull requests finished (`agent_session::domain::auto_archive`).
+  linked pull requests finished (`agent_session::domain::auto_archive`), and
+  ends their work registrations first
+  (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Users with
@@ -70,8 +72,11 @@ Pulumi stacks; they do not host extra agent processes.
   names with the types they name, breadth first within 48 KB) comes from
   `src/routine_code.rs`. Routine code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
-  type checker, with a token for the owner's access attributed to Macro
-  acting for them, so a step's writes don't start routines.
+  type checker, with a token for the owner's access (`mint_for_routine`):
+  attributed to Macro acting for them, or, when the routine sets
+  `dangerously_operate_as_user`, to the owner with no agent badge. Every such
+  token carries the routine id, which the events its writes produce keep, so
+  they never start routines.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).
@@ -199,3 +204,5 @@ listener failure shuts down the process so ECS can replace the task.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/config-and-service-urls.md`
+
+- Code-mode credentials create durable per-invocation agent correlation; the final merged HTTP router validates incoming attribution before handlers.

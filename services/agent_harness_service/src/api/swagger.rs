@@ -21,6 +21,7 @@ use agent_harness::inbound::tool_approvals::{
     ToolApprovalStatusDto,
 };
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
+use agent_session::domain::coding_agents::CodingAgent;
 use agent_session::domain::model::{ArchiveCause, SandboxSize, SessionBot};
 use agent_session::domain::pull_request_links::{
     PullRequestLinkSource, PullRequestLinkedSession, PullRequestSessions, SessionPullRequestLink,
@@ -32,6 +33,7 @@ use agent_session::inbound::axum_router::pull_requests::{
     PullRequestSessionsResponse, PullRequestUrl, PullRequestUrls, PullRequestsSessionsResponse,
     SessionPullRequestsResponse,
 };
+use agent_session::inbound::axum_router::work_registration::WorkRegistrationResponse;
 use agent_session::inbound::axum_router::{
     self, AgentSessionFoldedLogResponse, AgentSessionLogEntryDto, AgentSessionLogResponse,
     AgentSessionPreviewData, AgentSessionPreviewDto, AgentSessionQueueResponse,
@@ -41,6 +43,7 @@ use agent_session::inbound::axum_router::{
     PreviewAgentSessionsResponse, QueuedActionDto, RenameAgentSessionRequest, SandboxSizeBody,
     SessionStatusDto, SetAgentSessionArchivedRequest, WithAgentSessionId,
 };
+use agent_session::inbound::coding_agents::{self, CodingAgentsResponse};
 use utoipa::{
     Modify, OpenApi,
     openapi::security::{Http, HttpAuthScheme, SecurityScheme},
@@ -67,6 +70,7 @@ impl Modify for SecurityAddon {
         universal_input::inbound::axum_router::classify,
         universal_input::inbound::axum_router::extract,
         agent_code_mode::inbound::axum_router::get_code_execution,
+        agent_session::inbound::axum_router::activity::get_agent_session_activity,
         agent_code_mode::inbound::axum_router::create_review,
         agent_code_mode::inbound::axum_router::present_view,
         agent_code_mode::inbound::axum_router::get_review,
@@ -108,12 +112,16 @@ impl Modify for SecurityAddon {
         axum_router::auto_archive::put_auto_archive_preferences,
         axum_router::auto_archive::get_session_auto_archive,
         axum_router::auto_archive::put_session_auto_archive,
+        axum_router::work_registration::register_work,
+        axum_router::work_registration::unregister_work,
+        axum_router::work_registration::list_own_work,
         model_load::load_agent_models_handler,
         capability_discovery::discover_agent_capabilities_handler,
         agent_harness::inbound::conversations::list_agent_conversations,
         agent_harness::inbound::conversations::retry_agent_conversation_turn,
         agent_harness::inbound::conversations::start_fresh_agent_conversation,
         repositories::list_agent_repositories_handler,
+        coding_agents::list_coding_agents_handler,
         repositories::list_agent_repository_branches_handler,
         mode_choice::choose_agent_mode_handler,
         changes_router::get_agent_session_changes_handler,
@@ -123,6 +131,8 @@ impl Modify for SecurityAddon {
         app_connections::app_connected_handler,
     ),
     components(schemas(
+        CodingAgent,
+        CodingAgentsResponse,
         CreateAgentSessionRequest,
         CreateAgentSessionResponse,
         CreateSessionThread,
@@ -166,6 +176,7 @@ impl Modify for SecurityAddon {
         AutoArchiveOverridesBody,
         ArchiveCause,
         SessionAutoArchiveResponse,
+        WorkRegistrationResponse,
         LoadAgentModelsRequest,
         LoadAgentModelsResponse,
         AgentModelDto,

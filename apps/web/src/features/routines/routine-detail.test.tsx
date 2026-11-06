@@ -933,6 +933,41 @@ describe('routine editor triggers', () => {
     });
   });
 
+  it('offers acting as the owner only for routines with code, off by default', async () => {
+    render(() => <Routine />);
+    // An Ask AI routine stays the agent's, so there is nothing to choose.
+    expect(screen.queryByRole('switch', { name: 'Act as me' })).toBeNull();
+    cleanup();
+
+    const task = {
+      steps: [
+        {
+          type: 'code',
+          title: 'Post the summary',
+          source: 'export async function main() {}',
+        },
+      ],
+    };
+    const program: ScheduledAction = { ...events, task };
+    setSchedules([program]);
+    render(() => <Routine />);
+    const actAsMe = screen.getByRole('switch', { name: 'Act as me' });
+    expect((actAsMe as HTMLInputElement).checked).toBe(false);
+    expect(
+      screen.getByText(
+        'Posts, emails and comments from code steps will appear as written by you, with no Agent badge.'
+      )
+    ).toBeTruthy();
+    fireEvent.click(actAsMe);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      body: expect.objectContaining({
+        task: { ...task, dangerously_operate_as_user: true },
+      }),
+    });
+  });
+
   it('saves a description typed under the title, on blur', async () => {
     render(() => <Routine />);
     const description = screen.getByRole('textbox', {

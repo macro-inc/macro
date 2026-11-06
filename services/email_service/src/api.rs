@@ -29,13 +29,21 @@ const GATEWAY_PATH_PREFIX: &str = "/email";
 
 pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let env = state.config.environment;
+    let correlation =
+        agent_correlation::inbound::CorrelationState::new(state.db.clone(), state.jwt_args.clone());
     let port = state.config.port;
-    let traced_api = api_router(state.clone()).with_state(state).layer(
-        ServiceBuilder::new()
-            .layer(TraceLayer::new_for_http())
-            .layer(macro_cors::cors_layer())
-            .layer(CompressionLayer::new().gzip(true)),
-    );
+    let traced_api = api_router(state.clone())
+        .with_state(state)
+        .layer(axum::middleware::from_fn_with_state(
+            correlation,
+            agent_correlation::inbound::propagate,
+        ))
+        .layer(
+            ServiceBuilder::new()
+                .layer(TraceLayer::new_for_http())
+                .layer(macro_cors::cors_layer())
+                .layer(CompressionLayer::new().gzip(true)),
+        );
     let health = health::router();
     let app = mount_at_root_and_prefix(traced_api.merge(health)).merge(swagger_ui());
 

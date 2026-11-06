@@ -1,4 +1,5 @@
 import type { MacroOpts } from './config';
+import { AccountManagerNamespace } from './entities/account-managers/namespace';
 import { AgentSessionNamespace } from './entities/agent-sessions/namespace';
 import { AgentNamespace } from './entities/agents/namespace';
 import { AiNamespace } from './entities/ai/namespace';
@@ -52,7 +53,16 @@ export type {
   StructuredCompletionRequest,
   StructuredCompletionResponse,
 } from './entities/ai/namespace';
+export { CallRecord } from './entities/calls/call-record';
+export { CallConnection, type JoinOptions } from './entities/calls/connection';
+export {
+  AlreadyConnectedError,
+  CallEndedError,
+  InOtherCallError,
+} from './entities/calls/errors';
 export type { CallMessage } from './entities/calls/message';
+export type { CallSummary } from './entities/calls/namespace';
+export { CallParticipant } from './entities/calls/participant';
 export {
   ConnectedApp,
   ConnectedTool,
@@ -123,6 +133,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** apiKeys resources and operations. */
   readonly apiKeys: ApiKeyNamespace;
+
+  /** accountManagers resources and operations. */
+  readonly accountManagers: AccountManagerNamespace;
 
   /** harnesses resources and operations. */
   readonly harnesses: HarnessNamespace;
@@ -228,6 +241,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.agents = new AgentNamespace(client);
     this.initiatives = new InitiativeNamespace(client);
     this.apiKeys = new ApiKeyNamespace(client);
+    this.accountManagers = new AccountManagerNamespace(client);
     this.me = new MeNamespace(client);
     this.harnesses = new HarnessNamespace(client);
     this.meetings = new MeetingNamespace(client);
@@ -284,6 +298,11 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   }
 }
 
+export {
+  type AgentActivity,
+  type AgentActivityOptions,
+  AgentInvocation,
+} from './entities/agent-sessions/activity';
 export type {
   ArchiveCause,
   AutoArchiveOverrides,
@@ -296,6 +315,12 @@ export {
   ConversationTurn,
 } from './entities/agent-sessions/conversation';
 export type {
+  SessionOrigin,
+  SessionOriginCaller,
+  SessionOriginLineage,
+  SessionOriginRoot,
+} from './entities/agent-sessions/origin';
+export type {
   CreateReviewOptions,
   ReviewCalendarDraft,
   ReviewDraft,
@@ -304,7 +329,13 @@ export type {
 export { ReviewItem, SessionReview } from './entities/agent-sessions/review';
 export { ToolApproval } from './entities/agent-sessions/tool-approval';
 export type { SessionView } from './entities/agent-sessions/view';
-export { Agent, type AgentOptions } from './entities/agents/agent';
+export {
+  Agent,
+  type AgentApps,
+  type AgentOptions,
+  type AgentPatch,
+} from './entities/agents/agent';
+export type { CodingAgent } from './entities/agents/namespace';
 export { UserApiKey } from './entities/api-keys/api-key';
 export {
   Bot,
