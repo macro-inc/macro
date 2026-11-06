@@ -27,8 +27,12 @@ export type KnobEdits = Record<string, Knob['value']>;
  */
 export function createRoutinesStep(context: RoutinesStepCapabilities) {
   const step = context.createRoutinesStep();
+  // Only what the catalog can show and build: a suggestion it doesn't
+  // (yet) have is neither listed, counted nor created.
   const suggestions = createMemo(() =>
-    onboardingSuggestions(step.suggestions() ?? [])
+    onboardingSuggestions(step.suggestions() ?? []).filter((suggestion) =>
+      step.catalog().some((routine) => routine.key === suggestion.key)
+    )
   );
   // Switches the person flipped; the rest follow the defaults.
   const [choices, setChoices] = createSignal<Record<string, boolean>>({});
@@ -60,9 +64,9 @@ export function createRoutinesStep(context: RoutinesStepCapabilities) {
   };
 
   async function createOne(suggestion: StarterSuggestion): Promise<boolean> {
-    const draft = draftFor(suggestion);
-    if (!draft) return false;
     try {
+      const draft = draftFor(suggestion);
+      if (!draft) return false;
       await step.create(suggestion, draft);
       setCreated((ids) => [...ids, suggestion.id]);
       return true;
@@ -71,10 +75,30 @@ export function createRoutinesStep(context: RoutinesStepCapabilities) {
     }
   }
 
+  function enable(pending: readonly StarterSuggestion[]) {
+    return Telemetry.span('onboarding.routines.enable', async (span) => {
+      span.setAttr('routines.selected', pending.length);
+      const outcomes = await Promise.all(
+        pending.map(async (suggestion) => ({
+          id: suggestion.id,
+          ok: await createOne(suggestion),
+        }))
+      );
+      span.setAttr(
+        'routines.failed',
+        outcomes.filter((outcome) => !outcome.ok).length
+      );
+      return outcomes;
+    });
+  }
+
   return {
     suggestions,
     /** Nothing has been picked yet, or a pick is running. */
-    picking: () => step.generating() || step.suggestions() === undefined,
+    picking: () =>
+      step.generating() ||
+      step.suggestions() === undefined ||
+      step.catalog().length === 0,
     loadFailed: step.failed,
     refresh: step.refresh,
     catalog: step.catalog,
@@ -102,33 +126,22 @@ export function createRoutinesStep(context: RoutinesStepCapabilities) {
       const pending = suggestions().filter(
         (suggestion) => isOn(suggestion) && !created().includes(suggestion.id)
       );
-      const results = await Telemetry.span(
-        'onboarding.routines.enable',
-        async (span) => {
-          span.setAttr('routines.selected', pending.length);
-          const outcomes = await Promise.all(
-            pending.map(async (suggestion) => ({
-              id: suggestion.id,
-              ok: await createOne(suggestion),
-            }))
-          );
-          span.setAttr(
-            'routines.failed',
-            outcomes.filter((outcome) => !outcome.ok).length
-          );
-          return outcomes;
-        }
-      );
+      let results: { id: string; ok: boolean }[];
+      try {
+        results = await enable(pending);
+      } finally {
+        setEnabling(false);
+      }
       setFailed(results.filter((result) => !result.ok).map((r) => r.id));
-      setEnabling(false);
       if (failed().length) return;
       report(selected());
       onFinish();
     },
-    /** Leaves without turning anything on. */
+    /** Leaves without turning anything else on. */
     skip(onFinish: () => void) {
       if (enabling()) return;
-      report([]);
+      // Routines a partly failed attempt already created stay on.
+      report(created());
       onFinish();
     },
   };
