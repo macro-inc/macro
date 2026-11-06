@@ -88,6 +88,7 @@ sfs_map = []
 sfs_delete = []
 
 [dependencies]
+agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 calendar_events = { path = "../../crates/calendar_events", features = ["google", "inbound", "postgres", "schema"] }
 ammonia = { workspace = true }
 anyhow = { workspace = true }

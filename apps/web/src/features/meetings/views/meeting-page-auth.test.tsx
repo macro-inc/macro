@@ -106,6 +106,7 @@ it.each([
               serverUrl: 'wss://example.com',
               token: 'token',
               participantId: 'member',
+              started: false,
               shareToken: 'share',
             }),
             release: () => released,

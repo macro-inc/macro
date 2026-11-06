@@ -6,6 +6,8 @@ import {
   type DraftSaveResult,
   type SaveEmailDraft,
 } from '../context/compose-capabilities';
+import { decodeBase64Utf8 } from '../core/decode-base64';
+import type { LocalDraft } from '../core/local-draft';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
 import { mountReplyComposer } from '../tests/reply';
@@ -635,6 +637,128 @@ describe.each(['reply', 'compose'] as const)(
         await vi.advanceTimersByTimeAsync(600);
         await root.send();
         expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      } finally {
+        root.dispose();
+      }
+    });
+
+    /**
+     * Saves ride the offline queue and commit later. `acknowledge` makes the
+     * server accept the working copy's newest revision and tells mounted
+     * composers, as a queue settlement does.
+     */
+    function queuedWorkingCopy(
+      context: ReturnType<typeof createComposeContext>
+    ) {
+      let local: LocalDraft | undefined;
+      let notify!: () => void;
+      vi.mocked(context.drafts.saveDraft).mockImplementation(async (input) =>
+        queued(input)
+      );
+      context.drafts.saveLocalDraft = vi.fn(async (input) => {
+        local = {
+          key: input.clientHandles?.draftId ?? input.draft.db_id!,
+          draftId: input.clientHandles?.draftId ?? input.draft.db_id!,
+          threadId: input.clientHandles?.threadId ?? 'thread',
+          accountId: 'owner',
+          generation: 'local-generation',
+          revision: (local?.revision ?? 0) + 1,
+          acknowledgedRevision: local?.acknowledgedRevision ?? 0,
+          status: 'dirty',
+          updatedAt: Date.now(),
+          content: input.draft,
+          attachments: [],
+        };
+        return local;
+      });
+      context.drafts.readDraft = vi.fn(async () =>
+        local && local.acknowledgedRevision > 0
+          ? {
+              draft: message('server-draft', { is_draft: true }),
+              persistence:
+                local.acknowledgedRevision >= local.revision
+                  ? ('committed' as const)
+                  : ('queued' as const),
+              local,
+            }
+          : undefined
+      );
+      context.drafts.watchDrafts = (changed) => {
+        notify = () => changed();
+        return () => {};
+      };
+      return {
+        acknowledge() {
+          if (local) local = { ...local, acknowledgedRevision: local.revision };
+          notify();
+        },
+      };
+    }
+    const sentElsewhere = {
+      type: 'sent' as const,
+      draftId: 'server-draft',
+      threadId: 'thread',
+      inboxId: 'inbox',
+      observedAt: 0,
+    };
+    const newDraftSaves = (
+      context: ReturnType<typeof createComposeContext>
+    ) => {
+      const [first, ...rest] = savedInputs(context);
+      return rest.filter(
+        (input) =>
+          input.clientHandles &&
+          input.clientHandles.draftId !== first.clientHandles?.draftId
+      );
+    };
+
+    it('does not copy a draft sent elsewhere into a new draft after its queued saves commit', async () => {
+      const context = createComposeContext();
+      const workingCopy = queuedWorkingCopy(context);
+      const root = mount(context);
+      try {
+        root.edit('Reply that another tab sends');
+        await vi.advanceTimersByTimeAsync(600);
+        workingCopy.acknowledge();
+        await vi.advanceTimersByTimeAsync(0);
+        const observer = vi.mocked(context.draftLifecycle.observe).mock
+          .calls[0][0];
+        expect(observer.draftId()).toBe('server-draft');
+
+        context.setDraftLifecycle(sentElsewhere);
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(newDraftSaves(context)).toEqual([]);
+        expect(context.notices.feedback.alert).not.toHaveBeenCalledWith(
+          'This email was already sent. Your newer text was kept as a new draft and was not sent.'
+        );
+      } finally {
+        root.dispose();
+      }
+    });
+
+    it('keeps text the server never acknowledged as a new draft when the draft is sent elsewhere', async () => {
+      const context = createComposeContext();
+      const workingCopy = queuedWorkingCopy(context);
+      const root = mount(context);
+      try {
+        root.edit('Reply that another device sends');
+        await vi.advanceTimersByTimeAsync(600);
+        workingCopy.acknowledge();
+        await vi.advanceTimersByTimeAsync(0);
+        root.edit('Text typed after that save');
+        await vi.advanceTimersByTimeAsync(0);
+
+        context.setDraftLifecycle(sentElsewhere);
+        await vi.advanceTimersByTimeAsync(1000);
+
+        const [kept] = newDraftSaves(context);
+        expect(decodeBase64Utf8(kept.draft.body_html ?? '')).toContain(
+          'Text typed after that save'
+        );
+        expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+          'This email was already sent. Your newer text was kept as a new draft and was not sent.'
+        );
       } finally {
         root.dispose();
       }

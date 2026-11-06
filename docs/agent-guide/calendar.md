@@ -2,6 +2,8 @@
 
 ## Calendar — `/app/calendar/<month-or-week-or-day>`
 
+The top of the Calendar sidebar holds the Calendar `TutorialSidebarItem` (from `features/video-tutorials`) once that video is in its catalog; phones have no Calendar sidebar, so no entry.
+
 Microsoft calendars use the same editor and calendar views after calendar consent.
 Conference choices follow the selected calendar's capabilities: Microsoft Teams
 where supported and Google Meet for Google calendars. Selecting a calendar that
@@ -879,6 +881,7 @@ description, then larger task-style URL-path, duration, and scheduling-type pill
 with matching surfaces. Scheduling type reflects the saved link mode: Individual,
 Collective, or Round robin, with a corresponding icon. Pills wrap on narrow panes
 and align with the title on touch devices. Row content has no hover tooltips.
+The Booking links list, empty or not, starts with the Scheduling `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog.
 Paused links appear dimmed but remain editable. The URL pill offers Copy link and
 Open in new tab. Desktop More and right-click menus share Copy link, Preview,
 Edit, Duplicate, and Delete. Touch rows hide More; hold a row to open the shared
@@ -1395,7 +1398,10 @@ been checked. A series invitation shows its current or next live occurrence.
 Descriptions render sanitized rich text, including emphasis, links, and lists.
 Plain-text line breaks and literal angle brackets (such as `<bob@example.com>`)
 remain readable. Use `Show more` / `Show less` to expand or collapse the description;
-description links use the host's normal link-opening behavior.
+description links use the host's normal link-opening behavior. Long unbroken text
+(Google's Meet separator, long links, forwarded mail) wraps inside the card in a narrow
+pane, and the guest names stay level with their icon beside `+N more`, which
+keeps a 44px tap target on touch.
 
 A published event file (`METHOD:PUBLISH`, what `Forward by email` and, for a Google
 organizer, `Forward invitation` attach) is a shared

@@ -1,7 +1,8 @@
 import { t } from '@app/lib/i18n';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { twoLineClampMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import { cn } from '@ui';
+import CheckIcon from '@icon/system/regular/check.svg';
+import { Button, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 
 export type NotificationStackItemProps = {
@@ -24,12 +25,16 @@ export type NotificationStackItemProps = {
   highlighted: boolean;
   onClick: (event: MouseEvent) => void;
   onHover: () => void;
+  /** Complete this notification and leave the rest of the stack. */
+  onDone: () => void;
 };
 
 /**
  * One notification of an open stack: a sheet of the stack spread into its own
  * small card, inset evenly where its paper edge sat, and looking as read or unread
- * as the card it came from. Choosing it opens that notification.
+ * as the card it came from. Choosing it opens that notification. With a
+ * pointer, Mark done takes the time's place on hover, as on the card; touch
+ * marks it done by swiping it.
  */
 export function NotificationStackItem(props: NotificationStackItemProps) {
   return (
@@ -39,7 +44,7 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
       aria-selected={props.highlighted}
       data-stack-item=""
       class={cn(
-        'relative w-full min-w-0 flex-1 px-[19px] pt-1.5',
+        'group/stack-item relative w-full min-w-0 flex-1 px-[19px] pt-1.5',
         props.last && 'pb-2.5 mobile:pb-3'
       )}
       onMouseMove={() => props.onHover()}
@@ -72,7 +77,26 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
               >
                 {props.by}
               </span>
-              <span class="shrink-0 text-ink-extra-muted/80">{props.time}</span>
+              <span class="relative shrink-0">
+                <span class="block text-ink-extra-muted/80 not-touch:group-hover/stack-item:invisible">
+                  {props.time}
+                </span>
+                {/* Touch marks done by swiping the item instead. */}
+                <span class="absolute top-1/2 -right-1.5 hidden -translate-y-1/2 not-touch:group-hover/stack-item:block">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={t('notificationsInbox.markDone')}
+                    tooltip={t('notificationsInbox.markDone')}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      props.onDone();
+                    }}
+                  >
+                    <CheckIcon class="size-4" />
+                  </Button>
+                </span>
+              </span>
             </div>
             <div
               data-stack-item-text=""

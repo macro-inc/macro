@@ -161,6 +161,7 @@ fn started_event() -> CallTopicEvent {
 
 fn archived_event() -> CallTopicEvent {
     CallTopicEvent::RecordArchived(CallRecordArchivedMetadata {
+        channel_thread: false,
         call_id: CALL_ID,
         channel_id: Some(CHANNEL_ID),
         created_by: user_id(),
@@ -1256,6 +1257,7 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
         ),
         (
             PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+                inherited_from_project: None,
                 entity_property_id: ENTITY_PROPERTY_ID,
                 entity_id: PROPERTY_ENTITY_ID.to_string(),
                 entity_type: EntityType::Document,

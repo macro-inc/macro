@@ -5,14 +5,14 @@ use std::sync::Arc;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post},
 };
 use harness_id::HarnessId;
 use macro_authorization::{
-    HarnessOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal,
+    AccountHolderOrInternal, HarnessOnly, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
 use serde::Serialize;
@@ -22,10 +22,13 @@ use crate::domain::{
     models::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
         CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessSession,
-        PairingDetails, PatchHarnessRequest,
+        PairingDetails, PatchHarnessRequest, RUNTIME_CONNECTED_HEADER,
     },
     ports::{HarnessError, HarnessService},
 };
+
+#[cfg(test)]
+mod test;
 
 /// State for the harnesses router.
 pub struct HarnessesRouterState<S, Auth> {
@@ -198,7 +201,7 @@ pub async fn get_pairing_handler<S: HarnessService, Auth: MacroAuthorizationServ
 )]
 pub async fn approve_pairing_handler<S: HarnessService, Auth: MacroAuthorizationService>(
     State(state): State<HarnessesRouterState<S, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
     Path(path): Path<PairingCodePath>,
     Json(req): Json<ApprovePairingRequest>,
 ) -> Result<Json<Harness>, HarnessesHandlerErr> {
@@ -352,13 +355,29 @@ pub async fn delete_harness_handler<S: HarnessService, Auth: MacroAuthorizationS
 pub async fn get_self_harness_handler<S: HarnessService, Auth: MacroAuthorizationService>(
     State(state): State<HarnessesRouterState<S, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, HarnessOnly>,
+    headers: HeaderMap,
 ) -> Result<Json<Harness>, HarnessesHandlerErr> {
-    Ok(Json(
-        state
-            .service
-            .get_self(authorization.authorization.harness_id)
-            .await?,
-    ))
+    let harness = state
+        .service
+        .get_self(authorization.authorization.harness_id)
+        .await?;
+
+    if runtime_presence_disagrees(&headers, &harness) {
+        tracing::warn!(
+            telemetry_event = "harness_presence_disagreement",
+            harness = %harness.id,
+            last_connected_at = ?harness.last_connected_at,
+            "a daemon holds a runtime connection this harness reads as offline"
+        );
+    }
+
+    Ok(Json(harness))
+}
+
+/// Whether the daemon asking says it holds a connection the harness reads as not
+/// having. Only the daemon can see this: the service's own answer is what is wrong.
+fn runtime_presence_disagrees(headers: &HeaderMap, harness: &Harness) -> bool {
+    headers.contains_key(RUNTIME_CONNECTED_HEADER) && !harness.connected
 }
 
 /// Handler for `DELETE /harnesses/me`.
