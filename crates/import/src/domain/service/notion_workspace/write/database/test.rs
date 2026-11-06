@@ -300,7 +300,7 @@ impl WorkspaceWriter for FakeWriter {
             .iter()
             .filter_map(|op| match op {
                 DatabaseOp::Rows {
-                    change: RowsChange::Insert { rows },
+                    change: RowsChange::Insert { rows, .. },
                     ..
                 } => Some(OpResult::Rows {
                     table: TableId::from_uuid(TABLE),
@@ -466,7 +466,7 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
 
     // Then the rows, title first.
     let DatabaseOp::Rows {
-        change: RowsChange::Insert { rows },
+        change: RowsChange::Insert { rows, .. },
         ..
     } = &batches[1][0]
     else {
@@ -753,7 +753,7 @@ fn inserted(batches: &[Vec<DatabaseOp>]) -> usize {
         .flatten()
         .map(|op| match op {
             DatabaseOp::Rows {
-                change: RowsChange::Insert { rows },
+                change: RowsChange::Insert { rows, .. },
                 ..
             } => rows.len(),
             _ => 0,

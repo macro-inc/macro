@@ -172,7 +172,10 @@ pub(in super::super) async fn write_database<
                 created.database_id,
                 vec![DatabaseOp::Rows {
                     table,
-                    change: RowsChange::Insert { rows: cells },
+                    change: RowsChange::Insert {
+                        rows: cells,
+                        ids: None,
+                    },
                 }],
             )
             .await?;
