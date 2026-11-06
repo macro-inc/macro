@@ -17,6 +17,7 @@ export default {
   layoutSpeakerDescription: 'Speaker on stage, others below',
   layoutSidebarDescription: 'Speaker on stage, others to the side',
   hideParticipants: 'Hide participants',
+  showParticipants: 'Show participants',
   whileSharing: "While someone's sharing",
   inProgress: 'Call in progress',
   callingYou: 'Calling you',

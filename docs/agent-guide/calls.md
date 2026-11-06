@@ -351,8 +351,10 @@ equal tiles; Speaker puts the active person or share above a filmstrip; Sidebar
 puts that strip on the right. Phones always use Auto.
 **More → Hide participants** hides the strip and self view during screen sharing,
 leaving a speaking-person chip on the share. It resets when sharing stops and is
-disabled without a share. Tracks stay mounted and audio continues; the old
-maximize/restore button no longer appears over the share.
+disabled without a share. Hover or focus the shared screen to reveal the same
+visibility toggle on its bottom edge, or its right edge in Sidebar. The caret
+flips while hidden. Grid has no edge caret; its equal participant grid remains
+controlled through More. Tracks stay mounted and audio continues.
 
 Desktop **Reactions** beside Team opens a one-row picker with arrow-key navigation.
 The picker stays open for repeated reactions; in compact panes it moves into More.

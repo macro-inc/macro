@@ -772,3 +772,53 @@ describe('CallParticipantsList live roster', () => {
     expect(within(row).getByRole('img', { name: 'Camera off' })).toBeTruthy();
   });
 });
+
+it.each(['auto', 'speaker', 'sidebar', 'grid'] as const)(
+  'shares edge visibility state with More in %s layout',
+  async (layout) => {
+    const participant = createRemoteParticipant(
+      'presenter',
+      {
+        screen_share: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('screen'),
+        },
+      },
+      'Presenter'
+    );
+    setUpCallState([participant]);
+    localStorage.setItem('call.layout', JSON.stringify(layout));
+    render(() => <CallOverlay onLeave={() => {}} />);
+    const edge = screen.queryByRole('button', { name: 'Hide participants' });
+    if (layout === 'grid') {
+      expect(edge).toBeNull();
+      return;
+    }
+    expect(
+      edge?.querySelector(
+        `[data-macro-icon="${layout === 'sidebar' ? 'caret-right' : 'caret-down'}"]`
+      )
+    ).toBeTruthy();
+    fireEvent.click(edge!);
+    const restore = screen.getByRole('button', { name: 'Show participants' });
+    expect(
+      restore.querySelector(
+        `[data-macro-icon="${layout === 'sidebar' ? 'caret-left' : 'caret-up'}"]`
+      )
+    ).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+      key: 'ArrowDown',
+    });
+    const item = await screen.findByRole('menuitemcheckbox', {
+      name: /Hide participants/,
+    });
+    expect(item.getAttribute('aria-checked')).toBe('true');
+    item.focus();
+    fireEvent.keyDown(item, { key: 'Enter' });
+    fireEvent.keyDown(item, { key: 'Escape' });
+    expect(
+      await screen.findByRole('button', { name: 'Hide participants' })
+    ).toBeTruthy();
+  }
+);

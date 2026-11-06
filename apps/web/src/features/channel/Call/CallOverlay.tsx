@@ -16,6 +16,10 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import Screencast from '@icon/system/regular/screencast.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
@@ -36,6 +40,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
 import { CallMoreMenu } from './CallControls/CallMoreMenu';
@@ -303,6 +308,14 @@ export function CallOverlay(props: {
   );
   const layout = () => (isMobile() ? 'auto' : savedLayout());
   const [hideParticipants, setHideParticipants] = createSignal(false);
+  const changeParticipantVisibility = (value: boolean) => {
+    const interaction = beginInteraction('call.participants.visibility');
+    try {
+      setHideParticipants(value);
+    } finally {
+      interaction.end();
+    }
+  };
   createEffect(
     on(hasAnyScreenShare, (sharing) => {
       if (!sharing) setHideParticipants(false);
@@ -461,7 +474,7 @@ export function CallOverlay(props: {
                     class="flex-1 min-h-0 pt-2"
                     classList={{ hidden: !showScreenShare() }}
                   >
-                    <div class="relative h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
+                    <div class="group/share relative h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
                       <Show when={callCtx.isScreenSharing()}>
                         <div class="flex size-full flex-col items-center justify-center gap-3 p-4">
                           <Screencast class="size-10 text-accent" />
@@ -512,6 +525,47 @@ export function CallOverlay(props: {
                           <span>{talkingName()}</span>
                           <CallWaveform class="size-4" />
                         </div>
+                      </Show>
+                      <Show when={!isMobile() && layout() !== 'grid'}>
+                        <Button
+                          appearance="bare"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={
+                            hideParticipants()
+                              ? t('calls.showParticipants')
+                              : t('calls.hideParticipants')
+                          }
+                          aria-expanded={!hideParticipants()}
+                          tooltip={{
+                            content: hideParticipants()
+                              ? t('calls.showParticipants')
+                              : t('calls.hideParticipants'),
+                            placement: layout() === 'sidebar' ? 'left' : 'top',
+                          }}
+                          class={cn(
+                            'absolute z-20 rounded-full border border-edge-muted bg-surface/70 text-ink opacity-0 pointer-events-none group-hover/share:opacity-100 group-hover/share:pointer-events-auto group-focus-within/share:opacity-100 group-focus-within/share:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
+                            layout() === 'sidebar'
+                              ? 'right-2 top-1/2 -translate-y-1/2 h-11 w-6'
+                              : 'bottom-2 left-1/2 -translate-x-1/2 h-6 w-11'
+                          )}
+                          onClick={() =>
+                            changeParticipantVisibility(!hideParticipants())
+                          }
+                        >
+                          <Dynamic
+                            component={
+                              layout() === 'sidebar'
+                                ? hideParticipants()
+                                  ? CaretLeft
+                                  : CaretRight
+                                : hideParticipants()
+                                  ? CaretUp
+                                  : CaretDown
+                            }
+                            class="size-4"
+                          />
+                        </Button>
                       </Show>
                     </div>
                   </div>
@@ -726,16 +780,7 @@ export function CallOverlay(props: {
                           }}
                           hasScreenShare={hasAnyScreenShare()}
                           hideParticipants={hideParticipants()}
-                          onHideParticipantsChange={(value) => {
-                            const interaction = beginInteraction(
-                              'call.participants.visibility'
-                            );
-                            try {
-                              setHideParticipants(value);
-                            } finally {
-                              interaction.end();
-                            }
-                          }}
+                          onHideParticipantsChange={changeParticipantVisibility}
                           onOpenChange={setSettingsOpen}
                         />
                       </Show>
