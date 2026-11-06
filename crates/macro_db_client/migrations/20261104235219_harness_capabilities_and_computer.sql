@@ -1,3 +1,5 @@
+SET LOCAL lock_timeout = '5s';
+
 -- What a harness's machine can do, reported by macrod after it connects,
 -- e.g. {"screen": true} when the box runs a display Macro can stream.
 ALTER TABLE public.harnesses

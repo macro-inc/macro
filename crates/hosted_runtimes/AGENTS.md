@@ -58,6 +58,9 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   `ComputerStatus` exposes `vcpus`, `memoryGib`, `diskGib`, `catalogEntry`.
   PR B: the unpublished hosted-runtimes migration was rewritten in place;
   reset existing local databases before applying it.
+  Purchaser deletion is RESTRICTed to retain enrollment/billing attribution until
+  the computer or team is deleted; harness deletion clears its reference, and
+  user deletion cascades waitlist requests.
 - **Fleet ownership**: Require explicit `COMPUTERS_CONTROL_PLANE_ID` whenever
   `COMPUTERS_FLEET` is set, shared across replicas but distinct per control plane.
   Stamp Incus `user.macro.control_plane` / Docker `macro.control_plane` at create;

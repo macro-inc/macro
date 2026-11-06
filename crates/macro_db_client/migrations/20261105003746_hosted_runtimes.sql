@@ -30,15 +30,18 @@ CREATE TABLE hosted_runtime (
     holds_units BOOLEAN NOT NULL DEFAULT true,
     state JSONB NOT NULL,
     version BIGINT NOT NULL DEFAULT 0,
-    harness_id UUID,
+    harness_id UUID REFERENCES harnesses (id) ON DELETE SET NULL,
     persona JSONB,
-    created_by TEXT NOT NULL,
+    -- Preserve the purchaser needed for enrollment and billing attribution;
+    -- delete the computer/team explicitly before deleting its purchaser.
+    created_by TEXT NOT NULL REFERENCES "User" (id) ON DELETE RESTRICT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     enrolled_at TIMESTAMPTZ,
     CHECK ((price_id IS NULL) = (state->>'comp_reason' IS NOT NULL))
 );
 
+CREATE INDEX hosted_runtime_created_by_idx ON hosted_runtime (created_by);
 CREATE INDEX hosted_runtime_team_idx ON hosted_runtime (team_id, created_at);
 CREATE INDEX hosted_runtime_host_idx ON hosted_runtime (host_id) WHERE holds_units;
 CREATE UNIQUE INDEX hosted_runtime_harness_idx ON hosted_runtime (harness_id)
@@ -71,8 +74,10 @@ CREATE INDEX hosted_runtime_timer_due_idx ON hosted_runtime_timer (fire_at);
 -- "Notify me" requests for sold-out sizes.
 CREATE TABLE hosted_runtime_waitlist (
     team_id UUID NOT NULL REFERENCES team (id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL,
+    user_id TEXT NOT NULL REFERENCES "User" (id) ON DELETE CASCADE,
     size TEXT NOT NULL CHECK (size IN ('standard', 'large', 'xl')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (team_id, user_id, size)
 );
+
+CREATE INDEX hosted_runtime_waitlist_user_idx ON hosted_runtime_waitlist (user_id);

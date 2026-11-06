@@ -630,3 +630,25 @@ async fn capacity_counts_recorded_resources_independently_of_size(pool: PgPool) 
         Err(ReserveError::SoldOut)
     ));
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reservation_rejects_a_missing_purchaser(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool);
+    repo.register_host(HostRegistration {
+        name: "reference-host".to_owned(),
+        memory_gb: 24,
+        reserve_gb: 0,
+        oversell_factor: 1,
+    })
+    .await
+    .unwrap();
+    let mut request = standard(70);
+    request.created_by = "macro|missing@example.com".to_owned();
+    let error = repo.reserve(request, now()).await.unwrap_err();
+    let ReserveError::Storage(PgComputerError::Sqlx(sqlx::Error::Database(error))) = error else {
+        panic!("expected a database foreign key error, got {error:?}");
+    };
+    assert_eq!(error.code().as_deref(), Some("23503"));
+    assert_eq!(error.constraint(), Some("hosted_runtime_created_by_fkey"));
+}
