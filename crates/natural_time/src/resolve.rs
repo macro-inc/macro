@@ -1,5 +1,5 @@
-//! Places a [`Phrase`] on the calendar and takes the part a [`Pick`] names. The rules are listed
-//! in the crate documentation.
+//! Places a [`Phrase`] on the calendar and takes the part a [`Pick`] names.
+//! The rules are listed in the crate documentation.
 use chrono::{Datelike, Months, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Weekday};
 
 use crate::phrase::{
