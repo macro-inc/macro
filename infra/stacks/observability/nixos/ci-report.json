@@ -5,7 +5,8 @@
     "PR_JOB": "{service_name=\"ci-telemetry\"} | event=\"job\" | event_name=~\"pull_request|pull_request_target\" | experiment=\"false\"",
     "PR_STEP": "{service_name=\"ci-telemetry\"} | event=\"step\" | event_name=~\"pull_request|pull_request_target\" | experiment=\"false\"",
     "JOB": "{service_name=\"ci-telemetry\"} | event=\"job\"",
-    "EXPORT": "{service_name=\"ci-telemetry\"} | event=\"export\""
+    "EXPORT": "{service_name=\"ci-telemetry\"} | event=\"export\"",
+    "SCCACHE": "{service_name=\"ci-telemetry\"} | event=\"job\" | event_name=~\"pull_request|pull_request_target\" | experiment=\"false\" | sccache_requests > 0"
   },
   "tables": [
     {
@@ -260,6 +261,50 @@
           "name": "Dev shell p90",
           "unit": "s",
           "expr": "quantile_over_time(0.9, $PR_JOB | unwrap dev_shell_seconds | __error__=\"\" [$RANGE]) by (runner_profile, volume_state)"
+        }
+      ]
+    },
+    {
+      "id": "sccache",
+      "title": "Compiler cache by PR job",
+      "description": "sccache's numbers from each PR job that compiles Rust, uploaded at the job's end. Hit rate is hits over hits and misses across the job's runs; each miss compiles and writes back. Local is a fork PR's empty disk fallback. Sorted by hours spent compiling misses.",
+      "by": [
+        "workflow",
+        "job",
+        "sccache_backend"
+      ],
+      "sort": "Miss hours",
+      "limit": 20,
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (workflow, job, sccache_backend) (count_over_time($SCCACHE [$RANGE]))"
+        },
+        {
+          "name": "Hit rate",
+          "unit": "percentunit",
+          "expr": "sum by (workflow, job, sccache_backend) (sum_over_time($SCCACHE | unwrap sccache_hits | __error__=\"\" [$RANGE])) / (sum by (workflow, job, sccache_backend) (sum_over_time($SCCACHE | unwrap sccache_hits | __error__=\"\" [$RANGE])) + sum by (workflow, job, sccache_backend) (sum_over_time($SCCACHE | unwrap sccache_misses | __error__=\"\" [$RANGE])))"
+        },
+        {
+          "name": "Hit p10",
+          "unit": "percentunit",
+          "expr": "quantile_over_time(0.1, $SCCACHE | unwrap sccache_hit_percent | __error__=\"\" [$RANGE]) by (workflow, job, sccache_backend) / 100"
+        },
+        {
+          "name": "Misses p50",
+          "unit": "short",
+          "expr": "quantile_over_time(0.5, $SCCACHE | unwrap sccache_misses | __error__=\"\" [$RANGE]) by (workflow, job, sccache_backend)"
+        },
+        {
+          "name": "Errors",
+          "unit": "short",
+          "expr": "sum by (workflow, job, sccache_backend) (sum_over_time($SCCACHE | unwrap sccache_errors | __error__=\"\" [$RANGE])) + sum by (workflow, job, sccache_backend) (sum_over_time($SCCACHE | unwrap sccache_timeouts | __error__=\"\" [$RANGE]))"
+        },
+        {
+          "name": "Miss hours",
+          "unit": "h",
+          "expr": "sum by (workflow, job, sccache_backend) (sum_over_time($SCCACHE | unwrap sccache_compile_ms | __error__=\"\" [$RANGE])) / 3600000"
         }
       ]
     },
