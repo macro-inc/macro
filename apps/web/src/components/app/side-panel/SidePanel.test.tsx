@@ -7,7 +7,7 @@ import {
 } from '@solidjs/testing-library';
 import { createContext, createSignal, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { SidePanel } from './SidePanel';
+import { SidePanel, useSidePanel } from './SidePanel';
 
 const mocks = vi.hoisted(() => ({
   touch: false,
@@ -87,6 +87,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+function ReportUnseen(props: { count: number }) {
+  useSidePanel()?.reportUnseenCount(() => props.count);
+  return null;
+}
+
 function setup(persistentFloating = false, unseenCount = 0) {
   render(() => (
     <SidePanel.Root
@@ -95,7 +100,8 @@ function setup(persistentFloating = false, unseenCount = 0) {
       defaultOpen={false}
       persistKey="test-agent"
     >
-      <SidePanel.Toggle unseenCount={unseenCount} />
+      <SidePanel.Toggle />
+      <ReportUnseen count={unseenCount} />
       <SidePanel.Layout
         floating
         persistentFloating={persistentFloating}

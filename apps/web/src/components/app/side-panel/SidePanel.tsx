@@ -162,7 +162,11 @@ function Root(
     });
   }
 
+  const [unseenSource, setUnseenSource] = createSignal<Accessor<number>>();
+
   const ctx: SidePanelContextType = {
+    unseenCount: () => unseenSource()?.() ?? 0,
+    reportUnseenCount: (count) => setUnseenSource(() => count),
     headerActionsMount,
     setHeaderActionsMount,
     register,
@@ -436,8 +440,8 @@ function SidePanelLayoutInner(
   );
 }
 
-/** `unseenCount` is supplied by the owning section; zero hides the badge. */
-function Toggle(props: { size?: 'sm' | 'md'; unseenCount?: number } = {}) {
+/** Sections report `unseenCount` through the context; zero hides the badge. */
+function Toggle(props: { size?: 'sm' | 'md' } = {}) {
   const ctx = useContext(SidePanelContext);
   if (!ctx) {
     throw new Error('<SidePanel.Toggle> must be inside <SidePanel.Root>');
@@ -486,14 +490,14 @@ function Toggle(props: { size?: 'sm' | 'md'; unseenCount?: number } = {}) {
               class={cn('size-6 shrink-0', ctx.isOpen() && 'text-accent')}
             />
           </Show>
-          <Show when={(props.unseenCount ?? 0) > 0 && !ctx.isOpen()}>
+          <Show when={ctx.unseenCount() > 0 && !ctx.isOpen()}>
             <span
               aria-label={t('nav.unseenItems', {
-                count: props.unseenCount ?? 0,
+                count: ctx.unseenCount(),
               })}
               class="absolute -right-1 -top-1 flex min-w-4 h-4 items-center justify-center rounded-full bg-button-accent-bg px-0.5 text-[10px] font-semibold text-button-accent-ink"
             >
-              {props.unseenCount}
+              {ctx.unseenCount()}
             </span>
           </Show>
         </ButtonGroup.Button>
@@ -768,6 +772,7 @@ function useSidePanel() {
     isOpen: ctx.isOpen,
     setIsOpen: ctx.setIsOpen,
     toggle: ctx.toggle,
+    reportUnseenCount: ctx.reportUnseenCount,
     isOverlayMode: ctx.isOverlayMode,
     hasSections: ctx.hasSections,
     setOpenSectionIds: ctx.setOpenSectionIds,

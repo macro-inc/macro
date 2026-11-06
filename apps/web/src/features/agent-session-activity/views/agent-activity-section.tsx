@@ -5,11 +5,12 @@ import {
 } from '@app/features/activity/context/activity-context';
 import { formatRelativeTimestamp } from '@app/features/entity/utils/timestamp';
 import { t } from '@app/lib/i18n';
-import { SidePanel } from '@components/app/side-panel';
+import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { EntityIcon } from '@core/component/EntityIcon';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType as PropertyEntityType } from '@service-properties/generated/schemas/entityType';
+import { debounce } from '@core/util/debounce';
 import { Button } from '@ui';
 import {
   createEffect,
@@ -17,6 +18,7 @@ import {
   createSignal,
   For,
   on,
+  onCleanup,
   Show,
 } from 'solid-js';
 import { TransitionGroup } from 'solid-transition-group';
@@ -41,10 +43,24 @@ const PROPERTY_ENTITY_TYPES: Partial<
   database_row: 'DATABASE_ROW',
 };
 
+const UNSEEN_MS = 8000;
+const LOAD_MORE_WITHIN_PX = 120;
+
 export function AgentActivitySection() {
   const source = useAgentActivitySource();
   const activityContext = useActivityContext();
   const state = createPanelState(source);
+  const sidePanel = useSidePanel();
+  // Dots mark what's new since you last looked, not forever.
+  const clearSeenSoon = debounce(state.markAllSeen, UNSEEN_MS);
+  sidePanel?.reportUnseenCount(state.unseenItemCount);
+  onCleanup(() => {
+    sidePanel?.reportUnseenCount(undefined);
+    clearSeenSoon.clear();
+  });
+  createEffect(() => {
+    if (sidePanel?.isOpen() && state.unseenItemCount() > 0) clearSeenSoon();
+  });
   const [pointerInside, setPointerInside] = createSignal(false);
   const [focusInside, setFocusInside] = createSignal(false);
   const [awayFromTop, setAwayFromTop] = createSignal(false);
@@ -62,9 +78,9 @@ export function AgentActivitySection() {
   const updateEdges = () => {
     if (!list) return;
     setAwayFromTop(list.scrollTop > 1);
-    setAwayFromBottom(
-      list.scrollTop + list.clientHeight < list.scrollHeight - 1
-    );
+    const fromBottom = list.scrollHeight - list.scrollTop - list.clientHeight;
+    setAwayFromBottom(fromBottom > 1);
+    if (fromBottom < LOAD_MORE_WITHIN_PX) source.loadMore();
     updateHold();
   };
 
@@ -158,11 +174,6 @@ export function AgentActivitySection() {
                 )}
               </For>
             </TransitionGroup>
-            <Show when={source.hasMore()}>
-              <Button variant="ghost" size="sm" onClick={source.loadMore}>
-                {t('agentWork.loadMoreActivity')}
-              </Button>
-            </Show>
           </div>
           <Show when={awayFromBottom()}>
             <div class="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-surface to-transparent" />
@@ -239,68 +250,89 @@ function AgentActivityItemRow(props: {
   };
   const latest = () => props.item.steps[0];
 
+  const multiple = () => props.item.steps.length > 1;
+  const expanded = () => props.open && multiple();
+
   return (
     <div data-agent-activity-item={props.item.key}>
-      <div class="flex min-h-11 items-center gap-2 rounded-lg px-1 hover:bg-hover">
-        <Show when={props.unseen}>
-          <span
-            class="size-1.5 shrink-0 rounded-full bg-accent"
-            aria-label={t('agentWork.unseenActivity')}
-          />
-        </Show>
-        <span class="min-w-0 flex-1 truncate text-xs text-ink">
-          <EntityMention
-            entityId={props.item.entityId}
-            display={mentionDisplay}
-          />
-        </span>
-        <button
-          type="button"
-          class="flex min-h-11 shrink-0 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-accent"
-          aria-expanded={props.open}
-          aria-label={t('agentWork.showEntityActivity', { name: name() })}
-          onClick={props.onToggle}
-        >
-          <Show when={latest()}>
-            {(step) => (
-              <span class="text-xs text-ink-muted">
-                <StepLabel step={step()} />
-              </span>
-            )}
+      <div class="flex touch:min-h-11 flex-col justify-center rounded-lg px-1 py-1 not-touch:hover:bg-hover">
+        <div class="flex min-w-0 items-center gap-2">
+          <span class="min-w-0 flex-1 truncate text-xs font-medium text-ink">
+            <EntityMention
+              entityId={props.item.entityId}
+              display={mentionDisplay}
+            />
+          </span>
+          <Show when={props.unseen}>
+            <span
+              class="size-1.5 shrink-0 rounded-full bg-accent"
+              aria-label={t('agentWork.unseenActivity')}
+            />
           </Show>
-          <span class="text-[11px] text-ink-extra-muted">
+          <span class="shrink-0 text-[11px] tabular-nums text-ink-extra-muted">
             {formatRelativeTimestamp(new Date(props.item.latest.occurredAt), {
               condensed: true,
             })}
           </span>
-          <Show when={props.item.steps.length > 1}>
-            <span class="flex items-center gap-0.5 text-[11px] text-ink-muted">
+        </div>
+        <Show
+          when={multiple()}
+          fallback={
+            <span class="pl-5.5 text-[11px] leading-4 text-ink-muted">
+              <Show when={latest()}>
+                {(step) => <StepLabel step={step()} />}
+              </Show>
+            </span>
+          }
+        >
+          <button
+            type="button"
+            class="flex w-full min-w-0 items-center justify-between gap-2 rounded pl-5.5 text-left text-[11px] leading-4 text-ink-muted focus-visible:outline-2 focus-visible:outline-accent"
+            aria-expanded={expanded()}
+            aria-label={t('agentWork.showEntityActivity', { name: name() })}
+            onClick={props.onToggle}
+          >
+            <span class="truncate">
+              <Show when={latest()}>
+                {(step) => <StepLabel step={step()} />}
+              </Show>
+            </span>
+            <span class="flex shrink-0 items-center gap-0.5 tabular-nums">
               {props.item.steps.length}
               <CaretDownIcon
-                class={`size-3 transition-transform ${props.open ? 'rotate-180' : ''}`}
+                class={`size-3 transition-transform ${expanded() ? 'rotate-180' : ''}`}
               />
             </span>
-          </Show>
-        </button>
+          </button>
+        </Show>
       </div>
-      <Show when={props.open}>
-        <div class="border-l border-edge-muted ml-3 pl-3 pb-2">
-          <For each={[...props.item.steps].reverse()}>
-            {(step) => (
-              <div class="flex min-h-8 items-center justify-between gap-2 text-xs text-ink-muted">
-                <span>
-                  <StepLabel step={step} />
-                </span>
-                <span>
-                  {formatRelativeTimestamp(new Date(step.latest.occurredAt), {
-                    condensed: true,
-                  })}
-                </span>
-              </div>
-            )}
-          </For>
+      <div
+        class="grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none"
+        classList={{
+          'grid-rows-[0fr]': !expanded(),
+          'grid-rows-[1fr]': expanded(),
+        }}
+        inert={!expanded()}
+      >
+        <div class="min-h-0 overflow-hidden">
+          <div class="ml-2.5 border-l border-edge-muted pb-1 pl-3.5">
+            <For each={[...props.item.steps].reverse()}>
+              {(step) => (
+                <div class="flex min-h-6 items-center justify-between gap-2 text-[11px] text-ink-muted touch:min-h-9">
+                  <span>
+                    <StepLabel step={step} />
+                  </span>
+                  <span class="tabular-nums text-ink-extra-muted">
+                    {formatRelativeTimestamp(new Date(step.latest.occurredAt), {
+                      condensed: true,
+                    })}
+                  </span>
+                </div>
+              )}
+            </For>
+          </div>
         </div>
-      </Show>
+      </div>
     </div>
   );
 }

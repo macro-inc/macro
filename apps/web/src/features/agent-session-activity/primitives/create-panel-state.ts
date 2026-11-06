@@ -36,10 +36,16 @@ export function createPanelState(source: AgentActivitySource) {
         .map((item) => item.key);
       setUnseenKeys((current) => [...new Set([...current, ...newKeys])]);
     }
+    const wasInitialized = initialized;
     if (next.length > 0) initialized = true;
     setVisibleRows(source.rows());
+    // A refetch or an older page isn't an update: leave what's open alone.
+    const hasNews = next.some((item) => {
+      const previous = before.find((old) => old.key === item.key);
+      return !previous || previous.latest.id !== item.latest.id;
+    });
+    if (wasInitialized && hasNews) setOpenKey(changed?.key);
     setItems(reconcile(next, { key: 'key' }));
-    setOpenKey(changed?.key);
     setUnseenIds([]);
     setPendingChanges(false);
   };
@@ -79,8 +85,10 @@ export function createPanelState(source: AgentActivitySource) {
     setOpenKey,
     unseenCount: () => unseenIds().length,
     isUnseen: (key: string) => unseenKeys().includes(key),
+    unseenItemCount: () => unseenKeys().length,
     markSeen: (key: string) =>
       setUnseenKeys((current) => current.filter((item) => item !== key)),
+    markAllSeen: () => setUnseenKeys([]),
     hold: () => setHeld(true),
     release: () => {
       setHeld(false);

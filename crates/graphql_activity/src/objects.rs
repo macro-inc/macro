@@ -47,8 +47,7 @@ impl From<ActivityRecord> for GraphqlActivityEvent {
             actor_id: record.actor.as_ref().to_owned(),
             subject_id: record.subject_id,
             agent_correlation_id: record.agent_correlation_id.map(|id| ID(id.to_string())),
-            // TODO(activity-verb): map record.agent_verb when ActivityRecord gains it.
-            agent_verb: None,
+            agent_verb: record.agent_verb.map(|verb| verb.to_string()),
             entity_type: GraphqlEntityType::new(record.entity_type),
             entity_id: ID(record.entity_id),
             action: record.action.into(),

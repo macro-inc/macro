@@ -66,7 +66,7 @@ function fromStoredRow(
     entityType: row.entity_type,
     entityId: row.entity_id,
     action: row.action,
-    verb: null, // TODO(activity-verb): read row.agent_verb after OpenAPI regeneration.
+    verb: row.agent_verb ?? null,
     occurredAt: row.occurred_at,
   };
 }
@@ -154,7 +154,8 @@ export function createAgentActivitySource(
 
   const rows = createMemo(() => {
     const byId = new Map<string, AgentActivityRow>();
-    for (const page of query.data?.pages ?? []) {
+    // Reading `data` while pending would suspend the panel's section.
+    for (const page of query.isPending ? [] : (query.data?.pages ?? [])) {
       for (const stored of page.activities) {
         if (stored.action === 'opened') continue;
         const row = fromStoredRow(stored);
