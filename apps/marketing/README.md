@@ -481,7 +481,7 @@ together.
 The videos and posters live once, in `public/video/tutorials/` (mp4s through
 Git LFS), and deploy to `macro.com/video/tutorials/`. docs.macro.com embeds
 them from there, including Blocks without a page here (Home, Drive, Calendar,
-Scheduling). Replacing a video keeps its name; the deploy's `--size-only` sync
+Scheduling, Spreadsheets, Databases, Canvas). Replacing a video keeps its name; the deploy's `--size-only` sync
 skips a same-size file, and CloudFront caches videos for a day.
 
 ## Paid-social landing page
