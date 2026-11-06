@@ -35,7 +35,7 @@ function ParticipantRow(props: {
         class={cn(
           'shrink-0 rounded-full',
           props.compact ? 'size-6' : 'size-8',
-          props.speaking && 'ring-2 ring-success'
+          props.speaking && 'outline-2 -outline-offset-2 outline-success'
         )}
       >
         <Show

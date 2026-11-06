@@ -1,5 +1,6 @@
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallLiveChip } from '@channel/Call/CallLiveChip';
+import { useParticipantSpeaking } from '@channel/Call/use-call-speaking';
 import { UserGroup } from '@core/component/UserGroup';
 import { useUserId } from '@core/context/user';
 import { tryMacroId } from '@core/user';
@@ -17,6 +18,9 @@ export function ChannelLiveCallBadge(props: { channelId: string }) {
     active.isSuccess
       ? active.data.find((item) => item.channelId === props.channelId)
       : undefined;
+  const isSpeaking = useParticipantSpeaking(() => ({
+    channelId: props.channelId,
+  }));
   const participants = () => {
     if (!joined() || !call) return [];
     const local = userId();
@@ -32,6 +36,7 @@ export function ChannelLiveCallBadge(props: { channelId: string }) {
     <span class="flex shrink-0 items-center gap-1.5">
       <Show when={joined()}>
         <UserGroup
+          isHighlighted={isSpeaking}
           userIds={participants()}
           maxUsers={3}
           size="sm"

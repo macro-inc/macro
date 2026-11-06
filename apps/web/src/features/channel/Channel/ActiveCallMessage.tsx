@@ -4,6 +4,7 @@ import { CallLiveChip } from '@channel/Call/CallLiveChip';
 import { CallWaveform } from '@channel/Call/CallWaveform';
 import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
+import { useParticipantSpeaking } from '@channel/Call/use-call-speaking';
 import { UserGroup } from '@core/component/UserGroup';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -22,6 +23,9 @@ export function ActiveCallMessage(props: { channelId: string }) {
   const call = useCall(() => props.channelId, {
     onJoin: () => setActiveTab(getCallJoinTab()),
   });
+  const isSpeaking = useParticipantSpeaking(() => ({
+    channelId: props.channelId,
+  }));
   const participantIds = () =>
     record.isSuccess
       ? record.data.participants
@@ -56,6 +60,7 @@ export function ActiveCallMessage(props: { channelId: string }) {
             />
           </div>
           <UserGroup
+            isHighlighted={isSpeaking}
             userIds={participantIds()}
             maxUsers={isMobile() ? 3 : 4}
             size="sm"

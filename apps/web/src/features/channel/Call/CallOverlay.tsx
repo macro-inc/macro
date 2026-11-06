@@ -335,7 +335,13 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
         <span class="flex items-center gap-1.5">
           <Show when={macroId()}>
             {(id) => (
-              <span class="size-5 shrink-0">
+              <span
+                class={cn(
+                  'size-5 shrink-0 rounded-full',
+                  callCtx.isParticipantSpeaking(props.participant) &&
+                    'outline-2 -outline-offset-2 outline-success'
+                )}
+              >
                 <UserIcon id={id()} size="fill" suppressClick />
               </span>
             )}

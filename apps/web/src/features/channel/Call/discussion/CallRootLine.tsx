@@ -18,6 +18,7 @@ import {
   Switch,
 } from 'solid-js';
 import { CallWaveform } from '../CallWaveform';
+import { useParticipantSpeaking } from '../use-call-speaking';
 import { formatCallElapsed } from './format-call-elapsed';
 import { callerName, PastCallLine } from './PastCallLine';
 
@@ -28,6 +29,9 @@ function LiveCallLine(props: {
   ref?: (element: HTMLElement) => void;
 }) {
   const record = useLiveCallRecordQuery(() => props.message.id);
+  const isSpeaking = useParticipantSpeaking(() => ({
+    callId: props.message.id,
+  }));
   const [nowMs, setNowMs] = createSignal(Date.now());
   const timer = globalThis.setInterval(() => setNowMs(Date.now()), 1000);
   onCleanup(() => globalThis.clearInterval(timer));
@@ -63,6 +67,7 @@ function LiveCallLine(props: {
       </span>
       <Show when={liveParticipants().length > 0}>
         <UserGroup
+          isHighlighted={isSpeaking}
           userIds={liveParticipants()}
           maxUsers={4}
           size="sm"

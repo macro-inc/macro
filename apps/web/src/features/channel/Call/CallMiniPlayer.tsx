@@ -175,7 +175,8 @@ export function CallMiniPlayer(props: {
               class={cn(
                 'relative mx-2 flex items-center justify-center overflow-hidden rounded-xl bg-panel',
                 audioOnly() ? 'min-h-16 gap-3 px-3' : 'aspect-video',
-                participant().speaking && 'ring-2 ring-inset ring-success'
+                participant().speaking &&
+                  'outline-2 -outline-offset-2 outline-success'
               )}
             >
               <Show
@@ -184,7 +185,13 @@ export function CallMiniPlayer(props: {
                   <Show
                     when={participant().hasVideo}
                     fallback={
-                      <span class="flex size-10 items-center justify-center rounded-full bg-ink-extra-muted text-surface text-lg font-semibold">
+                      <span
+                        class={cn(
+                          'flex size-10 items-center justify-center rounded-full bg-ink-extra-muted text-surface text-lg font-semibold',
+                          participant().speaking &&
+                            'outline-2 -outline-offset-2 outline-success'
+                        )}
+                      >
                         {participant().name.charAt(0).toUpperCase()}
                       </span>
                     }

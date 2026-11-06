@@ -3,6 +3,7 @@ import { useActiveCallQuery, useLiveCallRecordQuery } from '@queries/call/call';
 import { Show } from 'solid-js';
 import { ActiveCallLink } from './ActiveCallLink';
 import { CallLiveChip } from './CallLiveChip';
+import { useParticipantSpeaking } from './use-call-speaking';
 
 /** The channel owns its header; the call adds only its live state and link. */
 export function ActiveCallHeader(props: { channelId: string; link?: boolean }) {
@@ -25,6 +26,9 @@ export function JoinableCallStatus(props: { channelId: string }) {
   const record = useLiveCallRecordQuery(() =>
     active.isSuccess ? (active.data?.callId ?? '') : ''
   );
+  const isSpeaking = useParticipantSpeaking(() => ({
+    channelId: props.channelId,
+  }));
   const participants = () =>
     record.isSuccess
       ? record.data.participants
@@ -34,6 +38,7 @@ export function JoinableCallStatus(props: { channelId: string }) {
   return (
     <Show when={active.isSuccess && active.data}>
       <UserGroup
+        isHighlighted={isSpeaking}
         userIds={participants()}
         size="sm"
         maxUsers={4}

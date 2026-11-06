@@ -10,6 +10,8 @@ type UserGroupProps = {
   size?: UserGroupSize;
   suppressClick?: boolean;
   showTooltip?: boolean;
+  /** Emphasize selected live participants without replacing avatar separators. */
+  isHighlighted?: (userId: string) => boolean;
 };
 
 /**
@@ -39,6 +41,11 @@ export function UserGroup(props: UserGroupProps) {
             size={size()}
             suppressClick={props.suppressClick}
             showTooltip={props.showTooltip ?? false}
+            class={
+              props.isHighlighted?.(userId)
+                ? 'relative z-10 outline-2 -outline-offset-2 outline-success'
+                : undefined
+            }
           />
         )}
       </For>
