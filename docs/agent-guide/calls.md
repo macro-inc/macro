@@ -376,9 +376,10 @@ A compact bottom island holds microphone, camera, Team/Private and Leave;
 Chat is a separate island beside it. Both keep the safe-area gutters and stay
 below the tiles. The phone island has no screen-share button or device carets.
 The desktop control bar is centered beneath the tiles, with an equal-width
-balance slot on the left and a separate round chat toggle immediately on the
-right (12px gap, or 8px with compact controls). Equal outer grid tracks keep the
-media container centered when chat docks or the stage narrows. The
+balance slot matching the measured round chat toggle on the right (12px gap,
+or 8px in compact controls). The toggle uses the same floating surface, 8px
+padding and shadow as the pill. The content-width row centers within the stage
+when chat docks; compact controls keep the whole row inside a 480px pane. The
 toggle uses accent while open; existing discussion/Work updates retain their dot.
 On desktop channel calls, the meeting-link action lives in the header, not the
 footer. Phones retain their channel header islands. Media controls occupy a

@@ -27,6 +27,7 @@ function MediaSplitButton(props: {
   icon: JSX.Element;
   children: JSX.Element;
   mobileContent: JSX.Element;
+  hideMenu?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = createSignal(false);
@@ -55,7 +56,7 @@ function MediaSplitButton(props: {
           >
             {props.icon}
           </ButtonGroup.Button>
-          <Show when={!isMobile()}>
+          <Show when={!isMobile() && !props.hideMenu}>
             <ButtonGroup.Divider />
             <ButtonGroup.Button
               {...triggerProps}
@@ -68,7 +69,7 @@ function MediaSplitButton(props: {
                 placement: 'top',
                 disabled: open(),
               }}
-              class="w-6 mobile:@max-[20rem]:min-w-6"
+              class={props.compact ? 'w-4' : 'w-6'}
             >
               <CaretUp
                 class="size-3 transition-transform duration-200 ease-out motion-reduce:transition-none"
@@ -182,6 +183,7 @@ export function CallControlBar(props: {
           <MediaSplitButton
             label="Screen share"
             compact={props.compact}
+            hideMenu={props.compact && !props.unframed}
             onOpenChange={(open) => {
               screenOpen = open;
               props.onSettingsOpenChange?.(
@@ -207,7 +209,10 @@ export function CallControlBar(props: {
             size={props.compact ? 'icon-md' : 'icon-lg'}
             variant="danger"
             aria-label="Leave call"
-            class={cn('rounded-full', !props.unframed && 'min-w-14')}
+            class={cn(
+              'rounded-full',
+              !props.unframed && (props.compact ? 'min-w-11' : 'min-w-14')
+            )}
             tooltip={{ content: 'Leave call', placement: 'top' }}
             onClick={props.onLeave}
           >

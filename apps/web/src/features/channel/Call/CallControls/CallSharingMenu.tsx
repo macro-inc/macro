@@ -121,7 +121,9 @@ export function CallSharingMenu(props: {
               {label()}
             </span>
           </Show>
-          <CaretUp class="size-3" />
+          <Show when={!props.compact}>
+            <CaretUp class="size-3" />
+          </Show>
         </Button>
       )}
       mobileContent={
