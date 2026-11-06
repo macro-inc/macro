@@ -80,8 +80,10 @@ whose review was requested offers **Review**, which opens the pull request on
 GitHub and marks the row seen.
 
 **All** and **Unread** under the header switch the list (`1` and `2`, or Tab, also
-switch), and the choice is kept per user across reloads. A row you read under
-Unread, or a stack you're going through, stays until you next switch or reload.
+switch), and the choice is kept per user across reloads. Unread reads only unread
+rows from the server, so it pages through unread rows alone; a row read elsewhere
+leaves it and new activity brings one back. A row you read under Unread, or a
+stack you're going through, stays until you next switch or reload.
 With nothing unread, Unread shows **You're all caught up**.
 
 **Clear notifications** (double check, beside the filter; a sheet beside the

@@ -9,14 +9,12 @@
 //! runs only for those.
 //! Generated into `check_tauri_lockfiles.yml`.
 
-use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, PullRequest, Step, Use, Workflow, WorkflowCall,
-};
+use gh_workflow::{Event, Expression, Job, Level, Permissions, Step, Use, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
 use crate::workflows::{runners, steps, vars};
 
-/// Files whose change runs the workflow, on a push and in `PR CI`.
+/// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("apps/web/tauri/**"),
     xtask_paths::repo_glob!("crates/**/Cargo.toml"),
@@ -29,20 +27,12 @@ pub const PATHS: &[RepoGlob<'static>] = &[
 
 /// Build the workflow.
 pub fn check_tauri_lockfiles() -> Workflow {
-    let pull_request = PullRequest::default().add_branch("main");
-
     Workflow::new("check tauri lockfiles")
         .permissions(Permissions {
             contents: Some(Level::Read),
             ..Default::default()
         })
-        .on(Event::default()
-            .pull_request(
-                PATHS
-                    .iter()
-                    .fold(pull_request, |trigger, path| trigger.add_path(*path)),
-            )
-            .workflow_call(WorkflowCall::default()))
+        .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("check-tauri-lockfiles", check_tauri_lockfiles_job())
         .add_job("check-tauri-vendoring", check_tauri_vendoring_job())
 }

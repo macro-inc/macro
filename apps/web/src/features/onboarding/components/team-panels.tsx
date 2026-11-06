@@ -9,6 +9,8 @@ import { ContinueButton, SecondaryButton, SkipButton } from './controls';
  * joined here. */
 export function OnTeamPanel(props: {
   name: string;
+  /** Teammates just emailed from this step; asks for a heads-up when > 0. */
+  invited?: number;
   finishing: boolean;
   copyingLink: boolean;
   onCopyLink: () => void;
@@ -23,10 +25,21 @@ export function OnTeamPanel(props: {
         <p class="text-sm font-medium text-ink">You're on {props.name}</p>
         {/* Copy must stay true for invite-link join, invite-accept,
             domain-join, and the optimistic mid-create flash alike. */}
-        <p class="max-w-xs text-xs text-ink-muted leading-snug">
-          Your team is set up — everything your teammates bring into Macro is
-          shared with you.
-        </p>
+        <Show
+          when={(props.invited ?? 0) > 0}
+          fallback={
+            <p class="max-w-xs text-xs text-ink-muted leading-snug">
+              Your team is set up — everything your teammates bring into Macro
+              is shared with you.
+            </p>
+          }
+        >
+          <p class="max-w-xs text-xs text-ink-muted leading-snug">
+            {props.invited === 1
+              ? 'Invite sent. Give your teammate a heads-up: send them the invite link in Slack or a text so they know to look for the email.'
+              : `Invites sent to ${props.invited} teammates. Give them a heads-up: send the invite link in Slack or a text so they know to look for the email.`}
+          </p>
+        </Show>
       </div>
       <ContinueButton
         label={props.finishing ? 'Opening your workspace…' : 'Continue'}

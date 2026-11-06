@@ -11,6 +11,10 @@
 //   fork    after a fork PR's run, whose read-only token could not set the status
 //
 // Statuses go on the PR head commit, so a later push starts without one.
+//
+// A fork PR's run uses the workflow files of its merge commit, so a fork that
+// edits them decides its own verdict. Both fork steps fail closed instead: the
+// fork's CI sources must be the trees it branched from (`ciSourceChanges`).
 
 import { readFileSync } from 'node:fs';
 
@@ -21,11 +25,19 @@ const RUNNING = 'Running on';
 // Job names in `PR CI`; the fork step reads them back from the finished run.
 export const START_JOB = 'Start';
 export const GATE_JOB = 'CI gate';
+// The workflow whose jobs the fork step trusts, and the trees that define it:
+// the generated workflows and the Rust that generates them.
+export const PR_CI_PATH = '.github/workflows/pr-ci.yml';
+export const CI_SOURCES = ['.github', 'tooling/xtask/crates/xtask_workflows'] as const;
+export const FORK_CHANGES_CI =
+  'fork changes CI workflows: a maintainer must review and run CI from a branch';
 
 type State = 'pending' | 'success' | 'failure' | 'error';
 export type Needs = Record<string, { result: string }>;
 export type RunJob = { name: string; conclusion: string | null };
 type Outcome = { state: State; description: string } | null;
+/// Git tree SHA of each CI source at a commit; null where the path is missing.
+export type CiTrees = Record<string, string | null>;
 
 function env(name: string): string {
   const value = process.env[name];
@@ -111,6 +123,25 @@ export function forkOutcome(jobs: RunJob[], head: string, labelName: string): Ou
   return null;
 }
 
+/// The CI sources whose tree differs between a fork head and the commit it
+/// branched from. A source missing from either side counts as changed.
+export function ciSourceChanges(head: CiTrees, base: CiTrees): string[] {
+  return CI_SOURCES.filter((path) => !head[path] || !base[path] || head[path] !== base[path]);
+}
+
+/// Why a finished fork run can't be trusted, or null. The workflow is matched
+/// by name, so a fork can add another file named `PR CI`; and even `pr-ci.yml`
+/// is the fork's copy unless the CI sources are unchanged.
+export function forkRunDistrust(runPath: string, changes: string[]): string | null {
+  if (changes.length > 0) {
+    return FORK_CHANGES_CI;
+  }
+  if (runPath !== PR_CI_PATH) {
+    return `The run came from ${runPath}, not ${PR_CI_PATH}`;
+  }
+  return null;
+}
+
 async function setStatus(sha: string, state: State, description: string, targetUrl: string) {
   await github('POST', `/repos/${repo()}/statuses/${sha}`, {
     state,
@@ -135,6 +166,41 @@ async function gateStatus(sha: string): Promise<{ state: string; description: st
 /// closed yet.
 export function isOpenRequest(status: { state: string; description: string } | undefined): boolean {
   return status?.state === 'pending' && status.description.startsWith(RUNNING);
+}
+
+/// The tree SHA at `path` in a commit, walking one directory at a time.
+async function treeAt(commit: string, path: string): Promise<string | null> {
+  let tree: string = (await github('GET', `/repos/${repo()}/git/commits/${commit}`)).tree.sha;
+  for (const part of path.split('/')) {
+    const { tree: entries }: { tree: { path: string; type: string; sha: string }[] } = await github(
+      'GET',
+      `/repos/${repo()}/git/trees/${tree}`,
+    );
+    const entry = entries.find((each) => each.path === part && each.type === 'tree');
+    if (!entry) {
+      return null;
+    }
+    tree = entry.sha;
+  }
+  return tree;
+}
+
+async function ciTrees(commit: string): Promise<CiTrees> {
+  const trees: CiTrees = {};
+  for (const path of CI_SOURCES) {
+    trees[path] = await treeAt(commit, path);
+  }
+  return trees;
+}
+
+/// The CI sources a fork head changed since it branched from `base`.
+async function forkCiChanges(base: string, head: string): Promise<string[]> {
+  const compare = await github('GET', `/repos/${repo()}/compare/${base}...${head}`);
+  const changes = ciSourceChanges(await ciTrees(head), await ciTrees(compare.merge_base_commit.sha));
+  if (changes.length > 0) {
+    console.log(`${head.slice(0, 10)} changes ${changes.join(', ')}`);
+  }
+  return changes;
 }
 
 async function removeLabel(pr: string) {
@@ -222,6 +288,13 @@ async function forkRequest() {
   const pr = env('PR_NUMBER');
 
   await removeLabel(pr);
+
+  // The run the label starts would use the fork's own workflow files.
+  if ((await forkCiChanges(env('BASE_REF'), head)).length > 0) {
+    await setStatus(head, 'failure', FORK_CHANGES_CI, env('PR_CHECKS_URL'));
+    return;
+  }
+
   await setStatus(head, 'pending', `${RUNNING} ${head.slice(0, 7)}`, env('PR_CHECKS_URL'));
 }
 
@@ -235,6 +308,14 @@ async function fork() {
   // or a run after the result is in, finds no open request.
   if (!isOpenRequest(await gateStatus(head))) {
     console.log(`${head.slice(0, 10)} has no open ${context()} request; nothing to report.`);
+    return;
+  }
+
+  // Checked again here, from the run itself: the request step's view could be
+  // stale, and the run's path is only known now.
+  const distrust = forkRunDistrust(run.path, await forkCiChanges(env('BASE_REF'), head));
+  if (distrust) {
+    await setStatus(head, 'failure', distrust, run.html_url);
     return;
   }
 

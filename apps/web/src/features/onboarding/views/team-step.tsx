@@ -1,7 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { ToggleSwitch } from '@ui';
-import { createMemo, Match, Show, Switch } from 'solid-js';
+import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import {
   ContinueButton,
   SecondaryButton,
@@ -60,6 +60,9 @@ export function TeamStep(props: {
   );
 
   const inviteLink = createTeamInviteLinkCopy(context);
+  // How many teammates this step just emailed, so the confirmation can ask
+  // the creator to give them a heads-up.
+  const [invited, setInvited] = createSignal(0);
   // A personal address has no team to create; it refers friends instead.
   const referring = () => {
     const ready = seed();
@@ -87,6 +90,7 @@ export function TeamStep(props: {
             <OnTeamPanel
               name={name}
               finishing={props.finishing}
+              invited={invited()}
               copyingLink={inviteLink.copying()}
               onCopyLink={() => fireAndForget(inviteLink.copy(), 'onboarding')}
               onContinue={props.onContinue}
@@ -128,6 +132,7 @@ export function TeamStep(props: {
                   finishing={props.finishing}
                   seed={ready()}
                   ownEmail={ownEmail()}
+                  onInvited={setInvited}
                 />
               </Show>
             )}
@@ -152,10 +157,12 @@ function TeamForm(props: {
   finishing: boolean;
   seed: TeamFormSeed;
   ownEmail: string | undefined;
+  onInvited: (count: number) => void;
 }) {
   const context = useOnboardingContext();
   const form = createTeamForm(context, props.seed, {
     ownEmail: props.ownEmail,
+    onCreated: (sent) => props.onInvited(sent.length),
   });
   return (
     <div class="flex flex-col gap-3">

@@ -1,4 +1,4 @@
-use gh_workflow::{Event, Job, PullRequest, Push, Run, Step, Workflow, WorkflowCall};
+use gh_workflow::{Event, Job, Push, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
 use crate::workflows::{steps, vars};
@@ -6,7 +6,7 @@ use crate::workflows::{steps, vars};
 #[cfg(test)]
 mod test;
 
-/// Files whose change runs the workflow, on a push and in `PR CI`.
+/// Files whose change makes `PR CI` call this workflow, and that runs it on `main`.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("packages/sdk/**"),
     xtask_paths::repo_glob!(".github/workflows/sdk-check.yml"),
@@ -16,15 +16,8 @@ pub const PATHS: &[RepoGlob<'static>] = &[
 /// checked by the web app workflow's `Generated Code Check`, which builds the
 /// spec binaries once for every Rust-generated artifact.
 pub fn sdk_check() -> Workflow {
-    let pull_request = PullRequest::default().add_branch("main");
-
     Workflow::new("SDK Check")
         .on(Event::default()
-            .pull_request(
-                PATHS
-                    .iter()
-                    .fold(pull_request, |trigger, path| trigger.add_path(*path)),
-            )
             // `Release SDK` publishes from `main` without re-checking the
             // package, so the same suite has to guard what lands there.
             .push(
