@@ -11,8 +11,8 @@ use ::attention_feed::{
     inbound::viewers::FeedViewerResolver,
 };
 use ::notification_inbox::domain::models::{
-    InboxActor, InboxChange, InboxClearOutcome, InboxClearRequest, InboxDoneOutcome, InboxEntry,
-    InboxNotificationDoneOutcome, InboxPage, InboxQuery, InboxRow, InboxRowAction,
+    ClearProgress, InboxActor, InboxChange, InboxClearOutcome, InboxClearRequest, InboxDoneOutcome,
+    InboxEntry, InboxNotificationDoneOutcome, InboxPage, InboxQuery, InboxRow, InboxRowAction,
     InboxRowActionKind, InboxRowId, InboxRowTarget, InboxRowType, InboxScope,
 };
 use async_graphql::futures_util::{StreamExt as _, future::BoxFuture, pin_mut};
@@ -106,7 +106,8 @@ struct RecordingInboxService {
     recomputes: Mutex<Vec<(InboxScope, Vec<FeedKey>)>>,
     dones: Mutex<Vec<Vec<InboxRowTarget>>>,
     notification_dones: Mutex<Vec<(InboxScope, InboxRowId, Uuid)>>,
-    clears: Mutex<Vec<InboxClearRequest>>,
+    clears: Mutex<Vec<(InboxClearRequest, Uuid)>>,
+    clear_undos: Mutex<Vec<(InboxScope, Uuid)>>,
     undos: Mutex<Vec<(InboxScope, DoneReceipt)>>,
     seens: Mutex<Vec<(InboxScope, Vec<InboxRowId>)>>,
 }
@@ -207,22 +208,38 @@ impl NotificationInboxGraphqlService for Recording {
         &self,
         _viewer: FeedViewer,
         request: InboxClearRequest,
+        id: Uuid,
     ) -> BoxFuture<'_, Result<InboxClearOutcome, FeedError>> {
-        self.0.clears.lock().unwrap().push(request);
+        self.0.clears.lock().unwrap().push((request, id));
         Box::pin(async {
             Ok(InboxClearOutcome {
                 rows: 3,
-                receipt: DoneReceipt {
-                    keys: vec![doc_group().id()],
-                    notification_ids: vec![Uuid::from_u128(1), Uuid::from_u128(2)],
-                    ..Default::default()
-                },
-                next: Some(FeedPosition {
-                    sort_at: at(7),
-                    entity_id: DOC_ID.to_string(),
-                }),
+                cancelled: false,
             })
         })
+    }
+
+    fn clear_progress(
+        &self,
+        _viewer: FeedViewer,
+        _id: Uuid,
+    ) -> BoxFuture<'_, Result<Option<ClearProgress>, FeedError>> {
+        Box::pin(async {
+            Ok(Some(ClearProgress {
+                rows: 3,
+                finished: true,
+            }))
+        })
+    }
+
+    fn undo_clear(
+        &self,
+        _viewer: FeedViewer,
+        scope: InboxScope,
+        id: Uuid,
+    ) -> BoxFuture<'_, Result<Changes, FeedError>> {
+        self.0.clear_undos.lock().unwrap().push((scope, id));
+        Box::pin(async { Ok(vec![InboxChange::Upserted(doc_entry())]) })
     }
 
     fn undo_done(
@@ -502,54 +519,81 @@ async fn one_notification_of_a_row_is_marked_done() {
 }
 
 #[tokio::test]
-async fn the_inbox_is_cleared_one_batch_at_a_time() {
+async fn the_inbox_is_cleared_in_one_call_and_undone_by_one_token() {
     let harness = harness();
     let service = Arc::new(RecordingInboxService::default());
     let triggers = ManualTriggers::default();
+    let run = |query: String| {
+        harness.schema.execute(
+            harness
+                .request(&query, authenticated_parts())
+                .data(viewer_id())
+                .data(context(&service, &triggers)),
+        )
+    };
 
-    let cleared = harness
+    let cleared = run(r#"mutation { clearNotificationInbox(input: {
+            scope: { rowTypes: [EMAIL], unreadOnly: true },
+            since: "2024-06-01T00:00:00+02:00"
+        }) { rowCount undoToken complete nextCursor } }"#
+        .to_string())
+    .await;
+
+    assert!(cleared.errors.is_empty(), "{:?}", cleared.errors);
+    let cleared = cleared.data.into_json().unwrap();
+    let payload = &cleared["clearNotificationInbox"];
+    assert_eq!(payload["rowCount"], 3);
+    assert_eq!(payload["complete"], true);
+    assert!(payload["nextCursor"].is_null());
+    let token = payload["undoToken"].as_str().unwrap().to_string();
+    let id = {
+        let clears = service.clears.lock().unwrap();
+        let (request, id) = &clears[0];
+        assert_eq!(request.scope.row_types, vec![InboxRowType::Email]);
+        assert!(request.scope.unread_only);
+        assert_eq!(
+            request.since,
+            Some(
+                chrono::DateTime::parse_from_rfc3339("2024-05-31T22:00:00Z")
+                    .unwrap()
+                    .with_timezone(&chrono::Utc)
+            )
+        );
+        *id
+    };
+    assert_eq!(token, format!("clear:{id}"));
+
+    let undone = run(format!(
+        r#"mutation {{ undoNotificationInboxRowsDone(input: {{
+            undoToken: "{token}", scope: {{ rowTypes: [EMAIL] }}
+        }}) {{ patches {{ __typename }} }} }}"#
+    ))
+    .await;
+    assert!(undone.errors.is_empty(), "{:?}", undone.errors);
+    let undos = service.clear_undos.lock().unwrap();
+    assert_eq!(undos.len(), 1);
+    assert_eq!(undos[0].1, id);
+    assert!(service.undos.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_clear_naming_no_row_types_is_rejected() {
+    let harness = harness();
+    let service = Arc::new(RecordingInboxService::default());
+    let response = harness
         .schema
         .execute(
             harness
                 .request(
-                    r#"mutation { clearNotificationInbox(input: {
-                        scope: { rowTypes: [EMAIL], unreadOnly: true },
-                        since: "2024-06-01T00:00:00+02:00", limit: 150
-                    }) { rowCount undoToken nextCursor } }"#,
+                    r#"mutation { clearNotificationInbox(input: { scope: { rowTypes: [] } }) { rowCount } }"#,
                     authenticated_parts(),
                 )
                 .data(viewer_id())
-                .data(context(&service, &triggers)),
+                .data(context(&service, &ManualTriggers::default())),
         )
         .await;
-
-    assert!(cleared.errors.is_empty(), "{:?}", cleared.errors);
-    let cleared = cleared.data.into_json().unwrap();
-    assert_eq!(cleared["clearNotificationInbox"]["rowCount"], 3);
-    let token = cleared["clearNotificationInbox"]["undoToken"]
-        .as_str()
-        .unwrap();
-    assert_eq!(
-        DoneReceipt::decode(token).unwrap().notification_ids.len(),
-        2
-    );
-    let cursor = cleared["clearNotificationInbox"]["nextCursor"]
-        .as_str()
-        .unwrap();
-    assert_eq!(FeedPosition::decode(cursor).unwrap().sort_at, at(7));
-    let clears = service.clears.lock().unwrap();
-    assert_eq!(clears[0].scope.row_types, vec![InboxRowType::Email]);
-    assert!(clears[0].scope.unread_only);
-    assert_eq!(
-        clears[0].since,
-        Some(
-            chrono::DateTime::parse_from_rfc3339("2024-05-31T22:00:00Z")
-                .unwrap()
-                .with_timezone(&chrono::Utc)
-        )
-    );
-    assert_eq!(clears[0].limit, 150);
-    assert!(clears[0].after.is_none());
+    assert!(!response.errors.is_empty());
+    assert!(service.clears.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

@@ -4,6 +4,8 @@ use async_graphql::{Context, ID, Object, SimpleObject};
 use attention_feed::domain::models::DoneReceipt;
 use graphql_common::require_authenticated_user;
 use graphql_soup::SoupEntityEdges;
+use tracing::Instrument;
+use uuid::Uuid;
 
 use crate::{
     context::{NotificationInboxGraphqlContext, to_graphql_error},
@@ -34,16 +36,40 @@ pub struct MarkNotificationInboxNotificationDonePayload<E: SoupEntityEdges> {
     undo_token: String,
 }
 
-/// The result of one batch of clearing the inbox.
+/// The result of clearing the inbox.
 #[derive(SimpleObject)]
 pub struct ClearNotificationInboxPayload {
-    /// How many rows the batch cleared.
+    /// How many rows the clear has cleared; while it runs on, the count so
+    /// far.
     row_count: i32,
-    /// Opaque token that reverses exactly this batch.
+    /// Opaque token that reverses the whole clear, stopping it first if it
+    /// is still running. Undo it with `undoNotificationInboxRowsDone`.
     undo_token: String,
-    /// Send as the next batch's `cursor` to keep clearing; absent once
-    /// nothing is left.
+    /// Whether the clear finished before the reply. A clear still running
+    /// carries on in the background; live updates remove its rows.
+    complete: bool,
+    /// Always absent: the server reads every batch itself.
+    #[graphql(deprecation = "The server clears every batch. Remove after 2026-12-06.")]
     next_cursor: Option<String>,
+}
+
+/// How long a clear request waits for the clear before replying with its
+/// progress; the clear carries on either way.
+const CLEAR_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// The prefix that marks an undo token as a whole clear's.
+const CLEAR_TOKEN_PREFIX: &str = "clear:";
+
+fn clear_token(id: Uuid) -> String {
+    format!("{CLEAR_TOKEN_PREFIX}{id}")
+}
+
+/// The clear an undo token names, if it names one.
+fn parse_clear_token(token: &str) -> Option<async_graphql::Result<Uuid>> {
+    token.strip_prefix(CLEAR_TOKEN_PREFIX).map(|id| {
+        Uuid::parse_str(id)
+            .map_err(|_| async_graphql::Error::new("invalid notification inbox undo token"))
+    })
 }
 
 /// The result of undoing a mark-done.
@@ -125,11 +151,12 @@ impl<E: SoupEntityEdges> NotificationInboxMutationRoot<E> {
         })
     }
 
-    /// Clear the authenticated user's notification inbox one batch at a time:
-    /// every matching row the batch reads is marked done, its shown and hidden
-    /// notifications. Email threads are not archived. Repeat with
-    /// `nextCursor` until it is absent; each batch's undo token reverses that
-    /// batch.
+    /// Clear the authenticated user's notification inbox in one call: the
+    /// server reads every batch and marks each matching row done, its shown
+    /// and hidden notifications. Email threads are not archived. The clear
+    /// runs apart from the request, so a closed tab or dropped connection
+    /// doesn't stop it partway; the reply comes when it finishes, or with
+    /// its progress after a while, and one token undoes all of it.
     async fn clear_notification_inbox(
         &self,
         ctx: &Context<'_>,
@@ -139,15 +166,34 @@ impl<E: SoupEntityEdges> NotificationInboxMutationRoot<E> {
         let context = ctx.data::<NotificationInboxGraphqlContext>()?;
         let request = input.into_request()?;
         let viewer = context.viewer(user).await?;
-        let outcome = context
-            .service
-            .clear(viewer, request)
-            .await
-            .map_err(to_graphql_error)?;
+        let id = Uuid::now_v7();
+        let service = context.service.clone();
+        let clearing = viewer.clone();
+        let task = tokio::spawn(
+            async move { service.clear(clearing, request, id).await }.in_current_span(),
+        );
+        let (rows, complete) = match tokio::time::timeout(CLEAR_WAIT, task).await {
+            Ok(Ok(outcome)) => (outcome.map_err(to_graphql_error)?.rows, true),
+            Ok(Err(error)) => {
+                tracing::error!(error = ?error, "notification inbox clear task failed");
+                return Err(async_graphql::Error::new(
+                    "the notification inbox clear failed",
+                ));
+            }
+            Err(_) => {
+                let progress = context
+                    .service
+                    .clear_progress(viewer, id)
+                    .await
+                    .map_err(to_graphql_error)?;
+                (progress.map_or(0, |progress| progress.rows), false)
+            }
+        };
         Ok(ClearNotificationInboxPayload {
-            row_count: i32::try_from(outcome.rows).unwrap_or(i32::MAX),
-            undo_token: outcome.receipt.encode(),
-            next_cursor: outcome.next.as_ref().map(|next| next.encode()),
+            row_count: i32::try_from(rows).unwrap_or(i32::MAX),
+            undo_token: clear_token(id),
+            complete,
+            next_cursor: None,
         })
     }
 
@@ -161,15 +207,22 @@ impl<E: SoupEntityEdges> NotificationInboxMutationRoot<E> {
     ) -> async_graphql::Result<UndoNotificationInboxRowsDonePayload<E>> {
         let user = require_authenticated_user(ctx)?;
         let context = ctx.data::<NotificationInboxGraphqlContext>()?;
-        let receipt = DoneReceipt::decode(&input.undo_token)
-            .map_err(|_| async_graphql::Error::new("invalid notification inbox undo token"))?;
         let scope = input.scope.unwrap_or_default().into_scope();
-        let viewer = context.viewer(user).await?;
-        let changes = context
-            .service
-            .undo_done(viewer, scope, receipt)
-            .await
-            .map_err(to_graphql_error)?;
+        let changes = match parse_clear_token(&input.undo_token) {
+            Some(id) => {
+                let id = id?;
+                let viewer = context.viewer(user).await?;
+                context.service.undo_clear(viewer, scope, id).await
+            }
+            None => {
+                let receipt = DoneReceipt::decode(&input.undo_token).map_err(|_| {
+                    async_graphql::Error::new("invalid notification inbox undo token")
+                })?;
+                let viewer = context.viewer(user).await?;
+                context.service.undo_done(viewer, scope, receipt).await
+            }
+        }
+        .map_err(to_graphql_error)?;
         Ok(UndoNotificationInboxRowsDonePayload {
             patches: changes
                 .into_iter()

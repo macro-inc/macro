@@ -9,7 +9,7 @@ use attention_feed::domain::{
     acknowledge::Acknowledger,
     models::{
         Acknowledgment, CandidateKeying, CandidateRequest, DoneReceipt, FeedError, FeedKey,
-        FeedRevision, FeedViewer, Loaded, MailFacts, unseen_among,
+        FeedPosition, FeedRevision, FeedViewer, Loaded, MailFacts, unseen_among,
     },
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
     reader::FeedReader,
@@ -21,11 +21,13 @@ use uuid::Uuid;
 
 use super::{
     models::{
-        InboxChange, InboxClearOutcome, InboxClearRequest, InboxDoneOutcome, InboxEntry,
-        InboxNotificationDoneOutcome, InboxPage, InboxQuery, InboxRow, InboxRowId, InboxRowTarget,
-        InboxRowType, InboxScope,
+        ClearProgress, InboxChange, InboxClearOutcome, InboxClearRequest, InboxDoneOutcome,
+        InboxEntry, InboxNotificationDoneOutcome, InboxPage, InboxQuery, InboxRow, InboxRowId,
+        InboxRowTarget, InboxRowType, InboxScope,
     },
-    policy, rows,
+    policy,
+    ports::ClearLog,
+    rows,
 };
 
 #[cfg(test)]
@@ -74,14 +76,35 @@ pub trait NotificationInboxService: Send + Sync + 'static {
         notification: Uuid,
     ) -> impl Future<Output = Result<InboxNotificationDoneOutcome<Self::Entity>, FeedError>> + Send;
 
-    /// Mark done every row one batch of the inbox holds that the request
-    /// matches: their shown and hidden notifications. Clearing doesn't archive
-    /// email threads: it clears notifications, and the mail stays where it is.
+    /// Mark done every row of the inbox the request matches, their shown and
+    /// hidden notifications, reading the inbox in batches until it ends. Each
+    /// batch is recorded in clear `id`'s log, so `undo_clear` reverses the
+    /// whole clear, and an undo stops a clear still running. Clearing doesn't
+    /// archive email threads: it clears notifications, and the mail stays
+    /// where it is.
     fn clear(
         &self,
         viewer: FeedViewer,
         request: InboxClearRequest,
+        id: Uuid,
     ) -> impl Future<Output = Result<InboxClearOutcome, FeedError>> + Send;
+
+    /// How far clear `id` has got; `None` for an unknown or expired clear.
+    fn clear_progress(
+        &self,
+        viewer: FeedViewer,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<ClearProgress>, FeedError>> + Send;
+
+    /// Stop clear `id` if it is still running, reverse everything it changed,
+    /// then recompute its groups for the caller's inbox. A clear undone
+    /// already, or expired, changes nothing.
+    fn undo_clear(
+        &self,
+        viewer: FeedViewer,
+        scope: InboxScope,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Vec<InboxChange<Self::Entity>>, FeedError>> + Send;
 
     /// Reverse exactly what one mark-done changed, then recompute its groups
     /// for the caller's inbox.
@@ -103,24 +126,27 @@ pub trait NotificationInboxService: Send + Sync + 'static {
 }
 
 /// The notification inbox service over the shared feed layer.
-pub struct NotificationInboxServiceImpl<S, N, M, G> {
+pub struct NotificationInboxServiceImpl<S, N, M, G, L> {
     reader: FeedReader<S, N>,
     acknowledger: Acknowledger<N, M, G>,
+    clear_log: L,
 }
 
-impl<S, N, M, G> NotificationInboxServiceImpl<S, N, M, G>
+impl<S, N, M, G, L> NotificationInboxServiceImpl<S, N, M, G, L>
 where
     S: CandidateSource,
     N: FeedNotifications + Clone,
     M: FeedMail,
     G: FeedSignals,
+    L: ClearLog,
 {
     /// Create the service from its ports; the reader and the acknowledger
     /// share the notification port.
-    pub fn new(source: S, notifications: N, mail: M, signals: G) -> Self {
+    pub fn new(source: S, notifications: N, mail: M, signals: G, clear_log: L) -> Self {
         Self {
             reader: FeedReader::new(source, notifications.clone()),
             acknowledger: Acknowledger::new(notifications, mail, signals),
+            clear_log,
         }
     }
 }
@@ -211,6 +237,36 @@ impl<E> Group<E> {
     }
 }
 
+/// Groups one clear batch reads.
+const CLEAR_BATCH_GROUPS: u16 = 100;
+/// Batches one clear reads at most: far beyond any inbox, a stop for a
+/// source that never ends.
+const MAX_CLEAR_BATCHES: usize = 1_000;
+/// How long an undo waits for a running clear to stop.
+const CLEAR_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+/// How often an undo checks whether the clear has stopped.
+const CLEAR_STOP_POLL: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// What one batch of a clear did.
+struct ClearBatch {
+    rows: usize,
+    receipt: DoneReceipt,
+    next: Option<FeedPosition>,
+}
+
+/// One receipt for everything a clear's batches changed.
+fn merge_receipts(receipts: Vec<DoneReceipt>) -> DoneReceipt {
+    let mut merged = DoneReceipt::default();
+    for receipt in receipts {
+        merged.keys.extend(receipt.keys);
+        merged.notification_ids.extend(receipt.notification_ids);
+        merged.unseen_ids.extend(receipt.unseen_ids);
+        merged.archived_threads.extend(receipt.archived_threads);
+    }
+    merged.keys = unique(merged.keys);
+    merged
+}
+
 /// What clearing one group acknowledges.
 struct ClearedGroup {
     key: FeedKey,
@@ -246,12 +302,13 @@ fn email_thread_id(key: &FeedKey) -> Option<Uuid> {
         .flatten()
 }
 
-impl<S, N, M, G> NotificationInboxServiceImpl<S, N, M, G>
+impl<S, N, M, G, L> NotificationInboxServiceImpl<S, N, M, G, L>
 where
     S: CandidateSource,
     N: FeedNotifications,
     M: FeedMail,
     G: FeedSignals,
+    L: ClearLog,
 {
     /// Every row of each current group in `keys`, keyed by group.
     async fn current(
@@ -267,6 +324,128 @@ where
             .into_iter()
             .map(|(key, loaded)| (key, Group::cut(loaded, viewer, now)))
             .collect())
+    }
+
+    /// Clear batch after batch, recording each, until the inbox ends, the
+    /// clear passes `since`, or an undo asks it to stop.
+    async fn clear_batches(
+        &self,
+        viewer: &FeedViewer,
+        request: &InboxClearRequest,
+        id: Uuid,
+    ) -> Result<InboxClearOutcome, FeedError> {
+        let mut after = None;
+        let mut rows = 0;
+        for batch_number in 1..=MAX_CLEAR_BATCHES {
+            let batch = self.clear_batch(viewer, request, after).await?;
+            rows += batch.rows;
+            let cancelled = self
+                .clear_log
+                .record(&viewer.user, id, batch.rows, &batch.receipt)
+                .await?;
+            tracing::Span::current().record("batches", batch_number);
+            if cancelled {
+                return Ok(InboxClearOutcome {
+                    rows,
+                    cancelled: true,
+                });
+            }
+            match batch.next {
+                Some(next) => after = Some(next),
+                None => break,
+            }
+        }
+        Ok(InboxClearOutcome {
+            rows,
+            cancelled: false,
+        })
+    }
+
+    #[tracing::instrument(
+        name = "notification_inbox.clear_batch",
+        skip_all,
+        fields(
+            user = %viewer.user,
+            rows = tracing::field::Empty,
+            notifications = tracing::field::Empty,
+            has_next = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn clear_batch(
+        &self,
+        viewer: &FeedViewer,
+        request: &InboxClearRequest,
+        after: Option<FeedPosition>,
+    ) -> Result<ClearBatch, FeedError> {
+        let candidates = CandidateRequest {
+            limit: CLEAR_BATCH_GROUPS,
+            after,
+            ..candidate_request(viewer)
+        };
+        let now = Utc::now();
+        // Every group read comes back, cleared or not, so the batch knows how
+        // far it walked.
+        let page = self
+            .reader
+            .page(candidates, |loaded| {
+                let group = Group::cut(loaded, viewer, now);
+                let cleared: Vec<&InboxRow> = group
+                    .rows
+                    .iter()
+                    .filter(|row| request.clears(row))
+                    .collect();
+                let notification_ids: Vec<Uuid> = cleared
+                    .iter()
+                    .flat_map(|row| row.all_notifications().map(|n| n.notification_id))
+                    .collect();
+                Some(ClearedGroup {
+                    rows: cleared.len(),
+                    unseen_ids: unseen_among(
+                        cleared.iter().flat_map(|row| row.all_notifications()),
+                        &notification_ids,
+                    ),
+                    notification_ids,
+                    key: group.key,
+                    sort_at: group.sort_at,
+                })
+            })
+            .await?;
+        // Groups are newest first, so one older than `since` ends the clear.
+        let past_since = request.since.is_some_and(|since| {
+            page.entries
+                .last()
+                .is_some_and(|group| group.sort_at < since)
+        });
+        let next = if past_since { None } else { page.next };
+        let rows = page.entries.iter().map(|group| group.rows).sum();
+        let acknowledgments: Vec<Acknowledgment> = page
+            .entries
+            .into_iter()
+            .filter(|group| !group.notification_ids.is_empty())
+            .map(|group| Acknowledgment {
+                key: group.key,
+                notification_ids: group.notification_ids,
+                unseen_ids: group.unseen_ids,
+                archive_thread: None,
+            })
+            .collect();
+        let receipt = if acknowledgments.is_empty() {
+            DoneReceipt::default()
+        } else {
+            self.acknowledger
+                .acknowledge(viewer, acknowledgments)
+                .await?
+        };
+        let span = tracing::Span::current();
+        span.record("rows", rows);
+        span.record("notifications", receipt.notification_ids.len());
+        span.record("has_next", next.is_some());
+        Ok(ClearBatch {
+            rows,
+            receipt,
+            next,
+        })
     }
 
     async fn recompute_groups(
@@ -292,12 +471,13 @@ where
     }
 }
 
-impl<S, N, M, G> NotificationInboxService for NotificationInboxServiceImpl<S, N, M, G>
+impl<S, N, M, G, L> NotificationInboxService for NotificationInboxServiceImpl<S, N, M, G, L>
 where
     S: CandidateSource,
     N: FeedNotifications,
     M: FeedMail,
     G: FeedSignals,
+    L: ClearLog,
 {
     type Entity = S::Entity;
 
@@ -484,12 +664,13 @@ where
         skip_all,
         fields(
             user = %viewer.user,
+            clear = %id,
             row_types = request.scope.row_types.len(),
             unread_only = request.scope.unread_only,
             since = request.since.is_some(),
+            batches = tracing::field::Empty,
             rows = tracing::field::Empty,
-            notifications = tracing::field::Empty,
-            has_next = tracing::field::Empty,
+            cancelled = tracing::field::Empty,
         ),
         err
     )]
@@ -497,75 +678,67 @@ where
         &self,
         viewer: FeedViewer,
         request: InboxClearRequest,
+        id: Uuid,
     ) -> Result<InboxClearOutcome, FeedError> {
-        let candidates = CandidateRequest {
-            limit: request.limit,
-            after: request.after.clone(),
-            ..candidate_request(&viewer)
-        };
-        let now = Utc::now();
-        // Every group read comes back, cleared or not, so the batch knows how
-        // far it walked.
-        let page = self
-            .reader
-            .page(candidates, |loaded| {
-                let group = Group::cut(loaded, &viewer, now);
-                let cleared: Vec<&InboxRow> = group
-                    .rows
-                    .iter()
-                    .filter(|row| request.clears(row))
-                    .collect();
-                let notification_ids: Vec<Uuid> = cleared
-                    .iter()
-                    .flat_map(|row| row.all_notifications().map(|n| n.notification_id))
-                    .collect();
-                Some(ClearedGroup {
-                    rows: cleared.len(),
-                    unseen_ids: unseen_among(
-                        cleared.iter().flat_map(|row| row.all_notifications()),
-                        &notification_ids,
-                    ),
-                    notification_ids,
-                    key: group.key,
-                    sort_at: group.sort_at,
-                })
-            })
-            .await?;
-        // Groups are newest first, so one older than `since` ends the clear.
-        let past_since = request.since.is_some_and(|since| {
-            page.entries
-                .last()
-                .is_some_and(|group| group.sort_at < since)
-        });
-        let next = if past_since { None } else { page.next };
-        let rows = page.entries.iter().map(|group| group.rows).sum();
-        let acknowledgments: Vec<Acknowledgment> = page
-            .entries
-            .into_iter()
-            .filter(|group| !group.notification_ids.is_empty())
-            .map(|group| Acknowledgment {
-                key: group.key,
-                notification_ids: group.notification_ids,
-                unseen_ids: group.unseen_ids,
-                archive_thread: None,
-            })
-            .collect();
-        let receipt = if acknowledgments.is_empty() {
-            DoneReceipt::default()
-        } else {
-            self.acknowledger
-                .acknowledge(&viewer, acknowledgments)
-                .await?
-        };
+        self.clear_log.begin(&viewer.user, id).await?;
+        let result = self.clear_batches(&viewer, &request, id).await;
+        // Close the log however the clear ended, so an undo waiting on it
+        // reverses what it did.
+        if let Err(error) = self.clear_log.finish(&viewer.user, id).await {
+            tracing::warn!(error = ?error, "failed to close the clear log");
+        }
+        let outcome = result?;
         let span = tracing::Span::current();
-        span.record("rows", rows);
+        span.record("rows", outcome.rows);
+        span.record("cancelled", outcome.cancelled);
+        Ok(outcome)
+    }
+
+    async fn clear_progress(
+        &self,
+        viewer: FeedViewer,
+        id: Uuid,
+    ) -> Result<Option<ClearProgress>, FeedError> {
+        Ok(self.clear_log.progress(&viewer.user, id).await?)
+    }
+
+    #[tracing::instrument(
+        name = "notification_inbox.undo_clear",
+        skip_all,
+        fields(
+            user = %viewer.user,
+            clear = %id,
+            waited_ms = tracing::field::Empty,
+            notifications = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn undo_clear(
+        &self,
+        viewer: FeedViewer,
+        scope: InboxScope,
+        id: Uuid,
+    ) -> Result<Vec<InboxChange<Self::Entity>>, FeedError> {
+        self.clear_log.cancel(&viewer.user, id).await?;
+        // A clear still running stops after its current batch; wait for it so
+        // the log holds everything it changed.
+        let started = tokio::time::Instant::now();
+        while started.elapsed() < CLEAR_STOP_WAIT {
+            match self.clear_log.progress(&viewer.user, id).await? {
+                Some(progress) if !progress.finished => {
+                    tokio::time::sleep(CLEAR_STOP_POLL).await;
+                }
+                _ => break,
+            }
+        }
+        let span = tracing::Span::current();
+        span.record("waited_ms", started.elapsed().as_millis() as u64);
+        let receipt = merge_receipts(self.clear_log.take(&viewer.user, id).await?);
         span.record("notifications", receipt.notification_ids.len());
-        span.record("has_next", next.is_some());
-        Ok(InboxClearOutcome {
-            rows,
-            receipt,
-            next,
-        })
+        if receipt.keys.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.undo_done(viewer, scope, receipt).await
     }
 
     #[tracing::instrument(

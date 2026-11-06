@@ -115,3 +115,21 @@ fn seen_input_is_capped() {
     };
     assert!(too_many.into_rows().is_err());
 }
+
+#[test]
+fn a_clear_with_no_row_types_is_rejected_and_one_without_the_field_takes_every_kind() {
+    let named_none = ClearNotificationInboxInput {
+        scope: Some(NotificationInboxScopeInput {
+            row_types: Some(Vec::new()),
+            unread_only: None,
+        }),
+        ..Default::default()
+    };
+    assert!(named_none.into_request().is_err());
+
+    let every_kind = ClearNotificationInboxInput::default()
+        .into_request()
+        .unwrap();
+    assert!(every_kind.scope.row_types.is_empty());
+    assert!(every_kind.since.is_none());
+}

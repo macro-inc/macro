@@ -11,7 +11,7 @@ use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification_inbox::domain::{
     models::{
-        InboxChange, InboxClearOutcome, InboxClearRequest, InboxDoneOutcome,
+        ClearProgress, InboxChange, InboxClearOutcome, InboxClearRequest, InboxDoneOutcome,
         InboxNotificationDoneOutcome, InboxPage, InboxQuery, InboxRowId, InboxRowTarget,
         InboxScope,
     },
@@ -62,7 +62,23 @@ pub trait NotificationInboxGraphqlService: Send + Sync + 'static {
         &self,
         viewer: FeedViewer,
         request: InboxClearRequest,
+        id: Uuid,
     ) -> BoxFuture<'_, Result<InboxClearOutcome, FeedError>>;
+
+    /// See [`NotificationInboxService::clear_progress`].
+    fn clear_progress(
+        &self,
+        viewer: FeedViewer,
+        id: Uuid,
+    ) -> BoxFuture<'_, Result<Option<ClearProgress>, FeedError>>;
+
+    /// See [`NotificationInboxService::undo_clear`].
+    fn undo_clear(
+        &self,
+        viewer: FeedViewer,
+        scope: InboxScope,
+        id: Uuid,
+    ) -> BoxFuture<'_, Result<Changes, FeedError>>;
 
     /// See [`NotificationInboxService::undo_done`].
     fn undo_done(
@@ -133,8 +149,28 @@ where
         &self,
         viewer: FeedViewer,
         request: InboxClearRequest,
+        id: Uuid,
     ) -> BoxFuture<'_, Result<InboxClearOutcome, FeedError>> {
-        Box::pin(NotificationInboxService::clear(self, viewer, request))
+        Box::pin(NotificationInboxService::clear(self, viewer, request, id))
+    }
+
+    fn clear_progress(
+        &self,
+        viewer: FeedViewer,
+        id: Uuid,
+    ) -> BoxFuture<'_, Result<Option<ClearProgress>, FeedError>> {
+        Box::pin(NotificationInboxService::clear_progress(self, viewer, id))
+    }
+
+    fn undo_clear(
+        &self,
+        viewer: FeedViewer,
+        scope: InboxScope,
+        id: Uuid,
+    ) -> BoxFuture<'_, Result<Changes, FeedError>> {
+        Box::pin(NotificationInboxService::undo_clear(
+            self, viewer, scope, id,
+        ))
     }
 
     fn undo_done(

@@ -151,15 +151,11 @@ impl NotificationInboxInput {
     }
 }
 
-/// Groups one clear batch reads when no limit is given.
-pub const DEFAULT_CLEAR_LIMIT: i32 = 100;
-/// Most groups one clear batch may read.
-pub const MAX_CLEAR_LIMIT: i32 = 200;
-
-/// One batch of clearing the viewer's notification inbox.
+/// Clearing the viewer's notification inbox.
 #[derive(InputObject, Default)]
 pub struct ClearNotificationInboxInput {
-    /// Which rows are cleared; the inbox the caller shows.
+    /// Which rows are cleared; the inbox the caller shows. Omit `rowTypes`
+    /// to clear every kind; an empty list is rejected, since it names none.
     pub scope: Option<NotificationInboxScopeInput>,
     /// Clear only unread rows.
     #[graphql(deprecation = "Set scope.unreadOnly. Remove after 2026-12-06.")]
@@ -167,36 +163,32 @@ pub struct ClearNotificationInboxInput {
     /// RFC 3339 time; clear only rows whose newest notification arrived at or
     /// after it.
     pub since: Option<String>,
-    /// Groups read in this batch; defaults to 100, capped at 200.
+    /// Ignored: the server reads every batch.
+    #[graphql(deprecation = "The server clears every batch. Remove after 2026-12-06.")]
     pub limit: Option<i32>,
-    /// Opaque cursor from the previous batch's `nextCursor`; absent for the
-    /// first. Send it with the same scope, filters and `since`.
+    /// Ignored: the server reads every batch.
+    #[graphql(deprecation = "The server clears every batch. Remove after 2026-12-06.")]
     pub cursor: Option<String>,
 }
 
 impl ClearNotificationInboxInput {
     /// Validate and convert into the domain request.
     pub(crate) fn into_request(self) -> async_graphql::Result<InboxClearRequest> {
-        let limit = graphql_common::parse_limit(self.limit, DEFAULT_CLEAR_LIMIT, MAX_CLEAR_LIMIT)?;
-        let after = self
-            .cursor
-            .map(|cursor| FeedPosition::decode(&cursor))
-            .transpose()
-            .map_err(|_| async_graphql::Error::new("invalid notification inbox cursor"))?;
+        let scope = self.scope.unwrap_or_default();
+        if scope.row_types.as_ref().is_some_and(Vec::is_empty) {
+            return Err(async_graphql::Error::new(
+                "a clear needs at least one row type; omit rowTypes to clear every kind",
+            ));
+        }
         let since = self
             .since
             .map(|since| DateTime::parse_from_rfc3339(&since))
             .transpose()
             .map_err(|_| async_graphql::Error::new("invalid notification inbox clear time"))?
             .map(|since| since.with_timezone(&Utc));
-        let mut scope = self.scope.unwrap_or_default().into_scope();
+        let mut scope = scope.into_scope();
         scope.unread_only |= self.unread_only.unwrap_or(false);
-        Ok(InboxClearRequest {
-            scope,
-            since,
-            limit: u16::try_from(limit).expect("limit is capped below u16::MAX"),
-            after,
-        })
+        Ok(InboxClearRequest { scope, since })
     }
 }
 
