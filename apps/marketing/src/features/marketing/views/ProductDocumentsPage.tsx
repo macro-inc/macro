@@ -82,6 +82,7 @@ export function RouteDocuments() {
           title={['Fast collaborative docs', 'for your team and agents.']}
           description="Link emails, chats, tasks, and files to your documents."
           cta="documents_hero_get_started"
+          tutorial="docs"
         />
         <WorkspaceDesktopDemo
           heroFrame

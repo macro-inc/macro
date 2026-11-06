@@ -36,6 +36,7 @@ export function RouteChannels() {
           'and the whole channel can open it natively.',
         ]}
         cta="channels_hero_get_started"
+        tutorial="chat"
       />
       <ChannelHero />
       <nav class="feature-page-jump-links" aria-label="On this page">

@@ -2,6 +2,8 @@
 
 ## Calls — `/app/calls`
 
+The Calls list starts with the Calls `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits below the touch inset, outside the virtualized rows.
+
 On desktop a collapsible sidebar starts with the shared outlined `New` button,
 with `Search calls` immediately left of collapse. Search reveals its field above
 New. The sidebar also holds
@@ -71,6 +73,33 @@ still ringing for you also shows a `Dismiss` button, which declines it like the
 conversation row's Decline. To see the section
 without starting a real call, answer `/call/active` and `/call/<channelId>/active`
 with a fake call through CDP `Fetch` interception.
+
+### Calls whose discussion is a channel thread
+
+With the `enable-call-channel-thread` server flag on for the caller, a new call in a channel stores
+`channel_thread` as its discussion, and `CallRecord.discussion` says so. Past channel calls, calls
+already running, and calls with no channel keep `call_chat`, and behave as described elsewhere here.
+
+In the channel, the call is a row at its start time: `<name> started a call`, the call time, live
+avatars and **Join** (or **Return to call**), with the thread collapsed under it, which replies like any other thread.
+When it ends the line says how long it lasted. While the live row is
+off screen, the banner above the composer shows a message count and scrolls to the row.
+
+In the call, the panel opens on desktop and tablet, closed on phones. Its first tab is the channel's
+name. It shows the channel up to the call's row, opened on the blank slate when the thread is empty
+and at the newest message otherwise. The composer is pinned to the call thread and returns there
+after replying elsewhere; nothing posts top-level from the panel. A popup counts top-level messages
+others have sent to the channel since you joined, and **View** swaps to the Messages tab with the
+call still connected. On the meeting page it navigates to the channel.
+
+People connected to the call get no notification from its thread, mentions included; they stay
+followers, so later replies reach them after they leave. The call's root accepts replies and nothing
+else: no edit, delete or reactions. On a call's record the chat is read-only with **Open in channel**,
+and absent for anyone who can't read the channel. Deleting a record leaves the thread in the channel.
+
+To verify, turn the flag on for your test user in PostHog, start a call in a channel from one account,
+and open the channel from a second. Check replying from each side, a quote reply inside the thread,
+that no notification reaches the person in the call, and that ending the call updates the row.
 
 While you are in a call, a green phone button (`Return to call`,
 `data-sidebar-next-item="active-call"`) sits at the bottom of the desktop rail,
@@ -203,6 +232,10 @@ profile pictures; initials are the fallback when no photo is available.
 In-call participant tiles fill their grid cell but are never wider than 16:9,
 so a wide window centers them instead of cropping cameras; check a single remote
 participant in a wide window and at phone width.
+Participants with the LiveKit `macro.program` attribute show an **Agent** badge
+beside their name on video tiles, screen shares, and in the Participants list,
+including on phones.
+
 The join screen has microphone, camera, and background effects buttons over the
 preview, with pill selectors below for microphone, speaker, camera, and
 backgrounds. The background button over the preview toggles the selected effect
@@ -320,6 +353,14 @@ and macOS shows its prompt; the user reopens Macro after allowing it. A refused
 or failed capture shows its reason under the call controls. Browsers
 and older desktop builds keep the browser's own picker. Verify on a Mac by
 sharing a display and a window, stopping, and cancelling the picker.
+
+### Programs in calls
+
+An agent account joins with its own API key through the SDK. Starting a channel
+call uses `POST /call/{channel_id}`; joining an existing call uses
+`POST /call/record/{call_id}/join`, which never starts one. Meeting joins use
+`POST /call/meetings/join/{token}`. When only programs have remained in a call
+for 60 seconds, the call ends automatically.
 
 ### Work in a call
 

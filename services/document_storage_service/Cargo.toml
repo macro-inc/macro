@@ -44,6 +44,7 @@ local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
+agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 access_requests = { path = "../../crates/access_requests" }
 async-trait = { workspace = true }
 ai_billing = { path = "../../crates/ai_billing" }
@@ -84,6 +85,7 @@ bzip2 = { workspace = true, default-features = false, features = [
 ] }
 cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
 call = { path = "../../crates/call" }
+feature_flags = { path = "../../crates/feature_flags" }
 channel_bots = { path = "../../crates/channel_bots" }
 messages = { path = "../../crates/messages", features = ["annotations", "broker", "delivery", "inbound"] }
 channels = { path = "../../crates/channels", features = [
@@ -309,6 +311,11 @@ tower-http = { workspace = true, features = ["compression-gzip"] }
 tracing = { workspace = true }
 unicode-segmentation = { workspace = true }
 urlencoding = { workspace = true }
+account_manager = { path = "../../crates/account_manager", features = [
+  "inbound",
+  "outbound",
+  "postgres",
+] }
 user_api_key = { path = "../../crates/user_api_key", features = [
   "inbound",
   "postgres",

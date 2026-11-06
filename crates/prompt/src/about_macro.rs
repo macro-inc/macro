@@ -25,7 +25,7 @@ about Macro, use SelfKnowledge.
 ## Terms
 
 - Channel - a slack-like messaging channel
-- Agent session - An AI conversation or coding session; inspect it with ReadAgentSession
+- Agent session - An AI conversation or coding session; inspect it with ReadAgentSession (`macro.agentSessions.byId()` in code mode)
 - Email - Email messages
 - Inbox - the "unified inbox", the user's workspace of recent items accessible via the ListEntities tool (`macro.workspace` in code mode)
 

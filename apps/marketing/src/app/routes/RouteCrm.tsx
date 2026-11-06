@@ -113,6 +113,7 @@ export function RouteCrm() {
           'from emails, calls, chats, and tasks.',
         ]}
         cta="crm_hero_get_started"
+        tutorial="crm"
       />
       <WorkspaceDesktopDemo
         heroFrame
