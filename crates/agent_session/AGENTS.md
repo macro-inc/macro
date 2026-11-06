@@ -20,7 +20,12 @@ consumer talks to.
 - `src/domain/read.rs` and `src/inbound/toolset/read_agent_session.rs`: bounded,
   view-authorized conversation reads using the shared transcript fold.
 - `src/domain/updates.rs`: owner-scoped blocked and stalled coding-session updates,
-  capped to 25 sessions before folding their logs.
+  capped to 25 sessions before folding their logs. Served to the caller by
+  `GET /agent-sessions/updates` (`inbound/axum_router/updates.rs`) and to the
+  `ListAgentUpdates` tool by `/internal/coding-agents/updates`.
+- `src/domain/session_task.rs`: a session's task. The `link_task` MCP tool and
+  `PUT /agent-sessions/{id}/task` (`inbound/axum_router/task.rs`, owner only)
+  share `SessionTasks::link_task`.
 - `src/outbound/postgres.rs`: the session repository.
 - `src/outbound/broker_lifecycle_publisher.rs` /
   `broker_log_realtime.rs`: Kafka publication of lifecycle and log events.

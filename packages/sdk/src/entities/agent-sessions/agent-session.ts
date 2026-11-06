@@ -5,6 +5,7 @@ import type {
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionResponse,
+  AgentUpdateKind,
   ArchiveCause,
   AutoArchivePreferencesBody,
   CodingPreferencesBody,
@@ -24,6 +25,7 @@ import {
   type SharePermissionOptions,
   sharePermissionBody,
 } from '../sharing/permissions';
+import { Task } from '../tasks/task';
 import { User } from '../users/user';
 import {
   type AgentActivityOptions,
@@ -95,6 +97,64 @@ export type SessionPullRequest = {
   linkedBy?: User;
   /** When it was linked. */
   createdAt: string;
+};
+
+/** A request a session is waiting on its owner to answer, or a session gone quiet. */
+export type AgentSessionUpdate = {
+  /** The session. */
+  session: AgentSession;
+  /** The session's name. */
+  sessionName: string;
+  /** The runtime the session runs on. */
+  harness: string;
+  /** The session's pull request, if it has one. */
+  pullRequestUrl?: string;
+  /**
+   * What the session waits for: `permission` to run a tool, an `elicitation`
+   * question, a held `tool_approval`, or `stalled` with no activity for over
+   * 20 minutes.
+   */
+  kind: AgentUpdateKind;
+  /** What is asked, or why the session looks stalled. */
+  summary: string;
+  /** When the request was made, or the session's last activity. */
+  since: string;
+  /** The choices a permission request offers; empty for other kinds. */
+  options: string[];
+};
+
+/** The caller's sessions waiting for them, newest activity first. */
+export type AgentSessionUpdates = {
+  /** One entry per pending request or stalled session. */
+  items: AgentSessionUpdate[];
+  /** Whether sessions beyond the 25 most recent were left out. */
+  truncated: boolean;
+  /** Says what was left out, when truncated. */
+  truncationNotice?: string;
+};
+
+/** A tool call the session's runtime holds until its owner answers. */
+export type PendingToolApproval = {
+  /** Answer it with {@link ToolApproval.answer}. */
+  approval: ToolApproval;
+  /** What a person calls the server the tool is on. */
+  serverName: string;
+  /** The tool called. */
+  toolName: string;
+  /** What it was called with. */
+  arguments: unknown;
+  /** Who prompted the turn; absent for a bot on nobody's behalf. */
+  requestedBy?: User;
+};
+
+/** The task a session is linked to. */
+export type LinkedTask = {
+  /** The task. */
+  task: Task;
+  /** Put this in the pull request description so GitHub activity reaches the task. */
+  reference: string;
+  /** The session's pull request, now linked to the task, if it has one. */
+  pullRequestUrl?: string;
 };
 
 /** A GitHub repository the caller can point a managed session at. */
@@ -330,6 +390,77 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       await client.agentHarness.agentSessionsForPullRequest({ body: { url } }),
     );
     return sessionIds.map((id) => AgentSession.byId(client, id));
+  }
+
+  /**
+   * The caller's coding sessions waiting for an answer from them, or stalled
+   * for over 20 minutes, newest activity first. Only the 25 most recent such
+   * sessions are inspected.
+   */
+  static async updates(client: MacroClient): Promise<AgentSessionUpdates> {
+    const { items, truncated, truncationNotice } = unwrap(
+      await client.agentHarness.listAgentSessionUpdates(),
+    );
+    return {
+      items: items.map((item) => ({
+        session: AgentSession.byId(client, item.sessionId),
+        sessionName: item.sessionName,
+        harness: item.harness,
+        pullRequestUrl: item.pullRequestUrl ?? undefined,
+        kind: item.kind,
+        summary: item.summary,
+        since: item.since,
+        options: item.options,
+      })),
+      truncated,
+      truncationNotice: truncationNotice ?? undefined,
+    };
+  }
+
+  /**
+   * Tool calls this session's runtime holds until its owner approves them,
+   * oldest first. Answer each with {@link ToolApproval.answer}; only the
+   * owner may approve or decline. Permission requests and questions from the
+   * agent itself are answered with {@link control}.
+   */
+  async pendingApprovals(): Promise<PendingToolApproval[]> {
+    const { messages } = await this.foldedLog();
+    return messages.flatMap((message) =>
+      message.parts.flatMap((part) =>
+        part.kind === 'tool_approval' && part.status === 'pending'
+          ? [
+              {
+                approval: ToolApproval.byId(this.client, this, part.approvalId),
+                serverName: part.serverName,
+                toolName: part.toolName,
+                arguments: part.arguments,
+                requestedBy: part.requestedBy
+                  ? User.byId(this.client, part.requestedBy)
+                  : undefined,
+              },
+            ]
+          : [],
+      ),
+    );
+  }
+
+  /**
+   * Link this session to the task it works on, replacing any earlier link.
+   * Only the session's owner can link it, to a task they can view. The
+   * session's pull request, now or later, is linked to the task too.
+   */
+  async linkTask(task: Task): Promise<LinkedTask> {
+    const linked = unwrap(
+      await this.client.agentHarness.linkAgentSessionTask({
+        path: { session_id: this.id },
+        body: { taskId: task.id },
+      }),
+    );
+    return {
+      task: Task.byId(this.client, linked.taskId),
+      reference: linked.reference,
+      pullRequestUrl: linked.pullRequestUrl ?? undefined,
+    };
   }
 
   /**
