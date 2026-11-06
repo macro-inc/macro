@@ -299,9 +299,11 @@ prompts use **Maybe later**, except draft-save recovery uses a desktop close ico
 and keeps **Save as new draft** as its only action. Dismissal keeps the same
 suppression behavior.
 Recovery and update-ready prompts have accent-colored subject icons: mail for
-inbox reconnect and email access, a plug for integration reconnect, a draft for
-draft-save recovery, and a refresh arrow for app updates. Other error notices
-retain their failure-colored icons.
+inbox-only reconnect and email access, a calendar for **Reconnect email and
+calendar**, a plug for integration reconnect, a draft for draft-save recovery,
+and the Macro logo for app updates. Other error notices retain their
+failure-colored icons. Leading icons align with the title's first line even when
+the title or actions wrap.
 
 Staff Noise emails still create in-app notification rows, but do not send a new-notification
 event over GraphQL or the legacy WebSocket gateway, so they do not trigger browser popups.

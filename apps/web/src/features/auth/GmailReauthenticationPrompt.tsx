@@ -4,6 +4,7 @@ import { useAddInboxFlow } from '@core/email-link';
 import { reconnectScopes } from '@core/email-link/consent';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import CalendarIcon from '@icon/system/regular/calendar.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import {
   useEmailLinksQuery,
@@ -11,7 +12,7 @@ import {
 } from '@queries/email/link';
 
 /**
- * Surfaces a per-inbox "Reconnect Gmail" prompt for every linked inbox whose grant
+ * Surfaces a scope-specific reconnect prompt for every linked inbox whose grant
  * has died, driven by `needs_reauth` from the (already polled) links list. Because
  * the links list includes delegated/shared inboxes, a shared inbox's prompt fans
  * out to every sharer automatically. Replaces the old mount-once, primary-only
@@ -32,8 +33,14 @@ export function GmailReauthenticationPrompt() {
       ),
     key: (link) => link.id,
     toast: (link, dismiss) => ({
-      title: 'Reconnect inbox',
-      icon: EnvelopeIcon,
+      title:
+        reconnectScopes(link) === 'gmail_and_calendar'
+          ? 'Reconnect email and calendar'
+          : 'Reconnect inbox',
+      icon:
+        reconnectScopes(link) === 'gmail_and_calendar'
+          ? CalendarIcon
+          : EnvelopeIcon,
       color: 'var(--color-accent)',
       dismissLabel: t('common.maybeLater'),
       content(): string {

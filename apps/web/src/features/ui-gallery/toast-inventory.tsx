@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { type ToastContent, ToastType } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
+import MacroLogo from '@icon/macro-logo.svg';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import Bell from '@icon/system/regular/bell.svg';
@@ -198,8 +198,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: 'Persistent · closing suppresses the prompt for this session',
     create: (dismiss) => ({
       custom: {
-        title: 'Reconnect inbox',
-        icon: EnvelopeIcon,
+        title: 'Reconnect email and calendar',
+        icon: CalendarIcon,
         color: 'var(--color-accent)',
         dismissLabel: t('common.maybeLater'),
         content: () =>
@@ -260,7 +260,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         title: 'A new version of Macro is ready',
-        icon: ArrowClockwiseIcon,
+        icon: MacroLogo,
         color: 'var(--color-accent)',
         dismissLabel: t('common.maybeLater'),
         actions: [{ label: 'Reload', onClick: dismiss }],

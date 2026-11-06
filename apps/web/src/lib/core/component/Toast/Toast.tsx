@@ -347,67 +347,46 @@ export function ToastContent(props: {
           <Show
             when={props.embed}
             fallback={
-              <div
-                class={cn(
-                  'flex min-w-0 gap-2',
-                  singleRow() ? 'items-center' : 'items-start'
-                )}
-              >
-                <Show when={icon()}>
-                  {(Icon) => (
-                    <span
-                      aria-hidden="true"
-                      class={cn(
-                        'flex size-5 shrink-0 items-center justify-center',
-                        !singleRow() && 'mt-0.5',
-                        props.custom ? 'text-ink-muted' : styles()?.iconClass
-                      )}
-                      style={
-                        props.custom ? { color: props.custom.color } : undefined
-                      }
-                      data-icon-motion="none"
-                    >
-                      <Dynamic
-                        component={Icon()}
-                        class={props.custom ? 'size-4' : 'size-5'}
-                      />
-                    </span>
-                  )}
-                </Show>
-                <div class="min-w-0 flex-1">
-                  <div class="macro-toast-heading flex min-w-0 flex-wrap items-center gap-2">
-                    <Toast.Title class="min-w-0 flex-auto text-base font-medium leading-normal text-ink wrap-anywhere">
-                      <Show when={props.titleIcon}>
-                        {(Icon) => (
+              <div class={cn('min-w-0', icon() && 'pl-7')}>
+                <div class="macro-toast-heading flex min-w-0 flex-wrap items-center gap-2">
+                  <Toast.Title class="relative min-w-0 flex-auto text-base font-medium leading-normal text-ink wrap-anywhere">
+                    <Show when={icon()}>
+                      {(Icon) => (
+                        <span
+                          aria-hidden="true"
+                          class={cn(
+                            'absolute top-0.5 -left-7 flex size-5 items-center justify-center',
+                            props.custom
+                              ? 'text-ink-muted'
+                              : styles()?.iconClass
+                          )}
+                          style={
+                            props.custom
+                              ? { color: props.custom.color }
+                              : undefined
+                          }
+                          data-icon-motion="none"
+                        >
                           <Dynamic
                             component={Icon()}
-                            class="mr-1 inline-block size-4 align-text-bottom text-ink-muted"
-                            aria-hidden="true"
+                            class={props.custom ? 'size-4' : 'size-5'}
                           />
-                        )}
-                      </Show>
-                      {props.custom?.title ?? props.message}
-                    </Toast.Title>
-                    <Show when={inlineActions()}>
-                      <div class="flex max-w-full shrink-0 flex-wrap items-center gap-2">
-                        <ActionButtons
-                          actions={actions()}
-                          showDismiss={showDismissAction()}
-                          dismissLabel={dismissLabel()}
-                          onDismiss={props.onUserDismiss}
-                        />
-                      </div>
+                        </span>
+                      )}
                     </Show>
-                  </div>
-                  <Show when={hasBody()}>
-                    <Toast.Description class="mt-0.5 text-sm leading-normal text-ink-muted wrap-anywhere">
-                      {props.custom?.content
-                        ? props.custom.content()
-                        : props.subtext}
-                    </Toast.Description>
-                  </Show>
-                  <Show when={hasActions() && !inlineActions()}>
-                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <Show when={props.titleIcon}>
+                      {(Icon) => (
+                        <Dynamic
+                          component={Icon()}
+                          class="mr-1 inline-block size-4 align-text-bottom text-ink-muted"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </Show>
+                    {props.custom?.title ?? props.message}
+                  </Toast.Title>
+                  <Show when={inlineActions()}>
+                    <div class="flex max-w-full shrink-0 flex-wrap items-center gap-2">
                       <ActionButtons
                         actions={actions()}
                         showDismiss={showDismissAction()}
@@ -417,6 +396,23 @@ export function ToastContent(props: {
                     </div>
                   </Show>
                 </div>
+                <Show when={hasBody()}>
+                  <Toast.Description class="mt-0.5 text-sm leading-normal text-ink-muted wrap-anywhere">
+                    {props.custom?.content
+                      ? props.custom.content()
+                      : props.subtext}
+                  </Toast.Description>
+                </Show>
+                <Show when={hasActions() && !inlineActions()}>
+                  <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <ActionButtons
+                      actions={actions()}
+                      showDismiss={showDismissAction()}
+                      dismissLabel={dismissLabel()}
+                      onDismiss={props.onUserDismiss}
+                    />
+                  </div>
+                </Show>
               </div>
             }
           >
