@@ -7,10 +7,10 @@ import { formatRelativeTimestamp } from '@app/features/entity/utils/timestamp';
 import { t } from '@app/lib/i18n';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { debounce } from '@core/util/debounce';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType as PropertyEntityType } from '@service-properties/generated/schemas/entityType';
-import { debounce } from '@core/util/debounce';
 import { Button } from '@ui';
 import {
   createEffect,
@@ -306,33 +306,38 @@ function AgentActivityItemRow(props: {
           </button>
         </Show>
       </div>
-      <div
-        class="grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none"
-        classList={{
-          'grid-rows-[0fr]': !expanded(),
-          'grid-rows-[1fr]': expanded(),
-        }}
-        inert={!expanded()}
-      >
-        <div class="min-h-0 overflow-hidden">
-          <div class="ml-2.5 border-l border-edge-muted pb-1 pl-3.5">
-            <For each={[...props.item.steps].reverse()}>
-              {(step) => (
-                <div class="flex min-h-6 items-center justify-between gap-2 text-[11px] text-ink-muted touch:min-h-9">
-                  <span>
-                    <StepLabel step={step} />
-                  </span>
-                  <span class="tabular-nums text-ink-extra-muted">
-                    {formatRelativeTimestamp(new Date(step.latest.occurredAt), {
-                      condensed: true,
-                    })}
-                  </span>
-                </div>
-              )}
-            </For>
+      <Show when={multiple()}>
+        <div
+          class="grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none"
+          classList={{
+            'grid-rows-[0fr]': !expanded(),
+            'grid-rows-[1fr]': expanded(),
+          }}
+          inert={!expanded()}
+        >
+          <div class="min-h-0 overflow-hidden">
+            <div class="ml-2.5 border-l border-edge-muted pb-1 pl-3.5">
+              <For each={[...props.item.steps].reverse()}>
+                {(step) => (
+                  <div class="flex min-h-6 items-center justify-between gap-2 text-[11px] text-ink-muted touch:min-h-9">
+                    <span>
+                      <StepLabel step={step} />
+                    </span>
+                    <span class="tabular-nums text-ink-extra-muted">
+                      {formatRelativeTimestamp(
+                        new Date(step.latest.occurredAt),
+                        {
+                          condensed: true,
+                        }
+                      )}
+                    </span>
+                  </div>
+                )}
+              </For>
+            </div>
           </div>
         </div>
-      </div>
+      </Show>
     </div>
   );
 }

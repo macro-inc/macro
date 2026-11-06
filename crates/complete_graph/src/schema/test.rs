@@ -2057,6 +2057,7 @@ async fn agent_session_activity_appended_routes_only_the_requested_session(pool:
 
     let worker = tokio::spawn(async move { consumer.run().await });
     let wire_row = |correlation_id, id| ActivityWireRow {
+        agent_verb: None,
         agent_correlation_id: Some(correlation_id),
         id,
         actor_id: format!("bot|{bot_id}"),

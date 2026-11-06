@@ -1,5 +1,7 @@
 import type { JSX } from 'solid-js';
 
+export const useSidePanel = () => null;
+
 export const SidePanel = {
   Section: (props: { title: JSX.Element; children: JSX.Element }) => (
     <section>

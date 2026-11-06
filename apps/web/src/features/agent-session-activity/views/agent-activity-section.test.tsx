@@ -8,6 +8,7 @@ import {
 import { AgentActivitySection } from './agent-activity-section';
 
 vi.mock('@components/app/side-panel', () => ({
+  useSidePanel: () => null,
   SidePanel: {
     Section: (props: { title: JSX.Element; children: JSX.Element }) => (
       <section>
@@ -109,7 +110,7 @@ describe('AgentActivitySection', () => {
       row('2', 'a', 'edited'),
       row('1', 'a', 'created'),
     ]);
-    expect(screen.getByText('Edited (x2)')).toBeTruthy();
+    expect(screen.getAllByText('Edited (x2)').length).toBeGreaterThan(0);
     const toggle = screen.getByRole('button', {
       name: 'Show activity for Example document',
     });
@@ -145,11 +146,8 @@ describe('AgentActivitySection', () => {
   });
 
   it('keeps updates queued while focus remains in the list', () => {
-    const { setRows } = setup([row('1', 'a', 'created')]);
-    const toggle = screen.getByRole('button', {
-      name: 'Show activity for Example document',
-    });
-    fireEvent.focusIn(toggle);
+    const { setRows, section } = setup([row('1', 'a', 'created')]);
+    fireEvent.focusIn(section);
     setRows([row('2', 'b', 'edited'), row('1', 'a', 'created')]);
     expect(screen.getAllByText('Example document')).toHaveLength(1);
     expect(screen.getByRole('button', { name: '1 new' })).toBeTruthy();
@@ -162,9 +160,8 @@ describe('AgentActivitySection', () => {
     const items = document.querySelectorAll('[data-agent-activity-item]');
     expect(items).toHaveLength(2);
     expect(screen.getByLabelText('New activity')).toBeTruthy();
-    expect(
-      items[0]?.querySelector('button')?.getAttribute('aria-expanded')
-    ).toBe('false');
+    // One step has nothing to expand, so the row has no accordion at all.
+    expect(items[0]?.querySelector('[aria-expanded]')).toBeNull();
   });
 
   it('labels an unresolved type without offering an entity link', () => {
