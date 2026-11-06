@@ -4,11 +4,13 @@
 //! on the CLI; bollard has no compose support.)
 
 use std::os::unix::fs::MetadataExt;
+use std::process::Command;
 
 use anyhow::{Context, Result};
 use bollard::Docker;
 use bollard::models::{NetworkCreateRequest, VolumeCreateRequest};
 use macro_env_var::maybe_env_var;
+use serde::Deserialize;
 
 /// Run a future to completion on a throwaway current-thread runtime (xtask's
 /// flow is synchronous).
@@ -75,29 +77,50 @@ pub fn ensure_volume(name: &str) -> Result<()> {
 /// unchanged. Docker Desktop, rootless Docker or Podman, and the macOS runtimes
 /// already map container root to the host user, and would map a host uid to a
 /// subordinate id instead, so they keep the image's user (`None`).
+///
+/// The daemon is asked through the CLI, so the answer comes from the context
+/// or `DOCKER_HOST` that `docker compose` uses. Without a reachable daemon
+/// nothing starts, and generating the override (`gen-compose`, dry runs) still
+/// works with the image's users.
 pub fn checkout_user() -> Result<Option<String>> {
     if !cfg!(target_os = "linux") {
         return Ok(None);
     }
 
-    let info = block_on(async {
-        connect()?
-            .info()
-            .await
-            .context("reading Docker daemon info")
-    })?;
+    let info = Command::new("docker")
+        .args(["info", "--format", DAEMON_INFO_FORMAT])
+        .output();
+    let info: DaemonInfo = match info {
+        Ok(out) if out.status.success() => {
+            serde_json::from_slice(&out.stdout).context("parsing `docker info`")?
+        }
+        _ => {
+            eprintln!(
+                "warning: could not read Docker daemon info; containers keep their image's user."
+            );
+            return Ok(None);
+        }
+    };
     let rootless = info
-        .security_options
+        .security
         .unwrap_or_default()
         .iter()
         .any(|option| option.contains("rootless"));
-    let desktop = info.operating_system.as_deref() == Some("Docker Desktop");
-    if rootless || desktop {
+    if rootless || info.os == "Docker Desktop" {
         return Ok(None);
     }
 
     let checkout = std::fs::metadata(super::repo_root()).context("reading the checkout owner")?;
     Ok(Some(format!("{}:{}", checkout.uid(), checkout.gid())))
+}
+
+const DAEMON_INFO_FORMAT: &str =
+    r#"{"os":{{json .OperatingSystem}},"security":{{json .SecurityOptions}}}"#;
+
+#[derive(Deserialize)]
+struct DaemonInfo {
+    os: String,
+    security: Option<Vec<String>>,
 }
 
 fn already_exists(e: &bollard::errors::Error) -> bool {
