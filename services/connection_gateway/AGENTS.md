@@ -78,3 +78,5 @@ the socket themselves.
 ## Related
 
 - Rules: `.agents/rules/config-and-service-urls.md`
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

@@ -58,6 +58,11 @@ zip = { workspace = true, features = ["bzip2"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+aws-sdk-s3 = { workspace = true }
 docx_engine = { path = "../../crates/docx_engine" }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 pptx_engine = { path = "../../crates/pptx_engine" }
 tempfile = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }

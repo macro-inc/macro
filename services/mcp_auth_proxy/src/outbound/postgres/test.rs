@@ -175,10 +175,18 @@ async fn a_pending_authorization_is_taken_once(pool: PgPool) {
                 client_state: "state".to_owned(),
                 client_redirect_uri: "http://127.0.0.1:51000/oauth/callback".to_owned(),
                 browser_binding_digest: Some("binding-digest".to_owned()),
+                delivery: CodeDelivery::Manual,
             },
         )
         .await
         .expect("insert");
+
+    let found = store
+        .find_pending("session")
+        .await
+        .expect("find")
+        .expect("reading a flow leaves it pending");
+    assert_eq!(found.delivery, CodeDelivery::Manual);
 
     let pending = store
         .take_pending("session")
@@ -186,6 +194,7 @@ async fn a_pending_authorization_is_taken_once(pool: PgPool) {
         .expect("take")
         .expect("pending");
     assert_eq!(pending.client_state, "state");
+    assert_eq!(pending.delivery, CodeDelivery::Manual);
     assert_eq!(
         pending.browser_binding_digest.as_deref(),
         Some("binding-digest")

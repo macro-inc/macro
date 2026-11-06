@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+uuid = { workspace = true }
 # `AgentSessionId` only. `default-features = false` drops the crate's CLI
 # binaries (clap, tokio), which the vocabulary does not need.
 agent_fold = { path = "../folds/agent_fold", default-features = false }

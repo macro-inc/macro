@@ -18,6 +18,7 @@ name = "contacts_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
+agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }

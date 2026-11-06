@@ -1,6 +1,7 @@
 import { createSessionComposerDraft } from '@app/features/block-agent/primitives/session-composer-draft';
 import type { InputAttachmentData } from '@channel/Input/types';
 import { preloadAgentFold } from '@core/agent-fold/client';
+import type { RestoreFocusDefault } from '@core/component/LexicalMarkdown/plugins/restore-focus';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
@@ -9,12 +10,14 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $getSelection,
+  $isRangeSelection,
   createEditor,
   type LexicalEditor,
 } from 'lexical';
-import { createSignal } from 'solid-js';
+import { createSignal, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { RepositoryPicker } from '../views/RepositoryPicker';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
 
@@ -53,6 +56,10 @@ const editor = vi.hoisted(() => ({
     | undefined,
   text: '',
   readMarkdown: (): string => '',
+  /** Applies MarkdownShell's initial value when the editor connects. */
+  connect: undefined as ((markdown: string) => void) | undefined,
+  /** The fallback the composer configures with withRestoreFocus. */
+  restoreFocus: undefined as RestoreFocusDefault | undefined,
 }));
 
 vi.mock(
@@ -69,7 +76,10 @@ vi.mock(
         withLinks: () => builder,
         withHistory: () => builder,
         withCode: () => builder,
-        withRestoreFocus: () => builder,
+        withRestoreFocus: (fallback?: RestoreFocusDefault) => {
+          editor.restoreFocus = fallback;
+          return builder;
+        },
         withSkills: () => builder,
         withAgentCommands: () => builder,
         withFilePaste: (options: {
@@ -101,15 +111,26 @@ vi.mock(
 );
 
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
-  MarkdownShell: (props: { placeholder?: string }) => (
-    <div data-testid="editor">
-      {props.placeholder}
-      {/* Decorators portal their popups (the paste viewer) out of the editor. */}
-      <Portal>
-        <pre data-testid="portaled-text">Pasted text</pre>
-      </Portal>
-    </div>
-  ),
+  MarkdownShell: (props: {
+    placeholder?: string;
+    initialValue?: string;
+    onConnect?: () => void;
+  }) => {
+    // Like the real shell: apply the initial value once connected, then report it.
+    onMount(() => {
+      if (props.initialValue) editor.connect?.(props.initialValue);
+      props.onConnect?.();
+    });
+    return (
+      <div data-testid="editor">
+        {props.placeholder}
+        {/* Decorators portal their popups (the paste viewer) out of the editor. */}
+        <Portal>
+          <pre data-testid="portaled-text">Pasted text</pre>
+        </Portal>
+      </div>
+    );
+  },
 }));
 
 vi.mock('@channel/Input/Input', () => ({
@@ -163,7 +184,60 @@ beforeEach(() => {
   editor.readMarkdown = () => editor.text;
   editor.enter = undefined;
   editor.change = undefined;
+  editor.connect = undefined;
 });
+
+/** Replace the editor contents with the selection at the start, as Lexical's markdown import does. */
+function importAtStart(markdown: string) {
+  editor.lexical?.update(
+    () => {
+      const paragraph = $createParagraphNode().append(
+        $createTextNode(markdown)
+      );
+      $getRoot().clear().append(paragraph);
+      paragraph.selectStart();
+    },
+    { discrete: true }
+  );
+}
+
+/** Attach the editor to a document root, so focus and DOM selection run. */
+function connectRoot() {
+  const root = document.createElement('div');
+  root.contentEditable = 'true';
+  document.body.append(root);
+  editor.lexical?.setRootElement(root);
+  onTestFinished(() => {
+    editor.lexical?.setRootElement(null);
+    root.remove();
+  });
+  return root;
+}
+
+/** Focus the root as triggerFocusInput does; restoreFocusPlugin then focuses the editor, falling back to the composer's configured default. */
+function focusEditor(root: HTMLElement) {
+  root.focus();
+  editor.lexical?.focus(undefined, {
+    defaultSelection: editor.restoreFocus ?? 'rootStart',
+  });
+}
+
+/** Characters before the DOM caret in `root`, or undefined when it is elsewhere. */
+function domCaretOffset(root: HTMLElement) {
+  const selection = window.getSelection();
+  if (!selection?.anchorNode || !root.contains(selection.anchorNode)) return;
+  const range = document.createRange();
+  range.selectNodeContents(root);
+  range.setEnd(selection.anchorNode, selection.anchorOffset);
+  return range.toString().length;
+}
+
+function caretOffset() {
+  return editor.lexical?.read(() => {
+    const selection = $getSelection();
+    return $isRangeSelection(selection) ? selection.anchor.offset : undefined;
+  });
+}
 
 function type(text: string) {
   editor.text = text;
@@ -253,6 +327,46 @@ describe('Chat session input', () => {
     ));
     expect(editor.setMarkdown).toHaveBeenCalledWith('Document context');
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('focuses a draft seeded when the editor connects after the draft', () => {
+    let root: HTMLElement | undefined;
+    editor.connect = (markdown) => {
+      root = connectRoot();
+      importAtStart(markdown);
+    };
+    render(() => (
+      <ChatSessionInput initialInput="Ask about @Routine" onSend={vi.fn()} />
+    ));
+    if (!root) throw new Error('the editor never connected');
+    focusEditor(root);
+    expect(caretOffset()).toBe('Ask about @Routine'.length);
+    expect(domCaretOffset(root)).toBe('Ask about @Routine'.length);
+  });
+
+  it('focuses a draft the host applies to an open editor after the draft', () => {
+    editor.setMarkdown.mockImplementation(importAtStart);
+    const [draft, setDraft] = createSignal('');
+    render(() => (
+      <ChatSessionInput
+        draft={draft()}
+        onDraftChange={setDraft}
+        onSend={vi.fn()}
+      />
+    ));
+    const root = connectRoot();
+    // Typed in earlier, then left for the Compose with agent button.
+    focusEditor(root);
+    const button = document.createElement('button');
+    document.body.append(button);
+    onTestFinished(() => button.remove());
+    button.focus();
+    setDraft('Ask about @Routine');
+    // Applying the draft doesn't take focus.
+    expect(document.activeElement).toBe(button);
+    focusEditor(root);
+    expect(caretOffset()).toBe('Ask about @Routine'.length);
+    expect(domCaretOffset(root)).toBe('Ask about @Routine'.length);
   });
 
   it('shows only the model control and submits a trimmed follow-up', () => {

@@ -31,6 +31,13 @@ enforced by the ordinary backend APIs.
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
+- `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the
+  connected apps and custom MCP servers a running code execution's session
+  agent was given; `app.tools()` and `tool.call(args)` go through the harness,
+  which stamps the credential and holds each owner-account call in a turn
+  someone else prompted for the owner's approval. `discover(execution, name)`
+  and `Connector.inspect()` mirror `DiscoverConnectors`; `addServer` mirrors
+  `ConnectMcpServer`. Only works inside a running execution.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
   returns an `ExternalChat`.
 - `src/entities/me/`: `macro.me.update()` sets the caller's name and profile
@@ -45,6 +52,11 @@ enforced by the ordinary backend APIs.
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /
   `WebFetch` tools in their favour.
+- `src/entities/bots/`: `macro.bots` manages bots (`Bot`: profile, channel
+  grants, webhook URLs, `BotToken`s) with user auth, and reads the
+  authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
+  bot-management tools in its favour; `IssueBotCredential` stays, because its
+  chat card mints a token the model never reads.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 
 ## Boundaries
@@ -157,3 +169,5 @@ the existing gateway prefixes.
 
 - Workspace-import report/cancel endpoints remain app-only review plumbing,
   explicitly classified alongside the existing Notion routes in coverage skips.
+
+- `AgentSession.activity()` and invocation handles iterate durable agent-correlated history lazily; session visibility controls the feed.

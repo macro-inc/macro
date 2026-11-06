@@ -35,6 +35,7 @@ macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
 messages = { path = "../messages", features = ["broker", "outbound"] }
 models_properties = { path = "../models_properties" }
 properties = { path = "../properties", default-features = false, features = ["outbound"] }
+routine_program = { path = "../routine_program", features = ["schema"] }
 system_properties = { path = "../system_properties" }
 trigger_context = { path = "../trigger_context" }
 rdkafka = { workspace = true }
@@ -67,6 +68,7 @@ entity_registry = { path = "../entity_registry/entity_registry", features = ["ax
 entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils" }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 tower = { workspace = true }
+macro_tower_layers = { path = "../macro_tower_layers" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

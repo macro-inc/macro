@@ -15,6 +15,7 @@ export type SettingsTab =
   | 'Calendar'
   | 'Account'
   | 'API Keys'
+  | 'Account Managers'
   | 'Notifications'
   | 'Usage'
   | 'Billing'

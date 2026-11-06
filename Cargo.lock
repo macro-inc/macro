@@ -38,9 +38,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "account_manager"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "channels",
+ "chrono",
+ "entity_access",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_service_urls",
+ "macro_user_id",
+ "messages",
+ "model-error-response",
+ "rootcause",
+ "serde",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "user_api_key",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "activity"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "ai_toolset",
  "async-trait",
  "bot_id",
@@ -324,7 +352,9 @@ dependencies = [
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "mcp_client",
  "nutype",
+ "pipedream_mcp",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -339,6 +369,25 @@ dependencies = [
  "tokio-util",
  "tracing",
  "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_correlation"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "macro_auth",
+ "macro_db_migrator",
+ "rootcause",
+ "serde",
+ "serde_urlencoded",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]
@@ -387,6 +436,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "url",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -517,6 +567,7 @@ dependencies = [
  "agent_api_keys",
  "agent_changes",
  "agent_code_mode",
+ "agent_correlation",
  "agent_egress",
  "agent_fold",
  "agent_harness",
@@ -641,6 +692,7 @@ dependencies = [
  "rmcp",
  "roles_and_permissions",
  "rootcause",
+ "routine_program",
  "scheduled_action",
  "schemars 1.2.1",
  "search_service_client",
@@ -649,6 +701,7 @@ dependencies = [
  "serde_json",
  "share_permission_db_utils",
  "soup",
+ "soup_realtime",
  "sqlx",
  "sqs_client",
  "sqs_worker",
@@ -807,6 +860,7 @@ dependencies = [
 name = "agent_session"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent",
  "agent-client-protocol",
  "agent_fold",
@@ -827,6 +881,7 @@ dependencies = [
  "entity_access_db_utils",
  "entity_registry",
  "entity_registry_db_utils",
+ "futures",
  "genai_telemetry",
  "harness_id",
  "jev",
@@ -2145,6 +2200,7 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm 0.10.3",
  "agent_api_keys",
+ "agent_correlation",
  "ai_billing",
  "ai_usage",
  "analytics_client",
@@ -3862,6 +3918,7 @@ dependencies = [
 name = "calendar_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "authentication_service_client",
  "aws-sdk-secretsmanager",
@@ -3929,6 +3986,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "entity_mutation",
+ "feature_flags",
  "filter_ast",
  "futures",
  "invite_email",
@@ -4215,6 +4273,7 @@ name = "channels"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -4495,6 +4554,7 @@ dependencies = [
  "code_mode_assets",
  "futures",
  "rootcause",
+ "rustix 1.1.4",
  "serde",
  "serde_json",
  "tempfile",
@@ -4790,6 +4850,7 @@ dependencies = [
  "graphql_notification_inbox",
  "graphql_permission",
  "graphql_properties",
+ "graphql_registered_work",
  "graphql_scheduled_action",
  "graphql_soup",
  "graphql_work_feed",
@@ -4909,6 +4970,7 @@ dependencies = [
 name = "connection_gateway"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "async-trait",
  "aws-sdk-dynamodb",
@@ -5105,6 +5167,7 @@ dependencies = [
 name = "contacts_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -5162,6 +5225,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-lambda",
+ "aws-sdk-s3",
  "aws-sdk-sqs",
  "axum",
  "database_env_vars",
@@ -5184,6 +5248,8 @@ dependencies = [
  "macro_uuid",
  "model",
  "nix 0.29.0",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "pptx_engine",
  "rs-libreoffice-bindings",
  "s3_client",
@@ -5198,6 +5264,8 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "utoipa",
  "utoipa-swagger-ui",
  "workspace-hack",
@@ -6495,8 +6563,10 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "access_requests",
+ "account_manager",
  "activity",
  "agent_changes",
+ "agent_correlation",
  "agent_session",
  "agent_session_realtime",
  "ai_billing",
@@ -6553,6 +6623,7 @@ dependencies = [
  "entity_registry_db_utils",
  "external_chat",
  "favorites",
+ "feature_flags",
  "flate2",
  "foreign_entity",
  "forms",
@@ -6772,6 +6843,7 @@ name = "documents"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_billing",
  "ai_engine",
  "ai_toolset",
@@ -7186,6 +7258,7 @@ name = "email"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -7442,6 +7515,7 @@ dependencies = [
 name = "email_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "authentication_service_client",
  "aws-sdk-s3",
@@ -8441,6 +8515,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "upstream_error",
  "urlencoding",
  "uuid",
@@ -9271,6 +9346,7 @@ dependencies = [
  "async-graphql",
  "async-stream",
  "attention_feed",
+ "chrono",
  "futures",
  "graphql_common",
  "graphql_notification",
@@ -9279,6 +9355,7 @@ dependencies = [
  "notification_inbox",
  "soup",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -9317,6 +9394,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_registered_work"
+version = "0.1.0"
+dependencies = [
+ "agent_session",
+ "async-graphql",
+ "async-stream",
+ "attention_feed",
+ "chrono",
+ "futures",
+ "graphql_common",
+ "graphql_soup",
+ "macro_user_id",
+ "model-entity",
+ "soup_realtime",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_scheduled_action"
 version = "0.1.0"
 dependencies = [
@@ -9326,6 +9424,7 @@ dependencies = [
  "macro_uuid",
  "model_owner",
  "rootcause",
+ "routine_program",
  "scheduled_action",
  "serde_json",
  "tokio",
@@ -11145,6 +11244,7 @@ dependencies = [
  "ai_billing",
  "ai_usage",
  "async-trait",
+ "futures",
  "macro_env_var",
  "macro_user_id",
  "reqwest 0.13.4",
@@ -12359,6 +12459,7 @@ dependencies = [
 name = "macro_event_broker"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "kafka_util",
  "macro_event_topics",
  "rdkafka",
@@ -12637,9 +12738,12 @@ dependencies = [
  "fusionauth",
  "macro_auth",
  "macro_db_migrator",
+ "macro_tower_layers",
  "macro_user_id",
+ "model",
  "rand 0.9.4",
  "redis",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -12651,9 +12755,11 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "uuid",
+ "wiremock",
  "workspace-hack",
  "zeroize",
 ]
@@ -13819,6 +13925,7 @@ dependencies = [
 name = "notification_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sesv2",
@@ -16909,6 +17016,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "routine_program"
+version = "0.1.0"
+dependencies = [
+ "bots",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "routines"
 version = "0.1.0"
 dependencies = [
@@ -16922,6 +17043,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "reqwest 0.13.4",
+ "routine_program",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -17366,6 +17488,7 @@ dependencies = [
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mention_utils",
@@ -17378,6 +17501,7 @@ dependencies = [
  "rdkafka",
  "reqwest 0.13.4",
  "rootcause",
+ "routine_program",
  "serde",
  "serde_json",
  "sqlx",

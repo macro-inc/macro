@@ -1,7 +1,9 @@
 import MacroLogo from '@icon/macro-logo.svg';
 import { type JSX, type ParentProps, Show } from 'solid-js';
+import type { TutorialVideoId } from '../../core/tutorial-videos';
 import { DemoInteractionBoundary } from '../DemoInteractionBoundary';
 import { FeaturePage, FeaturePageCta } from '../FeaturePage';
+import { TutorialVideoDialog } from '../TutorialVideoDialog';
 import '../email/email-hero.css';
 import './product-page.css';
 import './product-demo-stage.css';
@@ -39,6 +41,8 @@ export function ProductHero(props: {
   title: readonly [string, string];
   description: string | readonly [string, string];
   cta?: string;
+  /** The Block tutorial that "Watch demo" opens beside the CTA. */
+  tutorial?: TutorialVideoId;
 }) {
   return (
     <header class="feature-page-hero email-page-hero">
@@ -57,7 +61,12 @@ export function ProductHero(props: {
           </>
         )}
       </p>
-      <Show when={props.cta}>{(cta) => <FeaturePageCta name={cta()} />}</Show>
+      <div class="feature-page-hero-actions">
+        <Show when={props.cta}>{(cta) => <FeaturePageCta name={cta()} />}</Show>
+        <Show when={props.tutorial}>
+          {(tutorial) => <TutorialVideoDialog tutorial={tutorial()} />}
+        </Show>
+      </div>
     </header>
   );
 }

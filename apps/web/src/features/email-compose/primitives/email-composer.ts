@@ -75,6 +75,8 @@ import { observeDraftIdentity } from './draft-identity';
 import {
   createDraftPersistence,
   deleteDraftForDiscard,
+  type KeptAsNewDraftReason,
+  recordKeptAsNewDraft,
 } from './draft-persistence';
 import { observeDraftRestoration } from './draft-restoration';
 import { createDraftSaveNotice } from './draft-save-notice';
@@ -271,7 +273,11 @@ export function createEmailComposer(props: EmailComposerOptions) {
       if (persistencePaused()) return;
       if (props.drafts.retryDraft) {
         void retryDraft().catch(props.notices.reportError);
-      } else detachFromObsoleteDraft('Saving your edits as a new draft.');
+      } else
+        detachFromObsoleteDraft(
+          'save-rejected',
+          'Saving your edits as a new draft.'
+        );
     },
     handleAlreadySent,
     async () => {
@@ -285,6 +291,11 @@ export function createEmailComposer(props: EmailComposerOptions) {
       const draftId = session.draftId();
       if (draftId && session.serverConfirmed())
         await attachmentPersistence.upload(draftId);
+    },
+    (local) => {
+      const edit = persistence.acknowledgedEdit(local);
+      if (edit !== undefined)
+        persistedEditVersion = Math.max(persistedEditVersion, edit);
     }
   );
   const persistedInboxId = session.inboxId;
@@ -543,6 +554,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
         draft: snapshot.draft,
         inboxId: snapshot.inboxId,
         attachments: snapshot.attachments,
+        edit: snapshot.revision,
       });
     },
     paused: persistencePaused,
@@ -1175,7 +1187,14 @@ export function createEmailComposer(props: EmailComposerOptions) {
     }
   };
 
-  const detachFromObsoleteDraft = (message: string) => {
+  const detachFromObsoleteDraft = (
+    reason: KeptAsNewDraftReason,
+    message: string
+  ) => {
+    recordKeptAsNewDraft(reason, {
+      draftId: session.draftId(),
+      unacknowledgedEdits: editVersion - persistedEditVersion,
+    });
     identityVersion += 1;
     autosave.cancel();
     session.dispatch({ type: 'reset' });
@@ -1235,6 +1254,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
       if (state.type === 'scheduled') {
         if (editVersion > persistedEditVersion) {
           detachFromObsoleteDraft(
+            'scheduled-elsewhere',
             'This email was scheduled in another tab. Your newer text was kept as a new draft.'
           );
           return;
@@ -1274,6 +1294,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
       const wasScheduled = schedule.state().type === 'scheduled';
       if (editVersion > persistedEditVersion) {
         detachFromObsoleteDraft(
+          state.type === 'sent' ? 'sent-elsewhere' : 'changed-elsewhere',
           state.type !== 'sent'
             ? 'The draft changed elsewhere. Your newer text was kept as a new draft.'
             : wasScheduled

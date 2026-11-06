@@ -64,6 +64,10 @@ pub struct CallRecordArchivedMetadata {
     pub has_recording: bool,
     /// Reason the call was archived.
     pub archive_reason: CallArchiveReason,
+    /// Whether the call's discussion is a thread in its channel, whose row
+    /// already shows the ending. False in events published before this existed.
+    #[serde(default)]
+    pub channel_thread: bool,
 }
 
 /// Metadata for [`CallTopicEvent::RecordUpdated`].
