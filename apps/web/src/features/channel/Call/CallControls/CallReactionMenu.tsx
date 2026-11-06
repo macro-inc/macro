@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import Smiley from '@icon/system/regular/smiley.svg';
 import { Popover } from '@kobalte/core/popover';
-import { Button } from '@ui';
+import { Button, Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import {
   CALL_REACTION_EMOJIS,
@@ -10,15 +10,21 @@ import {
 
 export function CallReactionRow(props: {
   onReaction: (emoji: CallReactionEmoji) => void;
+  inMenu?: boolean;
 }) {
   const [focused, setFocused] = createSignal(0);
-  const buttons: HTMLButtonElement[] = [];
+  const buttons: HTMLElement[] = [];
   return (
     <div
-      role="toolbar"
+      role={props.inMenu ? 'group' : 'toolbar'}
       aria-label={t('calls.reactions')}
       class="flex items-center justify-center gap-1 p-1"
       onKeyDown={(event) => {
+        if (
+          props.inMenu &&
+          ['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)
+        )
+          return;
         const offset = ['ArrowRight', 'ArrowDown'].includes(event.key)
           ? 1
           : ['ArrowLeft', 'ArrowUp'].includes(event.key)
@@ -38,21 +44,37 @@ export function CallReactionRow(props: {
       }}
     >
       <For each={CALL_REACTION_EMOJIS}>
-        {(emoji, index) => (
-          <Button
-            ref={(element) => {
-              buttons[index()] = element;
-            }}
-            variant="ghost"
-            size="icon-lg"
-            aria-label={emoji}
-            tabIndex={focused() === index() ? 0 : -1}
-            onFocus={() => setFocused(index())}
-            onClick={() => props.onReaction(emoji)}
-          >
-            <span class="text-xl">{emoji}</span>
-          </Button>
-        )}
+        {(emoji, index) =>
+          props.inMenu ? (
+            <Dropdown.Item
+              ref={(element: HTMLDivElement) => {
+                buttons[index()] = element;
+              }}
+              class="size-10 shrink-0 justify-center rounded-full p-0"
+              aria-label={emoji}
+              textValue={emoji}
+              closeOnSelect={false}
+              onFocus={() => setFocused(index())}
+              onSelect={() => props.onReaction(emoji)}
+            >
+              <span class="text-xl">{emoji}</span>
+            </Dropdown.Item>
+          ) : (
+            <Button
+              ref={(element) => {
+                buttons[index()] = element;
+              }}
+              variant="ghost"
+              size="icon-lg"
+              aria-label={emoji}
+              tabIndex={focused() === index() ? 0 : -1}
+              onFocus={() => setFocused(index())}
+              onClick={() => props.onReaction(emoji)}
+            >
+              <span class="text-xl">{emoji}</span>
+            </Button>
+          )
+        }
       </For>
     </div>
   );

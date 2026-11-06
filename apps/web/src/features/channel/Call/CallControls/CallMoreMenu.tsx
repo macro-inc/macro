@@ -155,6 +155,7 @@ export function CallMoreMenu(props: {
             <Show when={props.compact && props.onReaction}>
               <Dropdown.Group>
                 <CallReactionRow
+                  inMenu
                   onReaction={(emoji) => props.onReaction?.(emoji)}
                 />
               </Dropdown.Group>

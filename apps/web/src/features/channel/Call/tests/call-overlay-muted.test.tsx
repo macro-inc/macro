@@ -837,7 +837,7 @@ it('leads shared-screen and speaking chips with their action icon before the ava
     'Presenter'
   );
   setUpCallState([participant]);
-  mocks.callContext.isParticipantSpeaking = () => true;
+  (mocks.callContext as CallState).isParticipantSpeaking = () => true;
   const { container } = render(() => <CallOverlay onLeave={() => {}} />);
   const share = container.querySelector('[data-call-stage-chip="share"]');
   expect(share?.firstElementChild?.getAttribute('data-macro-icon')).toBe(

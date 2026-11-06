@@ -149,9 +149,7 @@ it.each([false, true])(
       key: 'ArrowDown',
     });
     await screen.findByRole('menuitem', { name: /Layout/ });
-    expect(!!screen.queryByRole('toolbar', { name: 'Reactions' })).toBe(
-      compact
-    );
+    expect(!!screen.queryByRole('group', { name: 'Reactions' })).toBe(compact);
   }
 );
 
@@ -186,4 +184,31 @@ it('uses the shared group boundary as the single divider above shortcuts', async
       .getAllByRole('group')[0]
       .parentElement?.classList.contains('divide-y')
   ).toBe(true);
+});
+
+it('reaches compact reactions by keyboard and can continue into the menu', async () => {
+  const send = vi.fn();
+  render(() => (
+    <CallMoreMenu
+      compact
+      layout="auto"
+      onLayoutChange={() => {}}
+      hasScreenShare={false}
+      hideParticipants={false}
+      onHideParticipantsChange={() => {}}
+      onReaction={send}
+      onOpenChange={() => {}}
+    />
+  ));
+  fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+    key: 'ArrowDown',
+  });
+  const first = await screen.findByRole('menuitem', { name: '👍' });
+  await waitFor(() => expect(document.activeElement).toBe(first));
+  await userEvent.setup().keyboard('{ArrowRight}{Enter}');
+  expect(send).toHaveBeenCalledWith('👏');
+  const last = screen.getByRole('menuitem', { name: '🎉' });
+  last.focus();
+  await userEvent.setup().keyboard('{ArrowDown}');
+  expect(document.activeElement?.textContent).toContain('Layout');
 });
