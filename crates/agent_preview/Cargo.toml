@@ -21,7 +21,7 @@ hyper = { workspace = true, features = ["client", "http1"] }
 hyper-util = { workspace = true }
 rand = { workspace = true }
 rootcause = { workspace = true }
-russh = { version = "0.63.3", default-features = false, features = ["ring"] }
+russh = { version = "0.64.1", default-features = false, features = ["ring"] }
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 schemars = { workspace = true }
 serde = { workspace = true }
