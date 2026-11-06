@@ -30,6 +30,7 @@ pub mod instance;
 pub mod inventory;
 pub mod kafka;
 pub mod kickstart;
+pub mod kubernetes;
 pub mod local_env;
 pub mod localstack;
 pub mod mailpit;
