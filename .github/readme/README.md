@@ -41,21 +41,24 @@ Compare navigation icons and body text at equal output widths, not the number
 of rows or cards; each surface has its own layout density.
 
 Content stops at the viewport edge rather than using a
-different content-dependent aspect ratio for every image. Product pixels are
-never stretched, rewritten, or generated.
+different content-dependent aspect ratio for every image. Do not stretch product
+pixels. Email and CRM use the explicitly authorized, visibly labeled demo-content
+edits below; the remaining screenshots retain their original product content.
 
-- Email: Signal inbox with the calendar-invite filter, keeping the approved
-  invitation-overview content at baseline zoom. The filter excludes login-code
-  emails and private address previews; it was cleared after capture.
+- Email: labeled demo correspondence in the Signal inbox. Fictional sender names,
+  subjects, previews, row-type icons, and account identity replace real email
+  content. Navigation, controls, row spacing, dates, and framing retain the
+  original capture pixels.
 - Chat: the November 4 feature-request conversation, distinct from the header.
 - Tasks: restored original split capture with mixed statuses, assigned work, and
   a completed task with its linked discussion and code change.
 - Docs: the same PRD recaptured at baseline zoom.
 - Agents, Calendar: existing captures reframed consistently.
 - Databases: full original Donations Example capture, preserving all columns.
-- CRM: fresh desktop board capture at 100% app zoom, showing active deal stages,
-  owners, and revenue. Board layout replaces the uneven table rows. No records
-  were edited; neighboring columns stop naturally at the viewport edge.
+- CRM: desktop board at 100% zoom with labeled demo company names. Only company
+  title regions change; stages, counts, owner labels and avatars, revenue values,
+  card sizes, and controls retain the original capture pixels. No live records
+  were edited. Neighboring columns stop naturally at the viewport edge.
 - Calls: An internal group recording, paused near 0:35. People are on
   camera without a screen share. Portrait video and black bars are inherent in
   the recording; the transcript was scrolled independently.
@@ -65,8 +68,14 @@ are retained in the November 5 and 6 screenshot packages outside the repository.
 
 Preserve the supplied logo proportions, never upscale its raster, and check the
 transparent header against light and dark backgrounds. Keep image alt text and
-this asset guide in sync with replacements. Do not paint over real product text
-or fabricate people, messages, statuses, or results.
+this asset guide in sync with replacements. Keep demo-content images labeled
+and document their scope. Outside the authorized demo text and icon regions,
+preserve the original pixels; do not fabricate product controls, statuses,
+agent results, or live records.
+
+For the November 6 demo revisions, pixel comparison confirmed zero changes
+outside the declared content-edit regions and disclosure labels. Source images
+and edit-region manifests remain in the local demo screenshot package.
 
 Keep navigation when it adds context. Exclude system chrome, pointer highlights,
 and tooltips. Inspect all visible content before staging. Exclude credentials
