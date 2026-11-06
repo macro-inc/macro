@@ -28,6 +28,7 @@ export default {
   tabRuntimes: 'Runtimes',
   tabMcpServer: 'MCP server',
   tabApiKeys: 'API Keys',
+  tabAccountManagers: 'Account Managers',
   tabBots: 'Bots',
   tabDebug: 'Debug',
 

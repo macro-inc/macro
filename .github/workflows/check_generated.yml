@@ -10,6 +10,7 @@ name: check generated workflows
     - crates/macro_event_topics/**
     - '.github/workflows/**'
     - '.github/kafka-cluster-topics.json'
+  workflow_call: {}
 jobs:
   check-workflows:
     runs-on: namespace-profile-linux-small

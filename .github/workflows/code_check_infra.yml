@@ -10,6 +10,7 @@ name: infra code check
     - ready_for_review
     branches:
     - main
+  workflow_call: {}
 jobs:
   path-check:
     runs-on: namespace-profile-linux-small
@@ -33,7 +34,7 @@ jobs:
   biome-check:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    if: needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled')
     name: Biome Check
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
@@ -59,7 +60,7 @@ jobs:
   check:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    if: needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled')
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
@@ -108,5 +109,5 @@ jobs:
 
         echo "✅ All jobs passed or were skipped"
 concurrency:
-  group: code-check-infra-${{ github.ref }}
+  group: code-check-infra-${{ github.event.action == 'labeled' && github.run_id || github.ref }}
   cancel-in-progress: true

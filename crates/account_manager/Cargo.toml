@@ -1,0 +1,46 @@
+[package]
+edition = "2024"
+name = "account_manager"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "dep:utoipa",
+]
+outbound = [
+  "dep:channels",
+  "dep:entity_access",
+  "dep:macro_service_urls",
+  "dep:messages",
+]
+postgres = ["dep:sqlx"]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+channels = { path = "../channels", optional = true, default-features = false, features = ["ports"] }
+chrono = { workspace = true, features = ["serde"] }
+entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_service_urls = { path = "../macro_service_urls", optional = true }
+macro_user_id = { path = "../macro_user_id" }
+messages = { path = "../messages", optional = true, default-features = false, features = ["ports"] }
+model-error-response = { path = "../model-error-response", optional = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+user_api_key = { path = "../user_api_key" }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true, features = ["serde", "v7"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -294,6 +294,79 @@ describe('createNotificationInboxSource', () => {
     expect(row('document:doc-s#top_level').count).toBe(3);
   });
 
+  it('clears the inbox in batches, hiding the loaded rows it takes', async () => {
+    vi.useFakeTimers();
+    let batch = 0;
+    const { fake, feed, rowIds } = await loaded({
+      get ClearNotificationInbox() {
+        batch += 1;
+        return {
+          clearNotificationInbox: {
+            rowCount: 2,
+            undoToken: `undo-${batch}`,
+            nextCursor: batch < 3 ? `cursor-${batch}` : null,
+          },
+        };
+      },
+      UndoNotificationInboxRowsDone: {
+        undoNotificationInboxRowsDone: { patches: [] },
+      },
+    });
+
+    const cleared = await feed.clear({
+      rowTypes: ['task'],
+      unreadOnly: false,
+    });
+
+    expect(cleared.count).toBe(6);
+    const clears = fake.mutations.filter(
+      ({ name }) => name === 'ClearNotificationInbox'
+    );
+    expect(clears.map(({ variables }) => variables)).toEqual([
+      {
+        input: {
+          scope: { rowTypes: ['TASK'] },
+          unreadOnly: false,
+          since: null,
+          cursor: null,
+        },
+      },
+      expect.objectContaining({
+        input: expect.objectContaining({ cursor: 'cursor-1' }),
+      }),
+      expect.objectContaining({
+        input: expect.objectContaining({ cursor: 'cursor-2' }),
+      }),
+    ]);
+    // Only the task row matches what was cleared.
+    expect(rowIds()).toEqual([
+      'document:doc-a#top_level',
+      'document:doc-b#top_level',
+    ]);
+
+    await cleared.undo();
+    const undos = fake.mutations.filter(
+      ({ name }) => name === 'UndoNotificationInboxRowsDone'
+    );
+    expect(undos.map(({ variables }) => variables.input)).toEqual([
+      expect.objectContaining({ undoToken: 'undo-1' }),
+      expect.objectContaining({ undoToken: 'undo-2' }),
+      expect.objectContaining({ undoToken: 'undo-3' }),
+    ]);
+    expect(rowIds()).toContain('document:doc-a#task');
+  });
+
+  it('shows the cleared rows again when the clear fails', async () => {
+    vi.useFakeTimers();
+    const { feed, rowIds } = await loaded();
+
+    await expect(
+      feed.clear({ rowTypes: ['task'], unreadOnly: false })
+    ).rejects.toThrow();
+
+    expect(rowIds()).toContain('document:doc-a#task');
+  });
+
   it('shows a done row again when a newer notification reopens it', async () => {
     vi.useFakeTimers();
     const { fake, feed, row, rowIds } = await loaded(doneResult);

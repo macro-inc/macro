@@ -22,15 +22,15 @@ mod subscriptions;
 
 pub use context::{NotificationInboxGraphqlContext, NotificationInboxGraphqlService};
 pub use inputs::{
-    GraphqlNotificationInboxRowType, MarkNotificationInboxNotificationDoneInput,
-    MarkNotificationInboxRowsDoneInput, MarkNotificationInboxRowsSeenInput, NotificationInboxInput,
-    NotificationInboxRowTargetInput, NotificationInboxScopeInput,
-    UndoNotificationInboxRowsDoneInput,
+    ClearNotificationInboxInput, GraphqlNotificationInboxRowType,
+    MarkNotificationInboxNotificationDoneInput, MarkNotificationInboxRowsDoneInput,
+    MarkNotificationInboxRowsSeenInput, NotificationInboxInput, NotificationInboxRowTargetInput,
+    NotificationInboxScopeInput, UndoNotificationInboxRowsDoneInput,
 };
 pub use mutations::{
-    MarkNotificationInboxNotificationDonePayload, MarkNotificationInboxRowsDonePayload,
-    MarkNotificationInboxRowsSeenPayload, NotificationInboxMutationRoot,
-    UndoNotificationInboxRowsDonePayload,
+    ClearNotificationInboxPayload, MarkNotificationInboxNotificationDonePayload,
+    MarkNotificationInboxRowsDonePayload, MarkNotificationInboxRowsSeenPayload,
+    NotificationInboxMutationRoot, UndoNotificationInboxRowsDonePayload,
 };
 pub use objects::{
     GraphqlNotificationInboxActor, GraphqlNotificationInboxActorKind,
