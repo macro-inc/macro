@@ -447,6 +447,8 @@ pub enum MessageKind {
     /// The root of a channel call's thread. Its id is the call id, and it
     /// stands for the call rather than for anything the caller said.
     CallRoot,
+}
+
 /// The immutable audience of a durable message thread.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

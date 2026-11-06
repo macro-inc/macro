@@ -1305,6 +1305,9 @@ async fn an_agent_asking_for_a_person_names_them_and_counts_its_hop() {
             hops: 2,
         })
     );
+}
+
+#[tokio::test]
 async fn a_public_prompt_never_expands_a_private_quote() {
     let parent = channel();
     let prompt = posted(&parent, 70, None, "wolf@example.com", "Quoted preview", 30);

@@ -699,9 +699,7 @@ async fn by_ids_inherits_the_parent_thread_access(pool: PgPool) -> anyhow::Resul
 /// A private thread's audience is its initiating person and invited agents,
 /// so a document viewer cannot open a session that runs in one.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_private_document_thread_does_not_share_its_session(
-    pool: PgPool,
-) -> anyhow::Result<()> {
+async fn a_private_document_thread_does_not_share_its_session(pool: PgPool) -> anyhow::Result<()> {
     let fixture = seed(&pool).await?;
     let entities = [EntityType::AgentSession.with_entity_string(fixture.private.to_string())];
     let root = Uuid::now_v7();

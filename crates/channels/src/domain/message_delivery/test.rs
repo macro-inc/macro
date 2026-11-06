@@ -679,6 +679,8 @@ async fn an_agent_post_for_nobody_shares_nothing() {
     tokio::time::sleep(Duration::from_secs(60)).await;
 
     assert!(log.shares.lock().unwrap().is_empty());
+}
+
 #[tokio::test]
 async fn private_messages_reach_only_the_initiator_without_shared_channel_effects() {
     let log = Log::default();
@@ -687,7 +689,13 @@ async fn private_messages_reach_only_the_initiator_without_shared_channel_effect
         user_id: SENDER.into(),
         bot_ids: vec![],
     };
-    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        Creations::default(),
+    );
     delivery
         .publish(event(MessageChange::Posted {
             message: private,

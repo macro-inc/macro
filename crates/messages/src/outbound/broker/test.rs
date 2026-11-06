@@ -282,6 +282,8 @@ fn only_finalized_bot_replies_reach_agent_triggers_with_or_without_a_mention() {
         };
         assert_eq!(patched.completed_reply, expected.then_some(expected_post));
     }
+}
+
 #[tokio::test]
 async fn private_posts_publish_only_the_audience_aware_fact() {
     let parent = MessageParent::Channel(Uuid::from_u128(20));
