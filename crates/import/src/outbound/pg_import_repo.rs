@@ -125,6 +125,7 @@ struct ImportRunDbRow {
     scanned_pages: Option<i32>,
     scanned_data_sources: Option<i32>,
     review_id: Option<Uuid>,
+    review_session_id: Option<Uuid>,
 }
 
 impl TryFrom<ImportRunDbRow> for ImportRun {
@@ -149,6 +150,7 @@ impl TryFrom<ImportRunDbRow> for ImportRun {
             updated_at: row.updated_at,
             scanned,
             review_id: row.review_id,
+            review_session_id: row.review_session_id,
         })
     }
 }
@@ -593,7 +595,7 @@ impl ImportRepo for PgImportRepo {
                    CASE WHEN status = 'running' THEN scanned_pages END AS scanned_pages,
                    CASE WHEN status = 'running' THEN scanned_data_sources END
                        AS scanned_data_sources,
-                   review_id
+                   review_id, review_session_id
             FROM import_run WHERE user_id = $1
             ORDER BY source
             "#,
