@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use crate::domain::enrollment::DeviceSecret;
 use crate::domain::ids::PairingId;
 use crate::domain::models::ComputerName;
 use uuid::Uuid;
@@ -212,11 +213,11 @@ impl Harnesses for FakeHarnesses {
             pairing_id: PairingId::new(Uuid::from_u128(
                 0x0000_0000_0000_7000_8000_0000_0000_0909 + generation,
             )),
-            device_secret: if generation == 0 {
+            device_secret: DeviceSecret::new(if generation == 0 {
                 "secret".to_owned()
             } else {
                 format!("secret-{generation}")
-            },
+            }),
         })
     }
 
@@ -372,7 +373,7 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
                 pairing_id: PairingId::new(Uuid::from_u128(
                     0x0000_0000_0000_7000_8000_0000_0000_0909
                 )),
-                device_secret: "secret".to_owned(),
+                device_secret: DeviceSecret::new("secret".to_owned()),
                 name: ComputerName::try_new("Ada").unwrap(),
                 service_url_overrides: BTreeMap::from([(
                     "OVERRIDE_AGENT_HARNESS_SERVICE_URL".to_owned(),

@@ -383,7 +383,7 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
         match client
             .claim(
                 enrollment.pairing_id.into_inner(),
-                &enrollment.device_secret,
+                enrollment.device_secret.expose(),
             )
             .await
         {

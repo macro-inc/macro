@@ -368,7 +368,9 @@ impl Harnesses for HostedHarnesses {
             .await?;
         Ok(HostedPairing {
             pairing_id: PairingId::new(pairing.pairing_id),
-            device_secret: pairing.device_secret,
+            device_secret: hosted_runtimes::domain::enrollment::DeviceSecret::new(
+                pairing.device_secret,
+            ),
         })
     }
 

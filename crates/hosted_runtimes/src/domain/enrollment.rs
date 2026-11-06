@@ -23,7 +23,8 @@ pub const INCUS_ENROLLMENT_KEY: &str = "user.macro.enrollment";
 pub struct Enrollment {
     pub computer_id: ComputerId,
     pub pairing_id: PairingId,
-    pub device_secret: String,
+    #[serde(serialize_with = "serialize_device_secret")]
+    pub device_secret: DeviceSecret,
     /// Display name the harness shows in Settings → Runtimes.
     pub name: ComputerName,
     /// `OVERRIDE_*` service URL variables (see `macro_service_urls`) macrod
@@ -262,6 +263,47 @@ impl Borrow<str> for PersonaConfigKey {
     fn borrow(&self) -> &str {
         self.as_str()
     }
+}
+
+/// A pairing credential, exposed only explicitly and wiped when dropped.
+#[derive(Clone, PartialEq, Eq, Deserialize)]
+#[serde(transparent)]
+pub struct DeviceSecret(String);
+
+impl DeviceSecret {
+    /// Take ownership of a credential received from the harness registry.
+    pub fn new(value: String) -> Self {
+        Self(value)
+    }
+    /// Expose the credential for enrollment transport or pairing.
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Drop for DeviceSecret {
+    fn drop(&mut self) {
+        zeroize::Zeroize::zeroize(&mut self.0);
+    }
+}
+
+impl std::fmt::Debug for DeviceSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("DeviceSecret(**redacted**)")
+    }
+}
+
+impl std::fmt::Display for DeviceSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
+}
+
+fn serialize_device_secret<S: serde::Serializer>(
+    secret: &DeviceSecret,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(secret.expose())
 }
 
 impl<'de> Deserialize<'de> for PersonaOsUser {

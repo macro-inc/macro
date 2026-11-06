@@ -126,7 +126,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 ## Typed boundaries
 
 - Use `domain::ids::{ComputerId, PairingId, HostId}` and `harness_id::HarnessId`; keep team IDs as UUIDs until a shared team identity exists. Convert only at external/storage boundaries.
-- Construct `ComputerName` to trim and validate display names.
+- Construct `ComputerName` to trim and validate display names. `DeviceSecret` redacts Debug/Display and zeroizes on drop; expose only for pairing or enrollment transport. It deliberately has no Serialize implementation.
 - Keep serde newtypes transparent and validate string deserialization through `TryFrom<String>`; serde does not allow `transparent` together with its `try_from` container attribute.
 
 ## Scope

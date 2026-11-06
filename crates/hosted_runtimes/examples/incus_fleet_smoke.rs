@@ -29,6 +29,7 @@ use hosted_runtimes::domain::models::{Computer, ControlPlaneId};
 use hosted_runtimes::domain::ports::Fleet;
 use hosted_runtimes::domain::size::ComputerSize;
 use hosted_runtimes::domain::{
+    enrollment::DeviceSecret,
     ids::{ComputerId, HostId, PairingId},
     models::ComputerName,
 };
@@ -129,7 +130,7 @@ async fn main() -> Result<(), rootcause::Report> {
     let enrollment = Enrollment {
         computer_id: computer.id,
         pairing_id: PairingId::new(Uuid::now_v7()),
-        device_secret: "smoke-test-not-a-secret".to_owned(),
+        device_secret: DeviceSecret::new("smoke-test-not-a-secret".to_owned()),
         name: computer.name.clone(),
         service_url_overrides: BTreeMap::new(),
         persona: None,

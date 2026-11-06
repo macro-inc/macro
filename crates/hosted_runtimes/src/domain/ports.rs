@@ -5,7 +5,7 @@ use harness_id::HarnessId;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::domain::enrollment::Enrollment;
+use crate::domain::enrollment::{DeviceSecret, Enrollment};
 use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, TimerKind};
 use crate::domain::models::{
@@ -312,7 +312,7 @@ pub enum InstanceStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostedPairing {
     pub pairing_id: PairingId,
-    pub device_secret: String,
+    pub device_secret: DeviceSecret,
 }
 
 /// The harness registry macrod pairs with.
