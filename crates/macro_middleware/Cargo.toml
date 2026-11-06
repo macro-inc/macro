@@ -16,6 +16,7 @@ macro_db_client = ["dep:macro_db_client", "dep:sqlx"]
 tracking = ["dep:ip_extractor"]
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation" }
 anyhow = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }

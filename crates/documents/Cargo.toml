@@ -49,6 +49,7 @@ attachment = [
 ]
 axum = [
   "dep:axum",
+  "dep:axum-extra",
   "dep:base64",
   "dep:entity_registry",
   "dep:jsonwebtoken",
@@ -94,7 +95,7 @@ outbound = [
   "ports",
 ]
 ports = ["dep:shared_entity_registry", "dep:tokio", "dep:tokio-retry"]
-schema = ["dep:utoipa", "macro_user_id/schema"]
+schema = ["dep:utoipa", "macro_user_id/schema", "pptx_engine?/openapi"]
 service = [
   "dep:entity_access_management",
   "dep:foreign_entity",
@@ -161,6 +162,7 @@ tokio-retry = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true }
 jsonwebtoken = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true }
@@ -225,3 +227,4 @@ serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "test-util"] }
 tower = { workspace = true }
 tracing-subscriber = { workspace = true }
+wiremock = { workspace = true }

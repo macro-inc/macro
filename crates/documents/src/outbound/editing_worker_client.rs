@@ -139,7 +139,12 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
         document_id: &str,
         document_token: &DocumentPermissionToken,
         request: &crate::domain::spreadsheet::SpreadsheetRequest,
-    ) -> anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse> {
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetResponse,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
+        use crate::domain::spreadsheet::SpreadsheetError;
+
         let mut headers = reqwest::header::HeaderMap::new();
         macro_tower_layers::inject_trace_headers(&mut headers);
         let response = self
@@ -153,18 +158,34 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                 "request": request,
             }))
             .send()
-            .await?;
+            .await
+            .map_err(|error| SpreadsheetError::Failed(error.into()))?;
         let status = response.status();
-        if !status.is_success() {
-            let body = response
-                .json::<serde_json::Value>()
+        if status.is_success() {
+            return response
+                .json()
                 .await
-                .unwrap_or_default();
-            let message = body.get("error").and_then(serde_json::Value::as_str)
-                .unwrap_or("Spreadsheet operation failed. Read the workbook again before retrying an edit.");
-            anyhow::bail!("{message} (HTTP {status})");
+                .map_err(|error| SpreadsheetError::Failed(error.into()));
         }
-        Ok(response.json().await?)
+
+        let body = response
+            .json::<serde_json::Value>()
+            .await
+            .unwrap_or_default();
+        let message = body
+            .get("error")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(
+                "Spreadsheet operation failed. Read the workbook again before retrying an edit.",
+            )
+            .to_owned();
+        Err(match status {
+            reqwest::StatusCode::BAD_REQUEST | reqwest::StatusCode::PAYLOAD_TOO_LARGE => {
+                SpreadsheetError::Invalid(message)
+            }
+            reqwest::StatusCode::CONFLICT => SpreadsheetError::RevisionConflict(message),
+            _ => SpreadsheetError::Failed(anyhow::anyhow!("{message} (HTTP {status})")),
+        })
     }
 
     #[cfg(feature = "ai_tools")]
@@ -199,6 +220,12 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                 .get("error")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("Word document operation failed. Read the document again before retrying an edit.");
+            // The editor refused the request (an unknown id, text not found); nothing changed.
+            if status == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
+                return Err(
+                    crate::domain::word_document::WordDocumentRejected(message.to_owned()).into(),
+                );
+            }
             anyhow::bail!("{message} (HTTP {status})");
         }
         Ok(response.json().await?)

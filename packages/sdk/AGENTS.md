@@ -11,17 +11,33 @@ enforced by the ordinary backend APIs.
 - `src/macro.ts`: public exports and namespace registration.
 - `documents.createCanvas()` creates shared content before returning a Document handle;
   it requires no browser open or upload.
+- `documents.createSpreadsheet()` and `documents.spreadsheet(document)` return a
+  `Spreadsheet` (`src/entities/documents/spreadsheet.ts`) whose `read`,
+  `calculate` and `applyEdits` run the spreadsheet tools' engine; code mode
+  hides `ReadSpreadsheet`, `CalculateSpreadsheet` and `EditSpreadsheet`.
 - File bytes must work inside code mode, whose sandbox reaches only Macro hosts:
   `documents.upload()` posts them to storage's `/documents/upload`, and
   `Document.bytes()` downloads through the CloudFront export host (`document-content`
   in the harness's `sdk_hosts`). Never return a presigned S3 URL as the only path.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
+- `Document.readPresentation`/`editPresentation`/`copyPresentation`,
+  `readWord`/`editWord`, and `readDesign`/`readPhotoshop`/`readIllustrator`
+  run the matching direct tools' services through storage routes; the edit
+  operation unions are generated from `pptx_engine::EditOp` and
+  `WordDocumentOperation` (`office-files.ts` aliases them).
 - `src/entities/workspace/namespace.ts`: filtered activity pages and iteration,
   agent sessions included.
 - `src/entities/search/namespace.ts`: `macro.search`, one unified search across
   every kind of item with the direct search tools' filters (types, exact match,
   tags, inbox, agent session transcripts), returning typed handles.
+- `src/entities/calendar/booking-namespace.ts`: `macro.calendar.booking`, booking links
+  (`BookingLink`), settings, booked meetings (`Booking`) and insights over calendar
+  `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the
+  route rejects when blank; `BookingLink` handles keep their `team` for edits.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
+  `agents.list()` reads storage agent records, which built-in personas lack;
+  `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
+  included) that the `ListCodingAgents` tool serves.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.
@@ -58,23 +74,30 @@ enforced by the ordinary backend APIs.
   bot-management tools in its favour; `IssueBotCredential` stays, because its
   chat card mints a token the model never reads.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
+- `src/calls/`: optional Node and browser LiveKit helpers, exported only as
+  `@macro-inc/sdk/calls/node` and `@macro-inc/sdk/calls/browser`. Keep them out of
+  `src/macro.ts` and its dependency graph; LiveKit runtimes stay optional peers.
+- `src/entities/calls/`: live and recorded call handles; token-bearing `CallConnection` never serializes its token.
 
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
+- Use POST to start channel calls and call-id scoped joins/leaves; the legacy GET starts a call as a side effect.
 - Keep notification mute, unmute, and snooze endpoints, including bulk item preferences, in the app-only coverage exclusions.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
 - `../sdk-docs/` generates the public TypeDoc reference and static docs Worker.
-  Runtime-specific bundles belong to their consumer, not this package.
+  Consumer application bundles belong to their consumer. The calls entry points
+  are built separately from core, with LiveKit and OpenTelemetry external.
 
 ## Checks
 
 Run from this directory: `bun test`, `bun run check`, `bun run coverage`, and
-`bun run lint`. Coverage requires each generated endpoint to be wrapped or
-explicitly classified in `src/coverage/skipped.ts`. Build output in `dist/` is
+`bun run lint`. After building, run `bun run check:pack` to verify isolated
+consumer imports, types, and bundle separation. Coverage requires each generated
+endpoint to be wrapped or explicitly classified in `src/coverage/skipped.ts`. Build output in `dist/` is
 excluded from source linting.
 
 ## Local agent APIs
@@ -85,6 +108,10 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- Dependency changes require refreshing both platform hashes in
+  `nix-support/node_modules-hashes.json`; use
+  `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
+  generation otherwise restores dependencies from the old SDK snapshot.
 - Every entity's namespace class carries one `@routing` sentence ("Use when …;
   not …") that agents route on, and may carry an `@agent` block: how that area
   of Macro works, for agents only. Both are stripped from the public
@@ -171,3 +198,16 @@ the existing gateway prefixes.
   explicitly classified alongside the existing Notion routes in coverage skips.
 
 - `AgentSession.activity()` and invocation handles iterate durable agent-correlated history lazily; session visibility controls the feed.
+
+## Call media entry points
+
+- See `CALLS.md` for the optional room helpers. `src/calls/common.ts` owns connection
+  cleanup, `node.ts` publishes caller-supplied frames, and `browser.ts` publishes
+  MediaStreams. Keep the existing one-time leave and audio DTX defaults.
+- Never log, trace, or serialize room tokens. Call spans use `@opentelemetry/api`
+  and are no-ops without a host tracer provider.
+- Node has no room-wide publish defaults, so `publishTrack` is wrapped to disable
+  audio DTX. Unpublish Node tracks by publication SID; browser tracks by object.
+- Keep LiveKit and OpenTelemetry external in the calls build so room objects and
+  tracing use the consumer's runtime instances. Do not re-export calls helpers
+  or their runtime types from `src/macro.ts`.

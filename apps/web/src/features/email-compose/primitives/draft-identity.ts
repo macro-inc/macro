@@ -170,6 +170,7 @@ function observeAvailableDraftIdentity(
               actions: [
                 {
                   label: 'Save as new draft',
+                  kind: 'save',
                   onClick: () => {
                     if (
                       disposed ||

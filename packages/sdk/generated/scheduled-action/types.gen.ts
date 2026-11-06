@@ -153,6 +153,11 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * Who a routine's code steps write as.
+ */
+export type CodeIdentity = 'agent' | 'owner';
+
+/**
  * One time a routine's code was brought to a new SDK.
  */
 export type CodeUpgrade = {
@@ -548,6 +553,7 @@ export type RunInfo = {
      * When the run counts as happening: its trigger's time.
      */
     at: string;
+    code_acts_as?: null | CodeIdentity;
     /**
      * When the routine's previous finished run started.
      */

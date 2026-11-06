@@ -14403,6 +14403,7 @@
     "trigger_context": [
       "crates/bot_id",
       "crates/cowlike",
+      "crates/macro_user_id",
       "crates/trigger_context",
       "crates/workspace-hack"
     ],

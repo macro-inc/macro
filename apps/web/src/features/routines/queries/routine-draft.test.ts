@@ -665,6 +665,82 @@ describe('routines with steps', () => {
   });
 });
 
+describe('operating as the user', () => {
+  const program: ScheduledAction = {
+    ...events,
+    task: {
+      steps: [
+        {
+          type: 'code',
+          id: 'post_it',
+          title: 'Post it',
+          source: 'export async function main() {}',
+        },
+      ],
+    },
+  };
+  const operating: ScheduledAction = {
+    ...program,
+    task: { ...(program.task as object), dangerously_operate_as_user: true },
+  };
+
+  it('reads the setting, absent meaning off', () => {
+    expect(loadedDraft(program).dangerouslyOperateAsUser).toBe(false);
+    expect(loadedDraft(operating).dangerouslyOperateAsUser).toBe(true);
+  });
+
+  it('leaves the task untouched by edits that do not change it', () => {
+    expect(draftToUpdateBody(loadedDraft(program), program)?.task).toBe(
+      program.task
+    );
+    expect(draftToUpdateBody(loadedDraft(operating), operating)?.task).toBe(
+      operating.task
+    );
+    const renamed = draftToUpdateBody(
+      { ...loadedDraft(program), name: 'Renamed' },
+      program
+    );
+    expect(renamed?.task).not.toHaveProperty('dangerously_operate_as_user');
+    expect(draftToCreateBody(loadedDraft(program)).task).not.toHaveProperty(
+      'dangerously_operate_as_user'
+    );
+  });
+
+  it('turns the setting on and off, and keeps it across other edits', () => {
+    const on = draftToUpdateBody(
+      { ...loadedDraft(program), dangerouslyOperateAsUser: true },
+      program
+    )!;
+    expect(on.task).toEqual({
+      ...(program.task as object),
+      dangerously_operate_as_user: true,
+    });
+    expect(isUnchangedUpdate(on, program)).toBe(false);
+
+    const off = draftToUpdateBody(
+      { ...loadedDraft(operating), dangerouslyOperateAsUser: false },
+      operating
+    )!;
+    expect(off.task).toMatchObject({ dangerously_operate_as_user: false });
+    expect(isUnchangedUpdate(off, operating)).toBe(false);
+
+    const parsed = loadedDraft(operating);
+    const edited = draftToUpdateBody(
+      {
+        ...parsed,
+        steps: parsed.steps!.map((step) =>
+          step.kind === 'code' ? { ...step, title: 'Post the summary' } : step
+        ),
+      },
+      operating
+    );
+    expect(edited?.task).toMatchObject({ dangerously_operate_as_user: true });
+    expect(draftToCreateBody(parsed).task).toMatchObject({
+      dangerously_operate_as_user: true,
+    });
+  });
+});
+
 describe('descriptions', () => {
   it('keeps a description within what the scheduler stores', () => {
     const draft = {

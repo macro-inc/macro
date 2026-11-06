@@ -15,7 +15,7 @@ use bot_id::BotId;
 use bots::domain::models::AgentMcpServer;
 use macro_user_id::user_id::MacroUserIdStr;
 use routine_program::AgentStep;
-use trigger_context::TriggerContext;
+use trigger_context::{TriggerContext, TriggerOrigin};
 
 use super::{
     execution::ExecutionHandle,
@@ -66,6 +66,10 @@ impl<Sessions: RoutineSessions> RoutineAgents for TargetRunner<Sessions> {
                 session_id: identity.session_id,
                 source: SessionSource::Routine,
                 visibility: action.run_visibility.into(),
+                origin: match (action.id, handle.firing) {
+                    (Some(routine), Some(firing)) => TriggerOrigin::Routine { routine, firing },
+                    _ => TriggerOrigin::Unknown,
+                },
             })
             .await;
         match prepared {

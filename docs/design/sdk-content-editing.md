@@ -237,17 +237,27 @@ await structure.applyEdits((editor) => {
   vendored code stays free of SDK types and the model-facing sandbox keeps
   passing strings.
 
-Typed handles for the other types, `Document.spreadsheet()`, `.wordDocument()`,
-`.presentation()` and `.canvas()`, refuse the wrong file type and each has
-`webUrl()`. `documents.createSpreadsheet()` joins `createCanvas()`.
+Typed handles for the other types refuse the wrong file type and each has
+`webUrl()`. Spreadsheets have one: `macro.documents.spreadsheet(document)`
+returns a `Spreadsheet` (a namespace method, because a `Document` method
+returning a `Document` subclass would be a circular import), and
+`documents.createSpreadsheet()` joins `createCanvas()`.
 
-### Later option: structured editing for spreadsheets, Word and PowerPoint
+### Structured editing for spreadsheets; later option for Word and PowerPoint
 
-Not part of this stack. A typed lower layer like markdown's (vendored
-spreadsheet and Word op types, `pptx_engine` `EditOp` types generated from its
-schema, reads in the tools' formats, `expectedRevision` conflicts, and a
-PowerPoint version check replacing today's last-writer-wins) can follow if
-programs need exact cell, paragraph or shape edits without a model.
+Spreadsheets get the structured layer in their PR, without vendoring: the
+spreadsheet ops are already serde types in `crates/documents`, so DSS
+publishes them in its OpenAPI and the SDK's generated client types them.
+`Spreadsheet.read()`, `calculate()` and `applyEdits(ops, { expectedRevision })`
+are `ReadSpreadsheet`, `CalculateSpreadsheet` and `EditSpreadsheet` over HTTP,
+on the same `SpreadsheetService`, with `RevisionConflictError` for a stale
+revision and `EditOutcomeUnknownError` for a lost acknowledgement.
+
+A typed lower layer for Word and PowerPoint (their op types, `pptx_engine`
+`EditOp` types generated from its schema, reads in the tools' formats,
+`expectedRevision` conflicts, and a PowerPoint version check replacing today's
+last-writer-wins) can follow if programs need exact paragraph or shape edits
+without a model.
 
 ## Hiding the direct tools
 
@@ -335,16 +345,23 @@ generated at build time), and adds the direct tool it replaces to
      `Document.insertDatabaseQuery()`.
    - Tests for round trips, concurrent typing during an edit, aborts, and
      refused edits and batches.
-3. **Spreadsheets** (MACRO-4587). `sheet.edit(instructions, { signal })` with a
-   new writer model over `SpreadsheetService`; changed ranges and the new
-   revision; `documents.createSpreadsheet()`. Hides `EditSpreadsheet`.
-4. **PowerPoint** (MACRO-4581). `deck.edit(instructions, { signal, saveAs })`
-   with a new writer model over `PresentationService`; changed slides, the new
-   version or the new `Presentation` for `saveAs`. Hides `EditPresentation`.
-5. **Word** (MACRO-4581). `wordDoc.edit(instructions, { signal })` with a new
-   writer model over `WordDocumentService`; changed paragraph ids. Hides
-   `EditWordDocument`.
-6. **Canvases** (MACRO-4584). `canvas.edit(instructions, { signal })` over
+3. **Spreadsheets** (MACRO-4587). `documents.createSpreadsheet()`,
+   `documents.spreadsheet(document)` with `read`, `calculate` and
+   `applyEdits` over `SpreadsheetService`. Hides `ReadSpreadsheet`,
+   `CalculateSpreadsheet` and `EditSpreadsheet`. Then `sheet.edit(instructions,
+   { signal })` with a new writer model over the same service.
+4. **PowerPoint and Word** (MACRO-4581, MACRO-4841). Shipped as the
+   structured layer first: `Document.readPresentation()`,
+   `editPresentation(operations)` and `copyPresentation(name, { operations })`
+   over `PresentationService`, and `Document.readWord()` and
+   `editWord(operations, { trackChanges })` over `WordDocumentService`'s live
+   copy, through DSS `/documents/{id}/presentation` and `/word` routes. The
+   operation unions are generated from `pptx_engine::EditOp` and
+   `WordDocumentOperation`. The same PR adds the read-only
+   `readDesign()`, `readPhotoshop()` and `readIllustrator()`, and hides the
+   seven matching tools. An instructions `edit()` with a writer model can
+   follow.
+5. **Canvases** (MACRO-4584). `canvas.edit(instructions, { signal })` over
    `EditCanvas`; the structured layer (`CanvasEditor` in `packages/editor-ops`,
    ops with `expectedRevision`) and render. Hides `EditCanvas` and
    `ApplyCanvasEdits`.

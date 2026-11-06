@@ -150,8 +150,8 @@ owner's phone only when they press Import. While a chat is
 `waiting_for_phone`, its owner sees a bar under the chat header ("Open
 WhatsApp on your phone to import earlier messages." with **Import**), and on desktop and
 tablets a closable bottom-right prompt **Import WhatsApp history** with
-**Import** covers all their waiting chats (never on phones, where it would
-cover the composer; a close sticks until another chat needs it). Both post
+**Import** and **Not now** covers all their waiting chats (never on phones, where it would
+cover the composer; a close sticks until another chat needs it). Both Import actions post
 `/whatsapp/history-import`. The detail's `backfill` drives the header's
 subtitle: **WhatsApp · Importing history…** while `pending`/`running`, and
 *Earlier messages wait for the owner's phone* for shared viewers while
