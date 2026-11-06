@@ -777,6 +777,9 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "ContentSearch",
         "DiscoverConnectors",
         "ConnectMcpServer",
+        "ReadSpreadsheet",
+        "CalculateSpreadsheet",
+        "EditSpreadsheet",
         "ListSkills",
         "SearchSkills",
         "ReadSkill",
@@ -788,7 +791,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     }
     for name in [
         "CreateDocument",
-        "EditSpreadsheet",
         "ReadCanvas",
         "RenderCanvas",
         "ApplyCanvasEdits",
