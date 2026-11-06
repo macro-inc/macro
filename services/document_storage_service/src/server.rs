@@ -1673,13 +1673,16 @@ async fn run_server() -> anyhow::Result<()> {
     // Individual initiative and agent-session reads preserve read-after-write
     // consistency when a newly created entity opens immediately, as does
     // realtime patch hydration, which runs right after the write it announces.
-    // Lists retain the replica reader. Reuse Soup hydration so detail and
+    // Ordinary lists retain the replica reader. Reuse Soup hydration so detail and
     // mutation metadata include viewer history.
     let primary_entity_soup = Arc::new(
         SoupImpl::new(
             PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
             frecency_service.clone(),
-            ReadonlyEmailPreviewAdapter(email_service.clone()),
+            service::email_previews::ConsistentEmailPreviewReader::new(
+                ReadonlyEmailPreviewAdapter(email_service.clone()),
+                ReadonlyEmailPreviewAdapter(email_service.clone()),
+            ),
             ChannelListServiceImpl::new(
                 PgChannelsRepo::new(db.clone()),
                 PgChannelsRepo::new(db.clone()),
@@ -1712,15 +1715,17 @@ async fn run_server() -> anyhow::Result<()> {
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
 
-    // Keep the replica-backed Soup reader alongside the primary-backed email
-    // writer in SoupRouterState. REST and GraphQL lists share this reader;
-    // only email mutations and their reply loader use the writer service, so
-    // normal list traffic never switches to the primary.
+    // REST and GraphQL lists share this reader. CRM email eligibility must
+    // observe committed withdrawals/exclusions immediately; only that preview
+    // leg reads the primary. Ordinary inbox lists keep using the replica.
     let soup_service = Arc::new(
         SoupImpl::new(
             PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
             frecency_service,
-            readonly_email_service.clone(),
+            service::email_previews::ConsistentEmailPreviewReader::new(
+                ReadonlyEmailPreviewAdapter(email_service.clone()),
+                readonly_email_service.clone(),
+            ),
             ChannelListServiceImpl::new(
                 PgChannelsRepo::new(readonly_db.clone()),
                 PgChannelsRepo::new(readonly_db.clone()),

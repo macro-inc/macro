@@ -15,11 +15,18 @@ for (const admin of [false, true]) {
       dialog.getByText('member@example.com', { exact: true })
     ).toBeInViewport();
     await page.screenshot({ path: testInfo.outputPath('privacy-review.png') });
-    const removes = dialog.getByRole('button', { name: 'Remove', exact: true });
-    if (admin) await expect(removes.nth(0)).toBeEnabled();
-    else await expect(removes.nth(0)).toBeDisabled();
-    await expect(removes.nth(1)).toBeEnabled();
-    await removes.nth(1).click();
+    const teamRemove = dialog.getByRole('button', {
+      name: 'Remove team.example.com',
+      exact: true,
+    });
+    const personalRemove = dialog.getByRole('button', {
+      name: 'Remove personal.example.com',
+      exact: true,
+    });
+    if (admin) await expect(teamRemove).toBeEnabled();
+    else await expect(teamRemove).toBeDisabled();
+    await expect(personalRemove).toBeEnabled();
+    await personalRemove.click();
     await expect(page.getByTestId('last-change')).toHaveText(
       JSON.stringify({
         action: 'remove_domain',

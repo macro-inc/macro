@@ -145,7 +145,7 @@ impl SQS {
     /// that becomes visible after `delay_seconds`. Unlike waiting out the
     /// visibility timeout, the wait uses none of the operation's deliveries.
     /// `deferrals` is recorded in [`BACKFILL_DEFERRALS_ATTRIBUTE`].
-    #[tracing::instrument(skip_all, err, fields(delay_seconds, deferrals))]
+    #[tracing::instrument(skip_all, err, fields(delay_seconds = i64::from(delay_seconds), deferrals = i64::from(deferrals)))]
     pub async fn defer_email_backfill_message(
         &self,
         message: &BackfillPubsubMessage,

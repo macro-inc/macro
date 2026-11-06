@@ -418,6 +418,18 @@ async fn consent_trace_survives_outbox_queue_and_deferral_without_payload_fields
             .iter()
             .any(|span| span.name == "crm.email_backfill.publish")
     );
+    let deferral = spans
+        .iter()
+        .find(|span| span.name == "defer_email_backfill_message")
+        .expect("deferral span exported");
+    for (key, expected) in [("delay_seconds", 5), ("deferrals", 1)] {
+        assert!(
+            deferral.attributes.iter().any(|field| {
+                field.key.as_str() == key && field.value == opentelemetry::Value::I64(expected)
+            }),
+            "missing numeric deferral field {key}"
+        );
+    }
     for span in spans {
         for field in span.attributes {
             let value = field.value.to_string();

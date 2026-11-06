@@ -1,3 +1,6 @@
+-- Do not queue mailbox writes behind lifecycle-trigger DDL on a busy table.
+SET LOCAL lock_timeout = '5s';
+
 CREATE INDEX crm_email_consent_enabled_link ON crm_email_consent(link_id) WHERE enabled;
 
 -- A connection returning to primary/connected status must not resurrect an

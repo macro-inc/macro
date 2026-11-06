@@ -67,6 +67,7 @@ function DomainBlocklist(props: {
                 variant="ghost"
                 size="sm"
                 disabled={!canRemove() || busy()}
+                aria-label={t('crm.privacyRemoveDomain', { domain: item })}
                 onClick={() =>
                   props.source.update.mutate({
                     action: 'remove_domain',

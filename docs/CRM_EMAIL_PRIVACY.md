@@ -33,6 +33,11 @@ receipts. The Axum GET/PUT `/crm/email-privacy` adapters only extract identity,
 forward a command, and map the response. The SQL repository persists consent and
 the two lists; it commits backfill requests in an outbox with the mutation.
 
+CRM-scoped REST and GraphQL email previews read the primary database so a
+committed withdrawal or exclusion cannot be undone by replica lag during refresh.
+Ordinary inbox lists retain replica reads; primary failures never fall back to
+stale CRM eligibility.
+
 `crm_email_thread_allowed` is shared by ingestion, CRM-scoped email listing, and
 direct thread access. It verifies the mailbox, current membership, explicit consent,
 and whole-thread participant exclusions. `crm_email_domain_blocked` also honors

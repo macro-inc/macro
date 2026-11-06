@@ -63,6 +63,7 @@ export default {
     'Subdomains are included. A blocked participant excludes the entire email thread. Existing companies stay visible.',
   privacyNoDomains: 'No domains blocked.',
   privacyRemove: 'Remove',
+  privacyRemoveDomain: 'Remove {{domain}}',
   privacyTeamDomainLabel: 'Domain to block for the team',
   privacyPersonalDomainLabel: 'Domain to block for my emails',
   privacyDomainPlaceholder: 'example.com',

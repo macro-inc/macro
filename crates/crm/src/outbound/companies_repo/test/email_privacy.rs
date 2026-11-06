@@ -98,6 +98,42 @@ async fn rollout_and_rollback_preserve_records_and_do_not_inherit_consent(
     Ok(())
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mailbox_lifecycle_migration_times_out_without_blocking_writers(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    // Only this disposable test database is changed; production migrations
+    // and previously applied development migration histories stay untouched.
+    sqlx::raw_sql(include_str!(
+        "../../../../../macro_db_client/migrations/20261106023717_crm_consent_mailbox_lifecycle.down.sql"
+    )).execute(&pool).await?;
+    let mut writer = pool.begin().await?;
+    sqlx::raw_sql("LOCK TABLE email_links IN ROW EXCLUSIVE MODE")
+        .execute(&mut *writer)
+        .await?;
+    let migration = include_str!(
+        "../../../../../macro_db_client/migrations/20261106023717_crm_consent_mailbox_lifecycle.up.sql"
+    );
+    let mut deploy = pool.begin().await?;
+    let error = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        sqlx::raw_sql(migration).execute(&mut *deploy),
+    )
+    .await
+    .expect("migration must stop waiting for the mailbox writer")
+    .unwrap_err();
+    assert_eq!(
+        error.as_database_error().and_then(|e| e.code()).as_deref(),
+        Some("55P03")
+    );
+    deploy.rollback().await?;
+    writer.commit().await?;
+    let mut retry = pool.begin().await?;
+    sqlx::raw_sql(migration).execute(&mut *retry).await?;
+    retry.commit().await?;
+    Ok(())
+}
+
 async fn setup(pool: &PgPool) -> anyhow::Result<(CompaniesRepositoryImpl, Uuid, Uuid)> {
     let team = Uuid::now_v7();
     seed_team(pool, team, OWNER).await?;
