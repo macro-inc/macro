@@ -1,0 +1,48 @@
+"""Behavioral checks for the Compose-to-Kubernetes boundary; no running cluster."""
+import unittest
+
+from run import manifests
+
+
+class ManifestTests(unittest.TestCase):
+    def test_routes_aliases_and_private_service_ports(self):
+        config = {'name': 'macro-example', 'services': {
+            'connection_gateway': {
+                'image': 'runtime:dev', 'command': ['/app/out/connection_gateway'],
+                'environment': {'UPSTREAM': 'http://connection_gateway:8080'},
+                'networks': {'services': {'aliases': ['connection-gateway']}},
+                'ports': [{'published': '23012', 'target': 8080}],
+                'healthcheck': {'test': ['CMD', 'curl', '-f', 'http://localhost:8080/health']},
+            },
+            'proxy': {'image': 'caddy:2-alpine'},
+            'lgtm': {'image': 'grafana/otel-lgtm', 'profiles': ['lgtm']},
+        }}
+        objects = manifests(config, 'macro-kube-example', 1)
+        deployments = {o['metadata']['name']: o for o in objects if o['kind'] == 'Deployment'}
+        self.assertNotIn('lgtm', deployments)
+        gateway = deployments['connection-gateway']['spec']['template']['spec']['containers'][0]
+        self.assertEqual(gateway['args'], ['/app/out/connection_gateway'])
+        self.assertEqual(gateway['env'], [{'name': 'UPSTREAM', 'value': 'http://connection-gateway:8080'}])
+        self.assertEqual(gateway['readinessProbe']['exec']['command'], ['curl', '-f', 'http://localhost:8080/health'])
+        services = [o for o in objects if o['kind'] == 'Service']
+        public = [o for o in services if o['spec'].get('type') == 'NodePort']
+        self.assertEqual(len(public), 1)
+        self.assertEqual(public[0]['spec']['ports'][0], {'port': 443, 'targetPort': 32444, 'nodePort': 30444})
+        self.assertEqual(len([o for o in services if o['metadata']['name'] == 'connection-gateway']), 1)
+
+    def test_backing_volume_survives_deployment_replacement(self):
+        config = {'name': 'macro-example', 'services': {'postgres': {
+            'image': 'postgres:18', 'stop_grace_period': '2m0s', 'volumes': [{'type': 'volume', 'source': 'db_data', 'target': '/var/lib/postgresql'}],
+        }}}
+        objects = manifests(config, 'macro-kube-example', 0)
+        claim = next(o for o in objects if o['kind'] == 'PersistentVolumeClaim')
+        self.assertEqual(claim['metadata']['namespace'], 'macro-kube-example')
+        self.assertEqual(claim['metadata']['name'], 'db-data')
+        deployment = next(o for o in objects if o['kind'] == 'Deployment')
+        self.assertEqual(deployment['spec']['strategy'], {'type': 'Recreate'})
+        self.assertEqual(deployment['spec']['template']['spec']['terminationGracePeriodSeconds'], 120)
+        self.assertEqual(deployment['spec']['template']['spec']['volumes'][0]['persistentVolumeClaim'], {'claimName': 'db-data'})
+
+
+if __name__ == '__main__':
+    unittest.main()

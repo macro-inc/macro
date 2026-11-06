@@ -175,3 +175,8 @@ setup:
 destroy:
   just infra/stacks/fusionauth-instance/destroy
   {{ compose }} down -v
+
+# Local Nix-declared kind cluster; see docs/development/local-kubernetes.md.
+[positional-arguments]
+kube-local *ARGS:
+  @python3 tooling/local-kubernetes/run.py "$@"

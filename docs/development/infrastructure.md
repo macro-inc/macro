@@ -213,3 +213,8 @@ point at the shared gateway, preserving public URLs and OAuth callbacks. The
 retired MCP and schedule stack programs contain no compute resources. Follow
 [the cutover guide](../guides/consolidate-agent-services.md) before deployment;
 old listener rules must be retired before the harness claims their priorities.
+
+## Local Kubernetes development
+
+The [local kind runtime](local-kubernetes.md) reuses the Compose service inventory
+without changing deployed ECS infrastructure or provisioning cloud resources.
