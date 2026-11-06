@@ -179,8 +179,12 @@ export function CallOverlay(props: {
   const PanelToggle = () => (
     <Button
       ref={panelButton}
-      class="relative"
-      variant={panelOpen() ? 'accent' : 'secondary'}
+      class={cn(
+        'relative',
+        !isMobile() && (compactControls() ? 'size-13' : 'size-14'),
+        !isMobile() && !panelOpen() && 'menu-surface text-ink'
+      )}
+      variant={panelOpen() ? (isMobile() ? 'accent' : 'primary') : 'secondary'}
       size={compactControls() ? 'icon-md' : 'icon-lg'}
       aria-label={panelOpen() ? t('calls.closePanel') : t('calls.openPanel')}
       tooltip={{
@@ -205,7 +209,7 @@ export function CallOverlay(props: {
       >
         <span
           aria-hidden="true"
-          class="absolute top-1 right-1 size-1.5 rounded-full bg-accent"
+          class="absolute top-0 right-0 size-1.5 rounded-full bg-accent"
         />
       </Show>
     </Button>
@@ -899,9 +903,9 @@ export function CallOverlay(props: {
                   <div
                     ref={setPanelToggleFrame}
                     class={cn(
-                      isMobile() ? 'island' : 'menu-surface',
+                      isMobile() && 'island',
                       'col-start-3 row-start-1 flex justify-center justify-self-end rounded-full mobile:col-start-2',
-                      isMobile() ? 'p-1.5' : 'p-2'
+                      isMobile() && 'p-1.5'
                     )}
                   >
                     <PanelToggle />
