@@ -245,9 +245,9 @@ Backgrounds use a simple menu with None, Light blur, Strong blur, and image uplo
 Selected devices and backgrounds carry into the call; unsupported browsers use
 the system speaker. If a background cannot be applied, the camera stays off
 until the user retries or chooses None. The screen uses a gray join
-button. During a desktop or tablet call, `Copy Meeting Url` sits at the
-bottom-left; narrow panes show only its copy icon. Active phone calls fill the
-available viewport, retaining header islands for Back and Copy Meeting Url.
+button. In a channel's Call tab, the header shows the live waveform and duration,
+then an icon-only meeting link and Invite. The link is fetched only when copied.
+Active phone calls fill the viewport and retain Back, channel title and live status.
 The header shows the current local time before the call name. Owners can click the name
 to rename it, then Save or press Enter; Cancel or Escape discards the edit. Guests and other participants see a
 read-only name.
@@ -317,10 +317,8 @@ separate on the right with a 48px tap target and the row keeps its side gutters.
 On phones at most 416px wide, the sidebar button moves below the bar so the
 additional screen-share settings control fits without clipping. Controls wrap
 on smaller available widths without shrinking their split-button segments.
-On desktop, the sidebar button stays at the bottom-right and Copy Meeting Url
-stays at the bottom-left, without horizontal padding on the footer row. On
-phones, Copy Meeting Url uses the shared `CopyButton` in a standard 40px
-header island, without custom button colors or sizing. Media controls occupy a
+On desktop channel calls, the meeting-link action lives in the header, not the
+footer. Phones retain their channel header islands. Media controls occupy a
 separate row below the video, never over it. Controls remain visible while idle;
 auto-hide is disabled for now. Header islands also stay visible. Check 320px
 phones, safe-area insets, and rotation.

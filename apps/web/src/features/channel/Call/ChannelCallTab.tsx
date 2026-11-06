@@ -16,7 +16,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { ActiveCallLink } from './ActiveCallLink';
+import { ActiveCallHeader } from './ActiveCallHeader';
 import { CallOverlay } from './CallOverlay';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { CallDiscussionContent } from './discussion/CallDiscussionContent';
@@ -170,7 +170,7 @@ export function ChannelCallTab(props: {
         <div class="size-full min-h-0">
           <Show when={isMobile()}>
             <SplitHeaderRight>
-              <ActiveCallLink />
+              <ActiveCallHeader channelId={props.channelId} />
             </SplitHeaderRight>
           </Show>
           <CallOverlay
@@ -192,11 +192,6 @@ export function ChannelCallTab(props: {
                 />
               ),
             }}
-            footerLeading={
-              <Show when={!isMobile()}>
-                <ActiveCallLink />
-              </Show>
-            }
           />
         </div>
       </Match>

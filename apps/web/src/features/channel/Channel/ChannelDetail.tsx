@@ -18,6 +18,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { TraceFlow } from '@app/observability/flow';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
+import { ActiveCallHeader } from '@channel/Call/ActiveCallHeader';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallEventSync } from '@channel/Call/CallEventSync';
 import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
@@ -185,10 +186,20 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
 
   return (
     <div class="header-actions ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
-      <DmWorkToggle />
+      <Show when={activeTab() !== 'call'}>
+        <DmWorkToggle />
+      </Show>
       <DebugSuspense name="ChannelDetail.live-indicators">
         <ChannelLiveIndicators channelId={props.channelId} />
       </DebugSuspense>
+      <Show when={call.isInThisChannel()}>
+        <DebugSuspense name="ChannelDetail.active-call">
+          <ActiveCallHeader
+            channelId={props.channelId}
+            link={activeTab() === 'call'}
+          />
+        </DebugSuspense>
+      </Show>
       <HeaderActionGroup label="Conversation actions">
         <Show
           when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
@@ -197,7 +208,7 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
             <ChannelCallButton grouped channelId={props.channelId} />
           </DebugSuspense>
         </Show>
-        <Show when={askMacroEntity()}>
+        <Show when={activeTab() !== 'call' && askMacroEntity()}>
           {(entity) => (
             <DebugSuspense name="ChannelDetail.ask-macro">
               <ChatWithAgentButton

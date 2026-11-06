@@ -5,7 +5,7 @@ import { useQuickCallsFlag } from '../../meetings/use-quick-calls-flag';
 import { useCallContext } from './CallContext';
 import { getMeetingUrl } from './call-link';
 
-function ActiveCallLinkContent() {
+function ActiveCallLinkContent(props: { compact?: boolean }) {
   const call = useCallContext();
   // Creating a share link grants access, so fetch only on an explicit copy.
   const link = useCallLinkQuery(() => call.activeCallId() ?? undefined, {
@@ -25,16 +25,17 @@ function ActiveCallLinkContent() {
       url={url()}
       onCopy={copy}
       disabled={!call.activeCallId()}
+      compact={props.compact}
     />
   );
 }
 
-export function ActiveCallLink() {
+export function ActiveCallLink(props: { compact?: boolean }) {
   const flag = useQuickCallsFlag();
   return (
     <Show when={!flag().loading && flag().enabled}>
       <Suspense>
-        <ActiveCallLinkContent />
+        <ActiveCallLinkContent compact={props.compact} />
       </Suspense>
     </Show>
   );
