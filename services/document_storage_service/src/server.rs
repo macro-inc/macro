@@ -1478,12 +1478,26 @@ async fn run_server() -> anyhow::Result<()> {
     );
     let document_ai_usage =
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement);
-    // Document AI edits over HTTP share the channel agent's admission.
+    // Document and canvas AI edits over HTTP share the channel agent's admission.
     let document_ai_editing = Arc::new(documents_hex::domain::ai_editing::AiEditingService::new(
         editing_worker.clone(),
         admission.clone(),
         document_ai_usage.clone(),
     ));
+    let canvas_routes = documents_hex::inbound::axum_router::CanvasRouteDeps {
+        worker: editing_worker.clone(),
+        admission: admission.clone(),
+        recorder: document_ai_usage.clone(),
+        // Off when PostHog isn't configured, as for the agents' Canvas tools.
+        artifacts: ai_tools::canvas_artifacts_rollout_from_env()?
+            .unwrap_or_else(|| Arc::new(|_| Box::pin(async { false }))),
+        images: Arc::new(crate::outbound::canvas_images::StaticFileCanvasImages(
+            static_file_service_client::StaticFileServiceClient::new(
+                config.internal_api_key.to_string(),
+                StaticFileServiceUrl::new()?.to_string(),
+            ),
+        )),
+    };
     // The spreadsheet tools' engine, for SDK spreadsheet reads and edits.
     let document_spreadsheet =
         Arc::new(documents_hex::domain::spreadsheet::SpreadsheetService::new(
@@ -2497,6 +2511,7 @@ async fn run_server() -> anyhow::Result<()> {
             lexical_client: lexical_client.clone(),
             creator: document_creator,
             ai_editing: document_ai_editing,
+            canvas: canvas_routes,
             spreadsheet: document_spreadsheet,
             spreadsheet_ai_edit: document_spreadsheet_ai_edit,
             presentations: Arc::new(

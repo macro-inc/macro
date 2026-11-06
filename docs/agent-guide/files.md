@@ -44,7 +44,8 @@ With `enable-databases` enabled, **My Files** includes owned databases and
 also includes accessible databases owned by others. **Search Drive** matches
 database names and **Filter → Type → Database** narrows the list. **New →
 Database** creates and opens a database from file tabs or the folder overview;
-it is absent inside a folder because a new database starts at the root.
+it is absent inside a folder because a new database starts at the root; move
+it in afterwards.
 Database rows open their database block, including Enter and Open in new split.
 Right-click (or long-press) a database for the same entity actions as other
 Drive rows: Open in new split, Rename (edit or owner), Favorite, Copy Link,
@@ -56,7 +57,9 @@ the form's title menu. A filed database or form appears in that folder's
 contents for everyone who can open it, inherits the folder's sharing like a
 document, and stays in the file tabs. Verify moving one into a nested folder
 shared with another user, that user opening it from the folder, and moving it
-back to root. Databases have no view history and do not appear in **Recent** or
+back to root, by **Remove from folder** or a drop on the sidebar's **Drive**
+row. Each move toasts success once: databases and forms have no Soup record, so
+the move's result carries no cache patch for them. Databases have no view history and do not appear in **Recent** or
 **Email attachments**. Creation time orders them when the selected sort has no
 corresponding database timestamp.
 
