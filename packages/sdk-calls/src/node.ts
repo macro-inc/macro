@@ -1,4 +1,3 @@
-import { Telemetry } from '@macro-inc/observability';
 import {
   LocalVideoTrack,
   Room,
@@ -16,6 +15,7 @@ import {
   connectRoomWith,
   type JoinOptions,
 } from './common';
+import { reportError, withSpan } from './telemetry';
 
 export type { CallConnection, CallTarget, JoinOptions } from './common';
 
@@ -51,8 +51,8 @@ export function connectRoom(target: CallTarget, options?: JoinOptions) {
       const participant = room.localParticipant;
       if (!participant) throw new Error('Room connected without a local participant');
 
-      // rtc-node has no room-wide publish defaults. Apply the app's DTX
-      // setting to audio tracks published by the caller after connection.
+      // rtc-node has no room-wide publish defaults or publish hook. Wrapping
+      // publishTrack is the only way to set DTX for caller-published audio.
       const publish = participant.publishTrack.bind(participant);
       participant.publishTrack = (track, publishOptions) => {
         if (track.kind === TrackKind.KIND_AUDIO) publishOptions.dtx = false;
@@ -69,10 +69,10 @@ export async function publishScreen(
   frames: AsyncIterable<ScreenFrame>,
   options: ScreenOptions = {},
 ): Promise<ScreenShare> {
-  return Telemetry.span('call.sdk.publish_screen', async (span) => {
+  return withSpan('call.sdk.publish_screen', async (span) => {
     const callId = callIdForRoom(room);
-    if (callId) span.setAttr('call.id', callId);
-    span.setAttr('call.sdk.source_kind', 'frames');
+    if (callId) span.setAttribute('call.id', callId);
+    span.setAttribute('call.sdk.source_kind', 'frames');
     const iterator = frames[Symbol.asyncIterator]();
     const first = await iterator.next();
     if (first.done) throw new Error('Screen source produced no frames');
@@ -81,9 +81,9 @@ export async function publishScreen(
     if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
       throw new Error('Screen frames require positive integer dimensions');
     }
-    span.setAttr('call.sdk.width', width);
-    span.setAttr('call.sdk.height', height);
-    span.setAttr('call.sdk.fps', options.fps ?? 15);
+    span.setAttribute('call.sdk.width', width);
+    span.setAttribute('call.sdk.height', height);
+    span.setAttribute('call.sdk.fps', options.fps ?? 15);
 
     const source = new VideoSource(width, height);
     const track = LocalVideoTrack.createVideoTrack(options.name ?? 'screen', source);
@@ -97,30 +97,34 @@ export async function publishScreen(
     });
 
     let stopped = false;
+    let stopping: Promise<void> | undefined;
+    let publicationSid: string | undefined;
     let resolveStopped: () => void = () => {};
     const stoppedPromise = new Promise<void>((resolve) => { resolveStopped = resolve; });
-    const stop = async () => {
-      if (stopped) return;
+    const stop = () => stopping ??= (async () => {
       stopped = true;
       try {
         await iterator.return?.();
-        if (track.sid) await room.localParticipant?.unpublishTrack(track.sid, false);
       } finally {
         try {
-          await track.close();
+          if (publicationSid) await room.localParticipant?.unpublishTrack(publicationSid, false);
         } finally {
-          resolveStopped();
+          try {
+            await track.close();
+          } finally {
+            resolveStopped();
+          }
         }
       }
-    };
+    })();
 
     try {
       const participant = room.localParticipant;
       if (!participant) throw new Error('Room is not connected');
-      await participant.publishTrack(track, publishOptions);
-      span.setAttr('call.sdk.outcome', 'published');
+      const publication = await participant.publishTrack(track, publishOptions);
+      publicationSid = publication.sid;
+      span.setAttribute('call.sdk.outcome', 'published');
     } catch (error) {
-      span.error(error);
       await stop();
       throw error;
     }
@@ -145,8 +149,10 @@ export async function publishScreen(
         await stop();
       }
     };
-    void pump().catch((error: unknown) => span.error(error));
-    room.on(RoomEvent.Disconnected, () => { void stop(); });
+    pump().catch((error: unknown) => reportError('call.sdk.publish_screen', error, callId));
+    room.on(RoomEvent.Disconnected, () => {
+      stop().catch((error: unknown) => reportError('call.sdk.publish_screen', error, callId));
+    });
 
     return { stop, stopped: stoppedPromise };
   });

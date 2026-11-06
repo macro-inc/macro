@@ -1,4 +1,4 @@
-import { Telemetry } from '@macro-inc/observability';
+import { reportError, startSpan, withSpan } from './telemetry';
 
 export type JoinOptions = {
   onOtherCall?: 'fail' | 'switch';
@@ -34,14 +34,13 @@ export async function connectRoomWith<Room extends object>(
   connect: (room: Room, connection: CallConnection) => Promise<void>,
   onDisconnect: (room: Room, callback: (reason?: unknown) => void) => void,
 ): Promise<{ room: Room; connection: CallConnection }> {
-  return Telemetry.span('call.sdk.connect', async (span) => {
+  return withSpan('call.sdk.connect', async (span) => {
     let connection: CallConnection | undefined;
-    let left = false;
+    let leavePromise: Promise<void> | undefined;
 
     const leaveOnce = () => {
-      if (left || !connection) return;
-      left = true;
-      void connection.leave().catch((error: unknown) => span.error(error));
+      if (!connection) return Promise.resolve();
+      return leavePromise ??= connection.leave().then(() => {});
     };
 
     try {
@@ -49,22 +48,25 @@ export async function connectRoomWith<Room extends object>(
         'startCall' in target
           ? await target.startCall(options)
           : await target.join(options);
-      span.setAttr('call.id', connection.call.id);
+      span.setAttribute('call.id', connection.call.id);
       callIds.set(room, connection.call.id);
       onDisconnect(room, (reason) => {
-        const disconnected = Telemetry.span('call.sdk.disconnected');
-        disconnected.setAttr('call.id', connection?.call.id ?? '');
-        disconnected.setAttr('call.sdk.reason', String(reason ?? 'unknown'));
+        const disconnected = startSpan('call.sdk.disconnected');
+        disconnected.setAttribute('call.id', connection?.call.id ?? '');
+        disconnected.setAttribute('call.sdk.reason', String(reason ?? 'unknown'));
         disconnected.end();
-        leaveOnce();
+        leaveOnce().catch((error: unknown) => {
+          reportError('call.sdk.disconnected', error, connection?.call.id);
+        });
       });
       await connect(room, connection);
-      span.setAttr('call.sdk.outcome', 'connected');
+      span.setAttribute('call.sdk.outcome', 'connected');
       return { room, connection };
     } catch (error) {
-      span.setAttr('call.sdk.outcome', 'failed');
-      span.error(error);
-      leaveOnce();
+      span.setAttribute('call.sdk.outcome', 'failed');
+      await leaveOnce().catch((leaveError: unknown) => {
+        reportError('call.sdk.disconnected', leaveError, connection?.call.id);
+      });
       throw error;
     }
   });

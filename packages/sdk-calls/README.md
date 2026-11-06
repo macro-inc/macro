@@ -5,6 +5,9 @@
 `livekit-client` for browsers. The core SDK grants access and issues the room
 token; this package does not store or log it.
 
+The package uses `@opentelemetry/api` for `call.sdk.*` spans. Tracing is a
+no-op until the host installs an OpenTelemetry tracer provider.
+
 ## Voice agent (Node or Bun)
 
 ```ts
@@ -26,7 +29,8 @@ await room.disconnect();
 `connectRoom` also accepts a channel (`startCall`) or meeting (`join`) and
 forwards `JoinOptions`. Use an agent account's own API key for a dedicated
 program identity. Audio publications use Opus DTX disabled, matching the app's
-quiet speech behavior.
+quiet speech behavior. In Node, `rtc-node` has no room-wide publish default,
+so `connectRoom` wraps the local participant's `publishTrack` to apply it.
 
 ## Screen share
 
