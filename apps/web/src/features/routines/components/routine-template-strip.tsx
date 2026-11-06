@@ -16,7 +16,7 @@ import { type RoutineTemplate, templateChain } from '../core/routine-templates';
 import { RoutineSurface } from './routine-editor';
 
 /** Each template's icon and tint, by what it is for. */
-function templateLook(surface: RoutineTemplate['surface']) {
+export function surfaceLook(surface: RoutineTemplate['surface']) {
   return match(surface)
     .with('email', () => ({ icon: EnvelopeIcon, tint: 'text-blue' }))
     .with('tasks', () => ({ icon: CheckSquareIcon, tint: 'text-green' }))
@@ -32,7 +32,7 @@ function templateLook(surface: RoutineTemplate['surface']) {
 
 /** What starts the template's routine and what it does, in a line. */
 function TemplateChain(props: { template: RoutineTemplate }) {
-  const look = () => templateLook(props.template.surface);
+  const look = () => surfaceLook(props.template.surface);
   const chain = () => templateChain(props.template);
   return (
     <span class="flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
@@ -67,8 +67,8 @@ function TemplateCardButton(props: {
       onClick={() => props.onUse()}
     >
       <Dynamic
-        component={templateLook(props.template.surface).icon}
-        class={cn('size-4 shrink-0', templateLook(props.template.surface).tint)}
+        component={surfaceLook(props.template.surface).icon}
+        class={cn('size-4 shrink-0', surfaceLook(props.template.surface).tint)}
         aria-hidden="true"
       />
       <span class="text-sm font-medium text-ink">{props.template.title}</span>

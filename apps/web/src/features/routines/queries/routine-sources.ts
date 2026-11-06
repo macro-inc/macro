@@ -140,7 +140,7 @@ export function createRoutineDetailSource(
     duplicate() {
       const current = raw();
       const body = current && scheduleToDuplicateBody(current);
-      if (body && !duplicate.isPending) duplicate.mutate(body);
+      if (body && !duplicate.isPending) duplicate.mutate({ body });
     },
     duplicationPending: () => duplicate.isPending,
     history: createMemo(() =>
@@ -177,7 +177,10 @@ export function createRoutineCreatorSource(): RoutineCreatorSource {
   return {
     pending: () => mutation.isPending,
     async create(draft) {
-      const created = await mutation.mutateAsync(draftToCreateBody(draft));
+      const created = await mutation.mutateAsync({
+        body: draftToCreateBody(draft),
+        suggestionId: draft.suggestionId,
+      });
       if (!created.id) throw new Error('Created routine has no ID');
       return created.id;
     },

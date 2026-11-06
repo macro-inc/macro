@@ -25,6 +25,8 @@ export type ScheduleDraft = {
   name: string;
   /** What the routine is for; absent from drafts saved before descriptions. */
   description?: string;
+  /** The routine suggestion a new routine starts from, recorded on save. */
+  suggestionId?: string;
   prompt: string;
   /**
    * Instructions a single agent routine written through the API stores ahead
