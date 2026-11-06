@@ -20,6 +20,8 @@ use messages::domain::models::MessageParent;
 use serde::{Deserialize, Serialize};
 
 use trigger_context::TriggerContext;
+use trigger_context::TriggerOrigin;
+use trigger_context::origin::{AgentActor, Caller, Lineage};
 
 #[cfg(test)]
 mod test;
@@ -81,6 +83,10 @@ pub struct AgentAssignedToTaskEvent {
     pub actor: macro_user_id::user_id::MacroUserIdStr<'static>,
     /// Private startup prompt, never posted as a discussion message.
     pub prompt: String,
+    /// Who assigned it, and whether a project's agents were inherited.
+    /// `Unknown` on events from producers that predate it.
+    #[serde(default, skip_serializing_if = "TriggerOrigin::is_unknown")]
+    pub origin: TriggerOrigin,
     /// Why the agent was called, for whoever composes its prompt. Absent on
     /// events from producers that predate it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -94,7 +100,8 @@ pub struct AgentAssignedToTaskEvent {
 /// Served by the bot's own runtime, which creates the session under the id
 /// named here so the requester can find it. No prompt: whoever asked
 /// delivers theirs through the session's control endpoint once it exists,
-/// so nothing a user typed travels on this topic.
+/// so nothing a user typed travels on this topic. Routines and dispatching
+/// tools ask the same way, and `origin` says which it was.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentSessionRequestedEvent {
     /// The bot the session runs for.
@@ -106,6 +113,10 @@ pub struct AgentSessionRequestedEvent {
     /// Repository selected by the requester, absent on older producers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repo_url: Option<String>,
+    /// What asked for the session. `Unknown` on events from producers that
+    /// predate it.
+    #[serde(default, skip_serializing_if = "TriggerOrigin::is_unknown")]
+    pub origin: TriggerOrigin,
     /// Why the agent was called, for whoever composes its prompt. Absent on
     /// events from producers that predate it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -178,6 +189,29 @@ impl NewAgentSessionEvent {
         }
     }
 
+    /// What opened this session, for whoever creates it. Mentions and
+    /// conversations derive it from the message they carry.
+    #[must_use]
+    pub fn origin(&self) -> TriggerOrigin {
+        match self {
+            Self::ConversationMessage(conversation) => {
+                match conversation.message.sender.as_user() {
+                    Some(by) => TriggerOrigin::Conversation {
+                        by: by.clone(),
+                        message_id: conversation.message.message_id,
+                    },
+                    None => TriggerOrigin::Unknown,
+                }
+            }
+            Self::TopLevelMentioned(_) | Self::Mentioned(_) => match self.mention() {
+                Some(mention) => mentioned_origin(&mention.message),
+                None => TriggerOrigin::Unknown,
+            },
+            Self::AssignedToTask(assigned) => assigned.origin.clone(),
+            Self::Requested(requested) => requested.origin.clone(),
+        }
+    }
+
     /// The composer request this event carries, if that is what it is.
     #[must_use]
     pub fn requested(&self) -> Option<&AgentSessionRequestedEvent> {
@@ -188,6 +222,26 @@ impl NewAgentSessionEvent {
             | Self::AssignedToTask(_)
             | Self::ConversationMessage(_) => None,
         }
+    }
+}
+
+/// A mention, attributed to whoever posted it. A bot's post with no invoking
+/// user opens nothing, so it has no origin to name.
+fn mentioned_origin(message: &MessagePostedMetadata) -> TriggerOrigin {
+    let Some(user) = message.invoking_user() else {
+        return TriggerOrigin::Unknown;
+    };
+    let by = match message.sender.as_bot() {
+        Some(bot) => Caller::Agent(AgentActor {
+            bot: bot.bot_id(),
+            on_behalf_of: user,
+            lineage: Lineage::Unattributed,
+        }),
+        None => Caller::Person { user },
+    };
+    TriggerOrigin::Mentioned {
+        by,
+        message_id: message.message_id,
     }
 }
 

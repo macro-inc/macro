@@ -103,6 +103,7 @@ fn document_triggers_become_work_on_the_document() {
     assert_eq!(
         trigger_to_work(opened).expect("a document mention is work"),
         TriggerWork::OpenAndPrompt {
+            origin: trigger_context::TriggerOrigin::Unknown,
             reuse_origin_message: false,
             bot: bot_id::BotId::TEST_A,
             sender: sender(),
@@ -137,6 +138,7 @@ fn document_triggers_become_work_on_the_document() {
 fn a_task_assignment_opens_and_prompts_in_the_task_discussion() {
     let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(
         AgentAssignedToTaskEvent {
+            origin: trigger_context::TriggerOrigin::Unknown,
             bot_id: BotId::TEST_A,
             parent: document(),
             discussion_id: Uuid::from_u128(2),
@@ -148,6 +150,7 @@ fn a_task_assignment_opens_and_prompts_in_the_task_discussion() {
     assert_eq!(
         trigger_to_work(event).expect("a task assignment is work"),
         TriggerWork::OpenAndPrompt {
+            origin: trigger_context::TriggerOrigin::Unknown,
             reuse_origin_message: true,
             bot: BotId::TEST_A,
             sender: sender(),
@@ -166,6 +169,7 @@ fn a_mention_becomes_open_and_prompt_rooting_its_own_thread() {
     assert_eq!(
         work,
         TriggerWork::OpenAndPrompt {
+            origin: trigger_context::TriggerOrigin::Unknown,
             reuse_origin_message: false,
             bot: bot_id::BotId::TEST_A,
             sender: sender(),
@@ -306,4 +310,16 @@ fn attributed_bot_mentions_open_and_prompt_with_the_invoking_user() {
     assert!(
         matches!(trigger_to_work(follow_up).unwrap(), TriggerWork::PromptExisting { sender: actor, .. } if actor == sender())
     );
+}
+
+#[test]
+fn a_mention_tells_the_runtime_what_opened_its_session() {
+    let Ok(TriggerWork::OpenAndPrompt { origin, .. }) = trigger_to_work(mention("hello")) else {
+        panic!("expected a session to open");
+    };
+
+    assert!(matches!(
+        origin,
+        trigger_context::TriggerOrigin::Mentioned { .. }
+    ));
 }

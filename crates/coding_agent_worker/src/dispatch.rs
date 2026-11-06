@@ -136,6 +136,7 @@ impl WorkExecutor for Dispatcher {
                 message_id,
                 content,
                 context,
+                origin,
             } => {
                 let session = AgentSessionId::new_from_uuid(uuid::Uuid::new_v5(
                     &bot.as_uuid(),
@@ -188,6 +189,7 @@ impl WorkExecutor for Dispatcher {
                     // Likewise the model: an external session runs on
                     // whatever this runtime is configured with.
                     model: None,
+                    origin,
                 };
                 let created = match self.api.create_session(&request, &sender).await {
                     Ok(created) => created,
@@ -239,6 +241,7 @@ impl WorkExecutor for Dispatcher {
                 session,
                 bot,
                 sender,
+                origin,
             } => {
                 let workspace = self.workspace_for(session, repo_url.as_deref()).await?;
                 // Same create as a mention, minus the thread: the requester is
@@ -258,6 +261,7 @@ impl WorkExecutor for Dispatcher {
                     thread: None,
                     instructions: None,
                     model: None,
+                    origin,
                 };
                 self.api.create_session(&request, &sender).await?;
                 self.created(session, &sender);

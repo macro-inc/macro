@@ -8,6 +8,7 @@ fn actor() -> MacroUserIdStr<'static> {
 #[test]
 fn existing_mention_commands_keep_their_wire_shape_and_reply_behavior() {
     let mention = MentionOrigin {
+        trigger_origin: trigger_context::TriggerOrigin::Unknown,
         reply_placement: Default::default(),
         parent: MessageParent::Channel(Uuid::from_u128(1)),
         thread_id: Uuid::from_u128(2),
@@ -34,6 +35,7 @@ fn existing_mention_commands_keep_their_wire_shape_and_reply_behavior() {
 #[test]
 fn assignments_remain_distinct_after_command_serialization() {
     let origin = SessionOrigin::TaskAssignment(TaskAssignmentOrigin {
+        trigger_origin: trigger_context::TriggerOrigin::Unknown,
         parent: MessageParent::parse("document", "task-1").unwrap(),
         discussion_id: Uuid::from_u128(4),
         actor: actor(),

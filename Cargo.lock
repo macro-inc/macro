@@ -21034,8 +21034,10 @@ version = "0.1.0"
 dependencies = [
  "bot_id",
  "chrono",
+ "macro_user_id",
  "serde",
  "serde_json",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]
@@ -22240,6 +22242,7 @@ dependencies = [
  "tokio-retry",
  "tower 0.5.3",
  "tracing",
+ "trigger_context",
  "url",
  "utoipa",
  "uuid",
