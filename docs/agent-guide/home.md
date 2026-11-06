@@ -121,6 +121,12 @@ working. A coding session adds a second line with repository, captured working
 branch (when available), and PR number/status. Non-coding sessions stay on one
 line. Their timestamps and unread dots stay visible. Missing repository metadata
 is omitted.
+A session sent from the desktop Home composer joins the top of the list at once,
+titled by the prompt's first line and highlighted while it is open, before its
+create answers. The server's row replaces it when the work feed lists it; a
+failed create removes it. Verify by sending a prompt and checking the row is
+there immediately, is the only row for that session once the server's arrives,
+and stays after a reload.
 Once `HIDE_AGENT_DM_SESSIONS` is enabled after the warm-marker rollout, agent
 DM contexts stay out of broad Agents/Home lists, including work-feed and
 notification-driven candidates. Prior notifications or activity must not bring

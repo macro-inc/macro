@@ -27,6 +27,7 @@ import {
   onMount,
 } from 'solid-js';
 import type { HomeFacetContext } from '../home-facets';
+import type { HomeStartedSessions } from '../home-started-sessions';
 import {
   admitHomeEntities,
   emptyHomeAdmission,
@@ -64,7 +65,10 @@ export type WorkFeedHomeDataSource = HomeDataSource & {
  */
 export function useWorkFeedHomeDataSource(
   state: Pick<HomeViewState, 'tab' | 'groupBy' | 'facets'>,
-  options: { enabled: Accessor<boolean> }
+  options: {
+    enabled: Accessor<boolean>;
+    startedSessions: Pick<HomeStartedSessions, 'unlisted'>;
+  }
 ): WorkFeedHomeDataSource {
   const notificationSource = useGlobalNotificationSource();
   const foreignEntities = useFeatureFlag(enableSupportedSoupForeignEntities);
@@ -108,17 +112,28 @@ export function useWorkFeedHomeDataSource(
           .map((entry) => workFeedEntityKey(entry.entity))
       )
   );
+  // The server scoped each row's notifications to its item; the shared
+  // source still layers local seen/done overrides on top.
+  const feedEntities = createMemo(() =>
+    enabled()
+      ? feed
+          .entries()
+          .map((entry) =>
+            withEntityNotifications(entry.entity, notificationSource)
+          )
+      : []
+  );
+  const startedSessions = options.startedSessions.unlisted(feedEntities);
   const entities = createMemo<HomeAdmission>(
     (previous) =>
       admitHomeEntities(previous, {
-        // The server scoped each row's notifications to its item; the
-        // shared source still layers local seen/done overrides on top.
         entities: enabled()
-          ? feed
-              .entries()
-              .map((entry) =>
-                withEntityNotifications(entry.entity, notificationSource)
-              )
+          ? [
+              ...startedSessions().map((session) =>
+                withEntityNotifications(session, notificationSource)
+              ),
+              ...feedEntities(),
+            ]
           : [],
         tab: state.tab,
         facets: state.facets,

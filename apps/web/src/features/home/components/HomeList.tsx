@@ -54,10 +54,12 @@ import {
   createMemo,
   createSignal,
   Match,
+  on,
   onCleanup,
   type Setter,
   Show,
   Switch,
+  untrack,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import {
@@ -129,12 +131,12 @@ export function HomeList(props: HomeListProps) {
     entity.type === 'channel_thread'
       ? getChannelThreadName(entity, channels.channelsById())
       : undefined;
-  const { state } = useHomeView();
+  const { state, startedSessions } = useHomeView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
 
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
-    useHomeDataSource(state)
+    useHomeDataSource(state, startedSessions)
   );
 
   usePending('home.items', source.isLoading);
@@ -497,6 +499,19 @@ export function HomeList(props: HomeListProps) {
     list.focus.clear({ reason: 'programmatic' });
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
+
+  // A session the composer opened is shown like a clicked row: focused,
+  // without taking the keyboard from the conversation it opened.
+  createEffect(
+    on(startedSessions.opened, (id) => {
+      if (!id) return;
+      startedSessions.clearOpened();
+      const row = untrack(rows).find(
+        (row) => row.kind === 'entity' && row.entity.id === id
+      );
+      if (row) list.focus.set(row.id, { reason: 'programmatic', force: true });
+    })
+  );
 
   createEffect(() => {
     rows();

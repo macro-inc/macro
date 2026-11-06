@@ -1,4 +1,7 @@
-import { startPendingSession } from '@app/features/block-agent/context/pending-session';
+import {
+  pendingSession,
+  startPendingSession,
+} from '@app/features/block-agent/context/pending-session';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useChatInputContext } from '@core/component/AI/context';
 import { toast } from '@core/component/Toast/Toast';
@@ -80,14 +83,27 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
       return true;
     },
   });
-  // The session opens in Home's detail pane rather than Agents; its row joins
-  // the Home list once the create answers.
+  // The session opens in Home's detail pane rather than Agents, and its row
+  // joins the Home list at once instead of when the create answers.
   const start = (conversation: StartConversation) => {
     const id = startPendingSession({
       ...conversation,
       userId: userId(),
       submitSurface: 'home',
     });
+    const pending = pendingSession(id);
+    const viewer = userId();
+    if (pending && viewer) {
+      home.startedSessions.record({
+        id,
+        pending,
+        prompt: conversation.prompt,
+        botId: conversation.botId,
+        repoUrl: conversation.repoUrl,
+        userId: viewer,
+        startedAt: new Date().toISOString(),
+      });
+    }
     home.openPreview({ type: 'agent_session', id });
   };
   return (
