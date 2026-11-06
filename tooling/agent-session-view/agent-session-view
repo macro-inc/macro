@@ -297,7 +297,7 @@ def main():
     now = datetime.datetime.now(datetime.timezone.utc)
     batch.add_argument("--since", default=(now - datetime.timedelta(days=7)).isoformat(), help="default 7 days ago")
     batch.add_argument("--until", default=now.isoformat())
-    batch.add_argument("--owner", help="owner_id, e.g. macro|someone@macro.com")
+    batch.add_argument("--owner", help="owner_id, e.g. macro|user@example.com")
     batch.add_argument("--model", help="substring of the model id")
     batch.add_argument("--include-routines", action="store_true")
     batch.add_argument("--min-seconds", type=int, default=0, help="first to last frame")
