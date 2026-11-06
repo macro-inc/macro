@@ -85,6 +85,33 @@ impl TeamAgentService for FakeService {
             is_agent_computer: true,
         })
     }
+    async fn voice(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<crate::domain::voice::AgentVoice, TeamAgentError> {
+        self.record(format!(
+            "voice {} {}",
+            receipt.entity().entity_id,
+            agent.as_ref()
+        ));
+        Ok(crate::domain::voice::AgentVoice {
+            model: "aura-2-arcas-en".to_owned(),
+        })
+    }
+    async fn set_voice(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+        voice: crate::domain::voice::AgentVoice,
+    ) -> Result<crate::domain::voice::AgentVoice, TeamAgentError> {
+        self.record(format!(
+            "set_voice {} {}",
+            receipt.entity().entity_id,
+            agent.as_ref()
+        ));
+        Ok(voice)
+    }
 
     async fn sizes(
         &self,
@@ -744,7 +771,7 @@ async fn disabled_admin_service_denials_are_forbidden_on_every_admin_route() {
 }
 
 #[tokio::test]
-async fn teammates_can_discover_agent_computers_but_cannot_list_admin_details() {
+async fn teammates_can_discover_agent_computers_without_admin_details() {
     let service = Arc::new(FakeService::default());
     let response = router(service.clone(), TeamRole::Member)
         .oneshot(
@@ -760,15 +787,28 @@ async fn teammates_can_discover_agent_computers_but_cannot_list_admin_details() 
     assert_eq!(body["isAgentComputer"], true);
     assert!(body["harnessId"].is_null());
     assert!(body.get("email").is_none());
-    let response = router(service.clone(), TeamRole::Member)
-        .oneshot(
-            Request::get("/")
-                .header(header::AUTHORIZATION, "Bearer admin")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    for (method, path, body) in [
+        ("GET", "/", ""),
+        ("GET", "/macro%7Csam%40agents.example.com/voice", ""),
+        (
+            "PUT",
+            "/macro%7Csam%40agents.example.com/voice",
+            r#"{"model":"aura-2-thalia-en"}"#,
+        ),
+    ] {
+        let response = router(service.clone(), TeamRole::Member)
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(path)
+                    .header(header::AUTHORIZATION, "Bearer admin")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
     assert_eq!(service.calls.lock().unwrap().len(), 1);
 }

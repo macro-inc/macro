@@ -27,6 +27,8 @@ that commit. The merge gate is `CI gate` passing on the PR's latest commit, so
 every push needs a new run before the PR can merge (see the end of this page
 for the switch-over).
 
+Request CI on a stacked PR's actual base; the gate accepts feature branches too.
+
 ## Run it
 
 Push first, then ask for the run:

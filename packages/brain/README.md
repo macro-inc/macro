@@ -162,14 +162,55 @@ Supervised children relay spans through stdout to the trusted supervisor, which
 exports to the configured collector. This preserves trace IDs without giving
 workspace code collector configuration or collector credentials.
 
-The runtime contract is `prepare(signal)`, `run(signal)`, `health()` and
-`post(turn, channel, text)`. `prepare` connects and buffers events without
+The runtime contract is `prepare(signal)`, `run(signal)`, `health()`,
+`post(turn, channel, text)` and `checkFixture(fixture)`. Wrappers forward all
+five methods so supervisor-owned regression replay remains available. `prepare` connects and buffers events without
 mutating workspace queues. The supervisor starts replacement intake alongside
 the old process, then stops old intake and drains its turns before activating
 replacement queue processing. Receipt IDs persist across the handoff to avoid
 duplicate delivery. Every activation independently verifies a fake DM answer,
 the health shape, and draining an admitted turn on abort; workspace tests cannot
 replace these conformance checks.
+
+## Calls
+
+`src/calls/` ports the per-participant gain, local endpointing and prerecorded
+rescue pipeline, turn-taking, barge-in/ducking and sentence-streamed speech.
+The runner installs its Macro API watcher through `BrainDeps.calls`; a custom
+`Wiring.onCall` can choose whether to invoke `brain.joinCall(call, policy)`.
+See `template/docs/brain-api.md` for policies and shared memory/work behavior.
+
+Voice selection lives in server-committed `config/voice.json`; channel opt-ins
+and exclusions live in `config/calls.json`. LiveKit runs natively on Node 24.
+The offline Nix package includes its platform addon and required shared libraries.
+Speech uses pinned `@livekit/agents` Inference STT (`deepgram/nova-3`) and
+TTS (`deepgram/aura-2`), through `/brain/inference/stt` and
+`/brain/inference/tts`. These are speech primitives; the call turn machine
+remains local. Agent-key authentication checks team/computer eligibility and
+credit admission. The gateway signs a 60-second `inference.perform` JWT for
+its upstream connection; project credentials and Cloud tokens never reach the VM.
+STT seconds and Aura-2 characters are metered to team credits.
+
+Inference preserves keyterms, interim transcripts, smart formatting and 300 ms
+endpointing, plus Inference's `utterance_end` boolean. It does not expose the
+separate `utterance_end_ms` control. The advertised `vad_events: true` option
+failed live Cloud checks with protocol error 2006 (numeric channel decoding),
+so it stays off. SDK speech-start/finalized speech-end events and the unchanged
+local segmenter detect quiet speech and sustained barge-in. No batch recognition
+API is available in the pinned SDK: rescue sends only the unresolved PCM span
+through a fresh finalized Inference stream, with trailing silence. This costs an
+extra connection plus the SDK's three-second final-transcript settlement window,
+and loses Deepgram's distinct prerecorded recognition path.
+There is no provider Clear command: barge-in clears local playback and terminates
+the turn's TTS sockets, then starts a fresh stream for the next reply. The voice
+catalog filters provider metadata to Inference-supported Aura-2 selectors; fixed
+samples also synthesize through LiveKit Inference.
+
+`npm test` includes call regressions. `calls.replayWav` runs captured audio
+through the same injected ear and turn machine without a live room or model.
+Diagnostics in ignored `log/calls/` are private, expire after seven days and
+retain at most fifty calls, with a one-hour session limit. Transcripts and WAVs
+stay out of telemetry and source control.
 
 New templates subscribe to `*` with Jev `{ "mode": "all" }`. Unknown events
 join conversation/event lanes and cheap tool-free triage before full turns.

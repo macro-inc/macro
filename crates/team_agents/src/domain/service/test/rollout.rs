@@ -32,6 +32,22 @@ async fn every_admin_operation_is_closed_without_flags_and_agent_self_service_re
         service.delete(receipt(TEAM_ID), &user(AGENT)).await,
         Err(TeamAgentError::NotEnabled)
     ));
+    assert!(matches!(
+        service.voice(receipt(TEAM_ID), &user(AGENT)).await,
+        Err(TeamAgentError::NotEnabled)
+    ));
+    assert!(matches!(
+        service
+            .set_voice(
+                receipt(TEAM_ID),
+                &user(AGENT),
+                crate::domain::voice::AgentVoice {
+                    model: "aura-2-arcas-en".to_owned(),
+                }
+            )
+            .await,
+        Err(TeamAgentError::NotEnabled)
+    ));
     assert_eq!(journal.steps(), Vec::<&str>::new());
 
     // Missing self accounts retain their ordinary domain result, not a rollout denial.
@@ -110,6 +126,23 @@ async fn each_admin_operation_loads_once_and_self_operations_load_no_flags() {
     ).await.expect("member computer discovery");
     assert_eq!(*calls.lock().expect("lock"), vec![user(ADMIN); 7]);
 
+    service
+        .voice(receipt(TEAM_ID), &agent.user_id)
+        .await
+        .expect("voice");
+    assert_eq!(calls.lock().expect("lock").len(), 8);
+    service
+        .set_voice(
+            receipt(TEAM_ID),
+            &agent.user_id,
+            crate::domain::voice::AgentVoice {
+                model: "aura-2-thalia-en".to_owned(),
+            },
+        )
+        .await
+        .expect("set voice");
+    assert_eq!(calls.lock().expect("lock").len(), 9);
+
     service.me(&agent.user_id).await.expect("self profile");
     service
         .list_email(&agent.user_id, 10)
@@ -136,5 +169,5 @@ async fn each_admin_operation_loads_once_and_self_operations_load_no_flags() {
         )
         .await
         .expect("send mail");
-    assert_eq!(calls.lock().expect("lock").len(), 7);
+    assert_eq!(calls.lock().expect("lock").len(), 9);
 }

@@ -234,6 +234,19 @@ pub trait Computers: Send + Sync + 'static {
 
 /// The agents' workspace repos (one per agent, Macro-hosted git).
 pub trait AgentRepos: Send + Sync + 'static {
+    /// Read the agent's committed voice selection.
+    fn voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team: Uuid,
+    ) -> impl Future<Output = Result<super::voice::AgentVoice, TeamAgentError>> + Send;
+    /// Commit a new voice selection through the repository service.
+    fn set_voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team: Uuid,
+        voice: super::voice::AgentVoice,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
     /// Creates the agent's repo from the persona template.
     fn create(
         &self,
@@ -261,6 +274,19 @@ pub trait AgentRepos: Send + Sync + 'static {
 
 /// Inbound port: what drivers (HTTP) can ask of team agents.
 pub trait TeamAgentService: Send + Sync + 'static {
+    /// Read a voice after checking the agent belongs to the administrator's team.
+    fn voice(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<super::voice::AgentVoice, TeamAgentError>> + Send;
+    /// Validate and commit a voice selected by a team administrator.
+    fn set_voice(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+        voice: super::voice::AgentVoice,
+    ) -> impl Future<Output = Result<super::voice::AgentVoice, TeamAgentError>> + Send;
     /// Catalog specifications for any team admin, regardless of subscription.
     fn sizes(
         &self,
@@ -281,7 +307,7 @@ pub trait TeamAgentService: Send + Sync + 'static {
         request: CreateTeamAgent,
     ) -> impl Future<Output = Result<TeamAgent, TeamAgentError>> + Send;
 
-    /// The receipt team's agents, with fresh computer status.
+    /// The receipt team's agents, visible only to administrators.
     fn list(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,

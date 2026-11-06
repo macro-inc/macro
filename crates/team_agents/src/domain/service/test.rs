@@ -448,6 +448,27 @@ struct FakeRepos {
 }
 
 impl AgentRepos for FakeRepos {
+    async fn voice(
+        &self,
+        _agent: &MacroUserIdStr<'_>,
+        _team: Uuid,
+    ) -> Result<crate::domain::voice::AgentVoice, TeamAgentError> {
+        self.journal.record("repo.voice")?;
+        Ok(crate::domain::voice::AgentVoice {
+            model: "aura-2-arcas-en".to_owned(),
+        })
+    }
+    async fn set_voice(
+        &self,
+        _agent: &MacroUserIdStr<'_>,
+        _team: Uuid,
+        voice: crate::domain::voice::AgentVoice,
+    ) -> Result<(), TeamAgentError> {
+        self.journal.record("repo.set_voice")?;
+        self.seeds.lock().unwrap().last_mut().unwrap().voice = Some(voice.model);
+        Ok(())
+    }
+
     async fn create(
         &self,
         _agent_user_id: &MacroUserIdStr<'_>,
@@ -587,7 +608,9 @@ fn build(setup: Setup) -> (Service, Arc<Journal>) {
     (service, journal)
 }
 
-fn receipt(team_id: &str) -> EntityAccessReceipt<AdminTeamRole> {
+fn receipt<T: entity_access::domain::models::RequiredPermission>(
+    team_id: &str,
+) -> EntityAccessReceipt<T> {
     EntityAccessReceipt::dangerously_assert_authenticated_user(
         user(ADMIN),
         team_id,
@@ -597,6 +620,7 @@ fn receipt(team_id: &str) -> EntityAccessReceipt<AdminTeamRole> {
 
 fn request() -> CreateTeamAgent {
     CreateTeamAgent {
+        voice: None,
         expected_included: false,
         name: "  Sam Rivera ".to_string(),
         job_description: "Runs vendor relations.".to_string(),
@@ -652,6 +676,7 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
     assert_eq!(
         *service.repos.seeds.lock().expect("lock"),
         vec![PersonaSeed {
+            voice: None,
             creator_id: Some(user(ADMIN)),
             name: "Sam Rivera".to_string(),
             job_description: "Runs vendor relations.".to_string(),
@@ -1866,6 +1891,55 @@ async fn purchase_status_outage_stays_provisioning_and_recovers() {
         service.me(&user(AGENT)).await.unwrap().status,
         TeamAgentStatus::Running
     );
+}
+
+#[tokio::test]
+async fn voice_management_requires_admin_receipts_and_the_same_team() {
+    use entity_access::domain::models::{Entity, EntityPermission, TeamRole};
+    let (service, _) = build(Setup::default());
+    service
+        .create(receipt(TEAM_ID), request())
+        .await
+        .expect("create");
+    // Being the recorded creator does not let a demoted member mint an admin capability.
+    assert!(
+        EntityAccessReceipt::<AdminTeamRole>::try_new_authenticated_user(
+            user(ADMIN),
+            Entity {
+                entity_id: TEAM_ID.to_owned(),
+                entity_type: EntityType::Team
+            },
+            EntityPermission::TeamRole {
+                role: TeamRole::Member
+            },
+        )
+        .is_err()
+    );
+    let voice = super::super::voice::AgentVoice {
+        model: "aura-2-thalia-en".to_owned(),
+    };
+    assert!(matches!(
+        service.voice(receipt(OTHER_TEAM_ID), &user(AGENT)).await,
+        Err(TeamAgentError::NotFound)
+    ));
+    assert!(matches!(
+        service
+            .set_voice(receipt(OTHER_TEAM_ID), &user(AGENT), voice.clone())
+            .await,
+        Err(TeamAgentError::NotFound)
+    ));
+    assert_eq!(
+        service.list(receipt(TEAM_ID)).await.unwrap().agents.len(),
+        1
+    );
+    assert_eq!(
+        service
+            .set_voice(receipt(TEAM_ID), &user(AGENT), voice.clone())
+            .await
+            .unwrap(),
+        voice
+    );
+    assert!(service.voice(receipt(TEAM_ID), &user(AGENT)).await.is_ok());
 }
 
 mod rollout;

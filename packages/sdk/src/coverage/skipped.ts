@@ -34,6 +34,8 @@ export const agentHarnessExcluded = [
   'completeClaudeSignIn', // Computer account credentials are managed in the app.
   'discoverAgentCapabilitiesHandler',
   'extract', // Command K inference is app-internal.
+  'getAgentVoiceSample', // Fixed previews belong to the app's agent voice picker.
+  'getAgentVoices', // The provider catalog belongs to app settings.
   'getClaudeMode', // Computer account selection belongs to the app.
   'loadAgentModelsHandler',
   'previewAgentSessions',
@@ -93,6 +95,7 @@ export const authExcluded = [
   // Renewal and scheduled-plan details are part of the app's billing settings.
   'getSubscriptionStatus',
   'getTeamAgentSizes', // Invitation catalog belongs to the app's team settings.
+  'getTeamAgentVoice', // Voice ownership is managed in app settings.
   'getTeamByInviteLink',
   'getTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'getTeamInviteLink',
@@ -172,6 +175,7 @@ export const authExcluded = [
   'setGithubPullRequestDraft',
   'setGithubPullRequestState',
   'setSystemStatus',
+  'setTeamAgentVoice', // Voice ownership is managed in app settings.
   'setTeamComputerPower', // Computer lifecycle controls belong to the app.
   'ssoLogin',
   'startCodexLogin',

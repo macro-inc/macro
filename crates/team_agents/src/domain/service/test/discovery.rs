@@ -27,6 +27,10 @@ async fn teammates_discover_only_the_bound_computer_without_admin_details() {
     assert_eq!(unpaired.computer_id, agent.computer_id.unwrap());
     assert!(unpaired.harness_id.is_none());
     assert!(unpaired.is_agent_computer);
+    assert_eq!(
+        service.list(receipt(TEAM_ID)).await.unwrap().agents.len(),
+        1
+    );
     let harness = harness_id::HarnessId::new_from_uuid(Uuid::from_u128(0x50));
     *service.computers.harness_id.lock().unwrap() = Some(harness);
     assert_eq!(

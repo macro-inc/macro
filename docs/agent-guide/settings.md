@@ -295,6 +295,10 @@ shows **Included for Macro**, with no currency charge.
    image-generation service as the AI tool. A failure leaves both actions available.
    Review waits for an active photo request. The shared Dialog supplies the normal
    header, close control, scrolling body, footer and phone sheet.
+   Choose a **Voice** and use **Play sample** to hear the fixed preview line.
+   The suggested voice matches the persona’s descriptive tags; another choice
+   stays selected through price review. Samples stop when the voice changes
+   or the form closes.
 2. Choose **Review price**. Review the server's **Agent seat**, **Computer**,
    and **Total per month/year**, in its quoted currency. **Back** preserves
    the draft. A loading or failed quote disables confirmation; **Try again**
@@ -357,6 +361,17 @@ cancellation on desktop, phone, and tablet.
 The backend-free browser check exercises the real invitation form with scripted
 quotes and purchases:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
+
+The agent row's **More → Change voice** opens the same voice picker later.
+Team admins can open the managed agent roster and save a new voice. Being an
+agent's creator does not keep roster access after losing the admin role.
+Teammates can still discover and request access to an agent's computer without
+loading that management roster.
+**Save voice** commits `config/voice.json` in the agent's repository and takes
+effect on the next call. Failed saves preserve the selection for retry. Desktop
+uses the existing dialog; phone uses the settings drawer with reachable actions.
+Samples are synthesized through Macro with a fixed line, cached, and billed to
+the team when synthesis is needed. Provider credentials stay at the gateway.
 
 ### Navigation
 

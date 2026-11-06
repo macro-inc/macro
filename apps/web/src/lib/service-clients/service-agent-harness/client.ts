@@ -39,6 +39,7 @@ import type {
   SharePermissionV2,
   ToolApprovalAnswerDto,
   UpdateSharePermissionRequestV2,
+  Voice,
   WarmAgentSessionResponse,
 } from './generated/schemas';
 
@@ -75,6 +76,14 @@ const sessionAiError: ErrorResponseHandler<
 
 /** Authenticated client for controlling live agent sessions. */
 export const agentHarnessServiceClient = {
+  voices() {
+    return fetchWithToken<Voice[]>(`${agentHarnessHost}/voices`);
+  },
+  voiceSample(model: string) {
+    return fetchWithToken<Uint8Array>(
+      `${agentHarnessHost}/voices/${encodeURIComponent(model)}/sample`
+    );
+  },
   preview(sessionIds: string[]) {
     return fetchWithToken<PreviewAgentSessionsResponse>(
       `${agentHarnessHost}/agent-sessions/preview`,

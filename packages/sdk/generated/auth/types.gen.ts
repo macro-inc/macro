@@ -85,6 +85,16 @@ export type AgentSetupResponse = {
 };
 
 /**
+ * A provider voice setting, serialized as `config/voice.json`.
+ */
+export type AgentVoice = {
+    /**
+     * Exact Aura-2 voice model.
+     */
+    model: string;
+};
+
+/**
  * Error response body.
  */
 export type AiBillingErrorBody = {
@@ -504,6 +514,10 @@ export type CreateTeamAgent = {
      * The computer to buy.
      */
     size: ComputerSize;
+    /**
+     * Aura-2 model chosen in the voice picker; older clients use a persona default.
+     */
+    voice?: string | null;
 };
 
 /**
@@ -5793,6 +5807,51 @@ export type DeleteTeamAgentSecretResponses = {
 };
 
 export type DeleteTeamAgentSecretResponse = DeleteTeamAgentSecretResponses[keyof DeleteTeamAgentSecretResponses];
+
+export type GetTeamAgentVoiceData = {
+    body?: never;
+    path: {
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/voice';
+};
+
+export type GetTeamAgentVoiceErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type GetTeamAgentVoiceError = GetTeamAgentVoiceErrors[keyof GetTeamAgentVoiceErrors];
+
+export type GetTeamAgentVoiceResponses = {
+    200: AgentVoice;
+};
+
+export type GetTeamAgentVoiceResponse = GetTeamAgentVoiceResponses[keyof GetTeamAgentVoiceResponses];
+
+export type SetTeamAgentVoiceData = {
+    body: AgentVoice;
+    path: {
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/voice';
+};
+
+export type SetTeamAgentVoiceErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type SetTeamAgentVoiceError = SetTeamAgentVoiceErrors[keyof SetTeamAgentVoiceErrors];
+
+export type SetTeamAgentVoiceResponses = {
+    200: AgentVoice;
+};
+
+export type SetTeamAgentVoiceResponse = SetTeamAgentVoiceResponses[keyof SetTeamAgentVoiceResponses];
 
 export type AgentSetupData = {
     body?: never;

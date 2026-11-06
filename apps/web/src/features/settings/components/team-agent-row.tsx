@@ -19,9 +19,10 @@ export function TeamAgentRow(props: {
   avatar: JSX.Element;
   retrying: boolean;
   retryError?: boolean;
-  onRetry(): void;
-  onRemove(): void;
+  onRetry?(): void;
+  onRemove?(): void;
   onViewComputer?(): void;
+  onVoice?(): void;
 }) {
   const lastActive = () => {
     if (!props.agent.lastTurnAt) return 'No activity yet';
@@ -60,6 +61,7 @@ export function TeamAgentRow(props: {
           agent={props.agent}
           onRemove={props.onRemove}
           onViewComputer={props.onViewComputer}
+          onVoice={props.onVoice}
           onRetry={props.onRetry}
           retrying={props.retrying}
           retryError={props.retryError}
@@ -74,8 +76,9 @@ export function TeamAgentMenu(props: {
   retrying?: boolean;
   retryError?: boolean;
   onRetry?(): void;
-  onRemove(): void;
+  onRemove?(): void;
   onViewComputer?(): void;
+  onVoice?(): void;
 }) {
   return (
     <Dropdown>
@@ -117,12 +120,21 @@ export function TeamAgentMenu(props: {
             {t('common.retry')}
           </Dropdown.Item>
         </Show>
-        <Dropdown.Item
-          disabled={props.agent.payment === 'pending'}
-          onSelect={() => props.agent.payment !== 'pending' && props.onRemove()}
-        >
-          {t('common.removeTeamAgent')}
-        </Dropdown.Item>
+        <Show when={props.onVoice}>
+          <Dropdown.Item onSelect={() => props.onVoice?.()}>
+            {t('common.changeVoice')}
+          </Dropdown.Item>
+        </Show>
+        <Show when={props.onRemove}>
+          <Dropdown.Item
+            disabled={props.agent.payment === 'pending'}
+            onSelect={() =>
+              props.agent.payment !== 'pending' && props.onRemove?.()
+            }
+          >
+            {t('common.removeTeamAgent')}
+          </Dropdown.Item>
+        </Show>
       </Dropdown.Content>
     </Dropdown>
   );

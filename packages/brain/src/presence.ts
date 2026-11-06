@@ -7,7 +7,9 @@ import { API_KEY_HEADER } from './macro.ts';
 export type Socket = Pick<
   WebSocket,
   'readyState' | 'send' | 'close' | 'onopen' | 'onclose' | 'onerror'
->;
+> &
+  Partial<Pick<WebSocket, 'onmessage'>>;
+
 export type OpenSocket = (url: string, apiKey: string) => Socket;
 export const openGatewaySocket: OpenSocket = (url, apiKey) =>
   new WebSocket(url, { headers: { [API_KEY_HEADER]: apiKey } });
@@ -17,6 +19,7 @@ export type PresenceOptions = {
   open: OpenSocket;
   log(line: object): void;
   pingMilliseconds?: number;
+  onMessage?(data: unknown): void;
 };
 /** Stay online until the returned stop function runs. */
 export function stayOnline(options: PresenceOptions): () => void {
@@ -28,6 +31,8 @@ export function stayOnline(options: PresenceOptions): () => void {
   const connect = () => {
     const opened = options.open(options.url, options.apiKey);
     socket = opened;
+    if (options.onMessage)
+      opened.onmessage = (event) => options.onMessage?.(event.data);
     opened.onopen = () => {
       delay = 1000;
       options.log({ presence: 'online' });

@@ -33,7 +33,9 @@ mod routine_drafts;
 mod routine_sessions;
 mod runtime_commands;
 mod scheduling;
+mod speech_gateway;
 mod trigger;
+mod voice_gateway;
 
 #[cfg(test)]
 mod test;
@@ -1347,6 +1349,17 @@ async fn run() -> anyhow::Result<()> {
             computer_operator.clone(),
         ),
     );
+    let brain_access = Arc::new(brain_access);
+    let speech_provider = Arc::new(speech_gateway::SpeechGateway::new(
+        brain_access.clone(),
+        admission.clone(),
+        recorder.clone(),
+        &config.livekit_api_key,
+        &config.livekit_api_secret,
+        "https://agent-gateway.livekit.cloud/v1",
+        "https://api.deepgram.com/v1/models",
+    )?);
+    let speech_gateway = speech_gateway::router(speech_provider.clone());
     let anthropic_gateway = anthropic_gateway::router(
         anthropic_gateway::GatewayState::new(
             Arc::new(session_repo.clone()),
@@ -1355,8 +1368,9 @@ async fn run() -> anyhow::Result<()> {
             anthropic_gateway::ANTHROPIC_API_URL,
             &config.anthropic_api_key,
         )?
-        .with_brains(Arc::new(brain_access)),
-    );
+        .with_brains(brain_access),
+    )
+    .merge(speech_gateway);
     let parked_commands = Arc::new(computers::ParkedCommands::default());
     let command_forwarder = Arc::new(RedisCommandForwarder::new(redis.clone()));
     let runtimes = RuntimeRegistry::with_presence(
@@ -1893,6 +1907,14 @@ async fn run() -> anyhow::Result<()> {
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),
     );
+    let voices = voice_gateway::router(voice_gateway::VoiceState {
+        service: Arc::new(team_agents::domain::voice::Voices::new(
+            speech_gateway::VoiceCatalog(speech_provider),
+            feature_flags.clone(),
+        )),
+        access: entity_access.clone(),
+        auth: MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    });
     let tool_approval_answers = tool_approvals_router(ToolApprovalsRouterState::new(
         tool_approvals,
         entity_access.clone(),
@@ -1960,6 +1982,7 @@ async fn run() -> anyhow::Result<()> {
             .with_coding_agents(coding_agents)
             .with_computer_screen(computer_screen)
             .with_capabilities(capabilities)
+            .with_voices(voices)
             .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
             .with_auto_archive(auto_archive)

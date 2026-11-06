@@ -76,6 +76,7 @@ impl<S, Eas, Auth> FromRef<TeamAgentsRouterState<S, Eas, Auth>> for MacroAuthori
 /// - `POST /` — a team admin invites an agent and buys its computer.
 /// - `GET /` — a team admin lists the team's agents.
 /// - `GET /{agent_user_id}/computer` — an enabled teammate discovers an agent runtime.
+/// - `GET`/`PUT /{agent_user_id}/voice` — a team admin reads/changes voice.
 /// - `DELETE /{agent_user_id}` — a team admin deletes an agent.
 /// - `GET /me` — the calling agent's profile.
 /// - `GET /me/email/messages` — the calling agent's newest emails.
@@ -91,6 +92,11 @@ where
     Router::new()
         .route("/sizes", get(get_team_agent_sizes_handler::<S, Eas, Auth>))
         .route("/quote", get(quote_team_agent_handler::<S, Eas, Auth>))
+        .route(
+            "/{agent_user_id}/voice",
+            get(get_team_agent_voice_handler::<S, Eas, Auth>)
+                .put(set_team_agent_voice_handler::<S, Eas, Auth>),
+        )
         .route(
             "/",
             post(create_team_agent_handler::<S, Eas, Auth>)
@@ -656,4 +662,51 @@ where
         .await?;
 
     Ok(Json(sent))
+}
+
+/// Read the user-selected voice from the agent's repository.
+#[utoipa::path(get, tag = "team-agents", operation_id = "get_team_agent_voice", path = "/team_agents/{agent_user_id}/voice", params(("agent_user_id" = String, Path)), responses((status = 200, body = crate::domain::voice::AgentVoice), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse)))]
+#[tracing::instrument(skip_all, err)]
+pub async fn get_team_agent_voice_handler<S, Eas, Auth>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+    Path(path): Path<AgentPath>,
+) -> Result<Json<crate::domain::voice::AgentVoice>, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let agent = MacroUserIdStr::parse_from_str(&path.agent_user_id)
+        .map_err(|_| TeamAgentError::BadRequest("invalid agent user id".to_owned()))?;
+    Ok(Json(
+        state
+            .service
+            .voice(access.entity_access_receipt, &agent)
+            .await?,
+    ))
+}
+
+/// Commit an administrator's voice selection to the agent's repository.
+#[utoipa::path(put, tag = "team-agents", operation_id = "set_team_agent_voice", path = "/team_agents/{agent_user_id}/voice", params(("agent_user_id" = String, Path)), request_body = crate::domain::voice::AgentVoice, responses((status = 200, body = crate::domain::voice::AgentVoice), (status = 400, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse)))]
+#[tracing::instrument(skip_all, err)]
+pub async fn set_team_agent_voice_handler<S, Eas, Auth>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+    Path(path): Path<AgentPath>,
+    Json(voice): Json<crate::domain::voice::AgentVoice>,
+) -> Result<Json<crate::domain::voice::AgentVoice>, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let agent = MacroUserIdStr::parse_from_str(&path.agent_user_id)
+        .map_err(|_| TeamAgentError::BadRequest("invalid agent user id".to_owned()))?;
+    Ok(Json(
+        state
+            .service
+            .set_voice(access.entity_access_receipt, &agent, voice)
+            .await?,
+    ))
 }

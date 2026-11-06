@@ -147,6 +147,12 @@ fn slug(name: &str) -> String {
 
 /// The request with its text trimmed, or why it is malformed.
 fn validate(request: CreateTeamAgent) -> Result<CreateTeamAgent, TeamAgentError> {
+    if let Some(model) = &request.voice {
+        super::voice::AgentVoice {
+            model: model.clone(),
+        }
+        .validate()?;
+    }
     let name = request.name.trim().to_string();
 
     if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
@@ -170,6 +176,7 @@ fn validate(request: CreateTeamAgent) -> Result<CreateTeamAgent, TeamAgentError>
     }
 
     Ok(CreateTeamAgent {
+        voice: request.voice,
         expected_included: request.expected_included,
         name,
         job_description,
@@ -283,9 +290,9 @@ where
         }
     }
 
-    async fn ensure_admin_enabled(
+    async fn ensure_management_enabled<T: RequiredPermission>(
         &self,
-        receipt: &EntityAccessReceipt<AdminTeamRole>,
+        receipt: &EntityAccessReceipt<T>,
     ) -> Result<(), TeamAgentError> {
         let caller = receipt.acting_user_id().ok_or(TeamAgentError::Forbidden)?;
         self.ensure_enabled(caller).await
@@ -378,6 +385,7 @@ where
         );
 
         let seed = PersonaSeed {
+            voice: request.voice,
             creator_id: Some(created_by.clone()),
             name: request.name.clone(),
             job_description: request.job_description,
@@ -436,9 +444,9 @@ where
     }
 
     /// The agent on the receipt's team, or `NotFound`.
-    async fn team_agent(
+    async fn team_agent<T: RequiredPermission>(
         &self,
-        receipt: &EntityAccessReceipt<AdminTeamRole>,
+        receipt: &EntityAccessReceipt<T>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<TeamAgent, TeamAgentError> {
         let team_id = team_id(receipt)?;
@@ -588,11 +596,39 @@ where
     Flags: FeatureFlags + 'static,
 {
     #[tracing::instrument(skip_all, err)]
+    async fn voice(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<super::voice::AgentVoice, TeamAgentError> {
+        self.ensure_management_enabled(&receipt).await?;
+        let agent = self.team_agent(&receipt, user).await?;
+
+        self.repos.voice(user, agent.team_id).await
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn set_voice(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        user: &MacroUserIdStr<'_>,
+        voice: super::voice::AgentVoice,
+    ) -> Result<super::voice::AgentVoice, TeamAgentError> {
+        self.ensure_management_enabled(&receipt).await?;
+        let agent = self.team_agent(&receipt, user).await?;
+
+        voice.validate()?;
+        self.repos
+            .set_voice(user, agent.team_id, voice.clone())
+            .await?;
+        Ok(voice)
+    }
+    #[tracing::instrument(skip_all, err)]
     async fn sizes(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> Result<TeamAgentSizes, TeamAgentError> {
-        self.ensure_admin_enabled(&receipt).await?;
+        self.ensure_management_enabled(&receipt).await?;
         team_id(&receipt)?;
         Ok(TeamAgentSizes {
             sizes: self.computers.sizes(),
@@ -763,7 +799,7 @@ where
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> Result<TeamAgents, TeamAgentError> {
-        self.ensure_admin_enabled(&receipt).await?;
+        self.ensure_management_enabled(&receipt).await?;
         let team_id = team_id(&receipt)?;
         let stored = self
             .repository
@@ -797,7 +833,7 @@ where
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<TeamAgent, TeamAgentError> {
-        self.ensure_admin_enabled(&receipt).await?;
+        self.ensure_management_enabled(&receipt).await?;
         let agent = self.team_agent(&receipt, agent_user_id).await?;
         let computer_id = agent.computer_id.ok_or_else(|| {
             TeamAgentError::RetryUnavailable("the agent has no saved computer to retry".to_string())
@@ -872,7 +908,7 @@ where
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), TeamAgentError> {
-        self.ensure_admin_enabled(&receipt).await?;
+        self.ensure_management_enabled(&receipt).await?;
         let agent = self.team_agent(&receipt, agent_user_id).await?;
         let Some(computer_id) = agent.computer_id else {
             return Err(TeamAgentError::RetryUnavailable(

@@ -66,6 +66,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { AgentVoiceDialog } from './components/agent-voice-dialog';
 import { InviteAgentDialog } from './components/invite-agent-dialog';
 import { MemberInviteActions } from './components/member-invite-actions';
 import { MemberRowLayout } from './components/member-row-layout';
@@ -427,6 +428,12 @@ export function TeamMembers(props: { team: TeamSummary }) {
       ? agentsQuery.data.agents
       : [];
   const [inviteAgentOpen, setInviteAgentOpen] = createSignal(false);
+  const [voiceAgent, setVoiceAgent] = createSignal<TeamAgent>();
+  const canChangeVoice = () => canManageAgents();
+  createEffect(() => {
+    const agent = voiceAgent();
+    if (agent && !canChangeVoice()) setVoiceAgent(undefined);
+  });
   const [removeAgent, setRemoveAgent] = createSignal<TeamAgent>();
   // A remote rollout change revokes open management UI, including when enabled again.
   createEffect(
@@ -805,25 +812,40 @@ export function TeamMembers(props: { team: TeamSummary }) {
                             retryAgent.isError &&
                             retryAgent.variables?.userId === agent.userId
                           }
-                          onRetry={() => {
-                            if (
-                              !canManageAgents() ||
-                              retryAgent.isPending ||
-                              !canRetryTeamAgent(agent)
-                            )
-                              return;
-                            retryAgent.mutate({
-                              teamId: props.team.id,
-                              userId: agent.userId,
-                            });
-                          }}
-                          onRemove={() => {
-                            if (
-                              canManageAgents() &&
-                              agent.payment !== 'pending'
-                            )
-                              setRemoveAgent(agent);
-                          }}
+                          onVoice={
+                            canChangeVoice()
+                              ? () => {
+                                  if (canChangeVoice()) setVoiceAgent(agent);
+                                }
+                              : undefined
+                          }
+                          onRetry={
+                            canManageAgents()
+                              ? () => {
+                                  if (
+                                    !canManageAgents() ||
+                                    retryAgent.isPending ||
+                                    !canRetryTeamAgent(agent)
+                                  )
+                                    return;
+                                  retryAgent.mutate({
+                                    teamId: props.team.id,
+                                    userId: agent.userId,
+                                  });
+                                }
+                              : undefined
+                          }
+                          onRemove={
+                            canManageAgents()
+                              ? () => {
+                                  if (
+                                    canManageAgents() &&
+                                    agent.payment !== 'pending'
+                                  )
+                                    setRemoveAgent(agent);
+                                }
+                              : undefined
+                          }
                         />
                       )}
                     </For>
@@ -834,6 +856,11 @@ export function TeamMembers(props: { team: TeamSummary }) {
           </Show>
         </SettingsSection>
 
+        <AgentVoiceDialog
+          teamId={props.team.id}
+          agent={voiceAgent()}
+          onClose={() => setVoiceAgent(undefined)}
+        />
         <Show when={canManageAgents()}>
           <InviteAgentDialog
             teamId={props.team.id}

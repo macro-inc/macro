@@ -188,6 +188,17 @@ export class GitWriter {
     this.tail = next.catch(() => undefined);
     return next;
   }
+  /** Read server-committed configuration without changing an active turn's workspace. */
+  readRemote(relative: string): Promise<string> {
+    return this.serial(async () => {
+      await this.must(['fetch', '--quiet', 'origin', 'main']);
+      const result = await this.git(['show', `FETCH_HEAD:${relative}`]);
+      if (result.code !== 0)
+        throw new WorkspaceError(`could not read committed ${relative}`);
+      return result.stdout;
+    });
+  }
+
   /** Write a workspace file in order with every other write and commit. */
   write(relative: string, content: string): Promise<void> {
     return this.serial(async () => {

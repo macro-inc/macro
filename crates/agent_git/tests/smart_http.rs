@@ -347,6 +347,7 @@ async fn a_repo_at_its_size_limit_refuses_pushes_with_a_message(pool: PgPool) {
 
 fn seed() -> agent_git::domain::template::PersonaSeed {
     agent_git::domain::template::PersonaSeed {
+        voice: None,
         name: "Sam".to_owned(),
         job_description: "Books venues.".to_owned(),
         personality: "Warm and direct.".to_owned(),
@@ -355,6 +356,125 @@ fn seed() -> agent_git::domain::template::PersonaSeed {
                 .expect("creator id")
                 .into_owned(),
         ),
+    }
+}
+
+#[tokio::test]
+async fn server_voice_commit_is_idempotent_and_preserves_other_files() {
+    use agent_git::domain::ports::RepoStore;
+    use agent_git::domain::voice::VoiceConfig;
+    let root = tempfile::tempdir().unwrap();
+    let directories = RepoDirectories::new(root.path().to_path_buf());
+    let store = BareRepoStore::new(directories.clone());
+    let agent = MacroUserIdStr::parse_from_str("macro|agent@example.com").unwrap();
+    let mut persona = seed();
+    persona.voice = Some("aura-2-thalia-en".to_owned());
+    store
+        .create_repo(&agent, &WORKSPACE_TEMPLATE.render(&persona).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(store.voice(&agent).await.unwrap().model, "aura-2-thalia-en");
+    let repo = directories.repo_path(&agent);
+    let before = tokio::process::Command::new("git")
+        .arg("--git-dir")
+        .arg(&repo)
+        .args(["rev-parse", "main:OPERATING.md"])
+        .output()
+        .await
+        .unwrap();
+    let voice = VoiceConfig {
+        model: "aura-2-arcas-en".to_owned(),
+    };
+    store.set_voice(&agent, &voice).await.unwrap();
+    assert_eq!(store.voice(&agent).await.unwrap(), voice);
+    let revision = tokio::process::Command::new("git")
+        .arg("--git-dir")
+        .arg(&repo)
+        .args(["rev-parse", "main"])
+        .output()
+        .await
+        .unwrap();
+    store.set_voice(&agent, &voice).await.unwrap();
+    let repeated = tokio::process::Command::new("git")
+        .arg("--git-dir")
+        .arg(&repo)
+        .args(["rev-parse", "main"])
+        .output()
+        .await
+        .unwrap();
+    assert_eq!(revision.stdout, repeated.stdout);
+    let after = tokio::process::Command::new("git")
+        .arg("--git-dir")
+        .arg(&repo)
+        .args(["rev-parse", "main:OPERATING.md"])
+        .output()
+        .await
+        .unwrap();
+    assert_eq!(before.stdout, after.stdout);
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn server_voice_updates_never_follow_repository_symlinks() {
+    use agent_git::domain::{ports::RepoStore, voice::VoiceConfig};
+    for directory_link in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let directories = RepoDirectories::new(root.path().join("repositories"));
+        let store = BareRepoStore::new(directories.clone());
+        let agent = MacroUserIdStr::parse_from_str("macro|agent@example.com").unwrap();
+        store
+            .create_repo(&agent, &WORKSPACE_TEMPLATE.render(&seed()).unwrap())
+            .await
+            .unwrap();
+        let repo = directories.repo_path(&agent);
+        assert!(
+            git(root.path(), &["clone", repo.to_str().unwrap(), "checkout"])
+                .await
+                .status
+                .success()
+        );
+        let checkout = root.path().join("checkout");
+        let outside = root.path().join("outside");
+        std::fs::create_dir(&outside).unwrap();
+        let protected = outside.join("voice.json");
+        std::fs::write(&protected, "protected contents").unwrap();
+        if directory_link {
+            std::fs::remove_dir_all(checkout.join("config")).unwrap();
+            std::os::unix::fs::symlink(&outside, checkout.join("config")).unwrap();
+        } else {
+            std::fs::remove_file(checkout.join("config/voice.json")).unwrap();
+            std::os::unix::fs::symlink(&protected, checkout.join("config/voice.json")).unwrap();
+        }
+        assert!(git(&checkout, &["add", "--all"]).await.status.success());
+        assert!(
+            git(&checkout, &["commit", "-m", "Change repository paths"])
+                .await
+                .status
+                .success()
+        );
+        assert!(
+            git(&checkout, &["push", "origin", "main"])
+                .await
+                .status
+                .success()
+        );
+        let result = store
+            .set_voice(
+                &agent,
+                &VoiceConfig {
+                    model: "aura-2-arcas-en".to_owned(),
+                },
+            )
+            .await;
+        assert_eq!(result.is_err(), directory_link);
+        assert_eq!(
+            std::fs::read_to_string(&protected).unwrap(),
+            "protected contents"
+        );
+        if !directory_link {
+            assert_eq!(store.voice(&agent).await.unwrap().model, "aura-2-arcas-en");
+        }
     }
 }
 

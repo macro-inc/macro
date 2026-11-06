@@ -226,6 +226,8 @@ use model::user::{
                 /// /team_agents
                 team_agents::inbound::axum_router::quote_team_agent_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 team_agents::inbound::axum_router::get_team_agent_sizes_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                team_agents::inbound::axum_router::get_team_agent_voice_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                team_agents::inbound::axum_router::set_team_agent_voice_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 team_agents::inbound::axum_router::create_team_agent_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 team_agents::inbound::axum_router::list_team_agents_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
         team_agents::inbound::axum_router::get_team_agent_computer_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,

@@ -64,8 +64,12 @@ Use `src/telemetry.ts` for brain spans and traced transports. Keep attributes to
 categories, counts and opaque IDs; hash email-bearing user IDs. Telemetry is
 opt-in through the persona env file; README documents its endpoint and parent.
 
-The runtime contract is `prepare(signal)`, `run(signal)`, `health()` and
-`post(turn, channel, text)`. `prepare` connects and buffers events without
+Voice calls live in `src/calls/`; its guide covers the media interfaces and
+quiet-mic regression fixtures. Speech uses agent-key gateway auth.
+
+The runtime contract is `prepare(signal)`, `run(signal)`, `health()`,
+`post(turn, channel, text)` and `checkFixture(fixture)`. Wrappers forward all
+five methods so supervisor-owned regression replay remains available. `prepare` connects and buffers events without
 mutating workspace queues. The supervisor starts replacement intake alongside
 the old process, then stops old intake and drains its turns before activating
 replacement queue processing. Receipt IDs persist across the handoff to avoid

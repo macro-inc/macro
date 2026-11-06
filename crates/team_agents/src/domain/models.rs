@@ -131,6 +131,9 @@ pub enum ComputerSize {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateTeamAgent {
+    /// Aura-2 model chosen in the voice picker; older clients use a persona default.
+    #[serde(default)]
+    pub voice: Option<String>,
     /// Whether the reviewed quote included the seat and computer for free.
     pub expected_included: bool,
     /// Display name.
@@ -338,6 +341,9 @@ pub struct BrainHealth {
 /// What the agent's workspace repo starts from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersonaSeed {
+    /// User-owned call voice, saved in the workspace repository.
+    #[serde(default)]
+    pub voice: Option<String>,
     /// Admin the brain should recognize as its creator; absent on older seeds.
     #[serde(default)]
     pub creator_id: Option<MacroUserIdStr<'static>>,

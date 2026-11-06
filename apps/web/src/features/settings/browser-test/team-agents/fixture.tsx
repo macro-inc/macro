@@ -11,6 +11,7 @@ import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../../theme/themes/macro-light';
+import { AgentVoiceForm } from '../../components/agent-voice-form';
 import { InviteAgentForm } from '../../components/invite-agent-form';
 import { MemberInviteActions } from '../../components/member-invite-actions';
 import {
@@ -31,6 +32,35 @@ const [personInvites, setPersonInvites] = createSignal(0);
 const menuDialog = new URLSearchParams(location.search).has('menu-dialog');
 const [size, setSize] = createSignal<ComputerSize>('standard');
 const [requests, setRequests] = createSignal(0);
+const voiceEnabled = new URLSearchParams(location.search).has('voices');
+const [settingsOpen, setSettingsOpen] = createSignal(false);
+const [savedVoice, setSavedVoice] = createSignal('aura-2-arcas-en');
+const [invitedVoice, setInvitedVoice] = createSignal('');
+const [saveFailed, setSaveFailed] = createSignal(false);
+let failSave = new URLSearchParams(location.search).has('voice-save-error');
+const voiceOptions = [
+  {
+    model: 'aura-2-arcas-en',
+    name: 'Arcas',
+    accent: 'American',
+    tags: ['male', 'confident'],
+    languages: ['en'],
+  },
+  {
+    model: 'aura-2-thalia-en',
+    name: 'Thalia',
+    accent: 'American',
+    tags: ['female', 'warm'],
+    languages: ['en'],
+  },
+];
+const voices = {
+  choices: () => voiceOptions,
+  loading: () => false,
+  failed: () => false,
+  retry: () => {},
+  sample: async () => new Uint8Array(44),
+};
 const [portraits, setPortraits] = createSignal(0);
 const [uploads, setUploads] = createSignal(0);
 const [savedAvatar, setSavedAvatar] = createSignal('');
@@ -104,6 +134,34 @@ render(
             <p>Person invitations: {personInvites()}</p>
           </Show>
           <p>Purchases: {requests()}</p>
+          <Show when={voiceEnabled}>
+            <Button onClick={() => setSettingsOpen(true)}>Change voice</Button>
+            <p>Saved voice: {savedVoice()}</p>
+            <p>Invited voice: {invitedVoice()}</p>
+            <Show when={settingsOpen()}>
+              <AgentVoiceForm
+                name="Assistant"
+                source={voices}
+                current={savedVoice()}
+                loading={false}
+                loadError={false}
+                saving={false}
+                saveError={saveFailed()}
+                onRetry={() => {}}
+                onClose={() => setSettingsOpen(false)}
+                onSave={(model) => {
+                  if (failSave) {
+                    failSave = false;
+                    setSaveFailed(true);
+                    return;
+                  }
+                  setSavedVoice(model);
+                  setSaveFailed(false);
+                  setSettingsOpen(false);
+                }}
+              />
+            </Show>
+          </Show>
           <p>Portrait generations: {portraits()}</p>
           <p>Photo uploads: {uploads()}</p>
           <p>Saved avatar: {savedAvatar()}</p>
@@ -155,6 +213,7 @@ render(
           <Show when={open()}>
             <InviteAgentForm
               teamId="team-1"
+              voices={voiceEnabled ? voices : undefined}
               open
               onClose={() => setOpen(false)}
               size={size()}
@@ -186,6 +245,7 @@ render(
                 reloadQuote: () => setFailed(false),
                 pending: () => false,
                 create: async (request) => {
+                  setInvitedVoice(request.voice ?? '');
                   if (changeEligibility) {
                     changeEligibility = false;
                     setIncluded(!included());

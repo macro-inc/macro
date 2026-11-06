@@ -56,6 +56,13 @@ vi.mock('./Team', () => ({
   }),
   InviteToTeamDialog: () => null,
 }));
+vi.mock('./components/agent-voice-dialog', () => ({
+  AgentVoiceDialog: (props: { agent?: TeamAgent }) => (
+    <Show when={props.agent}>
+      <p>Voice settings open</p>
+    </Show>
+  ),
+}));
 vi.mock('./components/invite-agent-dialog', () => ({
   InviteAgentDialog: (props: { open: boolean }) => (
     <Show when={props.open}>
@@ -147,6 +154,7 @@ const agent: TeamAgent = {
   name: 'Assistant',
   email: 'agent@example.com',
   createdAt: '2026-01-01',
+  createdBy: 'macro|owner@example.com',
   status: 'failed',
   payment: 'paid',
   retryable: true,
@@ -233,7 +241,7 @@ it('rejects an old roster-error retry after the rollout is disabled', () => {
   expect(mocks.refetch).not.toHaveBeenCalled();
 });
 
-it('lets a teammate open an agent computer without loading the management roster and revokes stale actions', async () => {
+it('lets a non-admin creator open a computer without loading the management roster and revokes stale actions', async () => {
   mocks.viewerRole = () => 'member';
   setFlag({ enabled: true, loading: false });
   render(() => <TeamMembers team={team} />);
@@ -252,4 +260,23 @@ it('lets a teammate open an agent computer without loading the management roster
   fireEvent.click(view);
   expect(mocks.openComputer).toHaveBeenCalledTimes(1);
   expect(mocks.enabled()).toBe(false);
+});
+
+it('keeps voice and computer actions together and revokes voice settings with the rollout', async () => {
+  setFlag({ enabled: true, loading: false });
+  render(() => <TeamMembers team={team} />);
+  fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+    key: 'ArrowDown',
+  });
+  expect(
+    await screen.findByRole('menuitem', { name: 'View computer' })
+  ).toBeTruthy();
+  const voice = screen.getByRole('menuitem', { name: 'Change voice' });
+  fireEvent.keyDown(voice, { key: 'Enter' });
+  expect(screen.getByText('Voice settings open')).toBeTruthy();
+  setFlag({ enabled: false, loading: false });
+  expect(screen.queryByText('Voice settings open')).toBeNull();
+  fireEvent.keyDown(voice, { key: 'Enter' });
+  expect(screen.queryByText('Voice settings open')).toBeNull();
+  expect(mocks.openComputer).not.toHaveBeenCalled();
 });

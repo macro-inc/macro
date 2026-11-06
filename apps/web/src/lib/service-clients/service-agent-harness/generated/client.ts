@@ -75,6 +75,7 @@ import type {
   StartFreshAgentConversationRequest,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
+  Voice,
   WarmAgentSessionRequest,
   WarmAgentSessionResponse,
   WorkRegistrationResponse,
@@ -4569,4 +4570,122 @@ export const extract = async (
 
   const data: extractResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as extractResponse;
+};
+
+/**
+ * @summary Provider voice metadata for the Invite agent form and agent settings.
+ */
+export type getAgentVoicesResponse200 = {
+  data: Voice[];
+  status: 200;
+};
+
+export type getAgentVoicesResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getAgentVoicesResponse502 = {
+  data: void;
+  status: 502;
+};
+
+export type getAgentVoicesResponseSuccess = getAgentVoicesResponse200 & {
+  headers: Headers;
+};
+export type getAgentVoicesResponseError = (
+  | getAgentVoicesResponse403
+  | getAgentVoicesResponse502
+) & {
+  headers: Headers;
+};
+
+export type getAgentVoicesResponse =
+  | getAgentVoicesResponseSuccess
+  | getAgentVoicesResponseError;
+
+export const getGetAgentVoicesUrl = () => {
+  return `/voices`;
+};
+
+export const getAgentVoices = async (
+  options?: RequestInit
+): Promise<getAgentVoicesResponse> => {
+  const res = await fetch(getGetAgentVoicesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentVoicesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentVoicesResponse;
+};
+
+/**
+ * @summary Cached audio generated through Macro using a fixed preview line.
+ */
+export type getAgentVoiceSampleResponse200 = {
+  data: number[];
+  status: 200;
+};
+
+export type getAgentVoiceSampleResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type getAgentVoiceSampleResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getAgentVoiceSampleResponse502 = {
+  data: void;
+  status: 502;
+};
+
+export type getAgentVoiceSampleResponseSuccess =
+  getAgentVoiceSampleResponse200 & {
+    headers: Headers;
+  };
+export type getAgentVoiceSampleResponseError = (
+  | getAgentVoiceSampleResponse400
+  | getAgentVoiceSampleResponse403
+  | getAgentVoiceSampleResponse502
+) & {
+  headers: Headers;
+};
+
+export type getAgentVoiceSampleResponse =
+  | getAgentVoiceSampleResponseSuccess
+  | getAgentVoiceSampleResponseError;
+
+export const getGetAgentVoiceSampleUrl = (model: string) => {
+  return `/voices/${model}/sample`;
+};
+
+export const getAgentVoiceSample = async (
+  model: string,
+  options?: RequestInit
+): Promise<getAgentVoiceSampleResponse> => {
+  const res = await fetch(getGetAgentVoiceSampleUrl(model), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentVoiceSampleResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentVoiceSampleResponse;
 };

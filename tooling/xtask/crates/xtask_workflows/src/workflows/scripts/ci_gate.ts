@@ -7,7 +7,7 @@
 //           holds the PR head, set pending
 //   finish  the run ends: success when every job passed or was path-skipped
 //   fork-request  the label goes on a fork PR: what start does with a write
-//                 token, from a trusted run of `main`'s workflow
+//                 token, from the trusted base branch's workflow
 //   fork    after a fork PR's run, whose read-only token could not set the status
 //
 // Statuses go on the PR head commit, so a later push starts without one.

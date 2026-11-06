@@ -66,9 +66,9 @@ The hosted adapter passes `PurchaseBilling::Comped` with reason
 The authentication service also applies this shared eligibility policy to direct
 team computer purchases through `MacroStaffCompPolicy`.
 
-The `enable-team-agents` rollout gates every administrator operation: roster,
-sizes, quote, create, retry, remove and admin secret list/delete. Load exactly one
-snapshot for the authenticated administrator and read the flag synchronously.
+The `enable-team-agents` rollout gates management operations: roster, voice
+discovery/samples/settings, sizes, quote, create, retry, remove and admin secret
+list/delete. Load one snapshot for the authenticated user and read it synchronously.
 Missing configuration, a missing key, off or load failure denies with HTTP 403.
 Team authorization remains independent. Agent self profile/mail, own secrets,
 brain gateway and git access never consult this rollout policy.
@@ -84,7 +84,7 @@ brain gateway and git access never consult this rollout policy.
 - `GET /team_agents/{agent_user_id}/computer` permits rollout-enabled teammates
   to discover only their team's bound computer and nullable harness ID, with
   `isAgentComputer: true`. It returns no profile, billing or bootstrap details
-  and grants no runtime access; the administrator roster stays admin-only.
+  and grants no runtime access. The roster stays administrator-only.
 
 - Owns: the `team_agents` table, agent account creation and deletion, the
   persona sent to the computer, agent email.
@@ -194,3 +194,14 @@ usage to the agent and its current team.
 
 Trace invite phases under the caller, record `billing_kind` as stripe/comped,
 and hash email-bearing agent user IDs with `macro_user_id::telemetry_id`.
+
+## Call voice ownership
+
+Voice settings, catalog, metered samples and roster reads require a team
+administrator receipt. Creator identity never grants management access;
+computer create/retry/delete also stay admin-only. Provisioning persists the selected
+voice in the saved persona seed. Voice updates call the agent git port, which
+commits only `config/voice.json`; no settings database column is needed.
+The harness owns the provider catalog and fixed-line sample cache. Discovery
+requires team administration and the enabled management rollout; changing an
+agent's voice also checks that it belongs to the receipt team.

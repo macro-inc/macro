@@ -44,6 +44,54 @@ pub struct AgentGitClient {
 }
 
 impl AgentGitClient {
+    /// Read the agent's committed voice after the caller authorizes its team.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> Result<crate::domain::voice::VoiceConfig, AgentGitClientError> {
+        let response = self
+            .http
+            .get(format!(
+                "{}/internal/repos/{}/voice",
+                self.base_url,
+                urlencoding::encode(agent.as_ref())
+            ))
+            .query(&[("teamId", team_id)])
+            .headers(self.headers())
+            .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
+            .send()
+            .await?;
+        Ok(Self::checked(response).await?.json().await?)
+    }
+
+    /// Commit a team-authorized voice change to the agent's repo.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn set_voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        model: String,
+    ) -> Result<(), AgentGitClientError> {
+        let response = self
+            .http
+            .put(format!(
+                "{}/internal/repos/{}/voice",
+                self.base_url,
+                urlencoding::encode(agent.as_ref())
+            ))
+            .headers(self.headers())
+            .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
+            .json(&crate::api::VoiceRequest {
+                team_id,
+                voice: crate::domain::voice::VoiceConfig { model },
+            })
+            .send()
+            .await?;
+        Self::checked(response).await?;
+        Ok(())
+    }
     /// `base_url` is `AgentGitServiceUrl` (no trailing slash).
     pub fn new(base_url: String, internal_api_key: String) -> Result<Self, AgentGitClientError> {
         if internal_api_key.is_empty() {

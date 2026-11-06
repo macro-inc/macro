@@ -146,3 +146,11 @@ workspace brain.ts executes directly with Node type stripping.
 The first clone forwards `BRAIN_PROVISION_TRACEPARENT` as an ephemeral git HTTP
 header; later brain git calls inject their active turn context through process
 configuration. Never persist trace headers in the workspace's git config.
+
+The brain's LiveKit dependencies include the host-platform rtc-ffi addon and
+pinned `@livekit/agents` inference SDK. Keep npm optional dependencies enabled.
+Patch native addons and ffmpeg with `autoPatchelfHook`; leave bundled libvips
+intact because patchelf issue 639 corrupts its low-address initializer. The
+install check imports Inference and creates/closes a native AudioSource after
+fixup, so a successful build proves more than dependency extraction. Node 24
+loads the addon directly without a bridge process.

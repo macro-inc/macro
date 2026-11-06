@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use macro_user_id::user_id::MacroUserIdStr;
+use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use crate::domain::ports::RepoStore;
@@ -19,6 +20,9 @@ const INITIAL_COMMIT_MESSAGE: &str = "Initial workspace";
 /// Errors from [`BareRepoStore`].
 #[derive(Debug, thiserror::Error)]
 pub enum BareRepoStoreError {
+    /// The selected voice file is malformed.
+    #[error("invalid voice configuration: {0}")]
+    Voice(#[from] serde_json::Error),
     /// A filesystem operation failed.
     #[error("{action} {path}: {source}")]
     Io {
@@ -153,6 +157,140 @@ fn directory_size_bytes(path: &Path) -> std::io::Result<u64> {
 
 impl RepoStore for BareRepoStore {
     type Err = BareRepoStoreError;
+
+    #[tracing::instrument(skip_all, err)]
+    async fn voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<crate::domain::voice::VoiceConfig, Self::Err> {
+        let repo = self.directories.repo_path(agent_user_id);
+        let output = git_command()
+            .arg("--git-dir")
+            .arg(&repo)
+            .args(["show", "main:config/voice.json"])
+            .output()
+            .await
+            .map_err(io_error("read voice", &repo))?;
+        if !output.status.success() {
+            return Err(BareRepoStoreError::Git {
+                command: "show",
+                stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+            });
+        }
+        Ok(serde_json::from_slice(&output.stdout)?)
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn set_voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        voice: &crate::domain::voice::VoiceConfig,
+    ) -> Result<(), Self::Err> {
+        let repo = self.directories.repo_path(agent_user_id);
+        let scratch = self
+            .directories
+            .root()
+            .join(format!(".voice-{}", Uuid::now_v7()));
+        let result = async {
+            run_git("clone", |git| {
+                git.args(["clone", "--quiet", "--no-hardlinks", "--branch", "main"])
+                    .arg(&repo)
+                    .arg(&scratch);
+            })
+            .await?;
+            let config = scratch.join("config");
+            match tokio::fs::symlink_metadata(&config).await {
+                Ok(metadata) if !metadata.is_dir() => {
+                    return Err(io_error("validate config directory", &config)(
+                        std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "config must be a directory",
+                        ),
+                    ));
+                }
+                Ok(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    tokio::fs::create_dir(&config)
+                        .await
+                        .map_err(io_error("create config", &config))?;
+                }
+                Err(error) => return Err(io_error("inspect config", &config)(error)),
+            }
+            let file = config.join("voice.json");
+            let temporary = config.join(format!(".voice-{}", Uuid::now_v7()));
+            let mut output = tokio::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)
+                .await
+                .map_err(io_error("create voice", &temporary))?;
+            output
+                .write_all(format!("{}\n", serde_json::to_string_pretty(voice)?).as_bytes())
+                .await
+                .map_err(io_error("write voice", &temporary))?;
+            drop(output);
+            tokio::fs::rename(&temporary, &file)
+                .await
+                .map_err(io_error("replace voice", &file))?;
+            run_git("add", |git| {
+                git.arg("-C")
+                    .arg(&scratch)
+                    .args(["add", "--", "config/voice.json"]);
+            })
+            .await?;
+            let diff = git_command()
+                .arg("-C")
+                .arg(&scratch)
+                .args(["diff", "--cached", "--quiet"])
+                .status()
+                .await
+                .map_err(io_error("compare voice", &scratch))?;
+            if diff.success() {
+                return Ok(());
+            }
+            run_git("commit", |git| {
+                git.arg("-C").arg(&scratch).args([
+                    "-c",
+                    "user.name=Macro",
+                    "-c",
+                    "user.email=agents@macro.com",
+                    "commit",
+                    "--quiet",
+                    "--message",
+                    "Set agent voice",
+                ]);
+            })
+            .await?;
+            // Compare-and-swap pushes preserve commits arriving through smart HTTP.
+            for _ in 0..3 {
+                let pushed = run_git("push", |git| {
+                    git.arg("-C")
+                        .arg(&scratch)
+                        .args(["push", "--quiet", "origin", "HEAD:main"]);
+                })
+                .await;
+                if pushed.is_ok() {
+                    return Ok(());
+                }
+                run_git("pull", |git| {
+                    git.arg("-C")
+                        .arg(&scratch)
+                        .args(["pull", "--rebase", "--quiet", "origin", "main"]);
+                })
+                .await?;
+            }
+            Err(BareRepoStoreError::Git {
+                command: "push",
+                stderr: "voice change raced repeated repository updates".to_owned(),
+            })
+        }
+        .await;
+        let cleanup = tokio::fs::remove_dir_all(&scratch).await;
+        if let Err(error) = cleanup {
+            tracing::warn!(error = ?error, "voice scratch cleanup failed");
+        }
+        result
+    }
 
     #[tracing::instrument(skip_all, err)]
     async fn create_repo(

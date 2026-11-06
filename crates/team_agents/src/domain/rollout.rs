@@ -1,4 +1,4 @@
-//! One fail-closed rollout policy for every team-agent administrator operation.
+//! One fail-closed rollout policy for team-agent management operations.
 
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -6,7 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 /// Shared frontend/backend rollout key. This never replaces team authorization.
 pub const TEAM_AGENTS_FLAG: &str = "enable-team-agents";
 
-/// Loads one immutable snapshot for the authenticated administrator per operation.
+/// Loads one immutable snapshot for the authenticated user per management operation.
 /// Agent self-service, credentials and runtime traffic must never consult it.
 pub struct TeamAgentRollout<Flags> {
     flags: Option<Flags>,

@@ -19,7 +19,9 @@ import {
   Show,
 } from 'solid-js';
 import { formatBillingAmount } from '../core/format-billing-amount';
+import { recommendedVoice, type VoicePickerSource } from '../core/voices';
 import { AgentPortrait, type AgentPortraitSource } from './agent-portrait';
+import { VoicePicker } from './voice-picker';
 
 export type AgentInviteSource = {
   quote: Accessor<TeamAgentQuote | undefined>;
@@ -33,9 +35,10 @@ export type AgentInviteSource = {
   create(request: CreateTeamAgent, parentSpan?: Span): Promise<unknown>;
 };
 
-function InviteSurface(props: {
+export function AgentFormSurface(props: {
   open: boolean;
   title: string;
+  closeLabel?: string;
   close(): void;
   actions: JSX.Element;
   children: JSX.Element;
@@ -62,7 +65,7 @@ function InviteSurface(props: {
             as={Button}
             variant="ghost"
             size="icon-sm"
-            aria-label="Close invitation"
+            aria-label={props.closeLabel ?? 'Close invitation'}
           >
             <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
@@ -89,6 +92,7 @@ export function InviteAgentForm(props: {
   size: ComputerSize;
   setSize(size: ComputerSize): void;
   source: AgentInviteSource;
+  voices?: VoicePickerSource;
   portrait?: AgentPortraitSource;
 }) {
   let disposed = false;
@@ -98,6 +102,10 @@ export function InviteAgentForm(props: {
   const [name, setName] = createSignal('');
   const [role, setRole] = createSignal('');
   const [personality, setPersonality] = createSignal('');
+  const [chosenVoice, setChosenVoice] = createSignal<string>();
+  const voice = () =>
+    chosenVoice() ??
+    recommendedVoice(props.voices?.choices() ?? [], personality())?.model;
   const [avatar, setAvatar] = createSignal('');
   const [portraitPending, setPortraitPending] = createSignal(false);
   const [review, setReview] = createSignal(false);
@@ -125,7 +133,8 @@ export function InviteAgentForm(props: {
     !!role().trim() &&
     !roleTooLong() &&
     !!personality().trim() &&
-    !personalityTooLong();
+    !personalityTooLong() &&
+    (!props.voices || !!voice());
   const busy = () => submitting() || props.source.pending();
   const close = () => {
     if (!busy()) props.onClose();
@@ -165,6 +174,7 @@ export function InviteAgentForm(props: {
               name: name().trim(),
               jobDescription: role().trim(),
               personality: personality().trim(),
+              voice: voice(),
               size: props.size,
               expectedIncluded: quote.included,
               avatarUrl: avatar().trim() || undefined,
@@ -229,7 +239,7 @@ export function InviteAgentForm(props: {
     );
   }
   return (
-    <InviteSurface
+    <AgentFormSurface
       open={props.open}
       title={review() ? 'Confirm agent invitation' : 'Invite agent'}
       close={close}
@@ -263,6 +273,7 @@ export function InviteAgentForm(props: {
                       },
                     }
                   );
+                  setChosenVoice(voice());
                   setReview(true);
                   operation.afterPaint();
                 }}
@@ -388,6 +399,16 @@ export function InviteAgentForm(props: {
               Use 4,000 characters or fewer.
             </TextField.ErrorMessage>
           </TextField>
+          <Show when={props.voices}>
+            {(source) => (
+              <VoicePicker
+                source={source()}
+                value={voice()}
+                onChange={setChosenVoice}
+                disabled={busy()}
+              />
+            )}
+          </Show>
           <RadioGroup
             value={props.size}
             onChange={(value) => {
@@ -450,6 +471,6 @@ export function InviteAgentForm(props: {
           </RadioGroup>
         </div>
       </Show>
-    </InviteSurface>
+    </AgentFormSurface>
   );
 }

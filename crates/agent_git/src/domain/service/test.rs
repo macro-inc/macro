@@ -112,6 +112,21 @@ struct FakeStore {
 
 impl RepoStore for FakeStore {
     type Err = Infallible;
+    async fn voice(
+        &self,
+        _agent: &MacroUserIdStr<'_>,
+    ) -> Result<crate::domain::voice::VoiceConfig, Self::Err> {
+        Ok(crate::domain::voice::VoiceConfig {
+            model: "aura-2-arcas-en".to_owned(),
+        })
+    }
+    async fn set_voice(
+        &self,
+        _agent: &MacroUserIdStr<'_>,
+        _voice: &crate::domain::voice::VoiceConfig,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
 
     async fn create_repo(
         &self,
@@ -516,6 +531,7 @@ async fn deleting_removes_the_repo_and_the_row() {
 
 fn seed() -> PersonaSeed {
     PersonaSeed {
+        voice: None,
         name: "Sam".to_owned(),
         job_description: "Books venues.".to_owned(),
         personality: "Warm and direct.".to_owned(),
@@ -680,6 +696,19 @@ struct PausedStore {
 
 impl RepoStore for PausedStore {
     type Err = Infallible;
+    async fn voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<crate::domain::voice::VoiceConfig, Self::Err> {
+        self.store.voice(agent).await
+    }
+    async fn set_voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        voice: &crate::domain::voice::VoiceConfig,
+    ) -> Result<(), Self::Err> {
+        self.store.set_voice(agent, voice).await
+    }
 
     async fn create_repo(
         &self,

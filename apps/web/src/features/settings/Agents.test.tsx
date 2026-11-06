@@ -37,6 +37,12 @@ const agentsPageProps = {
   onManageRuntimes: vi.fn(),
 };
 
+// The app supplies PostHog above Settings; keep rollout reads local to this
+// editor fixture, including the bound runtime's computer-screen action.
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
+}));
+
 // The real Lexical surface has its own Markdown round-trip suite.
 vi.mock('./components/instructions-editor', () => ({
   AgentInstructionsEditor: (props: {

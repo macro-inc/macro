@@ -1330,6 +1330,12 @@ Render setup as compact five-step progress from server
 Paying/Creating/Booting/Connecting/Ready data, never a client timer. Keep size
 specification items atomic and prices aligned with titles at 390px and 320px.
 
+Use the provider-backed `VoicePicker` in invitations and admin voice settings;
+stop and revoke samples when selection changes or the dialog closes. Keep a
+chosen voice through review and retries, and apply saved voices on the next call.
+Keep the managed roster query and voice controls admin-only; teammate computer
+discovery remains independent of the management roster.
+
 Keep Members invitation actions in `MemberInviteActions`; the split Invite action
 opens the existing person dialog, with person/agent choices in its dropdown.
 People and managed agents share the filtered roster; agent activity comes from

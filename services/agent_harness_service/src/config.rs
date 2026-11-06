@@ -210,6 +210,12 @@ pub struct Config {
     /// sandboxes advertise no models and managed sessions cannot prompt.
     #[macro_config_default(String::new())]
     pub anthropic_api_key: String,
+    /// Existing LiveKit Cloud project credentials, used only by the server-side inference proxy.
+    #[macro_config_default(String::new())]
+    pub livekit_api_key: String,
+    /// Never forwarded to a computer; signs inference-only project tokens at the gateway.
+    #[macro_config_default(String::new())]
+    pub livekit_api_secret: String,
     /// Run sandboxes on the local Docker daemon instead of Daytona.
     ///
     /// Default off: a deployed harness must keep using Daytona even if this

@@ -18,6 +18,7 @@ export default {
   selectedModel: 'This model',
   imagesUnsupported: "{{model}} doesn't support images",
   changeStatus: 'Change status',
+  changeVoice: 'Change voice',
   changePriority: 'Change priority',
   cancel: 'Cancel',
   close: 'Close',
