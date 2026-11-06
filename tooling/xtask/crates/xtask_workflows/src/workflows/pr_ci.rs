@@ -127,7 +127,6 @@ pub fn pr_ci() -> Workflow {
     let workflow = Workflow::new("PR CI")
         .on(Event::default().pull_request(
             PullRequest::default()
-                .add_branch("main")
                 .add_type(PullRequestType::Labeled),
         ))
         .concurrency(
