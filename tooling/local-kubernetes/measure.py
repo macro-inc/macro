@@ -64,9 +64,11 @@ def compose_stats(instance):
     inspect = json.loads(output(['docker', 'inspect', '--size', *ids]))
     volumes = {mount['Source'] for container in inspect for mount in container['Mounts'] if mount['Type'] == 'volume'}
     volume_bytes = sum(int(output(['sudo', '-n', 'du', '-s', '-B1', source]).split()[0]) for source in volumes)
+    logs = [c['LogPath'] for c in inspect if c.get('LogPath')]
+    log_bytes = sum(int(value) for value in output(['sudo', '-n', 'stat', '-c', '%s', '--', *logs]).split()) if logs else 0
     return {'ram_bytes': memory, 'cpu_cores': cpu,
             'disk_volume_bytes': volume_bytes,
-            'disk_writable_bytes': sum(c.get('SizeRw', 0) for c in inspect)}
+            'disk_writable_bytes': sum(c.get('SizeRw', 0) for c in inspect) + log_bytes}
 
 
 def process_stats(pid):
@@ -150,6 +152,10 @@ def main():
         if args.runtime == 'kube':
             elapsed = samples[-1]['sampled_at'] - samples[0]['sampled_at']
             entry['cpu_cores'] = (samples[-1]['cpu_core_seconds'] - samples[0]['cpu_core_seconds']) / elapsed
+            node_cpu = (samples[-1]['shared_node_cpu_core_seconds'] - samples[0]['shared_node_cpu_core_seconds']) / elapsed
+            entry['shared_node_overhead_cpu_cores'] = max(0, node_cpu - entry['cpu_cores'])
+            entry['shared_node_overhead_ram_bytes'] = statistics.median(
+                s['shared_node_ram_bytes'] - s['ram_bytes'] for s in samples)
         else:
             entry['cpu_cores'] = statistics.median(s['cpu_cores'] for s in samples)
         if args.process_root:
