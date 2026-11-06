@@ -1,4 +1,6 @@
 pub mod action_history;
+/// What counts as activity on a session.
+pub mod activity;
 pub mod agent_conversation;
 /// Current authorization for agent session streams.
 pub mod audience;

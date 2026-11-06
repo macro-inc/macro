@@ -120,6 +120,12 @@ working. A coding session adds a second line with repository, captured working
 branch (when available), and PR number/status. Non-coding sessions stay on one
 line. Their timestamps and unread dots stay visible. Missing repository metadata
 is omitted.
+A session a person starts is their own work from the moment its row commits,
+before its sandbox boots: Home lists it on every signed-in device within a
+couple of seconds of sending, without waiting for the first reply. Sessions
+another agent or a routine starts join only when they notify. Verify by sending
+a prompt from Home and checking the row appears while the session is still
+starting, on a second device too.
 Once `HIDE_AGENT_DM_SESSIONS` is enabled after the warm-marker rollout, agent
 DM contexts stay out of broad Agents/Home lists, including work-feed and
 notification-driven candidates. Prior notifications or activity must not bring

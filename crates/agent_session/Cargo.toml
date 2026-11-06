@@ -48,6 +48,7 @@ schema = ["dep:utoipa", "agent_runtime_protocol/utoipa", "macro_user_id/schema"]
 test-utils = ["dep:mockall", "agent_fold/test-utils"]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 ai_billing = { path = "../ai_billing", optional = true }
 lazy-regex = { workspace = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
