@@ -66,6 +66,11 @@ A channel's `Calls` tab lists that channel's recordings with the same rows, filt
 by the channel id. Its search field matches call names and transcripts in that
 channel.
 
+The rail's live waveform opens a 300px popover without leaving the current view.
+It shows the call title and duration, current attendees and compact media controls.
+Open call returns to the existing meeting/channel route; Copy meeting link is in
+More and creates the link only after explicit selection.
+
 The desktop Chat sidebar has no separate Live section. Live calls are marked
 on their conversation rows with a waveform and elapsed time. Your current call
 uses the waveform as its channel icon and shows live participant avatars.

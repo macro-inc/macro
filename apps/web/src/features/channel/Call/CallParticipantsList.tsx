@@ -17,14 +17,26 @@ function ParticipantRow(props: {
   name: string;
   userId?: string;
   local?: boolean;
+  compact?: boolean;
   isProgram: boolean;
   speaking: boolean;
   muted: boolean;
   videoEnabled: boolean;
 }) {
   return (
-    <li class="flex min-h-14 items-center gap-3 px-3 py-2">
-      <div class="size-8 shrink-0">
+    <li
+      class={cn(
+        'flex items-center gap-3 px-3',
+        props.compact ? 'min-h-9 py-1' : 'min-h-14 py-2'
+      )}
+    >
+      <div
+        class={cn(
+          'shrink-0 rounded-full',
+          props.compact ? 'size-6' : 'size-8',
+          props.speaking && 'ring-2 ring-success'
+        )}
+      >
         <Show
           when={props.userId}
           fallback={
@@ -51,7 +63,7 @@ function ParticipantRow(props: {
             </Badge>
           </Show>
         </div>
-        <Show when={props.speaking}>
+        <Show when={props.speaking && !props.compact}>
           <p class="text-xs text-accent">{t('calls.speaking')}</p>
         </Show>
       </div>
@@ -87,7 +99,10 @@ function ParticipantRow(props: {
   );
 }
 
-function RemoteParticipantRow(props: { participant: RemoteParticipant }) {
+function RemoteParticipantRow(props: {
+  participant: RemoteParticipant;
+  compact?: boolean;
+}) {
   const call = useCallContext();
   const userId = () => tryMacroId(props.participant.identity);
   const name = () =>
@@ -102,6 +117,7 @@ function RemoteParticipantRow(props: { participant: RemoteParticipant }) {
   return (
     <ParticipantRow
       name={name()}
+      compact={props.compact}
       userId={userId()}
       isProgram={isProgramParticipant(props.participant.attributes)}
       speaking={call.isParticipantSpeaking(props.participant)}
@@ -112,7 +128,10 @@ function RemoteParticipantRow(props: { participant: RemoteParticipant }) {
 }
 
 /** Shows current human attendees from the live room, not channel membership. */
-export function CallParticipantsList(props: { localName?: string }) {
+export function CallParticipantsList(props: {
+  localName?: string;
+  compact?: boolean;
+}) {
   const call = useCallContext();
   const author = useAuthor();
   const currentUserId = useUserId();
@@ -138,6 +157,7 @@ export function CallParticipantsList(props: { localName?: string }) {
     <ul aria-label={t('calls.inCallParticipants')} class="ph-no-capture">
       <ParticipantRow
         name={localName()}
+        compact={props.compact}
         userId={localUserId()}
         local
         isProgram={isProgramParticipant(
@@ -148,7 +168,12 @@ export function CallParticipantsList(props: { localName?: string }) {
         videoEnabled={!call.isVideoMuted()}
       />
       <For each={participants()}>
-        {(participant) => <RemoteParticipantRow participant={participant} />}
+        {(participant) => (
+          <RemoteParticipantRow
+            participant={participant}
+            compact={props.compact}
+          />
+        )}
       </For>
     </ul>
   );

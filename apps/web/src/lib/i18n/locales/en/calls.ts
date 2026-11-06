@@ -1,6 +1,11 @@
 export default {
   inProgress: 'Call in progress',
   join: 'Join',
+  leave: 'Leave call',
+  copyLink: 'Copy meeting link',
+  showPlayer: 'Show floating player',
+  collapsePlayer: 'Collapse',
+  more: 'More',
   team: 'Team',
   channel: 'Channel',
   shareWithTeam: 'Share with team',

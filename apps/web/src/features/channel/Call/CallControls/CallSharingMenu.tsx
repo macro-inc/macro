@@ -56,6 +56,7 @@ export function CallSharingMenu(props: {
   /** Present only when the discussion is authorized through this channel. */
   channelName?: string;
   compact?: boolean;
+  size?: 'md' | 'lg';
 }) {
   const [open, setOpen] = createSignal(false);
   const id = createUniqueId();
@@ -100,7 +101,7 @@ export function CallSharingMenu(props: {
       trigger={(triggerProps) => (
         <Button
           {...triggerProps}
-          size={isMobile() || props.compact ? 'md' : 'lg'}
+          size={props.size ?? (isMobile() || props.compact ? 'md' : 'lg')}
           variant="secondary"
           aria-label={t('calls.sharingLabel', { mode: label() })}
           disabled={props.disabled}
