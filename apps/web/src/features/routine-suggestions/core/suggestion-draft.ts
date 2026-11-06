@@ -112,10 +112,16 @@ export function starterSuggestionDraft(
           }
         : step
   );
+  // Its description says what it does with the values it starts with.
+  const [code] = (steps ?? []).filter((step) => step.kind === 'code');
+  const description =
+    (code?.kind === 'code' && sentenceText(code.sentence, code.knobs)) ||
+    draft.description;
   return {
     draft: {
       ...draft,
       ...(steps ? { steps } : {}),
+      description,
       suggestionId: suggestion.id,
     },
     missing,

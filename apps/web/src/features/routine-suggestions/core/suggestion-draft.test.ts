@@ -75,6 +75,7 @@ describe('starter suggestion drafts', () => {
     });
     expect(draft).toMatchObject({
       name: 'Tag new email',
+      description: 'Tag each new email Reply or Info within 14 days.',
       suggestionId: 'suggestion-1',
       triggers: [{ kind: 'event', events: ['email.message_received'] }],
     });
