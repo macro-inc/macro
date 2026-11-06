@@ -778,6 +778,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   in the other languages. See the [i18n rule](../../.agents/rules/web/i18n.md).
   The resolved interface language is reported to PostHog as the person
   property `interface_language` when the account language loads.
+- Make optimistic updates through the normalized cache mutation queue, never a
+  feature-local helper; see the [optimistic updates rule](../../.agents/rules/web/optimistic-updates.md)
+  for the documented exceptions.
 - When adding or changing a feature flag, follow the `feature-flags` skill.
 - Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
