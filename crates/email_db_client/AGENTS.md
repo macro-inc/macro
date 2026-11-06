@@ -85,6 +85,8 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   only by triggers: inserts and `message_id` changes read it from the message,
   and changing `email_messages.thread_id` moves the message's attachments.
   Don't set it in queries; read it instead of joining `email_messages`.
+  Fixtures that run with `session_replication_role = 'replica'` skip the
+  triggers and must set it themselves.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
 - A Macro draft (no provider id, or a live `email_mailbox_drafts` row) puts its
