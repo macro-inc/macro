@@ -1,6 +1,8 @@
-//! `cargo x deps [--check]` regenerates (or, with `--check`, verifies) the two
+//! `cargo x deps [--check]` regenerates (or, with `--check`, verifies) the
 //! generated dependency artifacts:
 //!
+//! - root `[workspace.dependencies]` entries for every workspace crate, with
+//!   members depending on each other through them (see `workspace_deps`).
 //! - `workspace-hack/Cargo.toml` (via the hakari engine): pins every
 //!   third-party dep to its union feature set so a solo `cargo build -p X`
 //!   resolves the same features as the union-built crane dep layers, keeping
@@ -9,12 +11,13 @@
 //!   transitive workspace dependency closure, consumed by flake.nix to build
 //!   pruned per-artifact deploy sources.
 //!
-//! Both run from the hakari/guppy versions pinned in Cargo.lock, so local
-//! runs and CI cannot disagree about generator versions. `just hakari` wraps
-//! the regenerate mode; CI runs `--check` and fails on drift.
+//! They run from the hakari/guppy/toml_edit versions pinned in Cargo.lock, so
+//! local runs and CI cannot disagree about generator versions. `just hakari`
+//! wraps the regenerate mode; CI runs `--check` and fails on drift.
 
 mod closures;
 mod hakari_ops;
+mod workspace_deps;
 
 use anyhow::{Result, bail};
 use guppy::graph::PackageGraph;
@@ -33,6 +36,12 @@ fn run_deps(check: bool) -> Result<()> {
     let graph = build_graph(check)?;
 
     let mut drift: Vec<String> = Vec::new();
+    // Rewritten manifests change the graph hakari reads, so rebuild it.
+    let graph = if workspace_deps::run(&graph, check, &mut drift)? {
+        build_graph(false)?
+    } else {
+        graph
+    };
     let hakari_changed = hakari_ops::run(&graph, check, &mut drift)?;
 
     // The hakari step may have edited manifests (hack contents or member dep
