@@ -6,6 +6,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CallMoreMenu } from '../CallControls/CallMoreMenu';
 
@@ -23,7 +24,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-async function openShortcuts() {
+async function openShortcuts(input: 'keyboard' | 'pointer' = 'keyboard') {
   const openChanged = vi.fn();
   render(() => (
     <div class="portal-scope" data-testid="call-root">
@@ -41,12 +42,16 @@ async function openShortcuts() {
     </div>
   ));
   const trigger = screen.getByRole('button', { name: 'More' });
-  fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+  if (input === 'pointer') await userEvent.setup().click(trigger);
+  else fireEvent.keyDown(trigger, { key: 'ArrowDown' });
   const menuItem = await screen.findByRole('menuitem', {
     name: 'Keyboard shortcuts',
   });
-  menuItem.focus();
-  fireEvent.keyDown(menuItem, { key: 'Enter' });
+  if (input === 'pointer') await userEvent.setup().click(menuItem);
+  else {
+    menuItem.focus();
+    fireEvent.keyDown(menuItem, { key: 'Enter' });
+  }
   const dialog = await screen.findByRole('dialog', {
     name: 'Keyboard shortcuts',
   });
@@ -149,3 +154,12 @@ it.each([false, true])(
     );
   }
 );
+
+it('opens the shortcut popover through pointer selection without losing its anchor', async () => {
+  const { dialog } = await openShortcuts('pointer');
+  expect(dialog.isConnected).toBe(true);
+  await userEvent
+    .setup()
+    .click(screen.getByRole('button', { name: 'Another action' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+});

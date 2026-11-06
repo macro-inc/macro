@@ -10,7 +10,7 @@ import UsersSlash from '@icon/system/regular/users-slash.svg';
 import { Popover } from '@kobalte/core/popover';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, Dropdown, Hotkey, SingleSelectCheck, ToggleSwitch } from '@ui';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import { type CallLayout, normalizeCallLayout } from '../call-layout';
 import type { CallReactionEmoji } from '../call-reactions';
 import { CallReactionRow } from './CallReactionMenu';
@@ -97,9 +97,14 @@ export function CallMoreMenu(props: {
   const [menuOpen, setMenuOpen] = createSignal(false);
   const [shortcutsOpen, setShortcutsOpen] = createSignal(false);
   let shortcutsInteractedOutside = false;
+  let shortcutsRequested = false;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   const onMenuOpenChange = (open: boolean) => {
     setMenuOpen(open);
-    props.onOpenChange(open || shortcutsOpen());
+    props.onOpenChange(open || shortcutsOpen() || shortcutsRequested);
   };
   const onShortcutsOpenChange = (open: boolean) => {
     if (open) shortcutsInteractedOutside = false;
@@ -138,7 +143,13 @@ export function CallMoreMenu(props: {
             portalScope="local"
             class="min-w-64"
             onCloseAutoFocus={(event) => {
-              if (shortcutsOpen()) event.preventDefault();
+              if (shortcutsRequested) {
+                event.preventDefault();
+                shortcutsRequested = false;
+                queueMicrotask(() => {
+                  if (!disposed) onShortcutsOpenChange(true);
+                });
+              } else if (shortcutsOpen()) event.preventDefault();
             }}
           >
             <Show when={props.compact && props.onReaction}>
@@ -257,8 +268,8 @@ export function CallMoreMenu(props: {
             <Dropdown.Group>
               <Dropdown.Item
                 onSelect={() => {
-                  setMenuOpen(false);
-                  onShortcutsOpenChange(true);
+                  shortcutsRequested = true;
+                  onMenuOpenChange(false);
                 }}
               >
                 <Keyboard class="size-4" />
