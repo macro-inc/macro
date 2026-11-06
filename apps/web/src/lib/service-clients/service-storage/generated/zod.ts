@@ -696,6 +696,73 @@ export const updateAgentResponse = zod
   .describe('A persisted user- or team-owned AI agent.');
 
 /**
+ * @summary Handler for `GET /agents/{agent_id}/memory`.
+ */
+export const getAgentMemoryParams = zod.object({
+  agent_id: zod.string().describe('Agent bot ID'),
+});
+
+export const getAgentMemoryResponse = zod
+  .object({
+    content: zod
+      .string()
+      .describe(
+        'The remembered markdown; empty before anything is remembered.'
+      ),
+    revision: zod
+      .number()
+      .describe('The revision to name in the next write; 0 before the first.'),
+    updated_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the memory last changed; absent before the first write.'),
+  })
+  .describe(
+    'What an agent remembers across its sessions: one markdown document shared\nby every session it runs, whoever starts them.'
+  );
+
+/**
+ * @summary Handler for `PUT /agents/{agent_id}/memory`.
+ */
+export const updateAgentMemoryParams = zod.object({
+  agent_id: zod.string().describe('Agent bot ID'),
+});
+
+export const updateAgentMemoryBody = zod
+  .object({
+    content: zod
+      .string()
+      .describe(
+        'The whole new memory, at most [`AGENT_MEMORY_MAX_BYTES`] bytes.'
+      ),
+    revision: zod
+      .number()
+      .describe(
+        'The revision the edit was made against. A write against any other\nrevision changes nothing and fails with a conflict.'
+      ),
+  })
+  .describe("Request to replace an agent's memory, whole.");
+
+export const updateAgentMemoryResponse = zod
+  .object({
+    content: zod
+      .string()
+      .describe(
+        'The remembered markdown; empty before anything is remembered.'
+      ),
+    revision: zod
+      .number()
+      .describe('The revision to name in the next write; 0 before the first.'),
+    updated_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the memory last changed; absent before the first write.'),
+  })
+  .describe(
+    'What an agent remembers across its sessions: one markdown document shared\nby every session it runs, whoever starts them.'
+  );
+
+/**
  * @summary Deletes a highlight and any attached discussion under the annotation policy.
  */
 export const deleteAnchorBody = zod

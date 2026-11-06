@@ -39,6 +39,7 @@ import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest'
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
 import type { Agent } from './generated/schemas/agent';
+import type { AgentMemory } from './generated/schemas/agentMemory';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
 import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
@@ -188,6 +189,7 @@ import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersio
 import type { TableDetail } from './generated/schemas/tableDetail';
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
+import type { UpdateAgentMemoryRequest } from './generated/schemas/updateAgentMemoryRequest';
 import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest';
 import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
 import type { UpdateSharePermissionRequestV2 } from './generated/schemas/updateSharePermissionRequestV2';
@@ -848,6 +850,20 @@ export const storageServiceClient = {
         body: JSON.stringify(request),
       })
     ).map((result) => result);
+  },
+
+  async getAgentMemory(agentId: string) {
+    return await dssFetch<AgentMemory>(`/agents/${agentId}/memory`, {
+      method: 'GET',
+    });
+  },
+
+  async updateAgentMemory(args: WithAgentId & UpdateAgentMemoryRequest) {
+    const { agent_id, ...request } = args;
+    return await dssFetch<AgentMemory>(`/agents/${agent_id}/memory`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    });
   },
 
   async getHarnesses() {
