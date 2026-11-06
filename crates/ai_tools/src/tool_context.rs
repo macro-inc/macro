@@ -976,6 +976,26 @@ impl CallRtcClient for NoOpCallRtcClient {
         anyhow::bail!("call RTC client not configured")
     }
 
+    async fn list_live_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<call::domain::models::LiveCallParticipant>>> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_bot_token(
+        &self,
+        _room_name: &str,
+        _bot_id: bot_id::BotId,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn remove_bot(&self, _room_name: &str, _bot_id: bot_id::BotId) -> anyhow::Result<()> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
     async fn generate_named_token<'a>(
         &self,
         _room_name: &str,

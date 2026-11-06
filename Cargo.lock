@@ -4051,6 +4051,7 @@ dependencies = [
  "aws-sdk-s3",
  "axum",
  "base64 0.22.1",
+ "bot_id",
  "channels",
  "chrono",
  "cloudfront_sign",
