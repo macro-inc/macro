@@ -58,10 +58,13 @@ topics, local AWS resources, auth and search indices using the existing xtask
 initialization functions. Initialization uses temporary loopback port forwards;
 run initial bring-ups sequentially. Subsequent instances share the node but have
 independent databases, local AWS emulators, volumes and service discovery.
-Local Wrangler workers get namespace-specific state volumes even where their
-Compose definitions bind-mount the shared worktree.
+Local Wrangler workers get namespace-specific state volumes and pod-local
+configuration files even where their Compose definitions bind-mount the shared
+worktree.
 
-The node mounts this worktree and the Nix store. Binaries and source mounts
+The node mounts this worktree, the Nix store and the local Docker sandbox socket.
+Containers with unlimited Compose memlock receive the `IPC_LOCK` capability.
+Binaries and source mounts
 remain identical to Compose. Auxiliary images are loaded into kind's containerd.
 Compose underscore service hostnames become hyphens for Kubernetes DNS.
 Application Deployments use rolling updates; single-replica backing stores use

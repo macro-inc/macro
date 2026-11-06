@@ -70,9 +70,11 @@ def cluster():
     claim(STATE)
     if (STATE / 'kubeconfig').exists():
         kube('get', 'nodes')
+        mounts = json.loads(run(['docker', 'inspect', f'{CLUSTER}-control-plane'], capture=True))[0]['Mounts']
+        if not any(mount['Source'] == '/var/run/docker.sock' for mount in mounts):
+            raise RuntimeError('the owned node lacks its sandbox socket mount; recreate it before starting instances')
         scratch = scratch_path()
         if scratch is not None:
-            mounts = json.loads(run(['docker', 'inspect', f'{CLUSTER}-control-plane'], capture=True))[0]['Mounts']
             if not any(mount['Source'] == str(scratch) for mount in mounts):
                 raise RuntimeError('the owned node does not mount the recorded build scratch; recreate it before starting instances')
         return
