@@ -23,6 +23,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Let CallRecordingBody own the only SidePanel.Layout; native and legacy hosts provide the root and header, never a second layout.
 - Keep the recorded composite; separate historical camera tracks and captions are not exposed by the record contract.
 - Keep metadata and entity sections on SidePanel's unframed rows; only team sharing gets a card.
+- Put the existing fetched entity-tag pill below title metadata; keep its property reads inside a local Suspense boundary.
 - Keep reading tabs unframed; let the shared Tabs component own the track and selected state.
 - Use FloatRegion ownership for phone playback instead of changing global dock state.
 - Keep the phone Details close action in the SidePanel drawer-header slot, outside its ScrollBody.

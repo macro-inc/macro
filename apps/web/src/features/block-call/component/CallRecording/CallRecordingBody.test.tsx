@@ -27,6 +27,7 @@ vi.mock('@channel/Call/CallContext', () => ({
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   AskMacroButton: () => null,
 }));
+vi.mock('@property/tags', () => ({ InlineFetchedEntityTagsPill: () => null }));
 vi.mock('@channel/Call/chat/CallChatHistory', () => ({
   CallDiscussionHistory: (props: {
     render: (source: unknown) => JSX.Element;

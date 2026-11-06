@@ -4,10 +4,11 @@ import { isMobile } from '@core/mobile/isMobile';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import { InlineFetchedEntityTagsPill } from '@property/tags';
 import type { CallRecord } from '@service-call/client';
 import { Button } from '@ui';
 import { isSameDay } from 'date-fns';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, Suspense } from 'solid-js';
 import { useCallAgain } from '../use-call-again';
 import {
   CallRecordingAvatars,
@@ -95,6 +96,15 @@ export function CallRecordingTitle(props: { record: CallRecord }) {
             </span>
           </Button>
         </Show>
+      </div>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <Suspense fallback={null}>
+          <InlineFetchedEntityTagsPill
+            entityId={props.record.callId}
+            entityType="CALL_RECORD"
+            showAddButton
+          />
+        </Suspense>
       </div>
       <MobileDrawer
         side="bottom"
