@@ -534,11 +534,11 @@ export function InviteToTeamDialog(props: {
   return (
     <Dialog open={props.open} onOpenChange={(open) => !open && close()}>
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
-        <Panel.Header class="px-2 gap-1">
+        <Panel.Header class="px-3 gap-2">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+            <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
-          <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+          <Dialog.Title as="span" class="text-base font-medium p-0 m-0">
             <Show when={sent()} fallback="Invite to Team">
               Let them know it's coming
             </Show>
@@ -555,51 +555,54 @@ export function InviteToTeamDialog(props: {
           )}
         </Show>
         <Show when={!sent()}>
-          <Panel.Body class="p-3 flex flex-col gap-3">
+          <Panel.Body scroll class="px-5 py-5 flex flex-col gap-5">
             <TeamInviteLinkSection
               teamId={props.teamId}
               canManage={props.canManageLink}
             />
-            <div class="h-px bg-edge-muted" />
-            <div class="text-sm text-ink">Invite by email</div>
-            <InviteEmailsInput
-              invites={invites()}
-              onChange={setInvites}
-              errors={inviteErrors()}
-              onErrorsChange={setInviteErrors}
-            />
+            <div class="h-px shrink-0 bg-edge-muted" />
+            <div class="flex flex-col gap-3">
+              <div class="text-sm font-medium text-ink">Invite by email</div>
+              <InviteEmailsInput
+                invites={invites()}
+                onChange={setInvites}
+                errors={inviteErrors()}
+                onErrorsChange={setInviteErrors}
+              />
+            </div>
+            <div class="h-px shrink-0 bg-edge-muted" />
             <Checkbox checked={inviteAsAgent()} onChange={setInviteAsAgent}>
               <Checkbox.Control />
               <Checkbox.Label class="text-sm text-ink">
                 Invite as agent
               </Checkbox.Label>
             </Checkbox>
-            <div class="flex justify-end gap-1 pt-2">
-              <Button
-                variant="ghost"
-                disabled={inviteToTeamMutation.isPending}
-                onClick={close}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
-                onClick={handleInvite}
-              >
-                <Show
-                  when={inviteToTeamMutation.isPending}
-                  fallback={
-                    invites().length > 1
-                      ? `Send ${invites().length} Invites`
-                      : 'Send Invite'
-                  }
-                >
-                  <SpinnerIcon class="size-4 animate-spin" />
-                </Show>
-              </Button>
-            </div>
           </Panel.Body>
+          <Panel.Footer class="justify-end gap-2 px-4 py-3">
+            <Button
+              variant="ghost"
+              disabled={inviteToTeamMutation.isPending}
+              onClick={close}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
+              onClick={handleInvite}
+            >
+              <Show
+                when={inviteToTeamMutation.isPending}
+                fallback={
+                  invites().length > 1
+                    ? `Send ${invites().length} invites`
+                    : 'Send invite'
+                }
+              >
+                <SpinnerIcon class="size-4 animate-spin" />
+              </Show>
+            </Button>
+          </Panel.Footer>
         </Show>
       </Panel>
     </Dialog>
@@ -617,35 +620,37 @@ function InviteHeadsUpStep(props: {
   onDone: () => void;
 }) {
   return (
-    <Panel.Body class="p-3 flex flex-col gap-3">
-      <div class="flex flex-col gap-1">
-        <div class="text-sm text-ink">
-          <Show
-            when={props.emails.length === 1}
-            fallback={`Invites sent to ${props.emails.length} people`}
-          >
-            Invite sent to <span class="font-medium">{props.emails[0]}</span>
-          </Show>
+    <>
+      <Panel.Body scroll class="px-5 py-5 flex flex-col gap-3">
+        <div class="flex flex-col gap-1">
+          <div class="text-sm text-ink">
+            <Show
+              when={props.emails.length === 1}
+              fallback={`Invites sent to ${props.emails.length} people`}
+            >
+              Invite sent to <span class="font-medium">{props.emails[0]}</span>
+            </Show>
+          </div>
+          <div class="text-sm text-ink-muted">
+            Invite emails from Macro are easy to miss. Send the invite link in
+            Slack, a text, or your own email so they know to look for it.
+          </div>
         </div>
-        <div class="text-xs text-ink-muted">
-          Invite emails from Macro are easy to miss. Send the invite link in
-          Slack, a text, or your own email so they know to look for it.
-        </div>
-      </div>
-      <Show when={props.emails.length > 1}>
-        <ul class="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-xs text-ink-muted">
-          <For each={props.emails}>
-            {(email) => <li class="truncate">{email}</li>}
-          </For>
-        </ul>
-      </Show>
-      <div class="flex items-center justify-end gap-1 pt-2">
+        <Show when={props.emails.length > 1}>
+          <ul class="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-xs text-ink-muted">
+            <For each={props.emails}>
+              {(email) => <li class="truncate">{email}</li>}
+            </For>
+          </ul>
+        </Show>
+      </Panel.Body>
+      <Panel.Footer class="justify-end gap-2 px-4 py-3">
         <CopyTeamInviteLinkButton teamId={props.teamId} />
         <Button variant="primary" onClick={() => props.onDone()}>
           Done
         </Button>
-      </div>
-    </Panel.Body>
+      </Panel.Footer>
+    </>
   );
 }
 

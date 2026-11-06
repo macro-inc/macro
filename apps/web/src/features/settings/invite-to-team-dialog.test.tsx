@@ -36,7 +36,7 @@ function sendInvite(asAgent: boolean, onClose: () => void = () => {}) {
   const email = screen.getByRole('textbox');
   fireEvent.input(email, { target: { value: 'invitee@signup.test' } });
   if (asAgent) fireEvent.click(screen.getByLabelText('Invite as agent'));
-  fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
 }
 
 describe('InviteToTeamDialog', () => {

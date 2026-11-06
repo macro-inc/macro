@@ -112,10 +112,10 @@ export function TeamInviteLinkSection(props: {
 
   return (
     <div class="flex flex-col gap-2">
-      <div class="flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <div class="text-sm text-ink">Invite link</div>
-          <div class="text-xs text-ink-muted">
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex min-w-0 flex-col gap-1">
+          <div class="text-sm font-medium text-ink">Invite link</div>
+          <div class="text-sm text-ink-muted">
             <Show when={!unknown()} fallback="Couldn't load the invite link.">
               Anyone with the link can join your team. Paste it in Slack or an
               email.
@@ -127,7 +127,6 @@ export function TeamInviteLinkSection(props: {
           fallback={
             <Button
               variant="secondary"
-              size="sm"
               class="shrink-0"
               onClick={() =>
                 fireAndForget(linkQuery.refetch(), 'team-invite-link')
@@ -138,13 +137,11 @@ export function TeamInviteLinkSection(props: {
           }
         >
           <Button
-            variant="secondary"
-            size="sm"
+            variant="primary"
             class="shrink-0"
             disabled={busy()}
             onClick={handleCopyOrCreate}
           >
-            <LinkIcon class="size-4" />
             <Show when={token()} fallback="Create link">
               Copy link
             </Show>
@@ -152,7 +149,7 @@ export function TeamInviteLinkSection(props: {
         </Show>
       </div>
       <Show when={props.canManage && token()}>
-        <div class="flex items-center gap-1">
+        <div class="-ml-2 flex items-center gap-1 text-ink-muted">
           <Button
             variant="ghost"
             size="xs"
@@ -161,6 +158,7 @@ export function TeamInviteLinkSection(props: {
           >
             Reset link
           </Button>
+          <span aria-hidden="true">·</span>
           <Button
             variant="ghost"
             size="xs"
