@@ -303,7 +303,7 @@ async fn notification_inbox_pages_groups_with_their_rows() {
             harness
                 .request(
                     r#"{ user { notificationInbox(input: {
-                        scope: { rowTypes: [DISCUSSION_THREAD, AGENT] },
+                        scope: { rowTypes: [DISCUSSION_THREAD, AGENT], unreadOnly: true },
                         limit: 10
                     }) {
                         nextCursor
@@ -360,6 +360,7 @@ async fn notification_inbox_pages_groups_with_their_rows() {
         pages[0].scope.row_types,
         vec![InboxRowType::DiscussionThread, InboxRowType::Agent]
     );
+    assert!(pages[0].scope.unread_only);
     assert_eq!(pages[0].limit, 10);
 }
 
@@ -512,7 +513,7 @@ async fn the_inbox_is_cleared_one_batch_at_a_time() {
             harness
                 .request(
                     r#"mutation { clearNotificationInbox(input: {
-                        scope: { rowTypes: [EMAIL] }, unreadOnly: true,
+                        scope: { rowTypes: [EMAIL], unreadOnly: true },
                         since: "2024-06-01T00:00:00+02:00", limit: 150
                     }) { rowCount undoToken nextCursor } }"#,
                     authenticated_parts(),
@@ -538,7 +539,7 @@ async fn the_inbox_is_cleared_one_batch_at_a_time() {
     assert_eq!(FeedPosition::decode(cursor).unwrap().sort_at, at(7));
     let clears = service.clears.lock().unwrap();
     assert_eq!(clears[0].scope.row_types, vec![InboxRowType::Email]);
-    assert!(clears[0].unread_only);
+    assert!(clears[0].scope.unread_only);
     assert_eq!(
         clears[0].since,
         Some(
@@ -583,7 +584,7 @@ async fn notification_inbox_updates_batch_recomputed_patches() {
         FeedKey::new(ModelEntityType::Chat.with_entity_string(Uuid::from_u128(0xC4A7).to_string()));
 
     let request = async_graphql::Request::new(
-        r#"subscription { notificationInboxUpdates(scope: { rowTypes: [DISCUSSION_THREAD] }) {
+        r#"subscription { notificationInboxUpdates(scope: { rowTypes: [DISCUSSION_THREAD], unreadOnly: true }) {
             __typename
             ... on NotificationInboxEntryUpserted { entry { groupId rows { id } } }
             ... on NotificationInboxEntryRemoved { groupId }
@@ -631,6 +632,7 @@ async fn notification_inbox_updates_batch_recomputed_patches() {
     {
         let recomputes = service.recomputes.lock().unwrap();
         assert_eq!(recomputes.len(), 1);
+        assert!(recomputes[0].0.unread_only);
         assert_eq!(recomputes[0].1, vec![doc_group(), other.clone()]);
     }
     assert_eq!(
