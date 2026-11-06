@@ -61,10 +61,66 @@ function blockMarkdown(blocks: SerializedLexicalNode[]): string[] {
   });
 }
 
-/** The longest common subsequence of blocks, as keep/remove/insert steps in document order. */
+/**
+ * The most cells the LCS table may hold (16 MiB of Uint32), well inside a
+ * Worker's memory. A changed middle larger than this is replaced whole.
+ */
+const MAX_LCS_CELLS = 4 * 1024 * 1024;
+
+/**
+ * Keep/remove/insert steps in document order. Blocks shared at the start and
+ * end are kept; the changed middle keeps its longest common subsequence.
+ */
 function blockSteps(current: string[], requested: string[]): BlockStep[] {
+  let prefix = 0;
+  while (
+    prefix < current.length &&
+    prefix < requested.length &&
+    current[prefix] === requested[prefix]
+  )
+    prefix++;
+  let suffix = 0;
+  while (
+    suffix < current.length - prefix &&
+    suffix < requested.length - prefix &&
+    current[current.length - 1 - suffix] ===
+      requested[requested.length - 1 - suffix]
+  )
+    suffix++;
+
+  const steps: BlockStep[] = [];
+  for (let i = 0; i < prefix; i++) steps.push({ kind: 'keep', current: i });
+  steps.push(
+    ...middleSteps(
+      current.slice(prefix, current.length - suffix),
+      requested.slice(prefix, requested.length - suffix),
+      prefix
+    )
+  );
+  for (let i = current.length - suffix; i < current.length; i++)
+    steps.push({ kind: 'keep', current: i });
+  return steps;
+}
+
+/** LCS steps for the changed middle, whose blocks start at `offset` in both lists. */
+function middleSteps(
+  current: string[],
+  requested: string[],
+  offset: number
+): BlockStep[] {
   const width = requested.length + 1;
-  const common = new Uint32Array((current.length + 1) * width);
+  const cells = (current.length + 1) * width;
+  if (cells > MAX_LCS_CELLS)
+    return [
+      ...current.map(
+        (_, i): BlockStep => ({ kind: 'remove', current: offset + i })
+      ),
+      ...requested.map(
+        (_, j): BlockStep => ({ kind: 'insert', requested: offset + j })
+      ),
+    ];
+
+  const common = new Uint32Array(cells);
   for (let i = current.length - 1; i >= 0; i--)
     for (let j = requested.length - 1; j >= 0; j--)
       common[i * width + j] =
@@ -81,7 +137,7 @@ function blockSteps(current: string[], requested: string[]): BlockStep[] {
       j < requested.length &&
       current[i] === requested[j]
     ) {
-      steps.push({ kind: 'keep', current: i });
+      steps.push({ kind: 'keep', current: offset + i });
       i++;
       j++;
     } else if (
@@ -89,10 +145,10 @@ function blockSteps(current: string[], requested: string[]): BlockStep[] {
       (i === current.length ||
         common[i * width + j + 1] >= common[(i + 1) * width + j])
     ) {
-      steps.push({ kind: 'insert', requested: j });
+      steps.push({ kind: 'insert', requested: offset + j });
       j++;
     } else {
-      steps.push({ kind: 'remove', current: i });
+      steps.push({ kind: 'remove', current: offset + i });
       i++;
     }
   }

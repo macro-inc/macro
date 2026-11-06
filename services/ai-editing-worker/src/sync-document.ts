@@ -50,10 +50,9 @@ function encode(bytes: Uint8Array): string {
 }
 
 function decode(value: unknown): Uint8Array {
-  if (
-    typeof value !== 'string' ||
-    value.length > Math.ceil(MAX_SNAPSHOT_BYTES / 3) * 4
-  )
+  if (typeof value !== 'string')
+    throw new SyncDocumentError('invalid_response', 502, 'read');
+  if (value.length > Math.ceil(MAX_SNAPSHOT_BYTES / 3) * 4)
     throw new SyncDocumentError('too_large', 413, 'read');
   let decoded: string;
   try {
