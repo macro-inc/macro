@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO sync_document_op (document_id, seq, payload)\n                   VALUES ($1, $2, $3) ON CONFLICT (document_id, seq) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c06d30ef88e2048fa32393c642922c517b8cb862b14b67d95f4958227da0d309"
+}

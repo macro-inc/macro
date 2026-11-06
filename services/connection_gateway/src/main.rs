@@ -110,8 +110,10 @@ async fn main() -> Result<()> {
     let stream_service = RedisPostgresStreamRepo::new((*redis_client).clone(), pgpool.clone());
     let stream_manager = RedisPostgresStreamManager::new(stream_service.obj());
 
+    let fanout_gateway_id: Arc<str> = Arc::from(uuid::Uuid::new_v4().to_string());
     let context = context::ApiContext {
         connection_manager,
+        fanout_gateway_id: Arc::clone(&fanout_gateway_id),
         redis_client: Arc::clone(&redis_client),
         redis_connection,
         frecency_ingestor_service: EventIngestorImpl::new(FrecencyPgStorage::new(pgpool.clone())),
@@ -120,6 +122,11 @@ async fn main() -> Result<()> {
     };
 
     tokio::spawn(poll_messages(context.clone()));
+    tokio::spawn(service::fanout::poll_outbound(context.clone()));
+    tokio::spawn(service::fanout::heartbeat_loop(
+        context.redis_connection.clone(),
+        fanout_gateway_id,
+    ));
 
     let config = Arc::new(config);
     let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(

@@ -5,7 +5,7 @@ use crate::{
         tracking::{EntityConnectionExt, TrackingData},
         websocket::ToWebsocketMessage,
     },
-    service::{stream_event::handle_stream_events, tracker},
+    service::{fanout, stream_event::handle_stream_events, tracker},
 };
 use anyhow::{Context, Result};
 use axum::extract::ws::{Message, WebSocket};
@@ -69,6 +69,25 @@ pub async fn handle_message(
     message: Message,
     sender: &Sender<OutgoingMessage>,
 ) -> Result<()> {
+    // Every client frame is republished to the fanout channel, unparsed,
+    // before any in-gateway handling. Backend services consume what they care
+    // about (the sync tier reads binary frames); the gateway stays a dumb tap.
+    //
+    // TODO: the in-gateway handling below (entity tracking / frecency,
+    // stream-event subscriptions) should probably migrate to services
+    // consuming this same fanout, keeping the gateway a pure edge.
+    match &message {
+        Message::Text(text) => {
+            fanout::frame(&connection_context, true, text.as_bytes().to_vec()).await;
+        }
+        Message::Binary(payload) => {
+            fanout::frame(&connection_context, false, payload.to_vec()).await;
+            // Binary frames have no in-gateway handling; fanout is it.
+            return Ok(());
+        }
+        _ => {}
+    }
+
     let text_message = match message {
         Message::Text(text) => Some(text),
         Message::Close(_) => {

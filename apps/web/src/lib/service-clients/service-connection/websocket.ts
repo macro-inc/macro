@@ -29,7 +29,7 @@ export type FromWebsocketMessage = {
   data: any;
 };
 
-async function resolveWsUrl() {
+export async function resolveWsUrl() {
   if (ENABLE_BEARER_TOKEN_AUTH) {
     const apiToken = await getMacroApiToken();
     if (!apiToken) throw new Error('No Macro API token');

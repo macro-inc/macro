@@ -1,0 +1,17 @@
+[package]
+edition = "2024"
+name = "sync_machine"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+# The production Replica over a Loro document. Off by default so the pure
+# machine (and its tests) build without the CRDT.
+loro = ["dep:loro"]
+
+[dependencies]
+loro = { version = "1.13", optional = true }
+macro_user_id = { path = "../macro_user_id" }
+thiserror = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

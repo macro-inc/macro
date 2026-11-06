@@ -213,6 +213,21 @@ impl ConnectionManager {
         Ok(())
     }
 
+    /// Send a raw binary frame to a connection held by this instance.
+    pub async fn send_binary(&self, id: &str, bytes: Vec<u8>) -> Result<()> {
+        let sender = match self.connections.get(id) {
+            Some(connection) => connection.sender.clone(),
+            None => anyhow::bail!("connection not found"),
+        };
+
+        if let Err(err) = sender.send(OutgoingMessage::Binary(bytes)).await {
+            self.remove_connection(id).await?;
+            anyhow::bail!("failed to send binary message: {}", err);
+        }
+
+        Ok(())
+    }
+
     pub fn get_entries_by_entity<'a>(
         &'a self,
         entity: &'a Entity<'a>,

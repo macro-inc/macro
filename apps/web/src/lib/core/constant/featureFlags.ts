@@ -64,6 +64,13 @@ export const ENABLE_PDF_MARKUP = resolveFeatureFlag('ENABLE_PDF_MARKUP', true);
 // https://github.com/macro-inc/pdf.js/blob/d22768d78ebaaf038707d3d926992a7aeb88e730/web/pdf_scripting_manager.js?plain=1#L59
 export const ENABLE_SCRIPTING = resolveFeatureFlag('ENABLE_SCRIPTING', false);
 
+/**
+ * Route document sync through the connection gateway (one multiplexed socket
+ * for all documents, server-side sync-router) instead of one direct
+ * sync-service websocket per document.
+ */
+export const SYNC_VIA_GATEWAY = resolveFeatureFlag('SYNC_VIA_GATEWAY', true);
+
 export const ENABLE_PDF_MULTISPLIT = resolveFeatureFlag(
   'ENABLE_PDF_MULTISPLIT',
   true

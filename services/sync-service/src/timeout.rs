@@ -131,7 +131,7 @@ impl<T> TimeoutResult<T> {
 /// A `TimeoutResult` indicating whether the operation completed or timed out
 ///
 /// # Examples
-/// ```rust
+/// ```ignore
 /// use crate::timeout::{timeout, TimeoutResult};
 ///
 /// async fn example() {

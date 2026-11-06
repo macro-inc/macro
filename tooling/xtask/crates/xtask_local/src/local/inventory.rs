@@ -89,6 +89,17 @@ pub const RUST_SERVICES: &[RustService] = &[
         no_default_features: true,
     },
     RustService {
+        compose_name: "sync_router",
+        cargo_bin: "sync_router",
+        package: "sync_router",
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        modes: &[Mode::Local, Mode::Dev],
+        opt_in: false,
+        no_default_features: false,
+    },
+    RustService {
         compose_name: "connection_gateway",
         cargo_bin: "connection_gateway_service",
         package: "connection_gateway",

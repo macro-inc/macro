@@ -1,12 +1,15 @@
 import { resumeDocumentSpan } from '@block-md/observability';
+import { SYNC_VIA_GATEWAY } from '@core/constant/featureFlags';
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import type {
   InitialSync,
   LiveSyncSource,
   TimeoutError,
 } from '@macro-inc/collaboration/collab/source';
+import { GatewaySyncTransport } from '@macro-inc/collaboration/sync-service/gateway';
 import {
   createSyncSocket,
+  type SyncSocket,
   type SyncWebsocket,
 } from '@macro-inc/collaboration/sync-service/socket';
 import {
@@ -15,6 +18,7 @@ import {
 } from '@macro-inc/collaboration/sync-service/source';
 import type { UrlResolver } from '@macro-inc/collaboration/websocket';
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
+import { resolveWsUrl as resolveGatewayWsUrl } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
 import type { ResultAsync } from 'neverthrow';
 
@@ -66,6 +70,28 @@ export function createSyncServiceSocket(
   return createSyncSocket(getUrl);
 }
 
+/**
+ * The one multiplexed sync connection: every document's sync traffic rides a
+ * single websocket to the connection gateway, which fans it out to the
+ * sync-router server-side. Lazy so nothing connects until a document opens.
+ */
+let gatewayTransport: GatewaySyncTransport | undefined;
+function syncGatewayTransport(): GatewaySyncTransport {
+  gatewayTransport ??= new GatewaySyncTransport(resolveGatewayWsUrl);
+  return gatewayTransport;
+}
+
+async function refreshPermissionToken(documentId: string): Promise<string> {
+  const response =
+    await storageServiceClient.permissionsTokens.createPermissionToken({
+      document_id: documentId,
+    });
+  if (response.isErr()) {
+    throw new Error(`failed to fetch permission token: ${response.error}`);
+  }
+  return response.value.token;
+}
+
 export const createSyncServiceSource = (
   documentId: string,
   token: string
@@ -73,7 +99,11 @@ export const createSyncServiceSource = (
   source: LiveSyncSource;
   doInitialSync: () => ResultAsync<InitialSync, TimeoutError>;
 } => {
-  const ws = createSyncServiceSocket(documentId, token);
+  const ws: SyncSocket = SYNC_VIA_GATEWAY
+    ? syncGatewayTransport().attach(documentId, token, () =>
+        refreshPermissionToken(documentId)
+      )
+    : createSyncServiceSocket(documentId, token);
   const state = createWebsocketStateSignal(ws);
   const source = new SyncServiceSource(ws, documentId, {
     status: () => mapToSyncStatus(state()),
