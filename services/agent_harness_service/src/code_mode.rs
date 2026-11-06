@@ -92,7 +92,14 @@ impl UserExecutionCredentials for UserRunCredentials {
         } else {
             false
         };
-        let agent = execution_actor(caller, teammate);
+        // No bot claim means a teammate's writes belong to its own user account.
+        let agent = match caller {
+            ai_toolset::ToolCaller::Agent(agent) => Some(*agent),
+            ai_toolset::ToolCaller::ApiKey if teammate => None,
+            ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
+                Some(bot_id::MACRO_AI_BOT_ID)
+            }
+        };
         let correlation = match (session, agent) {
             (Some(session), Some(agent)) => Some(
                 self.correlations
@@ -129,17 +136,6 @@ impl UserExecutionCredentials for UserRunCredentials {
             execution_id: None,
             unattended: None,
         })
-    }
-}
-
-// A teammate is a user account: no bot attribution claim means writes are its own.
-fn execution_actor(caller: &ai_toolset::ToolCaller, teammate: bool) -> Option<bot_id::BotId> {
-    match caller {
-        ai_toolset::ToolCaller::Agent(agent) => Some(*agent),
-        ai_toolset::ToolCaller::ApiKey if teammate => None,
-        ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
-            Some(bot_id::MACRO_AI_BOT_ID)
-        }
     }
 }
 
