@@ -264,7 +264,6 @@ export function CallMoreMenu(props: {
                 />
               </Dropdown.Item>
             </Dropdown.Group>
-            <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
             <Dropdown.Group>
               <Dropdown.Item
                 onSelect={() => {

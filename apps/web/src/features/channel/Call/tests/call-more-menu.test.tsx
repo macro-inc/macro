@@ -163,3 +163,27 @@ it('opens the shortcut popover through pointer selection without losing its anch
     .click(screen.getByRole('button', { name: 'Another action' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
+
+it('uses the shared group boundary as the single divider above shortcuts', async () => {
+  render(() => (
+    <CallMoreMenu
+      layout="auto"
+      onLayoutChange={() => {}}
+      hasScreenShare={false}
+      hideParticipants={false}
+      onHideParticipantsChange={() => {}}
+      onOpenChange={() => {}}
+    />
+  ));
+  fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+    key: 'ArrowDown',
+  });
+  const menu = await screen.findByRole('menu');
+  expect(within(menu).queryByRole('separator')).toBeNull();
+  expect(within(menu).getAllByRole('group')).toHaveLength(2);
+  expect(
+    within(menu)
+      .getAllByRole('group')[0]
+      .parentElement?.classList.contains('divide-y')
+  ).toBe(true);
+});
