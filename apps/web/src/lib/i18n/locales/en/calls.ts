@@ -4,6 +4,8 @@ export default {
   join: 'Join',
   leave: 'Leave call',
   copyLink: 'Copy meeting link',
+  linkCopied: 'Meeting URL copied',
+  linkCopyFailed: 'Could not load call link. Try again.',
   showPlayer: 'Show floating player',
   collapsePlayer: 'Collapse',
   more: 'More',

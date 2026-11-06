@@ -31,9 +31,9 @@ function ActiveCallLinkContent(props: {
   async function copyFromMenu() {
     try {
       await copy();
-      toast.success('Meeting URL copied');
+      toast.success(t('calls.linkCopied'));
     } catch {
-      toast.failure('Could not load call link. Try again.');
+      toast.failure(t('calls.linkCopyFailed'));
     }
   }
 
