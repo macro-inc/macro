@@ -1,3 +1,4 @@
+import { TutorialPill } from '@app/features/video-tutorials';
 import { useCodexAgentsAccess } from '@core/codex/flag';
 import { toast } from '@core/component/Toast/Toast';
 import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
@@ -128,6 +129,7 @@ export function Harness(
         <SettingsPage
           title="Runtimes"
           description="Providers and machines your agents can run on."
+          signpost={<TutorialPill tutorial="macrod" class="mt-1 self-start" />}
           onBack={props.onBack}
           backLabel={props.backLabel ?? 'Agents'}
           actions={

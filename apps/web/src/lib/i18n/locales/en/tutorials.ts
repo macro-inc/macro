@@ -30,6 +30,16 @@ export default {
   docsSnippet:
     '@mention anything, open it in a split, plain markdown, live agent cursors',
   docsLength: '1:15',
+  spreadsheetsTitle: 'Learn how to use Macro Spreadsheets',
+  spreadsheetsBlock: 'Macro Spreadsheets',
+  spreadsheetsSnippet:
+    'Formulas, @mentions, charts, agents and comments, linked to everything else',
+  spreadsheetsLength: '0:56',
+  canvasTitle: 'Learn how to use Macro Canvas',
+  canvasBlock: 'Macro Canvas',
+  canvasSnippet:
+    'Shapes and sketches, @mention anything as live pills, agents edit it too',
+  canvasLength: '0:50',
   tasksTitle: 'Learn how to use Macro Tasks',
   tasksBlock: 'Macro Tasks',
   tasksSnippet:

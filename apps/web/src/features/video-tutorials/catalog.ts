@@ -5,6 +5,8 @@ import calendarVideo from './assets/calendar.mp4';
 import calendarPoster from './assets/calendar-poster.jpg';
 import callsVideo from './assets/calls.mp4';
 import callsPoster from './assets/calls-poster.jpg';
+import canvasVideo from './assets/canvas.mp4';
+import canvasPoster from './assets/canvas-poster.jpg';
 import chatVideo from './assets/chat.mp4';
 import chatPoster from './assets/chat-poster.jpg';
 import crmVideo from './assets/crm.mp4';
@@ -21,6 +23,8 @@ import mailVideo from './assets/mail.mp4';
 import mailPoster from './assets/mail-poster.jpg';
 import schedulingVideo from './assets/scheduling.mp4';
 import schedulingPoster from './assets/scheduling-poster.jpg';
+import spreadsheetsVideo from './assets/spreadsheets.mp4';
+import spreadsheetsPoster from './assets/spreadsheets-poster.jpg';
 import tasksVideo from './assets/tasks.mp4';
 import tasksPoster from './assets/tasks-poster.jpg';
 import whatsappVideo from './assets/whatsapp.mp4';
@@ -114,6 +118,40 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     },
     videoUrl: docsVideo,
     posterUrl: docsPoster,
+  },
+  spreadsheets: {
+    id: 'spreadsheets',
+    get title() {
+      return t('tutorials.spreadsheetsTitle');
+    },
+    get block() {
+      return t('tutorials.spreadsheetsBlock');
+    },
+    get snippet() {
+      return t('tutorials.spreadsheetsSnippet');
+    },
+    get length() {
+      return t('tutorials.spreadsheetsLength');
+    },
+    videoUrl: spreadsheetsVideo,
+    posterUrl: spreadsheetsPoster,
+  },
+  canvas: {
+    id: 'canvas',
+    get title() {
+      return t('tutorials.canvasTitle');
+    },
+    get block() {
+      return t('tutorials.canvasBlock');
+    },
+    get snippet() {
+      return t('tutorials.canvasSnippet');
+    },
+    get length() {
+      return t('tutorials.canvasLength');
+    },
+    videoUrl: canvasVideo,
+    posterUrl: canvasPoster,
   },
   tasks: {
     id: 'tasks',
