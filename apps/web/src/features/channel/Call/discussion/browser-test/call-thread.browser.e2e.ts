@@ -160,7 +160,7 @@ async function open(
   });
   await page.routeWebSocket('**/*', (socket) => socket.close());
   await page.goto(`${PATH}?view=${view}&shell=${scenario.shell ?? ''}`);
-  return { posted };
+  return { posted, replies };
 }
 
 const callRow = (page: Page) =>
@@ -411,4 +411,78 @@ for (const shell of ['docked', 'overlay'] as const) {
       }
     });
   }
+}
+
+for (const readingHistory of [false, true]) {
+  test(`call discussion keeps its scroll across tabs: history=${readingHistory}`, async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name === 'phone');
+    const { posted, replies } = await open(page, 'panel', {
+      status: { state: 'live' },
+      shell: 'docked',
+      historyCount: 40,
+      replies: Array.from({ length: 40 }, (_, index) =>
+        reply(
+          `00000000-0000-7000-8000-0000000b00${10 + index}`,
+          `Message ${index + 1}`
+        )
+      ),
+    });
+    const latest = page.getByText('Message 40', { exact: true });
+    await expect(latest).toBeInViewport({ timeout: 30_000 });
+    const editor = page.locator('[data-markdown-editable]');
+    await editor.fill('Draft in the call');
+    const scroll = page.locator('[data-channel-scroll]');
+    if (readingHistory) {
+      await scroll.hover();
+      await page.mouse.wheel(0, -300);
+      await expect(latest).not.toBeInViewport();
+    }
+    const previous = await scroll.evaluate((el) => el.scrollTop);
+    await page.getByText(/^(People|Participants)$/).click();
+    await expect(
+      page.getByText('Call participant', { exact: true })
+    ).toBeVisible();
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        )
+    );
+    replies.push(reply('00000000-0000-7000-8000-0000000b0050', 'Message 41'));
+    const response = page.waitForResponse((response) =>
+      response.url().includes(`/threads/${CALL_ID}`)
+    );
+    await page.getByRole('button', { name: 'Refresh discussion' }).click();
+    await response;
+    await page.getByText('Chat', { exact: true }).click();
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        )
+    );
+    const directory = process.env.CALL_REPRO_DIR;
+    if (directory) {
+      await mkdir(directory, { recursive: true });
+      const path = `${directory}/L-78-${readingHistory ? 'history' : 'latest'}-${process.env.CALL_REPRO_PHASE ?? 'after'}.png`;
+      await page.screenshot({ path });
+      await testInfo.attach('Discussion after tab switch', {
+        path,
+        contentType: 'image/png',
+      });
+    }
+    const current = await scroll.evaluate((el) => el.scrollTop);
+    console.log(JSON.stringify({ readingHistory, previous, current }));
+    if (readingHistory) expect(Math.abs(current - previous)).toBeLessThan(2);
+    else
+      await expect(
+        page.getByText('Message 41', { exact: true })
+      ).toBeInViewport();
+    await expect(editor).toHaveText('Draft in the call');
+    await page.getByRole('button', { name: /send/i }).click();
+    await expect.poll(() => posted.length).toBe(1);
+    expect(posted[0]).toMatchObject({ thread_id: CALL_ID });
+  });
 }

@@ -126,6 +126,15 @@ function Fixture() {
                                         ? 'Leave call view'
                                         : 'Return to call view'}
                                     </button>
+                                    <button
+                                      onClick={() =>
+                                        queryClient.refetchQueries({
+                                          type: 'all',
+                                        })
+                                      }
+                                    >
+                                      Refresh discussion
+                                    </button>
                                     <div
                                       ref={setOverlay}
                                       class="@container/call relative mx-auto min-h-0 w-full flex-1"
