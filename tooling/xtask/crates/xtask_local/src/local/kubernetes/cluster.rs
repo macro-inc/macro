@@ -5,6 +5,15 @@ fn docker(args: &[&str]) -> Result<String> {
 }
 
 pub(super) fn ensure(state: &Path) -> Result<()> {
+    // Two instances may start together; create shared cluster resources once.
+    // The lock ends before either instance renders or applies its namespace.
+    let lease = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(state.join("cluster.lock"))?;
+    lease.lock()?;
     let root = super::super::repo_root();
     let owner = path_str(&root)?;
     if !state.join("tools").exists() {
