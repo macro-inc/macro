@@ -32,6 +32,8 @@ export function RoutineCreatorView(props: {
     current: Accessor<ScheduleDraft>,
     initialDescription: string | undefined
   ) => JSX.Element;
+  /** Fills the description box. */
+  initialDescription?: string;
   onStart(draft: ScheduleDraft): void;
   onClose(): void;
 }) {
@@ -79,7 +81,11 @@ export function RoutineCreatorView(props: {
       </EntityComposer.Header>
       <div class="min-h-0 flex-1 overflow-y-auto px-2 pt-2">
         <RoutineStart
-          describe={props.renderComposer?.(drafted, blank, undefined)}
+          describe={props.renderComposer?.(
+            drafted,
+            blank,
+            props.initialDescription
+          )}
           templates={
             props.templatesEnabled
               ? availableTemplates(props.catalog, props.decisionsEnabled)

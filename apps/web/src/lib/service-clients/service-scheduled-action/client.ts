@@ -19,6 +19,7 @@ import type {
   Draft,
   DraftRoutineRequest,
   InProgressExecution,
+  RoutineSuggestions,
   RoutineTemplate,
   ScheduledAction,
   ScheduledActionResponse,
@@ -59,11 +60,17 @@ export const scheduledActionClient = {
       }
     ),
 
-  createSchedule: async (body: ActionConfiguration) =>
-    scheduledActionFetch<ScheduledAction>('/scheduled-actions', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
+  /** `suggestionId` records the routine suggestion it is saved from. */
+  createSchedule: async (
+    body: ActionConfiguration,
+    options: { suggestionId?: string } = {}
+  ) =>
+    scheduledActionFetch<ScheduledAction>(
+      options.suggestionId
+        ? `/scheduled-actions?${new URLSearchParams({ suggestion_id: options.suggestionId })}`
+        : '/scheduled-actions',
+      { method: 'POST', body: JSON.stringify(body) }
+    ),
 
   updateSchedule: async (args: {
     scheduleId: string;
@@ -116,6 +123,29 @@ export const scheduledActionClient = {
     scheduledActionFetch<CatalogEntry[]>(
       `/scheduled-actions/catalog?${new URLSearchParams({ timezone: args.timezone })}`,
       { method: 'GET' }
+    ),
+
+  /**
+   * Routines AI picked for the caller from the catalog; reading starts a
+   * generation when they are due. 404 while suggestions are off for them.
+   */
+  routineSuggestions: async () =>
+    scheduledActionFetch<RoutineSuggestions>('/scheduled-actions/suggestions', {
+      method: 'GET',
+    }),
+
+  /** Start generating suggestions now; answers the current ones meanwhile. */
+  refreshRoutineSuggestions: async () =>
+    scheduledActionFetch<RoutineSuggestions>(
+      '/scheduled-actions/suggestions/refresh',
+      { method: 'POST' }
+    ),
+
+  /** The caller isn't interested in a suggestion; it isn't suggested again. */
+  dismissRoutineSuggestion: (args: { suggestionId: string }) =>
+    scheduledActionFetch(
+      `/scheduled-actions/suggestions/${args.suggestionId}/dismiss`,
+      { method: 'POST' }
     ),
 
   /** Have AI draft a routine or one of its steps, its code checked as saving would. */

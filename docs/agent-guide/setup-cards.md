@@ -72,6 +72,30 @@ card sits above **Settings**, outside the scrolling list.
 
 `src/features/sidebar-promotion/browser-test/` renders all three cards.
 
+## Suggested routines
+
+With `enable-routine-suggestions` and `enable-routine-code-steps` on, the
+Email, Calendar, Tasks, Drive, Customers, Chat, Calls, Reviews and Agents
+sidebars start with a **Suggested routines** card while the scheduler has
+suggestions for that area: the top one's name and `+N`. It opens **Routines
+for <area>**: a grid of the same cards as the Routines page **Templates** row
+(area icon, name, what it does with AI's values filled in, and its trigger →
+step line, or **AI drafts it → you review it** for a request). Choosing a card
+(`Review <name>`) reviews it; its corner **×** (`Not interested in <name>`,
+shown on hover on desktop) dismisses it.
+
+- Choosing a card opens New routine already filled in, unsaved: a catalog routine
+  with AI's knob values (names matched to the person's own tags, labels and
+  channels), or, for a request, what the drafter wrote from it
+  (**Drafting…**); a failed draft opens New routine with the request in the
+  describe box. Saving records the suggestion on the routine.
+- **Not interested** removes the card at once; it isn't suggested again,
+  across later generations.
+- **Refresh suggestions** starts a new generation; **All routines** opens
+  the Routines page.
+- Closing the card hides it for that area on every device (prompt dismissal
+  `routine-suggestions:<area>`).
+
 ## Dismissing cards
 
 Every card (import, Slack, and setup) has a close button. Dismissing is

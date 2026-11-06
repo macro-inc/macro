@@ -1133,7 +1133,12 @@ the catalog's first four available template cards (icon, name, one line and its 
 **New email → Label with AI**) with **All templates** at the right, which opens
 New routine's start screen. A card opens New routine already filled in from that
 template. The strip hides while searching and on **On**; on phones the cards
-scroll sideways. Columns are **Name**, **Trigger**, **Steps** and **Last run**.
+scroll sideways. While the scheduler has routine suggestions for the user
+(`enable-routine-suggestions` and `enable-routine-code-steps`), **Suggested
+for you** takes the strip's place in the same row of cards (see
+[setup cards](setup-cards.md#suggested-routines)): the four AI rates most
+likely to be kept, with **All suggestions** at the right when there are more,
+which opens them all in a dialog. Columns are **Name**, **Trigger**, **Steps** and **Last run**.
 Rows are grouped under **When something happens** and **On a schedule**, each a
 band like the tasks list's group headers, with a count. Each row has an icon for
 its trigger's kind, the name with its description below it when it has one,
@@ -1277,7 +1282,8 @@ GitHub sends, such as `workflow_run` and `completed`; empty means any), checks
 Macro's app can't retrigger itself). Deliveries only reach owners whose
 currently linked GitHub account installed the delivering installation, or whose
 team did. While GitHub is disconnected the panel shows **Connect GitHub**
-instead, and an enabled GitHub routine can't be saved. The panel also has
+instead, as does the triggers section above the list whenever a GitHub
+trigger is present, and an enabled GitHub routine can't be saved. The panel also has
 **Only when the payload…** rows: a dotted field (`*` checks every list item, e.g.
 `pull_request.labels.*.name`), a comparison (**is**, **is one of**, **is not one
 of**, **matches** glob, **is set**, **is not set**) and a value. Every row must

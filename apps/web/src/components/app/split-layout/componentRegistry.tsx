@@ -422,6 +422,11 @@ registerComponent('routine-compose', (params) => (
         ? (params.onStart as () => void)
         : undefined
     }
+    initialDescription={
+      typeof params.initialDescription === 'string'
+        ? params.initialDescription
+        : undefined
+    }
   />
 ));
 registerComponent('document-compose', (params) => {

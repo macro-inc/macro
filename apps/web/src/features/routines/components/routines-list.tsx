@@ -28,6 +28,11 @@ export function RoutinesList(props: {
   /** Templates to start from, above the list; absent where none are offered. */
   templates?: RoutineTemplate[];
   onTemplate?: (template: RoutineTemplate) => void;
+  /**
+   * What shows above the list in place of the templates, given the
+   * templates to show when it has nothing of its own (routine suggestions).
+   */
+  featured?: (templates: JSX.Element) => JSX.Element;
 }) {
   const [search, setSearch] = createSignal('');
   const [show, setShow] = createSignal<'all' | 'on'>('all');
@@ -137,21 +142,23 @@ export function RoutinesList(props: {
       </Show>
       <div class="@container/routines min-h-0 min-w-0 flex-1 overflow-auto">
         {/* Templates sit above the list, out of the way of a search. */}
-        <Show
-          when={
-            !search().trim() &&
-            show() === 'all' &&
-            (props.templates?.length ?? 0) > 0 &&
-            props.onTemplate
-          }
-        >
-          {(onTemplate) => (
-            <RoutineTemplateStrip
-              templates={props.templates ?? []}
-              onUse={onTemplate()}
-              onAll={props.onCreate}
-            />
-          )}
+        <Show when={!search().trim() && show() === 'all'}>
+          {(() => {
+            const templates = (
+              <Show
+                when={(props.templates?.length ?? 0) > 0 && props.onTemplate}
+              >
+                {(onTemplate) => (
+                  <RoutineTemplateStrip
+                    templates={props.templates ?? []}
+                    onUse={onTemplate()}
+                    onAll={props.onCreate}
+                  />
+                )}
+              </Show>
+            );
+            return props.featured ? props.featured(templates) : templates;
+          })()}
         </Show>
         <div
           ref={list}

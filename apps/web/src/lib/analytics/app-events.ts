@@ -392,10 +392,33 @@ export type AppEvents = {
   // scheduled and event-triggered runs are not counted yet.
   routine_created: {
     routineId?: string;
-    source: 'new' | 'duplicate';
+    source: 'new' | 'duplicate' | 'suggestion';
+    /** The routine suggestion it was saved from. */
+    suggestionId?: string;
     triggerType: string;
     /** A single agent's model or agent, or `steps` for a routine with steps. */
     targetKind?: 'agent' | 'model' | 'steps';
+  };
+  /** The suggestions for a sidebar or the Routines page were opened. */
+  routine_suggestions_opened: {
+    surface: string;
+    suggestions: number;
+  };
+  /** A sidebar's suggestions card was closed for good. */
+  routine_suggestions_card_dismissed: { surface: string };
+  /** "Not interested" in one suggestion. */
+  routine_suggestion_dismissed: {
+    suggestionId: string;
+    surface: string;
+    kind: 'starter' | 'request';
+    catalogKey?: string;
+  };
+  /** A suggestion opened for review before saving. */
+  routine_suggestion_reviewed: {
+    suggestionId: string;
+    surface: string;
+    kind: 'starter' | 'request';
+    catalogKey?: string;
   };
   /** A manual Run now the server accepted, not the run's outcome. */
   routine_run: {
