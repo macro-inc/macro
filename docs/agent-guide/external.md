@@ -99,7 +99,11 @@ in place, voice notes read **Voice note · 0:42** above an inline player; bytes
 come from the attachment's static file, like Chat's media. Other ready files
 (PDF, text) show as file chips that open the stored file in a new tab; other
 states show loading, unavailable or unsupported. Senders
-show their WhatsApp name. `@<number>` in a body shows the person: a verified
+show their WhatsApp name (from any of their messages, else the linked
+account's contacts or address book), else their phone number, and only then
+"WhatsApp participant"; history imports usually carry no names, so a later
+message or group sync names earlier messages too. Members are named the same
+way. `@<number>` in a body shows the person: a verified
 Macro user as Chat's mention chip, anyone else their WhatsApp name in bold.
 Bare URLs are links with Chat's hover preview. **Forwarded** marks forwarded
 messages. Polls (read-only tallies, "Vote in WhatsApp"), locations (**Open in

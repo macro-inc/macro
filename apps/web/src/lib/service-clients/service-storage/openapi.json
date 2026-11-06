@@ -37662,7 +37662,7 @@
       "ExternalChatParticipant": {
         "type": "object",
         "description": "Someone in an external chat; Macro access is a separate grant.",
-        "required": ["jid", "admin"],
+        "required": ["jid", "name", "admin"],
         "properties": {
           "admin": {
             "type": "boolean",
@@ -37679,6 +37679,10 @@
           "jid": {
             "type": "string",
             "description": "Their id at the provider (WhatsApp: phone-number or LID JID)."
+          },
+          "name": {
+            "type": "string",
+            "description": "What to call them: their provider name, else their phone number,\nelse a generic name."
           }
         }
       },

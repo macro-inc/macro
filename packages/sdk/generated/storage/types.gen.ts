@@ -9400,6 +9400,11 @@ export type ExternalChatParticipant = {
      * Their id at the provider (WhatsApp: phone-number or LID JID).
      */
     jid: string;
+    /**
+     * What to call them: their provider name, else their phone number,
+     * else a generic name.
+     */
+    name: string;
 };
 
 /**
