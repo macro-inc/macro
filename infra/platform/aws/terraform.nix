@@ -177,6 +177,8 @@ in
         name = "server_${toString i}";
         value = {
           ami = "\${data.aws_ami.nixos.id}";
+          # A new image must not replace a running node, and its volume with it.
+          lifecycle.ignore_changes = [ "ami" ];
           instance_type = cfg.serverType;
           subnet_id = "\${aws_subnet.public_${toString (lib.mod i (lib.length azs))}.id}";
           vpc_security_group_ids = [ "\${aws_security_group.nodes.id}" ];
@@ -184,6 +186,7 @@ in
           root_block_device = {
             volume_size = 200;
             volume_type = "gp3";
+            encrypted = true;
           };
           tags = named "server-${toString i}";
         };
@@ -192,6 +195,8 @@ in
         name = "agent_${toString i}";
         value = {
           ami = "\${data.aws_ami.nixos.id}";
+          # A new image must not replace a running node, and its volume with it.
+          lifecycle.ignore_changes = [ "ami" ];
           instance_type = cfg.agentType;
           subnet_id = "\${aws_subnet.public_${toString (lib.mod i (lib.length azs))}.id}";
           vpc_security_group_ids = [ "\${aws_security_group.nodes.id}" ];
@@ -199,6 +204,7 @@ in
           root_block_device = {
             volume_size = 500;
             volume_type = "gp3";
+            encrypted = true;
           };
           tags = named "agent-${toString i}";
         };

@@ -20,7 +20,7 @@ TLS = "__MACRO_TLS__"
 WAIT_IMAGE = "__MACRO_WAIT_IMAGE__"
 # Created as provisioning's last step (`job_provision` in xtask_local's platform.rs).
 WAIT_FOR_PROVISIONING = (
-    "until psql -h postgres -U user -d platform_provisioned -c 'select 1' >/dev/null 2>&1; "
+    "until psql \"${DATABASE_URL%/*}/platform_provisioned\" -c 'select 1' >/dev/null 2>&1; "
     "do sleep 2; done"
 )
 HOST = "selfhost.localhost"
@@ -65,10 +65,8 @@ def wait_for_provisioning():
         "command": ["/bin/sh", "-c", WAIT_FOR_PROVISIONING],
         "env": [
             {
-                "name": "PGPASSWORD",
-                "valueFrom": {
-                    "secretKeyRef": {"name": "macro-env", "key": "PLATFORM_POSTGRES_PASSWORD"}
-                },
+                "name": "DATABASE_URL",
+                "valueFrom": {"secretKeyRef": {"name": "macro-env", "key": "DATABASE_URL"}},
             }
         ],
     }
@@ -229,7 +227,8 @@ def main():
         "- Signed URLs use placeholder CloudFront keys unless you replace them in\n"
         "  `macro-env`.\n"
         "- FusionAuth runs in development mode.\n"
-        "- Mailpit captures all mail instead of sending it.\n\n"
+        "- Mailpit captures all mail instead of sending it.\n"
+        "- The analytics proxy has no rate limit of its own here: apply one at your ingress.\n\n"
         "Requirements: Kubernetes 1.30+, a default StorageClass, an ingress controller,\n"
         "and two Secrets in the release namespace: `macro-env` (the environment every\n"
         "service loads) and `fusionauth-kickstart` (`kickstart.json`).\n\n"
