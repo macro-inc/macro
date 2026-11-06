@@ -5445,6 +5445,7 @@ export const CreateRoutine = z.object({
         z.null(),
       ])
       .optional(),
+    dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
   }),
 });
 
@@ -5533,6 +5534,7 @@ export const RoutineInfo = z.object({
             z.null(),
           ])
           .optional(),
+        dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
       }),
       z.null(),
     ])
@@ -13399,6 +13401,9 @@ export const RoutineList = z.object({
                 z.null(),
               ])
               .optional(),
+            dangerouslyOperateAsUser: z
+              .union([z.boolean(), z.null()])
+              .optional(),
           }),
           z.null(),
         ])
@@ -18015,6 +18020,7 @@ export const RoutineDetails = z.object({
               z.null(),
             ])
             .optional(),
+          dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
         }),
         z.null(),
       ])
@@ -20097,6 +20103,7 @@ export const UpdateRoutine = z.object({
               z.null(),
             ])
             .optional(),
+          dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
         }),
         type: z.literal('configuration'),
       }),
