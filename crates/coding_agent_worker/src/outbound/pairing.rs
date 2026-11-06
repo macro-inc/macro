@@ -43,14 +43,16 @@ impl PairingClient {
         }
     }
 
-    /// Open a pairing named after this machine. Ownership, permission bypass,
-    /// and the final name are the approving user's choice on the web.
-    pub async fn start(&self) -> rootcause::Result<CreatedPairing> {
+    /// Open a pairing that requests `name` (see
+    /// [`crate::profiles::ConfigSelection::pairing_name`]). Ownership,
+    /// permission bypass, and the final name are the approving user's choice
+    /// on the web.
+    pub async fn start(&self, name: String) -> rootcause::Result<CreatedPairing> {
         let response = self
             .http
             .post(format!("{}/harness-pairings", self.base))
             .json(&CreatePairingRequest {
-                name: machine_name(),
+                name,
                 host: Some(host_info()),
             })
             .send()
@@ -109,8 +111,8 @@ fn credentials_from(claimed: ClaimedPairing) -> HarnessCredentials {
     }
 }
 
-/// This machine's hostname, or `macrod` when it has none: the name a pairing
-/// requests and the panel shows before the server's name is known.
+/// This machine's hostname, or `macrod` when it has none: what a pairing's
+/// requested name starts with.
 pub fn machine_name() -> String {
     local_hostname().unwrap_or_else(|| "macrod".to_owned())
 }
