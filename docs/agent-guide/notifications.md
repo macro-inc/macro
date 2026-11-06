@@ -287,6 +287,27 @@ while that query is pending, then apply only the second account's response.
 Toast regions are labeled `Notifications (alt+T)`; seven empty live regions always exist in
 the a11y tree (ignore them when parsing snapshots).
 
+Toasts with supporting details show their actions below the description. Without
+supporting details, a single action sits beside the short title. Undo and navigation
+actions use icons only when useful: Undo and recovery icons lead, Open has a
+trailing open icon, and Open split has a trailing split icon. View, Dismiss,
+Not now, and Maybe later remain text-only. Desktop Undo and navigation toasts
+replace **Dismiss** with a close icon on the right. On phones, swipe left or right
+to dismiss. Closing the toast does not perform Undo or change its expiry. Optional
+setup prompts use **Not now** instead of **Dismiss**. Recovery and update-ready
+prompts use **Maybe later**, except draft-save recovery uses a desktop close icon
+and keeps **Save as new draft** as its only action. Dismissal keeps the same
+suppression behavior.
+Recovery prompts have danger-colored titles and subject icons: mail for inbox-only
+reconnect and email access, a calendar for **Reconnect email and calendar**, and
+a plug for integration reconnect. Draft-save recovery uses the default error
+icon and danger color. Their descriptions and Save, Reconnect, and Try again
+buttons remain neutral, not destructive. The update-ready prompt is distinct:
+it uses the Macro logo, the standard neutral toast background and border, an
+accent **Reload** button, and secondary **Maybe later**. Its title remains
+**A new version of Macro is ready** in neutral ink.
+Leading icons align with the title's first line even when the title or actions wrap.
+
 Staff Noise emails still create in-app notification rows, but do not send a new-notification
 event over GraphQL or the legacy WebSocket gateway, so they do not trigger browser popups.
 Those rows are available on the next fetch/refetch. Signal delivery and the existing

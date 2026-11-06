@@ -349,7 +349,9 @@ generated at build time), and adds the direct tool it replaces to
    `documents.spreadsheet(document)` with `read`, `calculate` and
    `applyEdits` over `SpreadsheetService`. Hides `ReadSpreadsheet`,
    `CalculateSpreadsheet` and `EditSpreadsheet`. Then `sheet.edit(instructions,
-   { signal })` with a new writer model over the same service.
+   { signal })` with a new writer model over the same engine: the worker's
+   `/spreadsheet/instructions` reads, calculates and commits one batch, and
+   DSS `POST /documents/{id}/spreadsheet/ai-edit` admits and meters it.
 4. **PowerPoint and Word** (MACRO-4581, MACRO-4841). Shipped as the
    structured layer first: `Document.readPresentation()`,
    `editPresentation(operations)` and `copyPresentation(name, { operations })`

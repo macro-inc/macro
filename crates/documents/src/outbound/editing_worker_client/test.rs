@@ -250,3 +250,43 @@ async fn spreadsheet_statuses_keep_their_meaning() {
     ));
     assert!(matches!(unavailable, SpreadsheetError::Failed(_)));
 }
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn spreadsheet_instructions_carry_usage_with_every_outcome() {
+    use crate::domain::spreadsheet::SpreadsheetWriterOutcome;
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
+
+    let worker = MockServer::start().await;
+    Mock::given(matchers::method("POST"))
+        .and(matchers::path("/spreadsheet/instructions"))
+        .and(matchers::body_partial_json(serde_json::json!({
+            "documentId": "document",
+            "instructions": "Total the Revenue sheet.",
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "outcome": "refused",
+            "reason": "There is no Revenue sheet.",
+            "usage": [{"model": "claude-sonnet-5-5", "inputTokens": 400, "outputTokens": 30}],
+        })))
+        .mount(&worker)
+        .await;
+
+    let result = ReqwestEditingWorkerClient::from_url(worker.uri())
+        .spreadsheet_instructions(
+            "document",
+            &"token".to_owned().into(),
+            "Total the Revenue sheet.",
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result.outcome,
+        SpreadsheetWriterOutcome::Refused { reason } if reason == "There is no Revenue sheet."
+    ));
+    assert_eq!(result.usage.len(), 1);
+    assert_eq!(result.usage[0].model, "claude-sonnet-5-5");
+    assert_eq!(result.usage[0].input_tokens, 400);
+    assert_eq!(result.usage[0].output_tokens, 30);
+}

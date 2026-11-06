@@ -378,9 +378,13 @@ Drive's **New** menu (in the sidebar and after the header's Sort and Filter
 buttons; beside the title in narrow layouts) is headed
 **Create in &lt;folder&gt;** and creates everything in the open folder; on a tab or
 the Drive root it reads **Create in Drive**. **Folder** opens a **New folder**
-dialog with `Untitled folder` preselected; creating keeps Drive where it is, adds
-the folder to the open folder's list, and shows a toast with **Open**. Every other
-item opens as an inline detail in the open folder or tab once created
+dialog with `Untitled folder` preselected; creating keeps Drive where it is and adds
+the folder to the open folder's list. Creation and completed folder uploads show
+a compact toast with a success check, a folder icon beside **&lt;folder name&gt;
+created/uploaded**, and **Open**, without a separate description.
+Failed folder submissions retain separate **Retry** actions on desktop, even when
+their failure titles match; each action restores its own unfinished draft.
+Every other item opens as an inline detail in the open folder or tab once created
 (`/app/drive/folder/<uuid>/spreadsheet/<uuid>`, `/app/drive/database/<uuid>`),
 the same as opening an existing file: the Drive sidebar stays mounted and no
 loading pane replaces Drive. Databases and forms opened from Drive's list or
@@ -1789,7 +1793,7 @@ On desktop, a split showing a folder (Drive's folder route or a folder split) ac
 
 Folders in Drive's sidebar take the same drops, outlined while hovered, including rows from the list beside them in the same split. So do folder rows in Drive's lists and in a folder's own list; a row takes the drop ahead of the pane around it, so a drop lands in the row's folder, not the one the pane shows. Held at the sidebar's edge, a drag scrolls a long folder tree. The drag card sits beside the pointer so a narrow target stays visible. Drive's root row is not a drop target.
 
-Every move, from the picker or a drop, ends in a **Moved to folder** or **Moved N items** toast with **Open** and, on desktop with room for another split, **Open in new split**. Either action dismisses the toast and shows the folder on Drive's route; if a split already lists that folder, it focuses that split instead of opening a second copy. A split with an item open inside the folder doesn't count, because the folder's list isn't visible there. Touch devices have no splits, so they show only **Open**.
+Every move, from the picker or a drop, ends in a **Moved to folder** or **Moved N items** toast with primary **Open** and, on desktop with room for another split, secondary **Open split** to its left. Desktop shows a close icon instead of Dismiss. Either navigation action dismisses the toast and shows the folder on Drive's route; if a split already lists that folder, it focuses that split instead of opening a second copy. A split with an item open inside the folder doesn't count, because the folder's list isn't visible there. Touch devices have no splits, so they show only **Open** and retain swipe dismissal.
 
 ### Native update-required dialog
 
