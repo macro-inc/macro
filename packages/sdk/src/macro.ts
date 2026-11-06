@@ -3,6 +3,7 @@ import { AgentSessionNamespace } from './entities/agent-sessions/namespace';
 import { AgentNamespace } from './entities/agents/namespace';
 import { AiNamespace } from './entities/ai/namespace';
 import { ApiKeyNamespace } from './entities/api-keys/namespace';
+import { BookingsNamespace } from './entities/bookings/namespace';
 import { BotsNamespace } from './entities/bots/namespace';
 import { CalendarNamespace } from './entities/calendar/namespace';
 import { CallRecordNamespace } from './entities/calls/namespace';
@@ -139,6 +140,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   readonly ai: AiNamespace;
 
+  readonly bookings: BookingsNamespace;
+
   readonly bots: BotsNamespace;
 
   readonly calendar: CalendarNamespace;
@@ -231,6 +234,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.entityMentions = new EntityMentionNamespace(client);
     this.agentSessions = new AgentSessionNamespace(client);
     this.ai = new AiNamespace(client);
+    this.bookings = new BookingsNamespace(client);
     this.bots = new BotsNamespace(client);
     this.calendar = new CalendarNamespace(client);
     this.calls = new CallRecordNamespace(client);
@@ -301,6 +305,15 @@ export { ToolApproval } from './entities/agent-sessions/tool-approval';
 export type { SessionView } from './entities/agent-sessions/view';
 export { Agent, type AgentOptions } from './entities/agents/agent';
 export { UserApiKey } from './entities/api-keys/api-key';
+export { Booking, type BookingSlot } from './entities/bookings/booking';
+export { BookingLink } from './entities/bookings/link';
+export type {
+  BookingInsightsOptions,
+  BookingLinkListing,
+  BookingScope,
+  ListBookingsOptions,
+} from './entities/bookings/namespace';
+export { BookingSettings } from './entities/bookings/settings';
 export {
   Bot,
   type BotOwner,

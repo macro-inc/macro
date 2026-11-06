@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CalendarEventProviderUrlData, CalendarEventProviderUrlErrors, CalendarEventProviderUrlResponses, CalendarReplacementStatusData, CalendarReplacementStatusErrors, CalendarReplacementStatusResponses, ConfirmCalendarReplacementData, ConfirmCalendarReplacementErrors, ConfirmCalendarReplacementResponses, CopyCalendarEventData, CopyCalendarEventErrors, CopyCalendarEventResponses, CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, DiscardCalendarReplacementData, DiscardCalendarReplacementErrors, DiscardCalendarReplacementResponses, GetAvailabilityCalendarsData, GetAvailabilityCalendarsResponses, GetTeamSharingData, GetTeamSharingResponses, HealthHandlerData, HealthHandlerResponses, InviteCalendarEventGuestsData, InviteCalendarEventGuestsErrors, InviteCalendarEventGuestsResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, PrepareCalendarReplacementData, PrepareCalendarReplacementErrors, PrepareCalendarReplacementResponses, RespondToJoinRequestData, RespondToJoinRequestErrors, RespondToJoinRequestResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, SetAvailabilityCalendarData, SetAvailabilityCalendarResponses, SetTeamSharingData, SetTeamSharingResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
+import type { CalendarEventProviderUrlData, CalendarEventProviderUrlErrors, CalendarEventProviderUrlResponses, CalendarReplacementStatusData, CalendarReplacementStatusErrors, CalendarReplacementStatusResponses, ChangeBookingData, ChangeBookingErrors, ChangeBookingResponses, ConfirmCalendarReplacementData, ConfirmCalendarReplacementErrors, ConfirmCalendarReplacementResponses, CopyCalendarEventData, CopyCalendarEventErrors, CopyCalendarEventResponses, CreateBookingLinkData, CreateBookingLinkErrors, CreateBookingLinkResponses, CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, DiscardCalendarReplacementData, DiscardCalendarReplacementErrors, DiscardCalendarReplacementResponses, EditBookingLinkData, EditBookingLinkErrors, EditBookingLinkResponses, GetAvailabilityCalendarsData, GetAvailabilityCalendarsResponses, GetBookingInsightsData, GetBookingInsightsErrors, GetBookingInsightsResponses, GetBookingSettingsData, GetBookingSettingsErrors, GetBookingSettingsResponses, GetTeamSharingData, GetTeamSharingResponses, HealthHandlerData, HealthHandlerResponses, InviteCalendarEventGuestsData, InviteCalendarEventGuestsErrors, InviteCalendarEventGuestsResponses, ListBookingLinksData, ListBookingLinksErrors, ListBookingLinksResponses, ListBookingRescheduleSlotsData, ListBookingRescheduleSlotsErrors, ListBookingRescheduleSlotsResponses, ListBookingsData, ListBookingsErrors, ListBookingsResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, PrepareCalendarReplacementData, PrepareCalendarReplacementErrors, PrepareCalendarReplacementResponses, RespondToJoinRequestData, RespondToJoinRequestErrors, RespondToJoinRequestResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, SaveBookingSettingsData, SaveBookingSettingsErrors, SaveBookingSettingsResponses, SetAvailabilityCalendarData, SetAvailabilityCalendarResponses, SetTeamSharingData, SetTeamSharingResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -233,6 +233,104 @@ export class Sdk extends HeyApiClient {
      */
     public confirmCalendarReplacement<ThrowOnError extends boolean = false>(options: Options<ConfirmCalendarReplacementData, ThrowOnError>): RequestResult<ConfirmCalendarReplacementResponses, ConfirmCalendarReplacementErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ConfirmCalendarReplacementResponses, ConfirmCalendarReplacementErrors, ThrowOnError>({ url: '/replacements/{operation_id}/confirm', ...options });
+    }
+
+    /**
+     * Read every booking starting in a half-open range, or fail when too many match.
+     */
+    public listBookings<ThrowOnError extends boolean = false>(options?: Options<ListBookingsData, ThrowOnError>): RequestResult<ListBookingsResponses, ListBookingsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListBookingsResponses, ListBookingsErrors, ThrowOnError>({ url: '/scheduling/bookings', ...options });
+    }
+
+    /**
+     * Cancel, approve, record attendance on, or reschedule a booking.
+     */
+    public changeBooking<ThrowOnError extends boolean = false>(options: Options<ChangeBookingData, ThrowOnError>): RequestResult<ChangeBookingResponses, ChangeBookingErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ChangeBookingResponses, ChangeBookingErrors, ThrowOnError>({
+            url: '/scheduling/bookings/{id}/change',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Replacement start times for a booking on one date in its schedule zone.
+     */
+    public listBookingRescheduleSlots<ThrowOnError extends boolean = false>(options: Options<ListBookingRescheduleSlotsData, ThrowOnError>): RequestResult<ListBookingRescheduleSlotsResponses, ListBookingRescheduleSlotsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ListBookingRescheduleSlotsResponses, ListBookingRescheduleSlotsErrors, ThrowOnError>({ url: '/scheduling/bookings/{id}/slots', ...options });
+    }
+
+    /**
+     * Booking statistics for a local-date period and the equally long period before it.
+     */
+    public getBookingInsights<ThrowOnError extends boolean = false>(options: Options<GetBookingInsightsData, ThrowOnError>): RequestResult<GetBookingInsightsResponses, GetBookingInsightsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<GetBookingInsightsResponses, GetBookingInsightsErrors, ThrowOnError>({
+            url: '/scheduling/insights',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * List booking links with their full drafts, plus the page's reusable schedules.
+     */
+    public listBookingLinks<ThrowOnError extends boolean = false>(options?: Options<ListBookingLinksData, ThrowOnError>): RequestResult<ListBookingLinksResponses, ListBookingLinksErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListBookingLinksResponses, ListBookingLinksErrors, ThrowOnError>({ url: '/scheduling/links', ...options });
+    }
+
+    /**
+     * Create a booking link; an identical draft at the same slug returns the saved link.
+     */
+    public createBookingLink<ThrowOnError extends boolean = false>(options: Options<CreateBookingLinkData, ThrowOnError>): RequestResult<CreateBookingLinkResponses, CreateBookingLinkErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateBookingLinkResponses, CreateBookingLinkErrors, ThrowOnError>({
+            url: '/scheduling/links',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Replace one booking link's draft; other links and schedules keep their settings.
+     */
+    public editBookingLink<ThrowOnError extends boolean = false>(options: Options<EditBookingLinkData, ThrowOnError>): RequestResult<EditBookingLinkResponses, EditBookingLinkErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<EditBookingLinkResponses, EditBookingLinkErrors, ThrowOnError>({
+            url: '/scheduling/links/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Read the personal or team booking page settings without creating them.
+     */
+    public getBookingSettings<ThrowOnError extends boolean = false>(options?: Options<GetBookingSettingsData, ThrowOnError>): RequestResult<GetBookingSettingsResponses, GetBookingSettingsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetBookingSettingsResponses, GetBookingSettingsErrors, ThrowOnError>({ url: '/scheduling/settings', ...options });
+    }
+
+    /**
+     * Save booking page settings at the revision they were read at.
+     */
+    public saveBookingSettings<ThrowOnError extends boolean = false>(options: Options<SaveBookingSettingsData, ThrowOnError>): RequestResult<SaveBookingSettingsResponses, SaveBookingSettingsErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<SaveBookingSettingsResponses, SaveBookingSettingsErrors, ThrowOnError>({
+            url: '/scheduling/settings',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**

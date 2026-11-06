@@ -57,6 +57,13 @@ enforced by the ordinary backend APIs.
   authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
   bot-management tools in its favour; `IssueBotCredential` stays, because its
   chat card mints a token the model never reads.
+- `src/entities/bookings/`: `macro.bookings` wraps the calendar service's
+  `/scheduling` management routes: `BookingLink` (list, create, `edit` at the
+  revision it was read), `Booking` (cancel, approve, attendance, reschedule
+  slots), insights and `BookingSettings`. Handles are snapshots of a read;
+  writes return the saved handle. Code mode hides the booking tools in its
+  favour, and lists the namespace under the `calendar` entity (one `@routing`
+  sentence, on `CalendarNamespace`) to stay within 32 entities.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 
 ## Boundaries

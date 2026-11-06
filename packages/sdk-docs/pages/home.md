@@ -77,6 +77,7 @@ opens the methods and exact request and response types for that namespace.
 | {@link src/entities/channels/namespace!ChannelNamespace | macro.channels} | Shared conversations with messages, replies, threads, and posts. |
 | {@link src/entities/chats/namespace!ChatNamespace | macro.chats} | AI chat conversations and their messages. |
 | {@link src/entities/calendar/namespace!CalendarNamespace | macro.calendar} | Connected calendars and events, including timing, attendees, and invitations. |
+| {@link src/entities/bookings/namespace!BookingsNamespace | macro.bookings} | Booking links, the meetings guests book through them, booking insights and booking-page settings. |
 | {@link src/entities/calls/namespace!CallRecordNamespace | macro.calls} | Recorded calls and the transcripts associated with them. |
 | {@link src/entities/notifications/namespace!NotificationNamespace | macro.notifications} | Activity notices for the current user, with seen/done state and delivery preferences. |
 

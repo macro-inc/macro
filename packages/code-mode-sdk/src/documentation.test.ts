@@ -212,9 +212,7 @@ describe('TypeDoc documentation packaging', () => {
     expect(guide('databases')).toContain("check every database's tables");
     expect(guide('crm')).toContain('not a Macro database');
     expect(guide('email')).toContain('Labels are per inbox');
-    expect(guide('calendar')).toContain(
-      'Booking links use conversational confirmation'
-    );
+    expect(guide('calendar')).toContain('link.mentionTag()');
     expect(guide('channels')).toContain('A form for a channel is a poll:');
     expect(guide('tasks')).toContain('Never edit, merge or delete');
     expect(guide('agentSessions')).toContain(

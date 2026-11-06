@@ -52,6 +52,425 @@ export type AvailabilityCalendarsResponse = {
 };
 
 /**
+ * Public booking details, also visible to authorized profile members.
+ */
+export type Booking = {
+    /**
+     * Answers keyed by question identity.
+     */
+    answers: {
+        [key: string]: string;
+    };
+    /**
+     * Explicit attendance outcome; existing booking records default to unknown.
+     */
+    attendance?: BookingAttendance;
+    /**
+     * Booker's email.
+     */
+    email: string;
+    /**
+     * Absolute meeting end.
+     */
+    endsAt: string;
+    /**
+     * Booking link identity.
+     */
+    eventTypeId: string;
+    /**
+     * Assigned hosts.
+     */
+    hosts: Array<string>;
+    /**
+     * Booking identity.
+     */
+    id: string;
+    /**
+     * Final location or conference URL.
+     */
+    location: string;
+    /**
+     * Booker's name.
+     */
+    name: string;
+    /**
+     * Original labels for answers, independent of later event-type edits.
+     */
+    questionLabels?: {
+        [key: string]: string;
+    };
+    /**
+     * Number of successfully completed moves to a different start time.
+     */
+    rescheduleCount?: number;
+    /**
+     * When the most recent successful reschedule completed.
+     */
+    rescheduledAt?: string | null;
+    /**
+     * Absolute meeting start.
+     */
+    startsAt: string;
+    /**
+     * Current lifecycle state.
+     */
+    status: BookingStatus;
+    /**
+     * Booker's display time zone.
+     */
+    timeZone: string;
+    /**
+     * Snapshot of the meeting title.
+     */
+    title: string;
+};
+
+/**
+ * Attendance recorded by an assigned host or profile administrator after a meeting.
+ */
+export type BookingAttendance = 'unknown' | 'attended' | 'guestNoShow' | 'hostNoShow';
+
+/**
+ * A host's requested change to a booked meeting.
+ */
+export type BookingChange = {
+    action: 'approve';
+} | {
+    action: 'cancel';
+} | {
+    action: 'attendance';
+    /**
+     * Recorded outcome.
+     */
+    attendance: BookingAttendance;
+} | {
+    action: 'reschedule';
+    /**
+     * Absolute start chosen from available replacement slots.
+     */
+    startsAt: string;
+};
+
+/**
+ * A reusable booking link.
+ */
+export type BookingEventType = {
+    /**
+     * Protected time after a meeting.
+     */
+    afterMinutes: number;
+    /**
+     * Protected time before a meeting.
+     */
+    beforeMinutes: number;
+    /**
+     * Maximum bookings for this event on one schedule-local day.
+     */
+    dailyLimit?: number | null;
+    /**
+     * Public description.
+     */
+    description: string;
+    /**
+     * Meeting duration.
+     */
+    durationMinutes: number;
+    /**
+     * Whether new bookings are accepted.
+     */
+    enabled: boolean;
+    /**
+     * Generate a Google Meet conference. Mutually exclusive with a Macro call.
+     */
+    googleMeet: boolean;
+    /**
+     * Maximum days ahead.
+     */
+    horizonDays: number;
+    /**
+     * Current Macro user identities selected as hosts.
+     */
+    hosts: Array<string>;
+    /**
+     * Stable identity.
+     */
+    id: string;
+    /**
+     * Spacing of offered start times.
+     */
+    intervalMinutes: number;
+    /**
+     * Meeting location.
+     */
+    location: string;
+    /**
+     * Generate a Macro call and attach its join link when someone books.
+     * Mutually exclusive with Google Meet. Omitted on links saved before
+     * Macro calls were a booking option, which keep their previous conference.
+     */
+    macroCall?: boolean;
+    /**
+     * Host assignment policy.
+     */
+    mode: SchedulingMode;
+    /**
+     * Minimum notice in minutes.
+     */
+    noticeMinutes: number;
+    /**
+     * Additional form fields.
+     */
+    questions: Array<Question>;
+    /**
+     * Hold bookings for host approval.
+     */
+    requiresConfirmation: boolean;
+    /**
+     * Referenced availability schedule.
+     */
+    scheduleId: string;
+    /**
+     * Unique link segment within a profile.
+     */
+    slug: string;
+    /**
+     * Public title.
+     */
+    title: string;
+};
+
+/**
+ * Current and equally long preceding local-calendar periods.
+ */
+export type BookingInsights = {
+    /**
+     * Time at which completion was evaluated.
+     */
+    asOf: string;
+    /**
+     * Requested period.
+     */
+    current: InsightPeriod;
+    /**
+     * Comparison period, using identical filters and definitions.
+     */
+    previous: InsightPeriod;
+    /**
+     * Preceding period's first local date.
+     */
+    previousFrom: string;
+    /**
+     * Preceding period's last local date.
+     */
+    previousTo: string;
+};
+
+/**
+ * Saved link with actual identities and revision for subsequent edits.
+ */
+export type BookingLink = {
+    /**
+     * Full editable configuration.
+     */
+    draft: BookingLinkDraft;
+    /**
+     * Stable link identity.
+     */
+    eventTypeId: string;
+    /**
+     * Owning profile.
+     */
+    profileId: string;
+    /**
+     * Profile revision to supply when editing.
+     */
+    revision: number;
+};
+
+/**
+ * Complete proposal reviewed and validated before saving.
+ */
+export type BookingLinkDraft = {
+    /**
+     * Public details, hosts, booking rules and questions.
+     */
+    event: BookingLinkEvent;
+    /**
+     * Weekly hours, IANA time zone, and date overrides for this link.
+     */
+    schedule: BookingLinkSchedule;
+};
+
+/**
+ * All editable rules for one link. Personal links must use the authenticated user as host.
+ */
+export type BookingLinkEvent = {
+    /**
+     * Protected time after a meeting.
+     */
+    afterMinutes: number;
+    /**
+     * Protected time before a meeting.
+     */
+    beforeMinutes: number;
+    /**
+     * Maximum bookings for this event on one schedule-local day.
+     */
+    dailyLimit?: number | null;
+    /**
+     * Public description.
+     */
+    description: string;
+    /**
+     * Meeting duration.
+     */
+    durationMinutes: number;
+    /**
+     * Whether new bookings are accepted.
+     */
+    enabled: boolean;
+    /**
+     * Generate a Google Meet conference. Mutually exclusive with `macroCall`.
+     */
+    googleMeet: boolean;
+    /**
+     * Maximum days ahead.
+     */
+    horizonDays: number;
+    /**
+     * Current Macro user identities selected as hosts.
+     */
+    hosts: Array<string>;
+    /**
+     * Spacing of offered start times.
+     */
+    intervalMinutes: number;
+    /**
+     * Meeting location.
+     */
+    location: string;
+    /**
+     * Attach a Macro call when someone books. A join link is created for that
+     * booking and written onto the calendar invitation. Mutually exclusive
+     * with `googleMeet`. Prefer this for a Macro booking; omit or false when
+     * the link should use Google Meet or no video. False is omitted so drafts
+     * saved before this field still round-trip unchanged.
+     */
+    macroCall?: boolean;
+    /**
+     * Host assignment policy.
+     */
+    mode: SchedulingMode;
+    /**
+     * Minimum notice in minutes.
+     */
+    noticeMinutes: number;
+    /**
+     * Additional form fields.
+     */
+    questions: Array<Question>;
+    /**
+     * Hold bookings for host approval.
+     */
+    requiresConfirmation: boolean;
+    /**
+     * Unique link segment within a profile.
+     */
+    slug: string;
+    /**
+     * Public title.
+     */
+    title: string;
+};
+
+/**
+ * Authorized discovery results including reusable availability.
+ */
+export type BookingLinkListing = {
+    /**
+     * Links whose title, slug or description matches the search, including paused links.
+     */
+    links: Array<BookingLink>;
+    /**
+     * Owning profile identity, including unsaved new profiles.
+     */
+    profileId: string;
+    /**
+     * Current revision.
+     */
+    revision: number;
+    /**
+     * Reusable schedules, even when no links match.
+     */
+    schedules: Array<Schedule>;
+    /**
+     * Current team identities that can be used to discover team links.
+     */
+    teamIds: Array<string>;
+    /**
+     * Current authenticated host identity for personal drafts.
+     */
+    userId: string;
+};
+
+/**
+ * One saved booking link.
+ */
+export type BookingLinkResponse = {
+    /**
+     * The link as saved, with the revision for its next edit.
+     */
+    link: BookingLink;
+};
+
+/**
+ * Availability copied into a dedicated schedule when it changes; other links retain their hours.
+ */
+export type BookingLinkSchedule = {
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Date-specific replacements.
+     */
+    overrides: Array<DateOverride>;
+    /**
+     * IANA time zone.
+     */
+    timeZone: string;
+    /**
+     * Weekly windows.
+     */
+    weekly: Array<WeeklyDay>;
+};
+
+/**
+ * One booking after a change.
+ */
+export type BookingResponse = {
+    /**
+     * The booking as saved.
+     */
+    booking: Booking;
+};
+
+/**
+ * Booking lifecycle state.
+ */
+export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'processing' | 'failed';
+
+/**
+ * Bookings in the requested range.
+ */
+export type BookingsResponse = {
+    /**
+     * Every matching booking.
+     */
+    bookings: Array<Booking>;
+};
+
+/**
  * An attendee on a calendar event.
  */
 export type CalendarAttendee = {
@@ -573,6 +992,34 @@ export type CreateCalendarEventRequest = {
 };
 
 /**
+ * Replacement availability for one date.
+ */
+export type DateOverride = {
+    /**
+     * Local date in the schedule zone.
+     */
+    date: string;
+    /**
+     * Empty means unavailable all day.
+     */
+    windows: Array<TimeWindow>;
+};
+
+/**
+ * A full edited draft at the revision it was read at.
+ */
+export type EditBookingLinkRequest = {
+    /**
+     * The link's complete new configuration.
+     */
+    draft: BookingLinkDraft;
+    /**
+     * Profile revision the draft was read at; a stale revision conflicts.
+     */
+    expectedRevision: number;
+};
+
+/**
  * One reminder: how it alerts and how many minutes before the event start
  * (before midnight in the calendar's zone for all-day events) it fires.
  */
@@ -679,6 +1126,102 @@ export type GuestPolicy = {
 };
 
 /**
+ * Counts can overlap: a rescheduled event can also be completed or cancelled.
+ */
+export type InsightCounts = {
+    /**
+     * Cancelled bookings, grouped by their scheduled start.
+     */
+    cancelled: number;
+    /**
+     * Confirmed, ended bookings excluding explicit no-shows.
+     */
+    completed: number;
+    /**
+     * Explicit guest no-shows only.
+     */
+    guestNoShow: number;
+    /**
+     * Explicit host no-shows only.
+     */
+    hostNoShow: number;
+    /**
+     * Bookings with at least one completed reschedule, counted once.
+     */
+    rescheduled: number;
+    /**
+     * All bookings except failed and processing requests.
+     */
+    total: number;
+};
+
+/**
+ * One complete period of metrics and chart data, with no guest contact information.
+ */
+export type InsightPeriod = {
+    /**
+     * Average scheduled duration of all confirmed bookings, including future ones.
+     */
+    averageMinutes: number;
+    /**
+     * Summary event counts.
+     */
+    counts: InsightCounts;
+    /**
+     * Local-date counts, including dates with zero bookings.
+     */
+    days: {
+        [key: string]: InsightCounts;
+    };
+    /**
+     * Booking counts by link identity.
+     */
+    eventCounts: {
+        [key: string]: number;
+    };
+    /**
+     * Booking counts by host; collective bookings count once for each host.
+     */
+    hostCounts: {
+        [key: string]: number;
+    };
+    /**
+     * Booking counts by local hour, indexed from 0 to 23.
+     */
+    hours: Array<number>;
+    /**
+     * Scheduled minutes of completed meetings, not actual call duration.
+     */
+    meetingMinutes: number;
+};
+
+/**
+ * Inclusive local dates and optional booking/host filters.
+ */
+export type InsightQuery = {
+    /**
+     * Restrict to one booking link; omit for all links.
+     */
+    eventTypeId?: string | null;
+    /**
+     * First local date, inclusive.
+     */
+    from: string;
+    /**
+     * Restrict to one assigned host; omit for all hosts.
+     */
+    hostId?: string | null;
+    /**
+     * IANA zone used for dates and hour-of-day grouping.
+     */
+    timeZone: string;
+    /**
+     * Last local date, inclusive; maximum 366 days.
+     */
+    to: string;
+};
+
+/**
  * Request body adding guests to an event without touching anyone already
  * invited.
  */
@@ -757,6 +1300,68 @@ export type PrepareCalendarReplacementRequest = {
 };
 
 /**
+ * Editable configuration for a person or team.
+ */
+export type Profile = {
+    /**
+     * Personal hours used by team events; absent legacy profiles use their first schedule.
+     */
+    defaultScheduleId?: string | null;
+    /**
+     * Public introduction.
+     */
+    description: string;
+    /**
+     * Booking links.
+     */
+    eventTypes: Array<BookingEventType>;
+    /**
+     * Public, opaque profile identity.
+     */
+    id: string;
+    /**
+     * Display name on the public page.
+     */
+    name: string;
+    /**
+     * Optimistic concurrency version.
+     */
+    revision: number;
+    /**
+     * Reusable schedules.
+     */
+    schedules: Array<Schedule>;
+};
+
+/**
+ * Saved booking-page settings.
+ */
+export type ProfileResponse = {
+    /**
+     * Full settings, including the revision for the next save.
+     */
+    profile: Profile;
+};
+
+/**
+ * A question on the booking form.
+ */
+export type Question = {
+    /**
+     * Stable identity.
+     */
+    id: string;
+    /**
+     * Public question label.
+     */
+    label: string;
+    /**
+     * Whether an answer is mandatory.
+     */
+    required: boolean;
+};
+
+/**
  * Realtime signal that a connected inbox's calendar projection changed.
  */
 export type RefreshCalendarEvent = {
@@ -824,6 +1429,71 @@ export type RsvpCalendarEventRequest = {
 };
 
 /**
+ * Reusable hours, with DST interpreted in an IANA zone.
+ */
+export type Schedule = {
+    /**
+     * Stable schedule identity.
+     */
+    id: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Date-specific replacements.
+     */
+    overrides: Array<DateOverride>;
+    /**
+     * IANA time zone.
+     */
+    timeZone: string;
+    /**
+     * Weekly windows.
+     */
+    weekly: Array<WeeklyDay>;
+};
+
+/**
+ * A scheduling failure.
+ */
+export type SchedulingApiError = {
+    /**
+     * What went wrong, safe to show the user.
+     */
+    message: string;
+};
+
+/**
+ * Team host assignment policy.
+ */
+export type SchedulingMode = 'individual' | 'collective' | 'roundRobin';
+
+/**
+ * Available slot and the hosts who can satisfy it.
+ */
+export type Slot = {
+    /**
+     * Absolute end.
+     */
+    endsAt: string;
+    /**
+     * Absolute start.
+     */
+    startsAt: string;
+};
+
+/**
+ * Available start times.
+ */
+export type SlotsResponse = {
+    /**
+     * Every available slot, earliest first.
+     */
+    slots: Array<Slot>;
+};
+
+/**
  * What a user exposes through their team membership.
  */
 export type TeamCalendarSharing = 'all' | 'busy_only' | 'none';
@@ -836,6 +1506,20 @@ export type TeamCalendarSharingBody = {
      * Busy-only is the default, including when no setting has been saved.
      */
     sharing: TeamCalendarSharing;
+};
+
+/**
+ * A wall-clock window in an availability schedule.
+ */
+export type TimeWindow = {
+    /**
+     * Exclusive HH:MM end.
+     */
+    end: string;
+    /**
+     * Inclusive HH:MM start.
+     */
+    start: string;
 };
 
 /**
@@ -981,6 +1665,20 @@ export type VisibleCalendar = {
      * normally or a failure has not yet crossed the persistence threshold.
      */
     syncError?: string | null;
+};
+
+/**
+ * Availability for one weekday.
+ */
+export type WeeklyDay = {
+    /**
+     * Sunday is zero.
+     */
+    day: number;
+    /**
+     * Non-overlapping local windows.
+     */
+    windows: Array<TimeWindow>;
 };
 
 export type GetAvailabilityCalendarsData = {
@@ -1519,6 +2217,422 @@ export type ConfirmCalendarReplacementResponses = {
 };
 
 export type ConfirmCalendarReplacementResponse = ConfirmCalendarReplacementResponses[keyof ConfirmCalendarReplacementResponses];
+
+export type ListBookingsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Team whose bookings to read; omit for the caller's personal bookings.
+         */
+        teamId?: string;
+        /**
+         * Inclusive earliest start. Give both ends or neither.
+         */
+        from?: string;
+        /**
+         * Exclusive latest start, at most 733 days after `from`.
+         */
+        to?: string;
+    };
+    url: '/scheduling/bookings';
+};
+
+export type ListBookingsErrors = {
+    /**
+     * Invalid or oversized range
+     */
+    400: SchedulingApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * The caller may not manage this page
+     */
+    403: SchedulingApiError;
+    /**
+     * Scheduling is temporarily unavailable
+     */
+    503: SchedulingApiError;
+};
+
+export type ListBookingsError = ListBookingsErrors[keyof ListBookingsErrors];
+
+export type ListBookingsResponses = {
+    /**
+     * Matching bookings
+     */
+    200: BookingsResponse;
+};
+
+export type ListBookingsResponse = ListBookingsResponses[keyof ListBookingsResponses];
+
+export type ChangeBookingData = {
+    body: BookingChange;
+    path: {
+        /**
+         * Booking id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduling/bookings/{id}/change';
+};
+
+export type ChangeBookingErrors = {
+    /**
+     * The change is not allowed now
+     */
+    400: SchedulingApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * The caller may not manage this page
+     */
+    403: SchedulingApiError;
+    /**
+     * No such booking
+     */
+    404: SchedulingApiError;
+    /**
+     * The time is no longer available
+     */
+    409: SchedulingApiError;
+    /**
+     * Scheduling is temporarily unavailable
+     */
+    503: SchedulingApiError;
+};
+
+export type ChangeBookingError = ChangeBookingErrors[keyof ChangeBookingErrors];
+
+export type ChangeBookingResponses = {
+    /**
+     * The booking as saved
+     */
+    200: BookingResponse;
+};
+
+export type ChangeBookingResponse = ChangeBookingResponses[keyof ChangeBookingResponses];
+
+export type ListBookingRescheduleSlotsData = {
+    body?: never;
+    path: {
+        /**
+         * Booking id
+         */
+        id: string;
+    };
+    query: {
+        /**
+         * Date in the booking schedule's time zone.
+         */
+        date: string;
+    };
+    url: '/scheduling/bookings/{id}/slots';
+};
+
+export type ListBookingRescheduleSlotsErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * The caller may not manage this page
+     */
+    403: SchedulingApiError;
+    /**
+     * No such booking
+     */
+    404: SchedulingApiError;
+    /**
+     * Scheduling is temporarily unavailable
+     */
+    503: SchedulingApiError;
+};
+
+export type ListBookingRescheduleSlotsError = ListBookingRescheduleSlotsErrors[keyof ListBookingRescheduleSlotsErrors];
+
+export type ListBookingRescheduleSlotsResponses = {
+    /**
+     * Available replacement slots
+     */
+    200: SlotsResponse;
+};
+
+export type ListBookingRescheduleSlotsResponse = ListBookingRescheduleSlotsResponses[keyof ListBookingRescheduleSlotsResponses];
+
+export type GetBookingInsightsData = {
+    body: InsightQuery;
+    path?: never;
+    query?: {
+        /**
+         * Team whose booking page to act on; omit for the caller's personal page.
+         */
+        teamId?: string;
+    };
+    url: '/scheduling/insights';
+};
+
+export type GetBookingInsightsErrors = {
+    /**
+     * Invalid period
+     */
+    400: SchedulingApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * The caller may not manage this page
+     */
+    403: SchedulingApiError;
+    /**
+     * Scheduling is temporarily unavailable
+     */
+    503: SchedulingApiError;
+};
+
+export type GetBookingInsightsError = GetBookingInsightsErrors[keyof GetBookingInsightsErrors];
+
+export type GetBookingInsightsResponses = {
+    /**
+     * Current and previous period statistics
+     */
+    200: BookingInsights;
+};
+
+export type GetBookingInsightsResponse = GetBookingInsightsResponses[keyof GetBookingInsightsResponses];
+
+export type ListBookingLinksData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Team whose links to list; omit for the caller's personal links.
+         */
+        teamId?: string;
+        /**
+         * Text to match in a link's title, slug or description; omit for every link.
+         */
+        query?: string;
+    };
+    url: '/scheduling/links';
+};
+
+export type ListBookingLinksErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * The caller may not manage this page
+     */
+    403: SchedulingApiError;
+    /**
+     * Scheduling is temporarily unavailable
+     */
+    503: SchedulingApiError;
+};
+
+export type ListBookingLinksError = ListBookingLinksErrors[keyof ListBookingLinksErrors];
+
+export type ListBookingLinksResponses = {
+    /**
+     * Matching links and reusable availability
+     */
+    200: BookingLinkListing;
+};
+
+export type ListBookingLinksResponse = ListBookingLinksResponses[keyof ListBookingLinksResponses];
+
+export type CreateBookingLinkData = {
+    body: BookingLinkDraft;
+    path?: never;
+    query?: {
+        /**
+         * Team whose booking page to act on; omit for the caller's personal page.
+         */
+        teamId?: string;
+    };
+    url: '/scheduling/links';
+};
+
+export type CreateBookingLinkErrors = {
+    /**
+     * Invalid draft
+     */
+    400: SchedulingApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * The caller may not manage this page
+     */
+    403: SchedulingApiError;
+    /**
+     * A different link already uses this slug
+     */
+    409: SchedulingApiError;
+    /**
+     * Scheduling is temporarily unavailable
+     */
+    503: SchedulingApiError;
+};
+
+export type CreateBookingLinkError = CreateBookingLinkErrors[keyof CreateBookingLinkErrors];
+
+export type CreateBookingLinkResponses = {
+    /**
+     * The saved link
+     */
+    200: BookingLinkResponse;
+};
+
+export type CreateBookingLinkResponse = CreateBookingLinkResponses[keyof CreateBookingLinkResponses];
+
+export type EditBookingLinkData = {
+    body: EditBookingLinkRequest;
+    path: {
+        /**
+         * Booking link id
+         */
+        id: string;
+    };
+    query?: {
+        /**
+         * Team whose booking page to act on; omit for the caller's personal page.
+         */
+        teamId?: string;
+    };
+    url: '/scheduling/links/{id}';
+};
+
+export type EditBookingLinkErrors = {
+    /**
+     * Invalid draft
+     */
+    400: SchedulingApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * The caller may not manage this page
+     */
+    403: SchedulingApiError;
+    /**
+     * No such link
+     */
+    404: SchedulingApiError;
+    /**
+     * The page changed since the link was read
+     */
+    409: SchedulingApiError;
+    /**
+     * Scheduling is temporarily unavailable
+     */
+    503: SchedulingApiError;
+};
+
+export type EditBookingLinkError = EditBookingLinkErrors[keyof EditBookingLinkErrors];
+
+export type EditBookingLinkResponses = {
+    /**
+     * The saved link
+     */
+    200: BookingLinkResponse;
+};
+
+export type EditBookingLinkResponse = EditBookingLinkResponses[keyof EditBookingLinkResponses];
+
+export type GetBookingSettingsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Team whose booking page to act on; omit for the caller's personal page.
+         */
+        teamId?: string;
+    };
+    url: '/scheduling/settings';
+};
+
+export type GetBookingSettingsErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * The caller may not manage this page
+     */
+    403: SchedulingApiError;
+    /**
+     * Scheduling is temporarily unavailable
+     */
+    503: SchedulingApiError;
+};
+
+export type GetBookingSettingsError = GetBookingSettingsErrors[keyof GetBookingSettingsErrors];
+
+export type GetBookingSettingsResponses = {
+    /**
+     * Current settings
+     */
+    200: ProfileResponse;
+};
+
+export type GetBookingSettingsResponse = GetBookingSettingsResponses[keyof GetBookingSettingsResponses];
+
+export type SaveBookingSettingsData = {
+    body: Profile;
+    path?: never;
+    query?: {
+        /**
+         * Team whose booking page to act on; omit for the caller's personal page.
+         */
+        teamId?: string;
+    };
+    url: '/scheduling/settings';
+};
+
+export type SaveBookingSettingsErrors = {
+    /**
+     * Invalid settings
+     */
+    400: SchedulingApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * The caller may not manage this page
+     */
+    403: SchedulingApiError;
+    /**
+     * The settings changed since they were read
+     */
+    409: SchedulingApiError;
+    /**
+     * Scheduling is temporarily unavailable
+     */
+    503: SchedulingApiError;
+};
+
+export type SaveBookingSettingsError = SaveBookingSettingsErrors[keyof SaveBookingSettingsErrors];
+
+export type SaveBookingSettingsResponses = {
+    /**
+     * Saved settings
+     */
+    200: ProfileResponse;
+};
+
+export type SaveBookingSettingsResponse = SaveBookingSettingsResponses[keyof SaveBookingSettingsResponses];
 
 export type GetTeamSharingData = {
     body?: never;
