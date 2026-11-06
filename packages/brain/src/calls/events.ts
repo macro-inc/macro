@@ -1,4 +1,5 @@
 import { closeSync, mkdirSync, openSync, writeSync } from 'node:fs';
+import { context } from '@opentelemetry/api';
 import { startSpan } from '../telemetry.ts';
 import { level, wavHeader } from './audio.ts';
 export type Event = {
@@ -8,6 +9,7 @@ export type Event = {
 };
 export type Emit = (type: string, data?: Record<string, unknown>) => void;
 export class EventLog {
+  private readonly traceContext = context.active();
   readonly t0 = performance.now();
   private fd: number | null;
   readonly dir: string | null;
@@ -46,11 +48,16 @@ export class EventLog {
         'call.leave',
       ].includes(type)
     ) {
-      const span = startSpan(`brain.call.${type}`, {
-        ...(typeof data.turn === 'number' ? { 'call.turn': data.turn } : {}),
-        ...(typeof data.ms === 'number' ? { 'call.elapsed_ms': data.ms } : {}),
-        'call.has_text': typeof data.text === 'string' && data.text.length > 0,
-      });
+      const span = context.with(this.traceContext, () =>
+        startSpan(`brain.call.${type}`, {
+          ...(typeof data.turn === 'number' ? { 'call.turn': data.turn } : {}),
+          ...(typeof data.ms === 'number'
+            ? { 'call.elapsed_ms': data.ms }
+            : {}),
+          'call.has_text':
+            typeof data.text === 'string' && data.text.length > 0,
+        })
+      );
       span.end();
     }
   };

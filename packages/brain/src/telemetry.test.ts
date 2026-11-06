@@ -13,6 +13,8 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
+import { EventLog } from './calls/events.ts';
+import { SpeechGateway } from './calls/speech.ts';
 import { ConfigError } from './config.ts';
 import { judge } from './jev.ts';
 import { AgentSdkRunner } from './runner.ts';
@@ -31,6 +33,37 @@ const provider = new BasicTracerProvider({
 context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
 propagation.setGlobalPropagator(new W3CTraceContextPropagator());
 trace.setGlobalTracerProvider(provider);
+test('native call callbacks retain their call parent without exporting transcript text', async () => {
+  exporter.reset();
+  const { log, gateway } = await withSpan('brain.call', {}, async () => ({
+    log: new EventLog(null),
+    gateway: new SpeechGateway(
+      'http://localhost/inference',
+      'test-key',
+      'Agent'
+    ),
+  }));
+  log.emit('room.first_frame');
+  log.emit('stt.final', { text: 'private speech', turn: 1 });
+  log.close();
+  const spans = exporter.getFinishedSpans();
+  const parent = spans.find((span) => span.name === 'brain.call');
+  assert.ok(parent);
+  assert.equal(
+    gateway.headers().traceparent,
+    `00-${parent.spanContext().traceId}-${parent.spanContext().spanId}-01`
+  );
+  const children = spans.filter((span) => span.name !== 'brain.call');
+  assert.equal(children.length, 2);
+  for (const child of children) {
+    assert.equal(child.spanContext().traceId, parent.spanContext().traceId);
+    assert.equal(child.parentSpanContext?.spanId, parent.spanContext().spanId);
+    assert.equal(
+      JSON.stringify(child.attributes).includes('private speech'),
+      false
+    );
+  }
+});
 test('telemetry rejects malformed endpoint and parent instead of disabling export', () => {
   for (const value of [
     '',

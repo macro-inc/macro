@@ -1,5 +1,6 @@
 import { stt } from '@livekit/agents';
 import { AudioFrame } from '@livekit/rtc-node';
+import { context } from '@opentelemetry/api';
 import WebSocket from 'ws';
 import { traceHeaders } from '../telemetry.ts';
 import { frames } from './audio.ts';
@@ -8,6 +9,7 @@ import { GatewayStt } from './inference.ts';
 
 /** Macro proxies LiveKit Inference. Project credentials never enter this process. */
 export class SpeechGateway {
+  private readonly traceContext = context.active();
   readonly baseUrl: string;
   private readonly apiKey: string;
   readonly name: string;
@@ -20,7 +22,10 @@ export class SpeechGateway {
     return new SpeechGateway(this.baseUrl, this.apiKey, name);
   }
   headers(): Record<string, string> {
-    return { Authorization: `Bearer ${this.apiKey}`, ...traceHeaders() };
+    return {
+      Authorization: `Bearer ${this.apiKey}`,
+      ...context.with(this.traceContext, traceHeaders),
+    };
   }
   async open(
     operation: 'stt' | 'tts',
