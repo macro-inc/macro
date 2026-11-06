@@ -342,6 +342,21 @@ export type AgentActionId = string;
 export type AgentChannelScope = 'all' | 'selected';
 
 /**
+ * Where an agent can be mentioned: everywhere its owner can use it, or
+ * exactly the listed channels.
+ */
+export type AgentChannelSelection = {
+    /**
+     * Selected channels. Must be non-empty only for `selected` scope.
+     */
+    channel_ids?: Array<string>;
+    /**
+     * Whether the agent is global or channel-specific.
+     */
+    channel_scope: AgentChannelScope;
+};
+
+/**
  * Historical persona identity displayed beside a private conversation.
  */
 export type AgentDmProfile = {
@@ -357,6 +372,19 @@ export type AgentDmProfile = {
      * Persona display name.
      */
     name: string;
+};
+
+/**
+ * The runtime an agent runs on: a harness slug and, for `macrod`, the
+ * registered harness serving it. Travel together because one without the
+ * other is never a valid choice.
+ */
+export type AgentHarnessSelection = {
+    /**
+     * Harness slug, e.g. `in-memory`, `cursor`, or `macrod`.
+     */
+    harness: string;
+    harness_id?: null | HarnessId;
 };
 
 /**
@@ -13928,6 +13956,39 @@ export type Params = {
 export type ParticipantRole = 'owner' | 'admin' | 'member';
 
 /**
+ * Request to change part of a persisted agent's instructions or settings.
+ *
+ * Every field is optional; an absent field keeps the agent's current value.
+ * Ownership and the bot profile (name, handle, description, avatar) are not
+ * patchable here: the profile has [`PatchBotRequest`], and ownership changes
+ * go through [`UpdateAgentRequest`]. Unknown fields are refused, so a
+ * misspelled or flattened setting is never silently ignored.
+ */
+export type PatchAgentRequest = {
+    /**
+     * Replacement permission choice: approve without asking (`true`) or
+     * prompt (`false`). A patch cannot clear the choice back to unset; an
+     * explicit `false` prompts exactly as unset does.
+     */
+    auto_accept_permissions?: boolean | null;
+    channels?: null | AgentChannelSelection;
+    /**
+     * Replacement model.
+     */
+    default_model?: string | null;
+    harness?: null | AgentHarnessSelection;
+    /**
+     * Replacement instructions, whole.
+     */
+    instructions?: string | null;
+    /**
+     * Replacement coding choice.
+     */
+    is_coding?: boolean | null;
+    mcp?: null | AgentMcpServers;
+};
+
+/**
  * Request to patch a bot.
  */
 export type PatchBotRequest = {
@@ -21256,6 +21317,33 @@ export type CreateAgentResponses = {
 };
 
 export type CreateAgentResponse = CreateAgentResponses[keyof CreateAgentResponses];
+
+export type PatchAgentData = {
+    body: PatchAgentRequest;
+    path: {
+        /**
+         * Agent bot ID
+         */
+        agent_id: BotId;
+    };
+    query?: never;
+    url: '/agents/{agent_id}';
+};
+
+export type PatchAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchAgentError = PatchAgentErrors[keyof PatchAgentErrors];
+
+export type PatchAgentResponses = {
+    200: Agent;
+};
+
+export type PatchAgentResponse = PatchAgentResponses[keyof PatchAgentResponses];
 
 export type UpdateAgentData = {
     body: UpdateAgentRequest;

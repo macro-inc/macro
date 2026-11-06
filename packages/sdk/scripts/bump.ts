@@ -1,14 +1,12 @@
 /**
- * Raise the `version` of `@macro-inc/sdk` and `@macro-inc/sdk-calls`, and the
- * latter's peer range, together. Merging that bump to `main` is what publishes
- * the packages — see RELEASING.md and the `Release SDK` workflow.
+ * Raise the `version` field in package.json. Merging that bump to `main` is
+ * what publishes the package — see RELEASING.md and the `Release SDK` workflow.
  *
  * Usage: `bun scripts/bump.ts patch|minor|major` or `bun scripts/bump.ts X.Y.Z`.
  */
 import semver, { type ReleaseType } from 'semver';
 import {
   publishedVersions,
-  readCallsManifest,
   readManifest,
   resolveRelease,
   writeVersion,
@@ -29,15 +27,6 @@ if (target === null) {
   throw new Error(`cannot ${argument}-bump ${manifest.version}`);
 }
 
-const calls = await readCallsManifest();
-const callsResolution = resolveRelease(
-  target,
-  await publishedVersions(calls.name),
-);
-if (callsResolution.kind !== 'release') {
-  throw new Error(`${calls.name}@${target} can't be released`);
-}
-
 const resolution = resolveRelease(
   target,
   await publishedVersions(manifest.name),
@@ -51,7 +40,7 @@ if (resolution.kind === 'rejected') {
 
 await writeVersion(target);
 
-console.log(`${manifest.version} -> ${target} (with ${calls.name})`);
+console.log(`${manifest.version} -> ${target}`);
 if (resolution.distTag !== 'latest') {
   console.log(
     `prerelease: will publish under the '${resolution.distTag}' dist-tag.`,

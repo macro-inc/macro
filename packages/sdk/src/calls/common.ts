@@ -1,7 +1,7 @@
 import type {
   CallConnection as CoreCallConnection,
   JoinOptions as CoreJoinOptions,
-} from '@macro-inc/sdk';
+} from '../entities/calls/connection.js';
 
 export type JoinOptions = CoreJoinOptions;
 /** Structural connection accepted from the core SDK. */
@@ -30,7 +30,7 @@ export async function connectRoomWith<Room extends object>(
   options: JoinOptions | undefined,
   room: Room,
   connect: (room: Room, connection: CallConnection) => Promise<void>,
-  onDisconnect: (room: Room, callback: (reason?: unknown) => void) => void
+  onDisconnect: (room: Room, callback: (reason?: unknown) => void) => void,
 ): Promise<{ room: Room; connection: CallConnection }> {
   return withSpan('call.sdk.connect', async (span) => {
     let connection: CallConnection | undefined;
@@ -54,7 +54,7 @@ export async function connectRoomWith<Room extends object>(
         disconnected.setAttribute('call.id', connection?.call.id ?? '');
         disconnected.setAttribute(
           'call.sdk.reason',
-          String(reason ?? 'unknown')
+          String(reason ?? 'unknown'),
         );
         disconnected.end();
         leaveOnce().catch((error: unknown) => {
