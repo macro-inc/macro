@@ -163,6 +163,11 @@ the gateway `/email` prefix.
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice.
   `PurgePacing` (`email_db_client::links::delete`) sets the purge's write rate.
+  Refresh and HealthCheck probes are capped at 240 s so a stalled probe is
+  redelivered instead of held in flight. A probe returns an error, and so is
+  redelivered toward the DLQ, only for transient failures. An `AuthRequired`
+  watch renewal retries once with a fresh token so the token source can set
+  `needs_reauth`, and finishes once that flag is stored.
 - `run_health` runs in every `pubsub_workers` task: each flushes its in-memory
   Outlook import counts every minute, and the task that wins the Redis key
   `outlook:health_snapshot` logs one "outlook mailbox health" line per Outlook
