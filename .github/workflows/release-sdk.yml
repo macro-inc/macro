@@ -7,11 +7,10 @@ name: Release SDK
     - main
     paths:
     - packages/sdk/package.json
-    - packages/sdk-calls/package.json
     - '.github/workflows/release-sdk.yml'
 jobs:
   release:
-    name: Release @macro-inc/sdk and @macro-inc/sdk-calls
+    name: Release @macro-inc/sdk
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -41,17 +40,9 @@ jobs:
       run: bun scripts/resolve-release.ts
       working-directory: packages/sdk
     - name: Validate SDK
-      if: steps.resolve.outputs.release == 'true' || steps.resolve.outputs.calls_release == 'true'
-      run: bun run check && bun test && bun run coverage && bun run build
+      if: steps.resolve.outputs.release == 'true'
+      run: bun run check && bun test && bun run coverage && bun run build && bun run check:pack
       working-directory: packages/sdk
-    - name: Install sdk-calls dependencies
-      if: steps.resolve.outputs.release == 'true' || steps.resolve.outputs.calls_release == 'true'
-      run: bun install --frozen-lockfile
-      working-directory: packages/sdk-calls
-    - name: Validate sdk-calls
-      if: steps.resolve.outputs.release == 'true' || steps.resolve.outputs.calls_release == 'true'
-      run: bun run check && bun test && bun run build && bun run check:pack
-      working-directory: packages/sdk-calls
     - name: Publish package
       if: steps.resolve.outputs.release == 'true'
       run: npm publish --access public --tag "${{ steps.resolve.outputs.dist_tag }}"
@@ -62,28 +53,20 @@ jobs:
         set -euo pipefail
         git tag "${{ steps.resolve.outputs.tag }}" "$GITHUB_SHA"
         git push origin "refs/tags/${{ steps.resolve.outputs.tag }}"
-    - name: Publish sdk-calls
-      if: steps.resolve.outputs.calls_release == 'true'
-      run: npm publish --access public --tag "${{ steps.resolve.outputs.calls_dist_tag }}"
-      working-directory: packages/sdk-calls
-    - name: Tag the sdk-calls release
-      if: steps.resolve.outputs.calls_release == 'true'
-      run: |
-        set -euo pipefail
-        git tag "${{ steps.resolve.outputs.calls_tag }}" "$GITHUB_SHA"
-        git push origin "refs/tags/${{ steps.resolve.outputs.calls_tag }}"
     - name: Summarize
       if: always()
       run: |
-        summarize() {
-          case "$2" in
-            true) echo "Published $1@$3 ($4)" >> "$GITHUB_STEP_SUMMARY" ;;
-            false) echo "No release of $1: $3 is already published." >> "$GITHUB_STEP_SUMMARY" ;;
-            *) echo "$1 did not resolve; see the failed step above." >> "$GITHUB_STEP_SUMMARY" ;;
-          esac
-        }
-        summarize @macro-inc/sdk "${{ steps.resolve.outputs.release }}" "${{ steps.resolve.outputs.version }}" "${{ steps.resolve.outputs.tag }}"
-        summarize @macro-inc/sdk-calls "${{ steps.resolve.outputs.calls_release }}" "${{ steps.resolve.outputs.calls_version }}" "${{ steps.resolve.outputs.calls_tag }}"
+        case "${{ steps.resolve.outputs.release }}" in
+          true)
+            echo "Published @macro-inc/sdk@${{ steps.resolve.outputs.version }} (${{ steps.resolve.outputs.tag }})" >> "$GITHUB_STEP_SUMMARY"
+            ;;
+          false)
+            echo "No SDK release: packages/sdk version ${{ steps.resolve.outputs.version }} is already published." >> "$GITHUB_STEP_SUMMARY"
+            ;;
+          *)
+            echo "SDK release did not resolve; see the failed step above." >> "$GITHUB_STEP_SUMMARY"
+            ;;
+        esac
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false

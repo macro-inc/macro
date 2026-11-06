@@ -28,14 +28,3 @@ fn the_package_job_needs_no_rust_toolchain() {
         "Rust changes reach the SDK through the web app's Generated Code Check: {yaml}"
     );
 }
-
-#[test]
-fn checks_sdk_calls_after_building_the_sdk() {
-    let yaml = rendered_yaml();
-
-    assert!(yaml.contains("packages/sdk-calls/**"));
-    let build = yaml.find("Build SDK").expect("SDK build");
-    let check = yaml.find("Check sdk-calls").expect("sdk-calls check");
-    assert!(build < check);
-    assert!(yaml.contains("check:pack"));
-}

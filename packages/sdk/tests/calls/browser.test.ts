@@ -18,7 +18,7 @@ mock.module('livekit-client', () => ({
     localParticipant = {
       publishTrack: async (
         track: MediaStreamTrack,
-        options: { source: string; dtx?: boolean }
+        options: { source: string; dtx?: boolean },
       ) => {
         published.push({ track, options });
       },
@@ -31,7 +31,7 @@ mock.module('livekit-client', () => ({
   },
 }));
 
-const { connectRoom, publishScreen } = await import('../src/browser');
+const { connectRoom, publishScreen } = await import('../../src/calls/browser');
 
 describe('browser screen share', () => {
   test('publishes video and audio with screen sources and stops both', async () => {
