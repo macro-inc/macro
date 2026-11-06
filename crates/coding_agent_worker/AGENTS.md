@@ -26,6 +26,15 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   what the session has. General Macro guidance stays in the `SelfKnowledge` tool.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
+- `src/workspace.rs`: each new session's directory, read fresh from
+  `GET /harnesses/me` and `/harnesses/me/agents`: the agent's workspace, else
+  the runtime's (both set on the web), else `workspace.path`. Canonicalized
+  and refused outside `[workspace] allowed_roots` (default: `workspace.path`)
+  with a `DispatchError::Workspace` (span `macrod.workspace.resolve`). Each
+  daemon start reports the roots and the repositories two levels under them
+  with `PUT /harnesses/me/workspaces` (span `macrod.workspaces.report`); the
+  web picks only from that list. Under native Herdr the resolved directory is
+  the repository search root.
 - `src/daemon.rs` `watch_presence`: each minute a connection has held, asks
   `GET /harnesses/me` with `RUNTIME_CONNECTED_HEADER`. A service that reads the
   harness offline logs `harness_presence_disagreement`, macrod warns, and the TUI

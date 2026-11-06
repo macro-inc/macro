@@ -307,3 +307,37 @@ fn native_settings_round_trip_and_agent_switch_resets_provider_defaults() {
     form.save().unwrap();
     assert!(Config::load(&path).unwrap().herdr.storage_path.is_none());
 }
+
+#[test]
+fn allowed_roots_default_to_the_workspace_and_round_trip() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let path = directory.path().join("macrod.toml");
+    let agent = discover(&HermesOnly).remove(0);
+    ConfigForm::create_for_deployment(&path, &agent, directory.path(), Deployment::Production)
+        .expect("create config");
+    let config = Config::load(&path).expect("load config");
+    assert_eq!(config.workspace.allowed_roots(), [directory.path()]);
+
+    let code = directory.path().join("my code");
+    fs::create_dir(&code).expect("create root");
+    let mut form = ConfigForm::load(&path).expect("load form");
+    assert_eq!(
+        form.apply_text(Setting::AllowedRoots, "relative/dir"),
+        Err("Allowed roots must be existing absolute directories: relative/dir".to_owned())
+    );
+    let input = shell_words::join([directory.path().to_string_lossy(), code.to_string_lossy()]);
+    form.apply_text(Setting::AllowedRoots, &input)
+        .expect("edit");
+    form.save().expect("save form");
+    let config = Config::load(&path).expect("reload config");
+    assert_eq!(
+        config.workspace.allowed_roots(),
+        [directory.path().to_owned(), code.clone()]
+    );
+    assert_eq!(form.edit_value(Setting::AllowedRoots), input);
+
+    form.apply_text(Setting::AllowedRoots, "").expect("clear");
+    form.save().expect("save form");
+    let config = Config::load(&path).expect("reload config");
+    assert_eq!(config.workspace.allowed_roots, None);
+}

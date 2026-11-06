@@ -131,6 +131,13 @@ fn runtime_lines(app: &App, width: u16) -> Vec<Line<'static>> {
                     Span::raw("Off (always prompt)")
                 },
             ));
+            lines.push(row(
+                "Workspace",
+                match &harness.workspace_path {
+                    Some(path) => Span::raw(path.clone()),
+                    None => Span::styled("The workspace above", Style::new().fg(DIM)),
+                },
+            ));
         }
         None => lines.push(Line::styled(
             "  Shown once this harness is paired and reachable.",

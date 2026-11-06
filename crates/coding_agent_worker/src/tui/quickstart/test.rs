@@ -123,6 +123,7 @@ fn config(harness: Harness) -> Config {
     config.workspace = Workspace {
         path: "/existing/workspace".into(),
         repo_url: None,
+        allowed_roots: None,
     };
     config
 }

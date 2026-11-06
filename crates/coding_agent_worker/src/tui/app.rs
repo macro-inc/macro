@@ -646,6 +646,7 @@ impl App {
                         self.save_config().await;
                     }
                     setting @ (Setting::Workspace
+                    | Setting::AllowedRoots
                     | Setting::HerdrModel
                     | Setting::HerdrArguments
                     | Setting::HerdrStorage) => {

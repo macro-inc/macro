@@ -20,6 +20,7 @@ use crate::outbound::stream::EventStreamClient;
 use crate::runtime::Runtime;
 use crate::trigger::{TriggerEvent, handle_event, trigger_filters};
 use crate::turns::ActiveTurns;
+use crate::workspace::AllowedRoots;
 
 #[cfg(test)]
 mod test;
@@ -88,7 +89,6 @@ impl Daemon {
                 .ok_or_else(|| rootcause::report!("start macrod inside a Herdr pane"))?;
             crate::herdr::configure_launch(&mut config.harness, &config.herdr, &root);
             Some(crate::herdr::repositories::Workspaces::new(
-                config.workspace.path.clone(),
                 config.herdr.storage_path.clone().unwrap_or(root),
                 herdr.cli(),
             ))
@@ -114,7 +114,14 @@ impl Daemon {
             EventStreamClient::new(&config.macro_api, &credentials),
             runtime_connected.clone(),
         )));
-        let executor = Dispatcher::new(api, runtime, config.workspace.clone());
+        let allowed_roots = AllowedRoots::resolve(config.workspace.allowed_roots());
+        let executor = Dispatcher::new(
+            api,
+            client.clone(),
+            runtime,
+            config.workspace.clone(),
+            allowed_roots.clone(),
+        );
         #[cfg(unix)]
         let executor = executor.with_workspaces(workspaces);
         #[cfg(unix)]
@@ -129,15 +136,21 @@ impl Daemon {
             harness_id = %credentials.harness_id,
             harness = %config.harness.command,
             workspace = %config.workspace.path.display(),
+            allowed_roots = allowed_roots.roots().len(),
             "daemon listening for agent triggers over SSE"
         );
 
         let shutdown = cancel.clone();
         let task = tokio::spawn(async move {
             let mut failures = 0u32;
+            let mut workspaces_reported = false;
             loop {
                 if shutdown.is_cancelled() {
                     return Ok(());
+                }
+                // Once per start: a config change restarts the daemon.
+                if !workspaces_reported {
+                    workspaces_reported = report_workspaces(&client, &allowed_roots).await;
                 }
                 match serve_once(&client, &executor, &shutdown).await {
                     ServeOutcome::Stopped => return Ok(()),
@@ -299,6 +312,26 @@ fn start_herdr(config: &mut Config, credentials: &HarnessCredentials) -> Option<
         Err(error) => {
             tracing::warn!(error = %error, "herdr detected but its window socket could not start");
             None
+        }
+    }
+}
+
+/// Report what the web may pick as a workspace. Returns whether it landed;
+/// a failure is retried on the next connect.
+async fn report_workspaces(client: &EventStreamClient, allowed_roots: &AllowedRoots) -> bool {
+    let roots = allowed_roots.clone();
+    let workspaces = match tokio::task::spawn_blocking(move || roots.discover()).await {
+        Ok(workspaces) => workspaces,
+        Err(error) => {
+            tracing::warn!(error = %error, "could not scan the allowed roots");
+            return false;
+        }
+    };
+    match client.report_workspaces(workspaces).await {
+        Ok(()) => true,
+        Err(error) => {
+            tracing::warn!(error = %error, "could not report this runtime's workspaces");
+            false
         }
     }
 }

@@ -193,6 +193,21 @@ pub struct Workspace {
     /// harnesses expect it at `path`; native Herdr can find or clone it.
     #[serde(default)]
     pub repo_url: Option<String>,
+    /// Absolute directories sessions may work in, the local ceiling on what
+    /// Macro asks for: the web picks a runtime's or an agent's workspace from
+    /// these and the repositories under them, and macrod refuses anything
+    /// outside. Absent allows `path` alone.
+    #[serde(default)]
+    pub allowed_roots: Option<Vec<PathBuf>>,
+}
+
+impl Workspace {
+    /// The configured ceiling: `allowed_roots`, or `path` when absent.
+    pub fn allowed_roots(&self) -> &[PathBuf] {
+        self.allowed_roots
+            .as_deref()
+            .unwrap_or(std::slice::from_ref(&self.path))
+    }
 }
 
 /// Why a config failed to load.

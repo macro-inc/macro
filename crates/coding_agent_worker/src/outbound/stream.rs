@@ -14,7 +14,10 @@ use std::time::Duration;
 
 use eventsource_stream::{Event, EventStreamError, Eventsource as _};
 use futures::{Stream, StreamExt as _};
-use harnesses::domain::models::{Harness, HarnessAgent, HarnessOwner, RUNTIME_CONNECTED_HEADER};
+use harnesses::domain::models::{
+    Harness, HarnessAgent, HarnessOwner, RUNTIME_CONNECTED_HEADER, ReportWorkspacesRequest,
+    ReportedWorkspace,
+};
 use rootcause::prelude::ResultExt as _;
 use serde::de::DeserializeOwned;
 use webhook::domain::models::{WebhookFilter, WebhookScope};
@@ -39,6 +42,8 @@ pub fn stream_scope(owner: &HarnessOwner) -> WebhookScope {
 }
 
 /// Client for the storage service's live event stream, acting as one harness.
+/// Also reads and reports the harness's own registration.
+#[derive(Clone)]
 pub struct EventStreamClient {
     http: reqwest::Client,
     base: String,
@@ -86,17 +91,49 @@ impl EventStreamClient {
             .context(format!("could not read the service's answer to {what}"))?)
     }
 
+    /// This harness's registration as the web last set it.
+    pub async fn harness(&self) -> rootcause::Result<Harness> {
+        self.read(
+            "read this harness's settings",
+            self.http.get(format!("{}/harnesses/me", self.base)),
+        )
+        .await
+    }
+
     /// The workspace scope of this harness's owner, read from the server on
     /// every connect so an ownership change on the web applies without
     /// re-pairing.
     async fn scope(&self) -> rootcause::Result<WebhookScope> {
-        let harness: Harness = self
-            .read(
-                "read this harness's owner",
-                self.http.get(format!("{}/harnesses/me", self.base)),
+        Ok(stream_scope(&self.harness().await?.owner))
+    }
+
+    /// Tell the service which directories this harness's sessions may use,
+    /// replacing its last report.
+    #[tracing::instrument(
+        name = "macrod.workspaces.report",
+        skip_all,
+        fields(workspaces = workspaces.len()),
+        err
+    )]
+    pub async fn report_workspaces(
+        &self,
+        workspaces: Vec<ReportedWorkspace>,
+    ) -> rootcause::Result<()> {
+        let response = self
+            .credentialed(
+                self.http
+                    .put(format!("{}/harnesses/me/workspaces", self.base))
+                    .json(&ReportWorkspacesRequest { workspaces }),
             )
-            .await?;
-        Ok(stream_scope(&harness.owner))
+            .send()
+            .await
+            .context("could not reach the service to report this harness's workspaces")?;
+        let status = response.status();
+        if !status.is_success() {
+            let message = response.text().await.unwrap_or_default();
+            rootcause::bail!("the service answered {status} to the workspace report: {message}");
+        }
+        Ok(())
     }
 
     /// Whether the service reports this harness connected, telling it that this
@@ -114,15 +151,19 @@ impl EventStreamClient {
         Ok(harness.connected)
     }
 
+    /// The agents currently bound to this harness.
+    pub async fn bound_agents(&self) -> rootcause::Result<Vec<HarnessAgent>> {
+        self.read(
+            "list this harness's agents",
+            self.http.get(format!("{}/harnesses/me/agents", self.base)),
+        )
+        .await
+    }
+
     /// The agents currently bound to this harness, as sorted bot-id strings —
     /// the shape the stream filter carries.
     pub async fn bound_bot_ids(&self) -> rootcause::Result<Vec<String>> {
-        let agents: Vec<HarnessAgent> = self
-            .read(
-                "list this harness's agents",
-                self.http.get(format!("{}/harnesses/me/agents", self.base)),
-            )
-            .await?;
+        let agents = self.bound_agents().await?;
         let ids: BTreeSet<String> = agents
             .into_iter()
             .map(|agent| agent.bot_id.to_string())

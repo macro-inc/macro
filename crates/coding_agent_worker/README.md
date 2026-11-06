@@ -2,8 +2,10 @@
 ### Repositories in native Herdr sessions
 
 Macro can include `repoUrl` when opening a session on macrod. Native Herdr
-sessions look for the matching origin in the configured workspace directory
-(and its child directories), then in this daemon's repository cache. A missing
+sessions look for the matching origin in the session's workspace directory
+(and its child directories), then in this daemon's repository cache. The
+session's workspace is the agent's workspace, else the runtime's, both picked
+on the web from the `allowed_roots` macrod reports, else `workspace.path`. A missing
 repository is cloned using the operator's Git credentials. New worktrees start
 from a fresh fetch of `origin/main`; macrod never pulls into the operator's
 working branch. A repository without `main` produces an error.

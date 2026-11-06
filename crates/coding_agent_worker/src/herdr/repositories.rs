@@ -7,27 +7,33 @@ use std::path::{Path, PathBuf};
 
 /// Serializes repository preparation within one macrod instance.
 pub(crate) struct Workspaces {
-    git: GitRepositories,
     herdr: HerdrCli,
     root: PathBuf,
     preparing: tokio::sync::Mutex<()>,
 }
 
 impl Workspaces {
-    pub(crate) fn new(search: PathBuf, root: PathBuf, herdr: HerdrCli) -> Self {
+    pub(crate) fn new(root: PathBuf, herdr: HerdrCli) -> Self {
         Self {
-            git: GitRepositories {
-                search,
-                cache: root.join("repos"),
-            },
             herdr,
             root,
             preparing: tokio::sync::Mutex::new(()),
         }
     }
 
-    pub(crate) async fn prepare(&self, session: &str, url: &str) -> rootcause::Result<PathBuf> {
+    /// The session's worktree, from a clone found under `search` (the
+    /// session's workspace) or cloned into the private cache.
+    pub(crate) async fn prepare(
+        &self,
+        search: &Path,
+        session: &str,
+        url: &str,
+    ) -> rootcause::Result<PathBuf> {
         let repository = Repository::parse(url)?;
+        let repositories = GitRepositories {
+            search: search.to_owned(),
+            cache: self.root.join("repos"),
+        };
         let _guard = self.preparing.lock().await;
         let path = self.root.join("worktrees").join(session);
         if path.exists() {
@@ -38,7 +44,7 @@ impl Workspaces {
             // Redelivery and reconnect preserve the session's edits and base.
             return Ok(path);
         }
-        let clone = prepare(&self.git, &repository).await?;
+        let clone = prepare(&repositories, &repository).await?;
         let source = primary_worktree(&clone).await?;
         std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")))?;
         self.herdr
