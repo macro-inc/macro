@@ -29,3 +29,5 @@ pub mod message_source;
 /// Forwarded-attachment persistence facts.
 pub mod forwarded_attachments;
 pub mod mailbox_settings;
+/// Live provider counts of recent mail per sender domain.
+pub mod sender_domain_counts;

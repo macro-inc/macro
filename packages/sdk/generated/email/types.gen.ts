@@ -1799,6 +1799,33 @@ export type SendMessageResponse = {
     message: ApiDraftOutput;
 };
 
+/**
+ * Recent mail from one sender domain, summed over the caller's inboxes.
+ */
+export type SenderDomainCount = {
+    domain: string;
+    /**
+     * Messages received in the last 180 days. Gmail estimates it and Outlook
+     * counts at most 50 per inbox, so use it to rank, not as a total. A
+     * provider that failed or did not answer in time counts as zero.
+     */
+    messageCount: number;
+};
+
+export type SenderDomainCountsRequest = {
+    /**
+     * 1 to 40 lowercase host names, such as `linear.app`.
+     */
+    domains: Array<string>;
+};
+
+export type SenderDomainCountsResponse = {
+    /**
+     * One entry per requested domain, in request order.
+     */
+    counts: Array<SenderDomainCount>;
+};
+
 export type Settings = {
     /**
      * Whether messages sent from this inbox carry an open-tracking pixel.
@@ -3184,6 +3211,27 @@ export type GetMessageEmlResponses = {
 };
 
 export type GetMessageEmlResponse = GetMessageEmlResponses[keyof GetMessageEmlResponses];
+
+export type CountSenderDomainsData = {
+    body: SenderDomainCountsRequest;
+    path?: never;
+    query?: never;
+    url: '/email/senders/domain-counts';
+};
+
+export type CountSenderDomainsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CountSenderDomainsError = CountSenderDomainsErrors[keyof CountSenderDomainsErrors];
+
+export type CountSenderDomainsResponses = {
+    200: SenderDomainCountsResponse;
+};
+
+export type CountSenderDomainsResponse = CountSenderDomainsResponses[keyof CountSenderDomainsResponses];
 
 export type PatchSettingsData = {
     body: PatchSettingsRequest;

@@ -12,6 +12,9 @@
   --color-accent-contrast-muted: #292929;
   --color-input: #171717;
   --color-ink-placeholder: #737373;
+  /* Menus opened in the flow mount inside it and take these. */
+  --color-menu: #141414;
+  --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
   --glass-tint: #fff;
   --glass-shade-color: #000;
   --glass-highlight-base: 6%;
@@ -40,6 +43,8 @@ html[data-theme-light='true'] .onboarding-flow {
   --color-accent-contrast: #f5f1e8;
   --color-accent-contrast-muted: #e6e1d7;
   --color-input: #faf8f3;
+  --color-menu: #fcfbf8;
+  --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
   --glass-highlight-base: 18%;
   --glass-rim-strong-base: 18%;
   --glass-rim-soft-base: 12%;

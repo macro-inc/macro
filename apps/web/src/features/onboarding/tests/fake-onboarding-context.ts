@@ -30,6 +30,8 @@ export type FakeOnboardingWorld = {
     licensed: boolean;
   } | null;
   emailAccounts: EmailAccount[];
+  /** Whether the account may connect an Outlook inbox. */
+  outlookAvailable: boolean;
   /** Addresses the next inbox connects link, in order. */
   inboxesToConnect: string[];
   record: OnboardingRecord;
@@ -37,6 +39,10 @@ export type FakeOnboardingWorld = {
   invites: TeamInvite[];
   contacts: string[];
   catalog: Tool[];
+  /** Recent messages per sender domain, as the mail provider reports them. */
+  senderDomainCounts: Record<string, number>;
+  /** How long the inbox read takes; past the step's limit it falls back. */
+  senderDomainCountsDelayMs: number;
   connectedTools: string[];
   githubLinkStatus: 'linked' | 'unlinked' | 'reauthentication_required';
   nativeTools: ServerResponse[];
@@ -58,6 +64,7 @@ export type FakeOnboardingWorld = {
       | 'record'
       | 'teams'
       | 'catalog'
+      | 'senderDomainCounts'
       | 'createTeam'
       | 'joinTeam'
       | 'teamInviteLink'
@@ -85,6 +92,7 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
       licensed: false,
     },
     emailAccounts: [],
+    outlookAvailable: true,
     inboxesToConnect: ['ada@acme.com', 'ada.personal@gmail.com'],
     record: { status: 'active', suggestedTeamDomain: 'acme.com' },
     teams: [],
@@ -97,6 +105,8 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
         iconUrl: fixtureConnectorIcon(name.toLowerCase()),
       })
     ),
+    senderDomainCounts: {},
+    senderDomainCountsDelayMs: 0,
     connectedTools: [],
     githubLinkStatus: 'unlinked',
     nativeTools: [],
@@ -215,8 +225,9 @@ export function createFakeOnboarding(
       accounts: () => loadable('emailAccounts', () => world.emailAccounts),
       refresh: async () => {},
     }),
-    connectInbox: () => {
-      call('connectInbox');
+    createOutlookAvailability: () => () => world.outlookAvailable,
+    connectInbox: (provider) => {
+      call(provider ? `connectInbox:${provider}` : 'connectInbox');
       return roundTrip(() =>
         update((draft) => {
           const address = draft.inboxesToConnect.shift();
@@ -246,6 +257,24 @@ export function createFakeOnboarding(
         loadMore: () => {},
         retry: () => call('retryCatalog'),
       };
+    },
+    createSenderDomainCounts: (domains) => {
+      const [answered, setAnswered] = createSignal(
+        world.senderDomainCountsDelayMs <= 0
+      );
+      if (!answered())
+        setTimeout(() => setAnswered(true), world.senderDomainCountsDelayMs);
+      return () =>
+        !answered()
+          ? { t: 'loading' }
+          : loadable('senderDomainCounts', () =>
+              Object.fromEntries(
+                domains.map((domain) => [
+                  domain,
+                  world.senderDomainCounts[domain] ?? 0,
+                ])
+              )
+            );
     },
     createConnectedTools: () => ({
       connected: () =>

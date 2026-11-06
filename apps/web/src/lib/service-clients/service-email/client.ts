@@ -50,6 +50,8 @@ import type {
   PatchSettingsResponse,
   ResolveMessageOperationRequest,
   ResyncResponse,
+  SenderDomainCountsRequest,
+  SenderDomainCountsResponse,
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
@@ -311,6 +313,17 @@ export const emailClient = {
     return fetchWithToken<Uint8Array<ArrayBuffer>>(
       `${emailHost}/email/messages/${args.message_id}/eml`,
       { method: 'GET' }
+    );
+  },
+  /**
+   * Recent mail (last 180 days) from each sender domain across the caller's
+   * own inboxes, read live from the provider. Counts rank senders; a domain
+   * the provider failed on or didn't answer within ~5 s counts as 0.
+   */
+  async countSenderDomains(args: SenderDomainCountsRequest) {
+    return emailFetch<SenderDomainCountsResponse>(
+      '/email/senders/domain-counts',
+      { method: 'POST', body: JSON.stringify(args) }
     );
   },
   async getUserLabels() {

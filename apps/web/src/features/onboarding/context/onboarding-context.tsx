@@ -39,6 +39,9 @@ export type EmailAccountsSource = {
   refresh(): Promise<void>;
 };
 
+/** A mail provider an inbox can be connected from. */
+export type InboxProvider = 'GMAIL' | 'OUTLOOK';
+
 /** A connectable integration from the catalog. */
 export type Tool = { slug: string; name: string; iconUrl: string | null };
 
@@ -102,9 +105,21 @@ export type OnboardingContext = {
   refreshViewer(): Promise<ViewerState>;
   createOnboardingRecord(): Accessor<Loadable<OnboardingRecord>>;
   createEmailAccounts(): EmailAccountsSource;
-  /** Starts Google consent for another inbox; on web the page navigates away. */
-  connectInbox(): Promise<void>;
+  /**
+   * Starts consent for another inbox, asking which provider when none is
+   * given; on web the page navigates away.
+   */
+  connectInbox(provider?: InboxProvider): Promise<void>;
+  /** Whether this account may connect an Outlook inbox; false while unknown. */
+  createOutlookAvailability(): Accessor<boolean>;
   createToolCatalog(): ToolCatalogSource;
+  /**
+   * Recent message counts per sender domain across the viewer's own inboxes,
+   * read live from the mail provider: onboarding runs before the backfill.
+   */
+  createSenderDomainCounts(
+    domains: readonly string[]
+  ): Accessor<Loadable<Readonly<Record<string, number>>>>;
   /**
    * Independent provider states. `poll` re-checks while connections change.
    */

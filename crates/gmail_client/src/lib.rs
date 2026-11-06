@@ -325,6 +325,17 @@ impl GmailClient {
         messages::send_message(self, access_token, mime, thread_id).await
     }
 
+    /// Estimates how many messages match a Gmail search query (`q`), from
+    /// `messages.list`'s `resultSizeEstimate` (5 quota units).
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn estimate_message_count(
+        &self,
+        access_token: &str,
+        query: &str,
+    ) -> Result<u32, GmailApiHttpError> {
+        messages::estimate_message_count(self, access_token, query).await
+    }
+
     /// Looks for a unique sent message by its RFC 5322 Message-ID, including trash.
     #[tracing::instrument(skip(self, access_token, message_id), err)]
     pub async fn find_sent_message(

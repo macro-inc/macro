@@ -63,6 +63,8 @@ import type {
   RemoveForwardedAttachmentParams,
   ResolveMessageOperationRequest,
   ResyncResponse,
+  SenderDomainCountsRequest,
+  SenderDomainCountsResponse,
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
@@ -3080,6 +3082,74 @@ export const getMessageEml = async (
     status: res.status,
     headers: res.headers,
   } as getMessageEmlResponse;
+};
+
+/**
+ * Counts rank senders: Gmail's are estimates and Outlook's stop at 50 per
+inbox. A domain a provider failed on, or did not answer within about five
+seconds, counts as 0, as does every domain when the caller has no inbox.
+ * @summary Count mail received in the last 180 days from each sender domain, summed
+across the caller's own inboxes and read live from Gmail or Outlook.
+ */
+export type countSenderDomainsResponse200 = {
+  data: SenderDomainCountsResponse;
+  status: 200;
+};
+
+export type countSenderDomainsResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type countSenderDomainsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type countSenderDomainsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type countSenderDomainsResponseSuccess =
+  countSenderDomainsResponse200 & {
+    headers: Headers;
+  };
+export type countSenderDomainsResponseError = (
+  | countSenderDomainsResponse400
+  | countSenderDomainsResponse401
+  | countSenderDomainsResponse500
+) & {
+  headers: Headers;
+};
+
+export type countSenderDomainsResponse =
+  | countSenderDomainsResponseSuccess
+  | countSenderDomainsResponseError;
+
+export const getCountSenderDomainsUrl = () => {
+  return `/email/senders/domain-counts`;
+};
+
+export const countSenderDomains = async (
+  senderDomainCountsRequest: SenderDomainCountsRequest,
+  options?: RequestInit
+): Promise<countSenderDomainsResponse> => {
+  const res = await fetch(getCountSenderDomainsUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(senderDomainCountsRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: countSenderDomainsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as countSenderDomainsResponse;
 };
 
 /**

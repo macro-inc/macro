@@ -17,11 +17,13 @@ import {
   useGithubLinkStatusQuery,
   useTrialEligibilityQuery,
 } from '@queries/auth';
+import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { useContactsQuery } from '@queries/contacts/contacts';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
+import { useSenderDomainCountsQuery } from '@queries/email/sender-domain-counts';
 import { queryReadyGate } from '@queries/gate';
 import { useGithubStarsQuery } from '@queries/github-stars';
 import { useGtmInviteOfferQuery } from '@queries/gtm-invite/links';
@@ -218,9 +220,25 @@ export function createAppOnboardingContext(): OnboardingContext {
         refresh: async () => invalidateEmailLinks(),
       };
     },
-    connectInbox: () => startAddInbox(),
+    connectInbox: (provider) => startAddInbox(provider && { provider }),
+    createOutlookAvailability: () => useOutlookAvailable(),
 
     createToolCatalog: createOnboardingToolCatalog,
+    createSenderDomainCounts: (domains) => {
+      const links = useEmailLinksQuery();
+      const inboxIds = () =>
+        queryReadyGate(links)
+          ? links.data.links.map((link) => link.id).sort()
+          : [];
+      const query = useSenderDomainCountsQuery(domains, inboxIds);
+      return () => {
+        if (!queryReadyGate(links))
+          return links.isError ? { t: 'error' } : { t: 'loading' };
+        // Without an inbox there is no mail to read; every count is zero.
+        if (inboxIds().length === 0) return { t: 'ready', value: {} };
+        return loadableQuery(query, (counts) => counts);
+      };
+    },
     createConnectedTools: ({ poll }) => {
       const connected = usePipedreamConnectionsQuery({
         neverSuspend: true,

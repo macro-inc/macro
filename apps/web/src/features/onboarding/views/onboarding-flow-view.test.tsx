@@ -87,7 +87,14 @@ describe('onboarding flow', () => {
     click('Skip for now');
 
     await heading('Connect your tools.');
-    click('Connect Linear');
+    // The inbox loader runs for at least a moment before the suggestions.
+    fireEvent.click(
+      await screen.findByRole(
+        'button',
+        { name: 'Connect Linear' },
+        { timeout: 3000 }
+      )
+    );
     await screen.findByRole('button', { name: 'Connected to Linear' });
     click('Continue');
 

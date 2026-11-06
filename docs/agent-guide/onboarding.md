@@ -22,6 +22,31 @@ All `@macro.com` accounts see a **Bypass** button on every onboarding step. It
 skips the rest of the flow and leaves onboarding. Accounts on other domains
 do not see it.
 
+## Tools step — `/app/onboarding?step=tools`
+
+If the inbox read has already finished, **Connect your tools.** shows its
+suggestions at once. Otherwise it shows a short loader (the workspace mark in
+the chosen accent, with tool icons wiring into it) and, in Continue's place, a
+**Loading 3 · 2 · 1** countdown. An answer within 3 s shows the suggestions
+(after at least 0.8 s, so the loader never flashes); otherwise, or if the read
+fails, the step falls back to the plain searchable catalog and stays there
+(`onboarding_v4_tool_suggestions` records which). The suggestions list
+**Add another inbox** first (its **Add** menu
+chooses Google, or Outlook when the account may connect one), then four
+suggested tools, each with its `native`/`mcp` badge and what connecting it does in Macro. The
+suggestions aim at what the business runs on: at most one tool per category,
+a detected CRM or store always shown, and fewer than three messages ignored.
+Tools are ranked by mail from their sender domains in the last six months
+(Gmail leaves out Promotions),
+searched live at Gmail or Outlook (`POST /email/senders/domain-counts`)
+because the inbox backfill hasn't run yet. The flow starts that search as soon
+as an inbox is connected, so the step usually finds it done; with no such mail, or if the search
+fails, Slack, Linear, Notion and GitHub are suggested. **Browse all
+integrations** opens the searchable catalog without the suggested tools. The
+backend-free check is
+`bunx playwright test --config src/features/onboarding/browser-test/playwright.config.ts`
+from `apps/web`; seed `senderDomainCounts` in the fixture world to rank tools.
+
 ## Setup plan step — `/app/onboarding`
 
 The final step offers Pro with a 30-day trial only after the server confirms

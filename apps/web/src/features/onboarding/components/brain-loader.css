@@ -1,0 +1,277 @@
+/* The tools step's loading scene; it never runs longer than about 2.5 s. */
+.brain-scene {
+  position: relative;
+  width: min(100%, 520px);
+  aspect-ratio: 520 / 300;
+}
+
+.brain-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0.6);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--brain-accent) 34%, transparent),
+    transparent
+  );
+  opacity: 0;
+  animation: brain-glow 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.brain-wires {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.brain-wire {
+  stroke: var(--brain-accent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0.85;
+  animation: brain-wire 520ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  animation-delay: calc(380ms + var(--i) * 150ms);
+}
+
+.brain-node {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--color-surface-2, var(--color-surface));
+  border: 1px solid var(--color-edge-muted);
+  box-shadow: 0 3px 12px -2px rgb(0 0 0 / 0.06);
+  transform: translate(-50%, -50%) scale(0.6);
+  opacity: 0;
+  animation: brain-node 460ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(var(--i) * 110ms);
+}
+
+.brain-node svg {
+  width: 22px;
+  height: 22px;
+}
+
+.brain-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 22px;
+  color: var(--brain-accent);
+  transform: translate(-50%, -50%);
+  background: var(
+    --onboarding-intro-background,
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--brain-accent) 7%, #171717),
+      #090909 65%
+    )
+  );
+  box-shadow: var(
+    --onboarding-intro-shadow,
+    inset 0.5px 0.5px 1px #ffffff1c,
+    inset -0.5px -0.5px 1px #0008,
+    0 1px 1px #131313,
+    0 4px 10px #0005
+  );
+  animation: brain-core 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* The mark's three strokes start apart and come together as wires land. */
+.brain-mark .macro-mark-part {
+  animation: brain-mark-part 1.5s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
+}
+.brain-mark .macro-mark-left {
+  --brain-shift: -40px;
+}
+.brain-mark .macro-mark-right {
+  --brain-shift: 40px;
+}
+.brain-mark .macro-mark-mid {
+  --brain-shift: 0px;
+}
+
+.brain-status-line {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: brain-status 800ms ease-in-out forwards;
+  animation-delay: calc(var(--i) * 780ms);
+}
+.brain-status-last {
+  animation-name: brain-status-last;
+}
+
+@keyframes brain-glow {
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+@keyframes brain-wire {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes brain-node {
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+@keyframes brain-core {
+  0% {
+    transform: translate(-50%, -50%) scale(0.92);
+  }
+  55% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  75% {
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+@keyframes brain-mark-part {
+  from {
+    transform: translateX(var(--brain-shift)) scale(0.9);
+    opacity: 0.5;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes brain-status {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  20%,
+  75% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes brain-status-last {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .brain-node {
+    width: 38px;
+    height: 38px;
+  }
+  .brain-node svg {
+    width: 18px;
+    height: 18px;
+  }
+  .brain-core {
+    width: 64px;
+    height: 64px;
+    border-radius: 18px;
+  }
+  .brain-glow {
+    width: 200px;
+    height: 200px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brain-glow,
+  .brain-wire,
+  .brain-node,
+  .brain-core,
+  .brain-mark .macro-mark-part,
+  .brain-status-line {
+    animation: none;
+  }
+  .brain-glow {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  .brain-wire {
+    stroke-dashoffset: 0;
+  }
+  .brain-node {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  .brain-status-line {
+    opacity: 0;
+  }
+  .brain-status-last {
+    opacity: 1;
+  }
+}
+
+/* Each second of the countdown drops in. */
+.brain-countdown-digit {
+  animation: brain-countdown 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes brain-countdown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brain-countdown-digit {
+    animation: none;
+  }
+}
+
+/* Suggestions arriving after the loader settle in one row at a time. */
+.suggestions-reveal > li {
+  animation: suggestion-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.suggestions-reveal > li:nth-child(2) { animation-delay: 60ms; }
+.suggestions-reveal > li:nth-child(3) { animation-delay: 120ms; }
+.suggestions-reveal > li:nth-child(4) { animation-delay: 180ms; }
+.suggestions-reveal > li:nth-child(5) { animation-delay: 240ms; }
+@keyframes suggestion-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .suggestions-reveal > li {
+    animation: none;
+  }
+}

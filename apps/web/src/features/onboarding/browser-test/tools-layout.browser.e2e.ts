@@ -28,6 +28,7 @@ for (const viewport of [
       );
       await page.reload();
       await expect(heading(page, 'Connect your tools.')).toBeVisible();
+      await page.getByRole('button', { name: 'Browse all integrations' }).tap();
       const next = page.getByRole('button', { name: 'Continue', exact: true });
       const catalog = page.getByRole('region', {
         name: 'Available integrations',

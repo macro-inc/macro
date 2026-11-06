@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, screen, waitFor } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   readPendingConnectors,
@@ -6,6 +12,9 @@ import {
 } from '../primitives/flow-storage';
 import { renderWithFakeOnboarding } from '../tests/render';
 import { ToolsStep } from './tools-step';
+
+/** No minimum loader time, so the step settles as soon as the fake answers. */
+const INSTANT = { minMs: 0, maxMs: 2500 };
 
 afterEach(() => {
   cleanup();
@@ -15,7 +24,7 @@ afterEach(() => {
 describe('onboarding tools', () => {
   it('keeps Drive and Sheets available, hides excluded Google apps, and reuses native connections', async () => {
     const { fake } = renderWithFakeOnboarding(
-      () => <ToolsStep onContinue={vi.fn()} />,
+      () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
       {
         catalog: [
           ['gmail', 'Gmail'],
@@ -58,6 +67,9 @@ describe('onboarding tools', () => {
         ).disabled
       ).toBe(false)
     );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Browse all integrations' })
+    );
     fireEvent.input(screen.getByRole('searchbox'), {
       target: { value: 'Google' },
     });
@@ -78,7 +90,7 @@ describe('onboarding tools', () => {
 
 it('keeps native GitHub available during hosted connection failures and offers retry', () => {
   const { fake } = renderWithFakeOnboarding(
-    () => <ToolsStep onContinue={vi.fn()} />,
+    () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
     {
       connectionFailures: ['pipedream'],
       catalog: [
@@ -86,6 +98,9 @@ it('keeps native GitHub available during hosted connection failures and offers r
         { slug: 'stripe', name: 'Stripe', iconUrl: null },
       ],
     }
+  );
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Browse all integrations' })
   );
   expect(
     (
@@ -108,7 +123,7 @@ it('keeps native GitHub available during hosted connection failures and offers r
 });
 it('distinguishes a linked GitHub account from repository setup', () => {
   const { fake } = renderWithFakeOnboarding(
-    () => <ToolsStep onContinue={vi.fn()} />,
+    () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
     { githubLinkStatus: 'linked' }
   );
   expect(
@@ -121,7 +136,7 @@ it('distinguishes a linked GitHub account from repository setup', () => {
 });
 it('tracks a connector once its connection lands, not ones already connected', async () => {
   const { fake } = renderWithFakeOnboarding(
-    () => <ToolsStep onContinue={vi.fn()} />,
+    () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
     {
       catalog: [
         { slug: 'linear', name: 'Linear', iconUrl: null },
@@ -151,7 +166,7 @@ it('reports a GitHub connect that lands after the OAuth reload', async () => {
   // Web GitHub OAuth reloads the page, so the step remounts with the link.
   savePendingConnectors(new Set(['github']));
   const { fake } = renderWithFakeOnboarding(
-    () => <ToolsStep onContinue={vi.fn()} />,
+    () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
     { githubLinkStatus: 'linked' }
   );
   await waitFor(() =>
@@ -167,4 +182,78 @@ it('reports a GitHub connect that lands after the OAuth reload', async () => {
     ])
   );
   expect(readPendingConnectors().size).toBe(0);
+});
+it('suggests the tools the inbox shows, with why, and always another inbox', async () => {
+  const { fake } = renderWithFakeOnboarding(
+    () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
+    {
+      emailAccounts: [
+        { address: 'ada@example.com', isPrimary: true, ownerId: 'macro|ada' },
+      ],
+      senderDomainCounts: { 'stripe.com': 31, 'posthog.com': 4 },
+    }
+  );
+  const list = screen.getByRole('list', { name: 'Suggested connections' });
+  expect(
+    within(list)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label'))
+  ).toEqual([
+    'Add another inbox',
+    'Connect Stripe',
+    'Connect PostHog',
+    'Connect Slack',
+    'Connect Linear',
+  ]);
+  expect(within(list).getAllByText('mcp')).toHaveLength(4);
+  expect(
+    within(list).getByText(
+      'Import Linear issues into Macro tasks, and let agents create and update issues straight from your email.'
+    )
+  ).toBeTruthy();
+  expect(within(list).getByText('ada@example.com')).toBeTruthy();
+  expect(within(list).getByRole('img', { name: 'Connected' })).toBeTruthy();
+  // Suggested tools aren't repeated in the full catalog.
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Browse all integrations' })
+  );
+  expect(
+    within(
+      screen.getByRole('region', { name: 'Available integrations' })
+    ).queryByRole('button', { name: 'Connect Linear' })
+  ).toBeNull();
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Add another inbox' }), {
+    key: 'Enter',
+  });
+  fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Outlook' }), {
+    key: 'Enter',
+  });
+  await waitFor(() => expect(fake.calls()).toContain('connectInbox:OUTLOOK'));
+});
+it('shows the plain catalog when the inbox check fails', () => {
+  renderWithFakeOnboarding(
+    () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
+    { failures: { senderDomainCounts: 'unavailable' } }
+  );
+  expect(
+    screen.queryByRole('list', { name: 'Suggested connections' })
+  ).toBeNull();
+  expect(screen.getByRole('searchbox')).toBeTruthy();
+  expect(
+    screen.getByRole('region', { name: 'Available integrations' })
+  ).toBeTruthy();
+});
+it('shows the plain catalog when the inbox check outlasts the loader', async () => {
+  renderWithFakeOnboarding(
+    () => <ToolsStep onContinue={vi.fn()} timing={{ minMs: 0, maxMs: 50 }} />,
+    {
+      senderDomainCountsDelayMs: 5000,
+      senderDomainCounts: { 'hubspot.com': 9 },
+    }
+  );
+  expect(screen.getByRole('status')).toBeTruthy();
+  expect(await screen.findByRole('searchbox')).toBeTruthy();
+  expect(
+    screen.queryByRole('list', { name: 'Suggested connections' })
+  ).toBeNull();
 });

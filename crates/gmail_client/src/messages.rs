@@ -60,6 +60,41 @@ pub(crate) async fn list_messages(
         .collect())
 }
 
+/// Estimates how many messages match a Gmail search query by reading one
+/// result's `resultSizeEstimate`. The estimate is approximate; it suits
+/// ranking, not exact totals.
+#[tracing::instrument(skip(client, access_token), err)]
+pub(crate) async fn estimate_message_count(
+    client: &GmailClient,
+    access_token: &str,
+    query: &str,
+) -> Result<u32, GmailApiHttpError> {
+    let response = client
+        .inner
+        .get(format!("{}/users/me/messages", client.base_url))
+        .bearer_auth(access_token)
+        .query(&[
+            ("q", query),
+            ("maxResults", "1"),
+            ("fields", "resultSizeEstimate"),
+        ])
+        .send()
+        .await
+        .map_err(GmailApiHttpError::transport)?;
+    if !response.status().is_success() {
+        return Err(unsuccessful_response(response).await);
+    }
+    let estimate: MessageCountEstimate = decode_json_response(response).await?;
+    Ok(estimate.result_size_estimate)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MessageCountEstimate {
+    #[serde(default)]
+    result_size_estimate: u32,
+}
+
 /// Finds a unique sent message, including messages moved into spam or trash.
 /// Ambiguous or incomplete search responses must never count as proof of absence.
 #[tracing::instrument(skip(client, access_token, message_id), err)]

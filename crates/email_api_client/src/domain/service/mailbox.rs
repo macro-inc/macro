@@ -204,6 +204,49 @@ impl<
     }
 }
 
+impl<
+    R: MailboxSenderActivityClient + ScopedMailboxRepository,
+    T: MailboxTokenSource,
+    L: ProviderRateLimiter,
+> MailboxApiService<R, T, L>
+{
+    /// Count messages received from a sender domain since `since`. The
+    /// provider may cap the count; it ranks senders rather than totals them.
+    pub async fn count_messages_from_domain(
+        &self,
+        mailbox: MailboxAccess,
+        domain: &SenderDomain,
+        since: chrono::DateTime<chrono::Utc>,
+    ) -> Result<u32, EmailApiError> {
+        let token = self
+            .token(
+                mailbox,
+                ApiOperationKind::ListMessages,
+                TokenFreshness::Cached,
+            )
+            .await?;
+        let repository = self.repository.for_mailbox(mailbox);
+        match repository
+            .count_messages_from_domain(&token, domain, since)
+            .await
+        {
+            Err(EmailApiError::AuthRequired) => {
+                let fresh = self
+                    .token(
+                        mailbox,
+                        ApiOperationKind::ListMessages,
+                        TokenFreshness::Fresh,
+                    )
+                    .await?;
+                repository
+                    .count_messages_from_domain(&fresh, domain, since)
+                    .await
+            }
+            result => result,
+        }
+    }
+}
+
 impl<R: FolderChangeReader + ScopedMailboxRepository, T: MailboxTokenSource, L: ProviderRateLimiter>
     MailboxApiService<R, T, L>
 {
