@@ -119,9 +119,10 @@ belong to `features/external-view`. Architecture:
   menu lists the members (ids are JIDs, minus the sender) and nothing else;
   `composerMentions` turns the chips into `@<digits>` plus `mentions` on the
   text send.
-- Macro users (senders and system-line people with a `userId`) show their
-  Macro name and avatar; everyone else shows their provider name
-  (`imported_author`).
+- Macro users (senders, reactors and system-line people with a `userId`)
+  show their Macro name and avatar; everyone else shows the name DSS gives
+  (`imported_author`; reactors through the reaction's `names`, which
+  `ReactionChip` reads for ids outside Macro).
 - Spans are `external_chat.*` with `external_chat.id`; provider account
   operations stay `whatsapp.*` in `lib/queries/whatsapp-linked`.
 - Use backend limits for text, files, edits and deletes.

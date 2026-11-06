@@ -215,9 +215,10 @@ pub async fn macro_chat(lids: &dyn LidStore, chat: &str) -> String {
 /// WhatsApp redelivers it.
 pub async fn complete_addresses(
     lids: &dyn LidStore,
+    contacts: &dyn ContactStore,
     event: &mut InboundEvent,
 ) -> Result<(), StoreError> {
-    complete_sender(lids, event).await?;
+    complete_sender(lids, contacts, event).await?;
     if event.chat_alternate_jid.is_some() {
         return Ok(());
     }
@@ -244,27 +245,32 @@ pub async fn complete_addresses(
 /// account's LID store, which whatsmeow fills at pairing (the account's own
 /// pair), from group participant lists and from message addressing. Without
 /// it a LID-only sender cannot be matched to the person already seen by phone
-/// number and is quarantined.
+/// number and is quarantined. A sender the message does not name (history
+/// messages, votes, system lines) gets the name the contact store keeps for
+/// either address ([`contact_name`]).
 pub async fn complete_sender(
     lids: &dyn LidStore,
+    contacts: &dyn ContactStore,
     event: &mut InboundEvent,
 ) -> Result<(), StoreError> {
     let InboundKind::Message(message) = &mut event.kind else {
         return Ok(());
     };
     let sender = &mut message.sender;
-    if sender.alternate_jid.is_some() {
-        return Ok(());
-    }
     let Ok(jid) = sender.jid.parse::<Jid>() else {
         return Ok(());
     };
-    let alternate = match jid.server.as_str() {
-        HIDDEN_USER_SERVER => lids.get_pn_for_lid(&jid).await?,
-        DEFAULT_USER_SERVER => lids.get_lid_for_pn(&jid).await?,
-        _ => return Ok(()),
-    };
-    sender.alternate_jid = alternate.as_ref().and_then(person);
+    if sender.alternate_jid.is_none() {
+        let alternate = match jid.server.as_str() {
+            HIDDEN_USER_SERVER => lids.get_pn_for_lid(&jid).await?,
+            DEFAULT_USER_SERVER => lids.get_lid_for_pn(&jid).await?,
+            _ => return Ok(()),
+        };
+        sender.alternate_jid = alternate.as_ref().and_then(person);
+    }
+    if sender.display_name.is_none() {
+        sender.display_name = contact_name(contacts, sender).await?;
+    }
     Ok(())
 }
 
