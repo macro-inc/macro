@@ -131,28 +131,69 @@ export function consumersReady(
 	});
 }
 
+/** Incomplete observations require a fresh read; they never prove readiness. */
+export class TransientSnapshotError extends Error {}
+
+export function isCliTimeout(error: unknown): boolean {
+	if (!error || typeof error !== "object") return false;
+	if ("code" in error && error.code === "ETIMEDOUT") return true;
+	const stderr = "stderr" in error ? error.stderr : undefined;
+	const text =
+		typeof stderr === "string"
+			? stderr
+			: Buffer.isBuffer(stderr)
+				? stderr.toString("utf8")
+				: "";
+	return /^(?:Read|Connect) timeout on endpoint URL:/m.test(text);
+}
+
+export function snapshotTasks(
+	requested: string[],
+	described: { tasks?: Task[]; failures?: { reason?: string }[] },
+): Task[] {
+	const failures = described.failures ?? [];
+	if (failures.some((failure) => failure.reason !== "MISSING"))
+		throw new Error("Email consumer task describe failed permanently");
+	const tasks = described.tasks;
+	if (
+		failures.length ||
+		!Array.isArray(tasks) ||
+		tasks.length !== requested.length ||
+		new Set(tasks.map((task) => task.taskArn)).size !== requested.length ||
+		tasks.some((task) => !task.taskArn || !requested.includes(task.taskArn))
+	)
+		throw new TransientSnapshotError("Incomplete email consumer task snapshot");
+	return tasks;
+}
+
 function aws<T>(args: string[]): T {
-	return JSON.parse(
-		execFileSync(
-			"aws",
-			[
-				"ecs",
-				...args,
-				"--output",
-				"json",
-				"--no-cli-pager",
-				"--cli-connect-timeout",
-				"10",
-				"--cli-read-timeout",
-				"30",
-			],
-			{
-				encoding: "utf8",
-				timeout: 45_000,
-				maxBuffer: 16 * 1024 * 1024,
-			},
-		),
-	);
+	try {
+		return JSON.parse(
+			execFileSync(
+				"aws",
+				[
+					"ecs",
+					...args,
+					"--output",
+					"json",
+					"--no-cli-pager",
+					"--cli-connect-timeout",
+					"10",
+					"--cli-read-timeout",
+					"30",
+				],
+				{
+					encoding: "utf8",
+					timeout: 45_000,
+					maxBuffer: 16 * 1024 * 1024,
+				},
+			),
+		);
+	} catch (error) {
+		if (isCliTimeout(error))
+			throw new TransientSnapshotError("AWS CLI snapshot request timed out");
+		throw error;
+	}
 }
 
 function snapshot(expected: ExpectedConsumer): Snapshot {
@@ -163,6 +204,8 @@ function snapshot(expected: ExpectedConsumer): Snapshot {
 		"--services",
 		expected.service,
 	]);
+	// A missing task must not delay a known failed/rolled-back service result.
+	consumersReady(expected, { ...service, tasks: [] });
 	// RUNNING alone omits tasks whose desired state is STOPPED but whose process
 	// still executes. AWS CLI pagination stays enabled for both lists.
 	const arns = new Set<string>();
@@ -185,17 +228,10 @@ function snapshot(expected: ExpectedConsumer): Snapshot {
 	const all = [...arns];
 	for (let offset = 0; offset < all.length; offset += 100) {
 		const chunk = all.slice(offset, offset + 100);
-		const described = aws<{ tasks?: Task[]; failures?: unknown[] }>([
-			"describe-tasks",
-			"--cluster",
-			expected.cluster,
-			"--tasks",
-			...chunk,
-		]);
-		if (!described.tasks || described.tasks.length !== chunk.length)
-			throw new Error("Incomplete consumer task snapshot");
-		tasks.push(...described.tasks);
-		failures.push(...(described.failures ?? []));
+		const described = aws<{ tasks?: Task[]; failures?: { reason?: string }[] }>(
+			["describe-tasks", "--cluster", expected.cluster, "--tasks", ...chunk],
+		);
+		tasks.push(...snapshotTasks(chunk, described));
 	}
 	return { ...service, tasks, failures };
 }
@@ -209,7 +245,14 @@ export async function waitForConsumers(
 ): Promise<void> {
 	const deadline = now() + timeoutMs;
 	while (now() < deadline) {
-		if (consumersReady(expected, read())) return;
+		try {
+			const ready = consumersReady(expected, read());
+			if (now() >= deadline) break;
+			if (ready) return;
+		} catch (error) {
+			if (!(error instanceof TransientSnapshotError)) throw error;
+		}
+		if (now() >= deadline) break;
 		await pause();
 	}
 	throw new Error(

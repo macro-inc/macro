@@ -184,11 +184,36 @@ forward instead. Touch devices keep the standalone record pages; a Customers
 record URL redirects there unless it opens a linked item inside Customers.
 Each record opened from the details appends a breadcrumb and a history entry: a
 contact from a company's Team tab gives `Companies > <company> > <contact>`, and
-a person's Company link gives `People > <contact> > <company>`. Opening a record
+a person's **Go to company** action gives `People > <contact> > <company>`. Opening a record
 already in the trail (such as the contact's own company from `Companies >
 <company> > <contact>`) returns to it instead of adding a duplicate. Back and
 Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 <record>`. The CRM sidebar stays visible throughout.
+Contact properties use Tasks-style pills in the header and **Record details**.
+**Add email** appears only when the address is absent. Save adds the address;
+Cancel or Escape discards the draft, and invalid input stays open. Populated
+addresses are read-only: no replacement, clearing or additional email identity.
+
+Only contacts with a known personal-provider email can link or switch company.
+Their company pill opens the Tasks singleton picker; on touch, select a company
+then **Done**. Cancel keeps the original relation. There is no unlink action.
+Company-email and email-less contacts keep a read-only company value. The separate
+**Go to company** action opens an existing company, including for read-only
+contacts; Shift-click opens a separate split on desktop.
+
+Pending controls prevent duplicate saves; rejected edits retain their draft for
+retry. The server enforces add-only email and personal-provider eligibility.
+Another contact with the address in the same team rejects the change without
+merging; restricted matches return generic feedback. Foreign-team destinations
+and new links to archived companies are rejected.
+
+Edits preserve contact ID, team, discussions, references, interaction dates and
+archive state. Restore a visible child through its archived company before
+moving it. Personal-email sync reuses a unique existing contact, preserving its
+chosen company through sent/received refreshes and source cleanup. Ambiguous
+matches are left unchanged. CRM settings and domain admission still apply.
+Existing email replacement and alias/history redesign are outside this version.
+
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
 On phones and tablets, the current section appears as a labeled header island
@@ -582,8 +607,13 @@ access remains available.
 
 The **Email sync** section retains **Keep personal emails out** (on by default).
 With it off, eligible mail sent to a personal-provider address adds a contact
-without a company; received mail only updates one that already exists. Both
-paths require the sender mailbox owner's contribution consent. Vendor, brand
+without a company only when no same-team identity exists; otherwise sent and
+received mail refresh the unique existing contact without changing its chosen
+company. A selected company with email sync disabled suppresses interaction and
+source updates while preserving the manual record. Both paths require the
+mailbox owner's exact-primary contribution consent and eligible stored history.
+Manual add-email and company link/switch remain available without consent and
+never enable sync or enroll a mailbox. Vendor, brand
 and bulk-sender filters still apply. Turning the filter back on stops future
 capture without deleting contacts. The existing admin **Blocked domains**
 controls use the same team exclusions as the privacy dialog. Blocking or

@@ -395,6 +395,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -726,6 +727,7 @@ dependencies = [
  "serde",
  "serde_json",
  "share_permission_db_utils",
+ "skills",
  "soup",
  "soup_realtime",
  "sqlx",
@@ -12691,6 +12693,7 @@ dependencies = [
 name = "macro_middleware"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "axum",
  "axum-extra",
@@ -18911,6 +18914,7 @@ dependencies = [
  "ai_toolset",
  "anyhow",
  "async-trait",
+ "axum",
  "chrono",
  "cognition",
  "cowlike",
@@ -18922,7 +18926,9 @@ dependencies = [
  "futures",
  "item_filters",
  "lexical_client",
+ "macro_authorization",
  "macro_user_id",
+ "model_user",
  "models_pagination",
  "models_search",
  "models_soup",
@@ -18936,7 +18942,9 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]

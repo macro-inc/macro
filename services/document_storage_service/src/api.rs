@@ -207,7 +207,11 @@ fn api_router(state: ApiContext) -> Router {
                                 if !uri.contains("/upload") {
                                     return next.run(req).await;
                                 }
-                                tokio::task::spawn(next.run(req)).await.unwrap()
+                                tokio::task::spawn(agent_correlation::context::capture(
+                                    next.run(req),
+                                ))
+                                .await
+                                .unwrap()
                             }
                             _ => next.run(req).await,
                         }

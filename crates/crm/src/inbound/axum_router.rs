@@ -13,6 +13,8 @@ pub mod set_company_name;
 /// Toggle the `hidden` flag on a `crm_contacts` row.
 pub mod set_contact_hidden;
 
+pub mod set_contact_company;
+pub mod set_contact_email;
 /// Set the display name (`name`) on a `crm_contacts` row.
 pub mod set_contact_name;
 
@@ -187,6 +189,14 @@ where
             put(set_contact_hidden::handler::<C, St, Eas, Auth>),
         )
         .route(
+            "/contacts/{contact_id}/email",
+            put(set_contact_email::handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/contacts/{contact_id}/company",
+            put(set_contact_company::handler::<C, St, Eas, Auth>),
+        )
+        .route(
             "/contacts/{contact_id}/name",
             put(set_contact_name::handler::<C, St, Eas, Auth>),
         )
@@ -258,7 +268,7 @@ impl IntoResponse for CrmError {
             CrmError::CompanyHidden => (
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
-                    message: "crm company is hidden; un-hide before enabling email sync".into(),
+                    message: "crm company is archived; restore it before making this change".into(),
                 }),
             ),
             CrmError::CompanyAlreadyExistsForTeam => (
@@ -271,6 +281,12 @@ impl IntoResponse for CrmError {
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
                     message: "a crm contact with this email already exists for the company".into(),
+                }),
+            ),
+            CrmError::ContactAlreadyExistsForTeam => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "a crm contact with this email already exists for the team".into(),
                 }),
             ),
             CrmError::CrmDisabledForTeam => (

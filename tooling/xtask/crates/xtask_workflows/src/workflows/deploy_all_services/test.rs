@@ -152,3 +152,18 @@ fn rollout_and_summary_scripts_cover_failed_cancelled_and_noop_deployments() {
         String::from_utf8_lossy(&result.stderr)
     );
 }
+
+#[test]
+fn summary_uses_the_verified_immutable_bun_action() {
+    let summary = serde_json::to_value(deployment_summary()).unwrap();
+    let bun = summary["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|step| step["name"] == "Setup Bun")
+        .unwrap();
+    assert_eq!(
+        bun["uses"],
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6"
+    );
+}

@@ -257,6 +257,20 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         name: &str,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
+    /// Add a missing email without merging identities; an identical retry is safe.
+    fn set_contact_email(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+        email: &str,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
+    /// Link or switch a personal-email contact's company within its owning team.
+    fn set_contact_company(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+        company_id: uuid::Uuid,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
     /// Batched authorization probe for a CRM-scoped email query. See
     /// [`CompaniesRepository::crm_scope_precheck`].
     fn crm_scope_precheck(
@@ -726,8 +740,9 @@ where
 
         // Personal mail providers (gmail, yahoo, …) never key a company:
         // one would swallow every contact on the provider. They file as
-        // company-less contacts, and only when the team lets personal
-        // emails in (the repository checks).
+        // company-less only when no identity exists, retaining a unique
+        // existing contact and its manual company. The repository still
+        // checks whether the team lets personal emails in.
         if is_personal_email_domain(domain) {
             return self
                 .companies_repository
@@ -956,6 +971,39 @@ where
         let contact_id = access.contact_id()?;
         self.companies_repository
             .set_contact_name(&team_id, &contact_id, name, access.include_hidden())
+            .await
+    }
+
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn set_contact_email(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+        email: &str,
+    ) -> Result<CrmContact, CrmError> {
+        let email = normalize_contact_email(email)?;
+        self.companies_repository
+            .update_contact(
+                &access.team_id(),
+                &access.contact_id()?,
+                &super::contact_update::ContactFieldUpdate::Email(email),
+                access.include_hidden(),
+            )
+            .await
+    }
+
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn set_contact_company(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+        company_id: uuid::Uuid,
+    ) -> Result<CrmContact, CrmError> {
+        self.companies_repository
+            .update_contact(
+                &access.team_id(),
+                &access.contact_id()?,
+                &super::contact_update::ContactFieldUpdate::Company(company_id),
+                access.include_hidden(),
+            )
             .await
     }
 
@@ -1356,6 +1404,22 @@ impl CrmService for NoOpCrmService {
         _name: &str,
     ) -> Result<(), CrmError> {
         unimplemented!("NoOpCrmService.set_contact_name")
+    }
+
+    async fn set_contact_email(
+        &self,
+        _access: &CrmContactReceipt<EditAccessLevel>,
+        _email: &str,
+    ) -> Result<CrmContact, CrmError> {
+        Err(CrmError::CrmDisabledForTeam)
+    }
+
+    async fn set_contact_company(
+        &self,
+        _access: &CrmContactReceipt<EditAccessLevel>,
+        _company_id: uuid::Uuid,
+    ) -> Result<CrmContact, CrmError> {
+        Err(CrmError::CrmDisabledForTeam)
     }
 
     async fn crm_scope_precheck(

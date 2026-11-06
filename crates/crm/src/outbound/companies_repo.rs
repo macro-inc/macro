@@ -5,6 +5,7 @@ pub(crate) mod test;
 
 mod association;
 mod contact_listing;
+mod contact_update;
 mod email_privacy;
 
 use crate::domain::{
@@ -36,12 +37,22 @@ struct DepopulateTarget {
 pub struct CompaniesRepositoryImpl {
     /// The underlying sqlx::PgPool connected to macrodb.
     pool: PgPool,
+    #[cfg(test)]
+    after_depopulate_source: Option<std::sync::Arc<test::ContactWriteGate>>,
+    #[cfg(test)]
+    after_personal_company: Option<std::sync::Arc<test::ContactWriteGate>>,
 }
 
 impl CompaniesRepositoryImpl {
     /// Creates a new instance of CompaniesRepositoryImpl
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            #[cfg(test)]
+            after_depopulate_source: None,
+            #[cfg(test)]
+            after_personal_company: None,
+        }
     }
 
     /// Take per-`(team_id, lower(domain))` advisory locks for every
@@ -101,7 +112,15 @@ impl CompaniesRepositoryImpl {
         normalized_email: &str,
     ) -> Result<Option<DepopulateTarget>, CrmError> {
         Self::lock_team_domain(tx, team_id, normalized_domain).await?;
+        Self::find_depopulate_target(tx, team_id, normalized_domain, normalized_email).await
+    }
 
+    async fn find_depopulate_target(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        team_id: &uuid::Uuid,
+        normalized_domain: &str,
+        normalized_email: &str,
+    ) -> Result<Option<DepopulateTarget>, CrmError> {
         sqlx::query_as!(
             DepopulateTarget,
             r#"
@@ -118,18 +137,21 @@ impl CompaniesRepositoryImpl {
               AND (
                   -- Company-less contacts are the personal-email ones
                   -- email sync files on their own.
-                  ct.company_id IS NULL
+                  $4 OR ct.company_id IS NULL
                   OR EXISTS (
                       SELECT 1 FROM crm_domains d
                       WHERE d.company_id = ct.company_id AND LOWER(d.domain) = $3
                   )
               )
+              AND (NOT $4 OR (SELECT COUNT(*) FROM crm_contacts other
+                   WHERE other.team_id = $1 AND LOWER(other.email) = $2) = 1)
             ORDER BY ct.company_id IS NULL, ct.id
             LIMIT 1
             "#,
             team_id,
             normalized_email,
             normalized_domain,
+            crate::domain::generic_email_domains::is_personal_email_domain(normalized_domain),
         )
         .fetch_optional(&mut **tx)
         .await
@@ -709,52 +731,57 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Merge rules mirror populate_contact: first non-NULL name wins,
-        // last_interaction always GREATEST, first_interaction LEAST only
-        // for sent mail. Received mail only refreshes an existing contact.
-        let contact_id = match (admitted, is_sent) {
-            (false, _) => None,
-            (true, true) => Some(
-                sqlx::query_scalar!(
-                    r#"
-                    INSERT INTO crm_contacts
-                        (team_id, company_id, email, name, first_interaction, last_interaction)
-                    VALUES ($1, NULL, $2, $3, $4, $5)
-                    ON CONFLICT (team_id, LOWER(email)) WHERE company_id IS NULL DO UPDATE
-                        SET name = COALESCE(crm_contacts.name, EXCLUDED.name),
-                            updated_at = now(),
-                            first_interaction = LEAST(crm_contacts.first_interaction, EXCLUDED.first_interaction),
-                            last_interaction = GREATEST(crm_contacts.last_interaction, EXCLUDED.last_interaction)
-                    RETURNING id
-                    "#,
-                    team_id,
-                    normalized_email,
-                    name,
-                    first_at,
-                    last_at,
-                )
-                .fetch_one(&mut *tx)
+        if !admitted {
+            tx.commit()
                 .await
-                .map_err(|e| CrmError::StorageLayerError(e.into()))?,
-            ),
-            (true, false) => sqlx::query_scalar!(
-                r#"
-                UPDATE crm_contacts
-                SET name = COALESCE(name, $3),
-                    last_interaction = GREATEST(last_interaction, $4)
-                WHERE team_id = $1
-                  AND company_id IS NULL
-                  AND LOWER(email) = $2
-                RETURNING id
-                "#,
-                team_id,
-                normalized_email,
-                name,
-                last_at,
-            )
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?,
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            return Ok(());
+        }
+
+        // A personal email identifies a contact independently of its manually
+        // selected company. Count archived matches too; ambiguity never creates
+        // another identity or assigns a source to an arbitrary contact.
+        let matches = sqlx::query!(
+            "SELECT id, company_id FROM crm_contacts WHERE team_id = $1 AND LOWER(email) = $2 LIMIT 2",
+            team_id, normalized_email,
+        ).fetch_all(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let contact_id = match matches.as_slice() {
+            [existing] => {
+                if let Some(company_id) = existing.company_id {
+                    // Match hide, edit and teardown lock order. Sync does not
+                    // change company settings, the relation or archive state.
+                    let parent = sqlx::query!("SELECT email_sync FROM crm_companies WHERE id = $1 AND team_id = $2 FOR UPDATE", company_id, team_id)
+                        .fetch_optional(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                    if !parent.is_some_and(|parent| parent.email_sync) {
+                        // Manual association/identity survives; a disabled parent
+                        // cannot admit email-derived metadata or new sources.
+                        return Ok(());
+                    }
+                }
+                #[cfg(test)]
+                if let Some(gate) = &self.after_personal_company {
+                    gate.entered.notify_one();
+                    gate.resume.notified().await;
+                }
+                sqlx::query_scalar!(
+                    r#"UPDATE crm_contacts SET name = COALESCE(name, $3),
+                        first_interaction = CASE WHEN $6 THEN LEAST(first_interaction, $4) ELSE first_interaction END,
+                        last_interaction = GREATEST(last_interaction, $5)
+                       WHERE id = $1 AND team_id = $2 AND LOWER(email) = $7
+                       RETURNING id"#,
+                    existing.id, team_id, name, first_at, last_at, is_sent, normalized_email,
+                ).fetch_optional(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?
+            }
+            [] if is_sent => Some(sqlx::query_scalar!(
+                r#"INSERT INTO crm_contacts (team_id, company_id, email, name, first_interaction, last_interaction)
+                   VALUES ($1, NULL, $2, $3, $4, $5) RETURNING id"#,
+                team_id, normalized_email, name, first_at, last_at,
+            ).fetch_one(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?),
+            [] => None,
+            _ => {
+                tracing::debug!("Skipping ambiguous personal contact sync");
+                None
+            }
         };
         tracing::Span::current().record("filed", contact_id.is_some());
 
@@ -795,8 +822,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Order manual creation against blocks: a later block sees and hides
-        // this row; a contact added after a committed block stays visible.
+        // Serialize manual identity creation with other writes for this domain.
+        // Contribution exclusions never change record visibility.
         if let Some((_, domain)) = normalized_email.as_deref().and_then(|e| e.split_once('@')) {
             Self::lock_team_domain(&mut tx, team_id, domain).await?;
         }
@@ -961,6 +988,13 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
+        if let Some((_, domain)) = normalized_email
+            .as_deref()
+            .and_then(|email| email.split_once('@'))
+        {
+            Self::lock_team_domain(&mut tx, team_id, domain).await?;
+        }
+
         if !Self::team_exists(&mut tx, team_id).await? {
             return Err(CrmError::CrmDisabledForTeam);
         }
@@ -1066,6 +1100,28 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Ok(outcome);
         };
 
+        // Bulk teardown and field edits lock companies before sources/contacts.
+        // Re-read after waiting so teardown never acts on a stale orphan snapshot.
+        if let Some(company_id) = row.company_id {
+            sqlx::query!(
+                "SELECT id FROM crm_companies WHERE id = $1 AND team_id = $2 FOR UPDATE",
+                company_id,
+                team_id
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        }
+        let Some(row) =
+            Self::find_depopulate_target(&mut tx, team_id, &normalized_domain, &normalized_email)
+                .await?
+        else {
+            tx.commit()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            return Ok(outcome);
+        };
+
         // 1. Drop the per-link source row.
         let source_result = sqlx::query!(
             r#"
@@ -1079,10 +1135,14 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         outcome.source_deleted = source_result.rows_affected() > 0;
+        #[cfg(test)]
+        if let Some(gate) = &self.after_depopulate_source {
+            gate.entered.notify_one();
+            gate.resume.notified().await;
+        }
 
-        // 2. Manually created contacts are user data, not derived —
-        //    never torn down (they have no sources by construction, so
-        //    the orphan check below would always condemn them).
+        // 2. Manually created or edited contacts are user data. Their
+        //    source rows may be removed, but the contact survives teardown.
         if row.contact_manually_created {
             tx.commit()
                 .await
@@ -1111,11 +1171,13 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Ok(outcome);
         }
 
-        let contact_result =
-            sqlx::query!(r#"DELETE FROM crm_contacts WHERE id = $1"#, row.contact_id,)
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let contact_result = sqlx::query!(
+            r#"DELETE FROM crm_contacts WHERE id = $1 AND manually_created = FALSE"#,
+            row.contact_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         outcome.contact_deleted = contact_result.rows_affected() > 0;
 
         // 3. Company-less contacts have nothing more to tear down. Keep
@@ -1242,6 +1304,17 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
+        // Match explicit edits' company-before-contact order. Lock before the
+        // orphan check so a company cannot be deleted from a stale snapshot
+        // after a contact has just been linked to it.
+        sqlx::query!(
+            "SELECT id FROM crm_companies WHERE team_id = $1 ORDER BY id FOR UPDATE",
+            team_id,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
         // 1. Drop the link's source rows scoped to this team.
         sqlx::query!(
             r#"
@@ -1259,8 +1332,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         // 2. Drop every contact in this team that no longer has any
-        //    source. Manually created contacts have no sources by
-        //    construction — they're user data and survive teardown.
+        //    source. Manually created or edited contacts are user data
+        //    and survive teardown even after their last source is removed.
         sqlx::query!(
             r#"
             DELETE FROM crm_contacts ct
@@ -1809,6 +1882,17 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         }
 
         Ok(())
+    }
+
+    async fn update_contact(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        update: &crate::domain::contact_update::ContactFieldUpdate,
+        include_hidden: bool,
+    ) -> Result<CrmContact, CrmError> {
+        self.update_contact_details(team_id, contact_id, update, include_hidden)
+            .await
     }
 
     #[tracing::instrument(skip_all, err)]

@@ -1,3 +1,5 @@
+mod linked_personal;
+
 #[cfg(feature = "inbound")]
 mod http;
 

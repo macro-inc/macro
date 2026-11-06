@@ -84,12 +84,23 @@ tools/HTTP/GraphQL surfaces over them.
   contact creation accepts any valid email, including personal providers.
   Email population still infers companies by domain. Do not apply manual
   creation rules to capture/consent; see `docs/design/crm-contact-creation.md`.
+- Contact setters add email only when absent or link/switch company for a known
+  personal-provider email; validate under the contact lock and reject same-team
+  duplicates without disclosing restricted matches. Preserve ID, archive and sources.
+- Personal sync and cleanup resolve one same-team/email contact across all companies,
+  including hidden rows; skip ambiguous identities and preserve manual company choices.
+- Serialize single and bulk source teardown company-before-source/contact, and
+  re-read the target after waiting; orphan deletion must not cascade a new manual link.
 - CRM availability is team membership, independent of contribution consent.
   Population takes the shared `crm-email:{team}` advisory lock before domain
   advisory locks, parent team `KEY SHARE`, then entity rows. Privacy changes
   take the exclusive privacy lock before domain/entity locks. Keep locks through
   commit; never wait on a domain or privacy lock after acquiring entity rows.
   Manual creation retains domain/parent/entity ordering without email consent.
+  Contact field edits take exclusive privacy coordination before discovery/domain
+  locks because reassignment changes contribution eligibility; they never require
+  consent or enable sync. Assigned personal contacts under disabled parent sync
+  retain their identity/company but receive no email-derived source/history writes.
   Legacy enable is a compatibility no-op; disable/purge is retired.
 - Bound pipeline read- and write-guard waits with a transaction-local five-second
   timeout so waiters release pool connections needed by the holder's storage work.
@@ -113,7 +124,7 @@ tools/HTTP/GraphQL surfaces over them.
 - Contacts carry their own `team_id`; `company_id` and `email` are optional.
   Scope contact reads by `ct.team_id` and LEFT JOIN the company for its
   `hidden` flag and name. Email sync files personal-provider addresses
-  (`is_personal_email_domain`) as company-less contacts only when the team
+  (`is_personal_email_domain`) as company-less contacts when no identity exists and the team
   turns `exclude_personal_emails` off; `crm_blocked_domains` stops sync per
   domain. CRM-scoped previews accept eligible company-less contacts using
   their team and email address. Company-less contacts add no independent

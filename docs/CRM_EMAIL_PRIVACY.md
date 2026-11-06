@@ -140,3 +140,17 @@ lifecycle changes. Current-source checks are recorded with the PR review evidenc
   and query adapter against a local fixture: list edits, removal permissions,
   opt-in, withdrawal, dialog scrolling, banner state, and disconnected mailboxes.
   These browser checks do not exercise a deployed version of the new API.
+
+### Manual contact edits and assigned personal addresses
+
+Adding a missing email or linking/switching a personal-provider contact remains
+available without mailbox consent. These edits never enable company email sync
+or enroll a mailbox. The contact ID, name, archive state and manual company are
+preserved during subsequent sync and source cleanup.
+
+When the assigned company has email sync disabled, personal-email processing
+skips interaction and source updates. An enabled company permits refresh only
+from eligible stored history under valid exact-primary consent and applicable
+team/personal exclusions. Contact email lists and direct CRM thread access keep
+the same parent restriction. Reassignment coordinates with population and
+privacy changes before acquiring domain/parent locks.

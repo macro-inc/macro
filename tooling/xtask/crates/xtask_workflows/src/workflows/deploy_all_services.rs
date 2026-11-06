@@ -498,7 +498,7 @@ fn deployment_summary() -> Job {
         ])
         .cond(Expression::new("always()"))
         .add_step(steps::checkout_v4())
-        .add_step(steps::setup_bun())
+        .add_step(steps::setup_bun_pinned())
         .add_step(check_deployment_results())
 }
 

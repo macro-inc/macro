@@ -460,8 +460,13 @@ await routine.update({
 
 ### Agents, conversations and hosts
 
-`macro.agents.list/create/byId` manage agent configuration. `AgentOptions` takes
-channel, team and host handles. Updates replace the configuration.
+`macro.agents.list/create/byId` manage agent configuration; listed agents read
+their runtime, coding/chat choice, apps, channel scope and permission settings.
+`agent.update(patch)` changes only the settings it names (`PATCH /agents/{id}`);
+`agent.replace(options)` replaces everything, including the owning team, and
+`AgentOptions` takes channel, team and host handles. `macro.agents.coding()` lists the coding personas the caller can
+start right now, built-in ones such as Cursor included; pass an entry's `agent`
+to `macro.agentSessions.createManaged`.
 `channel.agentConversations()` returns conversations with session and turn handles;
 `conversation.startFresh(session)` and `turn.retry(actionId)` expose explicit
 conversation controls. `session.toolApprovalById(id).answer(answer)` answers a
@@ -505,6 +510,14 @@ with `setImportant` and `delete`. Omit the inbox to select the caller's primary.
 `thread.setFollowup(command)` expose revision-aware reminder state; commands require
 caller-persisted operation IDs. `email.reminders({ inboxes })` auto-paginates and
 returns thread handles alongside reminder snapshots.
+
+### CRM contact fields
+
+`macro.crm.contactById(id).setEmail(address)` adds an address only when absent;
+an identical retry is safe. Existing addresses cannot be replaced or cleared.
+`setCompany(company)` links or switches a known personal-provider contact to a
+Company handle in the same team. Unlinking is not supported. Both preserve
+identity and reject same-team email conflicts without merging records.
 
 ### CRM pipelines and initiatives
 

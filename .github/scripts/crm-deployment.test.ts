@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { checkDeploymentResults } from "./check-service-deployment-results";
 import {
 	consumersReady,
+	isCliTimeout,
+	snapshotTasks,
+	TransientSnapshotError,
 	type ExpectedConsumer,
 	expectedConsumer,
 	waitForConsumers,
@@ -226,5 +229,129 @@ describe("deployment summary", () => {
 		state.setup.outputs.dss = "[]";
 		state["deploy-dss"].result = "skipped";
 		expect(() => checkDeploymentResults(state)).not.toThrow();
+	});
+});
+
+describe("transient snapshot retry", () => {
+	test.each(["missing", "incomplete", "timeout"])(
+		"retries %s with a fresh complete snapshot",
+		async (kind) => {
+			let clock = 0;
+			let reads = 0;
+			await waitForConsumers(
+				expected,
+				() => {
+					reads++;
+					if (reads === 1) {
+						if (kind === "timeout")
+							throw new TransientSnapshotError(
+								"AWS CLI snapshot request timed out",
+							);
+						snapshotTasks(
+							["current"],
+							kind === "missing"
+								? { tasks: [], failures: [{ reason: "MISSING" }] }
+								: { tasks: [] },
+						);
+					}
+					const state = ready();
+					return { ...state, tasks: snapshotTasks(["current"], state) };
+				},
+				() => clock,
+				async () => {
+					clock += 10;
+				},
+				30,
+			);
+			expect(reads).toBe(2);
+		},
+	);
+	test("persistent missing proof reaches the same deadline and cannot pass late", async () => {
+		let clock = 0;
+		let reads = 0;
+		await expect(
+			waitForConsumers(
+				expected,
+				() => {
+					reads++;
+					snapshotTasks(["current"], { failures: [{ reason: "MISSING" }] });
+					return ready();
+				},
+				() => clock,
+				async () => {
+					clock += 10;
+				},
+				30,
+			),
+		).rejects.toThrow("Timed out");
+		expect(reads).toBe(3);
+		clock = 0;
+		await expect(
+			waitForConsumers(
+				expected,
+				() => {
+					clock = 31;
+					return ready();
+				},
+				() => clock,
+				async () => {},
+				30,
+			),
+		).rejects.toThrow("Timed out");
+	});
+	test("only CLI timeouts are transient, never credentials or other command failures", () => {
+		expect(isCliTimeout({ code: "ETIMEDOUT" })).toBe(true);
+		expect(
+			isCliTimeout({
+				stderr: 'Read timeout on endpoint URL: "https://ecs.example.com"',
+			}),
+		).toBe(true);
+		expect(
+			isCliTimeout({
+				stderr: Buffer.from(
+					'Connect timeout on endpoint URL: "https://ecs.example.com"',
+				),
+			}),
+		).toBe(true);
+		expect(isCliTimeout({ stderr: "AccessDeniedException" })).toBe(false);
+		expect(isCliTimeout({ code: "ENOENT" })).toBe(false);
+		expect(isCliTimeout(new Error("Unexpected token"))).toBe(false);
+	});
+	test("permanent task failures, failed rollout and stable rollback stop immediately", async () => {
+		const failed = ready();
+		failed.services[0].deployments[0].rolloutState = "FAILED";
+		const rollback = ready();
+		rollback.services[0].taskDefinition = "old";
+		for (const read of [
+			() => {
+				snapshotTasks(["current"], {
+					tasks: [],
+					failures: [{ reason: "MISSING" }, { reason: "ACCESS_DENIED" }],
+				});
+				return ready();
+			},
+			() => {
+				throw new Error("AccessDeniedException");
+			},
+			() => {
+				throw new Error("Missing expected consumer metadata");
+			},
+			() => failed,
+			() => rollback,
+		]) {
+			let pauses = 0;
+			await expect(
+				waitForConsumers(
+					expected,
+					read,
+					() => 0,
+					async () => {
+						pauses++;
+					},
+					30,
+				),
+			).rejects.toThrow();
+			expect(pauses).toBe(0);
+		}
 	});
 });
