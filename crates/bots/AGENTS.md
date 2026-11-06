@@ -48,6 +48,10 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   SHARE in its transaction and refuses when it differs from the owner
   `ensure_harness_usable` checked, so a concurrent harness owner change
   (`crates/harnesses`) cannot strand the agent.
+- An agent's `workspace_path` belongs to its harness: a new one must be in
+  the harness's `reported_workspaces`, a kept one stays valid after the daemon
+  stops reporting it, and a patch that moves the agent to another harness
+  drops it.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
   metadata describes the requested PATCH, not a full snapshot — an omitted
   field serializes as `null` (see `README.md`).

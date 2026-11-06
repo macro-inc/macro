@@ -31,6 +31,7 @@ fn agent(owner: BotOwner) -> Agent {
         },
         auto_accept_permissions: Some(true),
         is_coding: true,
+        workspace_path: None,
     }
 }
 

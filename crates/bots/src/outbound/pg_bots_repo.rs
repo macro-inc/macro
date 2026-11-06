@@ -177,6 +177,7 @@ struct AgentRow {
     instructions: String,
     harness: String,
     harness_id: Option<Uuid>,
+    workspace_path: Option<String>,
     default_model: String,
     channel_scope: String,
     channel_ids: Vec<Uuid>,
@@ -230,6 +231,7 @@ impl TryFrom<AgentRow> for Agent {
             instructions: row.instructions,
             harness: row.harness,
             harness_id: row.harness_id.map(HarnessId::new_from_uuid),
+            workspace_path: row.workspace_path,
             default_model: row.default_model,
             channel_scope,
             channel_ids: row.channel_ids,
@@ -431,9 +433,9 @@ impl BotRepo for PgBotsRepo {
         sqlx::query!(
             r#"
             INSERT INTO agent_configs (
-                bot_id, instructions, harness, harness_id, default_model, channel_scope, mcp_scope, auto_accept_permissions, is_coding
+                bot_id, instructions, harness, harness_id, default_model, channel_scope, mcp_scope, auto_accept_permissions, is_coding, workspace_path
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             "#,
             bot_id.as_uuid(),
             &req.instructions,
@@ -444,6 +446,7 @@ impl BotRepo for PgBotsRepo {
             req.mcp.scope_str(),
             req.auto_accept_permissions,
             req.is_coding,
+            req.workspace_path.as_deref(),
         )
         .execute(&mut *tx)
         .await
@@ -476,6 +479,7 @@ impl BotRepo for PgBotsRepo {
             instructions: req.instructions,
             harness: req.harness,
             harness_id: req.harness_id,
+            workspace_path: req.workspace_path,
             default_model: req.default_model,
             channel_scope: req.channel_scope,
             auto_accept_permissions: req.auto_accept_permissions,
@@ -560,6 +564,7 @@ impl BotRepo for PgBotsRepo {
                 mcp_scope = $7,
                 auto_accept_permissions = $8,
                 is_coding = $9,
+                workspace_path = $10,
                 updated_at = now()
             WHERE bot_id = $1
             "#,
@@ -572,6 +577,7 @@ impl BotRepo for PgBotsRepo {
             req.mcp.scope_str(),
             req.auto_accept_permissions,
             req.is_coding,
+            req.workspace_path.as_deref(),
         )
         .execute(&mut *tx)
         .await
@@ -638,6 +644,7 @@ impl BotRepo for PgBotsRepo {
             instructions: req.instructions,
             harness: req.harness,
             harness_id: req.harness_id,
+            workspace_path: req.workspace_path,
             default_model: req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: req.channel_ids,
@@ -671,6 +678,7 @@ impl BotRepo for PgBotsRepo {
                 a.instructions,
                 a.harness,
                 a.harness_id,
+                a.workspace_path,
                 a.default_model,
                 a.channel_scope,
                 a.auto_accept_permissions,
@@ -1114,6 +1122,7 @@ impl BotRepo for PgBotsRepo {
                 a.instructions,
                 a.harness,
                 a.harness_id,
+                a.workspace_path,
                 a.default_model,
                 a.channel_scope,
                 a.auto_accept_permissions,
@@ -1165,7 +1174,14 @@ impl BotRepo for PgBotsRepo {
     ) -> Result<Option<HarnessFacts>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT owner_user_id, team_id, allow_permission_bypass
+            SELECT
+                owner_user_id,
+                team_id,
+                allow_permission_bypass,
+                ARRAY(
+                    SELECT workspace->>'path'
+                    FROM jsonb_array_elements(reported_workspaces) AS workspace
+                ) AS "workspace_paths!: Vec<String>"
             FROM harnesses
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -1179,6 +1195,7 @@ impl BotRepo for PgBotsRepo {
             Ok(HarnessFacts {
                 owner: harness_owner(harness_id.as_uuid(), row.owner_user_id, row.team_id)?,
                 allow_permission_bypass: row.allow_permission_bypass,
+                workspace_paths: row.workspace_paths,
             })
         })
         .transpose()

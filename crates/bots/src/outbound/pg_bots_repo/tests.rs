@@ -20,6 +20,7 @@ use std::sync::{Arc, Mutex};
 
 mod agent_dm;
 mod agent_enabled;
+mod agent_workspace;
 
 const USER_OWNER: &str = "macro|bot-owner@example.com";
 const USER_OTHER: &str = "macro|bot-other@example.com";
@@ -88,6 +89,7 @@ fn create_agent_req(handle: &str, channel_scope: AgentChannelScope) -> CreateAge
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: None,
         is_coding: true,
+        workspace_path: None,
     }
 }
 
@@ -107,6 +109,7 @@ fn update_agent_req(handle: &str, channel_scope: AgentChannelScope) -> UpdateAge
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: Some(false),
         is_coding: false,
+        workspace_path: None,
     }
 }
 

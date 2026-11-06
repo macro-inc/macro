@@ -342,6 +342,9 @@ pub struct Agent {
     pub harness: String,
     /// Registered harness the agent runs on, when `harness` is `macrod`.
     pub harness_id: Option<HarnessId>,
+    /// The directory on the harness its new sessions use, one of the
+    /// harness's reported workspaces. `None` uses the harness's workspace.
+    pub workspace_path: Option<String>,
     /// Model selected specifically for this agent.
     pub default_model: String,
     /// Whether the agent is global or channel-specific.
@@ -370,6 +373,11 @@ pub struct CreateAgentRequest {
     /// forbidden otherwise.
     #[serde(default)]
     pub harness_id: Option<HarnessId>,
+    /// The directory on `harness_id` new sessions use, one of the harness's
+    /// reported workspaces. Omit to use the harness's workspace; forbidden
+    /// without a harness id.
+    #[serde(default)]
+    pub workspace_path: Option<String>,
     /// Display name.
     pub name: String,
     /// Stable `@` handle.
@@ -411,6 +419,11 @@ pub struct UpdateAgentRequest {
     /// forbidden otherwise.
     #[serde(default)]
     pub harness_id: Option<HarnessId>,
+    /// The directory on `harness_id` new sessions use, one of the harness's
+    /// reported workspaces. Omit to use the harness's workspace; forbidden
+    /// without a harness id.
+    #[serde(default)]
+    pub workspace_path: Option<String>,
     /// Display name.
     pub name: String,
     /// Stable `@` handle.
@@ -500,9 +513,20 @@ impl PatchAgentRequest {
     /// patch names changes.
     #[must_use]
     pub fn apply_to(self, current: &Agent) -> UpdateAgentRequest {
-        let (harness, harness_id) = match self.harness {
-            Some(selection) => (selection.harness, selection.harness_id),
-            None => (current.harness.clone(), current.harness_id),
+        // A workspace is a directory on one harness: it stays while the
+        // agent stays there and is dropped when the agent moves.
+        let (harness, harness_id, workspace_path) = match self.harness {
+            Some(selection) if selection.harness_id == current.harness_id => (
+                selection.harness,
+                selection.harness_id,
+                current.workspace_path.clone(),
+            ),
+            Some(selection) => (selection.harness, selection.harness_id, None),
+            None => (
+                current.harness.clone(),
+                current.harness_id,
+                current.workspace_path.clone(),
+            ),
         };
         let (channel_scope, channel_ids) = match self.channels {
             Some(selection) => (selection.channel_scope, selection.channel_ids),
@@ -514,6 +538,7 @@ impl PatchAgentRequest {
                 Some(BotOwner::User { .. }) | None => None,
             },
             harness_id,
+            workspace_path,
             name: current.bot.name.clone(),
             handle: current.bot.handle.clone(),
             description: current.bot.description.clone(),
@@ -719,4 +744,6 @@ pub struct HarnessFacts {
     pub owner: HarnessOwner,
     /// Whether the harness operator permits unattended tool approvals.
     pub allow_permission_bypass: bool,
+    /// The directories the harness's daemon reported its sessions may use.
+    pub workspace_paths: Vec<String>,
 }

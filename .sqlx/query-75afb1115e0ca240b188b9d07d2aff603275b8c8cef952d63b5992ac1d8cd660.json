@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                b.id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id,\n                b.name,\n                b.handle,\n                b.description,\n                b.avatar_url,\n                b.created_by,\n                b.created_at,\n                b.updated_at,\n                b.deleted_at,\n                b.has_agent,\n                a.instructions,\n                a.harness,\n                a.harness_id,\n                a.default_model,\n                a.channel_scope,\n                a.auto_accept_permissions,\n                a.is_coding,\n                ARRAY(\n                    SELECT p.channel_id\n                    FROM comms_channel_participants p\n                    WHERE p.user_id = 'bot|' || b.id::text\n                      AND p.left_at IS NULL\n                      AND NOT EXISTS (\n                          SELECT 1\n                          FROM comms_channel_agents ca\n                          WHERE ca.channel_id = p.channel_id\n                            AND ca.kind = 'direct'\n                      )\n                    ORDER BY p.channel_id\n                ) AS \"channel_ids!\",\n                a.mcp_scope,\n                ARRAY(\n                    SELECT m.app_slug\n                    FROM agent_mcp_servers m\n                    WHERE m.bot_id = b.id\n                    ORDER BY m.app_slug\n                ) AS \"mcp_app_slugs!\",\n                ARRAY(\n                    SELECT m.server_name\n                    FROM agent_mcp_servers m\n                    WHERE m.bot_id = b.id\n                    ORDER BY m.app_slug\n                ) AS \"mcp_server_names!\"\n            FROM bots b\n            INNER JOIN agent_configs a ON a.bot_id = b.id\n            WHERE b.id = $1\n              AND b.kind = 'owned'\n              AND b.deleted_at IS NULL\n            ",
+  "query": "\n            SELECT\n                b.id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id,\n                b.name,\n                b.handle,\n                b.description,\n                b.avatar_url,\n                b.created_by,\n                b.created_at,\n                b.updated_at,\n                b.deleted_at,\n                b.has_agent,\n                a.instructions,\n                a.harness,\n                a.harness_id,\n                a.workspace_path,\n                a.default_model,\n                a.channel_scope,\n                a.auto_accept_permissions,\n                a.is_coding,\n                ARRAY(\n                    SELECT p.channel_id\n                    FROM comms_channel_participants p\n                    WHERE p.user_id = 'bot|' || b.id::text\n                      AND p.left_at IS NULL\n                      AND NOT EXISTS (\n                          SELECT 1\n                          FROM comms_channel_agents ca\n                          WHERE ca.channel_id = p.channel_id\n                            AND ca.kind = 'direct'\n                      )\n                    ORDER BY p.channel_id\n                ) AS \"channel_ids!\",\n                a.mcp_scope,\n                ARRAY(\n                    SELECT m.app_slug\n                    FROM agent_mcp_servers m\n                    WHERE m.bot_id = b.id\n                    ORDER BY m.app_slug\n                ) AS \"mcp_app_slugs!\",\n                ARRAY(\n                    SELECT m.server_name\n                    FROM agent_mcp_servers m\n                    WHERE m.bot_id = b.id\n                    ORDER BY m.app_slug\n                ) AS \"mcp_server_names!\"\n            FROM bots b\n            INNER JOIN agent_configs a ON a.bot_id = b.id\n            WHERE b.id = $1\n              AND b.kind = 'owned'\n              AND b.deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -85,41 +85,46 @@
       },
       {
         "ordinal": 16,
-        "name": "default_model",
+        "name": "workspace_path",
         "type_info": "Text"
       },
       {
         "ordinal": 17,
-        "name": "channel_scope",
+        "name": "default_model",
         "type_info": "Text"
       },
       {
         "ordinal": 18,
+        "name": "channel_scope",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
         "name": "auto_accept_permissions",
         "type_info": "Bool"
       },
       {
-        "ordinal": 19,
+        "ordinal": 20,
         "name": "is_coding",
         "type_info": "Bool"
       },
       {
-        "ordinal": 20,
+        "ordinal": 21,
         "name": "channel_ids!",
         "type_info": "UuidArray"
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "mcp_scope",
         "type_info": "Text"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "mcp_app_slugs!",
         "type_info": "TextArray"
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "mcp_server_names!",
         "type_info": "TextArray"
       }
@@ -146,6 +151,7 @@
       false,
       false,
       true,
+      true,
       false,
       false,
       true,
@@ -156,5 +162,5 @@
       null
     ]
   },
-  "hash": "21e4f75fca6a182472e3d18674b622731a9861f0852807581f5734da59715d98"
+  "hash": "75afb1115e0ca240b188b9d07d2aff603275b8c8cef952d63b5992ac1d8cd660"
 }
