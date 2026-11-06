@@ -137,7 +137,7 @@ fn bare_date_label(body: &str) -> Option<String> {
     let year: u32 = year.parse().ok()?;
     let month: usize = month.parse().ok()?;
     let day: u32 = day.parse().ok()?;
-    let is_leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    let is_leap = (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400);
     let days_in_month = match month {
         2 if is_leap => 29,
         2 => 28,
