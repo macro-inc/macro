@@ -113,6 +113,7 @@ export function RouteAgents() {
             'to get things done alongside your team.',
           ]}
           cta="agents_hero_get_started"
+          tutorial="agents"
         />
       </div>
       <WorkspaceDesktopDemo
