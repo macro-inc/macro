@@ -55,6 +55,7 @@ import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdT
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
 import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
 import type { CurrentSystemStatus } from './generated/schemas/currentSystemStatus';
+import type { DomainTeamResponse } from './generated/schemas/domainTeamResponse';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GenericSuccessResponse } from './generated/schemas/genericSuccessResponse';
 import type { GetLegacyUserPermissionsResponse } from './generated/schemas/getLegacyUserPermissionsResponse';
@@ -65,6 +66,7 @@ import type { GtmInviteLinkList } from './generated/schemas/gtmInviteLinkList';
 import type { GtmInviteOffer } from './generated/schemas/gtmInviteOffer';
 import type { GtmInviteOfferStatus } from './generated/schemas/gtmInviteOfferStatus';
 import type { InviteToTeamRequest } from './generated/schemas/inviteToTeamRequest';
+import type { JoinTeamByDomainResponse } from './generated/schemas/joinTeamByDomainResponse';
 import type { JoinTeamByInviteLinkResponse } from './generated/schemas/joinTeamByInviteLinkResponse';
 import type { MacroApiTokenResponse } from './generated/schemas/macroApiTokenResponse';
 import type { PasswordRequest } from './generated/schemas/passwordRequest';
@@ -1546,6 +1548,29 @@ export const authServiceClient = {
       await fetchWithAuth<JoinTeamByInviteLinkResponse>(
         `${authHost}/team/invite-link/join`,
         { method: 'POST', body: JSON.stringify({ token }) }
+      )
+    ).map((result) => result);
+  },
+
+  /** The team that lets people on the user's email domain join, if any. */
+  async getTeamByDomain() {
+    return (
+      await fetchWithAuth<DomainTeamResponse>(`${authHost}/team/domain`, {
+        method: 'GET',
+      })
+    ).map((result) => result.team ?? null);
+  },
+
+  /**
+   * Joins the team that lets people on the user's email domain join. Fails
+   * with NOT_FOUND when no team does, and CONFLICT when the user is on
+   * another team.
+   */
+  async joinTeamByDomain() {
+    return (
+      await fetchWithAuth<JoinTeamByDomainResponse>(
+        `${authHost}/team/domain/join`,
+        { method: 'POST' }
       )
     ).map((result) => result);
   },

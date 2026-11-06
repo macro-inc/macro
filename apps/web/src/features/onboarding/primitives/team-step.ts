@@ -1,5 +1,6 @@
 import { createEffect, createSignal } from 'solid-js';
 import type {
+  DomainTeam,
   Loadable,
   OnboardingContext,
   OnboardingRecord,
@@ -17,13 +18,19 @@ import {
 export type TeamStepState =
   | { t: 'loading' }
   | { t: 'error' }
-  /** Already a member: auto-joined by domain, or just created/joined here. */
+  /** Already a member: joined through an invite link, or just created or
+   * joined here. */
   | { t: 'on-team'; name: string }
-  | { t: 'invites'; invites: readonly TeamInvite[] }
+  /** Teams the viewer may join: email invites and their domain team. */
+  | {
+      t: 'invites';
+      invites: readonly TeamInvite[];
+      domainTeam: DomainTeam | null;
+    }
   | { t: 'create' };
 
 export function createTeamStep(
-  context: Pick<OnboardingContext, 'joinTeam' | 'track'>,
+  context: Pick<OnboardingContext, 'joinTeam' | 'joinDomainTeam' | 'track'>,
   directory: TeamDirectorySource
 ) {
   const [joining, setJoining] = createSignal(false);
@@ -31,13 +38,27 @@ export function createTeamStep(
   const state = (): TeamStepState => {
     const teams = directory.teams();
     const invites = directory.invites();
-    if (teams.t === 'error' || invites.t === 'error') return { t: 'error' };
-    if (teams.t === 'loading' || invites.t === 'loading')
+    const domainTeam = directory.domainTeam();
+    if (
+      teams.t === 'error' ||
+      invites.t === 'error' ||
+      domainTeam.t === 'error'
+    )
+      return { t: 'error' };
+    if (
+      teams.t === 'loading' ||
+      invites.t === 'loading' ||
+      domainTeam.t === 'loading'
+    )
       return { t: 'loading' };
     const team = teams.value[0];
     if (team) return { t: 'on-team', name: team.name };
-    if (invites.value.length > 0)
-      return { t: 'invites', invites: invites.value };
+    if (invites.value.length > 0 || domainTeam.value)
+      return {
+        t: 'invites',
+        invites: invites.value,
+        domainTeam: domainTeam.value,
+      };
     return { t: 'create' };
   };
 
@@ -52,20 +73,27 @@ export function createTeamStep(
       context.track('onboarding_v4_team', { action: 'already_on_team' });
   });
 
-  const join = async (inviteId: string) => {
+  const runJoin = async (
+    joinTeam: () => Promise<void>,
+    action: 'joined_invite' | 'joined_domain_team'
+  ) => {
     if (joining()) return;
     setJoining(true);
     try {
-      await context.joinTeam(inviteId);
-      context.track('onboarding_v4_team', { action: 'joined_invite' });
+      await joinTeam();
+      context.track('onboarding_v4_team', { action });
     } catch {
-      // The capability reports its own failure; the invite stays offered.
+      // The capability reports its own failure; the team stays offered.
     } finally {
       setJoining(false);
     }
   };
+  const join = (inviteId: string) =>
+    runJoin(() => context.joinTeam(inviteId), 'joined_invite');
+  const joinDomainTeam = () =>
+    runJoin(() => context.joinDomainTeam(), 'joined_domain_team');
 
-  return { state, joining, join, retry: directory.retry };
+  return { state, joining, join, joinDomainTeam, retry: directory.retry };
 }
 
 /** The create form's prefill, once contacts and the domain suggestion settle. */

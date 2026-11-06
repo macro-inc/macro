@@ -69,10 +69,14 @@ export type ConnectedToolsSource = {
 
 export type Team = { name: string };
 export type TeamInvite = { id: string; invitedBy: string };
+/** The team that lets people on the viewer's email domain join. */
+export type DomainTeam = { name: string };
 
 export type TeamDirectorySource = {
   teams: Accessor<Loadable<readonly Team[]>>;
   invites: Accessor<Loadable<readonly TeamInvite[]>>;
+  /** Null when no team lets people on the viewer's email domain join. */
+  domainTeam: Accessor<Loadable<DomainTeam | null>>;
   /** Contact email addresses, for same-domain invite suggestions. */
   contacts: Accessor<Loadable<readonly string[]>>;
   retry(): void;
@@ -124,6 +128,9 @@ export type OnboardingContext = {
   }): Promise<void>;
   /** Rejects on failure; the capability reports its own errors. */
   joinTeam(inviteId: string): Promise<void>;
+  /** Joins the viewer's domain team. Rejects on failure; the capability
+   * reports its own errors. */
+  joinDomainTeam(): Promise<void>;
   /**
    * Copies the viewer's team invite link, creating the link when the team has
    * none. Rejects on failure; the capability reports its own result.

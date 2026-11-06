@@ -472,6 +472,21 @@ describe('onboarding flow', () => {
     });
   });
 
+  it('joins the team open to the viewer email domain only once they accept', async () => {
+    const { fake } = setup({
+      resume: 'team',
+      world: { domainTeam: { name: 'Acme' } },
+    });
+    await screen.findByText('Acme is open to everyone at your company');
+    expect(fake.calls()).not.toContain('joinDomainTeam');
+    click('Join');
+    await screen.findByText("You're on Acme");
+    expect(fake.events()).toContainEqual({
+      event: 'onboarding_v4_team',
+      data: { action: 'joined_domain_team' },
+    });
+  });
+
   it('passes over the team step for someone who already joined a team', async () => {
     const { fake } = setup({
       resume: 'tools',

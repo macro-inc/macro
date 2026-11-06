@@ -321,8 +321,8 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const autoJoinDescription = () => {
     const domain = autoJoinDomain();
     return domain
-      ? `New sign-ups with an @${domain} email automatically join this team.`
-      : "Automatically add new sign-ups whose email matches the team owner's domain.";
+      ? `People with an @${domain} email can join this team without an invite.`
+      : "Let people whose email matches the team owner's domain join without an invite.";
   };
 
   const handleToggleAutoJoin = () => {

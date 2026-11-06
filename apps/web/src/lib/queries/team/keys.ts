@@ -3,6 +3,7 @@ import { createQueryKeys } from '@lukemorales/query-key-factory';
 export const teamKeys = createQueryKeys('team', {
   userTeams: null,
   userInvites: null,
+  domainTeam: null,
   currentTeam: null,
   acceptInvite: null,
   rejectInvite: null,

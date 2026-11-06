@@ -29,7 +29,8 @@ import {
 } from '../primitives/team-step';
 
 /** Set up your team: already a member → confirmation with the team's invite
- * link, pending invites → join, a work domain → create (with a domain-derived
+ * link, pending invites or a team open to the viewer's email domain → join,
+ * a work domain → create (with a domain-derived
  * name and same-domain teammates pre-added to the invite list), and a
  * personal address → refer friends instead of creating a team. */
 export function TeamStep(props: {
@@ -92,12 +93,16 @@ export function TeamStep(props: {
             />
           )}
         </Match>
-        <Match when={pendingInvites(team.state())}>
-          {(invites) => (
+        <Match when={teamOffers(team.state())}>
+          {(offers) => (
             <InvitesPanel
-              invites={invites()}
+              invites={offers().invites}
+              domainTeam={offers().domainTeam}
               joining={team.joining() || props.finishing}
               onJoin={(id) => fireAndForget(team.join(id), 'onboarding')}
+              onJoinDomainTeam={() =>
+                fireAndForget(team.joinDomainTeam(), 'onboarding')
+              }
               onSkip={props.onSkip}
             />
           )}
@@ -137,9 +142,9 @@ const onTeam = (
   state: ReturnType<ReturnType<typeof createTeamStep>['state']>
 ) => (state.t === 'on-team' ? state.name : undefined);
 
-const pendingInvites = (
+const teamOffers = (
   state: ReturnType<ReturnType<typeof createTeamStep>['state']>
-) => (state.t === 'invites' ? state.invites : undefined);
+) => (state.t === 'invites' ? state : undefined);
 
 /** Creating the team switches the step to the on-team confirmation, where
  * the creator can copy the team's invite link before continuing. */

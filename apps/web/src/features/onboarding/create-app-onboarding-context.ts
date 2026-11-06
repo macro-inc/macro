@@ -32,6 +32,8 @@ import {
 } from '@queries/onboarding';
 import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
 import {
+  useDomainTeamQuery,
+  useJoinDomainTeamMutation,
   useJoinTeamMutation,
   useUserInvitesQuery,
 } from '@queries/team/invitations';
@@ -153,6 +155,7 @@ export function createAppOnboardingContext(): OnboardingContext {
   const startAddInbox = useAddInboxFlow();
   const createTeam = useCreateTeamWithInvitesMutation();
   const joinTeam = useJoinTeamMutation();
+  const joinDomainTeam = useJoinDomainTeamMutation();
   const checkout = useCreateCheckoutSessionMutation();
   const billingPortal = useCreateBillingPortalMutation();
   const completeOnboarding = useCompleteOnboardingMutation();
@@ -280,6 +283,7 @@ export function createAppOnboardingContext(): OnboardingContext {
     createTeamDirectory: () => {
       const teams = useUserTeamsQuery();
       const invites = useUserInvitesQuery();
+      const domainTeam = useDomainTeamQuery();
       const contacts = useContactsQuery();
       return {
         teams: () =>
@@ -293,11 +297,16 @@ export function createAppOnboardingContext(): OnboardingContext {
               invitedBy: idToDisplayName(invite.invited_by),
             }))
           ),
+        domainTeam: () =>
+          loadableQuery(domainTeam, (data) =>
+            data ? { name: data.team_name } : null
+          ),
         contacts: () =>
           loadableQuery(contacts, (data) => data.contacts.map(idToEmail)),
         retry: () => {
           fireAndForget(teams.refetch(), 'onboarding');
           fireAndForget(invites.refetch(), 'onboarding');
+          fireAndForget(domainTeam.refetch(), 'onboarding');
         },
       };
     },
@@ -313,6 +322,10 @@ export function createAppOnboardingContext(): OnboardingContext {
     joinTeam: async (inviteId) => {
       await joinTeam.mutateAsync({ teamInviteId: inviteId });
     },
+    joinDomainTeam: () =>
+      Telemetry.span('onboarding.join_domain_team', () =>
+        joinDomainTeam.mutateAsync()
+      ),
     copyTeamInviteLink: async () => {
       const url = linkUrl(teamInviteLinkToken());
       // Start the write inside the click; Safari drops it after an await.
