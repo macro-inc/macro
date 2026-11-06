@@ -388,6 +388,10 @@ export type AgentSessionAuthor = 'user' | 'agent';
  */
 export type SchedulingMode = 'individual' | 'collective' | 'roundRobin';
 /**
+ * Channel types an agent may create.
+ */
+export type NewChannelType = 'private' | 'team';
+/**
  * The mutually exclusive time shape supplied to calendar tools.
  */
 export type EventTimeInput =
@@ -434,19 +438,6 @@ export type AutoDeclineModeInput =
   | 'decline_none'
   | 'decline_all'
   | 'decline_new_only';
-/**
- * User tools are pending until a user executes them
- */
-export type UserToolResponseForToolCalendarEvent =
-  | 'PendingUserExecution'
-  | 'Rejected'
-  | {
-      UserAction: ToolCalendarEvent;
-    };
-/**
- * Channel types an agent may create.
- */
-export type NewChannelType = 'private' | 'team';
 /**
  * Where a new form's responses go.
  */
@@ -4777,15 +4768,6 @@ export type SendEmailResponse =
         draft_id: string;
       };
     };
-/**
- * User tools are pending until a user executes them
- */
-export type UserToolResponseForSendEmailResponse =
-  | 'PendingUserExecution'
-  | 'Rejected'
-  | {
-      UserAction: SendEmailResponse;
-    };
 export type ToolEntityType =
   | 'document'
   | 'task'
@@ -4948,6 +4930,24 @@ export type ShareAccess = 'off' | 'view' | 'comment' | 'edit';
  * The kind of results a search favours.
  */
 export type WebSearchTopic = 'general' | 'news';
+/**
+ * User tools are pending until a user executes them
+ */
+export type UserToolResponseForToolCalendarEvent =
+  | 'PendingUserExecution'
+  | 'Rejected'
+  | {
+      UserAction: ToolCalendarEvent;
+    };
+/**
+ * User tools are pending until a user executes them
+ */
+export type UserToolResponseForSendEmailResponse =
+  | 'PendingUserExecution'
+  | 'Rejected'
+  | {
+      UserAction: SendEmailResponse;
+    };
 /**
  * Available SDK workflow guides.
  */
@@ -7357,15 +7357,76 @@ export interface BotWebhook {
   webhookUrl: string;
 }
 /**
- * Prepare an event on the user's calendar, inviting any listed attendees through its connected provider. In Macro chat this tool opens an inline composer so the user can review, edit, and confirm the event; use the tool to present the proposal instead of asking for a redundant confirmation in prose. When the pending call is executed, the event is written to the calendar provider immediately and attendees receive invitations. Other clients should confirm attendee events before executing the call. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the event out in your reply, ask whether to create it, and use CreateConfirmedCalendarEvent once the user approves.
- *
- * The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected.
- *
- * For video conferencing pick at most one of `addMacroCall` (a Macro meeting link, the default choice for a Macro user's meeting) or `addConference` (Google Meet or Microsoft Teams, per calendar capabilities). A Macro call is created for the user, scheduled to the event's times, and its join link is appended to the event's description so every attendee's invitation carries it; it also becomes the event's `location` unless a physical `location` was supplied. The returned event's `macroCallUrl` holds the link.
- *
- * Set `eventType` to "out_of_office" to mark the user as out of office (e.g. "mark me out of office Thursday"). Out-of-office events must land on the user's primary calendar (omit `calendarId`), must be timed rather than all-day, and take no attendees or video conferencing (leave `addMacroCall` and `addConference` false); use `outOfOffice` to control whether conflicting meetings are auto-declined. The type cannot be changed afterward.
+ * Create a private or team channel and add its first members. Use `private` for an invite-only channel and `team` for a channel owned by the current user's team. Do not use this for a direct message — those are created separately. Team id is resolved from the current user; do not invent one. Participants accept `macro|<email>` ids from ListTeamMembers or bare emails. Creating a team channel when the user has no team fails; create a private channel instead. Creating a team channel with no participants adds the current user so the channel is valid. Use only when the user asks to create a channel.
  */
-export interface CreateCalendarEvent {
+export interface CreateChannel {
+  /**
+   * Display name for the new channel.
+   */
+  name: string;
+  channelType: NewChannelType;
+  /**
+   * People to add, as `macro|<email>` ids or bare emails. Defaults to none. A team channel with an empty list adds the current user.
+   */
+  participants?: string[];
+}
+/**
+ * Response from [`CreateChannel`].
+ */
+export interface CreateChannelResponse {
+  /**
+   * Created channel id.
+   */
+  channelId: string;
+  /**
+   * Trimmed channel name.
+   */
+  name: string;
+  channelType: NewChannelType;
+  /**
+   * Canonical participant ids sent with the create request.
+   */
+  participants: string[];
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
+}
+/**
+ * Add a company to the user's team CRM by name and optional web domain, as New Company in the CRM does. Companies a team emails are usually added automatically, so check ListCompanies first. Set its stage, owner, and other properties afterwards with SetEntityProperty (entity type company).
+ */
+export interface CreateCompany {
+  /**
+   * The company's display name, e.g. "Acme".
+   */
+  name: string;
+  /**
+   * Optional company web domain; omit when unknown. For example, "acme.com" — no scheme or path. Contacts are matched to the company by this domain.
+   */
+  domain?: string | null;
+}
+/**
+ * The created company.
+ */
+export interface CreateCompanyResponse {
+  /**
+   * The new CRM company id (usable with GetCompany, CreateContact, and
+   * SetEntityProperty).
+   */
+  companyId: string;
+  /**
+   * The company's display name.
+   */
+  name?: string | null;
+  /**
+   * The company's domains.
+   */
+  domains: string[];
+}
+/**
+ * Create a calendar event immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The event is always shown before it is created, even when the user's request already spelled the whole thing out: in one turn write it into the thread - title, date and time with its time zone, duration, guests, location, provider conference or Macro call, recurrence - ask whether to create it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific event, quoting that reply verbatim in userConfirmation. Being asked to schedule something is a request to draft the event, never approval to create it, so a userConfirmation quoting the request that asked you to set it up - rather than the reply approving the event you wrote out - is wrong. Never call it in the agent session view, where the event goes on a PresentReview card, or in chat, where CreateCalendarEvent's composer is the confirmation. Takes the same fields as CreateCalendarEvent; the event is written to the calendar provider at once and any attendees receive invitations.
+ */
+export interface CreateConfirmedCalendarEvent {
   /**
    * The event title.
    */
@@ -7412,6 +7473,10 @@ export interface CreateCalendarEvent {
    * What guests may do: `canModify` (change the event; implies `canInviteOthers`), `canInviteOthers` and `canSeeOtherGuests`. Omit for the defaults: guests may invite others and see the guest list but not modify the event. Google calendars only; an Outlook calendar refuses it.
    */
   guestPolicy?: GuestPolicy | null;
+  /**
+   * The user's own message approving this specific event, quoted verbatim - for example their "yes, go ahead" in reply to the event you wrote out for them. It is a reply to your draft, never the earlier request that asked you to schedule something: if the user has not yet seen this event, there is nothing to quote here and the tool must not be called. Required: do not paraphrase it, and never supply it yourself.
+   */
+  userConfirmation: string;
 }
 /**
  * An attendee supplied to a calendar tool.
@@ -7480,128 +7545,6 @@ export interface GuestPolicy {
    * Whether guests may see the guest list.
    */
   canSeeOtherGuests: boolean;
-}
-/**
- * Create a private or team channel and add its first members. Use `private` for an invite-only channel and `team` for a channel owned by the current user's team. Do not use this for a direct message — those are created separately. Team id is resolved from the current user; do not invent one. Participants accept `macro|<email>` ids from ListTeamMembers or bare emails. Creating a team channel when the user has no team fails; create a private channel instead. Creating a team channel with no participants adds the current user so the channel is valid. Use only when the user asks to create a channel.
- */
-export interface CreateChannel {
-  /**
-   * Display name for the new channel.
-   */
-  name: string;
-  channelType: NewChannelType;
-  /**
-   * People to add, as `macro|<email>` ids or bare emails. Defaults to none. A team channel with an empty list adds the current user.
-   */
-  participants?: string[];
-}
-/**
- * Response from [`CreateChannel`].
- */
-export interface CreateChannelResponse {
-  /**
-   * Created channel id.
-   */
-  channelId: string;
-  /**
-   * Trimmed channel name.
-   */
-  name: string;
-  channelType: NewChannelType;
-  /**
-   * Canonical participant ids sent with the create request.
-   */
-  participants: string[];
-  /**
-   * Human-readable result summary.
-   */
-  summary: string;
-}
-/**
- * Add a company to the user's team CRM by name and optional web domain, as New Company in the CRM does. Companies a team emails are usually added automatically, so check ListCompanies first. Set its stage, owner, and other properties afterwards with SetEntityProperty (entity type company).
- */
-export interface CreateCompany {
-  /**
-   * The company's display name, e.g. "Acme".
-   */
-  name: string;
-  /**
-   * Optional company web domain; omit when unknown. For example, "acme.com" — no scheme or path. Contacts are matched to the company by this domain.
-   */
-  domain?: string | null;
-}
-/**
- * The created company.
- */
-export interface CreateCompanyResponse {
-  /**
-   * The new CRM company id (usable with GetCompany, CreateContact, and
-   * SetEntityProperty).
-   */
-  companyId: string;
-  /**
-   * The company's display name.
-   */
-  name?: string | null;
-  /**
-   * The company's domains.
-   */
-  domains: string[];
-}
-/**
- * Create a calendar event immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The event is always shown before it is created, even when the user's request already spelled the whole thing out: in one turn write it into the thread - title, date and time with its time zone, duration, guests, location, provider conference or Macro call, recurrence - ask whether to create it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific event, quoting that reply verbatim in userConfirmation. Being asked to schedule something is a request to draft the event, never approval to create it, so a userConfirmation quoting the request that asked you to set it up - rather than the reply approving the event you wrote out - is wrong. Never call it in the agent session view or in chat: use CreateCalendarEvent there, whose review card or composer is the confirmation. Takes the same fields as CreateCalendarEvent; the event is written to the calendar provider at once and any attendees receive invitations.
- */
-export interface CreateConfirmedCalendarEvent {
-  /**
-   * The event title.
-   */
-  title: string;
-  time: EventTimeInput;
-  /**
-   * Optional event body/description.
-   */
-  description?: string | null;
-  /**
-   * Optional physical or virtual location label.
-   */
-  location?: string | null;
-  /**
-   * Attendees to invite by email. They are notified by the calendar provider as soon as the event is created. Omit for a solo event.
-   */
-  attendees?: AttendeeInput[];
-  /**
-   * Raw RFC 5545 recurrence lines (RRULE, RDATE, EXDATE), e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]. Omit for a one-off event.
-   */
-  recurrenceLines?: string[];
-  /**
-   * Calendar to create the event on, from ListCalendars. Omit to use the user's primary calendar.
-   */
-  calendarId?: string | null;
-  /**
-   * Reminder configuration for the event. Omit to use the selected calendar's defaults.
-   */
-  reminders?: EventRemindersInput | null;
-  /**
-   * Attach a freshly created Macro call to the event: a Macro meeting link scheduled to the event's times, written into the event's location and description. Mutually exclusive with `addConference`.
-   */
-  addMacroCall?: boolean;
-  /**
-   * Attach a conference supported by this calendar: Google Meet or Microsoft Teams. Check ListCalendars capabilities first.
-   */
-  addConference?: boolean;
-  eventType?: CalendarEventTypeInput & string;
-  /**
-   * Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have the calendar integration decline conflicting meetings, optionally with a `declineMessage`.
-   */
-  outOfOffice?: OutOfOfficeInput | null;
-  /**
-   * What guests may do: `canModify` (change the event; implies `canInviteOthers`), `canInviteOthers` and `canSeeOtherGuests`. Omit for the defaults: guests may invite others and see the guest list but not modify the event. Google calendars only; an Outlook calendar refuses it.
-   */
-  guestPolicy?: GuestPolicy | null;
-  /**
-   * The user's own message approving this specific event, quoted verbatim - for example their "yes, go ahead" in reply to the event you wrote out for them. It is a reply to your draft, never the earlier request that asked you to schedule something: if the user has not yet seen this event, there is nothing to quote here and the tool must not be called. Required: do not paraphrase it, and never supply it yourself.
-   */
-  userConfirmation: string;
 }
 /**
  * Add a contact person to the user's team CRM, as New contact does. The company and the email are both optional. Personal email and addresses with a different domain are accepted; selecting a company is an explicit association. Find the company with ListCompanies, or add it first with CreateCompany.
@@ -15424,7 +15367,7 @@ export interface SendChannelMessageResponse {
   message_id: string;
 }
 /**
- * Send an email immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The email is always shown before it is sent, even when the user's request already spelled the whole thing out: in one turn write it into the thread - recipients, subject, body - ask whether to send it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific email, quoting that reply verbatim in userConfirmation. Being asked to send an email is a request to draft one, never approval to send it, so a userConfirmation quoting the request that asked you to write the email - rather than the reply approving the one you wrote - is wrong. Never call it in the agent session view or in chat: use SendEmail there, whose review card or composer is the confirmation. Takes the same fields as SendEmail; write the body in Markdown, which is rendered to HTML on send.
+ * Send an email immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The email is always shown before it is sent, even when the user's request already spelled the whole thing out: in one turn write it into the thread - recipients, subject, body - ask whether to send it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific email, quoting that reply verbatim in userConfirmation. Being asked to send an email is a request to draft one, never approval to send it, so a userConfirmation quoting the request that asked you to write the email - rather than the reply approving the one you wrote - is wrong. Never call it in the agent session view, where the draft goes on a PresentReview card, or in chat, where SendEmail's composer is the confirmation. Takes the same fields as SendEmail; write the body in Markdown, which is rendered to HTML on send.
  */
 export interface SendConfirmedEmail {
   /**
@@ -15503,61 +15446,6 @@ export interface EmailAttachment {
    * editor) has no file to attach; link to it in the body instead.
    */
   documentId: string;
-}
-/**
- * Draft, compose, and send an email the user confirms in a review card or composer. Use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) from the agent session view or from chat — never write the email as plain text there. It opens the draft for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the email out in your reply, ask whether to send it, and use SendConfirmedEmail once the user approves. To reply to an existing message, provide the replying_to_id; the reply then goes out from the inbox that received it unless `from` says otherwise. To attach files, list the Macro documents in attachments — uploaded files such as PDFs, images, spreadsheets, or Word documents the user can view; the user can add or remove attachments in the composer before sending. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
- */
-export interface SendEmail {
-  /**
-   * The subject line of the email.
-   */
-  subject: string;
-  /**
-   * The address of the inbox to send from, when the user has more than one
-   * connected and this email belongs to a particular one. Use the exact
-   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
-   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
-   * you know which inbox is right: a reply then goes out from the inbox
-   * that received the message it answers, and a new email from the user's
-   * primary inbox. The user can change it in the composer either way.
-   */
-  from?: string | null;
-  /**
-   * The body of the email, written as Markdown. A host with a composer
-   * (chat) replaces this with the base64url-encoded HTML the composer
-   * exported before the tool runs; a host without one (an agent session)
-   * leaves the Markdown, and this tool renders it the same way.
-   */
-  body: string;
-  /**
-   * The primary recipients (To field).
-   */
-  to: EmailRecipient[];
-  /**
-   * Carbon copy recipients (optional).
-   */
-  cc?: EmailRecipient[];
-  /**
-   * Blind carbon copy recipients (optional).
-   */
-  bcc?: EmailRecipient[];
-  /**
-   * The ID of a message to reply to (optional). When set, the email is
-   * sent as a reply within the same thread.
-   */
-  replyingToId?: string | null;
-  /**
-   * Per-message signature override, set by the composer's signature preview —
-   * not normally by you. Omit to use the inbox's default policy (always on a
-   * new email; on replies/forwards only when the user enabled it). `false`
-   * excludes the signature for this one email.
-   */
-  includeSignature?: boolean | null;
-  /**
-   * Macro documents to attach as files (optional). Each must be an
-   * uploaded file the user can view; together they may total 18 MB.
-   */
-  attachments?: EmailAttachment[];
 }
 /**
  * Set or update a property value on an entity. Tasks are targeted as entity_type='document'. Projects in the Tasks UI are entity_type='initiative'; entity_type='project' still means a folder. Initiatives share the Assignees, Status, Priority and Due Date definitions below and their clearing behavior. Project Status accepts only Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), and Completed (...0004); In Review and Canceled are task-only options. Provide the property_definition_id and exactly one value field matching the property's data type.
@@ -16457,6 +16345,118 @@ export interface WebSearchResult {
    * The page text as Markdown, when `includeContent` was set.
    */
   content?: string | null;
+}
+/**
+ * Prepare an event on the user's calendar, inviting any listed attendees through its connected provider. In Macro chat this tool opens an inline composer so the user can review, edit, and confirm the event; use the tool to present the proposal instead of asking for a redundant confirmation in prose. When the pending call is executed, the event is written to the calendar provider immediately and attendees receive invitations. Other clients should confirm attendee events before executing the call. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the event out in your reply, ask whether to create it, and use CreateConfirmedCalendarEvent once the user approves.
+ *
+ * The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected.
+ *
+ * For video conferencing pick at most one of `addMacroCall` (a Macro meeting link, the default choice for a Macro user's meeting) or `addConference` (Google Meet or Microsoft Teams, per calendar capabilities). A Macro call is created for the user, scheduled to the event's times, and its join link is appended to the event's description so every attendee's invitation carries it; it also becomes the event's `location` unless a physical `location` was supplied. The returned event's `macroCallUrl` holds the link.
+ *
+ * Set `eventType` to "out_of_office" to mark the user as out of office (e.g. "mark me out of office Thursday"). Out-of-office events must land on the user's primary calendar (omit `calendarId`), must be timed rather than all-day, and take no attendees or video conferencing (leave `addMacroCall` and `addConference` false); use `outOfOffice` to control whether conflicting meetings are auto-declined. The type cannot be changed afterward.
+ */
+export interface CreateCalendarEvent {
+  /**
+   * The event title.
+   */
+  title: string;
+  time: EventTimeInput;
+  /**
+   * Optional event body/description.
+   */
+  description?: string | null;
+  /**
+   * Optional physical or virtual location label.
+   */
+  location?: string | null;
+  /**
+   * Attendees to invite by email. They are notified by the calendar provider as soon as the event is created. Omit for a solo event.
+   */
+  attendees?: AttendeeInput[];
+  /**
+   * Raw RFC 5545 recurrence lines (RRULE, RDATE, EXDATE), e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]. Omit for a one-off event.
+   */
+  recurrenceLines?: string[];
+  /**
+   * Calendar to create the event on, from ListCalendars. Omit to use the user's primary calendar.
+   */
+  calendarId?: string | null;
+  /**
+   * Reminder configuration for the event. Omit to use the selected calendar's defaults.
+   */
+  reminders?: EventRemindersInput | null;
+  /**
+   * Attach a freshly created Macro call to the event: a Macro meeting link scheduled to the event's times, written into the event's location and description. Mutually exclusive with `addConference`.
+   */
+  addMacroCall?: boolean;
+  /**
+   * Attach a conference supported by this calendar: Google Meet or Microsoft Teams. Check ListCalendars capabilities first.
+   */
+  addConference?: boolean;
+  eventType?: CalendarEventTypeInput & string;
+  /**
+   * Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have the calendar integration decline conflicting meetings, optionally with a `declineMessage`.
+   */
+  outOfOffice?: OutOfOfficeInput | null;
+  /**
+   * What guests may do: `canModify` (change the event; implies `canInviteOthers`), `canInviteOthers` and `canSeeOtherGuests`. Omit for the defaults: guests may invite others and see the guest list but not modify the event. Google calendars only; an Outlook calendar refuses it.
+   */
+  guestPolicy?: GuestPolicy | null;
+}
+/**
+ * Draft, compose, and send an email the user confirms in a composer. Use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) in chat — never write the email as plain text there. It opens the draft for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the email out in your reply, ask whether to send it, and use SendConfirmedEmail once the user approves. To reply to an existing message, provide the replying_to_id; the reply then goes out from the inbox that received it unless `from` says otherwise. To attach files, list the Macro documents in attachments — uploaded files such as PDFs, images, spreadsheets, or Word documents the user can view; the user can add or remove attachments in the composer before sending. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
+ */
+export interface SendEmail {
+  /**
+   * The subject line of the email.
+   */
+  subject: string;
+  /**
+   * The address of the inbox to send from, when the user has more than one
+   * connected and this email belongs to a particular one. Use the exact
+   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
+   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
+   * you know which inbox is right: a reply then goes out from the inbox
+   * that received the message it answers, and a new email from the user's
+   * primary inbox. The user can change it in the composer either way.
+   */
+  from?: string | null;
+  /**
+   * The body of the email, written as Markdown. A host with a composer
+   * (chat) replaces this with the base64url-encoded HTML the composer
+   * exported before the tool runs; a host without one (an agent session)
+   * leaves the Markdown, and this tool renders it the same way.
+   */
+  body: string;
+  /**
+   * The primary recipients (To field).
+   */
+  to: EmailRecipient[];
+  /**
+   * Carbon copy recipients (optional).
+   */
+  cc?: EmailRecipient[];
+  /**
+   * Blind carbon copy recipients (optional).
+   */
+  bcc?: EmailRecipient[];
+  /**
+   * The ID of a message to reply to (optional). When set, the email is
+   * sent as a reply within the same thread.
+   */
+  replyingToId?: string | null;
+  /**
+   * Per-message signature override, set by the composer's signature preview —
+   * not normally by you. Omit to use the inbox's default policy (always on a
+   * new email; on replies/forwards only when the user enabled it). `false`
+   * excludes the signature for this one email.
+   */
+  includeSignature?: boolean | null;
+  /**
+   * Macro documents to attach as files (optional). Each must be an
+   * uploaded file the user can view; together they may total 18 MB.
+   */
+  attachments?: EmailAttachment[];
 }
 /**
  * Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog.

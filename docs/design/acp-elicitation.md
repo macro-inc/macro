@@ -365,6 +365,15 @@ sandboxed harnesses.
 
 ## User tools reviewed in the turn
 
+> Superseded. Agent sessions no longer review user tools through
+> elicitation: a review held the whole turn until the user answered. They
+> now present email and calendar drafts with `PresentReview`, a saved review
+> card that never pauses the turn, and submit it with `DecideReview` when the
+> account holder says yes in chat. `AgentLoop::with_user_tool_finisher`,
+> `ai_tools::user_tool_review` and the ACP reviewer are gone. The fold still
+> reads `ElicitationRequest::UserTool` so older sessions render. The rest of
+> this section records the original design.
+
 Macro's user tools (`SendEmail`, `CreateCalendarEvent`) are registered with
 `add_user_tool`: calling one returns `"PendingUserExecution"` and does
 nothing, and the *host* finishes the call with the pieces `ai_toolset`

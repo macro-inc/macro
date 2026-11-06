@@ -29,7 +29,6 @@ mod self_knowledge;
 pub mod serde_utils;
 mod subagent;
 mod tool_context;
-pub mod user_tool_review;
 
 pub use anthropic::toolset::AnthropicToolContext;
 use anthropic::toolset::anthropic_toolset;
@@ -212,10 +211,10 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
 ///
 /// Hosts differ on two axes. First, whether something finishes a deferred
 /// user tool for them: [`AiHost::Chat`] has the composer card after the
-/// turn and [`AiHost::AgentSession`] the review elicitation in it, so those
-/// two register `SendEmail` and the deferring `CreateCalendarEvent` — on any
-/// other host those registrations would return `PendingUserExecution`
-/// forever while reading to the model as success. Second, whether the host
+/// turn, so it advertises `SendEmail` and the deferring `CreateCalendarEvent`
+/// — on any other host those calls would return `PendingUserExecution`
+/// forever while reading to the model as success. [`AiHost::AgentSession`]
+/// registers them only for review submission and never advertises them. Second, whether the host
 /// supports tool discovery and can render tool-call views. Channel bots keep
 /// discovery, but only chat and agent-session transcripts render rich views.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -224,12 +223,12 @@ pub enum AiHost {
     /// frontend can render (scheduled agents, memory generation): composer
     /// cards finish deferred user tools there, after the turn.
     Chat,
-    /// Macro's in-process agent serving an agent session: the same toolset
-    /// as [`AiHost::Chat`], but its user tools are reviewed in the turn - the
-    /// agent loop's finisher puts the call to the user over ACP and the tool
-    /// returns the outcome - so the prompt describes a review card the agent
-    /// waits on, never a pending composer. It presents views with the
-    /// harness's `execution.views.present` instead of `DisplayResults`.
+    /// Macro's in-process agent serving an agent session: chat's toolset,
+    /// but email and calendar drafts go on a `PresentReview` card that never
+    /// pauses the turn, so `SendEmail` and `CreateCalendarEvent` are
+    /// registered for review submission and hidden from the model. It
+    /// presents views with the harness's `execution.views.present` instead
+    /// of `DisplayResults`.
     AgentSession,
     /// The channel-mention bot: no composer, so `CreateCalendarEvent`
     /// executes directly in the agent loop and `SendEmail` is omitted. Replies
@@ -359,15 +358,20 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
         AiHost::Chat | AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
     let mut toolset = toolset;
+    // Agent sessions present email and calendar drafts with `PresentReview`,
+    // which never pauses the turn. Review submission still runs these user
+    // tools, so they stay registered, but the model cannot call them.
+    if matches!(host, AiHost::AgentSession) {
+        toolset
+            .tools
+            .retain(|name, _| !matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent"));
+    }
     if code_mode_direct {
-        // Review submission still needs these user-tool implementations internally,
-        // but advertising their blocking agent calls would reintroduce elicitation.
         toolset.tools.retain(|name, _| {
-            !matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent")
-                && !agent_code_mode::domain::covered_by_code_sdk(
-                    name,
-                    toolset.user_tools.contains_key(name),
-                )
+            !agent_code_mode::domain::covered_by_code_sdk(
+                name,
+                toolset.user_tools.contains_key(name),
+            )
         });
     }
     // External MCP clients have no `LoadTools`, so they get every schema.
@@ -431,6 +435,15 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
 pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
         .merge(&tools_for(AiHost::AgentSession))
+        // Chat calls the deferring user tools that agent sessions only register.
+        .merge(
+            &AsyncToolCollection::<ToolServiceContext>::new()
+                .add_user_tool::<email::inbound::toolset::SendEmail, ToolEmailToolContext>()
+                .add_user_tool::<
+                    calendar_events::inbound::toolset::CreateCalendarEvent,
+                    ToolCalendarToolContext,
+                >(),
+        )
         .merge(&agent_code_mode::inbound::toolset::toolset())
         // Persisted legacy calls still render, but are never executable or advertised.
         .merge(&chat::inbound::toolset::chat_toolset::<

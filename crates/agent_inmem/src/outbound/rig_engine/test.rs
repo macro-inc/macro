@@ -50,7 +50,7 @@ const TOOLS: &str = "TOOLS";
 mod tool_mode;
 
 #[test]
-fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
+fn cached_definitions_keep_client_capabilities_and_hide_user_tools() {
     let tools = NativeTools::new();
     let supported = tools.for_turn(true);
     let unsupported = tools.for_turn(false);
@@ -67,15 +67,18 @@ fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
             .collect::<Vec<_>>(),
         unsupported.tools.keys().collect::<Vec<_>>()
     );
+    // Drafts go on a PresentReview card; the model never calls the
+    // deferring user tools, which stay registered for review submission.
     for tools in [supported, unsupported] {
         for name in ["SendEmail", "CreateCalendarEvent"] {
             assert!(tools.user_tools.contains_key(name));
+            assert!(!tools.tools.contains_key(name));
         }
     }
 }
 
 #[test]
-fn reduced_definitions_keep_user_input_and_user_tool_review() {
+fn reduced_definitions_keep_user_input() {
     let tools = NativeTools::from_factory(ai_tools::tools_for_agent_code_mode, true);
     assert!(tools.for_turn(true).tools.contains_key("AskUser"));
     assert!(!tools.for_turn(false).tools.contains_key("AskUser"));
@@ -163,7 +166,6 @@ async fn shared_definitions_keep_the_callers_context_and_check_each_sessions_gat
             gate: gate.clone(),
             session,
             awaiting: Arc::default(),
-            reviewed_tools: Vec::new(),
         };
         let result = tools
             .dispatch_tool_call(
@@ -482,7 +484,6 @@ async fn native_dispatch_uses_the_resolved_account_and_strips_routing_arguments(
         gate: Arc::new(SelectedActor(requester.clone())),
         session: AgentSessionId::new(),
         awaiting: Arc::default(),
-        reviewed_tools: Vec::new(),
     };
     let result = tools
         .dispatch_tool_call(

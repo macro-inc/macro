@@ -594,7 +594,6 @@ async fn complete(
         mcp_tools: None,
         cancel: call,
         user_input: None,
-        reviewer: None,
         agent_key: None,
     });
     let mut text = String::new();

@@ -73,7 +73,7 @@ edit capability but calls no nested model and emits no additional model charge; 
 
 ## Tool contracts
 
-- Session user-tool finishers authorize the final edited arguments after review; preserve the selected account through confirmation and never approve an earlier draft then execute a changed one.
+- Agent sessions never advertise the deferring user tools (`SendEmail`, `CreateCalendarEvent`); drafts go on a `PresentReview` card, whose submission runs them through `user_tools`. Never reintroduce a review that holds the turn.
 
 - Executable toolsets exclude legacy chats in every host and code mode. Keep historical parsing compatibility only in `frontend_compat.rs`; never merge it into provider schemas.
 

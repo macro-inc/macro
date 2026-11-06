@@ -62,8 +62,8 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 
 /// The agent-session tool-enabled prompt: [`TOOL_USE_PROMPT`] on
 /// [`SESSION_BASE_PROMPT`], with the user tool rules restated for a host that
-/// reviews those calls in the turn - a review card the user answers while the
-/// agent waits, not a composer left pending after it.
+/// presents drafts on a saved review card the turn never waits on, not a
+/// composer left pending after it.
 pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&user_tools::SESSION_PROMPT)
     .compose(&skills::PROMPT);

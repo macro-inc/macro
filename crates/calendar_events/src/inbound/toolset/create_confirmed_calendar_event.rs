@@ -1,12 +1,12 @@
 //! `CreateConfirmedCalendarEvent`: [`CreateCalendarEvent`] without the
 //! review, for a host that has nothing to review in.
 //!
-//! `CreateCalendarEvent` defers: it returns `PendingUserExecution` and a host
-//! finishes it - the chat composer after the turn, or a review-card
-//! elicitation in an agent-session turn. A prompt read out of a channel or
-//! document thread has neither surface, so the agent asks in prose there, the
-//! user answers in the thread, and this tool creates on that answer. Every
-//! host gets both tools; the prompt, not the toolset, says which to reach for.
+//! `CreateCalendarEvent` defers: it returns `PendingUserExecution` and chat's
+//! composer finishes it after the turn. An agent session puts the event on a
+//! `PresentReview` card instead. A prompt read out of a channel or document
+//! thread has neither surface, so the agent asks in prose there, the user
+//! answers in the thread, and this tool creates on that answer. The prompt,
+//! not the toolset, says which to reach for.
 //!
 //! The event is always floated first. Being told to schedule something is a
 //! request to draft the event, not permission to create it, so the agent
@@ -45,7 +45,7 @@ use crate::domain::ports::{
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "CreateConfirmedCalendarEvent",
-    description = "Create a calendar event immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The event is always shown before it is created, even when the user's request already spelled the whole thing out: in one turn write it into the thread - title, date and time with its time zone, duration, guests, location, provider conference or Macro call, recurrence - ask whether to create it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific event, quoting that reply verbatim in userConfirmation. Being asked to schedule something is a request to draft the event, never approval to create it, so a userConfirmation quoting the request that asked you to set it up - rather than the reply approving the event you wrote out - is wrong. Never call it in the agent session view or in chat: use CreateCalendarEvent there, whose review card or composer is the confirmation. Takes the same fields as CreateCalendarEvent; the event is written to the calendar provider at once and any attendees receive invitations."
+    description = "Create a calendar event immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The event is always shown before it is created, even when the user's request already spelled the whole thing out: in one turn write it into the thread - title, date and time with its time zone, duration, guests, location, provider conference or Macro call, recurrence - ask whether to create it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific event, quoting that reply verbatim in userConfirmation. Being asked to schedule something is a request to draft the event, never approval to create it, so a userConfirmation quoting the request that asked you to set it up - rather than the reply approving the event you wrote out - is wrong. Never call it in the agent session view, where the event goes on a PresentReview card, or in chat, where CreateCalendarEvent's composer is the confirmation. Takes the same fields as CreateCalendarEvent; the event is written to the calendar provider at once and any attendees receive invitations."
 )]
 #[serde(rename_all = "camelCase")]
 pub struct CreateConfirmedCalendarEvent {

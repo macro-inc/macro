@@ -1,6 +1,6 @@
 /// The main entry point: [`AgentLoop`] and [`Session`].
 use crate::error::AgentError;
-use crate::hook::{BridgeInputs, RegisterFn, ToolLoads, ToolRouter, UserToolFinisher};
+use crate::hook::{BridgeInputs, RegisterFn, ToolLoads, ToolRouter};
 use crate::model::metering::MeteringContext;
 use crate::model::metering_http::MeteredHttpClient;
 use crate::model::router::{ModelRouter, ProviderAgent};
@@ -129,7 +129,6 @@ pub struct AgentLoop {
     /// The output cap per model response; `None` asks for the model's maximum.
     max_tokens: Option<u64>,
     recorder: Arc<dyn UsageRecorder>,
-    user_tool_finisher: Option<UserToolFinisher>,
     result_limit: Option<ToolResultLimit>,
     /// The conversation (session) sessions belong to, for telemetry.
     conversation_id: Option<String>,
@@ -162,7 +161,6 @@ impl AgentLoop {
             max_turns: DEFAULT_MAX_TURNS,
             max_tokens: None,
             recorder,
-            user_tool_finisher: None,
             result_limit: None,
             conversation_id: None,
             agent_name: None,
@@ -197,20 +195,6 @@ impl AgentLoop {
         }
         self.speed = speed;
         Ok(self)
-    }
-
-    /// Finish user tools inside the turn.
-    ///
-    /// A user tool (`ai_toolset::UserTool`) answers `"PendingUserExecution"`
-    /// and leaves the call for the host to finish. Without a finisher that
-    /// answer reaches the model as-is and the host finishes the call later,
-    /// as chat does over HTTP. With one, the bridge hands each pending call
-    /// to `finisher` before the model reads it, and the model sees what the
-    /// user decided instead - the shape a host that can reach its user
-    /// mid-turn wants.
-    pub fn with_user_tool_finisher(mut self, finisher: UserToolFinisher) -> Self {
-        self.user_tool_finisher = Some(finisher);
-        self
     }
 
     /// Cut tool results too long for the model to read whole, keeping them in
@@ -518,7 +502,6 @@ impl AgentLoop {
                 loaded_buffer,
                 register_loaded,
                 tool_loads: tool_search.loads.clone(),
-                user_tool_finisher: self.user_tool_finisher.clone(),
                 stream_tool_calls: self.stream_tool_calls,
                 result_limit: self.result_limit.clone(),
             },
@@ -625,8 +608,8 @@ pub struct Session {
     agent: ProviderAgent,
     history: Vec<Message>,
     max_turns: usize,
-    /// What every turn's stream bridge is built from: tool routing, the
-    /// on-demand tool loading pair, and the user-tool finisher if any.
+    /// What every turn's stream bridge is built from: tool routing and the
+    /// on-demand tool loading pair.
     bridge_inputs: BridgeInputs,
     recorder: Arc<dyn UsageRecorder>,
     usage_ctx: UsageContext,
