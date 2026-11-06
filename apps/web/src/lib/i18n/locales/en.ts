@@ -12,6 +12,7 @@ import common from './en/common';
 import create from './en/create';
 import crm from './en/crm';
 import entityActions from './en/entity-actions';
+import importJobs from './en/import-jobs';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
@@ -43,6 +44,7 @@ export default {
   create,
   crm,
   entityActions,
+  importJobs,
   localRuntime,
   mobile,
   nav,

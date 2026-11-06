@@ -38,6 +38,25 @@ Every other app opens Pipedream's Connect UI inside the dialog. A connected row
 `src/features/connector-import/browser-test/` exercises the connect and
 handoff paths without a backend.
 
+### Import tray
+
+On desktop, signed in, every Notion, Linear, Jira and Slack import run also
+shows in the bottom-right corner, above upload progress (`src/features/import-jobs`,
+mounted in `ToastRegion`). A pill (`2 imports`, with an overall progress ring)
+toggles the list (**Hide imports** / **Show imports**); each row names the
+source and its phase: `Scanning 120 pages` (Linear and Jira: `Reading N
+issues`, Slack: `Finding channels`), `Deciding on N items`, `Waiting for your
+approval`, `Importing 31 of 124` with a percentage, then `Imported`, `Import
+failed` or `Import cancelled`. **Open the <Source> import** opens the agent
+session presenting the review, once one does; Slack rows have no session.
+Runs that stopped moving stay for an hour after their last change, and
+**Dismiss the <Source> import** hides them until they change again. Phones
+never show the tray. It reads `/import/state` (polling only while something
+is running, otherwise on `import_updated` pushes) and each listed workspace
+run's `/import/workspaces/{source}` report. `src/features/import-jobs/browser-test/`
+covers scanning, writing, done, failure, collapse and dismissal without a
+backend.
+
 The connector browser fixture uses in-memory connection responses. Desktop
 and 390-pixel viewport captures show the connected Linear/Jira actions:
 

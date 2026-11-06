@@ -1,11 +1,17 @@
 import { UploadProgressIndicator } from '@core/component/UploadProgress/UploadProgressIndicator';
 import { isMobile } from '@core/mobile/isMobile';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { Toast } from '@kobalte/core/toast';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui/utils/classname';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, type JSX, Show, Suspense } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { createMobileToastSwipe } from './create-mobile-toast-swipe';
+
+const ImportJobsTray = lazyNamed(
+  () => import('@app/features/import-jobs/import-jobs'),
+  'ImportJobsTray'
+);
 
 /** A column centered above the mobile dock, `lift` higher than its usual spot. */
 function MobileToastStack(props: {
@@ -40,7 +46,7 @@ export function ToastRegion() {
     <Portal>
       {/*
         Desktop stack, bottom-right. Persistent prompts get their own region
-        capped at one visible card. Ordinary notices form an expandable three-card stack. Upload progress sits nearest the corner.
+        capped at one visible card. Ordinary notices form an expandable three-card stack. Background imports, then upload progress, sit nearest the corner.
       */}
       <div class="fixed bottom-5 right-5 m-0 w-[380px] max-w-[calc(100vw-32px)] list-none outline-none pointer-events-none z-toast-region flex flex-col items-stretch gap-4">
         <Toast.Region
@@ -74,6 +80,9 @@ export function ToastRegion() {
           <Toast.List class="macro-toast-list" data-stack />
         </Toast.Region>
         <Show when={!isMobile()}>
+          <Suspense>
+            <ImportJobsTray />
+          </Suspense>
           <UploadProgressIndicator />
         </Show>
       </div>

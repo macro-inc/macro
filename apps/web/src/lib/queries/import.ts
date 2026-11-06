@@ -85,6 +85,28 @@ export function useImportQuery() {
   return useQuery(() => importStateQueryOptions());
 }
 
+// Cached on the query past unmount; module scope keeps hook state out of it.
+function importRunsQueryOptions() {
+  return queryOptions({
+    ...importStateQueryOptions(),
+    refetchInterval: (query) =>
+      anythingInFlight(query.state.data) ? 3_000 : false,
+  });
+}
+
+/**
+ * The import aggregate for an always-mounted reader: it polls only while
+ * something is in flight and otherwise waits for `import_updated` pushes.
+ */
+export function useImportRunsQuery() {
+  createConnectionWebsocketEffect((message) => {
+    if (message.type !== IMPORT_UPDATED_MESSAGE_TYPE) return;
+    fireAndForget(invalidateImportState(), 'import-state');
+  });
+
+  return useQuery(() => importRunsQueryOptions());
+}
+
 function invalidateImportState() {
   return queryClient.invalidateQueries({
     queryKey: importKeys.state.queryKey,
