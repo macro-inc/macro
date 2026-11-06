@@ -6,7 +6,7 @@
 //! respect for `MACRO_LOCAL_VERBOSE`, `MACRO_LOCAL_DRY_RUN`, and `NO_COLOR`.
 //!
 //! Only the subprocess capture is hand-rolled, on purpose: stdout and stderr
-//! are drained on dedicated threads so a chatty child (e.g. `cargo zigbuild`)
+//! are drained on dedicated threads so a chatty child (e.g. `cargo build`)
 //! cannot deadlock by filling a pipe buffer while we wait. `indicatif` only
 //! animates — it never reads the child's pipes.
 

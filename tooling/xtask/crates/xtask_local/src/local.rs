@@ -2,7 +2,7 @@
 //!
 //! `just run_local`, `just run_dev`, and the supporting
 //! `doctor`/`validate`/`status`/`stop`/`reset`/`destroy` recipes all delegate here.
-//! This module owns: building Linux service binaries on the host (zigbuild),
+//! This module owns: building service binaries natively on the host,
 //! the minimal runtime image, the typed service inventory, per-instance
 //! isolation, environment layering, generated docker-compose overrides, local
 //! infra (FusionAuth via kickstart, Mailpit, LocalStack, Postgres/Redis, DB
@@ -850,7 +850,7 @@ fn interact(
 /// networks/volumes — that's done after the background teardown joins, since
 /// teardown removes them. `static_frontend` wires the proxy to serve the staged
 /// app bundle (`stack up`, `run_local --static-frontend`, and
-/// `run_local --with-cf-tunnel`'s shared app). `infra_only` skips zigbuild: bake never
+/// `run_local --with-cf-tunnel`'s shared app). `infra_only` skips the service build: bake never
 /// starts Rust services and runs in parallel with the cargo lane. Returns the
 /// resolved env + build target.
 ///
@@ -884,7 +884,7 @@ fn prepare(
     build::ensure_runtime_image(stage, target, false)?;
     let binaries = if infra_only {
         // Compose still emits `/app/out` mounts, but infra-only never starts
-        // those services. Bake runs this in parallel with zigbuild.
+        // those services. Bake runs this in parallel with the service build.
         build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()))
     } else {
         build::resolve(
@@ -1527,8 +1527,8 @@ fn wait_http(stage: &Stage, label: &str, url: &str) -> Result<()> {
     stage.run(label, &mut cmd)
 }
 
-/// `cargo x zigbuild`.
-pub fn zigbuild_only() -> Result<()> {
+/// `cargo x build-services`.
+pub fn build_services_only() -> Result<()> {
     let stage = Stage::from_env();
     let target = arch::detect()?;
     let binaries = build::resolve(
