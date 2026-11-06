@@ -86,6 +86,15 @@ const harnessMocks = vi.hoisted(() => ({
   },
   searchParams: { pair: undefined as string | undefined },
   setSearchParams: vi.fn(),
+  isTeamOwner: false,
+  OwnerConflict: class extends Error {
+    constructor(
+      message: string,
+      public readonly blockingAgents: unknown[]
+    ) {
+      super(message);
+    }
+  },
 }));
 
 vi.mock('@queries/auth/cursor-api-key', () => ({
@@ -109,6 +118,7 @@ vi.mock('@queries/agents/models', () => ({
 }));
 
 vi.mock('@queries/harnesses/harnesses', () => ({
+  HarnessOwnerConflictError: harnessMocks.OwnerConflict,
   useHarnessesQuery: () => harnessMocks.query,
   useDeleteHarnessMutation: () => ({
     mutateAsync: harnessMocks.deleteHarness,
@@ -142,7 +152,20 @@ vi.mock('@queries/harnesses/harnesses', () => ({
 }));
 
 vi.mock('@queries/team/teams', () => ({
-  useCurrentTeamQuery: () => ({ data: { team: { id: 'team-1' } } }),
+  useCurrentTeamQuery: () => ({
+    isSuccess: true,
+    data: { team: { id: 'team-1' } },
+  }),
+  useIsTeamOwner: () => () => harnessMocks.isTeamOwner,
+}));
+
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|user@example.com',
+}));
+
+vi.mock('@core/user/displayName', () => ({
+  getDisplayName: (id: string) =>
+    id === 'macro|teammate@example.com' ? 'Teammate' : '',
 }));
 
 vi.mock('@solidjs/router', () => ({
@@ -201,6 +224,7 @@ beforeEach(() => {
   harnessMocks.deleteHarness.mockResolvedValue(undefined);
   harnessMocks.approve.mockResolvedValue(REGISTERED_HARNESS);
   harnessMocks.searchParams.pair = undefined;
+  harnessMocks.isTeamOwner = false;
 });
 
 describe('Harness', () => {
@@ -409,7 +433,7 @@ describe('Harness', () => {
       screen.getByRole('heading', { name: 'Connected runtimes' })
     ).toBeTruthy();
     expect(screen.getByText('Dev box')).toBeTruthy();
-    expect(screen.getByText('Team')).toBeTruthy();
+    expect(screen.getAllByText('Team').length).toBeGreaterThan(0);
     expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
     expect(screen.getByText(/Last connected /)).toBeTruthy();
     expect(screen.queryByText('Never connected')).toBeNull();
@@ -428,7 +452,7 @@ describe('Harness', () => {
 
     render(() => <Harness />);
 
-    expect(screen.getByText('Private')).toBeTruthy();
+    expect(screen.getAllByText('Private').length).toBeGreaterThan(0);
     expect(screen.getByRole('img', { name: 'Offline' })).toBeTruthy();
     expect(screen.getByText('Never connected')).toBeTruthy();
     const names = screen
@@ -540,6 +564,85 @@ describe('Harness', () => {
       });
       expect(screen.queryByRole('dialog')).toBeNull();
     });
+  });
+
+  it('makes a team runtime private after confirming', async () => {
+    const { confirmDialog } = await import('@ui');
+    harnessMocks.query.data = [REGISTERED_HARNESS];
+
+    render(() => <Harness />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Private' }));
+
+    await waitFor(() =>
+      expect(harnessMocks.patchHarness).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        owner: { type: 'user' },
+      })
+    );
+    expect(confirmDialog).toHaveBeenCalledOnce();
+  });
+
+  it('shares a private runtime with the current team', async () => {
+    harnessMocks.query.data = [
+      {
+        ...REGISTERED_HARNESS,
+        owner: { type: 'user', user_id: 'macro|user@example.com' },
+      },
+    ];
+
+    render(() => <Harness />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Team' }));
+
+    await waitFor(() =>
+      expect(harnessMocks.patchHarness).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        owner: { type: 'team', team_id: 'team-1' },
+      })
+    );
+  });
+
+  it('lists the agents that keep a runtime shared', async () => {
+    harnessMocks.query.data = [REGISTERED_HARNESS];
+    harnessMocks.patchHarness.mockRejectedValueOnce(
+      new harnessMocks.OwnerConflict('agents would lose access', [
+        {
+          bot_id: 'bot-1',
+          name: 'Reviewer',
+          handle: 'reviewer',
+          owner: { type: 'user', user_id: 'macro|teammate@example.com' },
+        },
+        {
+          bot_id: 'bot-2',
+          name: 'Triage',
+          handle: 'triage',
+          owner: { type: 'team', team_id: 'team-1' },
+        },
+      ])
+    );
+
+    render(() => <Harness />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Private' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Move these agents first')).toBeTruthy();
+    expect(within(dialog).getByText('Reviewer')).toBeTruthy();
+    expect(within(dialog).getByText('Teammate')).toBeTruthy();
+    expect(within(dialog).getByText('Triage')).toBeTruthy();
+    expect(within(dialog).getByText('Team agent')).toBeTruthy();
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('radio', { name: 'Team', hidden: true })
+    ).toHaveProperty('checked', true);
+  });
+
+  it('offers the owner choice only to a runtime manager', () => {
+    harnessMocks.query.data = [
+      { ...REGISTERED_HARNESS, created_by: 'macro|teammate@example.com' },
+    ];
+
+    render(() => <Harness />);
+
+    expect(screen.queryByRole('radio', { name: 'Private' })).toBeNull();
   });
 
   it('opens the pairing dialog prefilled from the pair search param', async () => {

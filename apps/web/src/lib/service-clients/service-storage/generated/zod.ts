@@ -29071,6 +29071,8 @@ export const deleteHarnessParams = zod.object({
 });
 
 /**
+ * An owner change is refused with 409 while it would leave bound agents
+their owners could no longer run on this harness.
  * @summary Handler for `PATCH /harnesses/{harness_id}`.
  */
 export const patchHarnessParams = zod.object({
@@ -29086,6 +29088,26 @@ export const patchHarnessBody = zod
         'Whether agents may bypass ACP permission requests on this harness.\nLive sessions pick the change up at their next turn.'
       ),
     name: zod.string().nullish().describe('New display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+              })
+              .describe('Private to the caller making the change.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Shared with a team the caller belongs to.'),
+          ])
+          .describe('Who a harness should belong to after a change.'),
+      ])
+      .optional(),
   })
   .describe(
     'Request to change a registered harness. Omitted fields stay as they are.'

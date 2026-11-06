@@ -6,6 +6,7 @@
  */
 import type { PatchHarnessRequestAllowPermissionBypass } from './patchHarnessRequestAllowPermissionBypass';
 import type { PatchHarnessRequestName } from './patchHarnessRequestName';
+import type { PatchHarnessRequestOwner } from './patchHarnessRequestOwner';
 
 /**
  * Request to change a registered harness. Omitted fields stay as they are.
@@ -16,4 +17,5 @@ Live sessions pick the change up at their next turn. */
   allow_permission_bypass?: PatchHarnessRequestAllowPermissionBypass;
   /** New display name. */
   name?: PatchHarnessRequestName;
+  owner?: PatchHarnessRequestOwner;
 }
