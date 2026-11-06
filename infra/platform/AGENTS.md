@@ -111,6 +111,12 @@ deploy repo, which Argo CD syncs.
   still succeed. Add a new target's origin to `RUSTFS_OUTBOUND_ALLOW_ORIGINS`.
 - The web E2E page must be served from the instance's host: the app calls the backend on
   its page's hostname, and the ingress routes nothing else.
+- Bucket events reach handlers through the `s3-events` bridge (`ROUTES` in
+  `components.nix`), which stands in for production's S3 notifications and EventBridge
+  rules. A handler fed by an EventBridge rule uses the runner's `s3-created:` trigger.
+  A new bucket also needs its notification in `xtask_local`'s `localstack.rs`.
+- A workload with `schedule` renders a CronJob: production's schedule rules that start
+  ECS tasks.
 - KEDA owns a queue worker's replica count (`scaleOnQueue` in `components.nix`), so it
   renders no `replicas`. A queue a scaled worker reads must be in `xtask_local`'s
   `resources.rs`: at zero replicas, nothing else creates it.

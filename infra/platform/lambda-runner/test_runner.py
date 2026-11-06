@@ -17,6 +17,19 @@ class Events(unittest.TestCase):
         self.assertEqual(runner.schedule_payload('{"dry_run": true}'), {"dry_run": True})
         self.assertEqual(runner.schedule_payload(None)["detail-type"], "Scheduled Event")
 
+    def test_an_s3_notification_becomes_object_created_events(self):
+        notification = {
+            "Records": [
+                {"s3": {"bucket": {"name": "b"}, "object": {"key": "a%2Fb+c.pdf", "size": 3}}},
+                {"s3": {"bucket": {"name": "b"}, "object": {"key": "d"}}},
+            ]
+        }
+        events = runner.object_created_events(notification, 0)
+        self.assertEqual([e["detail"]["object"]["key"] for e in events], ["a/b c.pdf", "d"])
+        self.assertEqual(events[0]["detail-type"], "Object Created")
+        self.assertEqual(events[0]["source"], "aws.s3")
+        self.assertEqual(events[0]["detail"]["bucket"]["name"], "b")
+
     def test_sqs_event_names_the_source_queue(self):
         event = runner.sqs_event(
             [{"MessageId": "1", "ReceiptHandle": "r", "Body": "b"}], "q"

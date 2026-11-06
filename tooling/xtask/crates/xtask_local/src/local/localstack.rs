@@ -370,6 +370,27 @@ async fn wire_upload_finalizer(
         .send()
         .await
         .context("configuring doc-storage notifications")?;
+
+    // On the platform, bulk-upload staging also reaches its trigger, which production
+    // wires with an EventBridge rule. LocalStack has no such rule to stand in for.
+    if let UploadNotificationTarget::Target(target_arn) = target {
+        let config = s3_types::NotificationConfiguration::builder()
+            .queue_configurations(
+                s3_types::QueueConfiguration::builder()
+                    .id("bulk-upload-trigger")
+                    .queue_arn(target_arn)
+                    .events(s3_types::Event::from("s3:ObjectCreated:*"))
+                    .build()
+                    .context("building bulk-upload notification config")?,
+            )
+            .build();
+        s3.put_bucket_notification_configuration()
+            .bucket(resources::BULK_UPLOAD_STAGING_BUCKET)
+            .notification_configuration(config)
+            .send()
+            .await
+            .context("configuring bulk-upload staging notifications")?;
+    }
     Ok(())
 }
 

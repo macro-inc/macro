@@ -21,8 +21,10 @@ def scrub(resource):
     if kind == "ScaledObject":
         resource["spec"].pop("minReplicaCount", None)
         resource["spec"].pop("maxReplicaCount", None)
-    if kind in ("Deployment", "Job"):
-        for container in resource["spec"]["template"]["spec"]["containers"]:
+    if kind in ("Deployment", "Job", "CronJob"):
+        spec = resource["spec"]
+        template = spec["jobTemplate"]["spec"]["template"] if kind == "CronJob" else spec["template"]
+        for container in template["spec"]["containers"]:
             container.pop("resources", None)
     if kind == "PersistentVolumeClaim":
         resource["spec"]["resources"]["requests"].pop("storage", None)

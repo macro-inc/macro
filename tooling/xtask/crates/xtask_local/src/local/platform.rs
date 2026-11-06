@@ -466,6 +466,7 @@ const PLATFORM_WORKLOADS: &[(&str, &str)] = &[
     ("agent-trigger-service", "agent_trigger_service"),
     ("email-focus-worker", "email_focus_worker"),
     ("slack-import-worker", "slack_import_worker"),
+    ("sha-cleanup", "sha_cleanup_worker"),
 ];
 
 /// Lambda handlers the instance runs behind lambda-runner: workload -> bin
@@ -485,6 +486,8 @@ const LAMBDA_HANDLERS: &[(&str, &str)] = &[
     ("delete-chat", "delete_chat_handler"),
     ("document-text-extractor", "document_text_extractor"),
     ("upload-extractor", "upload_extractor_lambda_handler"),
+    ("search-upload", "search_upload_handler"),
+    ("upload-extractor-trigger", "upload_extractor_lambda_trigger"),
 ];
 
 /// The cargo bin each Rust workload runs (the inventory, k8s names, and the

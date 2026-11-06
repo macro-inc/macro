@@ -159,12 +159,32 @@ let
       };
     };
 
-  # RustFS delivers bucket events to webhooks, not SQS ARNs. This forwards each
-  # S3-format event, unchanged, into the queue the upload finalizer reads.
+  # RustFS bucket webhooks -> queues, by bucket: the S3 notifications and EventBridge
+  # rules production wires to each bucket.
   s3EventsBridge = pkgs.writeText "s3-events.py" ''
     import http.server, json, urllib.request
 
-    QUEUE = "http://queue-gateway:9324/000000000000/document-upload-finalizer-queue"
+    GATEWAY = "http://queue-gateway:9324/"
+    ROUTES = {
+        "doc-storage": [
+            "document-upload-finalizer-queue",
+            # search_upload_handler's EventBridge rule.
+            "search-upload-events",
+        ],
+        # upload_extractor_lambda_trigger's EventBridge rule.
+        "bulk-upload-staging": ["bulk-upload-staging-events"],
+    }
+
+    def sqs(action, body):
+        request = urllib.request.Request(
+            GATEWAY,
+            data=json.dumps(body).encode(),
+            headers={
+                "Content-Type": "application/x-amz-json-1.0",
+                "X-Amz-Target": "AmazonSQS." + action,
+            },
+        )
+        return json.loads(urllib.request.urlopen(request).read() or b"{}")
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_HEAD(self):
@@ -172,16 +192,17 @@ let
             self.end_headers()
 
         def do_POST(self):
-            body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
-            request = urllib.request.Request(
-                "http://queue-gateway:9324/",
-                data=json.dumps({"QueueUrl": QUEUE, "MessageBody": body.decode()}).encode(),
-                headers={
-                    "Content-Type": "application/x-amz-json-1.0",
-                    "X-Amz-Target": "AmazonSQS.SendMessage",
-                },
-            )
-            urllib.request.urlopen(request).read()
+            body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode()
+            try:
+                records = json.loads(body).get("Records") or []
+                buckets = {r["s3"]["bucket"]["name"] for r in records}
+            except (ValueError, KeyError, TypeError, AttributeError):
+                buckets = set()
+            for bucket in buckets:
+                for queue in ROUTES.get(bucket, []):
+                    # Idempotent; the queue may belong to a worker scaled to zero.
+                    url = sqs("CreateQueue", {"QueueName": queue})["QueueUrl"]
+                    sqs("SendMessage", {"QueueUrl": url, "MessageBody": body})
             self.send_response(200)
             self.end_headers()
 
@@ -252,7 +273,14 @@ let
         let
           source = lib.splitString ":" trigger;
         in
-        if builtins.elem (builtins.head source) [ "sqs" "s3" ] then lib.last source else null;
+        if builtins.elem (builtins.head source) [
+          "sqs"
+          "s3"
+          "s3-created"
+        ] then
+          lib.last source
+        else
+          null;
       env = {
         LAMBDA_TRIGGER = trigger;
         RUST_MIN_STACK = "16777216";
@@ -324,6 +352,16 @@ let
         DSS_URL = "http://document-storage-service:8080";
         CONNECTION_GATEWAY_URL = inNetwork.gateway;
       };
+    };
+    # Bucket EventBridge rules, through the s3-events bridge.
+    search-upload = {
+      bin = "search_upload_handler";
+      trigger = "s3-created:search-upload-events";
+    };
+    upload-extractor-trigger = {
+      bin = "upload_extractor_lambda_trigger";
+      trigger = "s3-created:bulk-upload-staging-events";
+      env.DYNAMODB_TABLE = "bulk-upload";
     };
   };
 
@@ -858,6 +896,13 @@ in
   email-focus-worker = rustService {
     bin = "email_focus_worker";
     ports = [ ];
+  };
+  # Production runs it hourly as an ECS task, started by worker_trigger.
+  sha-cleanup = rustService {
+    bin = "sha_cleanup_worker";
+    ports = [ ];
+  } // {
+    schedule = "0 * * * *";
   };
   slack-import-worker = rustService {
     bin = "slack_import_worker";

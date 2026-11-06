@@ -59,6 +59,17 @@ class Parity(unittest.TestCase):
         right["spec"]["paused"] = True
         self.assertTrue(p.compare({"d": left}, {"d": right}))
 
+    def test_a_cron_job_may_differ_only_in_resources(self):
+        def cron(cpu, schedule="0 * * * *"):
+            pod = {"spec": {"containers": [{"image": "a", "resources": {"cpu": cpu}}]}}
+            return {
+                "kind": "CronJob",
+                "spec": {"schedule": schedule, "jobTemplate": {"spec": {"template": pod}}},
+            }
+
+        self.assertEqual(p.differences(p.scrub(cron("1")), p.scrub(cron("2"))), [])
+        self.assertTrue(p.differences(p.scrub(cron("1")), p.scrub(cron("1", "@daily"))))
+
     def test_a_scaler_may_differ_only_in_its_bounds(self):
         def scaler(minimum, queue="q"):
             return {

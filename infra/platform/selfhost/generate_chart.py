@@ -28,6 +28,7 @@ IMAGE = re.compile(r"[a-z0-9.:-]+/macro/([a-zA-Z0-9_.-]+):([a-z0-9]+)")
 RAW = re.compile(r'"__TPL__(.*?)__LPT__"')
 ALLOWED_KINDS = {
     "ConfigMap",
+    "CronJob",
     "Deployment",
     "Ingress",
     "Job",
@@ -98,6 +99,10 @@ def template_item(item):
         if item["metadata"].get("labels", {}).get("macro.com/tier") == "app":
             spec["template"]["spec"]["initContainers"] = [wait_for_provisioning()]
         rewrite_pod(spec["template"], component)
+    elif kind == "CronJob":
+        template = item["spec"]["jobTemplate"]["spec"]["template"]
+        template["spec"]["initContainers"] = [wait_for_provisioning()]
+        rewrite_pod(template, component)
     elif kind == "Job":
         # Job specs are immutable; every upgrade provisions under a new name.
         item["metadata"]["name"] = component + "-{{ .Release.Revision }}"

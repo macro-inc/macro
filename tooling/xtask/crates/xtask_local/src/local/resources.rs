@@ -19,6 +19,8 @@ const ACCOUNT_ID: &str = "000000000000";
 /// The doc-storage bucket — referenced by the upload-finalizer wiring and the
 /// seed env, so it is named rather than inlined.
 pub const DOC_STORAGE_BUCKET: &str = "doc-storage";
+/// Bulk uploads land here before their extractor runs.
+pub const BULK_UPLOAD_STAGING_BUCKET: &str = "bulk-upload-staging";
 
 /// The queue doc-storage ObjectCreated events publish to — referenced by the
 /// upload-finalizer wiring, so it is named.
@@ -320,7 +322,7 @@ pub const BUCKETS: &[Bucket] = &[
         env_key: "STATIC_STORAGE_BUCKET",
     },
     Bucket {
-        name: "bulk-upload-staging",
+        name: BULK_UPLOAD_STAGING_BUCKET,
         env_key: "UPLOAD_STAGING_BUCKET",
     },
     Bucket {

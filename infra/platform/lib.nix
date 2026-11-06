@@ -179,6 +179,8 @@ rec {
         annotations."argocd.argoproj.io/sync-wave" = wave;
       };
       isJob = w.job or false;
+      # A recurring run, as a schedule rule starting a task would be in production.
+      isCron = w ? schedule;
       # Job specs are immutable and must re-run for a new build or env.
       jobName = "${name}-${
         builtins.substring 0 10 (
@@ -291,7 +293,26 @@ rec {
         };
       };
     }
-    // lib.optionalAttrs (!isJob) {
+    // lib.optionalAttrs isCron {
+      cronJobs.${name} = {
+        inherit metadata;
+        spec = {
+          inherit (w) schedule;
+          # An hourly sweep that overruns waits, rather than running twice.
+          concurrencyPolicy = "Forbid";
+          jobTemplate.spec = {
+            backoffLimit = 2;
+            template = {
+              metadata.labels = labels;
+              spec = podSpec // {
+                restartPolicy = "OnFailure";
+              };
+            };
+          };
+        };
+      };
+    }
+    // lib.optionalAttrs (!isJob && !isCron) {
       deployments.${name} = {
         inherit metadata;
         spec = {

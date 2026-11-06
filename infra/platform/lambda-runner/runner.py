@@ -10,6 +10,8 @@ LAMBDA_TRIGGER selects the event source:
                       (JSON) in its place, as a rule's target `input` replaces the event
   sqs:<queue>         SQS batches; deleted once handled (partial failures honored)
   s3:<queue>          S3 events a bucket webhook enqueued; each body is the event
+  s3-created:<queue>  the same, delivered as EventBridge "Object Created" events, one per
+                      record, as an EventBridge rule on a bucket delivers them
 """
 
 import http.server
@@ -20,6 +22,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
 import uuid
 
@@ -34,6 +37,43 @@ LONG_POLL_SECONDS = 20
 DEADLINE_SECONDS = 900
 # A message stays hidden past its handler's deadline, as a Lambda queue's timeout must.
 VISIBILITY_SECONDS = DEADLINE_SECONDS + 30
+
+
+def object_created_events(notification, now=None):
+    """EventBridge's "Object Created" event for each record of an S3 notification."""
+    events = []
+    for record in notification.get("Records") or []:
+        s3 = record.get("s3") or {}
+        bucket = (s3.get("bucket") or {}).get("name", "")
+        obj = s3.get("object") or {}
+        events.append(
+            {
+                "version": "0",
+                "id": str(uuid.uuid4()),
+                "detail-type": "Object Created",
+                "source": "aws.s3",
+                "account": ACCOUNT_ID,
+                "time": record.get("eventTime")
+                or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
+                "region": REGION,
+                "resources": [f"arn:aws:s3:::{bucket}"],
+                "detail": {
+                    "version": "0",
+                    "bucket": {"name": bucket},
+                    "object": {
+                        # Notifications URL-encode keys; EventBridge does not.
+                        "key": urllib.parse.unquote_plus(obj.get("key", "")),
+                        "size": obj.get("size", 0),
+                        "etag": obj.get("eTag", ""),
+                        "sequencer": obj.get("sequencer", ""),
+                    },
+                    "request-id": "",
+                    "requester": ACCOUNT_ID,
+                    "reason": "PutObject",
+                },
+            }
+        )
+    return events
 
 
 def scheduled_event(now=None):
@@ -204,13 +244,19 @@ def run_queue(invocations, queue_name, unwrap_s3):
             messages = received.get("Messages") or []
             if not messages:
                 continue
-            if unwrap_s3:
-                payload = json.loads(messages[0]["Body"])
+            if unwrap_s3 == "created":
+                events = object_created_events(json.loads(messages[0]["Body"]))
+                if not all(invocations.invoke(event)[0] for event in events):
+                    continue
+                result = None
             else:
-                payload = sqs_event(messages, queue_name)
-            ok, result = invocations.invoke(payload)
-            if not ok:
-                continue  # Redelivered after the visibility timeout, like Lambda.
+                if unwrap_s3:
+                    payload = json.loads(messages[0]["Body"])
+                else:
+                    payload = sqs_event(messages, queue_name)
+                ok, result = invocations.invoke(payload)
+                if not ok:
+                    continue  # Redelivered after the visibility timeout, like Lambda.
             for message in handled_messages(messages, result):
                 sqs_call(
                     "DeleteMessage",
@@ -238,8 +284,9 @@ def main():
 
     if kind == "schedule":
         target, args = run_schedule, (invocations, int(argument))
-    elif kind in ("sqs", "s3"):
-        target, args = run_queue, (invocations, argument, kind == "s3")
+    elif kind in ("sqs", "s3", "s3-created"):
+        unwrap = {"sqs": False, "s3": True, "s3-created": "created"}[kind]
+        target, args = run_queue, (invocations, argument, unwrap)
     else:
         sys.exit(f"unknown LAMBDA_TRIGGER {trigger!r}")
     threading.Thread(target=target, args=args, daemon=True).start()

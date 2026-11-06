@@ -646,10 +646,13 @@
               "organization_retention_handler"
               "organization_retention_trigger"
               "queue_gateway"
+              "search_upload_handler"
+              "sha_cleanup_worker"
               "slack_import_worker"
               "static_file_service"
               "unfurl_service"
               "upload_extractor_lambda_handler"
+              "upload_extractor_lambda_trigger"
               "user_link_cleanup_handler"
               "whatsapp_session_service"
             ]

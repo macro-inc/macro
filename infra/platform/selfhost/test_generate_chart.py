@@ -85,6 +85,19 @@ class Chart(unittest.TestCase):
         tags = g.image_tags([workload("db", "aaa"), workload("postgres", "bbb")])
         self.assertEqual(tags, {"db": "aaa", "postgres": "bbb"})
 
+    def test_a_cron_job_waits_for_provisioning_and_takes_its_size(self):
+        pod = deployment()["spec"]["template"]
+        cron = {
+            "kind": "CronJob",
+            "metadata": {"name": "sha-cleanup", "labels": {"app.kubernetes.io/name": "sha-cleanup"}},
+            "spec": {"schedule": "0 * * * *", "jobTemplate": {"spec": {"template": pod}}},
+        }
+        component, rewritten = g.template_item(cron)
+        self.assertEqual(component, "sha-cleanup")
+        template = rewritten["spec"]["jobTemplate"]["spec"]["template"]
+        self.assertEqual(template["spec"]["initContainers"][0]["name"], "wait-for-provisioning")
+        self.assertIn("sha-cleanup", template["spec"]["containers"][0]["resources"])
+
     def test_jobs_get_a_new_name_per_revision(self):
         job = {
             "kind": "Job",

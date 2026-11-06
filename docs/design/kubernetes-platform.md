@@ -419,10 +419,11 @@ Not built yet:
   does not work on an instance. `convert_service` needs LibreOffice assets, and it and
   `docx_unzip_handler` invoke an AWS Lambda directly, so this needs Lambda-invoke support
   plus all of them together.
-- Workers and handlers the instance does not run yet: `mcp_auth_proxy`,
-  `sha_cleanup_worker`, `worker_trigger`, and the S3 and SNS handlers (`search_upload_handler`, `image_optimizer`, `call_recording_preview_handler`,
-  `dataloss_prevention_handler`, `email_suppression_handler`,
-  `upload_extractor_lambda_trigger`).
+- Handlers the instance does not run: `image_optimizer` (a function URL),
+  `call_recording_preview_handler` (needs ffmpeg and call recordings), and the SES ones,
+  `dataloss_prevention_handler` and `email_suppression_handler`, which Mailpit makes
+  moot. `worker_trigger` only starts `sha_cleanup_worker` on ECS, which instances run as a
+  CronJob, and `mcp_auth_proxy` runs inside the agent harness.
 - The rest of phase 7: publishing the images and chart per release, and a
   production-sized install. **The chart is a preview, not safe for real data**, and
   says so in its README: mail goes to Mailpit, OpenBao's seal key sits in `macro-env`, Kafka and OpenSearch have no authentication
