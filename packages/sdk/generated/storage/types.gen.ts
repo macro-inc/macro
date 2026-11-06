@@ -15729,16 +15729,39 @@ export type SaveDocumentResponseData = {
 };
 
 /**
- * Request body for saving a query.
+ * The result columns a chart of a saved question plots.
+ */
+export type SaveQueryChart = {
+    /**
+     * The column whose values split the series.
+     */
+    color?: string;
+    /**
+     * The label column.
+     */
+    x: string;
+    /**
+     * The value columns, each a number.
+     */
+    y: Array<string>;
+};
+
+/**
+ * Request body for saving a question.
  */
 export type SaveQueryRequest = {
+    /**
+     * The result columns a chart of the answer plots, checked against what
+     * the `SELECT` returns. The chart itself lives with the answer's block.
+     */
+    chart?: SaveQueryChart;
     /**
      * The database whose tables win name resolution. The caller must be
      * able to see it.
      */
     databaseId?: string;
     /**
-     * What the query asks: `{"version": 1, "query": "<SELECT>"}`.
+     * What the question asks: `{"version": 1, "query": "<SELECT>"}`.
      */
     definition: QueryDefinition;
 };
@@ -25210,6 +25233,10 @@ export type SaveDatabaseQueryData = {
 };
 
 export type SaveDatabaseQueryErrors = {
+    /**
+     * Not a SELECT, does not compile, or the chart names a column it does not return
+     */
+    400: ErrorResponse;
     /**
      * Missing or invalid credentials
      */

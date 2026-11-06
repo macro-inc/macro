@@ -19,6 +19,9 @@ export function createReviewController(
   const [error, setError] = createSignal<string>();
   const [saving, setSaving] = createSignal(false);
   const [validation, setValidation] = createSignal<string>();
+  // Bumped whenever the saved drafts replace what the editors were mounted
+  // with, so the view remounts them on the new drafts.
+  const [generation, setGeneration] = createSignal(0);
   const drafts = new Map<string, ReviewDraft>();
   let tail: Promise<void> = Promise.resolve();
   // A poll can return the revision our in-flight save or decision already
@@ -26,8 +29,9 @@ export function createReviewController(
   const stale = () =>
     !saving() && !busy() && source().revision > saved().revision;
   const record = () => (stale() ? source() : saved());
-  // Acknowledgments and action status can advance without changing editor data.
-  // Adopt those revisions only when no local edits or writes can be displaced.
+  // A newer revision (an acknowledgment, a status, or a draft the agent or
+  // another editor changed) is adopted whenever no local edits or writes can
+  // be displaced; otherwise the review is stale until an explicit reload.
   createEffect(() => {
     const next = source();
     const current = saved();
@@ -36,16 +40,10 @@ export function createReviewController(
       busy() ||
       saving() ||
       error() ||
-      drafts.size > 0 ||
-      next.items.length !== current.items.length ||
-      next.items.some(
-        (item, index) =>
-          item.id !== current.items[index]?.id ||
-          JSON.stringify(item.draft) !==
-            JSON.stringify(current.items[index]?.draft)
-      )
+      drafts.size > 0
     )
       return;
+    if (draftsChanged(current, next)) setGeneration((value) => value + 1);
     setSaved(next);
   });
   async function saveDrafts() {
@@ -133,6 +131,7 @@ export function createReviewController(
       drafts.clear();
       setValidation(undefined);
       setSaved(next);
+      setGeneration((value) => value + 1);
       setError(undefined);
       return true;
     } catch {
@@ -150,9 +149,22 @@ export function createReviewController(
     error,
     validation,
     stale,
+    generation,
     edit,
     flush,
     decide,
     reload,
   };
+}
+
+function draftsChanged(current: Review, next: Review): boolean {
+  return (
+    next.items.length !== current.items.length ||
+    next.items.some(
+      (item, index) =>
+        item.id !== current.items[index]?.id ||
+        JSON.stringify(item.draft) !==
+          JSON.stringify(current.items[index]?.draft)
+    )
+  );
 }

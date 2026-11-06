@@ -11947,10 +11947,25 @@ export const createDatabaseBody = zod
   .describe('Request body for creating a database.');
 
 /**
- * @summary Save an immutable query. Editing a question saves a new one.
+ * @summary Save a question: a `SELECT` that compiles against the caller's databases,
+whose chart columns, when given, are ones it returns. Saved questions
+never change; editing one saves a new one.
  */
 export const saveDatabaseQueryBody = zod
   .object({
+    chart: zod
+      .object({
+        color: zod
+          .string()
+          .optional()
+          .describe('The column whose values split the series.'),
+        x: zod.string().describe('The label column.'),
+        y: zod
+          .array(zod.string())
+          .describe('The value columns, each a number.'),
+      })
+      .optional()
+      .describe('The result columns a chart of a saved question plots.'),
     databaseId: zod
       .uuid()
       .optional()
@@ -11966,7 +11981,7 @@ export const saveDatabaseQueryBody = zod
       })
       .describe('A versioned query definition.'),
   })
-  .describe('Request body for saving a query.');
+  .describe('Request body for saving a question.');
 
 /**
  * @summary A saved query's definition, for its creator or a viewer of its database.
