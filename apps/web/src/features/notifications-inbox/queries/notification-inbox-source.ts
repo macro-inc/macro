@@ -5,20 +5,28 @@ import type { UnifiedNotification } from '@notifications/types';
 import { createLiveAttentionFeed } from '@queries/attention-feed/live-attention-feed';
 import {
   NotificationInboxDocument,
-  type NotificationInboxEntryFieldsFragment,
   type NotificationInboxQuery,
   type NotificationInboxQueryVariables,
   type NotificationInboxScopeInput,
   NotificationInboxUpdatesDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { type Client, stringifyDocument } from '@urql/core';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import {
+  type Accessor,
+  createComputed,
+  createMemo,
+  createSignal,
+  on,
+} from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import type {
   InboxFeedSource,
   InboxScope,
   NotificationInboxRow,
 } from '../context/notifications-inbox-context';
+import { clearIncludes, type InboxClear } from '../core/inbox-filters';
 import {
+  compareInboxRows,
   markRows,
   type RowMarks,
   settleRowMarks,
@@ -27,12 +35,13 @@ import {
   withoutDoneRows,
   withSeenRows,
 } from '../core/inbox-row';
-import { encodeInboxScope, type InboxRowMemo, toInboxGroup } from './decode';
+import { encodeInboxScope, toInboxGroup } from './decode';
 import {
   type NotificationInboxGroup,
   orderInboxRows,
 } from './notification-inbox-groups';
 import {
+  clearInboxBatch,
   markInboxNotificationDone,
   markInboxRowsDone,
   markInboxRowsSeen,
@@ -42,6 +51,8 @@ import { notificationInboxShape } from './notification-inbox-shape';
 
 /** Entries fetched per inbox page. */
 export const INBOX_PAGE_LIMIT = 50;
+/** Most batches one clear sends: 20,000 groups at the server's default. */
+const MAX_CLEAR_BATCHES = 200;
 
 const inboxCachedQuery = {
   query: stringifyDocument(NotificationInboxDocument),
@@ -91,20 +102,6 @@ export function createNotificationInboxSource(
   const enabled = () =>
     options.enabled() && options.scope().rowTypes.length > 0;
 
-  // Every change rebuilds the pages; rows it didn't touch keep their objects,
-  // so what reads them, such as an open preview, doesn't rerun.
-  let decodedRows: InboxRowMemo['previous'] = new Map();
-  const readGroups = (
-    entries: readonly NotificationInboxEntryFieldsFragment[]
-  ) => {
-    const memo: InboxRowMemo = { previous: decodedRows, next: new Map() };
-    const groups = entries
-      .map((entry) => toInboxGroup(entry, memo))
-      .filter(isGroup);
-    decodedRows = memo.next;
-    return groups;
-  };
-
   const query = createUrqlInfiniteQuery<
     NotificationInboxQuery,
     NotificationInboxQueryVariables,
@@ -123,9 +120,10 @@ export function createNotificationInboxSource(
       requestPolicy: 'cache-and-network',
       keepPreviousData: true,
       select: ({ pages, pageParams }) => ({
-        groups: readGroups(
-          pages.flatMap((page) => page.user.notificationInbox.entries)
-        ),
+        groups: pages
+          .flatMap((page) => page.user.notificationInbox.entries)
+          .map((entry) => toInboxGroup(entry))
+          .filter(isGroup),
         cursors: [...pageParams],
       }),
     };
@@ -144,8 +142,18 @@ export function createNotificationInboxSource(
         ? [...current, id]
         : current.filter((candidate) => candidate !== id)
     );
-  const ordered = createMemo(() =>
-    orderInboxRows(query.data?.groups ?? [], !query.hasNextPage)
+  // Every change rebuilds the pages. The rows live in a store that each read
+  // reconciles into by row id, so a row the change didn't touch keeps its
+  // object and a changed one updates in place: what reads them, such as an
+  // open preview, reruns only for what changed.
+  const [ordered, setOrdered] = createStore<NotificationInboxRow[]>([]);
+  createComputed(() =>
+    setOrdered(
+      reconcile(orderInboxRows(query.data?.groups ?? [], !query.hasNextPage), {
+        key: 'id',
+        merge: true,
+      })
+    )
   );
 
   const live = createLiveAttentionFeed({
@@ -168,7 +176,7 @@ export function createNotificationInboxSource(
     // acknowledged was reopened, so it shows again; while it is still
     // loaded, the same revision is a change computed before the done.
     onPatches: (patches) => {
-      const present = new Set(ordered().map((row) => row.id));
+      const present = new Set(ordered.map((row) => row.id));
       const reopened = patches.flatMap((patch) =>
         patch.__typename === 'NotificationInboxEntryUpserted'
           ? patch.entry.rows.flatMap((row) => {
@@ -185,18 +193,31 @@ export function createNotificationInboxSource(
       }
     },
     onRefetched: () => {
-      setDone((current) => settleRowMarks(current, ordered()));
-      setSeen((current) => settleRowMarks(current, ordered()));
+      setDone((current) => settleRowMarks(current, ordered));
+      setSeen((current) => settleRowMarks(current, ordered));
     },
     surface: 'notifications-inbox',
   });
+
+  // Under Unread the server drops a row once it is read. One the reader read
+  // here stays listed, read, until the scope changes, so it doesn't vanish
+  // while they are on it; a newer copy from the server replaces it.
+  const [kept, setKept] = createSignal<readonly NotificationInboxRow[]>([]);
+  createComputed(on(scopeInput, () => setKept([])));
+  const listed = () => {
+    const present = new Set(ordered.map((row) => row.id));
+    const extra = kept().filter((row) => !present.has(row.id));
+    return extra.length === 0
+      ? ordered
+      : [...ordered, ...extra].sort(compareInboxRows);
+  };
 
   const rows = createMemo(() =>
     query.data === undefined
       ? undefined
       : withSeenRows(
           withoutDoneNotifications(
-            withoutDoneRows(ordered(), done()),
+            withoutDoneRows(listed(), done()),
             doneNotifications()
           ),
           seen()
@@ -291,18 +312,76 @@ export function createNotificationInboxSource(
     };
   };
 
+  const clear = async (request: InboxClear) => {
+    const client = options.client();
+    const hidden = (rows() ?? []).filter((row) => clearIncludes(request, row));
+    const hiddenIds = hidden.map((row) => row.id);
+    setDone((current) => markRows(current, hidden));
+    const input = {
+      scope: encodeInboxScope({
+        rowTypes: request.rowTypes,
+        unreadOnly: request.unreadOnly,
+      }),
+      since:
+        request.since === undefined
+          ? null
+          : new Date(request.since).toISOString(),
+    };
+    const undoTokens: string[] = [];
+    let count = 0;
+    let cursor: string | null = null;
+    try {
+      for (let batch = 0; batch < MAX_CLEAR_BATCHES; batch++) {
+        const cleared = await clearInboxBatch(client, { ...input, cursor });
+        undoTokens.push(cleared.undoToken);
+        count += cleared.rowCount;
+        cursor = cleared.nextCursor;
+        if (!cursor) break;
+      }
+    } catch (error) {
+      // Earlier batches stand; a fresh read shows what is left.
+      setDone((current) => unmarkRows(current, hiddenIds));
+      fireAndForget(live.refetch(), 'notifications-inbox');
+      throw error;
+    }
+    revalidate(client);
+    // Pages past those loaded may hold what moves up into view.
+    fireAndForget(live.refetch(), 'notifications-inbox');
+    return {
+      count,
+      undo: async () => {
+        // The filter may have changed since the clear; restore into this one.
+        const scope = scopeInput();
+        for (const token of undoTokens) {
+          const patches = await undoInboxRowsDone(client, token, scope);
+          applyIfCurrent(scope, patches);
+        }
+        setDone((current) => unmarkRows(current, hiddenIds));
+        revalidate(client);
+        fireAndForget(live.refetch(), 'notifications-inbox');
+      },
+    };
+  };
+
   const markSeen = async (targets: readonly NotificationInboxRow[]) => {
     const unseen = targets.filter((row) => row.unseen);
     if (unseen.length === 0) return;
     const client = options.client();
     const ids = unseen.map((row) => row.id);
     setSeen((current) => markRows(current, unseen));
+    if (options.scope().unreadOnly) {
+      setKept((current) => [
+        ...current.filter((row) => !ids.includes(row.id)),
+        ...unseen.map((row) => ({ ...row, unseen: false })),
+      ]);
+    }
     try {
       const scope = scopeInput();
       const patches = await markInboxRowsSeen(client, ids, scope);
       applyIfCurrent(scope, patches);
     } catch (error) {
       setSeen((current) => unmarkRows(current, ids));
+      setKept((current) => current.filter((row) => !ids.includes(row.id)));
       throw error;
     }
     revalidate(client);
@@ -321,6 +400,7 @@ export function createNotificationInboxSource(
     refresh: live.refetch,
     markDone,
     markNotificationDone,
+    clear,
     markSeen,
   };
 }

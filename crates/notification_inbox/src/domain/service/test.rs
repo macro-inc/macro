@@ -1,6 +1,6 @@
 use attention_feed::{
     domain::{
-        models::{Candidate, FeedNotification, FeedRevision},
+        models::{Candidate, FeedNotification, FeedPosition, FeedRevision},
         ports::NotificationTransition,
     },
     test_support::*,
@@ -73,7 +73,10 @@ fn thread_slot() -> String {
 
 fn query(row_types: Vec<InboxRowType>) -> InboxQuery {
     InboxQuery {
-        scope: InboxScope { row_types },
+        scope: InboxScope {
+            row_types,
+            ..Default::default()
+        },
         limit: 50,
         after: None,
     }
@@ -485,6 +488,136 @@ async fn done_on_a_notification_the_row_no_longer_shows_acknowledges_nothing() {
     assert!(outcome.receipt.notification_ids.is_empty());
 }
 
+fn clear_request(scope: InboxScope) -> InboxClearRequest {
+    InboxClearRequest {
+        scope,
+        since: None,
+        limit: 50,
+        after: None,
+    }
+}
+
+#[tokio::test]
+async fn clear_marks_every_row_done_without_archiving_mail() {
+    let harness = inbox();
+    let outcome = harness
+        .service
+        .clear(viewer(), clear_request(InboxScope::default()))
+        .await
+        .unwrap();
+
+    // The channel's thread and top level, and the inbox email thread.
+    assert_eq!(outcome.rows, 3);
+    let mut cleared = outcome.receipt.notification_ids.clone();
+    cleared.sort();
+    assert_eq!(cleared, vec![uuid(1), uuid(2), uuid(3), uuid(4), uuid(5)]);
+    assert!(outcome.receipt.archived_threads.is_empty());
+    assert!(harness.mail.calls.lock().unwrap().is_empty());
+    assert!(outcome.next.is_none());
+}
+
+#[tokio::test]
+async fn clear_takes_only_the_rows_the_request_names() {
+    let harness = inbox();
+    let outcome = harness
+        .service
+        .clear(
+            viewer(),
+            InboxClearRequest {
+                // Channel rows only, and only what arrived at minute 8 or later.
+                since: Some(at(8)),
+                ..clear_request(InboxScope {
+                    row_types: vec![InboxRowType::ChannelMention, InboxRowType::ChannelMessages],
+                    ..Default::default()
+                })
+            },
+        )
+        .await
+        .unwrap();
+
+    // The mention thread, with the document chip it hides; not the
+    // top-level message from minute 2, nor the email.
+    assert_eq!(outcome.rows, 1);
+    let mut cleared = outcome.receipt.notification_ids.clone();
+    cleared.sort();
+    assert_eq!(cleared, vec![uuid(2), uuid(3), uuid(4)]);
+    assert_eq!(
+        harness.notifications.state_of(uuid(1)),
+        NotificationState::Unseen
+    );
+    assert_eq!(
+        harness.notifications.state_of(uuid(5)),
+        NotificationState::Unseen
+    );
+}
+
+#[tokio::test]
+async fn clear_of_unread_rows_leaves_read_ones() {
+    let harness = harness(
+        vec![
+            candidate("doc", entity(EntityType::Document, DOC), Some(9), None),
+            candidate("channel", channel().into_entity(), Some(5), None),
+        ],
+        vec![
+            notification(
+                1,
+                entity(EntityType::Document, DOC),
+                "task_assigned",
+                json!({ "taskId": "task-1", "assignedBy": "macro|other@example.com", "taskName": "Plan" }),
+                9,
+                NotificationState::Seen,
+            ),
+            channel_send(2, CHANNEL, 0x100, 5),
+        ],
+    );
+    let outcome = harness
+        .service
+        .clear(
+            viewer(),
+            clear_request(InboxScope {
+                unread_only: true,
+                ..Default::default()
+            }),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.receipt.notification_ids, vec![uuid(2)]);
+}
+
+#[tokio::test]
+async fn clear_since_a_time_ends_at_the_first_older_group() {
+    let harness = inbox();
+    let request = InboxClearRequest {
+        since: Some(at(8)),
+        limit: 1,
+        ..clear_request(InboxScope::default())
+    };
+    let first = harness
+        .service
+        .clear(viewer(), request.clone())
+        .await
+        .unwrap();
+    assert_eq!(first.rows, 1);
+    assert!(first.next.is_some());
+
+    let second = harness
+        .service
+        .clear(
+            viewer(),
+            InboxClearRequest {
+                after: first.next,
+                ..request
+            },
+        )
+        .await
+        .unwrap();
+    // The email thread is older than the cutoff: nothing more to clear.
+    assert_eq!(second.rows, 0);
+    assert!(second.receipt.notification_ids.is_empty());
+    assert!(second.next.is_none());
+}
+
 #[tokio::test]
 async fn undo_restores_a_done_and_recomputes_its_groups() {
     let harness = inbox();
@@ -574,4 +707,191 @@ async fn recompute_removes_groups_with_no_matching_row() {
     assert_eq!(changes.len(), 2);
     assert!(matches!(&changes[0], InboxChange::Upserted(entry) if entry.group == channel()));
     assert!(matches!(&changes[1], InboxChange::Removed(removed) if *removed == doc));
+}
+
+fn unread() -> InboxScope {
+    InboxScope {
+        unread_only: true,
+        ..Default::default()
+    }
+}
+
+fn unread_query(limit: u16, after: Option<FeedPosition>) -> InboxQuery {
+    InboxQuery {
+        scope: unread(),
+        limit,
+        after,
+    }
+}
+
+/// Mail read by its own state: one thread with an unread message whose
+/// notification was seen, one read thread whose notification wasn't; a
+/// channel whose thread is read and top level unread; a read document task.
+fn mostly_read() -> Harness {
+    let unread_mail = MailFacts {
+        inbox_visible: true,
+        is_read: false,
+    };
+    let read_mail = MailFacts {
+        inbox_visible: true,
+        is_read: true,
+    };
+    let mut seen_reply = channel_reply(4, CHANNEL, ROOT, 0x101, 9);
+    std::sync::Arc::make_mut(&mut seen_reply).state = NotificationState::Seen;
+    harness(
+        vec![
+            candidate("doc", entity(EntityType::Document, DOC), Some(10), None),
+            candidate("channel", channel().into_entity(), Some(9), None),
+            mail_candidate("unread mail", MAIL, Some(7), None, unread_mail),
+            mail_candidate("read mail", ARCHIVED, Some(6), None, read_mail),
+        ],
+        vec![
+            notification(
+                1,
+                entity(EntityType::Document, DOC),
+                "task_assigned",
+                json!({ "taskId": "task-1", "assignedBy": "macro|other@example.com", "taskName": "Plan" }),
+                10,
+                NotificationState::Seen,
+            ),
+            channel_send(2, CHANNEL, 0x100, 2),
+            seen_reply,
+            new_email(5, MAIL, 7, NotificationState::Seen),
+            new_email(6, ARCHIVED, 6, NotificationState::Unseen),
+        ],
+    )
+}
+
+#[tokio::test]
+async fn an_unread_page_lists_only_unread_rows_by_each_rows_rule() {
+    let harness = mostly_read();
+    let page = harness
+        .service
+        .page(viewer(), unread_query(50, None))
+        .await
+        .unwrap();
+
+    let listed: Vec<_> = page
+        .entries
+        .iter()
+        .map(|entry| {
+            let slots: Vec<_> = entry.rows.iter().map(|row| row.id.slot.clone()).collect();
+            (entry.entity, slots)
+        })
+        .collect();
+    // The read task and the read thread are left out; mail follows its own
+    // read state, not whether its notification was seen.
+    assert_eq!(
+        listed,
+        vec![
+            ("channel", vec!["top_level".to_string()]),
+            ("unread mail", vec!["email".to_string()]),
+        ]
+    );
+    assert!(
+        page.entries
+            .iter()
+            .flat_map(|entry| &entry.rows)
+            .all(|row| row.unseen)
+    );
+}
+
+#[tokio::test]
+async fn unread_pages_and_cursors_cover_unread_groups_only() {
+    let harness = mostly_read();
+    let first = harness
+        .service
+        .page(viewer(), unread_query(1, None))
+        .await
+        .unwrap();
+    assert_eq!(
+        first
+            .entries
+            .iter()
+            .map(|entry| entry.entity)
+            .collect::<Vec<_>>(),
+        vec!["channel"],
+        "the read document before it doesn't take the page's one place"
+    );
+    let second = harness
+        .service
+        .page(viewer(), unread_query(1, first.next))
+        .await
+        .unwrap();
+    assert_eq!(
+        second
+            .entries
+            .iter()
+            .map(|entry| entry.entity)
+            .collect::<Vec<_>>(),
+        vec!["unread mail"]
+    );
+    if let Some(after) = second.next {
+        let third = harness
+            .service
+            .page(viewer(), unread_query(1, Some(after)))
+            .await
+            .unwrap();
+        assert!(third.entries.is_empty(), "the read mail never lists");
+        assert!(third.next.is_none());
+    }
+}
+
+#[tokio::test]
+async fn reading_a_row_takes_it_out_of_an_unread_inbox() {
+    let harness = inbox();
+    let changes = harness
+        .service
+        .mark_seen(viewer(), unread(), vec![row(&channel(), &thread_slot())])
+        .await
+        .unwrap();
+    let InboxChange::Upserted(entry) = &changes[0] else {
+        panic!("the channel's top level is still unread");
+    };
+    let slots: Vec<_> = entry.rows.iter().map(|row| row.id.slot.clone()).collect();
+    assert_eq!(slots, vec!["top_level".to_string()]);
+
+    let changes = harness
+        .service
+        .mark_seen(viewer(), unread(), vec![row(&channel(), "top_level")])
+        .await
+        .unwrap();
+    assert!(matches!(&changes[0], InboxChange::Removed(removed) if *removed == channel()));
+}
+
+#[tokio::test]
+async fn new_activity_brings_a_read_row_back_into_an_unread_inbox() {
+    let harness = mostly_read();
+    let doc = key(entity(EntityType::Document, DOC));
+    let changes = harness
+        .service
+        .recompute(viewer(), unread(), vec![doc.clone()])
+        .await
+        .unwrap();
+    assert!(matches!(&changes[0], InboxChange::Removed(removed) if *removed == doc));
+
+    harness
+        .notifications
+        .by_entity
+        .lock()
+        .unwrap()
+        .get_mut(doc.entity())
+        .unwrap()
+        .push(notification(
+            8,
+            entity(EntityType::Document, DOC),
+            "task_assigned",
+            json!({ "taskId": "task-1", "assignedBy": "macro|other@example.com", "taskName": "Plan" }),
+            11,
+            NotificationState::Unseen,
+        ));
+    let changes = harness
+        .service
+        .recompute(viewer(), unread(), vec![doc.clone()])
+        .await
+        .unwrap();
+    let InboxChange::Upserted(entry) = &changes[0] else {
+        panic!("the task is unread again");
+    };
+    assert!(entry.rows.iter().all(|row| row.unseen));
 }

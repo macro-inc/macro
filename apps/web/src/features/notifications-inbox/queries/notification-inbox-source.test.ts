@@ -294,6 +294,78 @@ describe('createNotificationInboxSource', () => {
     expect(row('document:doc-s#top_level').count).toBe(3);
   });
 
+  it('clears the inbox in batches, hiding the loaded rows it takes', async () => {
+    vi.useFakeTimers();
+    let batch = 0;
+    const { fake, feed, rowIds } = await loaded({
+      get ClearNotificationInbox() {
+        batch += 1;
+        return {
+          clearNotificationInbox: {
+            rowCount: 2,
+            undoToken: `undo-${batch}`,
+            nextCursor: batch < 3 ? `cursor-${batch}` : null,
+          },
+        };
+      },
+      UndoNotificationInboxRowsDone: {
+        undoNotificationInboxRowsDone: { patches: [] },
+      },
+    });
+
+    const cleared = await feed.clear({
+      rowTypes: ['task'],
+      unreadOnly: false,
+    });
+
+    expect(cleared.count).toBe(6);
+    const clears = fake.mutations.filter(
+      ({ name }) => name === 'ClearNotificationInbox'
+    );
+    expect(clears.map(({ variables }) => variables)).toEqual([
+      {
+        input: {
+          scope: { rowTypes: ['TASK'] },
+          since: null,
+          cursor: null,
+        },
+      },
+      expect.objectContaining({
+        input: expect.objectContaining({ cursor: 'cursor-1' }),
+      }),
+      expect.objectContaining({
+        input: expect.objectContaining({ cursor: 'cursor-2' }),
+      }),
+    ]);
+    // Only the task row matches what was cleared.
+    expect(rowIds()).toEqual([
+      'document:doc-a#top_level',
+      'document:doc-b#top_level',
+    ]);
+
+    await cleared.undo();
+    const undos = fake.mutations.filter(
+      ({ name }) => name === 'UndoNotificationInboxRowsDone'
+    );
+    expect(undos.map(({ variables }) => variables.input)).toEqual([
+      expect.objectContaining({ undoToken: 'undo-1' }),
+      expect.objectContaining({ undoToken: 'undo-2' }),
+      expect.objectContaining({ undoToken: 'undo-3' }),
+    ]);
+    expect(rowIds()).toContain('document:doc-a#task');
+  });
+
+  it('shows the cleared rows again when the clear fails', async () => {
+    vi.useFakeTimers();
+    const { feed, rowIds } = await loaded();
+
+    await expect(
+      feed.clear({ rowTypes: ['task'], unreadOnly: false })
+    ).rejects.toThrow();
+
+    expect(rowIds()).toContain('document:doc-a#task');
+  });
+
   it('shows a done row again when a newer notification reopens it', async () => {
     vi.useFakeTimers();
     const { fake, feed, row, rowIds } = await loaded(doneResult);
@@ -443,6 +515,79 @@ describe('createNotificationInboxSource', () => {
     });
     expect(revalidateNotifications).toHaveBeenCalled();
     expect(row('document:doc-a#top_level').unseen).toBe(false);
+  });
+
+  it('reads unread rows from the server under Unread, live changes too', async () => {
+    vi.useFakeTimers();
+    const { fake } = setup({}, () => ({
+      rowTypes: ALL_INBOX_ROW_TYPES,
+      unreadOnly: true,
+    }));
+    await flush();
+
+    const unreadScope = { rowTypes: [], unreadOnly: true };
+    expect(fake.queries[0].variables).toEqual({
+      input: { scope: unreadScope, limit: 50, cursor: null },
+    });
+    expect(fake.subscriptions[0].variables).toEqual({ scope: unreadScope });
+  });
+
+  it('keeps a row read here under Unread until the scope changes', async () => {
+    vi.useFakeTimers();
+    const [scope, setScope] = createSignal<InboxScope>({
+      rowTypes: ALL_INBOX_ROW_TYPES,
+      unreadOnly: true,
+    });
+    const { fake, feed, row, rowIds } = setup(
+      {
+        // Read, doc-b leaves the server's unread inbox.
+        MarkNotificationInboxRowsSeen: {
+          markNotificationInboxRowsSeen: {
+            patches: [removedPatch(docB.groupId)],
+          },
+        },
+      },
+      scope
+    );
+    await flush();
+    fake.queries[0].resolve(inboxPage([docA, docB]));
+    await flush();
+
+    await feed.markSeen([row('document:doc-b#top_level')]);
+    await flush();
+    expect(rowIds()).toContain('document:doc-b#top_level');
+    expect(row('document:doc-b#top_level').unseen).toBe(false);
+
+    setScope({ rowTypes: ALL_INBOX_ROW_TYPES });
+    await flush();
+    setScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true });
+    await flush();
+    fake.queries.at(-1)?.resolve(inboxPage([docA]));
+    await flush();
+    expect(rowIds()).not.toContain('document:doc-b#top_level');
+  });
+
+  it('clears unread rows by the scope it sends', async () => {
+    vi.useFakeTimers();
+    const { fake, feed } = await loaded({
+      ClearNotificationInbox: {
+        clearNotificationInbox: {
+          rowCount: 1,
+          undoToken: 'undo-1',
+          nextCursor: null,
+        },
+      },
+    });
+
+    await feed.clear({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true });
+
+    expect(fake.mutations[0].variables).toEqual({
+      input: {
+        scope: { rowTypes: [], unreadOnly: true },
+        since: null,
+        cursor: null,
+      },
+    });
   });
 
   it('reads the row as unseen again when marking it seen fails', async () => {

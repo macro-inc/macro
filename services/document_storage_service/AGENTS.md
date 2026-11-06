@@ -86,6 +86,9 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
+- Provision required `POSTHOG_API_KEY` before startup; `enable-call-channel-thread`
+  evaluation has a 300 ms timeout and keeps the call's own chat on failure.
+
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,

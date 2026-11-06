@@ -85,6 +85,7 @@ export function RouteGithub() {
             'and keep linked tasks up to date.',
           ]}
           cta="github_hero_get_started"
+          tutorial="github"
         />
         <WorkspaceDesktopDemo
           heroFrame

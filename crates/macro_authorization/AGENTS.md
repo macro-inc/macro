@@ -62,6 +62,12 @@ attribution) instead of sniffing request headers. `authorize_identity` retains
 verified origin and signed agent attribution on user authentication. It
 does not turn a user credential into bot authority or change endpoint policies.
 
+An account manager's credential arrives as a normal `x-macro-user-api-key` and
+authenticates as the managed account, with `CredentialOrigin::AccountManager`
+naming the grant and the agent holding it. `AccountHolderOrInternal` is
+`UserOrInternal` minus that credential: use it on anything that mints credentials,
+changes who can sign in, deletes the account, or changes its managers.
+
 ## Gotchas
 
 - Both extractors reject (400) a request that combines explicit credential

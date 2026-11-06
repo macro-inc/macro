@@ -101,6 +101,73 @@ export type AccessiblePipeline = Pipeline & {
 };
 
 /**
+ * A response to a request.
+ */
+export type AccountManagerDecision = 'approve' | 'decline';
+
+/**
+ * A request for manager access and what became of it.
+ */
+export type AccountManagerGrant = {
+    /**
+     * When the manager claimed the credential.
+     */
+    claimedAt?: string | null;
+    /**
+     * When the request was made.
+     */
+    createdAt: string;
+    /**
+     * When the pending request or unclaimed approval stops being usable.
+     */
+    expiresAt?: string | null;
+    /**
+     * Grant id.
+     */
+    id: string;
+    /**
+     * When the credential was last used, to the minute.
+     */
+    lastUsedAt?: string | null;
+    /**
+     * The account being managed.
+     */
+    managedUserId: string;
+    /**
+     * The agent account doing the managing.
+     */
+    managerUserId: string;
+    /**
+     * The side that asked.
+     */
+    requestedBy: AccountManagerRole;
+    /**
+     * Lifecycle status.
+     */
+    status: AccountManagerGrantStatus;
+};
+
+/**
+ * Where a grant is in its lifecycle.
+ */
+export type AccountManagerGrantStatus = 'pending' | 'approved' | 'declined' | 'active' | 'revoked' | 'expired';
+
+/**
+ * One side of a grant.
+ */
+export type AccountManagerRole = 'managed' | 'manager';
+
+/**
+ * The managers of the caller's account.
+ */
+export type AccountManagersList = {
+    /**
+     * Approved and active grants on the caller's account.
+     */
+    grants: Array<AccountManagerGrant>;
+};
+
+/**
  * A currently active call, as returned by the batch active-calls listing.
  */
 export type ActiveCallSummary = {
@@ -2121,6 +2188,47 @@ export type CallActiveResponse = {
 };
 
 /**
+ * Where a call's discussion lives, decided once when the call is created.
+ * `channel_id` cannot decide this: past channel calls keep their own thread.
+ */
+export type CallDiscussion = {
+    /**
+     * The channel holding the thread.
+     */
+    channel_id: string;
+    kind: 'channel_thread';
+    /**
+     * The thread's root message.
+     */
+    root_id: string;
+} | {
+    /**
+     * The call owning the thread.
+     */
+    call_id: string;
+    kind: 'call_chat';
+};
+
+/**
+ * A channel call's life, as its timeline row shows it.
+ */
+export type CallEntryStatus = {
+    state: 'live';
+} | {
+    /**
+     * How long it lasted.
+     */
+    duration_ms: number;
+    /**
+     * When it ended.
+     */
+    ended_at: string;
+    state: 'ended';
+} | {
+    state: 'record_deleted';
+};
+
+/**
  * Filters for call records.
  */
 export type CallFilters = {
@@ -2177,6 +2285,10 @@ export type CallRecord = {
      * archived `call_records`; active calls always return `None`.
      */
     customName?: string | null;
+    /**
+     * Where this call's discussion lives.
+     */
+    discussion: CallDiscussion;
     /**
      * Call duration in milliseconds (None if still active).
      */
@@ -3308,6 +3420,20 @@ export type ClaimPairingRequest = {
      * The claim credential returned when the pairing was created.
      */
     device_secret: string;
+};
+
+/**
+ * The credential, returned only by the claim that issued it.
+ */
+export type ClaimedAccountManagerToken = {
+    /**
+     * The grant, now active.
+     */
+    grant: AccountManagerGrant;
+    /**
+     * The secret. Shown only once.
+     */
+    token: string;
 };
 
 /**
@@ -10394,6 +10520,10 @@ export type Message = {
     id: string;
     imported_author?: null | ImportedAuthor;
     /**
+     * What this message is.
+     */
+    kind?: MessageKind;
+    /**
      * Tracked mentions, retained when a caller changes attachments only.
      */
     mentions: Array<SimpleMention>;
@@ -10575,6 +10705,12 @@ export type MessageChange = {
     type: 'reaction_changed';
 } | {
     /**
+     * Persisted root.
+     */
+    message: Message;
+    type: 'call_root_posted';
+} | {
+    /**
      * Persisted thread state.
      */
     state: ThreadState;
@@ -10684,6 +10820,11 @@ export type MessageEventAttachment = {
      */
     entity_type: string;
 };
+
+/**
+ * What a persisted message is. Set by the server, never by a client.
+ */
+export type MessageKind = 'message' | 'call_root';
 
 /**
  * Root message with its small thread preview, independent of its parent type.
@@ -10949,6 +11090,16 @@ export type MessageTimelineEntry = {
      */
     activity: TimelineActivity;
     type: 'activity';
+} | {
+    /**
+     * The call's root message, its thread state and its reply preview.
+     */
+    message: MessageListItem;
+    /**
+     * Where the call is in its life.
+     */
+    status: CallEntryStatus;
+    type: 'call';
 };
 
 /**
@@ -12406,6 +12557,20 @@ export type RequestAccess = {
 };
 
 /**
+ * Request body for asking for a grant.
+ */
+export type RequestAccountManagerBody = {
+    /**
+     * The side the caller takes.
+     */
+    callerRole: AccountManagerRole;
+    /**
+     * The other account (`macro|...`).
+     */
+    counterpartyId: string;
+};
+
+/**
  * Durable outcome; reading a notification never changes it.
  */
 export type RequestStatus = 'pending' | 'granted' | 'denied' | 'cancelled';
@@ -12490,6 +12655,16 @@ export type ResolveRequest = {
      * Request revision being reviewed.
      */
     revision: number;
+};
+
+/**
+ * Request body for responding to a request.
+ */
+export type RespondToAccountManagerRequestBody = {
+    /**
+     * The response.
+     */
+    decision: AccountManagerDecision;
 };
 
 /**
@@ -17280,6 +17455,160 @@ export type WithDocumentId = {
 export type WithProjectId = {
     id: string;
 };
+
+export type ListAccountManagersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/account-managers';
+};
+
+export type ListAccountManagersErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListAccountManagersError = ListAccountManagersErrors[keyof ListAccountManagersErrors];
+
+export type ListAccountManagersResponses = {
+    200: AccountManagersList;
+};
+
+export type ListAccountManagersResponse = ListAccountManagersResponses[keyof ListAccountManagersResponses];
+
+export type RequestAccountManagerData = {
+    body: RequestAccountManagerBody;
+    path?: never;
+    query?: never;
+    url: '/account-managers';
+};
+
+export type RequestAccountManagerErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RequestAccountManagerError = RequestAccountManagerErrors[keyof RequestAccountManagerErrors];
+
+export type RequestAccountManagerResponses = {
+    200: AccountManagerGrant;
+};
+
+export type RequestAccountManagerResponse = RequestAccountManagerResponses[keyof RequestAccountManagerResponses];
+
+export type RevokeAccountManagerGrantData = {
+    body?: never;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}';
+};
+
+export type RevokeAccountManagerGrantErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RevokeAccountManagerGrantError = RevokeAccountManagerGrantErrors[keyof RevokeAccountManagerGrantErrors];
+
+export type RevokeAccountManagerGrantResponses = {
+    200: AccountManagerGrant;
+};
+
+export type RevokeAccountManagerGrantResponse = RevokeAccountManagerGrantResponses[keyof RevokeAccountManagerGrantResponses];
+
+export type GetAccountManagerGrantData = {
+    body?: never;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}';
+};
+
+export type GetAccountManagerGrantErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetAccountManagerGrantError = GetAccountManagerGrantErrors[keyof GetAccountManagerGrantErrors];
+
+export type GetAccountManagerGrantResponses = {
+    200: AccountManagerGrant;
+};
+
+export type GetAccountManagerGrantResponse = GetAccountManagerGrantResponses[keyof GetAccountManagerGrantResponses];
+
+export type RespondToAccountManagerRequestData = {
+    body: RespondToAccountManagerRequestBody;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}/response';
+};
+
+export type RespondToAccountManagerRequestErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RespondToAccountManagerRequestError = RespondToAccountManagerRequestErrors[keyof RespondToAccountManagerRequestErrors];
+
+export type RespondToAccountManagerRequestResponses = {
+    200: AccountManagerGrant;
+};
+
+export type RespondToAccountManagerRequestResponse = RespondToAccountManagerRequestResponses[keyof RespondToAccountManagerRequestResponses];
+
+export type ClaimAccountManagerTokenData = {
+    body?: never;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}/token';
+};
+
+export type ClaimAccountManagerTokenErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ClaimAccountManagerTokenError = ClaimAccountManagerTokenErrors[keyof ClaimAccountManagerTokenErrors];
+
+export type ClaimAccountManagerTokenResponses = {
+    200: ClaimedAccountManagerToken;
+};
+
+export type ClaimAccountManagerTokenResponse = ClaimAccountManagerTokenResponses[keyof ClaimAccountManagerTokenResponses];
 
 export type ListAgentsData = {
     body?: never;

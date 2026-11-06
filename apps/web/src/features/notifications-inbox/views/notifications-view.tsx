@@ -28,6 +28,7 @@ import {
 } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -62,6 +63,8 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import { InboxClearDrawer } from '../components/inbox-clear-drawer';
+import { InboxClearMenu } from '../components/inbox-clear-menu';
 import { InboxDateHeader } from '../components/inbox-date-header';
 import { InboxFilterDrawer } from '../components/inbox-filter-drawer';
 import { InboxFilterMenu } from '../components/inbox-filter-menu';
@@ -78,7 +81,12 @@ import {
   type NotificationInboxRow,
   useNotificationsInboxContext,
 } from '../context/notifications-inbox-context';
-import type { InboxStatus } from '../core/inbox-filters';
+import {
+  clearFor,
+  clearIncludes,
+  type InboxClearChoice,
+  type InboxStatus,
+} from '../core/inbox-filters';
 import type { InboxDecision } from '../core/inbox-row';
 import {
   describeInboxCard,
@@ -106,6 +114,8 @@ import {
   crmCommentParams,
 } from '../primitives/notification-location';
 import { createRowActions, rowButtons } from '../primitives/row-actions';
+import { rowEntity } from '../primitives/row-entity';
+import { NotificationsNoneSelected } from './notifications-none-selected';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
 /** Stepping through the list and moving on from a done row replace the entry. */
@@ -168,18 +178,12 @@ const previewSelection = (
     ? undefined
     : entity;
 
-/** The entity a row, or one of its notifications, is about. */
-const entityOf = (
-  row: NotificationInboxRow,
-  notification?: UnifiedNotification
-) => (notification ? row.content.entityAt(notification) : row.content.entity);
-
 /**
  * A calendar event row as the Calendar reads it: its notifications, such as
  * a reminder naming the occurrence, behind an accessor.
  */
 const calendarSelection = (
-  entity: ReturnType<typeof entityOf>
+  entity: ReturnType<typeof rowEntity>
 ): CalendarPreviewSelection | undefined => {
   if (entity.type !== 'calendar_event') return undefined;
   const { notifications } = entity;
@@ -201,7 +205,7 @@ const previewTargetFor = (
   row: NotificationInboxRow,
   notification?: UnifiedNotification
 ) => {
-  const entity = previewSelection(entityOf(row, notification));
+  const entity = previewSelection(rowEntity(row, notification));
   if (!entity) return undefined;
   const target = previewBlockTarget(entity);
   const params =
@@ -250,35 +254,47 @@ export function NotificationsView(props: NotificationsViewProps) {
   const context = useNotificationsInboxContext();
   const { pushUndo } = useMutationUndoContext();
   const filters = createInboxFilters(context.filterStorage);
-  const feed = context.createFeed(() => ({ rowTypes: filters.rowTypes() }));
-  const inbox = createInboxList(
-    feed,
-    {
-      pushUndo: (entry) => pushUndo(entry),
-      announceDone: (count, undo) => {
-        const id = toast.success(
-          t('notificationsInbox.markedDone', { count }),
+  const feed = context.createFeed(filters.scope);
+  const inbox = createInboxList(feed, {
+    pushUndo: (entry) => pushUndo(entry),
+    announceDone: (count, undo) => {
+      const id = toast.success(t('notificationsInbox.markedDone', { count }), {
+        actions: [
           {
-            actions: [
-              {
-                label: t('notificationsInbox.undo'),
-                icon: ArrowCounterClockwise,
-                onClick: () => fireAndForget(undo(), 'notifications-inbox'),
-              },
-            ],
-            duration: 3_000,
-            stack: true,
-            hideOnMobile: true,
-          }
-        );
-        return () => {
-          if (id !== undefined) toast.dismiss(id);
-        };
-      },
-      announceFailure: (message) => toast.failure(message),
+            label: t('notificationsInbox.undo'),
+            icon: ArrowCounterClockwise,
+            onClick: () => fireAndForget(undo(), 'notifications-inbox'),
+          },
+        ],
+        duration: 3_000,
+        stack: true,
+        hideOnMobile: true,
+      });
+      return () => {
+        if (id !== undefined) toast.dismiss(id);
+      };
     },
-    filters.includesRow
-  );
+    announceCleared: (count, undo) => {
+      const id =
+        count === 0
+          ? toast.success(t('notificationsInbox.clearedNothing'))
+          : toast.success(t('notificationsInbox.cleared', { count }), {
+              actions: [
+                {
+                  label: t('notificationsInbox.undo'),
+                  icon: ArrowCounterClockwise,
+                  onClick: () => fireAndForget(undo(), 'notifications-inbox'),
+                },
+              ],
+              duration: 8_000,
+              stack: true,
+            });
+      return () => {
+        if (id !== undefined) toast.dismiss(id);
+      };
+    },
+    announceFailure: (message) => toast.failure(message),
+  });
 
   onMount(() => panel.handle.setDisplayName(t('nav.notifications')));
 
@@ -346,7 +362,6 @@ export function NotificationsView(props: NotificationsViewProps) {
 
   const markSeen = (row: NotificationInboxRow) => {
     if (!row.unseen) return;
-    filters.keepRead(row.id);
     fireAndForget(feed.markSeen([row]), 'notifications-inbox');
   };
 
@@ -360,7 +375,7 @@ export function NotificationsView(props: NotificationsViewProps) {
     notification?: UnifiedNotification,
     history: HistoryOptions = {}
   ) => {
-    const calendarEvent = calendarSelection(entityOf(row, notification));
+    const calendarEvent = calendarSelection(rowEntity(row, notification));
     if (
       calendarEvent &&
       guard.canSelect(undefined) &&
@@ -485,6 +500,17 @@ export function NotificationsView(props: NotificationsViewProps) {
       inbox.markNotificationDone(row, notification),
       'notifications-inbox'
     );
+  };
+
+  /**
+   * Clear what the reader chose, under their filters. A preview of a row the
+   * clear takes closes, as the list leaves it.
+   */
+  const clear = (choice: InboxClearChoice) => {
+    const request = clearFor(choice, filters.filters(), new Date());
+    const shown = selection.selected();
+    if (shown && clearIncludes(request, shown)) closePreview();
+    fireAndForget(inbox.clear(request), 'notifications-inbox');
   };
 
   const markDone = (done: readonly NotificationInboxRow[]) => {
@@ -907,7 +933,16 @@ export function NotificationsView(props: NotificationsViewProps) {
             <InboxStatusPills
               status={filters.filters().status}
               onChange={filters.setStatus}
-              leading={<InboxFilterDrawer {...filterControls} />}
+              leading={
+                <>
+                  <InboxFilterDrawer {...filterControls} />
+                  <InboxClearDrawer
+                    unreadOnly={filters.filters().status === 'unread'}
+                    isShown={filters.isShown}
+                    onClear={clear}
+                  />
+                </>
+              }
             />
           </header>
           <PullToRefresh
@@ -947,103 +982,103 @@ export function NotificationsView(props: NotificationsViewProps) {
     </ViewShell.Root>
   );
 
+  // One editor renders every card's text; without it each line of each card
+  // builds its own.
   return (
-    <SplitPanel.Root>
-      <SplitPanel.Body>
-        <Show when={!isTouchDevice()} fallback={touchLayout()}>
-          <div class="size-full min-h-0 bg-panel">
-            <ViewShell.Root
-              asidePreferenceKey="notifications"
-              // Rows read as sentences, so the list starts wider than a nav rail.
-              aside={{ width: 360, max: 480, preserveDuringResize: false }}
-              // Narrow, the list and what it opens take turns.
-              asideList={{
-                open:
-                  props.calendarPreview.isOpen() ||
-                  previewTarget() !== undefined,
-                onBack: () => closePreview(),
-              }}
-              main={{ preferredWidth: 640 }}
-              resizable
-            >
-              <ViewShell.Aside class="flex flex-col bg-panel">
-                <ListHeader
-                  actions={
-                    <>
-                      <div class="relative">
-                        <InboxFilterMenu
-                          open={filterOpen()}
-                          onOpenChange={setFilterOpen}
-                          {...filterControls}
+    <StaticMarkdownContext>
+      <SplitPanel.Root>
+        <SplitPanel.Body>
+          <Show when={!isTouchDevice()} fallback={touchLayout()}>
+            <div class="size-full min-h-0 bg-panel">
+              <ViewShell.Root
+                asidePreferenceKey="notifications"
+                // Rows read as sentences, so the list starts wider than a nav rail.
+                aside={{ width: 360, max: 480, preserveDuringResize: false }}
+                // Narrow, the list and what it opens take turns.
+                asideList={{
+                  open:
+                    props.calendarPreview.isOpen() ||
+                    previewTarget() !== undefined,
+                  onBack: () => closePreview(),
+                }}
+                main={{ preferredWidth: 640 }}
+                resizable
+              >
+                <ViewShell.Aside class="flex flex-col bg-panel">
+                  <ListHeader
+                    actions={
+                      <>
+                        <div class="relative">
+                          <InboxFilterMenu
+                            open={filterOpen()}
+                            onOpenChange={setFilterOpen}
+                            {...filterControls}
+                          />
+                        </div>
+                        <InboxClearMenu
+                          unreadOnly={filters.filters().status === 'unread'}
+                          isShown={filters.isShown}
+                          onClear={clear}
                         />
-                      </div>
-                      <Button
-                        size="icon-md"
-                        variant="ghost"
-                        aria-label={t('notificationsInbox.settings')}
-                        tooltip={t('notificationsInbox.settings')}
-                        onClick={() => props.onOpenSettings()}
-                      >
-                        <GearSixIcon class="size-4" />
-                      </Button>
-                    </>
-                  }
-                />
-                <div class="shrink-0 px-3 pb-1">
-                  <InboxStatusTabs
-                    status={filters.filters().status}
-                    onChange={filters.setStatus}
+                        <Button
+                          size="icon-md"
+                          variant="ghost"
+                          aria-label={t('notificationsInbox.settings')}
+                          tooltip={t('notificationsInbox.settings')}
+                          onClick={() => props.onOpenSettings()}
+                        >
+                          <GearSixIcon class="size-4" />
+                        </Button>
+                      </>
+                    }
                   />
-                </div>
-                <div
-                  role="grid"
-                  aria-label={t('nav.notifications')}
-                  aria-activedescendant={list.focus.key()}
-                  tabIndex={0}
-                  class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none"
-                >
-                  {listBody()}
-                </div>
-              </ViewShell.Aside>
-              <ViewShell.Main class="overflow-hidden">
-                <NotificationsCalendarPaneProvider
-                  value={{ refocus: props.calendarPreview.refocus }}
-                >
-                  {/* A calendar event shows under the view's calendar route,
+                  <div class="shrink-0 px-3 pb-1">
+                    <InboxStatusTabs
+                      status={filters.filters().status}
+                      onChange={filters.setStatus}
+                    />
+                  </div>
+                  <div
+                    role="grid"
+                    aria-label={t('nav.notifications')}
+                    aria-activedescendant={list.focus.key()}
+                    tabIndex={0}
+                    class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none"
+                  >
+                    {listBody()}
+                  </div>
+                </ViewShell.Aside>
+                <ViewShell.Main class="overflow-hidden">
+                  <NotificationsCalendarPaneProvider
+                    value={{ refocus: props.calendarPreview.refocus }}
+                  >
+                    {/* A calendar event shows under the view's calendar route,
                       which loads lazily: suspend only this pane, so the list
                       keeps its place. */}
-                  <Suspense>
-                    <SplitRouter.Outlet
-                      fallback={() => (
-                        <Show
-                          when={previewTarget()}
-                          fallback={
-                            <EmptyStatePanel
-                              centered
-                              graphic={EmptyStateInboxTrayGraphic}
-                              title={t('notificationsInbox.noneSelectedTitle')}
-                              description={t(
-                                'notificationsInbox.noneSelectedDescription'
-                              )}
+                    <Suspense>
+                      <SplitRouter.Outlet
+                        fallback={() => (
+                          <Show
+                            when={previewTarget()}
+                            fallback={<NotificationsNoneSelected />}
+                          >
+                            <PreviewPanel
+                              target={previewTarget()}
+                              navigationRequest={selection.navigationRequest()}
+                              orchestrator={orchestrator}
+                              splitPanelContext={panel}
                             />
-                          }
-                        >
-                          <PreviewPanel
-                            target={previewTarget()}
-                            navigationRequest={selection.navigationRequest()}
-                            orchestrator={orchestrator}
-                            splitPanelContext={panel}
-                          />
-                        </Show>
-                      )}
-                    />
-                  </Suspense>
-                </NotificationsCalendarPaneProvider>
-              </ViewShell.Main>
-            </ViewShell.Root>
-          </div>
-        </Show>
-      </SplitPanel.Body>
-    </SplitPanel.Root>
+                          </Show>
+                        )}
+                      />
+                    </Suspense>
+                  </NotificationsCalendarPaneProvider>
+                </ViewShell.Main>
+              </ViewShell.Root>
+            </div>
+          </Show>
+        </SplitPanel.Body>
+      </SplitPanel.Root>
+    </StaticMarkdownContext>
   );
 }

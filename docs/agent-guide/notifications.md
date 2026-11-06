@@ -37,7 +37,7 @@ evenly where its paper edges sat, and every other card dims until you close it. 
 card brings it back. Each small card opens that notification:
 its message or reply, its comment, or an agent's turn. A channel invite and an
 email have no message of their own, so they open the channel or the thread.
-A stack stays open as new notifications land. The time always shows; on hover Mark done takes its place, and nothing else moves. The author is
+A stack stays open as new notifications land. The time always shows. With a pointer, the first line ends time, stack caret, Mark done, unread dot: Mark done shows on hover in a slot that stays empty otherwise, and a read card keeps the dot's room, so Mark done sits at the same spot on every card, stacked or not, read or not, and nothing moves. Touch has no Mark done button and no empty slots. The author is
 the row's actor: a Macro user by first name, an agent by its bot name, or
 **Macro**; a row from outside Macro names its email sender, and GitHub rows
 keep the GitHub login. A row type, author kind, or button this build doesn't
@@ -80,9 +80,21 @@ whose review was requested offers **Review**, which opens the pull request on
 GitHub and marks the row seen.
 
 **All** and **Unread** under the header switch the list (`1` and `2`, or Tab, also
-switch), and the choice is kept per user across reloads. A row you read under
-Unread, or a stack you're going through, stays until you next switch or reload.
+switch), and the choice is kept per user across reloads. Unread reads only unread
+rows from the server, so it pages through unread rows alone; a row read elsewhere
+leaves it and new activity brings one back. A row you read under Unread, or a
+stack you're going through, stays until you next switch or reload.
 With nothing unread, Unread shows **You're all caught up**.
+
+**Clear notifications** (double check, beside the filter; a sheet beside the
+filter pill on touch) offers **Clear today** (everything since local midnight,
+the rows under the list's today sections), **Clear all**, and **Clear by kind**
+for each kind the filters show. It acts on the whole inbox, not only the
+loaded rows, and never on a kind the filters hide; under Unread the choices
+read **Clear today's unread** and **Clear all unread** and take unread rows
+only. Clearing marks the rows done, but unlike a row's Mark done it doesn't
+archive email threads. A toast says how many were cleared and offers **Undo**,
+as does `⌘Z`/`Ctrl+Z`.
 
 **Filter notifications** (funnel, or `f`) offers **Type** checkboxes that start
 checked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,

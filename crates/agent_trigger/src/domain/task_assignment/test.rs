@@ -151,6 +151,7 @@ fn access(
 
 fn discussion(assignment: &TaskAssignment) -> messages::domain::models::Message {
     messages::domain::models::Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: discussion_id(assignment.event_id, BotId::TEST_A),
         parent: assignment.parent.clone(),
         thread_id: None,

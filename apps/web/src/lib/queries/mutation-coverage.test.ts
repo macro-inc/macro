@@ -63,6 +63,8 @@ const policies = {
     'authoritative: the server returns the restored feed entries',
   MarkNotificationInboxRowsDone:
     'custom: inbox rows stay hidden until the server removes them',
+  ClearNotificationInbox:
+    'custom: cleared rows stay hidden until the server removes them',
   MarkNotificationInboxNotificationDone:
     'custom: the notification stays hidden until the server returns its row',
   UndoNotificationInboxRowsDone:

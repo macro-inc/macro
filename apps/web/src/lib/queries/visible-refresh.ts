@@ -73,3 +73,29 @@ export function createVisibleRefresh(
     },
   };
 }
+
+/**
+ * Runs immediately while visible, with no throttle. A hidden tab keeps one dirty
+ * bit and runs once when it becomes visible, for a source whose own reads
+ * already coalesce.
+ *
+ * The caller must dispose it.
+ */
+export function createHiddenDeferral(run: () => void): {
+  request: () => void;
+  dispose: () => void;
+} {
+  let deferred = false;
+  const dispose = makeEventListener(document, 'visibilitychange', () => {
+    if (!deferred || document.visibilityState === 'hidden') return;
+    deferred = false;
+    run();
+  });
+  return {
+    request: () => {
+      deferred = document.visibilityState === 'hidden';
+      if (!deferred) run();
+    },
+    dispose,
+  };
+}
