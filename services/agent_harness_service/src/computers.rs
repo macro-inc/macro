@@ -372,7 +372,7 @@ impl Harnesses for HostedHarnesses {
         Ok(HostedPairing {
             pairing_id: PairingId::new(pairing.pairing_id),
             device_secret: hosted_runtimes::domain::enrollment::DeviceSecret::new(
-                pairing.device_secret,
+                pairing.device_secret.expose().to_owned(),
             ),
         })
     }

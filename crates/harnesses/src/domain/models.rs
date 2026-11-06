@@ -143,7 +143,7 @@ pub struct HostedPairing {
     /// Pairing id the device secret claims.
     pub pairing_id: Uuid,
     /// Claim credential; returned only here and never stored raw.
-    pub device_secret: String,
+    pub device_secret: DeviceSecret,
 }
 
 /// Request to open a pairing: the daemon asks for a code the user approves.
@@ -308,4 +308,32 @@ pub struct PairingClaimFacts {
     pub expires_at: DateTime<Utc>,
     /// The harness created at approval, when approved or claimed.
     pub harness_id: Option<HarnessId>,
+}
+
+/// Plaintext enrollment credential; deliberately requires explicit exposure.
+#[derive(Clone)]
+pub struct DeviceSecret(zeroize::Zeroizing<String>);
+
+impl DeviceSecret {
+    /// Take ownership of a newly minted credential.
+    pub fn new(secret: String) -> Self {
+        Self(zeroize::Zeroizing::new(secret))
+    }
+
+    /// Borrow the plaintext for enrollment or hashing.
+    pub fn expose(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl std::fmt::Debug for DeviceSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("**redacted**")
+    }
+}
+
+impl std::fmt::Display for DeviceSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("**redacted**")
+    }
 }

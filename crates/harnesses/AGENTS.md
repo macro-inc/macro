@@ -63,3 +63,5 @@ already authorized the team admin, never for an HTTP route.
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`
 - Skill: `cloud-storage-hexagonal-architecture`
+
+- `HostedPairing.device_secret` redacts formatting and zeroizes on drop; use `expose()` only at enrollment boundaries.

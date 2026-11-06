@@ -428,7 +428,7 @@ where
         req: CreateHostedPairing,
     ) -> Result<HostedPairing, HarnessError> {
         let name = validated_name(&req.name)?;
-        let device_secret = tokens::generate_device_secret();
+        let device_secret = super::models::DeviceSecret::new(tokens::generate_device_secret());
         let new_pairing_id = Uuid::now_v7();
         let upserted = self
             .repo
@@ -438,7 +438,7 @@ where
                     // Never shown or typed: the code only has to be unique,
                     // and its shape keeps it out of code lookups entirely.
                     code: format!("hosted:{new_pairing_id}"),
-                    device_secret_hash: harness_token::hash_token(&device_secret),
+                    device_secret_hash: harness_token::hash_token(device_secret.expose()),
                     requested_name: name.clone(),
                     host: None,
                     expires_at: Utc::now() + Duration::minutes(PAIRING_TTL_MINUTES),

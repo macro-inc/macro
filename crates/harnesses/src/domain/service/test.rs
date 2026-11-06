@@ -867,7 +867,7 @@ async fn hosted_pairing_registers_an_approved_team_harness_past_the_throttle() {
         .await
         .unwrap();
 
-    assert!(!hosted.device_secret.is_empty());
+    assert!(!hosted.device_secret.expose().is_empty());
     let calls = repo.calls.lock().unwrap();
     assert!(calls.inserted_pairings.is_empty());
     assert_eq!(calls.hosted_upserts.len(), 1);
@@ -876,7 +876,7 @@ async fn hosted_pairing_registers_an_approved_team_harness_past_the_throttle() {
     assert_eq!(pairing.code, format!("hosted:{}", hosted.pairing_id));
     assert_eq!(
         pairing.device_secret_hash,
-        harness_token::hash_token(&hosted.device_secret)
+        harness_token::hash_token(hosted.device_secret.expose())
     );
     assert_eq!(pairing.requested_name, "Standard computer");
     assert_eq!(pairing.host, None);
@@ -906,7 +906,7 @@ async fn hosted_pairing_rotates_before_claim_and_returns_fresh_pairing_after_rek
         let calls = repo.calls.lock().unwrap();
         assert_eq!(
             calls.hosted_upserts[0].0.device_secret_hash,
-            harness_token::hash_token(&hosted.device_secret)
+            harness_token::hash_token(hosted.device_secret.expose())
         );
     }
 
@@ -923,13 +923,13 @@ async fn hosted_pairing_rotates_before_claim_and_returns_fresh_pairing_after_rek
         assert_eq!(hosted.pairing_id, calls.hosted_upserts[0].0.id);
         assert_eq!(
             calls.hosted_upserts[0].0.device_secret_hash,
-            harness_token::hash_token(&hosted.device_secret)
+            harness_token::hash_token(hosted.device_secret.expose())
         );
     }
     let mut existing_harness = harness(HarnessOwner::Team { team_id: TEAM_ID });
     existing_harness.computer_id = Some(COMPUTER_ID);
     repo.claim_facts = Some(PairingClaimFacts {
-        device_secret_hash: harness_token::hash_token(&hosted.device_secret),
+        device_secret_hash: harness_token::hash_token(hosted.device_secret.expose()),
         status: PairingStatus::Approved,
         expires_at: Utc::now() + Duration::minutes(15),
         harness_id: Some(existing_harness.id),
@@ -939,7 +939,7 @@ async fn hosted_pairing_rotates_before_claim_and_returns_fresh_pairing_after_rek
         .claim_pairing(
             hosted.pairing_id,
             ClaimPairingRequest {
-                device_secret: hosted.device_secret,
+                device_secret: hosted.device_secret.expose().to_owned(),
             },
         )
         .await
@@ -1085,4 +1085,15 @@ async fn claude_mode_reaches_the_repo() {
         .set_claude_mode(HarnessId::TEST_A, ClaudeMode::OwnAccount)
         .await;
     assert!(matches!(missing, Err(HarnessError::NotFound(_))));
+}
+
+#[test]
+fn hosted_pairing_redacts_its_credential() {
+    let pairing = HostedPairing {
+        pairing_id: Uuid::now_v7(),
+        device_secret: super::super::models::DeviceSecret::new("enrollment-credential".to_owned()),
+    };
+    assert!(!format!("{pairing:?}").contains(pairing.device_secret.expose()));
+    assert_eq!(format!("{}", pairing.device_secret), "**redacted**");
+    assert_eq!(format!("{:?}", pairing.device_secret), "**redacted**");
 }
