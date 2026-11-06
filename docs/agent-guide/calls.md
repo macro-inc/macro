@@ -64,7 +64,10 @@ viewport. Show video returns to the recording; all controls drive one media
 element. Chat jump chips use message time relative to recording start and appear
 only within the known recording duration. Attachments retain their usual cards.
 There is no caption control without a caption track or synthetic speaker video
-layer over the recorded composite.
+layer over the recorded composite. Controls auto-dismiss after idle playback and
+return on movement, focus or tap; pause, control hover and open menus keep them
+visible. Speed uses a dropdown, and the volume slider appears beside mute on
+hover or focus. Both sliders keep white thumbs across themes.
 
 Phones use separate Back, title-menu, and Details header islands. The player
 comes before identity, then Summary/Transcript/Chat tabs with the real chat count.

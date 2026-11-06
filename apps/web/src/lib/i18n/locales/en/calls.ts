@@ -79,6 +79,7 @@ export default {
   detailPlayback: 'Recording playback',
   detailPosition: 'Recording position',
   detailSpeed: 'Playback speed',
+  detailVolume: 'Volume',
   detailMute: 'Mute',
   detailUnmute: 'Unmute',
   detailFullscreen: 'Fullscreen',

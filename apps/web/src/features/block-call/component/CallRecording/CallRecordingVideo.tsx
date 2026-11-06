@@ -1,8 +1,10 @@
 import { t } from '@app/lib/i18n';
+import { isModality } from '@core/mobile/inputModality';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 
+import { createRecordingControlsVisibility } from '../../primitives/recording-controls';
 import type { RecordingPlayback } from '../../primitives/recording-playback';
 import { CallRecordingControls } from './CallRecordingControls';
 export function CallRecordingVideo(props: {
@@ -16,6 +18,9 @@ export function CallRecordingVideo(props: {
   setVideoRef?: (el: HTMLVideoElement) => void;
 }): JSX.Element {
   const [isLoaded, setIsLoaded] = createSignal(false);
+  const controls = createRecordingControlsVisibility(
+    () => props.playback?.paused() ?? true
+  );
   const [playbackError, setPlaybackError] = createSignal(false);
   const [posterBlobUrl, setPosterBlobUrl] = createSignal<string>();
   const hasVisibleVideo = () =>
@@ -104,7 +109,37 @@ export function CallRecordingVideo(props: {
   onCleanup(stopTicking);
 
   return (
-    <div class="relative flex w-full flex-col overflow-hidden rounded-2xl bg-panel">
+    <div
+      class="portal-scope relative flex w-full flex-col overflow-hidden rounded-2xl bg-panel"
+      role="group"
+      aria-label={t('calls.detailPlayback')}
+      tabIndex={props.playback ? 0 : undefined}
+      onPointerMove={(event) => {
+        controls.setHovered(
+          event.pointerType !== 'touch' &&
+            event.target instanceof Element &&
+            event.target.closest('[data-recording-controls]') !== null
+        );
+        controls.show();
+      }}
+      onPointerLeave={() => controls.setHovered(false)}
+      onPointerDown={() => {
+        controls.setFocused(false);
+        controls.show();
+      }}
+      onFocusIn={() => {
+        controls.setFocused(isModality('keyboard'));
+        controls.show();
+      }}
+      onKeyDown={() => controls.setFocused(true)}
+      onFocusOut={(event) => {
+        if (
+          !(event.relatedTarget instanceof Node) ||
+          !event.currentTarget.contains(event.relatedTarget)
+        )
+          controls.setFocused(false);
+      }}
+    >
       <video
         ref={(element) => {
           videoRef = element;
@@ -148,7 +183,9 @@ export function CallRecordingVideo(props: {
         }
       />
       <Show when={!playbackError() && props.playback}>
-        {(playback) => <CallRecordingControls playback={playback()} />}
+        {(playback) => (
+          <CallRecordingControls playback={playback()} visibility={controls} />
+        )}
       </Show>
       <Show when={playbackError()}>
         <div

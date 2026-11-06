@@ -1,6 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 
+export const RECORDING_PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2] as const;
+
 /** One native media element remains the owner of playback across all controls. */
 export function createRecordingPlayback(
   video: Accessor<HTMLVideoElement | undefined>
@@ -10,6 +12,8 @@ export function createRecordingPlayback(
   const [paused, setPaused] = createSignal(true);
   const [muted, setMuted] = createSignal(false);
   const [rate, setRate] = createSignal(1);
+  const [volume, setVolumeLevel] = createSignal(1);
+  let audibleVolume = 1;
   createEffect(() => {
     const element = video();
     if (!element) return;
@@ -18,6 +22,8 @@ export function createRecordingPlayback(
       setDuration(Number.isFinite(element.duration) ? element.duration : 0);
       setPaused(element.paused);
       setMuted(element.muted);
+      setVolumeLevel(element.volume);
+      if (element.volume > 0) audibleVolume = element.volume;
       setRate(element.playbackRate);
     };
     const events = [
@@ -51,6 +57,7 @@ export function createRecordingPlayback(
     paused,
     muted,
     rate,
+    volume,
     seek,
     toggle: () => {
       const element = video();
@@ -61,14 +68,28 @@ export function createRecordingPlayback(
     skip: (seconds: number) => seek((video()?.currentTime ?? 0) + seconds),
     toggleMute: () => {
       const element = video();
-      if (element) element.muted = !element.muted;
-    },
-    cycleRate: () => {
-      const element = video();
       if (!element) return;
-      const rates = [1, 1.25, 1.5, 1.75, 2];
-      element.playbackRate =
-        rates[(rates.indexOf(element.playbackRate) + 1) % rates.length];
+      if (element.muted || element.volume === 0) {
+        element.muted = false;
+        if (element.volume === 0) element.volume = audibleVolume;
+      } else {
+        element.muted = true;
+      }
+    },
+    setVolume: (value: number) => {
+      const element = video();
+      if (!element || !Number.isFinite(value)) return;
+      element.volume = Math.max(0, Math.min(1, value));
+      if (element.volume > 0) {
+        audibleVolume = element.volume;
+        element.muted = false;
+      }
+    },
+    setRate: (value: number) => {
+      const element = video();
+      if (!element || !RECORDING_PLAYBACK_RATES.some((rate) => rate === value))
+        return;
+      element.playbackRate = value;
     },
     fullscreen: () => {
       const element = video();
