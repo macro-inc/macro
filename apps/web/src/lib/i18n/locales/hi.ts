@@ -53,7 +53,6 @@ export default {
     projectBadge: 'प्रोजेक्ट',
     newProject: 'नया प्रोजेक्ट',
     contentAlreadyOpen: 'कॉन्टेंट पहले से खुला है',
-    unableToOpenConversation: 'बातचीत नहीं खुल सकी। कृपया फिर से कोशिश करें।',
     mobileSearchPlaceholder: 'खोजें…',
     closeSearch: 'खोज बंद करें',
     searchFullTextFor: '“{{query}}” के लिए पूरे टेक्स्ट में खोजें',

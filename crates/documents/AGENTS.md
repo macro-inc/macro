@@ -50,6 +50,17 @@ word docs, Illustrator/Photoshop files).
   receipt's user and bot (`SpreadsheetCaller::Receipt`); the tools name the
   agent (`SpreadsheetCaller::Agent`). Worker 400/413 map to 400, 409 to a
   revision conflict, and anything else to 502 (an edit may have saved).
+- `axum_router/presentation.rs`, `word_document.rs`, `design_files.rs`: the
+  presentation, Word, design, Photoshop and Illustrator tools over HTTP
+  (`/{id}/presentation`, `/word`, `/design`, `/photoshop`, `/illustrator`),
+  calling the same domain services with the same receipts. Word routes need
+  an acting user; a bot caller's id rides in the worker token as the actor.
+  Caller-fixable failures (`PresentationError`, `WordDocumentRejected`, the
+  readers' errors) are 400s.
+- `axum_router/upload_file.rs`: `POST /upload` takes a file's raw bytes (25 MiB)
+  and runs UploadFile's `DocumentCreator::upload_file`, minting the project
+  receipt from the caller like the tool. It exists for clients that cannot PUT
+  to presigned storage URLs, such as code mode's sandbox.
 
 ## Scope
 
@@ -117,3 +128,5 @@ word docs, Illustrator/Photoshop files).
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md` ·
   Skill: `collab-surface-core`
+
+- Signed document grants carry agent correlation into Sync; editor deduplication and activity debounce include the invocation ID.

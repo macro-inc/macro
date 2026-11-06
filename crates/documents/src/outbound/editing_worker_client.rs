@@ -220,6 +220,12 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                 .get("error")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("Word document operation failed. Read the document again before retrying an edit.");
+            // The editor refused the request (an unknown id, text not found); nothing changed.
+            if status == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
+                return Err(
+                    crate::domain::word_document::WordDocumentRejected(message.to_owned()).into(),
+                );
+            }
             anyhow::bail!("{message} (HTTP {status})");
         }
         Ok(response.json().await?)

@@ -11,8 +11,8 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_authorization::{
-    AnyPrincipal, MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState,
+    AnyPrincipal, CredentialOrigin, MacroAuthorization, MacroAuthorizationExtractor,
+    MacroAuthorizationService, MacroAuthorizationState,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -262,6 +262,14 @@ where
 /// user drives the agent through, when the credential names one.
 /// Only a user credential carries one; it is set only alongside `agent_id`.
 fn sender_attribution(principal: &MacroAuthorization) -> MessageAttribution {
+    if let MacroAuthorization::User(user) = principal
+        && let CredentialOrigin::AccountManager(credential) = &user.origin
+    {
+        return MessageAttribution::AccountManager {
+            manager_user_id: credential.manager_user_id.as_ref().to_owned(),
+        };
+    }
+
     let via = match principal {
         MacroAuthorization::User(user) => user.agent_via.as_ref(),
         MacroAuthorization::Bot(_)

@@ -13,9 +13,9 @@ import {
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import { openExternalUrl } from '@core/util/url';
 import { isGithubPrEntity } from '@entity';
-import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { projectRouteId } from '../projects/core/route';
 import { routineContent } from '../routines/routine-navigation';
 import { getCategorySearchFilters } from './category-search-filters';
@@ -34,28 +34,14 @@ export function createCommandResultOpener(
   const { openWithSplit } = useSplitLayout();
   const navigateSearch = createGlobalSearchOpener(referredFrom);
   const projectsFlag = useFeatureFlag(enableProjects);
-  const getOrCreateDirectMessage = useGetOrCreateDirectMessageMutation();
+  const openDm = useOpenDirectMessage();
   // A person without a conversation yet: open one, as the user card does.
   const openDirectMessage = async (
     recipientId: string,
     openInNewSplit: boolean
   ) => {
-    try {
-      const { channel_id } = await getOrCreateDirectMessage.mutateAsync({
-        recipient_id: recipientId,
-      });
-      openWithSplit(
-        { type: 'channel', id: channel_id },
-        {
-          referredFrom,
-          preferNewSplit: openInNewSplit,
-          reopen: 'latest',
-        }
-      );
-      globalSplitManager()?.returnFocus();
-    } catch {
-      toast.failure(t('commandMenu.unableToOpenConversation'));
-    }
+    await openDm(recipientId, { referredFrom, preferNewSplit: openInNewSplit });
+    globalSplitManager()?.returnFocus();
   };
 
   const openEntity = (

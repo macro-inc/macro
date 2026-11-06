@@ -9,7 +9,7 @@ use attention_feed::domain::{
     acknowledge::Acknowledger,
     models::{
         Acknowledgment, CandidateKeying, CandidateRequest, DoneReceipt, FeedError, FeedKey,
-        FeedViewer, Loaded, MailFacts,
+        FeedRevision, FeedViewer, Loaded, MailFacts,
     },
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
     reader::FeedReader,
@@ -21,8 +21,9 @@ use uuid::Uuid;
 
 use super::{
     models::{
-        InboxChange, InboxDoneOutcome, InboxEntry, InboxPage, InboxQuery, InboxRow, InboxRowId,
-        InboxRowTarget, InboxRowType, InboxScope,
+        InboxChange, InboxClearOutcome, InboxClearRequest, InboxDoneOutcome, InboxEntry,
+        InboxNotificationDoneOutcome, InboxPage, InboxQuery, InboxRow, InboxRowId, InboxRowTarget,
+        InboxRowType, InboxScope,
     },
     policy, rows,
 };
@@ -60,6 +61,27 @@ pub trait NotificationInboxService: Send + Sync + 'static {
         viewer: FeedViewer,
         targets: Vec<InboxRowTarget>,
     ) -> impl Future<Output = Result<InboxDoneOutcome, FeedError>> + Send;
+
+    /// Acknowledge one notification a row shows, with the hidden ones it speaks
+    /// for, then recompute the row's group for the caller's inbox. The row's
+    /// last shown notification completes the row, as `mark_done` does. A
+    /// notification the row no longer shows has nothing left to acknowledge.
+    fn mark_notification_done(
+        &self,
+        viewer: FeedViewer,
+        scope: InboxScope,
+        row: InboxRowId,
+        notification: Uuid,
+    ) -> impl Future<Output = Result<InboxNotificationDoneOutcome<Self::Entity>, FeedError>> + Send;
+
+    /// Mark done every row one batch of the inbox holds that the request
+    /// matches: their shown and hidden notifications. Clearing doesn't archive
+    /// email threads: it clears notifications, and the mail stays where it is.
+    fn clear(
+        &self,
+        viewer: FeedViewer,
+        request: InboxClearRequest,
+    ) -> impl Future<Output = Result<InboxClearOutcome, FeedError>> + Send;
 
     /// Reverse exactly what one mark-done changed, then recompute its groups
     /// for the caller's inbox.
@@ -156,7 +178,7 @@ impl<E> Group<E> {
         let rows: Vec<InboxRow> = self
             .rows
             .into_iter()
-            .filter(|row| scope.admits(row.row_type))
+            .filter(|row| scope.admits(row))
             .collect();
         (!rows.is_empty()).then_some(InboxEntry {
             group: self.key,
@@ -168,6 +190,41 @@ impl<E> Group<E> {
 
     fn row(&self, id: &InboxRowId) -> Option<&InboxRow> {
         self.rows.iter().find(|row| row.id == *id)
+    }
+
+    /// What a done of `row` up to `observed` acknowledges. Archiving takes the
+    /// whole thread out of the inbox, so a done from before newer mail arrived
+    /// leaves it there.
+    fn row_acknowledgment(&self, row: &InboxRow, observed: FeedRevision) -> Acknowledgment {
+        let notification_ids = observed.acknowledged(row.all_notifications());
+        let observed_all = notification_ids.len() == row.all_notifications().count();
+        Acknowledgment {
+            key: self.key.clone(),
+            notification_ids,
+            archive_thread: (observed_all
+                && row.row_type == InboxRowType::Email
+                && self.mail.is_some_and(|mail| mail.inbox_visible))
+            .then(|| email_thread_id(&self.key))
+            .flatten(),
+        }
+    }
+}
+
+/// What clearing one group acknowledges.
+struct ClearedGroup {
+    key: FeedKey,
+    sort_at: DateTime<Utc>,
+    rows: usize,
+    notification_ids: Vec<Uuid>,
+}
+
+impl InboxClearRequest {
+    /// Whether the request clears `row`.
+    fn clears(&self, row: &InboxRow) -> bool {
+        self.scope.admits(row)
+            && self
+                .since
+                .is_none_or(|since| row.latest().created_at >= since)
     }
 }
 
@@ -249,6 +306,7 @@ where
             user = %viewer.user,
             limit = query.limit,
             row_types = query.scope.row_types.len(),
+            unread_only = query.scope.unread_only,
             groups = tracing::field::Empty,
             rows = tracing::field::Empty,
         ),
@@ -345,20 +403,7 @@ where
             let acknowledgment = match current_row {
                 Some((group, row)) => {
                     found.push(row.row_type);
-                    let observed = target.revision.unwrap_or_else(|| row.revision());
-                    let notification_ids = observed.acknowledged(row.all_notifications());
-                    // Archiving takes the whole thread out of the inbox, so a
-                    // done from before newer mail arrived leaves it there.
-                    let observed_all = notification_ids.len() == row.all_notifications().count();
-                    Acknowledgment {
-                        key: group.key.clone(),
-                        notification_ids,
-                        archive_thread: (observed_all
-                            && row.row_type == InboxRowType::Email
-                            && group.mail.is_some_and(|mail| mail.inbox_visible))
-                        .then(|| email_thread_id(&group.key))
-                        .flatten(),
-                    }
+                    group.row_acknowledgment(row, target.revision.unwrap_or_else(|| row.revision()))
                 }
                 None => Acknowledgment {
                     key: target.id.group,
@@ -377,6 +422,136 @@ where
             .await?;
         span.record("notifications", receipt.notification_ids.len());
         Ok(InboxDoneOutcome { rows, receipt })
+    }
+
+    #[tracing::instrument(
+        name = "notification_inbox.mark_notification_done",
+        skip_all,
+        fields(
+            user = %viewer.user,
+            row = %row.id(),
+            notification = %notification,
+            acknowledged = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn mark_notification_done(
+        &self,
+        viewer: FeedViewer,
+        scope: InboxScope,
+        row: InboxRowId,
+        notification: Uuid,
+    ) -> Result<InboxNotificationDoneOutcome<Self::Entity>, FeedError> {
+        let groups = vec![row.group.clone()];
+        let current = self.current(&viewer, &groups).await?;
+        let acknowledgment = match current.get(&row.group).and_then(|group| {
+            let found = group.row(&row)?;
+            Some((group, found))
+        }) {
+            Some((group, found)) if found.shows_only(notification) => {
+                group.row_acknowledgment(found, found.revision())
+            }
+            Some((group, found)) => Acknowledgment {
+                key: group.key.clone(),
+                notification_ids: rows::speaks_for(found, notification, &viewer.user),
+                archive_thread: None,
+            },
+            None => Acknowledgment {
+                key: row.group.clone(),
+                notification_ids: Vec::new(),
+                archive_thread: None,
+            },
+        };
+        let receipt = self
+            .acknowledger
+            .acknowledge(&viewer, vec![acknowledgment])
+            .await?;
+        tracing::Span::current().record("acknowledged", receipt.notification_ids.len());
+        let changes = self.recompute_groups(&viewer, &scope, groups).await?;
+        Ok(InboxNotificationDoneOutcome { changes, receipt })
+    }
+
+    #[tracing::instrument(
+        name = "notification_inbox.clear",
+        skip_all,
+        fields(
+            user = %viewer.user,
+            row_types = request.scope.row_types.len(),
+            unread_only = request.scope.unread_only,
+            since = request.since.is_some(),
+            rows = tracing::field::Empty,
+            notifications = tracing::field::Empty,
+            has_next = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn clear(
+        &self,
+        viewer: FeedViewer,
+        request: InboxClearRequest,
+    ) -> Result<InboxClearOutcome, FeedError> {
+        let candidates = CandidateRequest {
+            limit: request.limit,
+            after: request.after.clone(),
+            ..candidate_request(&viewer)
+        };
+        let now = Utc::now();
+        // Every group read comes back, cleared or not, so the batch knows how
+        // far it walked.
+        let page = self
+            .reader
+            .page(candidates, |loaded| {
+                let group = Group::cut(loaded, &viewer, now);
+                let cleared: Vec<&InboxRow> = group
+                    .rows
+                    .iter()
+                    .filter(|row| request.clears(row))
+                    .collect();
+                Some(ClearedGroup {
+                    rows: cleared.len(),
+                    notification_ids: cleared
+                        .iter()
+                        .flat_map(|row| row.all_notifications().map(|n| n.notification_id))
+                        .collect(),
+                    key: group.key,
+                    sort_at: group.sort_at,
+                })
+            })
+            .await?;
+        // Groups are newest first, so one older than `since` ends the clear.
+        let past_since = request.since.is_some_and(|since| {
+            page.entries
+                .last()
+                .is_some_and(|group| group.sort_at < since)
+        });
+        let next = if past_since { None } else { page.next };
+        let rows = page.entries.iter().map(|group| group.rows).sum();
+        let acknowledgments: Vec<Acknowledgment> = page
+            .entries
+            .into_iter()
+            .filter(|group| !group.notification_ids.is_empty())
+            .map(|group| Acknowledgment {
+                key: group.key,
+                notification_ids: group.notification_ids,
+                archive_thread: None,
+            })
+            .collect();
+        let receipt = if acknowledgments.is_empty() {
+            DoneReceipt::default()
+        } else {
+            self.acknowledger
+                .acknowledge(&viewer, acknowledgments)
+                .await?
+        };
+        let span = tracing::Span::current();
+        span.record("rows", rows);
+        span.record("notifications", receipt.notification_ids.len());
+        span.record("has_next", next.is_some());
+        Ok(InboxClearOutcome {
+            rows,
+            receipt,
+            next,
+        })
     }
 
     #[tracing::instrument(

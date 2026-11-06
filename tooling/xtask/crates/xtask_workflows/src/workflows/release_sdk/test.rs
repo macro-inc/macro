@@ -53,3 +53,26 @@ fn tags_only_after_a_successful_publish() {
         "the release tag must be pushed after npm publish"
     );
 }
+
+#[test]
+fn validates_both_packages_before_either_publishes() {
+    let yaml = rendered_yaml();
+
+    let validate_calls = yaml
+        .find("Validate sdk-calls")
+        .expect("sdk-calls validation");
+    let publish_sdk = yaml.find("Publish package").expect("SDK publish");
+    assert!(validate_calls < publish_sdk);
+}
+
+/// `@macro-inc/sdk-calls` requires the matching SDK version.
+#[test]
+fn publishes_the_sdk_first() {
+    let yaml = rendered_yaml();
+
+    let publish_sdk = yaml.find("Publish package").expect("SDK publish");
+    let publish_calls = yaml.find("Publish sdk-calls").expect("sdk-calls publish");
+    assert!(publish_sdk < publish_calls);
+    assert!(yaml.contains("packages/sdk-calls/package.json"));
+    assert!(yaml.contains("steps.resolve.outputs.calls_tag"));
+}

@@ -64,6 +64,7 @@ fn record(user_id: &MacroUserIdStr<'static>) -> ActivityRecord {
         Utc::now(),
     );
     ActivityRecord {
+        agent_correlation_id: activity.agent_correlation_id,
         id: activity.id,
         actor: activity.actor.clone(),
         subject_id: activity.subject_id.clone(),

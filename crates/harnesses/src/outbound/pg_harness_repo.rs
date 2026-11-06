@@ -44,21 +44,40 @@ struct HarnessRow {
     updated_at: DateTime<Utc>,
     last_connected_at: Option<DateTime<Utc>>,
     last_disconnected_at: Option<DateTime<Utc>>,
+    has_live_connection: bool,
+    has_connection_record: bool,
+}
+
+impl HarnessRow {
+    /// A live connection row is the answer. A row whose lease lapsed means the
+    /// replica holding it died. With no rows at all, the connection may come
+    /// from a replica older than these rows, which only stamps the timestamps.
+    fn connected(&self) -> bool {
+        if self.has_live_connection {
+            return true;
+        }
+
+        if self.has_connection_record {
+            return false;
+        }
+
+        match (self.last_connected_at, self.last_disconnected_at) {
+            (Some(connected_at), Some(disconnected_at)) => connected_at > disconnected_at,
+            (Some(_), None) => true,
+            (None, _) => false,
+        }
+    }
 }
 
 impl TryFrom<HarnessRow> for Harness {
     type Error = anyhow::Error;
 
     fn try_from(row: HarnessRow) -> Result<Self, Self::Error> {
+        let connected = row.connected();
         let owner = match (row.owner_user_id, row.team_id) {
             (Some(user_id), None) => HarnessOwner::User { user_id },
             (None, Some(team_id)) => HarnessOwner::Team { team_id },
             _ => anyhow::bail!("harness row violated its owner invariant"),
-        };
-        let connected = match (row.last_connected_at, row.last_disconnected_at) {
-            (Some(connected_at), Some(disconnected_at)) => connected_at > disconnected_at,
-            (Some(_), None) => true,
-            (None, _) => false,
         };
 
         Ok(Self {
@@ -94,7 +113,15 @@ async fn fetch_harness(
         r#"
         SELECT
             id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-            created_at, updated_at, last_connected_at, last_disconnected_at
+            created_at, updated_at, last_connected_at, last_disconnected_at,
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()
+                ) AS "has_live_connection!",
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id
+                ) AS "has_connection_record!"
         FROM harnesses
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -338,7 +365,15 @@ impl HarnessRepo for PgHarnessRepo {
             r#"
             SELECT
                 id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-                created_at, updated_at, last_connected_at, last_disconnected_at
+                created_at, updated_at, last_connected_at, last_disconnected_at,
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()
+                ) AS "has_live_connection!",
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id
+                ) AS "has_connection_record!"
             FROM harnesses
             WHERE deleted_at IS NULL
               AND (
@@ -376,7 +411,15 @@ impl HarnessRepo for PgHarnessRepo {
             WHERE id = $1 AND deleted_at IS NULL
             RETURNING
                 id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-                created_at, updated_at, last_connected_at, last_disconnected_at
+                created_at, updated_at, last_connected_at, last_disconnected_at,
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()
+                ) AS "has_live_connection!",
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id
+                ) AS "has_connection_record!"
             "#,
             harness_id.as_uuid(),
             changes.name,

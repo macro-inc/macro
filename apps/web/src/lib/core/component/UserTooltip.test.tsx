@@ -57,7 +57,7 @@ vi.mock('@core/user', () => ({
 }));
 
 vi.mock('@queries/channel/get-or-create-dm', () => ({
-  useGetOrCreateDirectMessageMutation: () => ({ mutateAsync: vi.fn() }),
+  existingDirectMessage: vi.fn(),
 }));
 
 vi.mock('@app/features/crm/record-adapter', () => ({

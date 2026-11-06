@@ -61,6 +61,14 @@ path = "src/openapi.rs"
 name = "email_service_doppler_config"
 path = "src/doppler_config.rs"
 
+
+# Built only by the `build-service-bins` CI job, which needs the real binaries;
+# `test = false` keeps it out of the test job.
+[[test]]
+name = "service_binary_builds"
+path = "tests/service_binary_builds.rs"
+test = false
+
 [features]
 attachment_upload = []
 connection_gateway = []
@@ -80,6 +88,7 @@ sfs_map = []
 sfs_delete = []
 
 [dependencies]
+agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 calendar_events = { path = "../../crates/calendar_events", features = ["google", "inbound", "postgres", "schema"] }
 ammonia = { workspace = true }
 anyhow = { workspace = true }
@@ -101,7 +110,7 @@ document_storage_service_client = { path = "../../crates/document_storage_servic
 doppleganger = { workspace = true }
 doppler-config = { workspace = true }
 ego-tree = { workspace = true }
-email = { path = "../../crates/email", features = ["axum", "calendar_invitations", "gmail_token", "inbound", "outbound", "mailbox"] }
+email = { path = "../../crates/email", features = ["axum", "calendar_invitations", "gmail_token", "inbound", "outbound", "mailbox", "sqs"] }
 entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
 entity_access_management = { path = "../../crates/entity_access_management" }
 email_api_client = { path = "../../crates/email_api_client", features = ["ports", "outbound-gmail", "outbound-outlook", "microsoft-gate"] }

@@ -47,7 +47,6 @@ export const COMPANY_SECTIONS = [
   'files',
   'tasks',
   'calls',
-  'databases',
 ] as const;
 export const CONTACT_SECTIONS = [
   'overview',
@@ -55,7 +54,6 @@ export const CONTACT_SECTIONS = [
   'files',
   'tasks',
   'calls',
-  'databases',
 ] as const;
 
 export type CompanySection = (typeof COMPANY_SECTIONS)[number];

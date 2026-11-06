@@ -7,6 +7,7 @@ mod recovery;
 mod search;
 mod session_task;
 mod user_cleanup;
+mod work_registration;
 mod working_branch;
 use crate::domain::model::{
     AgentMcpServer, DEFAULT_AGENT_SESSION_NAME, SessionSource, SessionVisibility,
@@ -96,6 +97,7 @@ pub(super) fn new_session(
     originating_message_id: Option<Uuid>,
 ) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
+        origin: trigger_context::TriggerOrigin::Unknown,
         purpose: crate::domain::model::SessionPurpose::Standalone,
         repo_branch: None,
         id: AgentSessionId::new(),
@@ -268,6 +270,7 @@ async fn create_refuses_an_owner_that_is_not_a_user(pool: PgPool) {
     let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let params = CreateAgentSessionParams {
+        origin: trigger_context::TriggerOrigin::Unknown,
         purpose: crate::domain::model::SessionPurpose::Standalone,
         owner_id: Owner::Bot(bot_id),
         ..new_session(bot_id, None, None)
@@ -326,6 +329,7 @@ async fn create_rejects_an_unknown_user_owner(pool: PgPool) {
     let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
     let params = CreateAgentSessionParams {
+        origin: trigger_context::TriggerOrigin::Unknown,
         purpose: crate::domain::model::SessionPurpose::Standalone,
         owner_id: Owner::User(user_id("macro|missing@example.com")),
         ..new_session(bot_id, None, None)
@@ -424,6 +428,7 @@ async fn instructions_round_trip_on_every_read_path(pool: PgPool) {
     let (_channel_id, thread_id, originating_message_id) =
         insert_originating_thread_fixture(&pool).await;
     let params = CreateAgentSessionParams {
+        origin: trigger_context::TriggerOrigin::Unknown,
         purpose: crate::domain::model::SessionPurpose::Standalone,
         instructions: Some(INSTRUCTIONS.to_owned()),
         egress_token_hash: Some("token-hash".to_owned()),
@@ -479,6 +484,7 @@ async fn mcp_server_selection_round_trips_on_every_read_path(pool: PgPool) {
         ],
     };
     let params = CreateAgentSessionParams {
+        origin: trigger_context::TriggerOrigin::Unknown,
         purpose: crate::domain::model::SessionPurpose::Standalone,
         mcp_servers: selection.clone(),
         egress_token_hash: Some("mcp-token-hash".to_owned()),
@@ -1080,6 +1086,7 @@ async fn recent_for_owner_returns_the_owners_newest_sessions(pool: PgPool) {
     let someone_else = create_session(
         &repo,
         CreateAgentSessionParams {
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: crate::domain::model::SessionPurpose::Standalone,
             owner_id: Owner::User(user_id(OTHER_OWNER)),
             ..new_session(bot_id, None, None)
@@ -1396,6 +1403,7 @@ async fn sessions_record_who_started_them_and_where_they_show(pool: PgPool) {
     let managed = create_session(
         &repo,
         CreateAgentSessionParams {
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: crate::domain::model::SessionPurpose::Routine {
                 visibility: SessionVisibility::Unlisted,
             },
@@ -1409,6 +1417,7 @@ async fn sessions_record_who_started_them_and_where_they_show(pool: PgPool) {
     let shown = create_session(
         &repo,
         CreateAgentSessionParams {
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: crate::domain::model::SessionPurpose::Routine {
                 visibility: SessionVisibility::Listed,
             },
@@ -1421,6 +1430,7 @@ async fn sessions_record_who_started_them_and_where_they_show(pool: PgPool) {
     let dispatched = create_session(
         &repo,
         CreateAgentSessionParams {
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: crate::domain::model::SessionPurpose::Dispatched,
             ..new_session(bot_id, None, None)
         },
@@ -2740,6 +2750,7 @@ async fn a_document_session_preserves_its_origin_and_inherits_live_document_acce
     let parent = MessageParent::parse("document", &document_id).unwrap();
     let root = messages
         .create(CreateMessage {
+            kind: messages::domain::models::MessageKind::Message,
             guest_name: None,
             canonical_root_id: None,
             parent: parent.clone(),
@@ -3222,9 +3233,17 @@ async fn warm_sessions_are_hidden_and_claimed_only_once_by_the_owner(pool: PgPoo
     );
     let other = Owner::User(user_id("macro|other@example.com"));
     assert_eq!(
-        WarmSessionLifecycle::claim(&repo, session.id, &other, bot, &session.model, None)
-            .await
-            .unwrap(),
+        WarmSessionLifecycle::claim(
+            &repo,
+            session.id,
+            &other,
+            bot,
+            &session.model,
+            None,
+            &trigger_context::TriggerOrigin::Unknown
+        )
+        .await
+        .unwrap(),
         WarmClaim::Missed(WarmMissReason::OwnerMismatch)
     );
     assert_eq!(
@@ -3234,7 +3253,8 @@ async fn warm_sessions_are_hidden_and_claimed_only_once_by_the_owner(pool: PgPoo
             &session.owner_id,
             bot,
             "wrong-model",
-            None
+            None,
+            &trigger_context::TriggerOrigin::Unknown,
         )
         .await
         .unwrap(),
@@ -3247,7 +3267,8 @@ async fn warm_sessions_are_hidden_and_claimed_only_once_by_the_owner(pool: PgPoo
             &session.owner_id,
             bot,
             &session.model,
-            Some("different instructions")
+            Some("different instructions"),
+            &trigger_context::TriggerOrigin::Unknown,
         )
         .await
         .unwrap(),
@@ -3260,7 +3281,8 @@ async fn warm_sessions_are_hidden_and_claimed_only_once_by_the_owner(pool: PgPoo
             &session.owner_id,
             bot,
             &session.model,
-            None
+            None,
+            &trigger_context::TriggerOrigin::Unknown,
         )
         .await
         .unwrap(),
@@ -3273,7 +3295,8 @@ async fn warm_sessions_are_hidden_and_claimed_only_once_by_the_owner(pool: PgPoo
             &session.owner_id,
             bot,
             &session.model,
-            None
+            None,
+            &trigger_context::TriggerOrigin::Unknown,
         ),
         WarmSessionLifecycle::claim(
             &repo,
@@ -3281,7 +3304,8 @@ async fn warm_sessions_are_hidden_and_claimed_only_once_by_the_owner(pool: PgPoo
             &session.owner_id,
             bot,
             &session.model,
-            None
+            None,
+            &trigger_context::TriggerOrigin::Unknown,
         ),
     );
     let mut outcomes = [left.unwrap(), right.unwrap()];
@@ -3334,7 +3358,8 @@ async fn expired_warm_sessions_cannot_be_claimed(pool: PgPool) {
             &session.owner_id,
             bot,
             &session.model,
-            None
+            None,
+            &trigger_context::TriggerOrigin::Unknown,
         )
         .await
         .unwrap(),
@@ -3348,7 +3373,8 @@ async fn expired_warm_sessions_cannot_be_claimed(pool: PgPool) {
             &session.owner_id,
             bot,
             &session.model,
-            None
+            None,
+            &trigger_context::TriggerOrigin::Unknown,
         )
         .await
         .unwrap(),
