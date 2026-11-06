@@ -13343,6 +13343,372 @@
         }
       }
     },
+    "/documents/{document_id}/canvas/ai-edit": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Edit a canvas by natural-language instructions with edit access, through\nEditCanvas's editor, AI admission and billing.",
+        "operationId": "edit_canvas_with_ai",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Canvas document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanvasAiEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasAiEdited"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a canvas, or empty instructions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "422": {
+            "description": "The editor could not do the edit; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The edit could not start",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The edit failed and may have partly applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/canvas/edits": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Apply one batch of CanvasEditor code with edit access, against the revision\nit was planned on, without a model. The batch validates, measures text and\ncommits once, or not at all.",
+        "operationId": "apply_canvas_edits",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Canvas document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanvasEditsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasEdited"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a canvas, or an invalid revision, code or snippets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "409": {
+            "description": "The scene changed since expectedRevision; nothing was committed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The batch failed before it committed; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The batch could not start",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The batch failed and may have applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/canvas/render": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Render a canvas to a PNG with view access, with the Canvas renderer, and\nkeep it as a static file owned by the caller. No model runs.",
+        "operationId": "render_canvas",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Canvas document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanvasRenderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasRendered"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a canvas, or an invalid crop or selection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document view access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "500": {
+            "description": "The render could not start or be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The render failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/canvas/scene": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Read a canvas's live scene with view access: stable item ids, containment\nand order, transforms, world bounds, shapes and text. No model runs.",
+        "operationId": "read_canvas_scene",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Canvas document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanvasSceneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasScene"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a canvas, or an invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document view access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "500": {
+            "description": "The read could not start",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The read failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/copy": {
       "post": {
         "tags": ["document"],
@@ -27777,6 +28143,331 @@
           "token": {
             "type": "string",
             "description": "The RTC token for connecting to the room."
+          }
+        }
+      },
+      "CanvasAiEditRequest": {
+        "type": "object",
+        "description": "What to change, in words.",
+        "required": ["instructions"],
+        "properties": {
+          "instructions": {
+            "type": "string",
+            "description": "Natural-language instructions, naming items by id where they exist.",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "CanvasAiEdited": {
+        "type": "object",
+        "description": "A completed edit by instructions.",
+        "required": ["operationsApplied", "summary"],
+        "properties": {
+          "clarification": {
+            "type": ["string", "null"],
+            "description": "What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays."
+          },
+          "operationsApplied": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Operations the live scene acknowledged.",
+            "minimum": 0
+          },
+          "summary": {
+            "type": "string",
+            "description": "What the editor did, in words."
+          }
+        }
+      },
+      "CanvasBounds": {
+        "type": "object",
+        "description": "World-space crop or object bounds.",
+        "required": ["x", "y", "width", "height"],
+        "properties": {
+          "height": {
+            "type": "number",
+            "format": "double",
+            "description": "Positive world height."
+          },
+          "width": {
+            "type": "number",
+            "format": "double",
+            "description": "Positive world width."
+          },
+          "x": {
+            "type": "number",
+            "format": "double",
+            "description": "World x coordinate."
+          },
+          "y": {
+            "type": "number",
+            "format": "double",
+            "description": "World y coordinate."
+          }
+        }
+      },
+      "CanvasEdited": {
+        "type": "object",
+        "description": "A committed batch.",
+        "required": ["operationsApplied", "revision", "scene", "summary"],
+        "properties": {
+          "operationsApplied": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Operations the live scene acknowledged.",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "string",
+            "description": "The scene's revision after the batch."
+          },
+          "scene": {
+            "type": "object",
+            "description": "The scene after the batch, with `textLayout` for measured text."
+          },
+          "summary": {
+            "type": "string",
+            "description": "What happened, in words."
+          }
+        }
+      },
+      "CanvasEditsRequest": {
+        "type": "object",
+        "description": "One batch of CanvasEditor code to apply against a revision.",
+        "required": ["expectedRevision", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "JavaScript using `editor` (and `snippets`), as ApplyCanvasEdits runs it.",
+            "minLength": 1
+          },
+          "expectedRevision": {
+            "type": "string",
+            "description": "The revision the batch was planned against, from a fresh scene read."
+          },
+          "snippets": {
+            "type": ["object", "null"],
+            "description": "Plain text values the code reads as `snippets.<key>`.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CanvasErrorBody": {
+        "type": "object",
+        "description": "Why a canvas call failed.",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/CanvasErrorCode",
+            "description": "What kind of failure."
+          },
+          "message": {
+            "type": "string",
+            "description": "What happened and what to do next."
+          }
+        }
+      },
+      "CanvasErrorCode": {
+        "type": "string",
+        "description": "Error code of a canvas call.",
+        "enum": [
+          "invalid_request",
+          "revision_conflict",
+          "edit_rejected",
+          "edit_refused",
+          "edit_failed",
+          "internal"
+        ]
+      },
+      "CanvasReadFormat": {
+        "type": "string",
+        "description": "Scene representation requested by a reader.",
+        "enum": ["scene", "overview"]
+      },
+      "CanvasRenderObject": {
+        "type": "object",
+        "description": "Stable object-to-image mapping.",
+        "required": ["id", "bounds"],
+        "properties": {
+          "bounds": {
+            "$ref": "#/components/schemas/CanvasBounds",
+            "description": "World-space bounds in the frozen scene."
+          },
+          "id": {
+            "type": "string",
+            "description": "Canvas item ID."
+          }
+        }
+      },
+      "CanvasRenderRequest": {
+        "type": "object",
+        "description": "What to render.",
+        "properties": {
+          "crop": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CanvasBounds",
+                "description": "A world-space rectangle; overrides `itemIds`."
+              }
+            ]
+          },
+          "itemIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Items to fit the image to, at most 100."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CanvasRendered": {
+        "type": "object",
+        "description": "A PNG of the canvas, stored as a static file owned by the caller.",
+        "required": [
+          "fileId",
+          "url",
+          "revision",
+          "crop",
+          "width",
+          "height",
+          "objects",
+          "unavailable",
+          "textLayout"
+        ],
+        "properties": {
+          "crop": {
+            "$ref": "#/components/schemas/CanvasBounds",
+            "description": "World bounds the image covers; pixels map linearly onto them."
+          },
+          "fileId": {
+            "type": "string",
+            "description": "Static file id of the PNG."
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Image height in pixels.",
+            "minimum": 0
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanvasRenderObject"
+            },
+            "description": "Items in the image, with their world bounds."
+          },
+          "revision": {
+            "type": "string",
+            "description": "Revision of the scene the image shows."
+          },
+          "textLayout": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanvasTextLayout"
+            },
+            "description": "Rendered text bounds and whether text overflows its frame."
+          },
+          "unavailable": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanvasUnavailable"
+            },
+            "description": "Referenced content the renderer could not show, and why."
+          },
+          "url": {
+            "type": "string",
+            "description": "Permanent URL of the PNG."
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Image width in pixels.",
+            "minimum": 0
+          }
+        }
+      },
+      "CanvasScene": {
+        "type": "object",
+        "description": "The live scene at one revision.",
+        "required": ["revision", "scene"],
+        "properties": {
+          "revision": {
+            "type": "string",
+            "description": "The scene's immutable revision; pass it as `expectedRevision` to edit."
+          },
+          "scene": {
+            "type": "object",
+            "description": "The scene: `rootId`, `totalItems`, `matchedItems`, `truncated` and\n`items` with stable ids, transforms, world bounds, shapes and text."
+          }
+        }
+      },
+      "CanvasSceneRequest": {
+        "type": "object",
+        "description": "Which part of the scene to read.",
+        "properties": {
+          "format": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CanvasReadFormat",
+                "description": "`scene` (default) for exact geometry and data, `overview` for a compact\napproximate graph with an exact id legend."
+              }
+            ]
+          },
+          "itemIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Stable item ids to read, at most 100; omit for the whole scene, up to\n300 items."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CanvasTextLayout": {
+        "type": "object",
+        "description": "Actual browser text bounds and overflow for a read-only render.",
+        "required": ["id", "bounds", "overflow"],
+        "properties": {
+          "bounds": {
+            "$ref": "#/components/schemas/CanvasBounds",
+            "description": "Actual rendered text bounds in world coordinates."
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable item ID."
+          },
+          "overflow": {
+            "type": "boolean",
+            "description": "Whether the DOM text exceeds its intended text frame."
+          }
+        }
+      },
+      "CanvasUnavailable": {
+        "type": "object",
+        "description": "Explicitly unavailable referenced content.",
+        "required": ["id", "reason"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Canvas item ID."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why no referenced resource was loaded."
           }
         }
       },

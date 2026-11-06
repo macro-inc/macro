@@ -2861,6 +2861,253 @@ export type CallTokenResponse = {
 };
 
 /**
+ * What to change, in words.
+ */
+export type CanvasAiEditRequest = {
+    /**
+     * Natural-language instructions, naming items by id where they exist.
+     */
+    instructions: string;
+};
+
+/**
+ * A completed edit by instructions.
+ */
+export type CanvasAiEdited = {
+    /**
+     * What the editor needs to know to finish, when it applied part of the
+     * edit and stopped; the applied part stays.
+     */
+    clarification?: string | null;
+    /**
+     * Operations the live scene acknowledged.
+     */
+    operationsApplied: number;
+    /**
+     * What the editor did, in words.
+     */
+    summary: string;
+};
+
+/**
+ * World-space crop or object bounds.
+ */
+export type CanvasBounds = {
+    /**
+     * Positive world height.
+     */
+    height: number;
+    /**
+     * Positive world width.
+     */
+    width: number;
+    /**
+     * World x coordinate.
+     */
+    x: number;
+    /**
+     * World y coordinate.
+     */
+    y: number;
+};
+
+/**
+ * A committed batch.
+ */
+export type CanvasEdited = {
+    /**
+     * Operations the live scene acknowledged.
+     */
+    operationsApplied: number;
+    /**
+     * The scene's revision after the batch.
+     */
+    revision: string;
+    /**
+     * The scene after the batch, with `textLayout` for measured text.
+     */
+    scene: {
+        [key: string]: unknown;
+    };
+    /**
+     * What happened, in words.
+     */
+    summary: string;
+};
+
+/**
+ * One batch of CanvasEditor code to apply against a revision.
+ */
+export type CanvasEditsRequest = {
+    /**
+     * JavaScript using `editor` (and `snippets`), as ApplyCanvasEdits runs it.
+     */
+    code: string;
+    /**
+     * The revision the batch was planned against, from a fresh scene read.
+     */
+    expectedRevision: string;
+    /**
+     * Plain text values the code reads as `snippets.<key>`.
+     */
+    snippets?: {
+        [key: string]: string;
+    } | null;
+};
+
+/**
+ * Why a canvas call failed.
+ */
+export type CanvasErrorBody = {
+    /**
+     * What kind of failure.
+     */
+    error: CanvasErrorCode;
+    /**
+     * What happened and what to do next.
+     */
+    message: string;
+};
+
+/**
+ * Error code of a canvas call.
+ */
+export type CanvasErrorCode = 'invalid_request' | 'revision_conflict' | 'edit_rejected' | 'edit_refused' | 'edit_failed' | 'internal';
+
+/**
+ * Scene representation requested by a reader.
+ */
+export type CanvasReadFormat = 'scene' | 'overview';
+
+/**
+ * Stable object-to-image mapping.
+ */
+export type CanvasRenderObject = {
+    /**
+     * World-space bounds in the frozen scene.
+     */
+    bounds: CanvasBounds;
+    /**
+     * Canvas item ID.
+     */
+    id: string;
+};
+
+/**
+ * What to render.
+ */
+export type CanvasRenderRequest = {
+    crop?: null | CanvasBounds;
+    /**
+     * Items to fit the image to, at most 100.
+     */
+    itemIds?: Array<string> | null;
+};
+
+/**
+ * A PNG of the canvas, stored as a static file owned by the caller.
+ */
+export type CanvasRendered = {
+    /**
+     * World bounds the image covers; pixels map linearly onto them.
+     */
+    crop: CanvasBounds;
+    /**
+     * Static file id of the PNG.
+     */
+    fileId: string;
+    /**
+     * Image height in pixels.
+     */
+    height: number;
+    /**
+     * Items in the image, with their world bounds.
+     */
+    objects: Array<CanvasRenderObject>;
+    /**
+     * Revision of the scene the image shows.
+     */
+    revision: string;
+    /**
+     * Rendered text bounds and whether text overflows its frame.
+     */
+    textLayout: Array<CanvasTextLayout>;
+    /**
+     * Referenced content the renderer could not show, and why.
+     */
+    unavailable: Array<CanvasUnavailable>;
+    /**
+     * Permanent URL of the PNG.
+     */
+    url: string;
+    /**
+     * Image width in pixels.
+     */
+    width: number;
+};
+
+/**
+ * The live scene at one revision.
+ */
+export type CanvasScene = {
+    /**
+     * The scene's immutable revision; pass it as `expectedRevision` to edit.
+     */
+    revision: string;
+    /**
+     * The scene: `rootId`, `totalItems`, `matchedItems`, `truncated` and
+     * `items` with stable ids, transforms, world bounds, shapes and text.
+     */
+    scene: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * Which part of the scene to read.
+ */
+export type CanvasSceneRequest = {
+    format?: null | CanvasReadFormat;
+    /**
+     * Stable item ids to read, at most 100; omit for the whole scene, up to
+     * 300 items.
+     */
+    itemIds?: Array<string> | null;
+};
+
+/**
+ * Actual browser text bounds and overflow for a read-only render.
+ */
+export type CanvasTextLayout = {
+    /**
+     * Actual rendered text bounds in world coordinates.
+     */
+    bounds: CanvasBounds;
+    /**
+     * Stable item ID.
+     */
+    id: string;
+    /**
+     * Whether the DOM text exceeds its intended text frame.
+     */
+    overflow: boolean;
+};
+
+/**
+ * Explicitly unavailable referenced content.
+ */
+export type CanvasUnavailable = {
+    /**
+     * Canvas item ID.
+     */
+    id: string;
+    /**
+     * Why no referenced resource was loaded.
+     */
+    reason: string;
+};
+
+/**
  * Where one card sits on a board: its lane, and its fractional key there.
  * A card whose row has since moved to another lane has no place until it is
  * moved again.
@@ -26734,6 +26981,214 @@ export type GetDocumentBranchNameResponses = {
 };
 
 export type GetDocumentBranchNameResponse = GetDocumentBranchNameResponses[keyof GetDocumentBranchNameResponses];
+
+export type EditCanvasWithAiData = {
+    body: CanvasAiEditRequest;
+    path: {
+        /**
+         * Canvas document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/canvas/ai-edit';
+};
+
+export type EditCanvasWithAiErrors = {
+    /**
+     * Not a canvas, or empty instructions
+     */
+    400: CanvasErrorBody;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The editor could not do the edit; nothing changed
+     */
+    422: CanvasErrorBody;
+    /**
+     * The edit could not start
+     */
+    500: CanvasErrorBody;
+    /**
+     * The edit failed and may have partly applied
+     */
+    502: CanvasErrorBody;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type EditCanvasWithAiError = EditCanvasWithAiErrors[keyof EditCanvasWithAiErrors];
+
+export type EditCanvasWithAiResponses = {
+    200: CanvasAiEdited;
+};
+
+export type EditCanvasWithAiResponse = EditCanvasWithAiResponses[keyof EditCanvasWithAiResponses];
+
+export type ApplyCanvasEditsData = {
+    body: CanvasEditsRequest;
+    path: {
+        /**
+         * Canvas document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/canvas/edits';
+};
+
+export type ApplyCanvasEditsErrors = {
+    /**
+     * Not a canvas, or an invalid revision, code or snippets
+     */
+    400: CanvasErrorBody;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The scene changed since expectedRevision; nothing was committed
+     */
+    409: CanvasErrorBody;
+    /**
+     * The batch failed before it committed; nothing changed
+     */
+    422: CanvasErrorBody;
+    /**
+     * The batch could not start
+     */
+    500: CanvasErrorBody;
+    /**
+     * The batch failed and may have applied
+     */
+    502: CanvasErrorBody;
+};
+
+export type ApplyCanvasEditsError = ApplyCanvasEditsErrors[keyof ApplyCanvasEditsErrors];
+
+export type ApplyCanvasEditsResponses = {
+    200: CanvasEdited;
+};
+
+export type ApplyCanvasEditsResponse = ApplyCanvasEditsResponses[keyof ApplyCanvasEditsResponses];
+
+export type RenderCanvasData = {
+    body: CanvasRenderRequest;
+    path: {
+        /**
+         * Canvas document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/canvas/render';
+};
+
+export type RenderCanvasErrors = {
+    /**
+     * Not a canvas, or an invalid crop or selection
+     */
+    400: CanvasErrorBody;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document view access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The render could not start or be stored
+     */
+    500: CanvasErrorBody;
+    /**
+     * The render failed
+     */
+    502: CanvasErrorBody;
+};
+
+export type RenderCanvasError = RenderCanvasErrors[keyof RenderCanvasErrors];
+
+export type RenderCanvasResponses = {
+    200: CanvasRendered;
+};
+
+export type RenderCanvasResponse = RenderCanvasResponses[keyof RenderCanvasResponses];
+
+export type ReadCanvasSceneData = {
+    body: CanvasSceneRequest;
+    path: {
+        /**
+         * Canvas document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/canvas/scene';
+};
+
+export type ReadCanvasSceneErrors = {
+    /**
+     * Not a canvas, or an invalid request
+     */
+    400: CanvasErrorBody;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document view access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The read could not start
+     */
+    500: CanvasErrorBody;
+    /**
+     * The read failed
+     */
+    502: CanvasErrorBody;
+};
+
+export type ReadCanvasSceneError = ReadCanvasSceneErrors[keyof ReadCanvasSceneErrors];
+
+export type ReadCanvasSceneResponses = {
+    200: CanvasScene;
+};
+
+export type ReadCanvasSceneResponse = ReadCanvasSceneResponses[keyof ReadCanvasSceneResponses];
 
 export type CopyDocumentData = {
     body: CopyDocumentRequest;

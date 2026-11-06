@@ -13140,6 +13140,7 @@ dependencies = [
  "channel_sender",
  "cool_asserts",
  "either",
+ "lazy-regex",
  "macro_user_id",
  "nom 8.0.0",
  "serde",
