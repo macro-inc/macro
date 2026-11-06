@@ -180,3 +180,5 @@ the gateway `/email` prefix.
 ## Related
 
 - Rules: `.agents/rules/config-and-service-urls.md` · Skill: `new-service`
+
+- Validate optional agent correlation at the HTTP boundary; delayed Gmail completion restores it from the scheduled-message row.

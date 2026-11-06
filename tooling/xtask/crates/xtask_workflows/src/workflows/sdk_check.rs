@@ -1,9 +1,21 @@
-use gh_workflow::{Concurrency, Event, Expression, Job, PullRequest, Push, Run, Step, Workflow};
+use gh_workflow::{Event, Job, Push, Run, Step, Workflow, WorkflowCall};
+use xtask_paths::RepoGlob;
 
-use crate::workflows::steps;
+use crate::workflows::{steps, vars};
 
 #[cfg(test)]
 mod test;
+
+/// Validates `@macro-inc/sdk-calls`; shared with its release workflows.
+pub const CALLS_VALIDATION: &str =
+    "bun run check && bun test && bun run build && bun run check:pack";
+
+/// Files whose change makes `PR CI` call this workflow, and that runs it on `main`.
+pub const PATHS: &[RepoGlob<'static>] = &[
+    xtask_paths::repo_glob!("packages/sdk/**"),
+    xtask_paths::repo_glob!("packages/sdk-calls/**"),
+    xtask_paths::repo_glob!(".github/workflows/sdk-check.yml"),
+];
 
 /// Build the workflow. Whether `packages/sdk`'s generated layer is fresh is
 /// checked by the web app workflow's `Generated Code Check`, which builds the
@@ -11,30 +23,21 @@ mod test;
 pub fn sdk_check() -> Workflow {
     Workflow::new("SDK Check")
         .on(Event::default()
-            .pull_request(
-                PullRequest::default()
-                    .add_branch("main")
-                    .add_path("packages/sdk/**")
-                    .add_path(".github/workflows/sdk-check.yml"),
-            )
             // `Release SDK` publishes from `main` without re-checking the
             // package, so the same suite has to guard what lands there.
             .push(
-                Push::default()
-                    .add_branch("main")
-                    .add_path("packages/sdk/**")
-                    .add_path(".github/workflows/sdk-check.yml"),
-            ))
-        .concurrency(
-            Concurrency::new(Expression::new(
-                "${{ github.workflow }}-${{ github.ref }}-check",
-            ))
-            .cancel_in_progress(true),
-        )
+                PATHS
+                    .iter()
+                    .fold(Push::default().add_branch("main"), |trigger, path| {
+                        trigger.add_path(*path)
+                    }),
+            )
+            .workflow_call(WorkflowCall::default()))
+        .concurrency(vars::concurrency("sdk-check"))
         .add_job("check-package", check_package())
 }
 
-/// Typecheck, test, and coverage-check the package as committed. Needs nothing
+/// Typecheck, test, and coverage-check the packages as committed. Needs nothing
 /// but Bun, so it stays a cheap gate that can run on every SDK change.
 fn check_package() -> Job {
     Job::default()
@@ -46,6 +49,29 @@ fn check_package() -> Job {
         .add_step(typecheck())
         .add_step(run_tests())
         .add_step(check_coverage())
+        .add_step(build_sdk())
+        .add_step(install_calls_dependencies())
+        .add_step(check_calls())
+}
+
+/// `@macro-inc/sdk-calls` compiles against the SDK's built declarations.
+fn build_sdk() -> Step<Run> {
+    Step::new("Build SDK")
+        .run("bun run build")
+        .working_directory(xtask_paths::repo_dir!("packages/sdk"))
+}
+
+fn install_calls_dependencies() -> Step<Run> {
+    Step::new("Install sdk-calls dependencies")
+        .run("bun install --frozen-lockfile")
+        .working_directory(xtask_paths::repo_dir!("packages/sdk-calls"))
+}
+
+/// The same suite the release validates, including what the tarball would hold.
+fn check_calls() -> Step<Run> {
+    Step::new("Check sdk-calls")
+        .run(CALLS_VALIDATION)
+        .working_directory(xtask_paths::repo_dir!("packages/sdk-calls"))
 }
 
 fn install_dependencies() -> Step<Run> {

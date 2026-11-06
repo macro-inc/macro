@@ -102,3 +102,5 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   connection. To regress connect-before-initialize, build without
   `create-default-state` and run `SYNC_TEST_UNINITIALIZED_ROOMS=true npx vitest run
   tests/canvas_initialization.test.ts`; the usual test build seeds automatically.
+
+- Preserve signed document-grant agent correlation in editor metadata and pending batches; different invocations remain distinct editors.

@@ -6,6 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 /// How `cropPicture` fits a picture's image to its frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum CropMode {
     /// Crop the image to the frame's aspect ratio so it covers the whole
@@ -20,6 +21,7 @@ pub enum CropMode {
 /// preset name (`"none"` removes the effect), or options.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(untagged)]
 pub enum EffectSpec<T> {
     /// A preset name, or `none` to remove the effect.
@@ -60,6 +62,7 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for EffectSpec<T> {
 /// Shadow options (PowerPoint's Shadow Options pane).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct ShadowOptions {
     /// Preset to start from (the names `shadow` takes); omitted: the
@@ -83,6 +86,7 @@ pub struct ShadowOptions {
 /// Glow options (PowerPoint's Glow Options).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct GlowOptions {
     /// Color: `RRGGBB` or a theme color name (`accent1`...; theme colors
@@ -97,6 +101,7 @@ pub struct GlowOptions {
 /// Soft edge options.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct SoftEdgeOptions {
     /// Width of the feathered edge in points (a new soft edge defaults to
@@ -107,6 +112,7 @@ pub struct SoftEdgeOptions {
 /// Reflection options (PowerPoint's Reflection Options).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct ReflectionOptions {
     /// Preset to start from (the names `reflection` takes); omitted: the

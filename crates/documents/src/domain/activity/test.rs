@@ -422,6 +422,7 @@ fn editor_event(editors: &[(&str, Option<&str>)]) -> DocumentTopicEvent {
         .iter()
         .map(
             |(actor, subject)| crate::domain::events::DocumentSyncEditor {
+                agent_correlation_id: None,
                 actor: Actor::try_from((*actor).to_owned()).unwrap(),
                 on_behalf_of: subject.map(user),
             },
@@ -543,4 +544,27 @@ async fn unavailable_debounce_is_best_effort_and_does_not_stall_other_activity()
             deleted.ingest(id)
         );
     }
+}
+
+#[test]
+fn batched_edits_from_the_same_actor_keep_each_invocation() {
+    let mut event = editor_event(&[
+        ("macro|actor@example.com", None),
+        ("macro|actor@example.com", None),
+    ]);
+    let DocumentTopicEvent::SyncContentUpdated(metadata) = &mut event else {
+        unreachable!()
+    };
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+    metadata.editors[0].agent_correlation_id = Some(first);
+    metadata.editors[1].agent_correlation_id = Some(second);
+    metadata.editors.push(metadata.editors[0].clone());
+    let Ingest::Insert(rows) = event.ingest(Uuid::now_v7()) else {
+        panic!("expected activity")
+    };
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].agent_correlation_id, Some(first));
+    assert_eq!(rows[1].agent_correlation_id, Some(second));
+    assert_ne!(rows[0].id, rows[1].id);
 }
