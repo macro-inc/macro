@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { makePersistedState } from '@app/lib/persistence';
 import { toast } from '@core/component/Toast/Toast';
 import { useTutorialCompleted } from '@core/context/user';
@@ -131,7 +132,8 @@ function FullScreenCallToastTrigger(props: { onHide: () => void }) {
   onMount(() => {
     const toastId = toast.custom(
       {
-        title: 'Show Calls on Your Lock Screen',
+        title: 'Lock-screen calls',
+        dismissLabel: t('common.notNow'),
         icon: PhoneIncoming,
         color: 'var(--color-accent)',
         content: () => (

@@ -18867,6 +18867,22 @@ export const createSnippetHandlerResponse = zod
   .describe('Response for creating a snippet.');
 
 /**
+ * @summary Create a blank native spreadsheet, ready to read and edit.
+ */
+export const createSpreadsheetBody = zod
+  .object({
+    documentName: zod.string().describe('Spreadsheet name.'),
+    projectId: zod.uuid().nullish().describe('Optional parent project.'),
+  })
+  .describe('Request to create a blank native spreadsheet.');
+
+export const createSpreadsheetResponse = zod
+  .object({
+    documentId: zod.string().describe("The new spreadsheet's document ID."),
+  })
+  .describe('A created native spreadsheet.');
+
+/**
  * @summary Creates a task document with properties and initialized markdown content in
 one backend-owned lifecycle.
  */
@@ -29387,6 +29403,2947 @@ export const setSkillDescriptionResponse = zod
   .describe("A skill's routing description.");
 
 /**
+ * A client that disconnects drops the worker request, which cancels the
+edit before its save.
+ * @summary Edit a native spreadsheet by instructions with the caller's edit access:
+a writer model reads the workbook and saves one atomic batch, with AI
+admission and billing. A workbook changed while it worked saves nothing
+and answers 409.
+ */
+export const editSpreadsheetWithAiParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const editSpreadsheetWithAiBody = zod
+  .object({
+    instructions: zod
+      .string()
+      .min(1)
+      .describe(
+        'Natural-language instructions. Name the sheet and the cells, columns\nor table to change, describe the outcome, and say what must stay.'
+      ),
+  })
+  .describe('What to change in a workbook, in words.');
+
+export const editSpreadsheetWithAiResponseSheetsItemColumnCountMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemErrorCellsMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemFormulaCellsMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemPopulatedCellsMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemRowCountMin = 0;
+
+export const editSpreadsheetWithAiResponse = zod
+  .object({
+    applied: zod.boolean().describe('Whether a new change was persisted.'),
+    changes: zod
+      .array(
+        zod
+          .object({
+            range: zod
+              .string()
+              .nullish()
+              .describe('Affected range, when applicable.'),
+            sheetId: zod.string().describe('Affected stable sheet identity.'),
+            summary: zod.string().describe('Human-readable change summary.'),
+            type: zod.string().describe('Operation type.'),
+          })
+          .describe('Applied edit summary.')
+      )
+      .describe('What changed, one summary per operation.'),
+    revision: zod.string().describe('Revision after the edit.'),
+    sheets: zod
+      .array(
+        zod
+          .object({
+            columnCount: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemColumnCountMin)
+              .describe('Available columns.'),
+            errorCells: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemErrorCellsMin)
+              .describe('Number of calculated errors.'),
+            formulaCells: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemFormulaCellsMin)
+              .describe('Number of formulas.'),
+            id: zod
+              .string()
+              .describe('Stable sheet identity for future calls.'),
+            name: zod.string().describe('Current sheet name.'),
+            populatedCells: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemPopulatedCellsMin)
+              .describe('Number of populated cells.'),
+            rowCount: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemRowCountMin)
+              .describe('Available rows.'),
+            tables: zod
+              .array(
+                zod
+                  .object({
+                    columnTypes: zod
+                      .array(
+                        zod
+                          .object({
+                            column: zod
+                              .string()
+                              .describe(
+                                'Header name of the column, ignoring case.'
+                              ),
+                            type: zod
+                              .enum([
+                                'text',
+                                'number',
+                                'percent',
+                                'currency',
+                                'date',
+                                'datetime',
+                                'time',
+                                'checkbox',
+                                'dropdown',
+                                'person',
+                              ])
+                              .describe(
+                                'What a table column holds, as Google Sheets types table columns.'
+                              ),
+                          })
+                          .describe(
+                            "A table column's type, by its header name."
+                          )
+                      )
+                      .optional()
+                      .describe('Typed columns; untyped columns are left out.'),
+                    columns: zod
+                      .array(zod.string())
+                      .describe('Column names, from the header row.'),
+                    filteredColumns: zod
+                      .array(zod.string())
+                      .optional()
+                      .describe('Columns whose filters currently hide rows.'),
+                    name: zod
+                      .string()
+                      .describe('Table name, as in Sales[Amount].'),
+                    range: zod
+                      .string()
+                      .describe(
+                        'A1 rectangle from the header row through the total row, if any.'
+                      ),
+                    totalsRow: zod
+                      .boolean()
+                      .describe('Whether the last row is a total row.'),
+                  })
+                  .describe(
+                    'A named table (an Excel table) that formulas address with structured references.'
+                  )
+              )
+              .optional()
+              .describe('Named tables on the sheet.'),
+            usedRange: zod
+              .string()
+              .nullish()
+              .describe(
+                'Bounding rectangle of used cells, or null for an empty sheet.'
+              ),
+          })
+          .describe('Compact metadata for a sheet.')
+      )
+      .describe('Every sheet after the edit.'),
+    warnings: zod
+      .array(zod.string())
+      .describe(
+        'Issues to check, such as formula errors; they are not repaired.'
+      ),
+  })
+  .describe('A completed edit by instructions.');
+
+/**
+ * @summary Evaluate scratch formulas against a native spreadsheet with view access,
+optionally with hypothetical inputs. Nothing is saved.
+ */
+export const calculateSpreadsheetParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const calculateSpreadsheetBody = zod
+  .object({
+    formulas: zod
+      .array(
+        zod
+          .object({
+            formula: zod
+              .string()
+              .describe('Excel-style formula, beginning with =.'),
+            label: zod
+              .string()
+              .nullish()
+              .describe('Optional label echoed with the result.'),
+          })
+          .describe('A scratch formula evaluated without persisting it.')
+      )
+      .describe('At most 20 formulas beginning with =.'),
+    overrides: zod
+      .array(
+        zod
+          .object({
+            cells: zod
+              .array(
+                zod
+                  .object({
+                    address: zod
+                      .string()
+                      .describe('A1 address, from A1 through XFD100000.'),
+                    value: zod
+                      .string()
+                      .describe(
+                        'Raw text or formula, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                      ),
+                  })
+                  .describe(
+                    'Source text for one cell. Formulas start with =; a leading apostrophe forces literal text.'
+                  )
+              )
+              .describe('Cells to change in this hypothetical calculation.'),
+            sheetId: zod
+              .string()
+              .describe(
+                'Stable sheet ID or exact sheet name from ReadSpreadsheet.'
+              ),
+          })
+          .describe(
+            "Hypothetical inputs applied only to the calculation's disposable workbook."
+          )
+      )
+      .nullish()
+      .describe('Hypothetical cell inputs, never saved.'),
+    sheetId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Sheet for unqualified references; defaults to the first sheet.'
+      ),
+  })
+  .describe(
+    'Scratch formulas to evaluate against a workbook, without writing anything.'
+  );
+
+export const calculateSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin = 0;
+
+export const calculateSpreadsheetResponseRangesItemCellsItemStyleIndentMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemColumnCountMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemErrorCellsMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemFormulaCellsMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemPopulatedCellsMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemRowCountMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemColumnCountMinOne = 0;
+
+export const calculateSpreadsheetResponseSheetsItemErrorCellsMinOne = 0;
+
+export const calculateSpreadsheetResponseSheetsItemFormulaCellsMinOne = 0;
+
+export const calculateSpreadsheetResponseSheetsItemPopulatedCellsMinOne = 0;
+
+export const calculateSpreadsheetResponseSheetsItemRowCountMinOne = 0;
+
+export const calculateSpreadsheetResponse = zod
+  .union([
+    zod
+      .object({
+        action: zod.enum(['read']),
+        ranges: zod
+          .array(
+            zod
+              .object({
+                cells: zod
+                  .array(
+                    zod
+                      .object({
+                        display: zod
+                          .string()
+                          .describe('Text shown in the spreadsheet.'),
+                        error: zod
+                          .string()
+                          .nullish()
+                          .describe('Explanation for an error result.'),
+                        type: zod
+                          .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                          .describe('The calculation result kind.'),
+                        value: zod
+                          .unknown()
+                          .describe(
+                            'The typed scalar. Empty cells have a null value.'
+                          ),
+                      })
+                      .describe(
+                        'A calculated scalar with its display text and optional error explanation.'
+                      )
+                      .and(
+                        zod.object({
+                          address: zod.string().describe('A1 address.'),
+                          formula: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Formula, when this input is calculated.'
+                            ),
+                          source: zod
+                            .string()
+                            .describe('Exact persisted source input.'),
+                          style: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  bold: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bold text.'),
+                                  borderBottom: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bottom border.'),
+                                  borderBottomColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Bottom border color.'),
+                                  borderBottomStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderLeft: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Left border.'),
+                                  borderLeftColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Left border color.'),
+                                  borderLeftStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderRight: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Right border.'),
+                                  borderRightColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Right border color.'),
+                                  borderRightStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderTop: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Top border.'),
+                                  borderTopColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Top border color.'),
+                                  borderTopStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  checkbox: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe(
+                                      "Show the cell's TRUE\/FALSE value as a checkbox; false removes it and keeps the value."
+                                    ),
+                                  decimals: zod
+                                    .number()
+                                    .nullish()
+                                    .describe(
+                                      'Decimal places, 0 through 10; -1 restores automatic.'
+                                    ),
+                                  fillColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Fill color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  fontFamily: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['sans', 'serif', 'mono'])
+                                        .describe('Font family.'),
+                                    ])
+                                    .optional(),
+                                  fontName: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel font name, up to 128 characters.'
+                                    ),
+                                  fontSize: zod
+                                    .number()
+                                    .min(
+                                      calculateSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      'Font size in points, 8 through 36.'
+                                    ),
+                                  format: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'general',
+                                          'number',
+                                          'currency',
+                                          'accounting',
+                                          'percent',
+                                          'date',
+                                          'time',
+                                          'scientific',
+                                          'text',
+                                        ])
+                                        .describe(
+                                          'Number interpretation and display; currency and accounting are USD and dates use UTC.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  horizontalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'auto',
+                                          'left',
+                                          'center',
+                                          'right',
+                                        ])
+                                        .describe('Horizontal alignment.'),
+                                    ])
+                                    .optional(),
+                                  indent: zod
+                                    .number()
+                                    .min(
+                                      calculateSpreadsheetResponseRangesItemCellsItemStyleIndentMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      "Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the\nleft edge, or from the right edge of right-aligned cells. Centered cells ignore it."
+                                    ),
+                                  italic: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Italic text.'),
+                                  numberFormat: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel number format, up to 512 characters; it overrides the display of `format`.\nShow dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,\nmm\/dd\/yyyy, dd\/mm\/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with\nformat=time and a code such as h:mm AM\/PM.'
+                                    ),
+                                  strikethrough: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Struck-through text.'),
+                                  textColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Text color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  underline: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Underlined text.'),
+                                  verticalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['top', 'middle', 'bottom'])
+                                        .describe('Vertical alignment.'),
+                                    ])
+                                    .optional(),
+                                  wrap: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Wrap text.'),
+                                })
+                                .describe(
+                                  'Sparse cell styling patch. Omitted fields remain unchanged.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                      )
+                      .describe('Cell source and calculated result.')
+                  )
+                  .describe('Cells with their sources and current results.'),
+                range: zod.string().describe('Requested or sampled rectangle.'),
+                sheetId: zod.string().describe('Stable sheet identity.'),
+                sheetName: zod.string().describe('Current sheet name.'),
+                truncated: zod
+                  .boolean()
+                  .describe(
+                    'True when a narrower follow-up read is needed to see every cell.'
+                  ),
+                validations: zod
+                  .array(
+                    zod
+                      .object({
+                        colors: zod
+                          .array(
+                            zod
+                              .object({
+                                color: zod
+                                  .string()
+                                  .describe(
+                                    'Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.'
+                                  ),
+                                item: zod
+                                  .string()
+                                  .describe(
+                                    'The choice, matched to cell text ignoring case.'
+                                  ),
+                              })
+                              .describe(
+                                "A dropdown choice's color. Cells showing the choice draw it as a chip of this color."
+                              )
+                          )
+                          .nullish()
+                          .describe("A dropdown's choice colors."),
+                        dropdown: zod
+                          .boolean()
+                          .nullish()
+                          .describe(
+                            'Whether a list rule shows its dropdown arrow.'
+                          ),
+                        formulas: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe('Rule formulas, without the leading =.'),
+                        items: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe("A dropdown's typed choices."),
+                        operator: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Comparison for number, date, time and text-length rules.'
+                          ),
+                        range: zod
+                          .string()
+                          .describe(
+                            'Cells the rule covers, as space-separated A1 ranges.'
+                          ),
+                        rejectInvalid: zod
+                          .boolean()
+                          .describe(
+                            'Whether entries that break the rule are rejected.'
+                          ),
+                        source: zod
+                          .string()
+                          .nullish()
+                          .describe("A dropdown's source range."),
+                        type: zod
+                          .string()
+                          .describe(
+                            'Rule kind: list, whole, decimal, date, time, textLength, custom, or any.'
+                          ),
+                      })
+                      .describe(
+                        'A data validation rule; list rules are dropdowns.'
+                      )
+                  )
+                  .optional()
+                  .describe(
+                    'Dropdowns and other data validation rules overlapping this range.'
+                  ),
+              })
+              .describe('Addressed range with explicit truncation.')
+          )
+          .describe('Addressed cells with raw inputs and calculated results.'),
+        revision: zod
+          .string()
+          .describe('Opaque revision required for EditSpreadsheet.'),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemColumnCountMin)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemErrorCellsMin)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemFormulaCellsMin)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemPopulatedCellsMin)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemRowCountMin)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('All visible sheets and their used bounds.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Limits or issues the caller should account for.'),
+      })
+      .describe('Workbook inspection result.'),
+    zod
+      .object({
+        action: zod.enum(['calculate']),
+        results: zod
+          .array(
+            zod
+              .object({
+                display: zod
+                  .string()
+                  .describe('Text shown in the spreadsheet.'),
+                error: zod
+                  .string()
+                  .nullish()
+                  .describe('Explanation for an error result.'),
+                type: zod
+                  .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                  .describe('The calculation result kind.'),
+                value: zod
+                  .unknown()
+                  .describe('The typed scalar. Empty cells have a null value.'),
+              })
+              .describe(
+                'A calculated scalar with its display text and optional error explanation.'
+              )
+              .and(
+                zod.object({
+                  formula: zod.string().describe('Evaluated scratch formula.'),
+                  label: zod
+                    .string()
+                    .nullish()
+                    .describe('Caller-supplied label.'),
+                })
+              )
+              .describe('One hypothetical formula result.')
+          )
+          .describe('Results in input order.'),
+        revision: zod
+          .string()
+          .describe('Revision used for these calculations.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Calculation limits or issues.'),
+      })
+      .describe('Scratch calculation result. No persistent changes were made.'),
+    zod
+      .object({
+        action: zod.enum(['edit']),
+        applied: zod.boolean().describe('Whether a new change was persisted.'),
+        changes: zod
+          .array(
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .nullish()
+                  .describe('Affected range, when applicable.'),
+                sheetId: zod
+                  .string()
+                  .describe('Affected stable sheet identity.'),
+                summary: zod
+                  .string()
+                  .describe('Human-readable change summary.'),
+                type: zod.string().describe('Operation type.'),
+              })
+              .describe('Applied edit summary.')
+          )
+          .describe('Applied operation summaries.'),
+        revision: zod
+          .string()
+          .describe(
+            'Revision after the edit; use a fresh read before further editing.'
+          ),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemColumnCountMinOne)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemErrorCellsMinOne)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemFormulaCellsMinOne)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(
+                    calculateSpreadsheetResponseSheetsItemPopulatedCellsMinOne
+                  )
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemRowCountMinOne)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('Sheet metadata after editing.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Issues requiring inspection, including formula errors.'),
+      })
+      .describe('Result of a persisted atomic edit.'),
+  ])
+  .describe('Structured output from a deterministic workbook operation.');
+
+/**
+ * @summary Apply one atomic batch of operations to a native spreadsheet with edit
+access. Every operation validates before anything is saved; a workbook that
+changed since `expectedRevision` rejects the batch with 409.
+ */
+export const editSpreadsheetParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const editSpreadsheetBodyOperationsItemStyleFontSizeMin = 0;
+
+export const editSpreadsheetBodyOperationsItemStyleIndentMin = 0;
+
+export const editSpreadsheetBodyOperationsItemCountMin = 0;
+
+export const editSpreadsheetBodyOperationsItemColumnsItemWidthMin = 0;
+
+export const editSpreadsheetBody = zod
+  .object({
+    expectedRevision: zod
+      .string()
+      .describe(
+        'The revision a read returned; a changed workbook rejects the batch.'
+      ),
+    operations: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                cells: zod
+                  .array(
+                    zod
+                      .object({
+                        address: zod
+                          .string()
+                          .describe('A1 address, from A1 through XFD100000.'),
+                        value: zod
+                          .string()
+                          .describe(
+                            'Raw text or formula, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                          ),
+                      })
+                      .describe(
+                        'Source text for one cell. Formulas start with =; a leading apostrophe forces literal text.'
+                      )
+                  )
+                  .describe('Cells and their new source inputs.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['set_cells']),
+              })
+              .describe(
+                'Set raw values\/formulas while preserving existing formatting.'
+              ),
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .describe('A1 rectangle, for example A1:D20.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                style: zod
+                  .object({
+                    bold: zod.boolean().nullish().describe('Bold text.'),
+                    borderBottom: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Bottom border.'),
+                    borderBottomColor: zod
+                      .string()
+                      .nullish()
+                      .describe('Bottom border color.'),
+                    borderBottomStyle: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'reset',
+                            'thin',
+                            'medium',
+                            'thick',
+                            'double',
+                            'dotted',
+                            'dashed',
+                            'dashDot',
+                            'dashDotDot',
+                            'slantDashDot',
+                            'hair',
+                            'mediumDashed',
+                            'mediumDashDot',
+                            'mediumDashDotDot',
+                          ])
+                          .describe('Excel border line style.'),
+                      ])
+                      .optional(),
+                    borderLeft: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Left border.'),
+                    borderLeftColor: zod
+                      .string()
+                      .nullish()
+                      .describe('Left border color.'),
+                    borderLeftStyle: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'reset',
+                            'thin',
+                            'medium',
+                            'thick',
+                            'double',
+                            'dotted',
+                            'dashed',
+                            'dashDot',
+                            'dashDotDot',
+                            'slantDashDot',
+                            'hair',
+                            'mediumDashed',
+                            'mediumDashDot',
+                            'mediumDashDotDot',
+                          ])
+                          .describe('Excel border line style.'),
+                      ])
+                      .optional(),
+                    borderRight: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Right border.'),
+                    borderRightColor: zod
+                      .string()
+                      .nullish()
+                      .describe('Right border color.'),
+                    borderRightStyle: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'reset',
+                            'thin',
+                            'medium',
+                            'thick',
+                            'double',
+                            'dotted',
+                            'dashed',
+                            'dashDot',
+                            'dashDotDot',
+                            'slantDashDot',
+                            'hair',
+                            'mediumDashed',
+                            'mediumDashDot',
+                            'mediumDashDotDot',
+                          ])
+                          .describe('Excel border line style.'),
+                      ])
+                      .optional(),
+                    borderTop: zod.boolean().nullish().describe('Top border.'),
+                    borderTopColor: zod
+                      .string()
+                      .nullish()
+                      .describe('Top border color.'),
+                    borderTopStyle: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'reset',
+                            'thin',
+                            'medium',
+                            'thick',
+                            'double',
+                            'dotted',
+                            'dashed',
+                            'dashDot',
+                            'dashDotDot',
+                            'slantDashDot',
+                            'hair',
+                            'mediumDashed',
+                            'mediumDashDot',
+                            'mediumDashDotDot',
+                          ])
+                          .describe('Excel border line style.'),
+                      ])
+                      .optional(),
+                    checkbox: zod
+                      .boolean()
+                      .nullish()
+                      .describe(
+                        "Show the cell's TRUE\/FALSE value as a checkbox; false removes it and keeps the value."
+                      ),
+                    decimals: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'Decimal places, 0 through 10; -1 restores automatic.'
+                      ),
+                    fillColor: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Fill color as #RRGGBB; empty string resets it.'
+                      ),
+                    fontFamily: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['sans', 'serif', 'mono'])
+                          .describe('Font family.'),
+                      ])
+                      .optional(),
+                    fontName: zod
+                      .string()
+                      .nullish()
+                      .describe('Exact Excel font name, up to 128 characters.'),
+                    fontSize: zod
+                      .number()
+                      .min(editSpreadsheetBodyOperationsItemStyleFontSizeMin)
+                      .nullish()
+                      .describe('Font size in points, 8 through 36.'),
+                    format: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'general',
+                            'number',
+                            'currency',
+                            'accounting',
+                            'percent',
+                            'date',
+                            'time',
+                            'scientific',
+                            'text',
+                          ])
+                          .describe(
+                            'Number interpretation and display; currency and accounting are USD and dates use UTC.'
+                          ),
+                      ])
+                      .optional(),
+                    horizontalAlign: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['auto', 'left', 'center', 'right'])
+                          .describe('Horizontal alignment.'),
+                      ])
+                      .optional(),
+                    indent: zod
+                      .number()
+                      .min(editSpreadsheetBodyOperationsItemStyleIndentMin)
+                      .nullish()
+                      .describe(
+                        "Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the\nleft edge, or from the right edge of right-aligned cells. Centered cells ignore it."
+                      ),
+                    italic: zod.boolean().nullish().describe('Italic text.'),
+                    numberFormat: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Exact Excel number format, up to 512 characters; it overrides the display of `format`.\nShow dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,\nmm\/dd\/yyyy, dd\/mm\/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with\nformat=time and a code such as h:mm AM\/PM.'
+                      ),
+                    strikethrough: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Struck-through text.'),
+                    textColor: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Text color as #RRGGBB; empty string resets it.'
+                      ),
+                    underline: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Underlined text.'),
+                    verticalAlign: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['top', 'middle', 'bottom'])
+                          .describe('Vertical alignment.'),
+                      ])
+                      .optional(),
+                    wrap: zod.boolean().nullish().describe('Wrap text.'),
+                  })
+                  .describe(
+                    'Sparse cell styling patch. Omitted fields remain unchanged.'
+                  ),
+                type: zod.enum(['format_cells']),
+              })
+              .describe('Apply a sparse formatting patch to a rectangle.'),
+            zod
+              .object({
+                clearFormatting: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    'Defaults to false; preserves formatting unless requested.'
+                  ),
+                range: zod.string().describe('A1 rectangle.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['clear_cells']),
+              })
+              .describe(
+                "Clear a rectangle's inputs, optionally its formatting too."
+              ),
+            zod
+              .object({
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                sourceRange: zod.string().describe('Source rectangle.'),
+                targetRange: zod.string().describe('Target rectangle.'),
+                type: zod.enum(['fill_cells']),
+              })
+              .describe(
+                'Repeat a source rectangle into a target using relative formula translation.'
+              ),
+            zod
+              .object({
+                name: zod
+                  .string()
+                  .describe(
+                    'Unique Excel-compatible name, at most 31 characters.'
+                  ),
+                type: zod.enum(['add_sheet']),
+              })
+              .describe(
+                'Add an empty sheet; later operations may address it by this name.'
+              ),
+            zod
+              .object({
+                name: zod.string().describe('New unique name.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['rename_sheet']),
+              })
+              .describe(
+                'Rename a sheet; rejected when existing formulas directly reference its current name.'
+              ),
+            zod
+              .object({
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('Optional unique name for the copy.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['duplicate_sheet']),
+              })
+              .describe(
+                'Duplicate a sheet, including values, formulas, styles, and layout.'
+              ),
+            zod
+              .object({
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['delete_sheet']),
+              })
+              .describe(
+                'Delete a sheet; the final sheet and directly referenced sheets are protected.'
+              ),
+            zod
+              .object({
+                count: zod
+                  .number()
+                  .min(editSpreadsheetBodyOperationsItemCountMin)
+                  .describe('Number of rows to append.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['append_rows']),
+              })
+              .describe('Append rows, up to the 100,000-row sheet limit.'),
+            zod
+              .object({
+                columns: zod
+                  .array(
+                    zod
+                      .object({
+                        column: zod
+                          .string()
+                          .describe('Column letter A through XFD.'),
+                        width: zod
+                          .number()
+                          .min(
+                            editSpreadsheetBodyOperationsItemColumnsItemWidthMin
+                          )
+                          .describe('Width in pixels, 8 through 640.'),
+                      })
+                      .describe('A column width.')
+                  )
+                  .describe('Column widths to set.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['resize_columns']),
+              })
+              .describe('Resize one or more columns.'),
+            zod
+              .object({
+                colors: zod
+                  .array(
+                    zod
+                      .object({
+                        color: zod
+                          .string()
+                          .describe(
+                            'Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.'
+                          ),
+                        item: zod
+                          .string()
+                          .describe(
+                            'The choice, matched to cell text ignoring case.'
+                          ),
+                      })
+                      .describe(
+                        "A dropdown choice's color. Cells showing the choice draw it as a chip of this color."
+                      )
+                  )
+                  .nullish()
+                  .describe(
+                    'Optional color per choice, shown as a colored chip in cells and in the open list. With typed items, each must name one of them.'
+                  ),
+                items: zod
+                  .array(zod.string())
+                  .nullish()
+                  .describe(
+                    'Typed choices, without commas, at most 253 characters in total.'
+                  ),
+                range: zod
+                  .string()
+                  .describe('A1 rectangle, for example C2:C200.'),
+                rejectInvalid: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    'Defaults to true: reject typed entries that are not a choice. False only suggests the choices.'
+                  ),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                source: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Range holding the choices, for example 'Lists'!A2:A20 or A2:A20 on the same sheet."
+                  ),
+                type: zod.enum(['set_dropdown']),
+              })
+              .describe(
+                'Add an in-cell dropdown (list data validation) to a rectangle, replacing any validation there.\nGive exactly one of items or source. Cell values are unchanged; set them separately.'
+              ),
+            zod
+              .object({
+                range: zod.string().describe('A1 rectangle.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['clear_validation']),
+              })
+              .describe(
+                'Remove dropdowns and any other data validation from a rectangle.'
+              ),
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .describe('A1 rectangle, for example D2:D50.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['insert_checkboxes']),
+              })
+              .describe(
+                'Turn a rectangle into checkboxes backed by TRUE\/FALSE values: blank cells become FALSE\n(unchecked) and other values are kept. Check or uncheck them with set_cells TRUE or FALSE.'
+              ),
+            zod
+              .object({
+                columnTypes: zod
+                  .array(
+                    zod
+                      .object({
+                        column: zod
+                          .string()
+                          .describe(
+                            'Header name of the column, ignoring case.'
+                          ),
+                        type: zod
+                          .enum([
+                            'text',
+                            'number',
+                            'percent',
+                            'currency',
+                            'date',
+                            'datetime',
+                            'time',
+                            'checkbox',
+                            'dropdown',
+                            'person',
+                          ])
+                          .describe(
+                            'What a table column holds, as Google Sheets types table columns.'
+                          ),
+                      })
+                      .describe("A table column's type, by its header name.")
+                  )
+                  .nullish()
+                  .describe(
+                    "Column types by header name. A type formats the column's data cells; checkbox makes\nthem checkboxes and dropdown offers the column's values as colored choices."
+                  ),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Unique table name, such as Sales; spaces become underscores. Defaults to the next free\nTableN.'
+                  ),
+                range: zod
+                  .string()
+                  .describe(
+                    'A1 rectangle including the header row, for example A1:D20. Must not overlap a table.'
+                  ),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                totalsRow: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    'Add a total row below the data, which must be empty. Defaults to false.'
+                  ),
+                type: zod.enum(['create_table']),
+              })
+              .describe(
+                'Convert a rectangle to a named table (an Excel table). Its first row becomes the header\nrow; blank or repeated headers are named. Formulas can then use structured references\nsuch as Table1[Amount], [@Amount] or Table1 for its data, and each header gets sort and\nfilter controls. Columns take the type their values suggest unless column_types says.'
+              ),
+          ])
+          .describe(
+            'One operation in an atomic workbook edit. All operations validate before any write.'
+          )
+      )
+      .describe('Between 1 and 25 operations, validated and saved together.'),
+  })
+  .describe(
+    'One atomic batch of operations against the revision it was planned on.'
+  );
+
+export const editSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin = 0;
+
+export const editSpreadsheetResponseRangesItemCellsItemStyleIndentMin = 0;
+
+export const editSpreadsheetResponseSheetsItemColumnCountMin = 0;
+
+export const editSpreadsheetResponseSheetsItemErrorCellsMin = 0;
+
+export const editSpreadsheetResponseSheetsItemFormulaCellsMin = 0;
+
+export const editSpreadsheetResponseSheetsItemPopulatedCellsMin = 0;
+
+export const editSpreadsheetResponseSheetsItemRowCountMin = 0;
+
+export const editSpreadsheetResponseSheetsItemColumnCountMinOne = 0;
+
+export const editSpreadsheetResponseSheetsItemErrorCellsMinOne = 0;
+
+export const editSpreadsheetResponseSheetsItemFormulaCellsMinOne = 0;
+
+export const editSpreadsheetResponseSheetsItemPopulatedCellsMinOne = 0;
+
+export const editSpreadsheetResponseSheetsItemRowCountMinOne = 0;
+
+export const editSpreadsheetResponse = zod
+  .union([
+    zod
+      .object({
+        action: zod.enum(['read']),
+        ranges: zod
+          .array(
+            zod
+              .object({
+                cells: zod
+                  .array(
+                    zod
+                      .object({
+                        display: zod
+                          .string()
+                          .describe('Text shown in the spreadsheet.'),
+                        error: zod
+                          .string()
+                          .nullish()
+                          .describe('Explanation for an error result.'),
+                        type: zod
+                          .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                          .describe('The calculation result kind.'),
+                        value: zod
+                          .unknown()
+                          .describe(
+                            'The typed scalar. Empty cells have a null value.'
+                          ),
+                      })
+                      .describe(
+                        'A calculated scalar with its display text and optional error explanation.'
+                      )
+                      .and(
+                        zod.object({
+                          address: zod.string().describe('A1 address.'),
+                          formula: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Formula, when this input is calculated.'
+                            ),
+                          source: zod
+                            .string()
+                            .describe('Exact persisted source input.'),
+                          style: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  bold: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bold text.'),
+                                  borderBottom: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bottom border.'),
+                                  borderBottomColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Bottom border color.'),
+                                  borderBottomStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderLeft: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Left border.'),
+                                  borderLeftColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Left border color.'),
+                                  borderLeftStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderRight: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Right border.'),
+                                  borderRightColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Right border color.'),
+                                  borderRightStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderTop: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Top border.'),
+                                  borderTopColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Top border color.'),
+                                  borderTopStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  checkbox: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe(
+                                      "Show the cell's TRUE\/FALSE value as a checkbox; false removes it and keeps the value."
+                                    ),
+                                  decimals: zod
+                                    .number()
+                                    .nullish()
+                                    .describe(
+                                      'Decimal places, 0 through 10; -1 restores automatic.'
+                                    ),
+                                  fillColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Fill color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  fontFamily: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['sans', 'serif', 'mono'])
+                                        .describe('Font family.'),
+                                    ])
+                                    .optional(),
+                                  fontName: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel font name, up to 128 characters.'
+                                    ),
+                                  fontSize: zod
+                                    .number()
+                                    .min(
+                                      editSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      'Font size in points, 8 through 36.'
+                                    ),
+                                  format: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'general',
+                                          'number',
+                                          'currency',
+                                          'accounting',
+                                          'percent',
+                                          'date',
+                                          'time',
+                                          'scientific',
+                                          'text',
+                                        ])
+                                        .describe(
+                                          'Number interpretation and display; currency and accounting are USD and dates use UTC.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  horizontalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'auto',
+                                          'left',
+                                          'center',
+                                          'right',
+                                        ])
+                                        .describe('Horizontal alignment.'),
+                                    ])
+                                    .optional(),
+                                  indent: zod
+                                    .number()
+                                    .min(
+                                      editSpreadsheetResponseRangesItemCellsItemStyleIndentMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      "Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the\nleft edge, or from the right edge of right-aligned cells. Centered cells ignore it."
+                                    ),
+                                  italic: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Italic text.'),
+                                  numberFormat: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel number format, up to 512 characters; it overrides the display of `format`.\nShow dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,\nmm\/dd\/yyyy, dd\/mm\/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with\nformat=time and a code such as h:mm AM\/PM.'
+                                    ),
+                                  strikethrough: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Struck-through text.'),
+                                  textColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Text color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  underline: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Underlined text.'),
+                                  verticalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['top', 'middle', 'bottom'])
+                                        .describe('Vertical alignment.'),
+                                    ])
+                                    .optional(),
+                                  wrap: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Wrap text.'),
+                                })
+                                .describe(
+                                  'Sparse cell styling patch. Omitted fields remain unchanged.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                      )
+                      .describe('Cell source and calculated result.')
+                  )
+                  .describe('Cells with their sources and current results.'),
+                range: zod.string().describe('Requested or sampled rectangle.'),
+                sheetId: zod.string().describe('Stable sheet identity.'),
+                sheetName: zod.string().describe('Current sheet name.'),
+                truncated: zod
+                  .boolean()
+                  .describe(
+                    'True when a narrower follow-up read is needed to see every cell.'
+                  ),
+                validations: zod
+                  .array(
+                    zod
+                      .object({
+                        colors: zod
+                          .array(
+                            zod
+                              .object({
+                                color: zod
+                                  .string()
+                                  .describe(
+                                    'Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.'
+                                  ),
+                                item: zod
+                                  .string()
+                                  .describe(
+                                    'The choice, matched to cell text ignoring case.'
+                                  ),
+                              })
+                              .describe(
+                                "A dropdown choice's color. Cells showing the choice draw it as a chip of this color."
+                              )
+                          )
+                          .nullish()
+                          .describe("A dropdown's choice colors."),
+                        dropdown: zod
+                          .boolean()
+                          .nullish()
+                          .describe(
+                            'Whether a list rule shows its dropdown arrow.'
+                          ),
+                        formulas: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe('Rule formulas, without the leading =.'),
+                        items: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe("A dropdown's typed choices."),
+                        operator: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Comparison for number, date, time and text-length rules.'
+                          ),
+                        range: zod
+                          .string()
+                          .describe(
+                            'Cells the rule covers, as space-separated A1 ranges.'
+                          ),
+                        rejectInvalid: zod
+                          .boolean()
+                          .describe(
+                            'Whether entries that break the rule are rejected.'
+                          ),
+                        source: zod
+                          .string()
+                          .nullish()
+                          .describe("A dropdown's source range."),
+                        type: zod
+                          .string()
+                          .describe(
+                            'Rule kind: list, whole, decimal, date, time, textLength, custom, or any.'
+                          ),
+                      })
+                      .describe(
+                        'A data validation rule; list rules are dropdowns.'
+                      )
+                  )
+                  .optional()
+                  .describe(
+                    'Dropdowns and other data validation rules overlapping this range.'
+                  ),
+              })
+              .describe('Addressed range with explicit truncation.')
+          )
+          .describe('Addressed cells with raw inputs and calculated results.'),
+        revision: zod
+          .string()
+          .describe('Opaque revision required for EditSpreadsheet.'),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemColumnCountMin)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemErrorCellsMin)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemFormulaCellsMin)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemPopulatedCellsMin)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemRowCountMin)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('All visible sheets and their used bounds.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Limits or issues the caller should account for.'),
+      })
+      .describe('Workbook inspection result.'),
+    zod
+      .object({
+        action: zod.enum(['calculate']),
+        results: zod
+          .array(
+            zod
+              .object({
+                display: zod
+                  .string()
+                  .describe('Text shown in the spreadsheet.'),
+                error: zod
+                  .string()
+                  .nullish()
+                  .describe('Explanation for an error result.'),
+                type: zod
+                  .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                  .describe('The calculation result kind.'),
+                value: zod
+                  .unknown()
+                  .describe('The typed scalar. Empty cells have a null value.'),
+              })
+              .describe(
+                'A calculated scalar with its display text and optional error explanation.'
+              )
+              .and(
+                zod.object({
+                  formula: zod.string().describe('Evaluated scratch formula.'),
+                  label: zod
+                    .string()
+                    .nullish()
+                    .describe('Caller-supplied label.'),
+                })
+              )
+              .describe('One hypothetical formula result.')
+          )
+          .describe('Results in input order.'),
+        revision: zod
+          .string()
+          .describe('Revision used for these calculations.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Calculation limits or issues.'),
+      })
+      .describe('Scratch calculation result. No persistent changes were made.'),
+    zod
+      .object({
+        action: zod.enum(['edit']),
+        applied: zod.boolean().describe('Whether a new change was persisted.'),
+        changes: zod
+          .array(
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .nullish()
+                  .describe('Affected range, when applicable.'),
+                sheetId: zod
+                  .string()
+                  .describe('Affected stable sheet identity.'),
+                summary: zod
+                  .string()
+                  .describe('Human-readable change summary.'),
+                type: zod.string().describe('Operation type.'),
+              })
+              .describe('Applied edit summary.')
+          )
+          .describe('Applied operation summaries.'),
+        revision: zod
+          .string()
+          .describe(
+            'Revision after the edit; use a fresh read before further editing.'
+          ),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemColumnCountMinOne)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemErrorCellsMinOne)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemFormulaCellsMinOne)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemPopulatedCellsMinOne)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemRowCountMinOne)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('Sheet metadata after editing.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Issues requiring inspection, including formula errors.'),
+      })
+      .describe('Result of a persisted atomic edit.'),
+  ])
+  .describe('Structured output from a deterministic workbook operation.');
+
+/**
+ * @summary Read a native spreadsheet with view access: every sheet's summary, and the
+cells of the requested ranges. Returns the revision an edit needs.
+ */
+export const readSpreadsheetParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const readSpreadsheetBody = zod
+  .object({
+    includeStyles: zod.boolean().nullish().describe('Include cell formatting.'),
+    ranges: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'A1 ranges such as A1:F20. Omit for the workbook overview and samples.'
+      ),
+    sheetId: zod
+      .string()
+      .nullish()
+      .describe('Stable sheet ID or exact name; defaults to the first sheet.'),
+  })
+  .describe('What to read from a workbook.');
+
+export const readSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin = 0;
+
+export const readSpreadsheetResponseRangesItemCellsItemStyleIndentMin = 0;
+
+export const readSpreadsheetResponseSheetsItemColumnCountMin = 0;
+
+export const readSpreadsheetResponseSheetsItemErrorCellsMin = 0;
+
+export const readSpreadsheetResponseSheetsItemFormulaCellsMin = 0;
+
+export const readSpreadsheetResponseSheetsItemPopulatedCellsMin = 0;
+
+export const readSpreadsheetResponseSheetsItemRowCountMin = 0;
+
+export const readSpreadsheetResponseSheetsItemColumnCountMinOne = 0;
+
+export const readSpreadsheetResponseSheetsItemErrorCellsMinOne = 0;
+
+export const readSpreadsheetResponseSheetsItemFormulaCellsMinOne = 0;
+
+export const readSpreadsheetResponseSheetsItemPopulatedCellsMinOne = 0;
+
+export const readSpreadsheetResponseSheetsItemRowCountMinOne = 0;
+
+export const readSpreadsheetResponse = zod
+  .union([
+    zod
+      .object({
+        action: zod.enum(['read']),
+        ranges: zod
+          .array(
+            zod
+              .object({
+                cells: zod
+                  .array(
+                    zod
+                      .object({
+                        display: zod
+                          .string()
+                          .describe('Text shown in the spreadsheet.'),
+                        error: zod
+                          .string()
+                          .nullish()
+                          .describe('Explanation for an error result.'),
+                        type: zod
+                          .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                          .describe('The calculation result kind.'),
+                        value: zod
+                          .unknown()
+                          .describe(
+                            'The typed scalar. Empty cells have a null value.'
+                          ),
+                      })
+                      .describe(
+                        'A calculated scalar with its display text and optional error explanation.'
+                      )
+                      .and(
+                        zod.object({
+                          address: zod.string().describe('A1 address.'),
+                          formula: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Formula, when this input is calculated.'
+                            ),
+                          source: zod
+                            .string()
+                            .describe('Exact persisted source input.'),
+                          style: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  bold: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bold text.'),
+                                  borderBottom: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bottom border.'),
+                                  borderBottomColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Bottom border color.'),
+                                  borderBottomStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderLeft: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Left border.'),
+                                  borderLeftColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Left border color.'),
+                                  borderLeftStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderRight: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Right border.'),
+                                  borderRightColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Right border color.'),
+                                  borderRightStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderTop: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Top border.'),
+                                  borderTopColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Top border color.'),
+                                  borderTopStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  checkbox: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe(
+                                      "Show the cell's TRUE\/FALSE value as a checkbox; false removes it and keeps the value."
+                                    ),
+                                  decimals: zod
+                                    .number()
+                                    .nullish()
+                                    .describe(
+                                      'Decimal places, 0 through 10; -1 restores automatic.'
+                                    ),
+                                  fillColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Fill color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  fontFamily: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['sans', 'serif', 'mono'])
+                                        .describe('Font family.'),
+                                    ])
+                                    .optional(),
+                                  fontName: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel font name, up to 128 characters.'
+                                    ),
+                                  fontSize: zod
+                                    .number()
+                                    .min(
+                                      readSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      'Font size in points, 8 through 36.'
+                                    ),
+                                  format: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'general',
+                                          'number',
+                                          'currency',
+                                          'accounting',
+                                          'percent',
+                                          'date',
+                                          'time',
+                                          'scientific',
+                                          'text',
+                                        ])
+                                        .describe(
+                                          'Number interpretation and display; currency and accounting are USD and dates use UTC.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  horizontalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'auto',
+                                          'left',
+                                          'center',
+                                          'right',
+                                        ])
+                                        .describe('Horizontal alignment.'),
+                                    ])
+                                    .optional(),
+                                  indent: zod
+                                    .number()
+                                    .min(
+                                      readSpreadsheetResponseRangesItemCellsItemStyleIndentMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      "Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the\nleft edge, or from the right edge of right-aligned cells. Centered cells ignore it."
+                                    ),
+                                  italic: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Italic text.'),
+                                  numberFormat: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel number format, up to 512 characters; it overrides the display of `format`.\nShow dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,\nmm\/dd\/yyyy, dd\/mm\/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with\nformat=time and a code such as h:mm AM\/PM.'
+                                    ),
+                                  strikethrough: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Struck-through text.'),
+                                  textColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Text color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  underline: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Underlined text.'),
+                                  verticalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['top', 'middle', 'bottom'])
+                                        .describe('Vertical alignment.'),
+                                    ])
+                                    .optional(),
+                                  wrap: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Wrap text.'),
+                                })
+                                .describe(
+                                  'Sparse cell styling patch. Omitted fields remain unchanged.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                      )
+                      .describe('Cell source and calculated result.')
+                  )
+                  .describe('Cells with their sources and current results.'),
+                range: zod.string().describe('Requested or sampled rectangle.'),
+                sheetId: zod.string().describe('Stable sheet identity.'),
+                sheetName: zod.string().describe('Current sheet name.'),
+                truncated: zod
+                  .boolean()
+                  .describe(
+                    'True when a narrower follow-up read is needed to see every cell.'
+                  ),
+                validations: zod
+                  .array(
+                    zod
+                      .object({
+                        colors: zod
+                          .array(
+                            zod
+                              .object({
+                                color: zod
+                                  .string()
+                                  .describe(
+                                    'Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.'
+                                  ),
+                                item: zod
+                                  .string()
+                                  .describe(
+                                    'The choice, matched to cell text ignoring case.'
+                                  ),
+                              })
+                              .describe(
+                                "A dropdown choice's color. Cells showing the choice draw it as a chip of this color."
+                              )
+                          )
+                          .nullish()
+                          .describe("A dropdown's choice colors."),
+                        dropdown: zod
+                          .boolean()
+                          .nullish()
+                          .describe(
+                            'Whether a list rule shows its dropdown arrow.'
+                          ),
+                        formulas: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe('Rule formulas, without the leading =.'),
+                        items: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe("A dropdown's typed choices."),
+                        operator: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Comparison for number, date, time and text-length rules.'
+                          ),
+                        range: zod
+                          .string()
+                          .describe(
+                            'Cells the rule covers, as space-separated A1 ranges.'
+                          ),
+                        rejectInvalid: zod
+                          .boolean()
+                          .describe(
+                            'Whether entries that break the rule are rejected.'
+                          ),
+                        source: zod
+                          .string()
+                          .nullish()
+                          .describe("A dropdown's source range."),
+                        type: zod
+                          .string()
+                          .describe(
+                            'Rule kind: list, whole, decimal, date, time, textLength, custom, or any.'
+                          ),
+                      })
+                      .describe(
+                        'A data validation rule; list rules are dropdowns.'
+                      )
+                  )
+                  .optional()
+                  .describe(
+                    'Dropdowns and other data validation rules overlapping this range.'
+                  ),
+              })
+              .describe('Addressed range with explicit truncation.')
+          )
+          .describe('Addressed cells with raw inputs and calculated results.'),
+        revision: zod
+          .string()
+          .describe('Opaque revision required for EditSpreadsheet.'),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemColumnCountMin)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemErrorCellsMin)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemFormulaCellsMin)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemPopulatedCellsMin)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemRowCountMin)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('All visible sheets and their used bounds.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Limits or issues the caller should account for.'),
+      })
+      .describe('Workbook inspection result.'),
+    zod
+      .object({
+        action: zod.enum(['calculate']),
+        results: zod
+          .array(
+            zod
+              .object({
+                display: zod
+                  .string()
+                  .describe('Text shown in the spreadsheet.'),
+                error: zod
+                  .string()
+                  .nullish()
+                  .describe('Explanation for an error result.'),
+                type: zod
+                  .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                  .describe('The calculation result kind.'),
+                value: zod
+                  .unknown()
+                  .describe('The typed scalar. Empty cells have a null value.'),
+              })
+              .describe(
+                'A calculated scalar with its display text and optional error explanation.'
+              )
+              .and(
+                zod.object({
+                  formula: zod.string().describe('Evaluated scratch formula.'),
+                  label: zod
+                    .string()
+                    .nullish()
+                    .describe('Caller-supplied label.'),
+                })
+              )
+              .describe('One hypothetical formula result.')
+          )
+          .describe('Results in input order.'),
+        revision: zod
+          .string()
+          .describe('Revision used for these calculations.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Calculation limits or issues.'),
+      })
+      .describe('Scratch calculation result. No persistent changes were made.'),
+    zod
+      .object({
+        action: zod.enum(['edit']),
+        applied: zod.boolean().describe('Whether a new change was persisted.'),
+        changes: zod
+          .array(
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .nullish()
+                  .describe('Affected range, when applicable.'),
+                sheetId: zod
+                  .string()
+                  .describe('Affected stable sheet identity.'),
+                summary: zod
+                  .string()
+                  .describe('Human-readable change summary.'),
+                type: zod.string().describe('Operation type.'),
+              })
+              .describe('Applied edit summary.')
+          )
+          .describe('Applied operation summaries.'),
+        revision: zod
+          .string()
+          .describe(
+            'Revision after the edit; use a fresh read before further editing.'
+          ),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemColumnCountMinOne)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemErrorCellsMinOne)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemFormulaCellsMinOne)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemPopulatedCellsMinOne)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemRowCountMinOne)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('Sheet metadata after editing.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Issues requiring inspection, including formula errors.'),
+      })
+      .describe('Result of a persisted atomic edit.'),
+  ])
+  .describe('Structured output from a deterministic workbook operation.');
+
+/**
  * @summary Gets the team-share state of a document. The team is resolved from the
 document owner's team membership; `teamId` is omitted when the owner does
 not belong to a team.
@@ -30579,6 +33536,11 @@ export const externalChatResponse = zod
                         .string()
                         .describe(
                           'Their id at the provider (WhatsApp: phone-number or LID JID).'
+                        ),
+                      name: zod
+                        .string()
+                        .describe(
+                          'What to call them: their provider name, else their phone number,\nelse a generic name.'
                         ),
                     })
                     .describe(

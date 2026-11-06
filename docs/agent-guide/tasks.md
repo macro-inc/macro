@@ -861,8 +861,9 @@ selection, repeated Create More, editing, cancellation, conflicts, and deletion.
 On touch, entering New template or Edit leaves name-field focus to an explicit
 tap. At narrow desktop widths, the dropdown stays within the viewport.
 
-After creation, the `Task created` toast shows an `Open` action. Touch devices
-omit `Open (New Split)`; desktop keeps both actions. Either action immediately dismisses the toast before opening
+After creation, the `Task created` toast shows primary `Open` and, on desktop,
+secondary `Open split` to its left, with a close icon instead of Dismiss.
+Touch devices omit `Open split` and the close icon. Either action immediately dismisses the toast before opening
 the task. Verify the toast at phone and tablet widths with touch
 emulation: the message and action fit without clipping, and `Open` visits the
 created task in place.
@@ -886,7 +887,7 @@ created task in place.
 3. `type_text` the title, then press **Ctrl+Enter** to create, or tap `Create Task` on
    touch (the button enables once there is a title). Dialog also offers `Continue editing in split` to open the
    task as a full document.
-   Creating shows a `Task created` toast with `Open` (and `Open (New Split)` on
+   Creating shows a `Task created` toast with `Open` (and `Open split` on
    desktop) as soon as the server returns, then copies the task link in the
    background. A denied or prompted clipboard write never delays or replaces
    that toast.
@@ -1047,8 +1048,9 @@ Submitting closes the composer at once; a full composer returns its split to
 Projects, and Back skips the submitted composer. One request creates the project
 together with its selected properties: a value the server rejects fails the whole
 create, so no half-configured project is left behind. When the server answers, a
-`Project created` toast offers `Open` and `Open (New Split)` (on touch devices
-both open in place); nothing navigates on its own. The Projects list then
+`Project created` toast offers secondary `Open split` to the left of primary `Open`,
+with a desktop close icon instead of Dismiss (on touch devices both actions open
+in place); nothing navigates on its own. The Projects list then
 refreshes in the background to include the new row. If creation fails, the
 composer reopens as a popover with the draft and the error.
 Closing the popover without submitting keeps the underlying view open.

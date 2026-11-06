@@ -15,6 +15,8 @@ mod test;
 #[derive(Debug)]
 pub struct People {
     by_id: HashMap<String, ExternalChatPersonRef>,
+    /// What the provider calls people stored without a name.
+    by_person: HashMap<Uuid, String>,
     unnamed: fn(&str) -> Option<String>,
 }
 
@@ -30,7 +32,31 @@ impl People {
     pub fn new(unnamed: fn(&str) -> Option<String>) -> Self {
         Self {
             by_id: HashMap::new(),
+            by_person: HashMap::new(),
             unnamed,
+        }
+    }
+
+    /// Learn what to call a person stored without a name (WhatsApp: their
+    /// contact name or phone number); the first name given wins.
+    pub fn learn_person(&mut self, person: Uuid, name: String) {
+        self.by_person.entry(person).or_insert(name);
+    }
+
+    /// A stored sender or voter: the name stored with them, else what the
+    /// provider calls them, else a generic name.
+    pub fn stored(&self, person: &StoredPerson) -> ExternalChatPersonRef {
+        let name = person
+            .name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .or_else(|| self.by_person.get(&person.person_id).cloned())
+            .unwrap_or_else(|| UNKNOWN_PERSON.to_owned());
+        ExternalChatPersonRef {
+            name,
+            user_id: person.user_id.clone(),
         }
     }
 
@@ -64,7 +90,19 @@ pub struct StoredVote {
     /// Hashes of the options chosen.
     pub selected: Vec<String>,
     /// Who voted.
-    pub voter: ExternalChatPersonRef,
+    pub voter: StoredPerson,
+}
+
+/// A person as stored with a message or vote: the provider name is `None`
+/// when no name was ever seen, and [`People::stored`] names them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredPerson {
+    /// External person identity.
+    pub person_id: Uuid,
+    /// Verified Macro user association, if present.
+    pub user_id: Option<String>,
+    /// The provider's name for them, untrusted.
+    pub name: Option<String>,
 }
 
 /// The mentions of a body, by name.
@@ -81,11 +119,16 @@ pub fn mentions_view(mentions: &[String], people: &People) -> Vec<ExternalChatMe
         .collect()
 }
 
-fn poll_option(option: &PollOption, votes: &[&StoredVote], viewer: &str) -> ExternalChatPollOption {
+fn poll_option(
+    option: &PollOption,
+    votes: &[&StoredVote],
+    viewer: &str,
+    people: &People,
+) -> ExternalChatPollOption {
     let voters: Vec<ExternalChatPersonRef> = votes
         .iter()
         .filter(|vote| vote.selected.contains(&option.hash))
-        .map(|vote| vote.voter.clone())
+        .map(|vote| people.stored(&vote.voter))
         .collect();
     ExternalChatPollOption {
         name: option.name.clone(),
@@ -132,7 +175,7 @@ pub fn rich_view(
             options: poll
                 .options
                 .iter()
-                .map(|option| poll_option(option, votes, viewer))
+                .map(|option| poll_option(option, votes, viewer, people))
                 .collect(),
             question: poll.question,
             selectable_count: poll.selectable_count,
@@ -167,10 +210,7 @@ pub fn message_view(
     viewer: &str,
     people: &People,
 ) -> ExternalChatMessage {
-    let sender = ExternalChatPersonRef {
-        name: message.sender.name.clone(),
-        user_id: message.sender.user_id.clone(),
-    };
+    let sender = people.stored(&message.sender);
     let votes: Vec<&StoredVote> = message.votes.iter().collect();
     ExternalChatMessage {
         id: message.id,
@@ -178,7 +218,11 @@ pub fn message_view(
         rich: message
             .rich
             .and_then(|content| rich_view(content, &sender, &votes, viewer, people)),
-        sender: message.sender,
+        sender: ExternalChatSender {
+            person_id: message.sender.person_id,
+            user_id: sender.user_id.clone(),
+            name: sender.name.clone(),
+        },
         body: message.body,
         reply_to: message.reply_to,
         sent_at: message.sent_at,

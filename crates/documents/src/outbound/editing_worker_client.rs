@@ -8,6 +8,34 @@ use macro_sync_service_jwt::DocumentPermissionToken;
 use reqwest::Client;
 use std::sync::Arc;
 
+/// The meaning of a failed spreadsheet worker response: a 400 or 413 is an
+/// invalid request and a 409 a stale revision, both saving nothing; anything
+/// else may follow a save.
+#[cfg(feature = "ai_tools")]
+async fn spreadsheet_error(
+    response: reqwest::Response,
+) -> crate::domain::spreadsheet::SpreadsheetError {
+    use crate::domain::spreadsheet::SpreadsheetError;
+
+    let status = response.status();
+    let body = response
+        .json::<serde_json::Value>()
+        .await
+        .unwrap_or_default();
+    let message = body
+        .get("error")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("Spreadsheet operation failed. Read the workbook again before retrying an edit.")
+        .to_owned();
+    match status {
+        reqwest::StatusCode::BAD_REQUEST | reqwest::StatusCode::PAYLOAD_TOO_LARGE => {
+            SpreadsheetError::Invalid(message)
+        }
+        reqwest::StatusCode::CONFLICT => SpreadsheetError::RevisionConflict(message),
+        _ => SpreadsheetError::Failed(anyhow::anyhow!("{message} (HTTP {status})")),
+    }
+}
+
 #[cfg(test)]
 mod test;
 
@@ -139,7 +167,12 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
         document_id: &str,
         document_token: &DocumentPermissionToken,
         request: &crate::domain::spreadsheet::SpreadsheetRequest,
-    ) -> anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse> {
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetResponse,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
+        use crate::domain::spreadsheet::SpreadsheetError;
+
         let mut headers = reqwest::header::HeaderMap::new();
         macro_tower_layers::inject_trace_headers(&mut headers);
         let response = self
@@ -153,18 +186,82 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                 "request": request,
             }))
             .send()
-            .await?;
-        let status = response.status();
-        if !status.is_success() {
-            let body = response
-                .json::<serde_json::Value>()
+            .await
+            .map_err(|error| SpreadsheetError::Failed(error.into()))?;
+        if response.status().is_success() {
+            return response
+                .json()
                 .await
-                .unwrap_or_default();
-            let message = body.get("error").and_then(serde_json::Value::as_str)
-                .unwrap_or("Spreadsheet operation failed. Read the workbook again before retrying an edit.");
-            anyhow::bail!("{message} (HTTP {status})");
+                .map_err(|error| SpreadsheetError::Failed(error.into()));
         }
-        Ok(response.json().await?)
+        Err(spreadsheet_error(response).await)
+    }
+
+    #[cfg(feature = "ai_tools")]
+    #[tracing::instrument(skip_all, fields(document_id), err)]
+    async fn spreadsheet_instructions(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        instructions: &str,
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetWriterResult,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
+        use crate::domain::spreadsheet::{
+            SpreadsheetError, SpreadsheetWriterOutcome, SpreadsheetWriterResult,
+        };
+
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Usage {
+            model: String,
+            input_tokens: u32,
+            output_tokens: u32,
+        }
+        #[derive(serde::Deserialize)]
+        struct Body {
+            #[serde(flatten)]
+            outcome: SpreadsheetWriterOutcome,
+            usage: Vec<Usage>,
+        }
+
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = self
+            .client
+            .post(format!("{}/spreadsheet/instructions", self.worker_url))
+            .headers(headers)
+            // Above the worker's own 120 s budget, so it reports its outcome.
+            .timeout(std::time::Duration::from_secs(130))
+            .json(&serde_json::json!({
+                "documentId": document_id,
+                "documentToken": document_token.as_str(),
+                "instructions": instructions,
+            }))
+            .send()
+            .await
+            .map_err(|error| SpreadsheetError::Failed(error.into()))?;
+        if !response.status().is_success() {
+            return Err(spreadsheet_error(response).await);
+        }
+
+        let body: Body = response
+            .json()
+            .await
+            .map_err(|error| SpreadsheetError::Failed(error.into()))?;
+        Ok(SpreadsheetWriterResult {
+            outcome: body.outcome,
+            usage: body
+                .usage
+                .into_iter()
+                .map(|usage| EditUsage {
+                    model: usage.model,
+                    input_tokens: usage.input_tokens,
+                    output_tokens: usage.output_tokens,
+                })
+                .collect(),
+        })
     }
 
     #[cfg(feature = "ai_tools")]
