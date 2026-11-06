@@ -204,6 +204,10 @@ pub(crate) fn router(state: Arc<SpeechGateway>) -> Router {
         .route("/brain/inference/stt", get(stt))
         .route("/brain/inference/tts", get(tts))
         .with_state(state)
+        .layer(
+            macro_tower_layers::MacroRequestIdAndTracingLayer::new(Duration::from_millis(200))
+                .into_inner(),
+        )
 }
 fn query(raw: Option<&str>, operation: Operation) -> Result<(), StatusCode> {
     let pairs: Vec<_> = url::form_urlencoded::parse(raw.unwrap_or_default().as_bytes()).collect();
