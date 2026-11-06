@@ -56,3 +56,5 @@ gateway `/calendar` prefix.
 
 - Rules: `.agents/rules/config-and-service-urls.md` · Skill: `new-service` ·
   Docs: `docs/guides/new-service.md` (uses this service as the model)
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

@@ -1064,6 +1064,12 @@ export const listTypedNotificationsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
                           isAgent: zod
                             .boolean()
                             .optional()
@@ -3201,6 +3207,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
                           isAgent: zod
                             .boolean()
                             .optional()
@@ -5288,6 +5300,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
                           isAgent: zod
                             .boolean()
                             .optional()
@@ -7314,6 +7332,12 @@ export const getTypedNotificationByIdResponse = zod
                     .enum(['free', 'premium'])
                     .optional()
                     .describe('What a team invitee gets by joining.'),
+                  inviterName: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                    ),
                   isAgent: zod
                     .boolean()
                     .optional()

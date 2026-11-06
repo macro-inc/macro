@@ -25,6 +25,11 @@ import {
   sharePermissionBody,
 } from '../sharing/permissions';
 import { User } from '../users/user';
+import {
+  type AgentActivityOptions,
+  AgentInvocation,
+  sessionActivity,
+} from './activity';
 import { CodeExecution } from './code-execution';
 import { QueuedAction } from './queued-action';
 import { type CreateReviewOptions, SessionReview } from './review';
@@ -680,6 +685,16 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   readonly codeExecutions = {
     byId: (id: string): CodeExecution =>
       CodeExecution.byId(this.client, this, id),
+  };
+
+  /** Recorded activity caused by this session, lazily paginated newest first. */
+  activity(options: AgentActivityOptions = {}) {
+    return sessionActivity(this.client, this, options);
+  }
+
+  /** Code-mode invocation handles, distinct from saved code executions. */
+  readonly invocations = {
+    byId: (id: string) => AgentInvocation.byId(this.client, this, id),
   };
 
   /** Delete this session and any live resources it owns. */

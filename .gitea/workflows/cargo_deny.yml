@@ -2,17 +2,7 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/cargo_deny.rs
 name: cargo deny check
 on:
-  pull_request:
-    paths:
-    - Cargo.toml
-    - crates/**/Cargo.toml
-    - services/**/Cargo.toml
-    - tooling/xtask/**/Cargo.toml
-    - Cargo.lock
-    - deny.toml
-    - .github/workflows/cargo_deny.yml
-    branches:
-    - main
+  workflow_call: {}
 jobs:
   cargo-deny:
     runs-on: linux-ci
@@ -25,6 +15,3 @@ jobs:
       uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe
       with:
         manifest-path: Cargo.toml
-concurrency:
-  group: cargo-deny-${{ github.ref }}
-  cancel-in-progress: true

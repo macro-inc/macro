@@ -449,6 +449,15 @@ fn started_event_call(created_by: &str) -> Call {
 }
 
 fn mock_get_or_create_repo(scenario: GetOrCreateScenario, call: Call) -> MockCallRepository {
+    mock_get_or_create_repo_storing(scenario, call, Arc::default())
+}
+
+/// The same scenarios, recording whether the call was stored with a channel thread.
+fn mock_get_or_create_repo_storing(
+    scenario: GetOrCreateScenario,
+    call: Call,
+    channel_thread_stored: Arc<Mutex<Option<bool>>>,
+) -> MockCallRepository {
     let mut repo = MockCallRepository::new();
 
     match scenario {
@@ -458,7 +467,8 @@ fn mock_get_or_create_repo(scenario: GetOrCreateScenario, call: Call) -> MockCal
                 .returning(|_| Box::pin(async { Ok(None) }));
 
             repo.expect_create_call().times(1).return_once(
-                move |call_id, channel_id, room_name, _| {
+                move |call_id, channel_id, room_name, _, channel_thread| {
+                    *channel_thread_stored.lock().unwrap() = Some(channel_thread);
                     assert_eq!(room_name, call_id.to_string());
                     assert_ne!(room_name, channel_id.to_string());
                     Box::pin(async move { Ok(Some(call)) })
@@ -477,7 +487,7 @@ fn mock_get_or_create_repo(scenario: GetOrCreateScenario, call: Call) -> MockCal
                 .return_once(move |_| Box::pin(async move { Ok(Some(call)) }));
             repo.expect_create_call()
                 .times(1)
-                .returning(|_, _, _, _| Box::pin(async { Ok(None) }));
+                .returning(|_, _, _, _, _| Box::pin(async { Ok(None) }));
         }
         GetOrCreateScenario::ExistingCall => {
             repo.expect_get_call_by_channel_id()
@@ -586,6 +596,83 @@ async fn get_or_create_call(
             .unwrap();
     }
     result
+}
+
+/// Answers the flag with `enabled`, and records and answers root requests.
+struct FakeChannelThreads {
+    enabled: bool,
+    root_fails: bool,
+    roots: Arc<Mutex<Vec<Uuid>>>,
+}
+
+#[async_trait::async_trait]
+impl crate::domain::ports::ChannelThreads for FakeChannelThreads {
+    async fn enabled_for(&self, _: MacroUserIdStr<'_>) -> bool {
+        self.enabled
+    }
+
+    async fn ensure_root(&self, call_id: Uuid) -> Result<(), rootcause::Report> {
+        self.roots.lock().unwrap().push(call_id);
+        if self.root_fails {
+            return Err(rootcause::report!("message service unavailable"));
+        }
+        Ok(())
+    }
+}
+
+/// Start a call as the race winner and report what the repository was asked to store.
+async fn start_flagged_call(enabled: bool, root_fails: bool) -> (Vec<Uuid>, bool) {
+    let stored = Arc::new(Mutex::new(None));
+    let repo = mock_get_or_create_repo_storing(
+        GetOrCreateScenario::CreatorWins,
+        started_event_call(STARTED_EVENT_CREATOR),
+        stored.clone(),
+    );
+    let roots = Arc::new(Mutex::new(Vec::new()));
+    let service = build_get_or_create_service(
+        repo,
+        StubConnectionService,
+        RecordingEventBroker::default(),
+        false,
+    )
+    .with_channel_threads(Arc::new(FakeChannelThreads {
+        enabled,
+        root_fails,
+        roots: roots.clone(),
+    }));
+
+    service
+        .get_or_create_call(&STARTED_EVENT_CHANNEL_ID, user("requester@example.com"))
+        .await
+        .unwrap();
+
+    let stored = stored.lock().unwrap().unwrap();
+    let roots = roots.lock().unwrap().clone();
+    (roots, stored)
+}
+
+#[tokio::test]
+async fn a_flagged_caller_gets_a_channel_thread_with_its_root() {
+    let (roots, stored) = start_flagged_call(true, false).await;
+
+    assert!(stored);
+    assert_eq!(roots, [STARTED_EVENT_CALL_ID]);
+}
+
+#[tokio::test]
+async fn an_unflagged_caller_keeps_the_calls_own_chat() {
+    let (roots, stored) = start_flagged_call(false, false).await;
+
+    assert!(!stored);
+    assert!(roots.is_empty());
+}
+
+#[tokio::test]
+async fn a_failed_root_never_stops_the_call() {
+    let (roots, stored) = start_flagged_call(true, true).await;
+
+    assert!(stored);
+    assert_eq!(roots, [STARTED_EVENT_CALL_ID]);
 }
 
 #[tokio::test]
@@ -999,6 +1086,7 @@ fn archived_call_for_event(
     has_recording: bool,
 ) -> ArchivedCall {
     ArchivedCall {
+        channel_thread: false,
         call_id: ARCHIVED_EVENT_CALL_ID,
         channel_id: Some(ARCHIVED_EVENT_CHANNEL_ID),
         created_by: created_by.to_string(),
@@ -1135,6 +1223,7 @@ fn assert_archived_event(
                 "participants": participants,
                 "has_recording": has_recording,
                 "archive_reason": archive_reason,
+                "channel_thread": false,
             },
         })
     );
@@ -1567,6 +1656,9 @@ const MUTATED_EVENT_ACTOR: &str = "macro|editor@example.com";
 
 fn call_record_for_mutation() -> CallRecord {
     CallRecord {
+        discussion: crate::domain::models::CallDiscussion::CallChat {
+            call_id: Uuid::nil(),
+        },
         call_id: MUTATED_EVENT_CALL_ID,
         channel_id: Some(MUTATED_EVENT_CHANNEL_ID),
         room_name: Some("mutation-event-room".to_string()),
@@ -2711,6 +2803,9 @@ enum NamePersistence {
 
 fn summarized_call_record(custom_name: Option<&str>) -> CallRecord {
     CallRecord {
+        discussion: crate::domain::models::CallDiscussion::CallChat {
+            call_id: Uuid::nil(),
+        },
         call_id: SUMMARIZED_EVENT_CALL_ID,
         channel_id: Some(SUMMARIZED_EVENT_CHANNEL_ID),
         room_name: Some(SUMMARIZED_EVENT_CHANNEL_ID.to_string()),

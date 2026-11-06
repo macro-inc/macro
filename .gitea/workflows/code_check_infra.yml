@@ -2,9 +2,7 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_infra.rs
 name: infra code check
 on:
-  pull_request:
-    branches:
-    - main
+  workflow_call: {}
 jobs:
   path-check:
     runs-on: linux-ci
@@ -33,7 +31,7 @@ jobs:
   biome-check:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
     runs-on: linux-ci
     steps:
@@ -56,7 +54,7 @@ jobs:
   check:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    if: needs.path-check.outputs.should_run == 'true'
     runs-on: linux-ci
     steps:
     - name: Put Cargo on PATH
@@ -102,6 +100,3 @@ jobs:
         fi
 
         echo "✅ All jobs passed or were skipped"
-concurrency:
-  group: code-check-infra-${{ github.ref }}
-  cancel-in-progress: true

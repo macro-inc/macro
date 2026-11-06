@@ -5,7 +5,8 @@ use bot_id::BotId;
 use harness_id::HarnessId;
 
 use crate::{
-    BotAuthentication, HarnessAuthentication, MacroAuthorization, MacroUserAuthentication,
+    BotAuthentication, CredentialOrigin, HarnessAuthentication, MacroAuthorization,
+    MacroUserAuthentication,
 };
 
 use super::{ActingEntity, MacroAuthorizationRejection, rejection, status_rejection};
@@ -31,6 +32,12 @@ pub trait AuthorizationPolicy: sealed::Sealed + Send + Sync + 'static {
     /// Derive the authenticated entity from the narrowed authorization.
     fn acting_entity(output: &Self::Output) -> Self::ActingEntity<'_>;
 }
+
+/// Like [`UserOrInternal`], but refuses an account manager's credential. For
+/// endpoints that create credentials, change who can sign in, delete the
+/// account, or change its managers: a manager must not be able to outlast its
+/// own revocation.
+pub struct AccountHolderOrInternal;
 
 /// Admits directly authenticated users and internal services acting for a user.
 pub struct UserOrInternal;
@@ -272,6 +279,27 @@ impl AuthorizationPolicy for UserOrInternal {
     }
 }
 
+impl AuthorizationPolicy for AccountHolderOrInternal {
+    type Output = UserOrInternalAuthorization;
+    type ActingEntity<'a> = UserOrInternalEntity<'a>;
+
+    fn narrow(
+        authorization: MacroAuthorization,
+    ) -> Result<Self::Output, MacroAuthorizationRejection> {
+        if let MacroAuthorization::User(user) = &authorization
+            && matches!(user.origin, CredentialOrigin::AccountManager(_))
+        {
+            return Err(forbidden());
+        }
+
+        UserOrInternal::narrow(authorization)
+    }
+
+    fn acting_entity(output: &Self::Output) -> Self::ActingEntity<'_> {
+        UserOrInternal::acting_entity(output)
+    }
+}
+
 impl AuthorizationPolicy for UserOrInternalService {
     type Output = UserOrInternalServiceAuthorization;
     type ActingEntity<'a> = UserOrInternalEntity<'a>;
@@ -478,6 +506,7 @@ mod sealed {
     pub trait Sealed {}
 
     impl Sealed for super::UserOrInternal {}
+    impl Sealed for super::AccountHolderOrInternal {}
     impl Sealed for super::UserOrInternalService {}
     impl Sealed for super::ActingUser {}
     impl Sealed for super::UserOnly {}

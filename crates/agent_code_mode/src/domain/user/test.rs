@@ -11,6 +11,7 @@ impl UserExecutionCredentials for Credentials {
         &self,
         user: &MacroUserIdStr<'static>,
         caller: &ToolCaller,
+        _session: Option<uuid::Uuid>,
     ) -> Result<RunEnvironment, CodeModeError> {
         self.0
             .lock()
@@ -79,7 +80,7 @@ async fn runs_as_the_authenticated_user_and_returns_data_with_activity() {
         0xA1,
     )));
     let receipt = service
-        .execute(&user(), &caller, request(), CancellationToken::new())
+        .execute(&user(), &caller, None, request(), CancellationToken::new())
         .await
         .unwrap();
 
@@ -111,6 +112,7 @@ async fn review_references_fail_outside_a_session() {
         .execute(
             &user(),
             &ToolCaller::ApiKey,
+            None,
             request(),
             CancellationToken::new(),
         )
@@ -142,6 +144,7 @@ async fn invalid_requests_are_rejected_before_minting_a_credential() {
                 .execute(
                     &user(),
                     &ToolCaller::ApiKey,
+                    None,
                     request,
                     CancellationToken::new()
                 )
@@ -163,6 +166,7 @@ async fn an_empty_reviews_list_is_dropped() {
         .execute(
             &user(),
             &ToolCaller::ApiKey,
+            None,
             request(),
             CancellationToken::new(),
         )

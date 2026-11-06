@@ -9,9 +9,7 @@ env:
   RUST_BACKTRACE: '1'
   RUSTFLAGS: -C link-arg=-fuse-ld=lld
 on:
-  pull_request:
-    branches:
-    - main
+  workflow_call: {}
 jobs:
   path-check:
     runs-on: linux-ci
@@ -310,7 +308,7 @@ jobs:
   check:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    if: needs.path-check.outputs.should_run == 'true'
     runs-on: linux-ci
     env:
       RUSTFLAGS: -Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold
@@ -540,7 +538,7 @@ jobs:
   test:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
+    if: needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
     runs-on: linux-ci
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
@@ -830,7 +828,7 @@ jobs:
   build-service-bins:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.skip_tests != 'true' && (needs.path-check.outputs.rust_packages == 'all' || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') || contains(needs.path-check.outputs.rust_packages, 'email_service') || contains(needs.path-check.outputs.rust_packages, 'authentication_service'))
+    if: needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.skip_tests != 'true' && (needs.path-check.outputs.rust_packages == 'all' || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') || contains(needs.path-check.outputs.rust_packages, 'email_service') || contains(needs.path-check.outputs.rust_packages, 'authentication_service'))
     runs-on: linux-ci
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
@@ -995,7 +993,7 @@ jobs:
   graphql-schema-compat:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.graphql_schema == 'true'
+    if: needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.graphql_schema == 'true'
     runs-on: linux-ci
     timeout-minutes: 15
     steps:
@@ -1013,6 +1011,3 @@ jobs:
         rust-cache: 'false'
     - name: Check GraphQL schema compatibility
       run: cargo run --locked --manifest-path tooling/xtask/Cargo.toml -- graphql-schema-compat --base HEAD^1
-concurrency:
-  group: code-check-cloud-storage-${{ github.ref }}
-  cancel-in-progress: true
