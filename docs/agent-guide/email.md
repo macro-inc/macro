@@ -1259,7 +1259,8 @@ scrolling row of those tabs, with `Open email filters` at the left. The rest of 
 view is the email list, which scrolls beneath the header and supports pull to refresh
 and swiping left to mark emails done in Signal and Noise. The filter button opens a
 glass bottom sheet for status, done, attachment, calendar and tag filters, plus an `Inbox`
-section when the user can pick one: `All inboxes` or a single address, never several.
+section when the user can pick one: `All inboxes`, any set of inboxes as checkboxes,
+or one alias, which replaces the inbox selection.
 `Clear all` resets those filters and the inbox selection. Desktop keeps its sidebar,
 single-row header: title (with Signal/Noise tabs beside Inbox), inbox/filter
 controls, reading-pane option, New, and an expandable Search icon. At 640px or
@@ -1333,8 +1334,9 @@ The address is a borderless ghost dropdown with the title's font weight and a
 consistent 14px font size at all widths; `from` is 12px. Both align to the title's baseline, without
 a tooltip or a separate clear button.
 Its single-select menu includes `All inboxes`, which clears the account selection
-and removes the filter. Saved selections from the old multi-select picker restore
-the first saved inbox; an empty saved selection restores All inboxes. Once linked
+and removes the filter; choosing an inbox there narrows to that one. Several
+inboxes, chosen in Filters or the mobile drawer, show as `N inboxes` and are
+restored as a set; an empty saved selection restores All inboxes. Once linked
 accounts load successfully, a selected inbox that no longer exists resets to All
 inboxes. This runs for the whole email view, including on touch devices before
 the filter drawer opens. New email uses the originating email-view split even if another split
