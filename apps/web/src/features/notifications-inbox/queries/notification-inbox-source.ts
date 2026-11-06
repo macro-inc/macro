@@ -118,7 +118,7 @@ export function createNotificationInboxSource(
       requestPolicy: 'cache-and-network',
       keepPreviousData: true,
       select: ({ pages, pageParams }) => ({
-        groups: pages
+        groups: pages // ast-grep-ignore: ts-no-client-list-filter -- Structural decode guard: drops entries this build cannot turn into a row.
           .flatMap((page) => page.user.notificationInbox.entries)
           .map((entry) => toInboxGroup(entry))
           .filter(isGroup),
