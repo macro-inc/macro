@@ -352,13 +352,18 @@ generated at build time), and adds the direct tool it replaces to
    { signal })` with a new writer model over the same engine: the worker's
    `/spreadsheet/instructions` reads, calculates and commits one batch, and
    DSS `POST /documents/{id}/spreadsheet/ai-edit` admits and meters it.
-4. **PowerPoint** (MACRO-4581). `deck.edit(instructions, { signal, saveAs })`
-   with a new writer model over `PresentationService`; changed slides, the new
-   version or the new `Presentation` for `saveAs`. Hides `EditPresentation`.
-5. **Word** (MACRO-4581). `wordDoc.edit(instructions, { signal })` with a new
-   writer model over `WordDocumentService`; changed paragraph ids. Hides
-   `EditWordDocument`.
-6. **Canvases** (MACRO-4584). `canvas.edit(instructions, { signal })` over
+4. **PowerPoint and Word** (MACRO-4581, MACRO-4841). Shipped as the
+   structured layer first: `Document.readPresentation()`,
+   `editPresentation(operations)` and `copyPresentation(name, { operations })`
+   over `PresentationService`, and `Document.readWord()` and
+   `editWord(operations, { trackChanges })` over `WordDocumentService`'s live
+   copy, through DSS `/documents/{id}/presentation` and `/word` routes. The
+   operation unions are generated from `pptx_engine::EditOp` and
+   `WordDocumentOperation`. The same PR adds the read-only
+   `readDesign()`, `readPhotoshop()` and `readIllustrator()`, and hides the
+   seven matching tools. An instructions `edit()` with a writer model can
+   follow.
+5. **Canvases** (MACRO-4584). `canvas.edit(instructions, { signal })` over
    `EditCanvas`; the structured layer (`CanvasEditor` in `packages/editor-ops`,
    ops with `expectedRevision`) and render. Hides `EditCanvas` and
    `ApplyCanvasEdits`.

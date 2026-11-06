@@ -108,7 +108,7 @@ Upserts read the current call state from Postgres and overwrite the indexed repr
 - The poll loop shards decoded events by entity ordering key across ten sequential workers, each with a bounded 16-message channel. Sending waits when the selected channel is full, stopping polling and committing until that worker catches up. Events for the same entity stay ordered within one consumer, but not end to end: producers can publish them out of order, and a rebalance does not wait for the previous owner's workers, which can still be processing older events while the new owner processes later ones. Handlers must not assume an entity's newest event arrives last.
 - An offset is committed asynchronously immediately after a successful in-memory handoff, not after OpenSearch processing. This commit-after-handoff design creates a loss window: a process or host crash can lose committed events still in those buffers. If the worker channel closes before handoff, the offset is left uncommitted for redelivery.
 - Malformed, keyless, and unsupported-schema records are logged and committed without handoff so a poison record cannot wedge a partition. Commit failures are logged and may cause duplicate delivery, which is safe because full upserts and per-call deletes are idempotent.
-- Processing gets three total attempts, with retries after 1 and 2 seconds. Exhausted events are logged and dropped so later events can continue.
+- Processing gets three total attempts, with retries after 1 and 2 seconds. Failed attempts that will be retried log warnings; exhausted events are logged as errors and dropped so later events can continue. Within each attempt, `opensearch_client` resends a request whose connection drops before a complete response.
 
 ## Running Locally
 

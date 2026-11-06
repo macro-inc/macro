@@ -17,6 +17,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct PermissionTokenClaims {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) agent_correlation_id: Option<uuid::Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) user_id: Option<MacroUserIdStr<'static>>,
     document_id: String,
     pub(crate) access_level: AccessLevel,
@@ -46,6 +48,7 @@ pub fn encode_permission_token(
 
     Ok(macro_sync_service_jwt::encode(
         &PermissionTokenClaims {
+            agent_correlation_id: agent_correlation::context::current(),
             user_id,
             document_id,
             access_level,

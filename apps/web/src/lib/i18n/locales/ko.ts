@@ -53,7 +53,6 @@ export default {
     projectBadge: '프로젝트',
     newProject: '새 프로젝트',
     contentAlreadyOpen: '이미 열려 있는 콘텐츠',
-    unableToOpenConversation: '대화를 열 수 없습니다. 다시 시도해 주세요.',
     mobileSearchPlaceholder: '검색…',
     closeSearch: '검색 닫기',
     searchFullTextFor: '“{{query}}” 전체 텍스트 검색',

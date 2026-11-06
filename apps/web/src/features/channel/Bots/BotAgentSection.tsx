@@ -14,15 +14,14 @@ export function BotAgentSection(props: {
     <Show when={agentsEnabled()}>
       <BotFormSection
         title="Agent"
-        description="Make this bot available in the model selector when starting an AI chat."
+        description="Make this bot available in the model selector and respond to mentions."
       >
         <div class="flex items-center justify-between gap-4">
           <div class="min-w-0">
-            <div class="text-sm font-medium text-ink">
-              Show in model selector
-            </div>
+            <div class="text-sm font-medium text-ink">Enable AI agent</div>
             <p class="mt-0.5 text-xs text-ink-muted">
-              Connect an agent such as Codex or Hermes to handle requests.
+              Use a chat agent or connect an external runtime to handle
+              requests.
             </p>
           </div>
           <ToggleSwitch
@@ -30,7 +29,7 @@ export function BotAgentSection(props: {
             checked={props.checked}
             disabled={props.disabled}
             onChange={props.onChange}
-            label={<span>Show in model selector</span>}
+            label={<span>Enable AI agent</span>}
             labelClass="sr-only"
           />
         </div>

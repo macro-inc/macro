@@ -128,8 +128,10 @@ async fn word_document_requests_carry_the_token_and_surface_agent_errors() {
         .await
         .unwrap_err();
     assert_eq!(
-        error.to_string(),
-        "No paragraph or block has id x. (HTTP 422 Unprocessable Entity)"
+        error
+            .downcast_ref::<crate::domain::word_document::WordDocumentRejected>()
+            .map(ToString::to_string),
+        Some("No paragraph or block has id x.".to_owned())
     );
 
     let bodies = bodies.lock().unwrap();

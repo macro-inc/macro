@@ -298,7 +298,10 @@ impl<
     }
 
     #[tracing::instrument(err, skip_all)]
-    pub(super) async fn prepare_meeting_call(&self, meeting: &Meeting) -> Result<Call, CallError> {
+    pub(super) async fn prepare_meeting_call(
+        &self,
+        meeting: &Meeting,
+    ) -> Result<(Call, bool), CallError> {
         if let Some(call_id) = meeting.call_id
             && let Some(call) = self
                 .repo
@@ -306,7 +309,7 @@ impl<
                 .await
                 .map_err(|e| CallError::Internal(e.into()))?
         {
-            return Ok(call);
+            return Ok((call, false));
         }
         let preparation = self.repo.get_meeting_preparation(&meeting.id).await?;
         let candidate_id = preparation
@@ -344,6 +347,9 @@ impl<
                 created_at: call.created_at,
                 recording_enabled: self.egress_s3_config.is_some(),
             }));
+            let mut metadata = CallNotificationMetadata::new(call.id, None);
+            metadata.created_by = Some(call.created_by.clone());
+            self.publish_call_notification(CallNotificationEvent::Started(metadata));
             // Token issuance needs a room, not a running recorder or agent.
             // Only the allocation winner schedules these best-effort services.
             let rtc = self.rtc_client.clone();
@@ -360,7 +366,7 @@ impl<
                 tokio::join!(transcription, recording);
             }.instrument(tracing::info_span!("start_meeting_media", call_id = %call_id)));
         }
-        Ok(call)
+        Ok((call, created))
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -368,16 +374,62 @@ impl<
         &self,
         token: MeetingToken,
         actor: MacroUserIdStr<'_>,
+        request: JoinCallRequest,
+        credential_is_program: bool,
+        agent_attributed: bool,
     ) -> Result<CallTokenResponse, CallError> {
         let meeting = self.resolve_invitation(&token).await?;
-        let call = self.prepare_meeting_call(&meeting).await?;
-        self.leave_other_active_call(actor.copied(), call.id)
-            .await?;
-        let rtc_token = self
-            .rtc_client
-            .generate_token(&call.room_name, actor.copied())
+        if matches!(request.on_other_call, OnOtherCall::Fail)
+            && let Some((other_id, _)) = self
+                .repo
+                .find_active_call_for_user(actor.copied())
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?
+            && meeting.call_id != Some(other_id)
+        {
+            return Err(CallError::InOtherCall);
+        }
+        if agent_attributed {
+            let active = match meeting.call_id {
+                Some(call_id) => self
+                    .repo
+                    .get_call_by_id(&call_id)
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?
+                    .is_some(),
+                None => false,
+            };
+            if !active {
+                return Err(CallError::Forbidden(
+                    "an agent-attributed start requires approval".to_string(),
+                ));
+            }
+        }
+        let (call, started) = self.prepare_meeting_call(&meeting).await?;
+        if let Some((other_id, _)) = self
+            .repo
+            .find_active_call_for_user(actor.copied())
             .await
-            .map_err(CallError::Internal)?;
+            .map_err(|e| CallError::Internal(e.into()))?
+            && other_id != call.id
+        {
+            if matches!(request.on_other_call, OnOtherCall::Fail) {
+                return Err(CallError::InOtherCall);
+            }
+            self.leave_other_active_call(actor.copied(), call.id)
+                .await?;
+        }
+        if !request.replace {
+            let connected = self
+                .rtc_client
+                .list_participant_identities(&call.room_name)
+                .await
+                .map_err(CallError::Internal)?
+                .unwrap_or_default();
+            if connected.iter().any(|identity| identity == actor.as_ref()) {
+                return Err(CallError::AlreadyConnected);
+            }
+        }
         match self
             .repo
             .add_meeting_participant(&call.id, actor.copied())
@@ -385,13 +437,57 @@ impl<
         {
             Ok(_) => {}
             Err(AddParticipantError::UserAlreadyActive) => {
-                return Err(CallError::AlreadyInCall("another call".to_string()));
+                return Err(CallError::InOtherCall);
             }
             Err(AddParticipantError::Repository(error)) => return Err(CallError::Internal(error)),
         }
-        self.send_meeting_answered_event(meeting.id, actor.copied())
+        let agent = if credential_is_program {
+            self.repo
+                .is_agent_account(actor.as_ref())
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?
+        } else {
+            false
+        };
+        let rtc_token = if agent || credential_is_program {
+            let client = if agent { "agent" } else { "api_key" };
+            self.repo
+                .set_participant_client(&call.id, actor.as_ref(), client)
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?;
+            self.rtc_client
+                .generate_program_token(
+                    &call.room_name,
+                    actor.copied(),
+                    client,
+                    request.name.clone(),
+                )
+                .await
+        } else {
+            // A person may rejoin a row a program of theirs marked. Reset it, or
+            // the program-only rule could end the call while they're in it.
+            self.repo
+                .set_participant_client(&call.id, actor.as_ref(), "person")
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?;
+            match request.name.as_deref() {
+                Some(name) => {
+                    self.rtc_client
+                        .generate_named_token(&call.room_name, actor.copied(), name)
+                        .await
+                }
+                None => {
+                    self.rtc_client
+                        .generate_token(&call.room_name, actor.copied())
+                        .await
+                }
+            }
+        }
+        .map_err(CallError::Internal)?;
+        self.send_meeting_answered_event(meeting.id, call.id, actor.copied())
             .await;
         Ok(CallTokenResponse {
+            started,
             call_id: call.id,
             channel_id: call.channel_id,
             token: rtc_token,
@@ -416,7 +512,7 @@ impl<
                 "Sign in to join this call".to_string(),
             ));
         }
-        let call = self.prepare_meeting_call(&meeting).await?;
+        let (call, started) = self.prepare_meeting_call(&meeting).await?;
         let guest_id = GuestId::generate();
         // Lock and persist before minting so a join racing archival fails here.
         self.repo.add_guest(&call.id, guest_id, &name).await?;
@@ -437,6 +533,7 @@ impl<
             }
         };
         Ok(CallTokenResponse {
+            started,
             call_id: call.id,
             channel_id: call.channel_id,
             token: rtc_token,
@@ -475,6 +572,10 @@ impl<
             .remove_participant(&other.id, user_id.copied())
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
+        let mut metadata = CallNotificationMetadata::new(other.id, other.channel_id);
+        metadata.identity = Some(user_id.to_string());
+        metadata.user_id = Some(user_id.to_string());
+        self.publish_call_notification(CallNotificationEvent::ParticipantLeft(metadata));
         // Archiving closes this room to future joins. Its whole-room teardown
         // can then run independently without kicking a later rejoin.
         if self.finish_empty_call(&other).await? {
@@ -498,10 +599,12 @@ impl<
             .get_participant_count(&call.id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
-        if remaining != 0 {
-            return Ok(false);
-        }
-        let archived = match self.repo.archive_call_if_empty(&call.id).await {
+        let archive = if remaining == 0 {
+            self.repo.archive_call_if_empty(&call.id).await
+        } else {
+            self.repo.archive_call_if_program_only(&call.id).await
+        };
+        let archived = match archive {
             Ok(Some(archived)) => archived,
             Ok(None) => return Ok(false),
             Err(CallError::NotFound(_)) => return Ok(true),
@@ -574,6 +677,9 @@ impl<
         }
         if let Some(guest_id) = GuestId::parse_rtc_identity(&verified.identity) {
             self.repo.reconcile_guest(&call.id, guest_id, false).await?;
+            let mut metadata = CallNotificationMetadata::new(call.id, call.channel_id);
+            metadata.identity = Some(guest_id.to_string());
+            self.publish_call_notification(CallNotificationEvent::ParticipantLeft(metadata));
             if self.finish_empty_call(&call).await? {
                 return Ok(LeaveCallResponse { call_ended: true });
             }
@@ -588,6 +694,10 @@ impl<
                 .remove_participant(&call.id, identity.copied())
                 .await
                 .map_err(|e| CallError::Internal(e.into()))?;
+            let mut metadata = CallNotificationMetadata::new(call.id, call.channel_id);
+            metadata.identity = Some(identity.to_string());
+            metadata.user_id = Some(identity.to_string());
+            self.publish_call_notification(CallNotificationEvent::ParticipantLeft(metadata));
             if self.finish_empty_call(&call).await? {
                 return Ok(LeaveCallResponse { call_ended: true });
             }
