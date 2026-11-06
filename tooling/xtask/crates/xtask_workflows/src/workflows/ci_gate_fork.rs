@@ -5,8 +5,12 @@
 //! out the fork's code. When the label goes on, `request` removes it and opens
 //! a pending `CI gate` request on the head it was added at. When the fork's run
 //! ends, `report` copies its verdict, but only onto a commit with an open
-//! request: a fork token can't set statuses, so a run on any other commit, such
-//! as one pushed with a rewritten workflow, reports nothing.
+//! request: a fork token can't set statuses, so a run on any other commit
+//! reports nothing.
+//!
+//! The fork's run uses the fork's workflow files, so both jobs fail closed when
+//! the fork changed `.github` or the workflow generator, and `report` trusts
+//! only a run of `pr-ci.yml`.
 
 use gh_workflow::{
     Event, Expression, Job, Level, Permissions, PullRequestTarget, PullRequestType, Workflow,
@@ -46,6 +50,7 @@ fn request() -> Job {
         .runs_on("ubuntu-latest")
         .timeout_minutes(5u32)
         .permissions(Permissions {
+            contents: Some(Level::Read),
             issues: Some(Level::Write),
             pull_requests: Some(Level::Write),
             statuses: Some(Level::Write),
@@ -55,6 +60,7 @@ fn request() -> Job {
             pr_ci::gate_step("Open the CI gate request", "fork-request")
                 .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
                 .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
+                .add_env(("BASE_REF", "${{ github.event.pull_request.base.ref }}"))
                 .add_env((
                     "PR_CHECKS_URL",
                     "${{ github.event.pull_request.html_url }}/checks",
@@ -72,8 +78,10 @@ fn report() -> Job {
         .timeout_minutes(5u32)
         .permissions(Permissions {
             actions: Some(Level::Read),
+            contents: Some(Level::Read),
             statuses: Some(Level::Write),
             ..Default::default()
         })
-        .add_step(pr_ci::gate_step("Set the CI gate status", "fork"))
+        // `PR CI` runs only for pull requests into `main`.
+        .add_step(pr_ci::gate_step("Set the CI gate status", "fork").add_env(("BASE_REF", "main")))
 }
