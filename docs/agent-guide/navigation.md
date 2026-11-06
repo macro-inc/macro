@@ -1136,8 +1136,9 @@ template. The strip hides while searching and on **On**; on phones the cards
 scroll sideways. While the scheduler has routine suggestions for the user
 (`enable-routine-suggestions` and `enable-routine-code-steps`), **Suggested
 for you** takes the strip's place: the same rows as the sidebar cards (see
-[setup cards](setup-cards.md#suggested-routines)), with area filters when
-more than one area has some. Columns are **Name**, **Trigger**, **Steps** and **Last run**.
+[setup cards](setup-cards.md#suggested-routines)), the three AI rates most
+likely to be kept, and **More suggestions (N)** to show the rest with area
+filters (**Fewer suggestions** folds them again). Columns are **Name**, **Trigger**, **Steps** and **Last run**.
 Rows are grouped under **When something happens** and **On a schedule**, each a
 band like the tasks list's group headers, with a count. Each row has an icon for
 its trigger's kind, the name with its description below it when it has one,

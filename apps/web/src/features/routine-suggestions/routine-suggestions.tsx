@@ -14,6 +14,7 @@ import { useChannelsContext } from '@core/context/channels';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useEnsureTagSetMutation } from '@queries/properties/tags';
 import type { RoutineSuggestion } from '@service-scheduled-action/generated/schemas';
+import { Button, Tabs } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import type { RoutineTemplate } from '../routines/core/routine-templates';
 import { useRoutineCatalog } from '../routines/queries/catalog';
@@ -130,7 +131,7 @@ function SuggestionList(props: {
   const catalog = useRoutineCatalog();
   const actions = useProductionActions(() => props.onLeave?.());
   return (
-    <ul class="flex flex-col">
+    <ul class="flex flex-col gap-1" aria-label="Suggested routines">
       <For each={rows(props.suggestions, catalog())}>
         {(row) => (
           <SuggestionRow
@@ -255,56 +256,81 @@ export function RoutineSuggestionsSection(props: {
   );
 }
 
+/** The Routines page shows this many until the person asks for more. */
+const ROUTINES_PAGE_SHOWN = 3;
+
 function SuggestedForYou(props: { fallback: JSX.Element }) {
   const source = useRoutineSuggestions();
+  const [expanded, setExpanded] = createSignal(false);
   const [surface, setSurface] = createSignal<RoutineSurface | 'all'>('all');
-  const present = createMemo(() =>
-    ROUTINE_SURFACES.filter((each) =>
-      source.suggestions()?.some((suggestion) => suggestion.surface === each)
+  // Best first across areas: AI's estimate that the person keeps it.
+  const ranked = createMemo(() =>
+    (source.suggestions() ?? []).toSorted(
+      (a, b) => b.keepProbability - a.keepProbability
     )
   );
-  const visible = () =>
-    source
-      .suggestions()
-      ?.filter(
-        (suggestion) => surface() === 'all' || suggestion.surface === surface()
-      ) ?? [];
+  const filterOptions = createMemo(() => [
+    { value: 'all' as const, label: 'All' },
+    ...ROUTINE_SURFACES.filter((each) =>
+      ranked().some((suggestion) => suggestion.surface === each)
+    ).map((each) => ({ value: each, label: SURFACE_COPY[each].label })),
+  ]);
+  const visible = () => {
+    if (!expanded()) return ranked().slice(0, ROUTINES_PAGE_SHOWN);
+    const current = surface();
+    return current === 'all'
+      ? ranked()
+      : ranked().filter((suggestion) => suggestion.surface === current);
+  };
+  const more = () => ranked().length - ROUTINES_PAGE_SHOWN;
   return (
-    <Show when={source.suggestions()?.length} fallback={props.fallback}>
+    <Show when={ranked().length} fallback={props.fallback}>
       <section
-        aria-label="Suggested for you"
-        class="grid min-w-0 gap-2 px-4 pb-2 pt-4 @max-[760px]/routines:px-3"
+        aria-labelledby="routine-suggestions-heading"
+        class="flex min-w-0 flex-col gap-3 px-4 pt-4 pb-2 @max-[760px]/routines:px-3"
       >
-        <div class="flex min-w-0 flex-wrap items-center gap-2">
-          <h2 class="text-sm font-semibold text-ink">Suggested for you</h2>
-          <span class="text-xs text-ink-muted">
-            Picked by AI from your workspace. Review one before it’s saved.
-          </span>
-          <Show when={present().length > 1}>
-            <div
-              class="ml-auto flex flex-wrap gap-1"
-              role="group"
-              aria-label="Suggestion area"
+        <div class="flex min-w-0 flex-wrap items-center justify-between gap-3 px-1">
+          <div class="min-w-0">
+            <h2
+              id="routine-suggestions-heading"
+              class="text-sm font-semibold text-ink"
             >
-              <For each={['all' as const, ...present()]}>
-                {(each) => (
-                  <button
-                    type="button"
-                    aria-pressed={surface() === each}
-                    class="rounded-full px-2 py-0.5 text-xs text-ink-muted aria-pressed:bg-hover aria-pressed:text-ink"
-                    onClick={() => setSurface(each)}
-                  >
-                    {each === 'all' ? 'All' : SURFACE_COPY[each].label}
-                  </button>
-                )}
-              </For>
-            </div>
+              Suggested for you
+            </h2>
+            <p class="text-xs text-ink-muted">
+              Routines AI picked from your workspace. Review one to see and
+              change it before it’s saved.
+            </p>
+          </div>
+          <Show when={expanded() && filterOptions().length > 2}>
+            <Tabs
+              aria-label="Suggestion area"
+              size="sm"
+              wrap
+              options={filterOptions()}
+              value={surface()}
+              onChange={setSurface}
+            />
           </Show>
         </div>
         <SuggestionList
           suggestions={visible()}
           showSurface={surface() === 'all'}
         />
+        <Show when={more() > 0}>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="self-start"
+            aria-expanded={expanded()}
+            onClick={() => {
+              setExpanded(!expanded());
+              setSurface('all');
+            }}
+          >
+            {expanded() ? 'Fewer suggestions' : `More suggestions (${more()})`}
+          </Button>
+        </Show>
       </section>
     </Show>
   );
