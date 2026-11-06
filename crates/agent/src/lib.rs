@@ -5,6 +5,7 @@
 mod accumulator;
 mod agent_loop;
 mod completion;
+mod connected_toolsets;
 mod convert;
 mod error;
 mod hook;
