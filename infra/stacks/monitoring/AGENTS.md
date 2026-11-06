@@ -4,7 +4,7 @@
 
 Org-global Datadog monitors, synthetics, and rollout dashboards. This stack is
 manual and has only a prod stack, even for monitors covering both environments.
-Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync}.ts`
+Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,agent-sessions}.ts`
 (`prodMonitor()` in `prod-monitor.ts`), each file with a dashboard graphing its
 monitors that their messages link to; every monitor notifies through `notify.ts`.
 `dashboards/web-performance.ts` holds the web app performance dashboard with the
@@ -71,3 +71,9 @@ From `infra/`:
 - `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
   log in `crates/notification/src/domain/service/voip.rs` and the
   `PushEndpointUnavailable` message. Rewording either silently breaks it.
+- Agent session panels (`monitors/agent-sessions.ts`) read span-based metrics
+  (`datadog.SpansMetric`): custom spans produce no trace metrics, and span
+  queries see only indexed spans. A new span field charted there needs its own
+  span-based metric, and only counts from the deploy that creates it. Its tool
+  metrics count spans with `gen_ai.conversation.id`, one per session tool call;
+  `execute_tool*` alone double-counts tools reached through MCP.
