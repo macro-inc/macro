@@ -138,6 +138,27 @@ describe('full-screen call prompt', () => {
     expect(screen.queryByText(title)).toBeNull();
   });
 
+  it('ignores an earlier check that finishes after a later one', async () => {
+    renderPrompt();
+    await screen.findByText(title);
+
+    const pending: ((state: { allowed: boolean }) => void)[] = [];
+    native.invoke.mockImplementation((command: string) =>
+      command === 'plugin:call-kit|can_use_full_screen_intent'
+        ? new Promise((resolve) => pending.push(resolve))
+        : Promise.resolve()
+    );
+    returnFromSettings();
+    returnFromSettings();
+    await waitFor(() => expect(pending).toHaveLength(2));
+
+    pending[1]({ allowed: true });
+    await waitFor(() => expect(screen.queryByText(title)).toBeNull());
+    pending[0]({ allowed: false });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText(title)).toBeNull();
+  });
+
   it('stays hidden on the next launch once access is granted', async () => {
     native.allowed = true;
     renderPrompt();

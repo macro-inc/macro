@@ -88,8 +88,13 @@ export function FullScreenCallPrompt() {
     },
   });
 
-  const checkBlocked = async (trigger: AccessCheckTrigger) =>
-    setBlocked(!(await canUseFullScreenIntent(trigger)));
+  // Only the latest check decides: an earlier one that finishes late is stale.
+  let latestCheck = 0;
+  const checkBlocked = async (trigger: AccessCheckTrigger) => {
+    const check = ++latestCheck;
+    const allowed = await canUseFullScreenIntent(trigger);
+    if (check === latestCheck) setBlocked(!allowed);
+  };
   onMount(() => fireAndForget(checkBlocked('mount'), 'channel-call'));
 
   // Calls only ring once notifications are on; that prompt comes first.
