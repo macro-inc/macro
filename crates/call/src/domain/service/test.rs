@@ -28,6 +28,7 @@ mod access;
 mod active_meetings;
 mod channel_startup;
 mod guest_chat;
+mod join;
 mod meeting_invites;
 mod meeting_participants;
 mod meeting_startup;
@@ -191,6 +192,13 @@ impl CallRtcClient for MockRtcClient {
         &self,
         _room_name: &str,
     ) -> anyhow::Result<Option<Vec<crate::domain::meetings::MeetingRtcParticipant>>> {
+        Ok(None)
+    }
+
+    async fn list_live_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<crate::domain::models::LiveCallParticipant>>> {
         Ok(None)
     }
 
@@ -527,11 +535,13 @@ type BaseGetOrCreateCallService<Cn, B = macro_event_broker::NoopMacroEventBroker
 >;
 
 fn build_get_or_create_service<B: MacroEventBroker + Clone, Cn: ConnectionService>(
-    repo: MockCallRepository,
+    mut repo: MockCallRepository,
     connection_service: Cn,
     event_broker: B,
     recording_enabled: bool,
 ) -> BaseGetOrCreateCallService<Cn, B> {
+    repo.expect_archive_call_if_program_only()
+        .returning(|_| Box::pin(async { Ok(None) }));
     let service: BaseGetOrCreateCallService<Cn> = CallServiceImpl::new(
         repo,
         MockRtcClient::new(),
@@ -688,6 +698,8 @@ async fn get_or_create_call_publishes_started_event() {
     .await
     .expect("call creation succeeds");
 
+    assert!(response.started);
+
     assert_eq!(response.call_id, STARTED_EVENT_CALL_ID);
     let events = broker.events();
     let [published] = events.as_slice() else {
@@ -727,7 +739,7 @@ async fn get_or_create_call_publishes_started_event() {
 async fn get_or_create_call_race_loser_does_not_publish_started_event() {
     let broker = RecordingEventBroker::default();
 
-    get_or_create_call(
+    let response = get_or_create_call(
         GetOrCreateScenario::RaceLoses,
         STARTED_EVENT_CREATOR,
         broker.clone(),
@@ -736,6 +748,7 @@ async fn get_or_create_call_race_loser_does_not_publish_started_event() {
     .await
     .expect("race loser joins the winning call");
 
+    assert!(!response.started);
     assert!(broker.events().is_empty());
 }
 
@@ -743,7 +756,7 @@ async fn get_or_create_call_race_loser_does_not_publish_started_event() {
 async fn get_or_create_call_existing_call_does_not_publish_started_event() {
     let broker = RecordingEventBroker::default();
 
-    get_or_create_call(
+    let response = get_or_create_call(
         GetOrCreateScenario::ExistingCall,
         STARTED_EVENT_CREATOR,
         broker.clone(),
@@ -752,6 +765,7 @@ async fn get_or_create_call_existing_call_does_not_publish_started_event() {
     .await
     .expect("existing call can be joined");
 
+    assert!(!response.started);
     assert!(broker.events().is_empty());
 }
 
@@ -876,11 +890,13 @@ fn switching_repo(remaining: i64) -> MockCallRepository {
 }
 
 async fn join_while_in_other_call(
-    repo: MockCallRepository,
+    mut repo: MockCallRepository,
 ) -> (
     crate::domain::models::CallTokenResponse,
     Vec<(String, String)>,
 ) {
+    repo.expect_archive_call_if_program_only()
+        .returning(|_| Box::pin(async { Ok(None) }));
     let rtc_client = MockRtcClient::new();
     let removed = rtc_client.removed.clone();
     let service: BaseGetOrCreateCallService<StubConnectionService> = CallServiceImpl::new(
@@ -967,7 +983,9 @@ fn reconcile_repo(joined: DateTime<Utc>) -> MockCallRepository {
     repo
 }
 
-async fn reconcile(repo: MockCallRepository, rtc_client: MockRtcClient) {
+async fn reconcile(mut repo: MockCallRepository, rtc_client: MockRtcClient) {
+    repo.expect_archive_call_if_program_only()
+        .returning(|_| Box::pin(async { Ok(None) }));
     let service: BaseGetOrCreateCallService<StubConnectionService> = CallServiceImpl::new(
         repo,
         rtc_client,
@@ -1166,11 +1184,13 @@ fn build_webhook_service(
 }
 
 fn build_webhook_service_with_connection<Cn: ConnectionService>(
-    repo: MockCallRepository,
+    mut repo: MockCallRepository,
     rtc_client: MockCallRtcClient,
     connection_service: Cn,
     event_broker: RecordingEventBroker,
 ) -> impl CallService + messages::domain::service::guest_chat::GuestCallAuthorizer {
+    repo.expect_archive_call_if_program_only()
+        .returning(|_| Box::pin(async { Ok(None) }));
     let service: BaseWebhookCallService<Cn> = CallServiceImpl::new(
         repo,
         rtc_client,

@@ -116,6 +116,8 @@ pub struct CallParticipant {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CallTokenResponse {
+    /// Whether this request allocated the call.
+    pub started: bool,
     /// RTC participant identity.
     pub participant_id: String,
     /// Meeting link capability, when joined using a link.
@@ -130,6 +132,148 @@ pub struct CallTokenResponse {
     pub room_name: String,
     /// The RTC server URL for the frontend SDK to connect to.
     pub server_url: String,
+}
+
+/// Options for an authenticated call join.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct JoinCallRequest {
+    /// What to do when this account is participating in another call.
+    #[serde(default)]
+    pub on_other_call: OnOtherCall,
+    /// Disconnect an existing RTC connection for this identity.
+    #[serde(default)]
+    pub replace: bool,
+    /// Optional display name in the RTC room.
+    pub name: Option<String>,
+}
+
+/// Whether a live call is associated with a channel.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum LiveCallKind {
+    /// Call associated with a channel.
+    Channel,
+    /// Independent meeting call.
+    Standalone,
+}
+
+/// A live call visible to an account that can join it.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct LiveCallSummary {
+    /// Session identifier.
+    pub call_id: Uuid,
+    /// Channel or standalone call.
+    pub kind: LiveCallKind,
+    /// Channel identifier, if present.
+    pub channel_id: Option<Uuid>,
+    /// Invitation identifier, if present.
+    pub meeting_id: Option<Uuid>,
+    /// Invitation capability, if present.
+    pub share_token: Option<String>,
+    /// Invitation title, if present.
+    pub title: Option<String>,
+    /// Caller identifier.
+    pub created_by: String,
+    /// When the session was created.
+    pub created_at: DateTime<Utc>,
+    /// Number of active people and guests.
+    pub participant_count: i64,
+    /// Whether this account is currently being rung.
+    pub ringing: bool,
+}
+
+/// Response containing every live call this account may join.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct LiveCallsResponse {
+    /// Joinable live calls.
+    pub calls: Vec<LiveCallSummary>,
+}
+
+/// A live media track.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum LiveTrackSource {
+    /// Microphone audio.
+    Microphone,
+    /// Camera video.
+    Camera,
+    /// Screen video.
+    ScreenShare,
+    /// Screen audio.
+    ScreenShareAudio,
+    /// Unrecognized source.
+    Unknown,
+}
+
+/// Participant kind in the live room.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum LiveParticipantKind {
+    /// Signed-in account.
+    User,
+    /// Link guest.
+    Guest,
+    /// Bot identity.
+    Bot,
+}
+
+/// A live media track.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct LiveCallTrack {
+    /// Microphone, camera, or screen source.
+    pub source: LiveTrackSource,
+    /// Whether the track is muted.
+    pub muted: bool,
+}
+
+/// A connected participant in an RTC room.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct LiveCallParticipant {
+    /// RTC identity.
+    pub identity: String,
+    /// Name displayed to room members.
+    pub display_name: String,
+    /// User or guest.
+    pub kind: LiveParticipantKind,
+    /// Macro account identifier, if this is a user.
+    pub user_id: Option<String>,
+    /// Whether the caller is a program.
+    pub is_program: bool,
+    /// RTC connection time.
+    pub joined_at: Option<DateTime<Utc>>,
+    /// Published media tracks.
+    pub tracks: Vec<LiveCallTrack>,
+}
+
+/// A live RTC room roster.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct LiveCallParticipantsResponse {
+    /// Connected participants.
+    pub participants: Vec<LiveCallParticipant>,
+}
+
+/// Policy for another active call.
+#[derive(Debug, Clone, Copy, Default, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum OnOtherCall {
+    /// Preserve the other call and return a conflict.
+    #[default]
+    Fail,
+    /// Leave the other call before joining.
+    Switch,
 }
 
 /// Inputs required by the RTC adapter to produce native VoIP invite payloads.
@@ -736,6 +880,18 @@ pub enum CallError {
     /// No active call found for this channel.
     #[error("no active call found for channel {0}")]
     NotFound(String),
+    /// The call existed, but has already ended.
+    #[error("call has ended")]
+    Ended,
+    /// The caller is already participating in a different call.
+    #[error("user is in another call")]
+    InOtherCall,
+    /// This RTC identity is already connected to the room.
+    #[error("identity is already connected")]
+    AlreadyConnected,
+    /// A per-caller start budget has been exhausted.
+    #[error("call start rate limit exceeded")]
+    RateLimited,
     /// User is not in the call.
     #[error("user not in call")]
     NotInCall,

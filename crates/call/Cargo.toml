@@ -104,6 +104,7 @@ subtle = { workspace = true }
 base64 = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
+model_user = { path = "../model_user" }
 rate_limit = { path = "../rate_limit", features = ["axum", "testing"] }
 rootcause = { workspace = true }
 sha2 = { workspace = true }

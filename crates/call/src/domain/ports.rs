@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::future::Future;
+use std::pin::Pin;
 
 use chrono::{DateTime, Utc};
 
@@ -33,9 +34,9 @@ use super::models::{
     CallActiveResponse, CallError, CallParticipant, CallRecord, CallRecordPreview,
     CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
     CallWebhookEvent, EgressS3Config, EnrichedCallTranscript, GetBatchCallRecordPreviewRequest,
-    GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse,
-    RingStatusResponse, RtcRoom, TranscriptSegmentRequest, VerifiedRingToken,
-    VoipPushPayloadRequest,
+    GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, JoinCallRequest, LeaveCallResponse,
+    LiveCallParticipant, LiveCallParticipantsResponse, LiveCallsResponse, RingStatusResponse,
+    RtcRoom, TranscriptSegmentRequest, VerifiedRingToken, VoipPushPayloadRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -43,6 +44,39 @@ use super::models::{
 pub trait CallRepository: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + Debug;
+
+    /// Whether this account may enter this live call as a participant.
+    fn can_join_call(
+        &self,
+        call_id: &Uuid,
+        user_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Live calls this account may enter, across channels and invitations.
+    fn list_joinable_calls(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<Call>, Self::Err>> + Send;
+
+    /// Whether this account is an agent account.
+    fn is_agent_account(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Persist the authenticated client kind on a live participant.
+    fn set_participant_client(
+        &self,
+        call_id: &Uuid,
+        user_id: &str,
+        client: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Atomically archive a call whose only active participants have been programs for 60 seconds.
+    fn archive_call_if_program_only(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<ArchivedCall>, CallError>> + Send;
 
     /// Persist an owner-bound room reservation and discard expired reservation metadata.
     fn insert_meeting_preparation(
@@ -559,6 +593,15 @@ pub trait CallRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
+/// Limit call creation by authenticated account before ringing others.
+pub trait CallStartLimiter: Send + Sync {
+    /// Consume one start attempt.
+    fn check<'a>(
+        &'a self,
+        user_id: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<(), CallError>> + Send + 'a>>;
+}
+
 /// Storage port for generating signed recording GET URLs and deleting objects.
 pub trait RecordingStorage: Send + Sync + 'static {
     /// Generate a storage- or distribution-signed GET URL for a recording key.
@@ -705,12 +748,41 @@ pub trait CallRtcClient: Send + Sync + 'static {
         room_name: &str,
     ) -> impl Future<Output = anyhow::Result<Option<Vec<MeetingRtcParticipant>>>> + Send;
 
+    /// Full live room roster with media state.
+    fn list_live_participants(
+        &self,
+        room_name: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<LiveCallParticipant>>>> + Send;
+
     /// Generate an access token for a participant to join a room.
     fn generate_token<'a>(
         &self,
         room_name: &str,
         participant_identity: MacroUserIdStr<'a>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Mint a room token with an optional display name for a person.
+    fn generate_named_token<'a>(
+        &self,
+        room_name: &str,
+        participant_identity: MacroUserIdStr<'a>,
+        name: &str,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send {
+        let _ = name;
+        self.generate_token(room_name, participant_identity)
+    }
+
+    /// Mint a token for a program, identifying its client in RTC attributes.
+    fn generate_program_token<'a>(
+        &self,
+        room_name: &str,
+        participant_identity: MacroUserIdStr<'a>,
+        program: &str,
+        name: Option<&str>,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send {
+        let _ = (program, name);
+        self.generate_token(room_name, participant_identity)
+    }
 
     /// Mint a room-scoped token for a validated non-account guest.
     fn generate_guest_token(
@@ -864,6 +936,15 @@ pub trait CallService: Send + Sync + 'static {
         token: MeetingToken,
         actor: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
+    /// Join with an explicit policy for other calls and RTC connections.
+    fn join_meeting_with_options<'a>(
+        &self,
+        token: MeetingToken,
+        actor: MacroUserIdStr<'a>,
+        request: JoinCallRequest,
+        credential_is_program: bool,
+        agent_attributed: bool,
+    ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
     /// Join as a non-account guest with a server-generated identity.
     fn join_meeting_guest(
         &self,
@@ -907,6 +988,51 @@ pub trait CallService: Send + Sync + 'static {
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
+
+    /// Explicit start or join of a channel call.
+    fn start_call<'a>(
+        &self,
+        channel_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+        request: JoinCallRequest,
+        credential_is_program: bool,
+    ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
+
+    /// Join an existing live call without creating one.
+    fn join_call<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+        request: JoinCallRequest,
+        credential_is_program: bool,
+    ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
+
+    /// Leave only this call, never a newer call in the same channel.
+    fn leave_call<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<LeaveCallResponse, CallError>> + Send;
+
+    /// Ring state for an authenticated account.
+    fn get_call_ring_state<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<RingStatusResponse, CallError>> + Send;
+
+    /// All live calls this account may join.
+    fn get_live_calls<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<LiveCallsResponse, CallError>> + Send;
+
+    /// Connected people in a live call, with the same access as join.
+    fn get_call_participants<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<LiveCallParticipantsResponse, CallError>> + Send;
 
     /// Leave or end a call. Removes the user; if last participant, also deletes the room and call.
     fn leave_or_end_call<'a>(
