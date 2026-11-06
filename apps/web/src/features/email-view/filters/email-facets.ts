@@ -173,7 +173,7 @@ export const EMAIL_FOCUS_FILTER_GROUP: EmailFilterGroup = {
 export const EMAIL_FILTER_GROUPS: EmailFilterGroup[] = [
   {
     id: 'read',
-    label: 'Status',
+    label: 'Read status',
     selectionMode: 'single',
     defaultOptionId: 'all',
     options: [

@@ -174,7 +174,7 @@ show neither. The desktop header's sort dropdown (`Sort Focus`, among the view
 options) switches between **Priority**,
 **Importance** and **Most recent**; touch layouts have no dropdown and keep the
 saved order (Priority by default). The filter menu adds a Focus group (Reply
-needed, Follow up) on this tab only and has no Status or Done group there. The
+needed, Follow up) on this tab only and has no Read status or Done group there. The
 list is one `user.emailFocus` GraphQL read filtered on the client; it refreshes
 on open, not live. Mark Done hides the row at once and archives the thread; Undo
 brings it back. The worker classifies only inboxes on its
@@ -263,7 +263,7 @@ Their triggers are icon-only buttons matching the surrounding view controls;
 Clear/Reset filters and the mobile Clear all action use destructive text styling.
 Both layouts show a small accent dot beside categories with active refinements;
 default All selections are not marked.
-Email Status and Done are single choices that close the menu; attachment filters
+Email Read status and Done are single choices that close the menu; attachment filters
 stay open for multiple selections. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
@@ -271,7 +271,7 @@ On Signal, Noise, All, Archived, Favorites and Calendar, Filters holds every
 condition a saved view can: People and companies (search, or type an address,
 domain, `@domain` or website and pick `Add “…”`), Match from (once someone is
 chosen; the last field stays on), Subject contains (a text field applied after a
-pause or on Enter), Tags, Importance, Status, Done, Latest activity, Inboxes
+pause or on Enter), Tags, Importance, Read status, Done, Latest activity, Inboxes
 (with two or more linked; several can be chosen, in step with the account
 picker), Starred, Attachments and Calendar. Each tab's own restrictions show as
 selected (Signal: Importance Signal and Done Not done; Favorites: Starred;
@@ -286,7 +286,7 @@ choosing Done → All widens the list, shows **Save view**, and Clear restores i
 
 ### Read state and trash
 
-In the Email view, Status filters discovery on the server **before pagination**,
+In the Email view, Read status filters discovery on the server **before pagination**,
 for both the mailbox list and service-backed search. With Unread selected, opening
 or marking an admitted row read keeps its position across refreshes. Separate
 lookups, bounded to 100 already-admitted thread IDs each, omit only the read filter;
@@ -1411,7 +1411,7 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   least one on), Subject contains, Tags (a chip picker over the same team and
   personal tags as Filters, shown when any exist; a tag the viewer can no
   longer see reads Unavailable tag and stays), and an **Advanced settings** toggle that
-  reveals Importance, Status, Done, Latest activity, Inboxes (with two or more
+  reveals Importance, Read status, Done, Latest activity, Inboxes (with two or more
   linked), and Starred, calendar invite and attachment requirements; it starts
   open when the view already sets one of them. Values within one
   condition are alternatives; conditions all apply. Once the filters on Signal,

@@ -47,7 +47,7 @@ function matchesSearch(email: EmailEntity, text: string): boolean {
  * Applies the view's inbox scope, filters and search to the Focus list. The
  * server returns it by priority; "Importance" and "Most recent" reorder it here.
  * Done threads leave at once, as on Signal: the server drops archived
- * threads only on the next read. Focus has no Status or Done filters.
+ * threads only on the next read. Focus has no Read status or Done filters.
  */
 export function selectFocusEmails(
   emails: readonly EmailEntity[],

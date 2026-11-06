@@ -50,7 +50,7 @@ export default {
   importance: 'Importance',
   signal: 'Signal',
   noise: 'Noise',
-  status: 'Status',
+  status: 'Read status',
   unread: 'Unread',
   read: 'Read',
   done: 'Done',

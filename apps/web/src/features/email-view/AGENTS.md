@@ -32,7 +32,7 @@ the Soup-backed thread list, and saved email views (flag
   menu edits like a view's. `emailTabRefinements` keeps the tab's own query
   while those restrictions stand; otherwise the list queries as a view. Write
   filters through `setFilters`/`clearFilters`, never by emptying facets.
-- A saved view opens on All. Its Status, Done, attachment, calendar, tag and
+- A saved view opens on All. Its Read status, Done, attachment, calendar, tag and
   inbox filters live in the normal state so the Filters menu, inbox picker,
   and read admission keep working; its other conditions live in
   `state.conditions`.

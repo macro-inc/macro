@@ -48,7 +48,7 @@ const facetGroup = (id: EmailFilterGroupId) =>
   STATIC_FILTER_GROUPS.filter((group) => group.id === id);
 
 // Focus lists only threads still in the inbox, so Done has nothing to filter.
-// Status filters on the client, where opening a thread would mark it read and
+// Read status filters on the client, where opening a thread would mark it read and
 // drop it from an Unread list mid-read, so Focus leaves it out too.
 const FOCUS_FILTER_GROUPS: EmailFilterGroup[] = [
   withIcons(EMAIL_FOCUS_FILTER_GROUP),
