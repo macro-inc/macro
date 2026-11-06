@@ -45,7 +45,7 @@ vi.mock('@ui', () => ({
   ),
 }));
 vi.mock('./CallRecordingParticipants', () => ({
-  CallRecordingParticipantsSection: () => null,
+  CallRecordingAvatars: () => null,
 }));
 vi.mock('./CallRecordingSummary', () => ({
   CallRecordingSummarySection: () => null,

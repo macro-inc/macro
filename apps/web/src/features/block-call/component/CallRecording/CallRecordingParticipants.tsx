@@ -3,6 +3,7 @@ import { idToEmail } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import type { CallRecord } from '@service-call/client';
+import { Avatar } from '@ui';
 import { createMemo, For } from 'solid-js';
 import { dedupeCallRecordingParticipants } from './call-recording-utils';
 
@@ -66,5 +67,36 @@ export function CallRecordingParticipantsSection(props: {
         </For>
       </div>
     </section>
+  );
+}
+
+/** Compact identity row; the full participant list remains available in details. */
+export function CallRecordingAvatars(props: { record: CallRecord }) {
+  const participants = createMemo(() =>
+    dedupeCallRecordingParticipants(
+      props.record.participants,
+      props.record.createdBy
+    )
+  );
+  return (
+    <div
+      class="flex shrink-0 items-center -space-x-1"
+      aria-label="Participants"
+    >
+      <For each={participants()}>
+        {(participant) => (
+          <UserIcon id={participant.userId} size="sm" isDeleted={false} />
+        )}
+      </For>
+      <For each={props.record.guests}>
+        {(guest) => (
+          <Avatar size="sm">
+            <Avatar.Fallback>
+              {(guest.displayName.trim() || 'Guest').charAt(0).toUpperCase()}
+            </Avatar.Fallback>
+          </Avatar>
+        )}
+      </For>
+    </div>
   );
 }

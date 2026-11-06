@@ -4,12 +4,10 @@ import { CallDiscussionHistory } from '@channel/Call/chat/CallChatHistory';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { isMobile } from '@core/mobile/isMobile';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { CallRecord } from '@service-call/client';
 import { Button } from '@ui';
-import { format } from 'date-fns';
 import {
   createEffect,
   createMemo,
@@ -19,7 +17,6 @@ import {
   Suspense,
 } from 'solid-js';
 import type { CallTranscriptTarget } from '../../constants';
-import { formatCallDuration } from '../../utils';
 import { CallTranscript } from '../CallTranscript';
 import {
   getActiveTranscriptSequenceNum,
@@ -27,8 +24,8 @@ import {
   sortTranscriptSegments,
 } from '../transcript-playback';
 import { useCallAgain } from '../use-call-again';
-import { CallRecordingParticipantsSection } from './CallRecordingParticipants';
 import { CallRecordingSummarySection } from './CallRecordingSummary';
+import { CallRecordingTitle } from './CallRecordingTitle';
 import { CallRecordingVideo } from './CallRecordingVideo';
 import {
   seekDedupeKey,
@@ -138,18 +135,6 @@ export function CallRecordingBody(props: {
     () => record().customName ?? record().channelName ?? 'Call Recording'
   );
 
-  const formattedDate = createMemo(() => {
-    const ended = record().endedAt;
-    if (!ended) return null;
-    return format(new Date(ended), 'MMM d, yyyy · h:mm a');
-  });
-
-  const formattedDuration = createMemo(() => {
-    const ms = record().durationMs;
-    if (!ms) return null;
-    return formatCallDuration(ms);
-  });
-
   const callCtx = useCallContextOptional();
   const { canCallAgain, callAgain } = useCallAgain(
     () => props.callId,
@@ -180,45 +165,20 @@ export function CallRecordingBody(props: {
         class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
         ref={setScrollRef}
       >
-        <div class="mx-auto max-w-3xl min-w-0 px-6 pt-12 pb-16 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
-          <div class="flex flex-col gap-10">
-            <header>
-              <Show when={!isMobile() && props.showOverlayHeaderGap}>
-                <div class="h-8 mb-4" />
-              </Show>
-              <h1 class="text-2xl font-semibold text-ink text-balance">
-                {callTitle()}
-              </h1>
-              <div class="mt-3 flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">
-                <Show when={formattedDate()}>
-                  {(date) => <span>{date()}</span>}
-                </Show>
-                <Show when={formattedDuration()}>
-                  {(dur) => (
-                    <>
-                      <span class="text-ink-extra-muted">&middot;</span>
-                      <span>{dur()}</span>
-                    </>
-                  )}
-                </Show>
-                <Show when={record().isActive}>
-                  <span class="text-success font-medium">In progress</span>
-                </Show>
-              </div>
-              <Show when={canJoin()}>
-                <Button
-                  variant="success"
-                  size="xl"
-                  class="mt-6"
-                  onClick={callAgain}
-                >
-                  <PhoneCallIcon />
-                  Join call
-                </Button>
-              </Show>
-            </header>
-
-            <CallRecordingParticipantsSection record={props.record} />
+        <div class="mx-auto max-w-3xl min-w-0 px-6 pt-4 pb-24 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+          <div class="flex flex-col gap-7">
+            <CallRecordingTitle record={record()} />
+            <Show when={canJoin()}>
+              <Button
+                variant="success"
+                size="xl"
+                class="mt-6"
+                onClick={callAgain}
+              >
+                <PhoneCallIcon />
+                Join call
+              </Button>
+            </Show>
 
             <CallRecordingSummarySection record={props.record} />
 
