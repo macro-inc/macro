@@ -803,10 +803,15 @@ export function CallOverlay(props: {
                 inert={controlsHidden()}
                 data-holds-prompts={isTouchDevice() ? undefined : ''}
               >
-                <div class="grid w-fit max-w-full grid-cols-[3.5rem_auto_3.5rem] items-center gap-3 @max-[640px]/call:grid-cols-[2.75rem_auto_2.75rem] @max-[640px]/call:gap-2 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:gap-2 mobile:px-[max(16px,var(--mobile-chrome-gutter))]">
+                <div
+                  class={cn(
+                    'grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center mobile:w-fit mobile:grid-cols-[minmax(0,1fr)_auto] mobile:gap-2 mobile:px-[max(16px,var(--mobile-chrome-gutter))]',
+                    compactControls() ? 'gap-2' : 'gap-3'
+                  )}
+                >
                   <div
                     aria-hidden={!props.footerLeading}
-                    class="w-full mobile:hidden"
+                    class="min-w-0 justify-self-end mobile:hidden"
                   >
                     {props.footerLeading}
                   </div>
@@ -833,7 +838,7 @@ export function CallOverlay(props: {
                   <div
                     class={cn(
                       isMobile() ? 'island' : 'menu-surface',
-                      'flex justify-center rounded-full p-1.5'
+                      'flex justify-center justify-self-start rounded-full p-1.5'
                     )}
                   >
                     <PanelToggle />
