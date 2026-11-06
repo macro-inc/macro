@@ -43,8 +43,8 @@ export function MacroComputers(props: {
   const isAdmin = useIsTeamAdmin();
   const isTeamOwner = useIsTeamOwner();
   const userId = useUserId();
-  const { enabled, computers, failed } = useTeamComputers();
-  const offers = useComputerOffersQuery(() => enabled() && isAdmin());
+  const { enabled, canPurchase, computers, failed } = useTeamComputers();
+  const offers = useComputerOffersQuery(() => canPurchase() && isAdmin());
   const purchase = usePurchaseComputerMutation();
   const notify = useNotifyComputerSizeMutation();
   const power = useSetComputerPowerMutation();
@@ -255,7 +255,7 @@ export function MacroComputers(props: {
         </div>
       </Show>
 
-      <Show when={isAdmin()}>
+      <Show when={canPurchase() && isAdmin()}>
         <div data-settings-target="macro-computer">
           <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
             Get a Macro computer
@@ -307,7 +307,7 @@ export function MacroComputers(props: {
         </div>
       </Show>
 
-      <Show when={confirming()} keyed>
+      <Show when={canPurchase() && confirming()} keyed>
         {(offer) => (
           <ComputerPurchaseDialog
             offer={offer}

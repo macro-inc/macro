@@ -284,7 +284,14 @@ pub async fn quote<
 ) -> Result<Json<Quote>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
     Ok(Json(
-        state.service.quote_for_team(team_id, query.size).await?,
+        state
+            .service
+            .quote_for_team(
+                &user_id(&access.entity_access_receipt)?,
+                team_id,
+                query.size,
+            )
+            .await?,
     ))
 }
 
@@ -684,6 +691,7 @@ impl std::fmt::Display for ComputersHttpError {
 impl IntoResponse for ComputersHttpError {
     fn into_response(self) -> Response {
         let status = match &self.0 {
+            ComputerError::RolloutDisabled => StatusCode::FORBIDDEN,
             ComputerError::NotFound => StatusCode::NOT_FOUND,
             ComputerError::SoldOut | ComputerError::NotFailed => StatusCode::CONFLICT,
             ComputerError::BadRequest(_) | ComputerError::ConfirmationMismatch => {

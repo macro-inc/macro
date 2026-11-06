@@ -56,6 +56,7 @@ const SCREEN_PING_INTERVAL: Duration = Duration::from_secs(20);
 /// State for the computer routes.
 pub struct ComputerScreenState<Harnesses, Auth> {
     harnesses: Arc<Harnesses>,
+    rollout: hosted_runtimes::domain::rollout::ComputerRollout,
     control: ComputerControl,
     redis: redis::Client,
     authorization_state: MacroAuthorizationState<Auth>,
@@ -65,6 +66,7 @@ impl<Harnesses, Auth> Clone for ComputerScreenState<Harnesses, Auth> {
     fn clone(&self) -> Self {
         Self {
             harnesses: Arc::clone(&self.harnesses),
+            rollout: self.rollout.clone(),
             control: self.control.clone(),
             redis: self.redis.clone(),
             authorization_state: self.authorization_state.clone(),
@@ -86,6 +88,7 @@ pub fn router<Harnesses, Auth>(
     redis: redis::Client,
     harnesses: Harnesses,
     authorization_state: MacroAuthorizationState<Auth>,
+    rollout: hosted_runtimes::domain::rollout::ComputerRollout,
     tasks: &TaskTracker,
     shutdown: CancellationToken,
 ) -> Router
@@ -97,6 +100,7 @@ where
     let state = ComputerScreenState {
         harnesses: Arc::new(harnesses),
         control,
+        rollout,
         redis,
         authorization_state,
     };
@@ -542,6 +546,13 @@ where
         harness_id: HarnessId,
         access: HarnessAccess,
     ) -> Result<harnesses::domain::models::Harness, ComputerRouteError> {
+        if !self
+            .rollout
+            .enabled(caller.authorization.user.macro_user_id.as_ref())
+            .await
+        {
+            return Err(ComputerRouteError::RolloutDisabled);
+        }
         let harness = self
             .harnesses
             .authorize_harness(caller.authorization.user.macro_user_id, harness_id, access)
@@ -564,6 +575,9 @@ pub enum ComputerRouteError {
     /// The caller may not do this.
     #[error("you cannot do that on this computer")]
     Forbidden,
+    /// The per-user computer rollout is off or unavailable.
+    #[error("Macro computers are not enabled for this user")]
+    RolloutDisabled,
     /// No such harness.
     #[error("{0}")]
     NotFound(String),
@@ -609,7 +623,7 @@ impl IntoResponse for ComputerRouteError {
     fn into_response(self) -> Response {
         let status = match &self {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::Forbidden => StatusCode::FORBIDDEN,
+            Self::Forbidden | Self::RolloutDisabled => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Failed(_) => StatusCode::UNPROCESSABLE_ENTITY,

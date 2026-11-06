@@ -11,6 +11,7 @@ use crate::domain::lifecycle::{Billing as BillingState, ComputerState, PaymentOu
 use crate::domain::models::{BillingInterval, SubscriptionItem};
 
 mod comped;
+mod rollout;
 mod sold_resources;
 
 /// Records subscription updates; fails them when `decline` is set.

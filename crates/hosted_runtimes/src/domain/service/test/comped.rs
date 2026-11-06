@@ -20,12 +20,13 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
         FakeBilling::default(),
         FixedClock,
     )
-    .with_comp_policy(TeamCompPolicy);
+    .with_comp_policy(TeamCompPolicy)
+    .with_rollout(super::rollout::enabled_rollout());
     let id = service
         .purchase_for_team(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "test-admin".to_owned(),
+            created_by: "macro|admin@example.com".to_owned(),
             size: ComputerSize::Standard,
             name: Some("Build box".to_owned()),
             persona: None,
@@ -64,7 +65,7 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
                 reason: "untrusted override".to_owned(),
             },
             team_id: Uuid::from_u128(99),
-            created_by: "test-admin".to_owned(),
+            created_by: "macro|admin@example.com".to_owned(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,
@@ -122,7 +123,7 @@ async fn comped_reservation_recovers_without_charging_and_release_skips_billing(
                 .unwrap(),
                 price_id: None,
                 persona: None,
-                created_by: "test-admin".to_owned(),
+                created_by: "macro|admin@example.com".to_owned(),
                 extra_items: vec![],
             },
             now(),
@@ -152,8 +153,11 @@ async fn comped_quote_preserves_stripe_terms_and_requires_a_subscription() {
             },
             FixedClock,
         )
-        .with_comp_policy(TeamCompPolicy);
-        let quote = service.quote_for_team(TEAM, ComputerSize::Standard).await;
+        .with_comp_policy(TeamCompPolicy)
+        .with_rollout(super::rollout::enabled_rollout());
+        let quote = service
+            .quote_for_team("macro|admin@example.com", TEAM, ComputerSize::Standard)
+            .await;
         if no_subscription {
             assert!(matches!(
                 quote,
@@ -185,7 +189,7 @@ async fn comped_purchase_rejects_subscription_items_before_reserving() {
                 reason: "internal team".to_owned(),
             },
             team_id: TEAM,
-            created_by: "test-admin".to_owned(),
+            created_by: "macro|admin@example.com".to_owned(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,
@@ -220,12 +224,13 @@ async fn policy_failure_cannot_reserve_or_charge_a_computer() {
         FakeBilling::default(),
         FixedClock,
     )
-    .with_comp_policy(UnavailablePolicy);
+    .with_comp_policy(UnavailablePolicy)
+    .with_rollout(super::rollout::enabled_rollout());
     let result = service
         .purchase_for_team(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "test-admin".to_owned(),
+            created_by: "macro|admin@example.com".to_owned(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,

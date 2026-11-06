@@ -29,6 +29,8 @@ const BILLING_BATCH: u32 = 16;
 pub enum ComputerError {
     #[error("computer not found")]
     NotFound,
+    #[error("Macro computers are not enabled for this user")]
+    RolloutDisabled,
     #[error("only a failed computer can be retried")]
     NotFailed,
     #[error("this size is sold out")]
@@ -73,6 +75,7 @@ impl Clock for SystemClock {
 /// Callers authorize first: team routes require an admin receipt for writes
 /// and a member receipt for reads, and pass the receipt's team id here.
 pub struct ComputerService<Repo, Bill, Time, Policy = NoComps> {
+    rollout: crate::domain::rollout::ComputerRollout,
     comp_policy: Policy,
     catalog: Vec<crate::domain::size::CatalogEntry>,
     repo: Repo,
@@ -88,6 +91,7 @@ where
 {
     pub fn new(repo: Repo, billing: Bill, clock: Time) -> Self {
         Self {
+            rollout: Default::default(),
             comp_policy: NoComps,
             catalog: crate::domain::size::current_catalog(),
             repo,
@@ -102,6 +106,7 @@ where
         comp_policy: Policy,
     ) -> ComputerService<Repo, Bill, Time, Policy> {
         ComputerService {
+            rollout: self.rollout,
             repo: self.repo,
             billing: self.billing,
             clock: self.clock,
@@ -114,6 +119,19 @@ where
 impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     ComputerService<Repo, Bill, Time, Policy>
 {
+    /// Configure the fail-closed rollout at the composition root.
+    pub fn with_rollout(mut self, rollout: crate::domain::rollout::ComputerRollout) -> Self {
+        self.rollout = rollout;
+        self
+    }
+
+    async fn require_rollout(&self, user_id: &str) -> Result<(), ComputerError> {
+        if !self.rollout.enabled(user_id).await {
+            return Err(ComputerError::RolloutDisabled);
+        }
+        Ok(())
+    }
+
     /// Select the purchase catalog at the composition root.
     pub fn with_catalog(mut self, catalog: Vec<crate::domain::size::CatalogEntry>) -> Self {
         self.catalog = catalog;
@@ -158,16 +176,20 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         &self,
         mut request: PurchaseRequest,
     ) -> Result<ComputerId, ComputerError> {
+        self.require_rollout(&request.created_by).await?;
         request.billing = self.purchase_billing(request.team_id).await?;
         self.purchase(request).await
     }
 
     /// Quote using server-side team policy.
+    #[tracing::instrument(skip(self, user_id), err)]
     pub async fn quote_for_team(
         &self,
+        user_id: &str,
         team_id: Uuid,
         size: ComputerSize,
     ) -> Result<Quote, ComputerError> {
+        self.require_rollout(user_id).await?;
         self.quote(team_id, size, &self.purchase_billing(team_id).await?)
             .await
     }
@@ -193,12 +215,13 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     }
 
     /// Every size with its price, availability and the caller's notify requests.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     pub async fn offers(
         &self,
         team_id: Uuid,
         user_id: String,
     ) -> Result<Vec<SizeOffer>, ComputerError> {
+        self.require_rollout(&user_id).await?;
         let sold_out = self
             .repo
             .sold_out_sizes(&self.catalog)

@@ -1,3 +1,5 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableMacroComputers } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
@@ -16,6 +18,7 @@ export function AgentComputerScreen(
     canEdit: boolean;
   }>
 ) {
+  const rollout = useFeatureFlag(enableMacroComputers);
   const agents = useAgentsQuery(() => !!props.botId);
   const harnesses = useHarnessesQuery();
   const harness = createMemo(() => {
@@ -38,7 +41,12 @@ export function AgentComputerScreen(
   };
   return (
     <ScreenProvider
-      value={{ host, available: () => !!harness(), open, setOpen }}
+      value={{
+        host,
+        available: () => rollout().enabled && !!harness(),
+        open,
+        setOpen,
+      }}
     >
       <ScreenSplit connect={connectScreen}>{props.children}</ScreenSplit>
     </ScreenProvider>

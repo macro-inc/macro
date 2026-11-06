@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { ComputerClaudeAccess } from './computer-claude-access';
 
 const mocks = vi.hoisted(() => ({
+  enabled: true,
   start: vi.fn(async () => ({ url: 'https://claude.ai/oauth/authorize' })),
   complete: vi.fn(async () => ({ signedIn: true })),
   open: vi.fn(),
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: mocks.enabled, loading: false }),
 }));
 vi.mock('@core/util/url', () => ({ openExternalUrl: mocks.open }));
 vi.mock('@queries/computers/claude', () => ({
@@ -25,6 +29,11 @@ vi.mock('@queries/computers/claude', () => ({
   }),
   useClaudeSignOutMutation: () => ({ isPending: false }),
 }));
+
+beforeEach(() => {
+  mocks.enabled = true;
+  vi.clearAllMocks();
+});
 
 it('opens Claude and submits the trimmed code or callback URL', async () => {
   render(() => (
@@ -50,4 +59,14 @@ it('opens Claude and submits the trimmed code or callback URL', async () => {
       screen.queryByLabelText('Paste the code or the URL you were sent to')
     ).toBeNull()
   );
+});
+
+it('hides Claude account controls with rollout off', () => {
+  mocks.enabled = false;
+  render(() => (
+    <ComputerClaudeAccess harnessId="computer" canManage mode="macro_credits" />
+  ));
+  expect(
+    screen.queryByRole('button', { name: 'Sign in with Claude' })
+  ).toBeNull();
 });

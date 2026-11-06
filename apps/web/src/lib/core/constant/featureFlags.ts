@@ -187,13 +187,13 @@ export const enableSlackArchiveImport = defineFlag({
 });
 
 /**
- * Macro computers: buying hosted machines in Settings → Runtimes and listing
- * them on team Billing. On in dev; production follows PostHog.
+ * Macro computers: purchases in Settings → Runtimes, Screen and Claude access.
+ * Existing computers remain visible on team Billing.
+ * Fail closed in dev too so the local kill switch agrees with the backend.
  */
 export const enableMacroComputers = defineFlag({
   key: 'enable-macro-computers',
   env: 'ENABLE_MACRO_COMPUTERS',
-  default: onInDev,
 });
 
 /** Sidebar prompt cards: imports, calendars, repositories, and Home setup. */

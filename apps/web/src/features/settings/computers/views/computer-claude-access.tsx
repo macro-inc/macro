@@ -1,3 +1,5 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableMacroComputers } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import {
@@ -14,8 +16,9 @@ export function ComputerClaudeAccess(props: {
   canManage: boolean;
   mode: string | undefined;
 }) {
+  const rollout = useFeatureFlag(enableMacroComputers);
   const mode = useClaudeModeQuery(() =>
-    props.canManage ? props.harnessId : undefined
+    rollout().enabled && props.canManage ? props.harnessId : undefined
   );
   const start = useClaudeSignInMutation();
   const complete = useClaudeCompleteMutation();
@@ -65,88 +68,90 @@ export function ComputerClaudeAccess(props: {
   };
 
   return (
-    <span class="flex min-w-0 flex-col items-start gap-2">
-      <span>
-        Claude:{' '}
-        {currentMode() === 'own_account'
-          ? 'your account'
-          : currentMode() === 'macro_credits'
-            ? 'Macro credits'
-            : 'unavailable'}
-      </span>
-      <Show when={props.canManage}>
-        <Show
-          when={currentMode() === 'own_account'}
-          fallback={
+    <Show when={rollout().enabled}>
+      <span class="flex min-w-0 flex-col items-start gap-2">
+        <span>
+          Claude:{' '}
+          {currentMode() === 'own_account'
+            ? 'your account'
+            : currentMode() === 'macro_credits'
+              ? 'Macro credits'
+              : 'unavailable'}
+        </span>
+        <Show when={props.canManage}>
+          <Show
+            when={currentMode() === 'own_account'}
+            fallback={
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={pending()}
+                onClick={() => fireAndForget(begin(), 'computer-claude')}
+              >
+                Sign in with Claude
+              </Button>
+            }
+          >
             <Button
               size="sm"
               variant="ghost"
               disabled={pending()}
-              onClick={() => fireAndForget(begin(), 'computer-claude')}
+              onClick={() => fireAndForget(useCredits(), 'computer-claude')}
             >
-              Sign in with Claude
+              Use Macro credits
             </Button>
-          }
-        >
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={pending()}
-            onClick={() => fireAndForget(useCredits(), 'computer-claude')}
-          >
-            Use Macro credits
-          </Button>
-        </Show>
-        <Show when={url()}>
-          {(signInUrl) => (
-            <form
-              class="ph-no-capture flex flex-wrap gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                fireAndForget(submit(), 'computer-claude');
-              }}
-            >
-              <a
-                href={signInUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="text-accent underline"
+          </Show>
+          <Show when={url()}>
+            {(signInUrl) => (
+              <form
+                class="ph-no-capture flex flex-wrap gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  fireAndForget(submit(), 'computer-claude');
+                }}
               >
-                Open Claude sign-in
-              </a>
-              <label class="flex w-full flex-col gap-1">
-                Paste the code or the URL you were sent to
-                <input
-                  class="rounded border border-edge-muted bg-input p-2 text-ink"
-                  value={code()}
-                  onInput={(event) => setCode(event.currentTarget.value)}
-                  autocomplete="off"
-                  spellcheck={false}
-                />
-              </label>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={pending() || !code().trim()}
-              >
-                Complete sign-in
-              </Button>
-            </form>
-          )}
-        </Show>
-        <Show when={mode.isError}>
-          <span role="alert" class="text-failure">
-            Could not load Claude access.
-          </span>
-        </Show>
-        <Show when={error()}>
-          {(message) => (
+                <a
+                  href={signInUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-accent underline"
+                >
+                  Open Claude sign-in
+                </a>
+                <label class="flex w-full flex-col gap-1">
+                  Paste the code or the URL you were sent to
+                  <input
+                    class="rounded border border-edge-muted bg-input p-2 text-ink"
+                    value={code()}
+                    onInput={(event) => setCode(event.currentTarget.value)}
+                    autocomplete="off"
+                    spellcheck={false}
+                  />
+                </label>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={pending() || !code().trim()}
+                >
+                  Complete sign-in
+                </Button>
+              </form>
+            )}
+          </Show>
+          <Show when={mode.isError}>
             <span role="alert" class="text-failure">
-              {message()}
+              Could not load Claude access.
             </span>
-          )}
+          </Show>
+          <Show when={error()}>
+            {(message) => (
+              <span role="alert" class="text-failure">
+                {message()}
+              </span>
+            )}
+          </Show>
         </Show>
-      </Show>
-    </span>
+      </span>
+    </Show>
   );
 }

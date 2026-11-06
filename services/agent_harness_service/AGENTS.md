@@ -46,6 +46,10 @@ Pulumi stacks; they do not host extra agent processes.
   `incus`, local-only `docker`, or explicit `disabled`; missing selection fails
   startup.
 - `src/computer_screen.rs` + `src/computer_screen/`: Macro computer routes.
+  Viewer Screen and all Claude routes require the caller's `enable-macro-computers`
+  flag through `hosted_runtimes::domain::rollout::ComputerRollout`; missing
+  providers/flags and evaluation errors return 403. The macrod
+  `/harnesses/me/screen` endpoint and fleet workers stay ungated.
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
   `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`,
   `POST /harnesses/{id}/claude-sign-out` → `{mode}` (manage rights; mode is

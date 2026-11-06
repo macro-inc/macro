@@ -126,6 +126,35 @@ impl macro_authorization::JwtValidator for TestIdentity {
 
 #[tokio::test]
 async fn computer_routes_require_harness_management_and_mode_reads_persisted_state() {
+    computer_route_access(true, None).await;
+}
+
+#[tokio::test]
+async fn computer_viewer_screen_refuses_flag_off() {
+    computer_route_access(false, Some("screen")).await;
+}
+
+#[tokio::test]
+async fn computer_claude_sign_in_refuses_flag_off() {
+    computer_route_access(false, Some("claude-sign-in")).await;
+}
+
+#[tokio::test]
+async fn computer_claude_complete_refuses_flag_off() {
+    computer_route_access(false, Some("claude-sign-in/complete")).await;
+}
+
+#[tokio::test]
+async fn computer_claude_sign_out_refuses_flag_off() {
+    computer_route_access(false, Some("claude-sign-out")).await;
+}
+
+#[tokio::test]
+async fn computer_claude_mode_refuses_flag_off() {
+    computer_route_access(false, Some("claude-mode")).await;
+}
+
+async fn computer_route_access(enabled: bool, only_route: Option<&str>) {
     use axum::{
         body::{Body, to_bytes},
         http::{Request, StatusCode},
@@ -178,11 +207,22 @@ async fn computer_routes_require_harness_management_and_mode_reads_persisted_sta
     );
     let tasks = tokio_util::task::TaskTracker::new();
     let shutdown = tokio_util::sync::CancellationToken::new();
+    let mut flags = feature_flags::outbound::fake::FakeFeatureFlags::default();
+    for user in ["macro|owner@example.com", "macro|other@example.com"] {
+        flags.set(
+            macro_user_id::user_id::MacroUserIdStr::try_from(user.to_owned()).unwrap(),
+            Ok(feature_flags::FlagSnapshot::new([(
+                "enable-macro-computers".into(),
+                feature_flags::FlagValue::Boolean(enabled),
+            )])),
+        );
+    }
     let app = super::router(
         agent_harness::outbound::runtime_registry::RuntimeRegistry::new(),
         redis::Client::open("redis://127.0.0.1:1").unwrap(),
         HarnessServiceImpl::new(repo),
         MacroAuthorizationState::new(Arc::new(authorization)),
+        hosted_runtimes::domain::rollout::ComputerRollout::new(flags),
         &tasks,
         shutdown.clone(),
     );
@@ -198,32 +238,66 @@ async fn computer_routes_require_harness_management_and_mode_reads_persisted_sta
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(
-            &to_bytes(response.into_body(), 1024).await.unwrap()
-        )
-        .unwrap(),
-        serde_json::json!({"mode": "own_account"})
+        response.status(),
+        if enabled {
+            StatusCode::OK
+        } else {
+            StatusCode::FORBIDDEN
+        }
     );
+    if enabled {
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(
+                &to_bytes(response.into_body(), 1024).await.unwrap()
+            )
+            .unwrap(),
+            serde_json::json!({"mode": "own_account"})
+        );
+    }
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server_shutdown = shutdown.clone();
+    let server_app = app.clone();
+    tasks.spawn(async move {
+        axum::serve(listener, server_app)
+            .with_graceful_shutdown(server_shutdown.cancelled_owned())
+            .await
+            .unwrap();
+    });
+    let client = reqwest::Client::new();
 
     for (method, suffix, body) in [
+        ("GET", "screen", ""),
         ("GET", "claude-mode", ""),
         ("POST", "claude-sign-in", ""),
         ("POST", "claude-sign-in/complete", r#"{"code":"test-code"}"#),
         ("POST", "claude-sign-out", ""),
     ] {
-        let response = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method(method)
-                    .uri(format!("/harnesses/{}/{suffix}", HarnessId::TEST_A))
-                    .header("authorization", "Bearer other")
-                    .header("content-type", "application/json")
-                    .body(Body::from(body))
-                    .unwrap(),
+        if only_route.is_some_and(|route| route != suffix) {
+            continue;
+        }
+        let response = client
+            .request(
+                method.parse().unwrap(),
+                format!("http://{address}/harnesses/{}/{suffix}", HarnessId::TEST_A),
             )
+            .header(
+                "authorization",
+                if enabled {
+                    "Bearer other"
+                } else {
+                    "Bearer owner"
+                },
+            )
+            .header("connection", "upgrade")
+            .header("upgrade", "websocket")
+            .header("sec-websocket-version", "13")
+            .header("sec-websocket-key", "AAAAAAAAAAAAAAAAAAAAAA==")
+            .header("content-type", "application/json")
+            .body(body)
+            .send()
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN, "{suffix}");

@@ -270,7 +270,7 @@ pub async fn run() -> anyhow::Result<()> {
                 cipher,
             )
             .with_connections_enabled(config.outlook_connections_enabled)
-            .with_feature_flags(feature_flags),
+            .with_feature_flags(feature_flags.clone()),
         ) as Arc<dyn MicrosoftAuth>
     });
 
@@ -695,7 +695,12 @@ pub async fn run() -> anyhow::Result<()> {
             ),
             hosted_runtimes::domain::service::SystemClock,
         )
-        .with_comp_policy(hosted_runtimes::domain::ports::NoComps),
+        .with_comp_policy(hosted_runtimes::domain::ports::NoComps)
+        .with_rollout(
+            feature_flags
+                .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+                .unwrap_or_default(),
+        ),
     );
     let teams_service = Arc::new(teams_service_impl);
     let domain_notice_service =

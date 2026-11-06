@@ -30,6 +30,15 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 - `src/outbound/`: Postgres repo, `IncusFleet`, dev-only `DockerFleet`, and
   `ConfiguredFleet` (explicit `COMPUTERS_FLEET`, never a fallback).
 
+## Rollout
+
+`domain::rollout::ComputerRollout` reads `enable-macro-computers` for the
+authenticated Macro user through `feature_flags`. Missing providers, missing
+flags and load errors refuse team purchase, quote and offers with 403.
+Composition roots inject it with `with_rollout`; `quote_for_team` takes the
+caller user id. Existing reads and management, internal purchase/quote, Stripe
+reconciliation and workers remain available when rollout is off.
+
 ## Explicit configuration
 
 Report environment sale availability through `Billing::sales_available` and

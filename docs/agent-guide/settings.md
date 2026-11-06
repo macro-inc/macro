@@ -771,8 +771,13 @@ session were not exercised by that UI check.
 
 Macro computers are hosted machines a team buys for its agents, billed on
 the team subscription. They sit in `Runtimes`, behind the
-`enable-macro-computers` flag (on in dev), and need a team: without one the
-page shows nothing about them. Every team member sees the **Macro computers**
+`enable-macro-computers` flag for purchases and Claude account controls, and
+need a team: without one the page shows nothing about them. The flag follows
+PostHog in every environment unless explicitly overridden locally. With the
+flag off, existing computers stay listed in Runtimes and team Billing, and
+management actions including Cancel and Release stay available. Team purchase,
+quote and offers return 403 when the rollout is off, missing or unavailable.
+Every team member sees the **Macro computers**
 list; only team admins and owners see the buying card and the row controls.
 
 If the environment has no computer prices configured, offers, quotes, and

@@ -471,10 +471,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Settings → Integrations: one searchable list row per integration, styled like
   the Drive/Tasks lists, custom MCP servers then connected ones first,
   described by what each does in Macro; preserve `agent-connections` and `team-connections` as aliases for existing links.
-- Keep Macro computers (`features/settings/computers`) team-only behind
-  `enable-macro-computers`: members read the list in Runtimes and Billing,
-  admins buy and manage; show the exact price before buying, and release only
-  after the computer's name is typed. See the
+- Keep Macro computers (`features/settings/computers`) team-only. Gate purchase,
+  Screen and Claude account surfaces with `enableMacroComputers`
+  (`enable-macro-computers`); keep existing lists in Runtimes and Billing and
+  management actions available with rollout off. `useTeamComputers` loads by
+  team membership and exposes `canPurchase` separately. Members read; admins
+  buy and manage. Show the exact price before buying, and release only after
+  the computer's name is typed. See the
   [Macro computers walkthrough](../../docs/agent-guide/settings.md#macro-computers).
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
