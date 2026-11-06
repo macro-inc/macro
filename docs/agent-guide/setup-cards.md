@@ -78,17 +78,18 @@ With `enable-routine-suggestions` and `enable-routine-code-steps` on, the
 Email, Calendar, Tasks, Drive, Customers, Chat, Calls, Reviews and Agents
 sidebars start with a **Suggested routines** card while the scheduler has
 suggestions for that area: the top one's name and `+N`. It opens **Routines
-for <area>**: each row has the area's icon in a violet tile, the routine's
-name, what it does with AI's values filled in, and when it runs with why AI
-picked it, beside **Review** (`Review <name>`) and **Not interested**
-(`Not interested in <name>`, shown on hover on desktop).
+for <area>**: a grid of the same cards as the Routines page **Templates** row
+(area icon, name, what it does with AI's values filled in, and its trigger →
+step line, or **AI drafts it → you review it** for a request). Choosing a card
+(`Review <name>`) reviews it; its corner **×** (`Not interested in <name>`,
+shown on hover on desktop) dismisses it.
 
-- **Review** opens New routine already filled in, unsaved: a catalog routine
+- Choosing a card opens New routine already filled in, unsaved: a catalog routine
   with AI's knob values (names matched to the person's own tags, labels and
   channels), or, for a request, what the drafter wrote from it
   (**Drafting…**); a failed draft opens New routine with the request in the
   describe box. Saving records the suggestion on the routine.
-- **Not interested** removes the row at once; it isn't suggested again,
+- **Not interested** removes the card at once; it isn't suggested again,
   across later generations.
 - **Refresh suggestions** starts a new generation; **All routines** opens
   the Routines page.

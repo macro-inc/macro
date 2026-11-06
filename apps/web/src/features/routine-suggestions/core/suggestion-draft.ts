@@ -2,6 +2,7 @@ import type {
   CatalogEntry,
   RoutineSuggestion,
 } from '@service-scheduled-action/generated/schemas';
+import type { RoutineCardContent } from '../../routines/components/routine-template-strip';
 import type { ScheduleDraft } from '../../routines/core/draft';
 import {
   type Knob,
@@ -164,5 +165,23 @@ export function suggestionSummary(
     title: entry.title,
     does: does ?? entry.description,
     when: templateChain(entry).trigger || undefined,
+  };
+}
+
+/** What a suggestion's card shows: the template card's content. */
+export function suggestionCard(
+  suggestion: RoutineSuggestion,
+  entry: RoutineTemplate | undefined
+): RoutineCardContent | undefined {
+  const summary = suggestionSummary(suggestion, entry);
+  if (!summary) return undefined;
+  return {
+    surface: suggestion.surface,
+    title: summary.title,
+    description: summary.does,
+    chain: entry
+      ? templateChain(entry)
+      : { trigger: 'AI drafts it', action: 'you review it', actionAi: true },
+    hint: suggestion.reason,
   };
 }

@@ -4,6 +4,7 @@ import { catalogTemplate } from '../../routines/queries/catalog';
 import {
   type StarterSuggestion,
   starterSuggestionDraft,
+  suggestionCard,
   suggestionSummary,
 } from './suggestion-draft';
 
@@ -125,5 +126,22 @@ describe('starter suggestion drafts', () => {
       title: 'Supplier digest',
       does: 'Every Friday, list deliveries suppliers confirmed.',
     });
+  });
+
+  it('show as a template card with the trigger → step line and why', () => {
+    expect(suggestionCard(suggestion, TAGS)).toEqual({
+      surface: 'email',
+      title: 'Tag new email',
+      description: 'Tag each new email Reply or info within 14 days.',
+      chain: {
+        trigger: 'New email received',
+        action: 'Tag with AI',
+        actionAi: true,
+      },
+      hint: 'You get a lot of newsletters.',
+    });
+    expect(
+      suggestionCard({ ...suggestion, key: 'missing' }, undefined)
+    ).toBeUndefined();
   });
 });
