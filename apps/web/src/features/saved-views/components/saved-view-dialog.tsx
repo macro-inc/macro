@@ -95,6 +95,7 @@ export function SavedViewForm(
           scrollRef={body}
           appearance="gradient"
           gradientColor="dialog"
+          class="h-10"
         />
         <div
           ref={setBody}
