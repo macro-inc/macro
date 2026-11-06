@@ -769,6 +769,7 @@
       "crates/cognition",
       "crates/collab_surface",
       "crates/comms_db_client",
+      "crates/computer_id",
       "crates/connect_client",
       "crates/connection",
       "crates/connection_gateway_client",
@@ -898,6 +899,7 @@
       "crates/onboarding",
       "crates/opensearch_client",
       "crates/opensearch_query_builder",
+      "crates/pairing_id",
       "crates/pipedream_mcp",
       "crates/pptx_engine",
       "crates/projects",
@@ -3936,6 +3938,7 @@
       "crates/channels",
       "crates/coding_agent_worker",
       "crates/comms_db_client",
+      "crates/computer_id",
       "crates/connection",
       "crates/connection_gateway_client",
       "crates/connection_gateway_models",
@@ -4029,6 +4032,7 @@
       "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
+      "crates/pairing_id",
       "crates/pptx_engine",
       "crates/prompt",
       "crates/properties",
@@ -4491,6 +4495,10 @@
       "crates/upstream_error",
       "crates/user_quota",
       "crates/work_feed",
+      "crates/workspace-hack"
+    ],
+    "computer_id": [
+      "crates/computer_id",
       "crates/workspace-hack"
     ],
     "connect_client": [
@@ -5497,6 +5505,7 @@
       "crates/collab_surface",
       "crates/comms_db_client",
       "crates/complete_graph",
+      "crates/computer_id",
       "crates/connect_client",
       "crates/connection",
       "crates/connection_gateway_client",
@@ -5644,6 +5653,7 @@
       "crates/notification_state",
       "crates/opensearch_client",
       "crates/opensearch_query_builder",
+      "crates/pairing_id",
       "crates/pipedream_mcp",
       "crates/pptx_engine",
       "crates/predicate_index",
@@ -9664,6 +9674,7 @@
     "harnesses": [
       "crates/bot_id",
       "crates/bot_token",
+      "crates/computer_id",
       "crates/cowlike",
       "crates/harness_id",
       "crates/harness_token",
@@ -9675,6 +9686,7 @@
       "crates/macro_user_id",
       "crates/model-error-response",
       "crates/model_user",
+      "crates/pairing_id",
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
@@ -12293,6 +12305,10 @@
       "crates/unfurl",
       "crates/workspace-hack",
       "services/organization_retention_trigger"
+    ],
+    "pairing_id": [
+      "crates/pairing_id",
+      "crates/workspace-hack"
     ],
     "pipedream_mcp": [
       "crates/ai_toolset",
