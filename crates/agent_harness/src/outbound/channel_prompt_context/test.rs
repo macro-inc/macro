@@ -58,6 +58,7 @@ fn posted(
     minute: i64,
 ) -> Message {
     Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: Uuid::from_u128(id),
         parent: parent.clone(),
         thread_id: thread.map(Uuid::from_u128),

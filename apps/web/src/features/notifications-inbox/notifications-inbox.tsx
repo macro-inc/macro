@@ -22,6 +22,7 @@ import {
   type NotificationsInboxContext,
   NotificationsInboxProvider,
 } from './context/notifications-inbox-context';
+import { inboxSearchFor, useInboxShownRowLocation } from './inbox-location';
 import { useNotificationsCalendarPreview } from './notifications-calendar-preview';
 import { openNotificationInSplit } from './open-notification-in-split';
 import { createNotificationInboxSource } from './queries/notification-inbox-source';
@@ -86,6 +87,7 @@ export function NotificationsInbox() {
   const { openSettings } = useSettingsState();
   const respondToJoinRequest = useRespondToCalendarJoinRequestMutation();
   const calendarPreview = useNotificationsCalendarPreview();
+  const shownRow = useInboxShownRowLocation(calendarPreview);
   const answerJoinRequest: NotificationsInboxContext['requests']['answerJoinRequest'] =
     async (request, accept) => {
       await respondToJoinRequest.mutateAsync({
@@ -101,7 +103,16 @@ export function NotificationsInbox() {
         >
           <NotificationsView
             onOpenSettings={() => openSettings('Notifications')}
-            calendarPreview={calendarPreview}
+            shownRow={shownRow}
+            calendarPreview={{
+              open: (entity, { shown, replace }) =>
+                calendarPreview.open(entity, {
+                  search: inboxSearchFor(shown),
+                  replace,
+                }),
+              isOpen: calendarPreview.isOpen,
+              refocus: calendarPreview.refocus,
+            }}
             onOpen={(row, { newSplit, notification }) =>
               openNotificationInSplit(row, {
                 newSplit,

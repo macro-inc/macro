@@ -32,6 +32,7 @@ fn user(local: &str) -> MacroUserIdStr<'static> {
 
 fn wire_row(subject: &MacroUserIdStr<'static>, entity_id: &str) -> ActivityWireRow {
     ActivityWireRow {
+        agent_correlation_id: None,
         id: Uuid::new_v4(),
         actor_id: subject.as_ref().to_owned(),
         subject_id: subject.as_ref().to_owned(),
