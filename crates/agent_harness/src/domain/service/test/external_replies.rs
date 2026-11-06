@@ -130,7 +130,7 @@ async fn an_external_mention_resolves_and_a_followup_can_finish_before_its_annou
     let store = Arc::new(ReplyStore::default());
     let mut service =
         harness_sharing_repo(InMemoryAgentSessionRepo::new()).with_external_replies(store.clone());
-    Arc::get_mut(&mut service.inner).unwrap().coding_agents = Box::new(ChosenCodingAgents(false));
+    Arc::get_mut(&mut service.inner).unwrap().personas = Box::new(ChosenCodingAgents(false));
     let source = macro_uuid::generate_uuid_v7();
     let mut request = open_external_request("/workspace");
     request.thread = Some(agent_session::domain::ports::SessionThread {
@@ -215,7 +215,7 @@ async fn failed_channel_updates_retry_after_restart_without_reprompting() {
     let repo = InMemoryAgentSessionRepo::new();
     let store = Arc::new(ReplyStore::default());
     let mut service = harness_sharing_repo(repo.clone()).with_external_replies(store.clone());
-    Arc::get_mut(&mut service.inner).unwrap().coding_agents = Box::new(ChosenCodingAgents(false));
+    Arc::get_mut(&mut service.inner).unwrap().personas = Box::new(ChosenCodingAgents(false));
     let session = service
         .open_external_session(open_external_request("/workspace"))
         .await
@@ -283,7 +283,7 @@ async fn recovery_rebuilds_a_missed_completion_from_the_durable_protocol_log() {
     let repo = InMemoryAgentSessionRepo::new();
     let store = Arc::new(ReplyStore::default());
     let mut service = harness_sharing_repo(repo.clone()).with_external_replies(store.clone());
-    Arc::get_mut(&mut service.inner).unwrap().coding_agents = Box::new(ChosenCodingAgents(false));
+    Arc::get_mut(&mut service.inner).unwrap().personas = Box::new(ChosenCodingAgents(false));
     let session = service
         .open_external_session(open_external_request("/workspace"))
         .await
@@ -351,7 +351,7 @@ async fn successful_announcements_are_not_repeated_after_restart() {
     let repo = InMemoryAgentSessionRepo::new();
     let store = Arc::new(ReplyStore::default());
     let mut service = harness_sharing_repo(repo.clone()).with_external_replies(store.clone());
-    Arc::get_mut(&mut service.inner).unwrap().coding_agents = Box::new(ChosenCodingAgents(false));
+    Arc::get_mut(&mut service.inner).unwrap().personas = Box::new(ChosenCodingAgents(false));
     let session = service
         .open_external_session(open_external_request("/workspace"))
         .await
@@ -426,7 +426,7 @@ async fn an_unauthorized_destination_never_reserves_or_posts_a_reply() {
     let mut service =
         harness_sharing_repo(InMemoryAgentSessionRepo::new()).with_external_replies(store.clone());
     let inner = Arc::get_mut(&mut service.inner).unwrap();
-    inner.coding_agents = Box::new(ChosenCodingAgents(false));
+    inner.personas = Box::new(ChosenCodingAgents(false));
     inner.prompt_context = PromptContextMock::unauthorized("access revoked");
     let session = service
         .open_external_session(open_external_request("/workspace"))
@@ -645,7 +645,7 @@ async fn recovery_finishes_a_turn_interrupted_before_an_acp_response() {
     let repo = InMemoryAgentSessionRepo::new();
     let store = Arc::new(ReplyStore::default());
     let mut service = harness_sharing_repo(repo.clone()).with_external_replies(store.clone());
-    Arc::get_mut(&mut service.inner).unwrap().coding_agents = Box::new(ChosenCodingAgents(false));
+    Arc::get_mut(&mut service.inner).unwrap().personas = Box::new(ChosenCodingAgents(false));
     let session = service
         .open_external_session(open_external_request("/workspace"))
         .await

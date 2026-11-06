@@ -63,8 +63,8 @@ use crate::domain::model::{
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
-    AgentPromptComposer, AgentSessionNotifier, CodingAgentSource, CommandForwarder,
-    ContainerManager, MessagePromptContext, PermissionPolicySource, PromptMentions,
+    AgentPromptComposer, AgentSessionNotifier, CommandForwarder, ContainerManager,
+    MessagePromptContext, PermissionPolicySource, PersonaSource, PromptMentions,
     RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
@@ -102,21 +102,33 @@ impl<S: PermissionPolicySource> ErasedPermissionPolicySource for S {
     }
 }
 
-/// [`CodingAgentSource`], object-safe, erased like
+/// [`PersonaSource`], object-safe, erased like
 /// [`ErasedPermissionPolicySource`].
-trait ErasedCodingAgentSource: Send + Sync + 'static {
+trait ErasedPersonaSource: Send + Sync + 'static {
     fn coding_agent_choice<'a>(
         &'a self,
         bot: BotId,
     ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Option<bool>>> + Send + 'a>>;
+
+    fn memory<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Option<String>>> + Send + 'a>>;
 }
 
-impl<S: CodingAgentSource> ErasedCodingAgentSource for S {
+impl<S: PersonaSource> ErasedPersonaSource for S {
     fn coding_agent_choice<'a>(
         &'a self,
         bot: BotId,
     ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Option<bool>>> + Send + 'a>> {
-        Box::pin(CodingAgentSource::coding_agent_choice(self, bot))
+        Box::pin(PersonaSource::coding_agent_choice(self, bot))
+    }
+
+    fn memory<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Option<String>>> + Send + 'a>> {
+        Box::pin(PersonaSource::memory(self, bot))
     }
 }
 
@@ -143,7 +155,7 @@ struct AgentHarnessInner<
     egress: Egress,
     forwarder: Box<dyn ErasedForwarder>,
     permission_policies: Box<dyn ErasedPermissionPolicySource>,
-    coding_agents: Box<dyn ErasedCodingAgentSource>,
+    personas: Box<dyn ErasedPersonaSource>,
     conversations: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
     conversation_turns: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
     external_replies: Option<Arc<dyn crate::domain::external_replies::ExternalReplyStore>>,
@@ -356,7 +368,7 @@ where
         egress: Egress,
         forwarder: impl CommandForwarder,
         permission_policies: impl PermissionPolicySource,
-        coding_agents: impl CodingAgentSource,
+        personas: impl PersonaSource,
         defaults: impl Into<HarnessDefaults>,
         lifecycle_publisher: Lifecycle,
         pending: PendingCommands,
@@ -376,7 +388,7 @@ where
                 egress,
                 forwarder: Box::new(forwarder),
                 permission_policies: Box::new(permission_policies),
-                coding_agents: Box::new(coding_agents),
+                personas: Box::new(personas),
                 conversations,
                 conversation_turns: None,
                 external_replies: None,

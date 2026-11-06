@@ -1,26 +1,36 @@
-//! Postgres-backed coding-agent choices for database-backed agents.
+//! Postgres-backed persona settings and memory for database-backed agents.
 
-use agent_harness::domain::ports::CodingAgentSource;
+use agent_harness::domain::ports::PersonaSource;
 use bot_id::BotId;
 use bots::domain::ports::BotRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 
-/// Reads the persona's setting of being a coding agent. Fixed system bots
-/// have no persona and so no setting; the domain lets their runtime decide.
+/// Reads the persona's setting of being a coding agent and its memory. Fixed
+/// system bots have no persona and so neither; the domain lets their runtime
+/// decide.
 #[derive(Clone)]
-pub struct PgCodingAgentSource {
+pub struct PgPersonaSource {
     repo: PgBotsRepo,
 }
 
-impl PgCodingAgentSource {
+impl PgPersonaSource {
     /// Build the source over the bots repository.
     pub fn new(repo: PgBotsRepo) -> Self {
         Self { repo }
     }
 }
 
-impl CodingAgentSource for PgCodingAgentSource {
+impl PersonaSource for PgPersonaSource {
     async fn coding_agent_choice(&self, bot: BotId) -> anyhow::Result<Option<bool>> {
         Ok(self.repo.get_agent(bot).await?.map(|agent| agent.is_coding))
+    }
+
+    async fn memory(&self, bot: BotId) -> anyhow::Result<Option<String>> {
+        Ok(self
+            .repo
+            .get_agent_memory(bot)
+            .await?
+            .map(|memory| memory.content)
+            .filter(|content| !content.trim().is_empty()))
     }
 }
