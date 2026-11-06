@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 /// flips, x grows to the right and y downward.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
@@ -76,6 +77,7 @@ pub enum PathCommand {
 /// How a [`GeometryPath`] is filled (DrawingML's path `fill`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum PathFillMode {
     /// With the shape fill.
@@ -97,6 +99,7 @@ pub enum PathFillMode {
 /// inside another and running the other way is a hole) and outlined.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GeometryPath {
     /// The drawing commands; each sub-path starts with `moveTo`.
@@ -112,6 +115,7 @@ pub struct GeometryPath {
 /// How `mergeShapes` combines the shapes (PowerPoint's Merge Shapes).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum MergeMode {
     /// One shape covering everything any of the shapes covers.

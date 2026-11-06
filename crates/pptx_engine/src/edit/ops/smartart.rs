@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 /// One bullet of a SmartArt graphic's text: a node and its outline level.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SmartArtItem {
     /// The node's text (`""` leaves the "[Text]" prompt; `\u{b}` is a line break).
@@ -23,6 +24,7 @@ pub struct SmartArtItem {
 /// (PowerPoint's Add Shape After/Before/Above/Below/Add Assistant).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum SmartArtPosition {
     /// The next sibling at the same level (the default).
@@ -41,6 +43,7 @@ pub enum SmartArtPosition {
 /// One change to a SmartArt graphic.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
@@ -141,6 +144,7 @@ pub enum SmartArtEdit {
 /// What `convertSmartArt` turns a SmartArt graphic into.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum SmartArtTarget {
     /// A group of ordinary shapes that look the same (Convert to Shapes).

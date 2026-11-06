@@ -15793,6 +15793,7 @@ dependencies = [
  "skrifa",
  "thiserror 2.0.18",
  "tiny-skia",
+ "utoipa",
  "wasm-bindgen",
  "zune-core",
  "zune-jpeg",

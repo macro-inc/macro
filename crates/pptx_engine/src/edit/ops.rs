@@ -43,6 +43,7 @@ pub use smartart::{SmartArtEdit, SmartArtItem, SmartArtPosition, SmartArtTarget}
 /// One edit operation.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
@@ -1233,6 +1234,7 @@ pub enum EditOp {
 /// Something an edit created.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Created {
     /// Slide id (a new section's first slide).
@@ -1247,6 +1249,7 @@ pub struct Created {
 /// The outcome of applying a batch of operations.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct EditResult {
     /// Ids created by the batch, in order.

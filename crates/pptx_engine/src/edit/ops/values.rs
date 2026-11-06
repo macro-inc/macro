@@ -12,6 +12,7 @@ fn nullable_start<'de, D: Deserializer<'de>>(de: D) -> Result<u32, D::Error> {
 /// A position inside a shape's text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(deny_unknown_fields)]
 pub struct TextPos {
     /// Paragraph index.
@@ -23,6 +24,7 @@ pub struct TextPos {
 /// A table cell inside a graphic frame (0-based).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(deny_unknown_fields)]
 pub struct CellRef {
     /// Row index.
@@ -34,6 +36,7 @@ pub struct CellRef {
 /// Character formatting changes (`None` = leave unchanged).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct RunPatch {
     /// Bold.
@@ -74,6 +77,7 @@ pub struct RunPatch {
 /// Bullet style for paragraphs.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", tag = "kind", deny_unknown_fields)]
 pub enum BulletSpec {
     /// No bullet.
@@ -102,6 +106,7 @@ fn one() -> u32 {
 /// Paragraph formatting changes.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct ParaPatch {
     /// `left`, `center`, `right`, `justify`, `distributed`.
@@ -125,6 +130,7 @@ pub struct ParaPatch {
 /// Text box (body) changes.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct BodyPatch {
     /// `top`, `middle`, `bottom`.
@@ -155,6 +161,7 @@ pub struct BodyPatch {
 /// Which way a drawing guide runs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum GuideOrient {
     /// A line across the slide, at a distance from its top edge.
@@ -166,6 +173,7 @@ pub enum GuideOrient {
 /// One drawing guide of [`EditOp::SetGuides`](super::EditOp::SetGuides).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GuideSpec {
     /// `horizontal` (a line across the slide) or `vertical` (a line down it).
@@ -189,6 +197,7 @@ pub struct GuideSpec {
 /// A text direction (`ST_TextVerticalType`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TextDirection {
     /// Horizontal.
     #[serde(rename = "horz")]
@@ -216,6 +225,7 @@ pub enum TextDirection {
 /// A fill specification.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", tag = "kind", deny_unknown_fields)]
 pub enum FillSpec {
     /// No fill.
@@ -241,6 +251,7 @@ pub enum FillSpec {
 /// Outline changes.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct LinePatch {
     /// Remove the outline.
@@ -261,6 +272,7 @@ pub struct LinePatch {
 /// What to add with [`EditOp::AddShape`](super::EditOp::AddShape).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
@@ -372,6 +384,7 @@ pub enum NewShape {
 /// One series of chart data.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ChartSeriesData {
     /// Series name (legend text).
@@ -383,6 +396,7 @@ pub struct ChartSeriesData {
 /// A series color for [`EditOp::FormatChart`](super::EditOp::FormatChart).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ChartSeriesColor {
     /// Series index in plot order (0-based).
@@ -394,6 +408,7 @@ pub struct ChartSeriesColor {
 /// One theme color for [`EditOp::SetThemeColors`](super::EditOp::SetThemeColors).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ThemeColor {
     /// `dk1`, `lt1`, `dk2`, `lt2`, `accent1`-`accent6`, `hlink`, or `folHlink`.
@@ -406,6 +421,7 @@ pub struct ThemeColor {
 /// Motion Paths galleries).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum AnimationClass {
     /// Makes the shape appear (it is hidden until the effect plays).
@@ -425,6 +441,7 @@ pub enum AnimationClass {
 /// When an animation starts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum AnimationStart {
     /// When the presenter clicks (or presses the next key).
@@ -438,6 +455,7 @@ pub enum AnimationStart {
 /// How often an animation plays.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(untagged)]
 pub enum AnimationRepeat {
     /// Plays this many times in all (`1` = once, no repeat; fractions such as 2.5 are allowed).
@@ -449,6 +467,7 @@ pub enum AnimationRepeat {
 /// The event that ends a repeating animation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum RepeatUntil {
     /// Until the presenter clicks again.
@@ -462,6 +481,7 @@ pub enum RepeatUntil {
 /// defaults, or keep the values of the existing animation it matches.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AnimationSpec {
     /// Id of the shape to animate. A group member's id animates only that member.
@@ -526,6 +546,7 @@ pub struct AnimationSpec {
 /// Z-order moves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum ZOrder {
     /// To the top.
@@ -542,6 +563,7 @@ pub enum ZOrder {
 /// ([`EditOp::SetSlideSize`](super::EditOp::SetSlideSize)).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum SlideScale {
     /// Content keeps its size and position (it may overflow or leave space).
@@ -561,6 +583,7 @@ pub enum SlideScale {
 /// between two cells is shared, so both cells get the change.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum BorderEdges {
     /// Every border, outside and inside.
@@ -587,6 +610,7 @@ pub enum BorderEdges {
 /// exist yet becomes a solid 1 pt `tx1` line unless the change says otherwise.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct BorderLine {
     /// Remove the border (no line).
@@ -603,6 +627,7 @@ pub struct BorderLine {
 /// Borders to change in [`EditOp::FormatCells`](super::EditOp::FormatCells).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CellBorders {
     /// Which borders.
