@@ -289,6 +289,10 @@ pub struct RunInfo {
     /// When the routine's previous finished run started.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous_at: Option<DateTime<Utc>>,
+    /// Who its code steps' writes were attributed to; absent when it had no
+    /// code steps, and on runs recorded before this was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_acts_as: Option<routine_program::CodeIdentity>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]

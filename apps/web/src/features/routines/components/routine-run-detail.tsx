@@ -8,11 +8,17 @@ import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import type {
   CallStatus,
+  CodeActsAs,
   HistoryCall,
   HistoryRecord,
   HistoryStep,
 } from '../core/history';
 import { failedStep, type RunOutcome, runOutcome } from '../core/step-history';
+
+const CODE_ACTS_AS_LABEL: Record<CodeActsAs, string> = {
+  owner: 'Code acted as you',
+  agent: 'Code acted as the agent',
+};
 
 const OUTCOME_LABEL: Record<RunOutcome, string> = {
   running: 'Running',
@@ -36,7 +42,9 @@ function seconds(ms: number): string {
   return `${Math.floor(total / 60)}m ${total % 60}s`;
 }
 
-/** When the run started, how it ended, how long it took, and its AI calls. */
+/** When the run started, how it ended, how long it took, its AI calls, and
+ * whom its code acted as.
+ */
 function runMeta(record: HistoryRecord): string {
   const parts: string[] = [];
   if (record.startedAt) parts.push(formatDateAndTime(record.startedAt));
@@ -50,6 +58,9 @@ function runMeta(record: HistoryRecord): string {
   // The Ask AI step is a call; code's own AI calls are among its calls.
   const calls = steps.filter((step) => step.kind === 'agent').length;
   if (calls) parts.push(calls === 1 ? '1 AI call' : `${calls} AI calls`);
+  const actsAs = record.run?.codeActsAs;
+  if (actsAs && steps.some((step) => step.kind === 'code'))
+    parts.push(CODE_ACTS_AS_LABEL[actsAs]);
   return parts.join(' · ');
 }
 

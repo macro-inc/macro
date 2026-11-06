@@ -1318,6 +1318,11 @@
           }
         }
       },
+      "CodeIdentity": {
+        "type": "string",
+        "description": "Who a routine's code steps write as.",
+        "enum": ["agent", "owner"]
+      },
       "CodeUpgrade": {
         "type": "object",
         "description": "One time a routine's code was brought to a new SDK.",
@@ -2087,6 +2092,17 @@
             "type": "string",
             "format": "date-time",
             "description": "When the run counts as happening: its trigger's time."
+          },
+          "code_acts_as": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CodeIdentity",
+                "description": "Who its code steps' writes were attributed to; absent when it had no\ncode steps, and on runs recorded before this was."
+              }
+            ]
           },
           "previous_at": {
             "type": ["string", "null"],

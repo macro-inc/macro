@@ -157,6 +157,9 @@ test('company-email and blank-email contacts stay read-only with company navigat
 }, info) => {
   await page.goto('/');
   await expect(
+    page.getByRole('button', { name: 'Go to company', exact: true }).first()
+  ).toBeVisible();
+  await expect(
     page.getByRole('button', {
       name: /Change contact company|Add company|Edit contact email/,
     })
@@ -171,6 +174,9 @@ test('company-email and blank-email contacts stay read-only with company navigat
     path: info.outputPath('read-only.png'),
   });
   await page.goto('/?empty');
+  await expect(
+    page.getByRole('button', { name: 'Add email', exact: true }).first()
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Add company', exact: true })
   ).toHaveCount(0);

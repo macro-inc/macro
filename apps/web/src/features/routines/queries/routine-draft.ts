@@ -62,6 +62,18 @@ function programApps(task: unknown): ScheduleDraft['apps'] {
   return parsed.success ? (parsed.data.mcp_servers ?? []) : [];
 }
 
+/** Whether a program's code steps write as its owner; absent means as the agent. */
+const programOperatesAsUserSchema = z.looseObject({
+  dangerously_operate_as_user: z.boolean().optional(),
+});
+
+function programOperatesAsUser(task: unknown): boolean {
+  const parsed = programOperatesAsUserSchema.safeParse(task);
+  return parsed.success
+    ? (parsed.data.dangerously_operate_as_user ?? false)
+    : false;
+}
+
 function getAgentTask(schedule: ScheduledAction): RoutineTask | undefined {
   if (schedule.kind !== 'Agent') return undefined;
   const result = agentTaskSchema.safeParse(schedule.task);
@@ -115,6 +127,7 @@ function programDraft(
     runVisibility: schedule.run_visibility,
     description: schedule.description ?? '',
     apps: programApps(schedule.task),
+    dangerouslyOperateAsUser: programOperatesAsUser(schedule.task),
     triggers,
     steps,
   };
@@ -195,22 +208,35 @@ function buildTask(draft: ScheduleDraft) {
       target: only.target,
     });
   return draft.steps
-    ? programTaskFor(draft.steps, draft.apps)
+    ? programTaskFor(draft.steps, {
+        apps: draft.apps,
+        operatesAsUser: draft.dangerouslyOperateAsUser ?? false,
+      })
     : buildAgentTask(draft);
 }
 
 /**
  * A program task. Apps are sent when there are some, or when `clearsApps`:
  * the scheduler rejects an update that drops stored apps without saying so.
+ * Operating as the user is sent when on, or as `false` when it turns off.
  */
 function programTaskFor(
   steps: StepDraft[],
-  apps: ScheduleDraft['apps'],
-  clearsApps = false
+  options: {
+    apps: ScheduleDraft['apps'];
+    operatesAsUser: boolean;
+    clearsApps?: boolean;
+    clearsOperatesAsUser?: boolean;
+  }
 ) {
   return {
     steps: stepsToWire(steps),
-    ...(apps.length || clearsApps ? { mcp_servers: apps } : {}),
+    ...(options.apps.length || options.clearsApps
+      ? { mcp_servers: options.apps }
+      : {}),
+    ...(options.operatesAsUser || options.clearsOperatesAsUser
+      ? { dangerously_operate_as_user: options.operatesAsUser }
+      : {}),
   };
 }
 
@@ -240,14 +266,28 @@ function descriptionField(draft: ScheduleDraft, previous: ScheduledAction) {
 /** Keep the stored task when the edited steps write the same program. */
 function programTask(draft: ScheduleDraft, previous: ScheduledAction) {
   const previousApps = programApps(previous.task);
-  const clearsApps = previousApps.length > 0;
+  const previousOperatesAsUser = programOperatesAsUser(previous.task);
+  const clears = {
+    clearsApps: previousApps.length > 0,
+    clearsOperatesAsUser: previousOperatesAsUser,
+  };
   const task = draft.steps
-    ? programTaskFor(draft.steps, draft.apps, clearsApps)
+    ? programTaskFor(draft.steps, {
+        apps: draft.apps,
+        operatesAsUser: draft.dangerouslyOperateAsUser ?? false,
+        ...clears,
+      })
     : buildTask(draft);
   const previousSteps = stepsFromTask(previous.task);
   return previousSteps &&
     JSON.stringify(task) ===
-      JSON.stringify(programTaskFor(previousSteps, previousApps, clearsApps))
+      JSON.stringify(
+        programTaskFor(previousSteps, {
+          apps: previousApps,
+          operatesAsUser: previousOperatesAsUser,
+          ...clears,
+        })
+      )
     ? previous.task
     : task;
 }
