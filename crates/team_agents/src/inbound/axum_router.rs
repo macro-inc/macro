@@ -10,7 +10,10 @@ use axum::{
     routing::{delete, get, post},
 };
 use entity_access::{
-    domain::{models::AdminTeamRole, ports::EntityAccessService},
+    domain::{
+        models::{AdminTeamRole, MemberTeamRole},
+        ports::EntityAccessService,
+    },
     inbound::axum_extractors::MacroUserTeamExtractorV2,
 };
 use macro_authorization::{
@@ -24,7 +27,7 @@ use serde::Deserialize;
 
 use crate::domain::models::{
     ComputerSize, CreateTeamAgent, EmailMessage, EmailMessages, SendEmail, SentEmail, TeamAgent,
-    TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgents,
+    TeamAgentComputer, TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgents,
 };
 use crate::domain::ports::TeamAgentService;
 
@@ -38,7 +41,7 @@ const DEFAULT_EMAIL_LIMIT: u8 = 20;
 pub struct TeamAgentsRouterState<S, Eas, Auth> {
     /// The team agent service.
     pub service: Arc<S>,
-    /// The entity access service, for the team admin check.
+    /// The entity access service, for team role checks.
     pub entity_access_service: Arc<Eas>,
     /// State for request authorization.
     pub authorization_state: MacroAuthorizationState<Auth>,
@@ -72,6 +75,7 @@ impl<S, Eas, Auth> FromRef<TeamAgentsRouterState<S, Eas, Auth>> for MacroAuthori
 /// - `GET /quote?size=` — a team admin prices an agent and its computer.
 /// - `POST /` — a team admin invites an agent and buys its computer.
 /// - `GET /` — a team admin lists the team's agents.
+/// - `GET /{agent_user_id}/computer` — an enabled teammate discovers an agent runtime.
 /// - `DELETE /{agent_user_id}` — a team admin deletes an agent.
 /// - `GET /me` — the calling agent's profile.
 /// - `GET /me/email/messages` — the calling agent's newest emails.
@@ -95,6 +99,10 @@ where
         .route(
             "/{agent_user_id}",
             delete(delete_team_agent_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/{agent_user_id}/computer",
+            get(get_team_agent_computer_handler::<S, Eas, Auth>),
         )
         .route(
             "/{agent_user_id}/retry",
@@ -377,6 +385,41 @@ where
 pub struct AgentPath {
     /// The agent's Macro user id.
     pub agent_user_id: String,
+}
+
+/// Minimal own-team computer discovery; does not grant runtime access.
+#[utoipa::path(
+    get, tag = "team-agents", operation_id = "get_team_agent_computer",
+    path = "/team_agents/{agent_user_id}/computer", params(AgentPath),
+    responses(
+        (status = 200, body = TeamAgentComputer),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_team_agent_computer_handler<S, Eas, Auth>(
+    access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+    Path(path): Path<AgentPath>,
+) -> Result<Json<TeamAgentComputer>, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let agent_user_id = MacroUserIdStr::parse_from_str(&path.agent_user_id)
+        .map(MacroUserIdStr::into_owned)
+        .map_err(|_| TeamAgentError::BadRequest("invalid agent user id".to_string()))?;
+    Ok(Json(
+        state
+            .service
+            .computer(access.entity_access_receipt, &agent_user_id)
+            .await?,
+    ))
 }
 
 /// Retry a failed agent's existing computer and recover its workspace repo.

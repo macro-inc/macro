@@ -5,7 +5,9 @@ use agent_credentials::RepoToken;
 use crate::domain::mail::{MailMessageId, MailboxId};
 use std::collections::BTreeMap;
 
-use entity_access::domain::models::{AdminTeamRole, EntityAccessReceipt};
+use entity_access::domain::models::{
+    AdminTeamRole, EntityAccessReceipt, MemberTeamRole, RequiredPermission,
+};
 use feature_flags::FeatureFlags;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -15,8 +17,8 @@ use super::models::{
     AgentApiKey, AgentRepo, ComputerPayment, ComputerPurchase, ComputerSize, ComputerStatus,
     ComputerStatusKind, CreateTeamAgent, EmailMessage, EmailMessages, MAX_NAME_CHARS,
     MAX_PROFILE_CHARS, NewAgentAccount, Persona, PersonaConfigKey, PersonaOsUser, PersonaSeed,
-    PersonaService, SendEmail, SentEmail, SystemdUnitName, TeamAgent, TeamAgentError,
-    TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
+    PersonaService, SendEmail, SentEmail, SystemdUnitName, TeamAgent, TeamAgentComputer,
+    TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
     AgentApiKeys, AgentRepos, Computers, Mailboxes, TeamAgentRepository, TeamAgentService,
@@ -244,7 +246,9 @@ fn persona(
     })
 }
 
-fn team_id(receipt: &EntityAccessReceipt<AdminTeamRole>) -> Result<Uuid, TeamAgentError> {
+fn team_id<P: RequiredPermission>(
+    receipt: &EntityAccessReceipt<P>,
+) -> Result<Uuid, TeamAgentError> {
     Uuid::parse_str(&receipt.entity().entity_id)
         .map_err(|_| TeamAgentError::BadRequest("the caller has no team".to_string()))
 }
@@ -727,6 +731,31 @@ where
                 self.agent(&user_id).await
             }
         }
+    }
+
+    #[tracing::instrument(name = "team_agents.computer", skip_all, err)]
+    async fn computer(
+        &self,
+        receipt: EntityAccessReceipt<MemberTeamRole>,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<TeamAgentComputer, TeamAgentError> {
+        let caller = receipt.acting_user_id().ok_or(TeamAgentError::Forbidden)?;
+        self.ensure_enabled(caller).await?;
+        let team_id = team_id(&receipt)?;
+        let agent = self
+            .repository
+            .get(agent_user_id)
+            .await
+            .map_err(TeamAgentError::internal)?
+            .filter(|agent| agent.team_id == team_id)
+            .ok_or(TeamAgentError::NotFound)?;
+        let computer_id = agent.computer_id.ok_or(TeamAgentError::NotFound)?;
+        let harness_id = self.computers.harness_id(team_id, computer_id).await?;
+        Ok(TeamAgentComputer {
+            computer_id,
+            harness_id,
+            is_agent_computer: true,
+        })
     }
 
     #[tracing::instrument(skip_all, err)]

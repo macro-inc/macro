@@ -367,6 +367,14 @@ where
         self.registry.is_connected(harness)
     }
 
+    async fn access_facts(
+        &self,
+        bot: BotId,
+        actor: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+    ) -> anyhow::Result<Option<crate::domain::model::RuntimeAccessFacts>> {
+        self.bindings.access_facts(bot, actor).await
+    }
+
     async fn sessions_on_harness(
         &self,
         harness: HarnessId,

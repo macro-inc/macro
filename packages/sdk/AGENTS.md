@@ -22,6 +22,12 @@ enforced by the ordinary backend APIs.
   every kind of item with the direct search tools' filters (types, exact match,
   tags, inbox, agent session transcripts), returning typed handles.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
+  `harnesses.directory()` lists teammates' hosts and `Harness.requestAccess()`
+  asks for one. Granting takes a human authorized reviewer's session, so the
+  server refuses `Harness.access.grant` and `resolve` from any SDK credential.
+  `users.byId(id).agentRuntime()` discovers an agent account's runtime within
+  the caller's own team and returns a Harness handle, or `undefined` before
+  pairing. Discovery grants no permissions.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.

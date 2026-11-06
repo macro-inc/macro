@@ -86,3 +86,50 @@ test('an empty contact set is empty but authorization and service failures propa
   await expect(macro.users.search('Alice')).rejects.toThrow();
   await expect(macro.users.search('  ')).rejects.toThrow('name or email');
 });
+
+test('agent runtime discovery returns a harness handle and preserves pending enrollment', async () => {
+  const requests: Request[] = [];
+  let harnessId: string | null = '00000000-0000-0000-0000-000000000050';
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return Response.json({
+        computerId: '00000000-0000-0000-0000-000000000040',
+        harnessId,
+        isAgentComputer: true,
+      });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'user', apiKey: 'mak_test' },
+    hosts: { auth: 'https://auth.test' },
+  });
+  const account = macro.users.byId('macro|agent@example.com');
+  const runtime = await account.agentRuntime();
+  expect(runtime?.id).toBe(harnessId);
+  expect(decodeURIComponent(new URL(requests[0].url).pathname)).toBe(
+    '/team_agents/macro|agent@example.com/computer',
+  );
+  expect(requests[0].method).toBe('GET');
+  harnessId = null;
+  expect(await account.agentRuntime()).toBeUndefined();
+  expect(requests).toHaveLength(2);
+});
+
+test('agent runtime discovery preserves feature and ownership denials', async () => {
+  let status = 403;
+  globalThis.fetch = Object.assign(
+    async () => Response.json({ message: 'not enabled' }, { status }),
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'user', apiKey: 'mak_test' },
+    hosts: { auth: 'https://auth.test' },
+  });
+  const account = macro.users.byId('macro|agent@example.com');
+  await expect(account.agentRuntime()).rejects.toThrow();
+  status = 404;
+  await expect(account.agentRuntime()).rejects.toThrow();
+});

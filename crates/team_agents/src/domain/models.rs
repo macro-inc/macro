@@ -88,6 +88,20 @@ pub struct TeamAgents {
     pub agents: Vec<TeamAgent>,
 }
 
+/// Minimal own-team discovery; this conveys no runtime permission.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct TeamAgentComputer {
+    /// Computer bound to the requested agent account.
+    pub computer_id: Uuid,
+    /// Paired runtime, absent until enrollment establishes it.
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<Uuid>))]
+    pub harness_id: Option<harness_id::HarnessId>,
+    /// Always true: a bound team-agent account classifies its computer as an agent computer.
+    pub is_agent_computer: bool,
+}
+
 /// The size of a Macro computer, from the computers catalog.
 #[derive(
     Debug,

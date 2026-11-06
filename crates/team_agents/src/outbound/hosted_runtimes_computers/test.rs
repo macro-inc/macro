@@ -259,6 +259,8 @@ impl ComputerRepo for FakeRepo {
     }
 }
 
+type BillingUpdate = (ComputerSize, Vec<SubscriptionItem>, String);
+
 /// Records subscription updates; fails them when `decline` is set.
 #[derive(Default)]
 struct FakeBilling {
@@ -266,7 +268,7 @@ struct FakeBilling {
     decline: bool,
     provider_fails: bool,
     no_subscription: bool,
-    updates: Arc<Mutex<Vec<(ComputerSize, Vec<SubscriptionItem>, String)>>>,
+    updates: Arc<Mutex<Vec<BillingUpdate>>>,
     removals: Mutex<Vec<(ComputerSize, String)>>,
 }
 
@@ -391,6 +393,19 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
         );
     }
     assert_eq!(service.persona(TEAM, id).await.unwrap(), persona);
+    assert_eq!(service.harness_id(TEAM, id).await.unwrap(), None);
+    assert!(matches!(
+        service.harness_id(Uuid::now_v7(), id).await,
+        Err(agent::TeamAgentError::NotFound)
+    ));
+    let harness_id = harness_id::HarnessId::new_from_uuid(Uuid::from_u128(0x50));
+    computers.lock().unwrap().get_mut(&id).unwrap().harness_id = Some(harness_id.as_uuid());
+    assert_eq!(
+        service.harness_id(TEAM, id).await.unwrap(),
+        Some(harness_id)
+    );
+    computers.lock().unwrap().get_mut(&id).unwrap().harness_id = None;
+
     assert!(matches!(
         service.persona(Uuid::now_v7(), id).await,
         Err(agent::TeamAgentError::NotFound)
@@ -449,6 +464,7 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
         .expect("retry existing paid computer");
     assert_eq!(retried.status, agent::ComputerStatusKind::SettingUp);
     assert_eq!(service.persona(TEAM, id).await.unwrap(), persona);
+
     assert_eq!(
         updates.lock().unwrap().len(),
         1,
@@ -676,7 +692,7 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
             Some("unit missing"),
         ),
     ] {
-        for matching_owner in [true, false] {
+        for matching_computer in [true, false] {
             let repo = FakeRepo {
                 sold_units: 4,
                 ..Default::default()
@@ -718,9 +734,12 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
                 id: harness_id::HarnessId::new_from_uuid(harness_id),
                 kind: "macrod".to_string(),
                 name: "Computer".to_string(),
-                owner: HarnessOwner::Team {
-                    team_id: if matching_owner { TEAM } else { Uuid::now_v7() },
+                owner: HarnessOwner::User {
+                    user_id: "macro|admin@example.com".to_owned(),
                 },
+                access: Default::default(),
+                is_agent_computer: true,
+                shared_team_ids: vec![TEAM],
                 created_by: "macro|admin@example.com".to_string(),
                 created_at: now(),
                 updated_at: now(),
@@ -739,7 +758,11 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
                         ),
                     ]),
                 },
-                computer_id: Some(id),
+                computer_id: Some(if matching_computer {
+                    id
+                } else {
+                    Uuid::now_v7()
+                }),
                 claude_mode: ClaudeMode::MacroCredits,
             };
             let mut harnesses = MockHarnessRepo::new();
@@ -758,7 +781,7 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
                 harnesses,
             );
             let report = adapter.status(TEAM, id).await.unwrap();
-            if matching_owner {
+            if matching_computer {
                 let brain = report.brain.unwrap();
                 assert_eq!(brain.healthy, healthy);
                 assert_eq!(brain.last_error.as_deref(), error);

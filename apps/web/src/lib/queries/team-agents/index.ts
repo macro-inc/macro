@@ -52,6 +52,35 @@ export function useTeamAgentSizesQuery(teamId: Accessor<string>) {
   return useQuery(() => teamAgentSizesQueryOptions(teamId()));
 }
 
+/** A click-only lookup; keep discovery out of component transport code. */
+export function useTeamAgentComputerMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    retry: false,
+    mutationFn: ({
+      userId,
+      parentSpan,
+    }: {
+      userId: string;
+      parentSpan?: Span;
+    }) => {
+      const load = async (span: Span) => {
+        const computer = await throwOnErr(async () => {
+          const result = await authServiceClient.getTeamAgentComputer(userId);
+          if (result.isErr()) span.error('Agent computer lookup failed');
+          return result;
+        });
+        span.setAttr('computer.id', computer.computerId);
+        if (computer.harnessId) span.setAttr('harness.id', computer.harnessId);
+        return computer;
+      };
+      return parentSpan
+        ? parentSpan.span('team-agent.computer.load', load)
+        : Telemetry.span('team-agent.computer.load', load);
+    },
+  }));
+}
+
 export function teamAgentQuoteQueryOptions(teamId: string, size: ComputerSize) {
   return queryOptions({
     queryKey: teamAgentKeys.quote(teamId, size).queryKey,

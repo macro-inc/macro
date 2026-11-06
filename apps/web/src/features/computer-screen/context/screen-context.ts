@@ -3,6 +3,7 @@ import { type Accessor, createContext, useContext } from 'solid-js';
 export type ScreenHost = {
   sessionId: Accessor<string | undefined>;
   harnessId: Accessor<string | undefined>;
+  title?: Accessor<string | undefined>;
   canEdit: Accessor<boolean>;
   mobile: Accessor<boolean>;
   resolveUrl: (harnessId: string, control: boolean) => Promise<string>;

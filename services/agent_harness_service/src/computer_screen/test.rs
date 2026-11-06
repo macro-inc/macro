@@ -104,6 +104,9 @@ impl macro_authorization::JwtValidator for TestIdentity {
         let user_id = match jwt {
             "owner" => "macro|owner@example.com",
             "other" => "macro|other@example.com",
+            "reader" => "macro|reader@example.com",
+            "user" => "macro|user@example.com",
+            "resident" => "macro|resident@example.com",
             _ => {
                 return Err(rootcause::Report::new(
                     macro_authorization::MacroAuthorizationError::InvalidCredentials,
@@ -157,12 +160,23 @@ async fn computer_routes_require_harness_management_and_mode_reads_persisted_sta
                 created_at: "2026-01-01T00:00:00Z".parse().unwrap(),
                 updated_at: "2026-01-01T00:00:00Z".parse().unwrap(),
                 allow_permission_bypass: false,
+                access: Default::default(),
+                shared_team_ids: Vec::new(),
+                is_agent_computer: false,
                 connected: false,
                 last_connected_at: None,
                 capabilities: Default::default(),
                 computer_id: Some(uuid::Uuid::from_u128(1)),
                 claude_mode: ClaudeMode::OwnAccount,
             }))
+        })
+    });
+    repo.expect_harness_access().returning(|_, caller| {
+        Box::pin(async move {
+            Ok(match caller.as_ref() {
+                "macro|owner@example.com" => harnesses::domain::models::HarnessAccess::Owner,
+                _ => harnesses::domain::models::HarnessAccess::None,
+            })
         })
     });
     let authorization = MacroAuthorizationServiceImpl::new(
@@ -239,4 +253,157 @@ async fn computer_routes_require_harness_management_and_mode_reads_persisted_sta
     shutdown.cancel();
     tasks.close();
     tasks.wait().await;
+}
+
+/// A forged control query still crosses the real harness authorization service
+/// before a screen session can touch Redis or send a command to the runtime.
+#[tokio::test]
+async fn runtime_screen_requires_view_or_use_even_without_a_hosted_computer() {
+    use harness_id::HarnessId;
+    use harnesses::domain::{
+        models::{ClaudeMode, Harness, HarnessAccess, HarnessOwner},
+        ports::MockHarnessRepo,
+        service::HarnessServiceImpl,
+    };
+    use macro_authorization::{
+        InternalAuthConfig, MacroAuthorizationServiceImpl, MacroAuthorizationState,
+        NoBotAuthorizer, NoUserApiKeyAuthorizer,
+    };
+    use std::sync::Arc;
+
+    let mut repo = MockHarnessRepo::new();
+    repo.expect_get_harness().returning(|id| {
+        Box::pin(async move {
+            if id != HarnessId::TEST_A {
+                return Ok(None);
+            }
+            Ok(Some(Harness {
+                id,
+                kind: "macrod".to_owned(),
+                name: "Paired runtime".to_owned(),
+                owner: HarnessOwner::User {
+                    user_id: "macro|owner@example.com".to_owned(),
+                },
+                created_by: "macro|owner@example.com".to_owned(),
+                created_at: "2026-01-01T00:00:00Z".parse().unwrap(),
+                updated_at: "2026-01-01T00:00:00Z".parse().unwrap(),
+                allow_permission_bypass: false,
+                access: HarnessAccess::None,
+                shared_team_ids: Vec::new(),
+                is_agent_computer: false,
+                connected: false,
+                last_connected_at: None,
+                capabilities: Default::default(),
+                computer_id: None,
+                claude_mode: ClaudeMode::MacroCredits,
+            }))
+        })
+    });
+    repo.expect_harness_access().returning(|_, caller| {
+        Box::pin(async move {
+            Ok(match caller.as_ref() {
+                "macro|owner@example.com" => HarnessAccess::Owner,
+                "macro|user@example.com" => HarnessAccess::User,
+                "macro|reader@example.com" => HarnessAccess::Read,
+                "macro|resident@example.com" => HarnessAccess::Resident,
+                _ => HarnessAccess::None,
+            })
+        })
+    });
+    let authorization = MacroAuthorizationServiceImpl::new(
+        TestIdentity,
+        InternalAuthConfig {
+            api_key: "test-internal-key".to_owned(),
+            default_user_id: None,
+        },
+        NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
+    );
+    let tasks = tokio_util::task::TaskTracker::new();
+    let shutdown = tokio_util::sync::CancellationToken::new();
+    let app = super::router(
+        agent_harness::outbound::runtime_registry::RuntimeRegistry::new(),
+        redis::Client::open("redis://127.0.0.1:1").unwrap(),
+        HarnessServiceImpl::new(repo),
+        MacroAuthorizationState::new(Arc::new(authorization)),
+        &tasks,
+        shutdown.clone(),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let stop = shutdown.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app)
+            .with_graceful_shutdown(stop.cancelled_owned())
+            .await
+            .unwrap();
+    });
+    let client = reqwest::Client::new();
+    for (token, control, expected) in [
+        ("owner", false, reqwest::StatusCode::CONFLICT),
+        ("owner", true, reqwest::StatusCode::CONFLICT),
+        ("user", false, reqwest::StatusCode::CONFLICT),
+        ("user", true, reqwest::StatusCode::CONFLICT),
+        ("reader", false, reqwest::StatusCode::CONFLICT),
+        ("reader", true, reqwest::StatusCode::FORBIDDEN),
+        ("resident", false, reqwest::StatusCode::CONFLICT),
+        ("resident", true, reqwest::StatusCode::FORBIDDEN),
+        ("other", false, reqwest::StatusCode::FORBIDDEN),
+        ("other", true, reqwest::StatusCode::FORBIDDEN),
+    ] {
+        let response = client
+            .get(format!(
+                "http://{address}/harnesses/{}/screen?control={control}",
+                HarnessId::TEST_A
+            ))
+            .bearer_auth(token)
+            .header("connection", "upgrade")
+            .header("upgrade", "websocket")
+            .header("sec-websocket-version", "13")
+            .header("sec-websocket-key", "AAAAAAAAAAAAAAAAAAAAAA==")
+            .send()
+            .await
+            .unwrap();
+        // A display-less paired runtime passes authorization, then returns 409
+        // before any screen command/bus side effect. Requiring Manage for
+        // control or requiring a hosted computer would fail this assertion.
+        assert_eq!(response.status(), expected, "{token} control={control}");
+    }
+    shutdown.cancel();
+    tasks.close();
+    tasks.wait().await;
+    server.await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn viewer_permission_renewal_observes_revocation_and_fails_closed_on_outage() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let allowed = Arc::new(AtomicBool::new(true));
+    let authorize = || {
+        let allowed = Arc::clone(&allowed);
+        async move {
+            if allowed.load(Ordering::SeqCst) {
+                Ok(())
+            } else {
+                Err(harnesses::domain::ports::HarnessError::Unauthorized)
+            }
+        }
+    };
+    assert_eq!(super::renew_viewer_access(&authorize).await, Ok(()));
+    allowed.store(false, Ordering::SeqCst);
+    assert_eq!(
+        super::renew_viewer_access(&authorize).await,
+        Err("access_revoked")
+    );
+
+    let started = tokio::time::Instant::now();
+    let unavailable =
+        || std::future::pending::<Result<(), harnesses::domain::ports::HarnessError>>();
+    assert_eq!(
+        super::renew_viewer_access(&unavailable).await,
+        Err("authorization_timeout")
+    );
+    assert_eq!(started.elapsed(), super::VIEWER_ACCESS_TIMEOUT);
 }

@@ -1,5 +1,6 @@
+import LinkIcon from '@icon/system/regular/link.svg';
 import type { TeamAgent } from '@service-auth/generated/schemas';
-import { Avatar } from '@ui';
+import { Avatar, Button } from '@ui';
 import { createSignal, For } from 'solid-js';
 import { MemberInviteActions } from '../../components/member-invite-actions';
 import { TeamAgentRow } from '../../components/team-agent-row';
@@ -58,12 +59,18 @@ export function MembersFixture() {
       title="Members"
       description="Invite people and agents to your team."
       actions={
-        <MemberInviteActions
-          canInvitePeople
-          canInviteAgents
-          onInvitePerson={() => setAction('person')}
-          onInviteAgent={() => setAction('agent')}
-        />
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <Button variant="secondary" onClick={() => setAction('copy')}>
+            <LinkIcon class="size-4" />
+            Copy invite link
+          </Button>
+          <MemberInviteActions
+            canInvitePeople
+            canInviteAgents
+            onInvitePerson={() => setAction('person')}
+            onInviteAgent={() => setAction('agent')}
+          />
+        </div>
       }
     >
       {unhealthy && (

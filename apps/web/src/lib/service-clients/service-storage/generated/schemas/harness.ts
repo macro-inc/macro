@@ -6,6 +6,7 @@
  */
 
 import type { ClaudeMode } from './claudeMode';
+import type { HarnessAccess } from './harnessAccess';
 import type { HarnessCapabilities } from './harnessCapabilities';
 import type { HarnessComputerId } from './harnessComputerId';
 import type { HarnessId } from './harnessId';
@@ -18,6 +19,9 @@ import type { HarnessOwner } from './harnessOwner';
 Clients deserialize this, so both derives are used.
  */
 export interface Harness {
+  /** What the caller may do with it. Reported as `none` where no caller is
+in question, such as to the daemon itself. */
+  access?: HarnessAccess;
   /** Whether agents may bypass ACP permission requests on this harness. */
   allow_permission_bypass?: boolean;
   /** What the harness's machine can do, as macrod last reported it. */
@@ -36,6 +40,8 @@ machine the user paired themselves. */
   created_by: string;
   /** Harness id. */
   id: HarnessId;
+  /** Whether this is a dedicated agent computer, whose teammates may only read it. */
+  is_agent_computer?: boolean;
   /** Runtime kind. Currently always `macrod`. */
   kind: string;
   /** When the daemon last attached a runtime connection. */
@@ -44,6 +50,8 @@ machine the user paired themselves. */
   name: string;
   /** Owner. */
   owner: HarnessOwner;
+  /** Teams with a grant; agent computers grant Read, ordinary computers User. */
+  shared_team_ids?: string[];
   /** Update timestamp. */
   updated_at: string;
 }

@@ -70,8 +70,15 @@ persisted completion at most hourly, preserving late answers after lost callback
 Persisted completions bypass this backoff; direct completion handling is immediate.
 
 External runtimes pass container preflight without a managed provider; only
-managed runtimes require provider account setup. External runtimes bind sessions
-lazily. On each dial `RuntimeRegistry` has the
+managed runtimes require provider account setup.
+
+Prompts to an external runtime pass `authorize_runtime` per turn:
+`RuntimeAccessFacts::may_run` requires a coding agent's prompter to have access
+and a resident's (a bound non-coding agent's) owner to have access, so removing
+access shuts a resident down without touching its binding. A turn nobody
+prompted runs on the agent owner's access.
+
+External runtimes bind sessions lazily. On each dial `RuntimeRegistry` has the
 connection run `initialize` (shared with every session through its handshake)
 and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
 `HarnessCommand::Reattach` for the listed sessions bound to that harness,

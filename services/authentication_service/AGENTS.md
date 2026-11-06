@@ -34,7 +34,9 @@ key issuance, and account merge/link flows.
   expose `code: "no_subscription"` for the invitation billing prompt.
   Every team-agent admin operation (including roster, catalog and admin secrets)
   shares one fail-closed `enable-team-agents` snapshot per authenticated actor.
-  Agent self-service and runtime credentials remain independent of the rollout.
+  Teammates discover their own team’s agent computer through the member-authorized
+  `/team_agents/{agent_user_id}/computer` route. Agent self-service and runtime
+  credentials remain independent of the rollout.
 - Not here: authorization/permission decisions on other entities →
   `crates/macro_authorization`; metered AI credits → `crates/ai_billing`;
   team lifecycle and seats → `crates/teams`; a person's interface language

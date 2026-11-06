@@ -12,6 +12,7 @@ import {
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
+import { SettingsScreenNavigationProvider } from '@app/features/computer-screen/context/settings-screen-navigation';
 import {
   companyCreation,
   contactCreation,
@@ -181,34 +182,36 @@ export function RootFrame(props: ParentProps) {
   attachGlobalDOMScope(document.body);
 
   return (
-    <MobileSettingsProvider>
-      <div
-        class={cn(
-          'relative flex flex-col justify-between not-touch:bg-page w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)',
-          hasOverlayTitleBar && 'pt-[40px]'
-        )}
-      >
-        <Show when={hasOverlayTitleBar}>
-          <DesktopTitleBar />
-        </Show>
-        <BundleUpdateProgressBar />
-        <Show when={paywallOpen()}>
-          <Suspense>
-            <Paywall />
-          </Suspense>
-        </Show>
-        <Show when={usageLimitOpen()}>
-          <AiUsageLimitDialog />
-        </Show>
-        <div class="min-h-0 flex-1 flex flex-col">
-          {/* Route loading must not detach the frame. Routes draw their own
+    <SettingsScreenNavigationProvider>
+      <MobileSettingsProvider>
+        <div
+          class={cn(
+            'relative flex flex-col justify-between not-touch:bg-page w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)',
+            hasOverlayTitleBar && 'pt-[40px]'
+          )}
+        >
+          <Show when={hasOverlayTitleBar}>
+            <DesktopTitleBar />
+          </Show>
+          <BundleUpdateProgressBar />
+          <Show when={paywallOpen()}>
+            <Suspense>
+              <Paywall />
+            </Suspense>
+          </Show>
+          <Show when={usageLimitOpen()}>
+            <AiUsageLimitDialog />
+          </Show>
+          <div class="min-h-0 flex-1 flex flex-col">
+            {/* Route loading must not detach the frame. Routes draw their own
                 loading state, so the frame adds none. */}
-          <Suspense>{props.children}</Suspense>
+            <Suspense>{props.children}</Suspense>
+          </div>
+          <SwipeDownDismissKeyboard />
+          <DevStatusBar />
         </div>
-        <SwipeDownDismissKeyboard />
-        <DevStatusBar />
-      </div>
-    </MobileSettingsProvider>
+      </MobileSettingsProvider>
+    </SettingsScreenNavigationProvider>
   );
 }
 

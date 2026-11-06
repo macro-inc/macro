@@ -167,3 +167,36 @@ for (const dismissal of ['Cancel', 'Escape']) {
     await expect(options).toBeFocused();
   });
 }
+
+test('keeps the Members heading readable beside invite controls in narrow panes', async ({
+  page,
+}) => {
+  for (const width of [560, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/?members');
+    const title = page.getByRole('heading', { name: 'Members', exact: true });
+    await expect(title).toBeVisible();
+    expect(
+      await title.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth + 1
+      )
+    ).toBe(true);
+    const description = page.getByText(
+      'Invite people and agents to your team.',
+      { exact: true }
+    );
+    const descriptionBox = await description.boundingBox();
+    const inviteBox = await page
+      .getByRole('button', { name: 'Invite agent', exact: true })
+      .boundingBox();
+    expect(descriptionBox?.width).toBeGreaterThan(220);
+    expect(inviteBox?.y).toBeGreaterThanOrEqual(
+      (descriptionBox?.y ?? 0) + (descriptionBox?.height ?? 0)
+    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth
+      )
+    ).toBe(true);
+  }
+});

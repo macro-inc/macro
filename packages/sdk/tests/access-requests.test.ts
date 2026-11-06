@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { Agent } from '../src/entities/agents/agent';
+import { User } from '../src/entities/users/user';
 import { Macro } from '../src/macro';
 import { MacroApiError, MacroForbiddenError } from '../src/utils';
 
@@ -130,5 +132,78 @@ describe('MacroForbiddenError', () => {
 
     expect(error).toBeInstanceOf(MacroApiError);
     expect(error).not.toBeInstanceOf(MacroForbiddenError);
+  });
+});
+
+describe('Harness access', () => {
+  const harnessId = '0198a4cc-e138-7670-a308-a6b766602732';
+
+  test('returns distinct lazy handles for bot and account residents', async () => {
+    const fetch = spyOn(globalThis, 'fetch').mockResolvedValue(
+      Response.json([
+        {
+          type: 'bot',
+          bot_id: '0198a4cc-e138-7670-a308-a6b766602733',
+          name: 'Assistant',
+          owner_user_id: 'macro|owner@example.test',
+          team_id: null,
+        },
+        {
+          type: 'account',
+          user_id: 'macro|agent@example.test',
+          name: 'Teammate',
+          team_id: '0198a4cc-e138-7670-a308-a6b766602734',
+        },
+        { type: 'future_resident', name: 'Unknown resident' },
+      ]),
+    );
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+
+    const residents = await macro.harnesses.byId(harnessId).residents();
+
+    expect(residents).toHaveLength(2);
+    expect(residents[0]).toBeInstanceOf(Agent);
+    expect(residents[0]?.id).toBe('0198a4cc-e138-7670-a308-a6b766602733');
+    expect(residents[1]).toBeInstanceOf(User);
+    expect(residents[1]?.id).toBe('macro|agent@example.test');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const request = fetch.mock.calls[0]?.[0];
+    if (!(request instanceof Request)) throw new Error('Expected a request');
+    expect(new URL(request.url).pathname).toBe(
+      `/harnesses/${harnessId}/residents`,
+    );
+  });
+
+  test('asks to be a user unless told otherwise', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      return Response.json(
+        request.method === 'GET'
+          ? {
+              ...state(null),
+              accessLevel: null,
+              supportedLevels: ['view', 'edit'],
+            }
+          : record('pending', 1),
+      );
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+
+    await macro.harnesses.byId(harnessId).requestAccess();
+
+    const submitted = requests.at(-1);
+    expect(new URL(submitted?.url ?? '').pathname).toBe(
+      `/entities/harness/${harnessId}/access-requests/mine`,
+    );
+    expect(await submitted?.json()).toMatchObject({ requestedLevel: 'edit' });
   });
 });

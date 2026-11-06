@@ -21,6 +21,10 @@ levels, and the computed `UserItemAccess` a caller has to an entity.
 
 ## Boundaries
 
+- `SharingFacts.agent_harness` carries the shared classifier's owning team and
+  optional assigned account without replacing the recorded human owner.
+  Access-request policy consumes these facts; this crate does not authorize.
+
 - Depends on: `macro_user_id`, `model-entity`, `model_file_type`, `model_owner`.
 - Used by: `agent_session`, `ai_tools`, `authentication_service`, `call`,
   `channels`, `chat`, `collab_surface`, `databases`, `document_cognition_service`,

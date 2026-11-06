@@ -1,6 +1,8 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { SearchBar } from '@app/components/view-shell/SearchBar';
+import { useSettingsComputerScreen } from '@app/features/computer-screen/context/settings-screen-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { beginInteraction, usePending } from '@app/observability/flow';
 import { AgentTag } from '@core/component/AgentTag';
 import { UserIcon } from '@core/component/UserIcon';
@@ -21,6 +23,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
+import MonitorIcon from '@icon/system/regular/desktop.svg';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
@@ -51,7 +55,7 @@ import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
-import { Button, ConfirmDialog, ToggleSwitch, Tooltip } from '@ui';
+import { Button, ConfirmDialog, Dropdown, ToggleSwitch, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -170,6 +174,7 @@ type MemberRowProps = {
   onRoleChange: (role: TeamRole) => void;
   onPlanChange: (plan: PaidPlan) => void;
   managedLayout?: boolean;
+  onViewComputer?: () => void;
 };
 
 export function MemberRow(props: MemberRowProps) {
@@ -233,41 +238,57 @@ export function MemberRow(props: MemberRowProps) {
             </Show>
           </>
         }
-        status={
-          <Tooltip label="Member activity is unavailable">
-            <span
-              class="text-xs text-ink-muted"
-              aria-label="Activity unavailable"
-            >
-              —
-            </span>
-          </Tooltip>
-        }
+        status={undefined}
         actions={
-          <Show when={props.canManageRemovals && humanMember()}>
-            <Tooltip
-              label={
-                props.canRemove
-                  ? 'Remove member'
-                  : props.member.role === TeamRole.owner
-                    ? 'Cannot remove team owner'
-                    : 'Cannot remove yourself'
-              }
-            >
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                disabled={!props.canRemove}
-                onClick={props.onRemove}
-                aria-label="Remove member"
+          <>
+            <Show when={props.onViewComputer}>
+              <MemberComputerMenu onOpen={() => props.onViewComputer?.()} />
+            </Show>
+            <Show when={props.canManageRemovals && humanMember()}>
+              <Tooltip
+                label={
+                  props.canRemove
+                    ? 'Remove member'
+                    : props.member.role === TeamRole.owner
+                      ? 'Cannot remove team owner'
+                      : 'Cannot remove yourself'
+                }
               >
-                <TrashIcon class="size-4" />
-              </Button>
-            </Tooltip>
-          </Show>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={!props.canRemove}
+                  onClick={props.onRemove}
+                  aria-label="Remove member"
+                >
+                  <TrashIcon class="size-4" />
+                </Button>
+              </Tooltip>
+            </Show>
+          </>
         }
       />
     </Show>
+  );
+}
+
+function MemberComputerMenu(props: { onOpen(): void }) {
+  return (
+    <Dropdown>
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-sm"
+        aria-label={t('common.more')}
+      >
+        <DotsIcon class="size-4" />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Item onSelect={props.onOpen}>
+          <MonitorIcon class="size-4" />
+          {t('runtimeSharing.viewComputer')}
+        </Dropdown.Item>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }
 
@@ -337,6 +358,9 @@ function LegacyMemberRow(props: MemberRowProps) {
         >
           <RoleSelect value={props.member.role} onChange={props.onRoleChange} />
         </Show>
+        <Show when={props.onViewComputer}>
+          <MemberComputerMenu onOpen={() => props.onViewComputer?.()} />
+        </Show>
         <Show when={props.canManageRemovals && humanMember()}>
           <Show
             when={props.canRemove}
@@ -388,6 +412,9 @@ export function TeamMembers(props: { team: TeamSummary }) {
   } = useTeamViewer(() => props.team);
   const invitesQuery = useTeamInvitesQuery(() => props.team.id);
   const agentFlag = useFeatureFlag(enableTeamAgents);
+  const screen = useSettingsComputerScreen();
+  const canViewAgentComputers = () =>
+    !agentFlag().loading && agentFlag().enabled && !!screen;
   const canManageAgents = () =>
     isAdminOrOwner() && !agentFlag().loading && agentFlag().enabled;
   const agentsQuery = useTeamAgentsQuery(() => props.team.id, canManageAgents);
@@ -685,6 +712,15 @@ export function TeamMembers(props: { team: TeamSummary }) {
                     <MemberRow
                       managedLayout={canManageAgents()}
                       member={member}
+                      onViewComputer={
+                        canViewAgentComputers() &&
+                        isAgentAccount(tryMacroId(member.user_id))
+                          ? () => {
+                              if (canViewAgentComputers())
+                                screen?.openAgentComputer(member.user_id);
+                            }
+                          : undefined
+                      }
                       isOwner={isOwner()}
                       isCurrentUser={member.user_id === userId()}
                       canManageRemovals={canManageMemberRemovals()}
@@ -756,6 +792,14 @@ export function TeamMembers(props: { team: TeamSummary }) {
                             />
                           }
                           agent={agent}
+                          onViewComputer={
+                            canViewAgentComputers()
+                              ? () => {
+                                  if (canViewAgentComputers())
+                                    screen?.openAgentComputer(agent.userId);
+                                }
+                              : undefined
+                          }
                           retrying={retryAgent.isPending}
                           retryError={
                             retryAgent.isError &&

@@ -6498,6 +6498,86 @@
         }
       }
     },
+    "/team_agents/{agent_user_id}/computer": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "Minimal own-team computer discovery; does not grant runtime access.",
+        "operationId": "get_team_agent_computer",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "The agent's Macro user id.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgentComputer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team_agents/{agent_user_id}/retry": {
       "post": {
         "tags": ["team-agents"],
@@ -10011,6 +10091,14 @@
         "description": "The request body to invite a user to a team",
         "required": ["invites"],
         "properties": {
+          "harness_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Runtimes the caller owns to share with each person who accepts. Others\nare ignored. Honored only from the caller's own session."
+          },
           "invites": {
             "type": "array",
             "items": {
@@ -11524,6 +11612,27 @@
           "userId": {
             "type": "string",
             "description": "The agent's Macro user id (`macro|<email>`)."
+          }
+        }
+      },
+      "TeamAgentComputer": {
+        "type": "object",
+        "description": "Minimal own-team discovery; this conveys no runtime permission.",
+        "required": ["computerId", "isAgentComputer"],
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Computer bound to the requested agent account."
+          },
+          "harnessId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Paired runtime, absent until enrollment establishes it."
+          },
+          "isAgentComputer": {
+            "type": "boolean",
+            "description": "Always true: a bound team-agent account classifies its computer as an agent computer."
           }
         }
       },

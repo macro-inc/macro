@@ -137,6 +137,13 @@ beside a scrolling editor whose selection runs past its visible bottom
 (`clipToVisible`), have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/directive/browser-test/playwright.config.ts`.
 
+The runtime Share menu (teammates, team access, access requests, and the warning
+before shutting down a resident) has a backend-free desktop/phone regression:
+`bunx playwright test --config src/features/runtime-sharing/browser-test/playwright.config.ts`.
+It runs the real queries and service client over a scripted network. The warning
+opens under an owner from inside the sheet; one captured outside it closes the
+menu on the first tap.
+
 Composer `/` menus list Connections between Skills and Pull requests. Keep native
 and hosted providers aligned with `mcp_select::select_connections`, prefer native
 credentials per provider, and preserve editor focus on pointer and touch selection.
@@ -1089,6 +1096,31 @@ the connection keyed by stable session/harness IDs so list polling preserves
 control and the stream. Keep noVNC lazy-loaded, refresh socket auth like the sync
 router, default to view-only,
 and reconnect when control changes. Touch devices remain watch-only.
+Settings tabs compose `SettingsComputerScreen` with `ScreenSplit takeover` so
+the screen replaces the main Settings content at every width; use the real
+harness name, shared mode Badge and icon back control, with `EmptyStatePanel`
+for disconnections. Offer Read-to-control requests only for ordinary runtimes
+whose server-supported levels include edit; agent discovery classification also
+suppresses them when optional directory classification is absent. Closing restores
+the still-mounted Settings form. Agent sessions keep their desktop split and
+phone takeover. Launch with `useSettingsComputerScreen().openHarness(id)` or
+`openAgentComputer(userId)`; the latter discovers the computer only after the
+click through the team-agent query adapter. Runtime cards outside Settings
+navigate to Runtimes through the app-scoped `SettingsScreenNavigationProvider`
+and open that same pane; do not create a module-global request bus. Preserve
+cached runtime permissions across refresh failures and show the refresh error.
+Keep screen discovery, access loading and connection inside the caller-owned
+interaction trace, passing its span explicitly across asynchronous work. With
+`enable-team-agents` on, derive control from the server's harness
+`access` (`user`/`owner`), never agent/session edit permission; resolve enabled
+session screens from the runtime directory, since the usable-runtime list omits
+Read/Resident/None. Keep directory fetching disabled on the legacy off path;
+refresh the directory
+every 15 seconds in the foreground and explicitly on Settings screen open so
+remote grants and service recovery appear without remounting; `read` and
+`resident` remain watch-only. Agent computer sharing exposes Read only, and
+access requests use the server's `supportedLevels`. Account residents are not
+bots and cannot be stopped by removing an unrelated human's runtime grant.
 Settings computer rows compose `ComputerClaudeAccess`; managers fetch
 `claude-mode`, while other members read the harness list's `claude_mode`.
 The backend also requires management rights for Claude account changes.
@@ -1304,7 +1336,9 @@ People and managed agents share the filtered roster; agent activity comes from
 `lastTurnAt`, and Retry uses `canRetryTeamAgent` at each entry point. The Members
 rows share `MemberRowLayout` for height and identity/status/action columns on
 desktop and phones; put the role below the name and keep failure details and
-Retry in the row menu. Keep billing labels out of the status column.
+Retry in the row menu. Leave human status empty when no activity field exists;
+do not invent activity timestamps or placeholder dashes. Keep billing labels out
+of the status column.
 Distinguish transient `unhealthy` agents on ready computers from
 terminal `failed` provisioning; only terminal failures can retry provisioning.
 The browser fixture covers header heights and invitation/row menus on desktop, phone,

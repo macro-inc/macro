@@ -14,7 +14,7 @@ inbound = [
   "dep:utoipa",
   "ports",
 ]
-outbound = ["dep:sqlx", "ports"]
+outbound = ["dep:entity_access_db_utils", "dep:models_permissions", "dep:sqlx", "ports"]
 ports = ["dep:tokio"]
 test-utils = ["dep:mockall", "ports"]
 
@@ -24,6 +24,7 @@ axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id", features = ["schema"] }
 chrono = { workspace = true }
 constant_time_eq = { workspace = true }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 harness_id = { path = "../harness_id", features = ["schema", "sqlx"] }
 harness_token = { path = "../harness_token" }
 hex = { workspace = true }
@@ -31,6 +32,7 @@ macro_authorization = { path = "../macro_authorization", optional = true, defaul
 macro_user_id = { path = "../macro_user_id" }
 mockall = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
+models_permissions = { path = "../models_permissions", optional = true }
 rand = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true, features = ["json"] }

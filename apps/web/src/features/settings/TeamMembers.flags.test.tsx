@@ -19,7 +19,17 @@ const mocks = vi.hoisted(() => ({
   removeMember: vi.fn(),
   patch: vi.fn(),
   plan: vi.fn(),
+  viewerRole: (): 'owner' | 'admin' | 'member' => 'owner',
+  openComputer: vi.fn(),
 }));
+vi.mock(
+  '@app/features/computer-screen/context/settings-screen-context',
+  () => ({
+    useSettingsComputerScreen: () => ({
+      openAgentComputer: mocks.openComputer,
+    }),
+  })
+);
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) =>
     flag.key === 'enable-team-agents'
@@ -39,9 +49,9 @@ vi.mock('./Team', () => ({
       isLoading: false,
       data: { team, members, scheduled_seat_plans: {} },
     },
-    role: () => 'owner',
-    isOwner: () => true,
-    isAdminOrOwner: () => true,
+    role: () => mocks.viewerRole(),
+    isOwner: () => mocks.viewerRole() === 'owner',
+    isAdminOrOwner: () => mocks.viewerRole() !== 'member',
     allowNonAdminInvites: () => true,
   }),
   InviteToTeamDialog: () => null,
@@ -146,6 +156,7 @@ const [flag, setFlag] = createSignal({ enabled: false, loading: true });
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.rosterError = false;
+  mocks.viewerRole = () => 'owner';
   vi.stubGlobal('scrollTo', vi.fn());
   setFlag({ enabled: false, loading: true });
   mocks.read = flag;
@@ -220,4 +231,25 @@ it('rejects an old roster-error retry after the rollout is disabled', () => {
   setFlag({ enabled: false, loading: false });
   fireEvent.click(retry);
   expect(mocks.refetch).not.toHaveBeenCalled();
+});
+
+it('lets a teammate open an agent computer without loading the management roster and revokes stale actions', async () => {
+  mocks.viewerRole = () => 'member';
+  setFlag({ enabled: true, loading: false });
+  render(() => <TeamMembers team={team} />);
+  expect(mocks.enabled()).toBe(false);
+  expect(screen.queryByRole('button', { name: 'Invite agent' })).toBeNull();
+
+  fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+    key: 'ArrowDown',
+  });
+  const view = await screen.findByRole('menuitem', { name: 'View computer' });
+  fireEvent.keyDown(view, { key: 'Enter' });
+  expect(mocks.openComputer).toHaveBeenCalledWith('macro|agent@example.com');
+
+  setFlag({ enabled: true, loading: true });
+  expect(screen.queryByRole('button', { name: 'More' })).toBeNull();
+  fireEvent.click(view);
+  expect(mocks.openComputer).toHaveBeenCalledTimes(1);
+  expect(mocks.enabled()).toBe(false);
 });

@@ -21,7 +21,8 @@ fn test_client(storage_url: &str) -> EventStreamClient {
 const TEAM_HARNESS: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
      {\"allow_permission_bypass\":false,\"id\":\"00000000-0000-0000-0000-00000000000a\",\
       \"kind\":\"macrod\",\"name\":\"desk\",\
-      \"owner\":{\"type\":\"team\",\"team_id\":\"00000000-0000-0000-0000-000000000007\"},\
+      \"owner\":{\"type\":\"user\",\"user_id\":\"macro|owner@example.com\"},\
+      \"shared_team_ids\":[\"00000000-0000-0000-0000-000000000007\"],\
       \"created_by\":\"macro|owner@example.com\",\"created_at\":\"2026-11-01T00:00:00Z\",\
       \"updated_at\":\"2026-11-01T00:00:00Z\",\"connected\":true,\"last_connected_at\":null}";
 

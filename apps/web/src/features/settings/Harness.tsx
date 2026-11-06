@@ -16,6 +16,7 @@ import {
   useHarnessesQuery,
   usePatchHarnessMutation,
 } from '@queries/harnesses/harnesses';
+import { useIsTeamOwner } from '@queries/team/teams';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
 import { ApiKeyInput, Button, confirmDialog, Dialog, Input, Panel } from '@ui';
@@ -59,6 +60,7 @@ export function Harness(
         .computers()
         .flatMap((computer) => (computer.harnessId ? [computer.harnessId] : []))
     );
+  const isTeamOwner = useIsTeamOwner();
   const deleteHarnessMutation = useDeleteHarnessMutation();
   const [pairingDialog, setPairingDialog] = createSignal<
     | {
@@ -157,6 +159,7 @@ export function Harness(
             error={harnessesQuery.isError}
             onRename={setRenamingHarness}
             onRemove={setRemovingHarness}
+            canRemoveShared={isTeamOwner()}
           />
           <MacroComputers harnesses={harnesses()} />
           <LocalRuntimeCard />

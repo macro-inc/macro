@@ -10,22 +10,90 @@ use uuid::Uuid;
 
 /// Harness owner.
 ///
-/// Exactly one of a user or a team, mirroring the bots owner pattern. There
-/// are no system harnesses.
+/// Always one person: a runtime is someone's computer. A team runtime is a
+/// person's runtime with a grant to the team, never one owned by the team.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum HarnessOwner {
-    /// User-owned (private) harness.
+    /// The person whose runtime this is.
     User {
         /// Owner user id.
         user_id: String,
     },
-    /// Team-owned harness, usable by every team member.
-    Team {
-        /// Owner team id.
+}
+
+/// What one caller may do with a runtime.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum HarnessAccess {
+    /// The caller owns it: they manage who else can use it.
+    Owner,
+    /// A user: the caller may run agents on it, through a direct or team grant.
+    User,
+    /// A reader: the caller may see what is on it, but not run agents on it.
+    Read,
+    /// The assigned agent account: a resident may read, never run as the host user.
+    Resident,
+    /// No access: the caller can see it exists and ask for access.
+    #[default]
+    None,
+}
+
+/// A bot or dedicated Macro account resident on a runtime.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum HarnessResident {
+    /// A non-coding bot bound to this runtime.
+    Bot {
+        /// Bot identity.
+        bot_id: BotId,
+        /// Display name.
+        name: String,
+        /// The person owning the bot, if any.
+        owner_user_id: Option<String>,
+        /// The team owning the bot, if any.
+        team_id: Option<Uuid>,
+    },
+    /// The Macro account assigned to a dedicated agent computer.
+    Account {
+        /// The agent's Macro account identity.
+        user_id: String,
+        /// Display name.
+        name: String,
+        /// The computer's team.
         team_id: Uuid,
     },
+}
+
+/// The grant a team receives on a harness.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HarnessTeamAccess {
+    /// View the runtime without executing as its host user.
+    Read,
+    /// Run agents on the runtime.
+    User,
+}
+
+/// A team grant created with a harness.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HarnessTeamGrant {
+    /// Team receiving access.
+    pub team_id: Uuid,
+    /// Maximum runtime access granted to members.
+    pub access: HarnessTeamAccess,
+}
+
+/// Request to open or close a runtime to one of the owner's teams.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct SetHarnessTeamAccessRequest {
+    /// The team, which the owner must belong to.
+    pub team_id: Uuid,
+    /// Whether every member of the team may use the runtime.
+    pub enabled: bool,
 }
 
 /// A registered user-run harness.
@@ -45,6 +113,16 @@ pub struct Harness {
     pub name: String,
     /// Owner.
     pub owner: HarnessOwner,
+    /// What the caller may do with it. Reported as `none` where no caller is
+    /// in question, such as to the daemon itself.
+    #[serde(default)]
+    pub access: HarnessAccess,
+    /// Whether this is a dedicated agent computer, whose teammates may only read it.
+    #[serde(default)]
+    pub is_agent_computer: bool,
+    /// Teams with a grant; agent computers grant Read, ordinary computers User.
+    #[serde(default)]
+    pub shared_team_ids: Vec<Uuid>,
     /// User that registered this harness.
     pub created_by: String,
     /// Creation timestamp.
@@ -104,10 +182,12 @@ impl std::str::FromStr for ClaudeMode {
 
 /// What a caller wants to do with a harness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HarnessAccess {
-    /// See it: its owner, or any member of its owning team.
+pub enum HarnessPermission {
+    /// Read the runtime and watch its screen.
     View,
-    /// Change it: the same rule as deleting it.
+    /// Run agents or control the runtime screen.
+    Use,
+    /// Change runtime settings or revoke it.
     Manage,
 }
 
@@ -162,8 +242,10 @@ pub enum PersonaHealth {
 /// A pre-approved pairing for a Macro computer, minted by the control plane.
 #[derive(Debug, Clone)]
 pub struct CreateHostedPairing {
-    /// Owning team.
+    /// Team receiving a grant; ownership remains with the buying administrator.
     pub team_id: Uuid,
+    /// Team members may read agent computers or use ordinary computers.
+    pub team_access: HarnessTeamAccess,
     /// Harness display name.
     pub name: String,
     /// The team admin who bought the computer.
@@ -243,7 +325,7 @@ pub struct ApprovePairingRequest {
     pub allow_permission_bypass: bool,
     /// Display name override. Defaults to the daemon's requested name.
     pub name: Option<String>,
-    /// Owning team. Omit for a private, user-owned harness.
+    /// Team to open the harness to. Omit to keep it to the approving user.
     pub team_id: Option<Uuid>,
 }
 

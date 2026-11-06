@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { AgentTag } from '@core/component/AgentTag';
+import MonitorIcon from '@icon/system/regular/desktop.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
 import RobotIcon from '@icon/system/regular/robot.svg';
 import type { TeamAgent } from '@service-auth/generated/schemas';
@@ -20,6 +21,7 @@ export function TeamAgentRow(props: {
   retryError?: boolean;
   onRetry(): void;
   onRemove(): void;
+  onViewComputer?(): void;
 }) {
   const lastActive = () => {
     if (!props.agent.lastTurnAt) return 'No activity yet';
@@ -57,6 +59,7 @@ export function TeamAgentRow(props: {
         <TeamAgentMenu
           agent={props.agent}
           onRemove={props.onRemove}
+          onViewComputer={props.onViewComputer}
           onRetry={props.onRetry}
           retrying={props.retrying}
           retryError={props.retryError}
@@ -72,6 +75,7 @@ export function TeamAgentMenu(props: {
   retryError?: boolean;
   onRetry?(): void;
   onRemove(): void;
+  onViewComputer?(): void;
 }) {
   return (
     <Dropdown>
@@ -95,6 +99,12 @@ export function TeamAgentMenu(props: {
           <div class="max-w-64 px-3 py-2 text-xs text-failure" role="alert">
             Retry failed. Check the status and try again.
           </div>
+        </Show>
+        <Show when={props.onViewComputer}>
+          <Dropdown.Item onSelect={() => props.onViewComputer?.()}>
+            <MonitorIcon class="size-4" />
+            {t('runtimeSharing.viewComputer')}
+          </Dropdown.Item>
         </Show>
         <Show when={props.onRetry && canRetryTeamAgent(props.agent)}>
           <Dropdown.Item

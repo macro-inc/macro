@@ -48,6 +48,7 @@ import type {
   SetGithubPullRequestStateRequest,
   SetGithubPullRequestStateResponse,
   TeamAgent,
+  TeamAgentComputer,
   TeamAgentQuote,
   TeamAgentSizes,
   TeamAgents,
@@ -1380,6 +1381,13 @@ export const authServiceClient = {
     return fetchWithAuth<TeamAgents>(`${authHost}/team_agents`, {
       method: 'GET',
     });
+  },
+
+  getTeamAgentComputer(userId: string) {
+    return fetchWithAuth<TeamAgentComputer>(
+      `${authHost}/team_agents/${encodeURIComponent(userId)}/computer`,
+      { method: 'GET' }
+    );
   },
 
   getTeamAgentSizes() {

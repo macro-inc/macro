@@ -5,7 +5,7 @@ use agent_credentials::RepoToken;
 use crate::domain::mail::{MailMessageId, MailboxId};
 use std::future::Future;
 
-use entity_access::domain::models::{AdminTeamRole, EntityAccessReceipt};
+use entity_access::domain::models::{AdminTeamRole, EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -13,7 +13,7 @@ use super::models::{
     AgentApiKey, AgentRepo, ComputerPurchase, ComputerQuote, ComputerSize, ComputerSizeSpec,
     ComputerStatus, CreateTeamAgent, EmailMessage, EmailMessages, Mailbox, NewAgentAccount,
     Persona, PersonaSeed, SeatQuote, SendEmail, SentEmail, SubscriptionItem, TeamAgent,
-    TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
+    TeamAgentComputer, TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
 };
 
 /// Storage for agent accounts and their provisioning status.
@@ -202,6 +202,13 @@ pub trait Computers: Send + Sync + 'static {
         computer_id: Uuid,
     ) -> impl Future<Output = Result<ComputerStatus, TeamAgentError>> + Send;
 
+    /// Paired runtime for a team-owned computer; missing computers return NotFound.
+    fn harness_id(
+        &self,
+        team_id: Uuid,
+        computer_id: Uuid,
+    ) -> impl Future<Output = Result<Option<harness_id::HarnessId>, TeamAgentError>> + Send;
+
     /// Original bootstrap persona, scoped to the owning team.
     fn persona(
         &self,
@@ -279,6 +286,13 @@ pub trait TeamAgentService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> impl Future<Output = Result<TeamAgents, TeamAgentError>> + Send;
+
+    /// Discover only an own-team agent's computer without administrator details.
+    fn computer(
+        &self,
+        receipt: EntityAccessReceipt<MemberTeamRole>,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<TeamAgentComputer, TeamAgentError>> + Send;
 
     /// Re-drive a failed agent from its saved persona and existing computer.
     fn retry(

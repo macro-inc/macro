@@ -338,6 +338,7 @@ struct FakeComputers {
     interval: BillingInterval,
     status: ComputerStatus,
     unavailable: bool,
+    harness_id: Mutex<Option<harness_id::HarnessId>>,
 }
 
 impl Computers for FakeComputers {
@@ -392,6 +393,17 @@ impl Computers for FakeComputers {
             return Err(TeamAgentError::internal_message("status unavailable"));
         }
         Ok(self.status.clone())
+    }
+
+    async fn harness_id(
+        &self,
+        _team_id: Uuid,
+        _computer_id: Uuid,
+    ) -> Result<Option<harness_id::HarnessId>, TeamAgentError> {
+        if self.unavailable {
+            return Err(TeamAgentError::NotFound);
+        }
+        Ok(*self.harness_id.lock().expect("harness"))
     }
 
     async fn persona(&self, _team_id: Uuid, _computer_id: Uuid) -> Result<Persona, TeamAgentError> {
@@ -560,6 +572,7 @@ fn build(setup: Setup) -> (Service, Arc<Journal>) {
             interval: setup.computer_interval,
             status: setup.computer_status,
             unavailable: false,
+            harness_id: Mutex::new(None),
         },
         FakeRepos {
             journal: journal.clone(),
@@ -1856,3 +1869,5 @@ async fn purchase_status_outage_stays_provisioning_and_recovers() {
 }
 
 mod rollout;
+
+mod discovery;

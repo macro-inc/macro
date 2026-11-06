@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type HarnessOwnerOneOfThreeType =
-  (typeof HarnessOwnerOneOfThreeType)[keyof typeof HarnessOwnerOneOfThreeType];
+export type HarnessResidentOneOfFiveType =
+  (typeof HarnessResidentOneOfFiveType)[keyof typeof HarnessResidentOneOfFiveType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const HarnessOwnerOneOfThreeType = {
-  team: 'team',
+export const HarnessResidentOneOfFiveType = {
+  account: 'account',
 } as const;

@@ -1,3 +1,5 @@
+use crate::domain::models::TeamAgentComputer;
+use entity_access::domain::models::MemberTeamRole;
 use std::sync::{Arc, Mutex};
 
 use axum::{
@@ -68,6 +70,22 @@ impl FakeService {
 }
 
 impl TeamAgentService for FakeService {
+    async fn computer(
+        &self,
+        receipt: EntityAccessReceipt<MemberTeamRole>,
+        _agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<TeamAgentComputer, TeamAgentError> {
+        if self.admin_disabled {
+            return Err(TeamAgentError::NotEnabled);
+        }
+        self.record(format!("computer {}", receipt.entity().entity_id));
+        Ok(TeamAgentComputer {
+            computer_id: uuid::Uuid::from_u128(0x40),
+            harness_id: None,
+            is_agent_computer: true,
+        })
+    }
+
     async fn sizes(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -723,4 +741,34 @@ async fn disabled_admin_service_denials_are_forbidden_on_every_admin_route() {
         .await
         .expect("response");
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn teammates_can_discover_agent_computers_but_cannot_list_admin_details() {
+    let service = Arc::new(FakeService::default());
+    let response = router(service.clone(), TeamRole::Member)
+        .oneshot(
+            Request::get("/macro%7Csam%40agents.example.com/computer")
+                .header(header::AUTHORIZATION, "Bearer admin")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body_text(response).await).unwrap();
+    assert_eq!(body["isAgentComputer"], true);
+    assert!(body["harnessId"].is_null());
+    assert!(body.get("email").is_none());
+    let response = router(service.clone(), TeamRole::Member)
+        .oneshot(
+            Request::get("/")
+                .header(header::AUTHORIZATION, "Bearer admin")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(service.calls.lock().unwrap().len(), 1);
 }

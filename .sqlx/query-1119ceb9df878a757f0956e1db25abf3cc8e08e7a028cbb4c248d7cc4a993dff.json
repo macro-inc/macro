@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(c.team_id, a.team_id) AS \"team_id!\", a.user_id AS \"agent_user_id?\"\n            FROM harnesses h\n            LEFT JOIN hosted_runtime c ON c.id = h.computer_id\n            LEFT JOIN LATERAL (\n                SELECT user_id, team_id FROM team_agents\n                WHERE computer_id = h.computer_id ORDER BY user_id LIMIT 1\n            ) a ON true\n            WHERE h.id = $1 AND harness_is_agent_computer(h.id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "agent_user_id?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "1119ceb9df878a757f0956e1db25abf3cc8e08e7a028cbb4c248d7cc4a993dff"
+}

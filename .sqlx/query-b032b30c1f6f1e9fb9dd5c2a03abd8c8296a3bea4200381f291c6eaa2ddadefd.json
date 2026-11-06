@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.team_id FROM harnesses h JOIN hosted_runtime c ON c.id = h.computer_id WHERE h.id = $1 AND h.deleted_at IS NULL AND harness_is_agent_computer(h.id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b032b30c1f6f1e9fb9dd5c2a03abd8c8296a3bea4200381f291c6eaa2ddadefd"
+}

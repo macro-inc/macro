@@ -1,9 +1,12 @@
+mod agent_computers;
+
 use chrono::Duration;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 use super::*;
 use crate::domain::tokens;
 
+const TEAMMATE_ID: &str = "macro|teammate@example.com";
 const OWNER_ID: &str = "macro|harness-repo@example.com";
 
 fn caller() -> MacroUserIdStr<'static> {
@@ -61,6 +64,7 @@ fn new_harness() -> NewHarness {
             user_id: OWNER_ID.to_owned(),
         },
         created_by: caller(),
+        team_grant: None,
         computer_id: None,
     }
 }
@@ -203,15 +207,17 @@ async fn visibility_spans_own_and_team_harnesses(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    sqlx::query!(
-        r#"
-        INSERT INTO harnesses (id, name, team_id, created_by)
-        VALUES ($1, 'teams', $2, 'macro|teammate@example.com')
-        "#,
+    let shared = sqlx::query_scalar!(
+        r#"INSERT INTO harnesses (id, name, owner_user_id, created_by)
+        VALUES ($1, 'teams', 'macro|teammate@example.com', 'macro|teammate@example.com') RETURNING id"#,
         Uuid::new_v4(),
+    ).fetch_one(&pool).await.unwrap();
+    repo.set_team_access(
+        HarnessId::new_from_uuid(shared),
         team_id,
+        HarnessTeamAccess::User,
+        true,
     )
-    .execute(&pool)
     .await
     .unwrap();
 
@@ -228,13 +234,13 @@ async fn visibility_spans_own_and_team_harnesses(pool: PgPool) {
     .await
     .unwrap();
 
-    let visible = repo.list_visible_harnesses(caller()).await.unwrap();
+    let visible = repo.list_usable_harnesses(caller()).await.unwrap();
     let mut names: Vec<_> = visible.iter().map(|h| h.name.as_str()).collect();
     names.sort_unstable();
     assert_eq!(names, ["mine", "teams"]);
 
     assert!(repo.user_has_team(caller(), team_id).await.unwrap());
-    assert!(!repo.user_owns_team(caller(), team_id).await.unwrap());
+    assert!(repo.user_owns_team(caller(), team_id).await.unwrap());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -361,7 +367,7 @@ async fn connected_state_follows_connection_leases_over_timestamps(pool: PgPool)
     // A crashed replica writes no disconnect; the lapsed lease is what ends it.
     let harness = repo.get_harness(harness_id).await.unwrap().unwrap();
     assert!(!harness.connected);
-    let listed = repo.list_visible_harnesses(caller()).await.unwrap();
+    let listed = repo.list_usable_harnesses(caller()).await.unwrap();
     assert!(!listed.iter().any(|harness| harness.connected));
 }
 
@@ -579,7 +585,7 @@ async fn permission_bypass_survives_registration_and_listing(pool: PgPool) {
                 .allow_permission_bypass,
             allowed
         );
-        let listed = repo.list_visible_harnesses(caller()).await.unwrap();
+        let listed = repo.list_usable_harnesses(caller()).await.unwrap();
         assert_eq!(
             listed
                 .iter()
@@ -662,7 +668,13 @@ fn hosted_harness(team_id: Uuid, computer_id: Uuid) -> NewHarness {
         allow_permission_bypass: false,
         id: HarnessId::new_from_uuid(Uuid::new_v4()),
         name: "Standard computer".to_owned(),
-        owner: HarnessOwner::Team { team_id },
+        owner: HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        },
+        team_grant: Some(crate::domain::models::HarnessTeamGrant {
+            team_id,
+            access: HarnessTeamAccess::User,
+        }),
         created_by: caller(),
         computer_id: Some(computer_id),
     }
@@ -692,7 +704,12 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         .unwrap();
     assert_eq!(created, HostedPairingUpsert::Created);
     let row = repo.get_harness(harness_id).await.unwrap().unwrap();
-    assert_eq!(row.owner, HarnessOwner::Team { team_id });
+    assert_eq!(
+        row.owner,
+        HarnessOwner::User {
+            user_id: OWNER_ID.to_owned()
+        }
+    );
     assert_eq!(row.computer_id, Some(computer_id));
     assert_eq!(
         row.capabilities,
@@ -735,7 +752,12 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         .unwrap();
     assert_eq!(renamed.name, "Renamed computer");
     assert!(renamed.allow_permission_bypass);
-    assert_eq!(renamed.owner, HarnessOwner::Team { team_id });
+    assert_eq!(
+        renamed.owner,
+        HarnessOwner::User {
+            user_id: OWNER_ID.to_owned()
+        }
+    );
     assert_eq!(renamed.computer_id, Some(computer_id));
     assert_eq!(
         renamed.capabilities,
@@ -999,5 +1021,250 @@ async fn capabilities_replace_the_previous_report(pool: PgPool) {
             )
             .await
             .unwrap()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn connected_state_follows_the_presence_timestamps(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    let harness_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO harnesses (id, name, owner_user_id, created_by, last_connected_at)
+        VALUES ($1, 'mine', $2, $2, now())
+        "#,
+        harness_id,
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let harness_id = HarnessId::new_from_uuid(harness_id);
+
+    let harness = repo.get_harness(harness_id).await.unwrap().unwrap();
+    assert!(harness.connected);
+
+    sqlx::query!(r#"UPDATE harnesses SET last_disconnected_at = now() + interval '1 second'"#)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let harness = repo.get_harness(harness_id).await.unwrap().unwrap();
+    assert!(!harness.connected);
+}
+
+async fn team_of(pool: &PgPool, members: &[&str]) -> Uuid {
+    let team_id = Uuid::new_v4();
+    for member in members {
+        insert_user(pool, member).await;
+    }
+    sqlx::query!(
+        r#"INSERT INTO team (id, name, owner_id) VALUES ($1, 'Team', $2)"#,
+        team_id,
+        members[0],
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    for member in members {
+        sqlx::query!(
+            r#"
+            INSERT INTO team_user (user_id, team_id, team_role)
+            VALUES ($1, $2, 'member'::team_role)
+            "#,
+            member,
+            team_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    team_id
+}
+
+async fn private_harness(pool: &PgPool, owner: &str) -> HarnessId {
+    let id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO harnesses (id, name, owner_user_id, created_by)
+        VALUES ($1, 'box', $2, $2)
+        "#,
+        id,
+        owner,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    HarnessId::new_from_uuid(id)
+}
+
+async fn grant_directly(pool: &PgPool, harness: HarnessId, user: &str) {
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'user', 'edit')
+        "#,
+        harness.as_uuid(),
+        user,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+fn user(id: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from(id.to_owned()).unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_directory_lists_teammates_runtimes_with_the_callers_access(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    team_of(&pool, &[OWNER_ID, TEAMMATE_ID]).await;
+    let harness = private_harness(&pool, TEAMMATE_ID).await;
+    private_harness(&pool, "macro|stranger@example.com").await;
+
+    let directory = repo.list_directory_harnesses(user(OWNER_ID)).await.unwrap();
+    assert_eq!(directory.len(), 1, "a stranger's runtime stays out of it");
+    assert_eq!(directory[0].id, harness);
+    assert_eq!(directory[0].access, HarnessAccess::None);
+    assert!(
+        repo.list_usable_harnesses(user(OWNER_ID))
+            .await
+            .unwrap()
+            .is_empty(),
+        "seeing a runtime is not being able to use it"
+    );
+
+    grant_directly(&pool, harness, OWNER_ID).await;
+    let usable = repo.list_usable_harnesses(user(OWNER_ID)).await.unwrap();
+    assert_eq!(usable[0].access, HarnessAccess::User);
+    assert_eq!(
+        repo.list_usable_harnesses(user(TEAMMATE_ID)).await.unwrap()[0].access,
+        HarnessAccess::Owner
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_direct_grant_lasts_only_while_its_holder_shares_a_team_with_the_owner(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    let team_id = team_of(&pool, &[OWNER_ID, TEAMMATE_ID]).await;
+    let harness = private_harness(&pool, TEAMMATE_ID).await;
+    grant_directly(&pool, harness, OWNER_ID).await;
+    assert_eq!(
+        repo.harness_access(harness, user(OWNER_ID)).await.unwrap(),
+        HarnessAccess::User
+    );
+
+    sqlx::query!(
+        "DELETE FROM team_user WHERE user_id = $1 AND team_id = $2",
+        OWNER_ID,
+        team_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.harness_access(harness, user(OWNER_ID)).await.unwrap(),
+        HarnessAccess::None
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn closing_a_runtime_to_a_team_ends_its_members_access(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    let team_id = team_of(&pool, &[OWNER_ID, TEAMMATE_ID]).await;
+    let harness = private_harness(&pool, TEAMMATE_ID).await;
+
+    repo.set_team_access(harness, team_id, HarnessTeamAccess::User, true)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.get_harness(harness)
+            .await
+            .unwrap()
+            .unwrap()
+            .shared_team_ids,
+        [team_id]
+    );
+    assert_eq!(
+        repo.harness_access(harness, user(OWNER_ID)).await.unwrap(),
+        HarnessAccess::User
+    );
+
+    repo.set_team_access(harness, team_id, HarnessTeamAccess::User, false)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.harness_access(harness, user(OWNER_ID)).await.unwrap(),
+        HarnessAccess::None
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn approving_for_a_team_keeps_a_person_as_owner_and_grants_the_team(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    let team_id = team_of(&pool, &[OWNER_ID, TEAMMATE_ID]).await;
+    let code = "KX7M-4QHD";
+    repo.insert_pairing(new_pairing(code, "secret"))
+        .await
+        .unwrap();
+
+    let mut registration = new_harness();
+    registration.team_grant = Some(crate::domain::models::HarnessTeamGrant {
+        team_id,
+        access: HarnessTeamAccess::User,
+    });
+    let harness = repo
+        .approve_pairing(code, registration)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        harness.owner,
+        HarnessOwner::User {
+            user_id: OWNER_ID.to_owned()
+        }
+    );
+    assert_eq!(harness.shared_team_ids, [team_id]);
+    assert_eq!(
+        repo.harness_access(harness.id, user(TEAMMATE_ID))
+            .await
+            .unwrap(),
+        HarnessAccess::User
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reader_sees_a_runtime_but_cannot_run_on_it(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    team_of(&pool, &[OWNER_ID, TEAMMATE_ID]).await;
+    let harness = private_harness(&pool, TEAMMATE_ID).await;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'user', 'view')
+        "#,
+        harness.as_uuid(),
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.harness_access(harness, user(OWNER_ID)).await.unwrap(),
+        HarnessAccess::Read
+    );
+    assert!(
+        repo.list_usable_harnesses(user(OWNER_ID))
+            .await
+            .unwrap()
+            .is_empty(),
+        "a reader cannot pick it to run agents on"
+    );
+    assert_eq!(
+        repo.list_directory_harnesses(user(OWNER_ID)).await.unwrap()[0].access,
+        HarnessAccess::Read
     );
 }

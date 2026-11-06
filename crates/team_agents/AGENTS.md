@@ -81,6 +81,11 @@ brain gateway and git access never consult this rollout policy.
 
 ## Scope
 
+- `GET /team_agents/{agent_user_id}/computer` permits rollout-enabled teammates
+  to discover only their team's bound computer and nullable harness ID, with
+  `isAgentComputer: true`. It returns no profile, billing or bootstrap details
+  and grants no runtime access; the administrator roster stays admin-only.
+
 - Owns: the `team_agents` table, agent account creation and deletion, the
   persona sent to the computer, agent email.
 - Not here: membership and seat pricing → `crates/teams`; computers →

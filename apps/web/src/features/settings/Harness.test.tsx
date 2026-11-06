@@ -2,6 +2,9 @@ const codexAccess = vi.hoisted(() => ({ enabled: true }));
 vi.mock('@core/codex/flag', () => ({
   useCodexAgentsAccess: () => () => codexAccess.enabled,
 }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
+}));
 
 /**
  * @vitest-environment jsdom
@@ -153,8 +156,15 @@ vi.mock('@queries/harnesses/harnesses', () => ({
   invalidateHarnesses: vi.fn(),
 }));
 
+vi.mock('@app/features/access-requests/access-requests', () => ({
+  useShareRequests: () => ({
+    state: () => ({ pendingCount: 2 }),
+  }),
+}));
+
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({ data: { team: { id: 'team-1' } } }),
+  useIsTeamOwner: () => () => false,
 }));
 
 vi.mock('@solidjs/router', () => ({
@@ -176,7 +186,9 @@ const REGISTERED_HARNESS = {
   allow_permission_bypass: false,
   kind: 'macrod',
   name: 'Dev box',
-  owner: { type: 'team', team_id: 'team-1' },
+  owner: { type: 'user', user_id: 'macro|teammate@example.com' },
+  access: 'user',
+  shared_team_ids: ['team-1'],
   created_by: 'macro|user@example.com',
   created_at: '2026-08-27T12:00:00Z',
   updated_at: '2026-08-27T12:00:00Z',
@@ -421,7 +433,7 @@ describe('Harness', () => {
       screen.getByRole('heading', { name: 'Connected runtimes' })
     ).toBeTruthy();
     expect(screen.getByText('Dev box')).toBeTruthy();
-    expect(screen.getByText('Team')).toBeTruthy();
+    expect(screen.getByText('Team machine')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
     expect(screen.getByText(/Last connected /)).toBeTruthy();
     expect(screen.queryByText('Never connected')).toBeNull();
@@ -433,6 +445,7 @@ describe('Harness', () => {
       id: 'harness-offline',
       name: 'Old laptop',
       owner: { type: 'user' as const, user_id: 'macro|user@example.com' },
+      shared_team_ids: [],
       connected: false,
       last_connected_at: null,
     };
@@ -466,8 +479,29 @@ describe('Harness', () => {
     expect(screen.queryByText('Dev box')).toBeNull();
   });
 
-  it('confirms before removing a harness', async () => {
+  it('offers Share and Remove only to the runtime owner', () => {
     harnessMocks.query.data = [REGISTERED_HARNESS];
+    const { unmount } = render(() => <Harness />);
+    expect(screen.queryByRole('button', { name: /^Share/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Rename' })).toBeNull();
+    expect(
+      screen.getByRole('switch', {
+        name: 'Allow bypassing permission requests',
+      })
+    ).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+    unmount();
+
+    harnessMocks.query.data = [{ ...REGISTERED_HARNESS, access: 'owner' }];
+    render(() => <Harness />);
+    expect(
+      screen.getByRole('button', { name: 'Share, 2 access requests' })
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
+  });
+
+  it('confirms before removing a harness', async () => {
+    harnessMocks.query.data = [{ ...REGISTERED_HARNESS, access: 'owner' }];
 
     render(() => <Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
@@ -493,7 +527,7 @@ describe('Harness', () => {
   });
 
   it('allows permission bypass on a paired runtime after confirming', async () => {
-    harnessMocks.query.data = [REGISTERED_HARNESS];
+    harnessMocks.query.data = [{ ...REGISTERED_HARNESS, access: 'owner' }];
 
     render(() => <Harness />);
     const toggle = screen.getByRole('switch', {
@@ -516,7 +550,7 @@ describe('Harness', () => {
   it('withdraws permission bypass without confirming', async () => {
     const { confirmDialog } = await import('@ui');
     harnessMocks.query.data = [
-      { ...REGISTERED_HARNESS, allow_permission_bypass: true },
+      { ...REGISTERED_HARNESS, access: 'owner', allow_permission_bypass: true },
     ];
 
     render(() => <Harness />);
@@ -536,7 +570,7 @@ describe('Harness', () => {
   });
 
   it('renames a paired runtime', async () => {
-    harnessMocks.query.data = [REGISTERED_HARNESS];
+    harnessMocks.query.data = [{ ...REGISTERED_HARNESS, access: 'owner' }];
 
     render(() => <Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Rename' }));

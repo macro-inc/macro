@@ -22,26 +22,30 @@ async fn seed(pool: &PgPool) -> Uuid {
     let macro_user_id = Uuid::now_v7();
     let team_id = Uuid::now_v7();
 
-    sqlx::query(
+    sqlx::query!(
         r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)"#,
+        macro_user_id,
+        ADMIN
     )
-    .bind(macro_user_id)
-    .bind(ADMIN)
     .execute(pool)
     .await
     .expect("macro_user should insert");
-    sqlx::query(r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#)
-        .bind(ADMIN)
-        .bind(macro_user_id)
-        .execute(pool)
-        .await
-        .expect("user should insert");
-    sqlx::query(r#"INSERT INTO team (id, name, owner_id) VALUES ($1, 'Acme', $2)"#)
-        .bind(team_id)
-        .bind(ADMIN)
-        .execute(pool)
-        .await
-        .expect("team should insert");
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#,
+        ADMIN,
+        macro_user_id
+    )
+    .execute(pool)
+    .await
+    .expect("user should insert");
+    sqlx::query!(
+        r#"INSERT INTO team (id, name, owner_id) VALUES ($1, 'Acme', $2)"#,
+        team_id,
+        ADMIN
+    )
+    .execute(pool)
+    .await
+    .expect("team should insert");
 
     team_id
 }
@@ -92,11 +96,11 @@ async fn a_created_agent_reads_back_and_tracks_its_computer(pool: PgPool) {
     assert_eq!(agent.computer_id, None);
     assert_eq!(agent.status, TeamAgentStatus::Provisioning);
 
-    let is_agent: bool = sqlx::query_scalar(r#"SELECT "isAgent" FROM "User" WHERE id = $1"#)
-        .bind(AGENT)
-        .fetch_one(&pool)
-        .await
-        .expect("user row");
+    let is_agent: bool =
+        sqlx::query_scalar!(r#"SELECT "isAgent" FROM "User" WHERE id = $1"#, AGENT)
+            .fetch_one(&pool)
+            .await
+            .expect("user row");
     assert!(is_agent, "the account is marked as an agent");
 
     repo.set_computer(&user(AGENT), computer_id)
@@ -156,17 +160,20 @@ async fn deleting_the_account_removes_every_row(pool: PgPool) {
         .await
         .expect("account should be deleted");
 
-    let users: i64 = sqlx::query_scalar(r#"SELECT COUNT(*) FROM "User" WHERE id = $1"#)
-        .bind(AGENT)
-        .fetch_one(&pool)
-        .await
-        .expect("count users");
-    let macro_users: i64 =
-        sqlx::query_scalar(r#"SELECT COUNT(*) FROM macro_user WHERE username = $1"#)
-            .bind(AGENT)
-            .fetch_one(&pool)
-            .await
-            .expect("count macro users");
+    let users: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM "User" WHERE id = $1"#,
+        AGENT
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count users");
+    let macro_users: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM macro_user WHERE username = $1"#,
+        AGENT
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count macro users");
     assert_eq!((users, macro_users), (0, 0));
     assert_eq!(repo.get(&user(AGENT)).await.expect("get"), None);
 }
@@ -176,11 +183,13 @@ async fn legacy_agents_have_no_recovery_seed(pool: PgPool) {
     let team_id = seed(&pool).await;
     let repo = PgTeamAgentsRepo::new(pool.clone());
     repo.create_account(&account(team_id)).await.unwrap();
-    sqlx::query("UPDATE team_agents SET persona_seed = NULL WHERE user_id = $1")
-        .bind(AGENT)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query!(
+        "UPDATE team_agents SET persona_seed = NULL WHERE user_id = $1",
+        AGENT
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     assert_eq!(repo.persona_seed(&user(AGENT)).await.unwrap(), None);
     assert!(repo.get(&user(AGENT)).await.unwrap().is_some());
 }

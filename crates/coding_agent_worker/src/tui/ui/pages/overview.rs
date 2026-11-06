@@ -1,4 +1,3 @@
-use harnesses::domain::models::HarnessOwner;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize as _};
@@ -18,9 +17,10 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
     let mut lines: Vec<Line> = Vec::new();
     match &app.snapshot.harness {
         Some(harness) => {
-            let scope = match &harness.owner {
-                HarnessOwner::User { .. } => Span::styled("private", Style::new().fg(WARN)),
-                HarnessOwner::Team { .. } => Span::styled("team", Style::new().fg(ACCENT)),
+            let scope = if harness.shared_team_ids.is_empty() {
+                Span::styled("private", Style::new().fg(WARN))
+            } else {
+                Span::styled("team", Style::new().fg(ACCENT))
             };
             lines.push(field(
                 "Name",

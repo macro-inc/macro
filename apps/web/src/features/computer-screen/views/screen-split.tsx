@@ -2,17 +2,24 @@ import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { Resize } from '@core/component/Resize';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { createSignal, type ParentProps, Show } from 'solid-js';
+import { createSignal, type JSX, type ParentProps, Show } from 'solid-js';
 import type { ConnectScreen } from '../context/screen-context';
 import { useScreen } from '../context/screen-context';
 import { ScreenPane } from './screen-pane';
 
-export function ScreenSplit(props: ParentProps<{ connect: ConnectScreen }>) {
+export function ScreenSplit(
+  props: ParentProps<{
+    connect: ConnectScreen;
+    pane?: JSX.Element;
+    takeover?: boolean;
+  }>
+) {
   const screen = useScreen();
   const [root, setRoot] = createSignal<HTMLDivElement>();
   const size = createElementSize(root);
   const visible = () => screen.available() && screen.open();
-  const takeover = () => screen.host.mobile() || (size.width ?? 0) < 760;
+  const takeover = () =>
+    props.takeover || screen.host.mobile() || (size.width ?? 0) < 760;
   return (
     <div
       ref={setRoot}
@@ -37,7 +44,7 @@ export function ScreenSplit(props: ParentProps<{ connect: ConnectScreen }>) {
         </Resize.Panel>
         <Show when={visible() && !takeover()}>
           <Resize.Panel id="screen-pane" index={1} minSize={360} target={50}>
-            <ScreenPane connect={props.connect} />
+            {props.pane ?? <ScreenPane connect={props.connect} />}
           </Resize.Panel>
         </Show>
       </Resize.Zone>
@@ -55,7 +62,7 @@ export function ScreenSplit(props: ParentProps<{ connect: ConnectScreen }>) {
               <span />
             </FloatRegion>
           </Show>
-          <ScreenPane connect={props.connect} />
+          {props.pane ?? <ScreenPane connect={props.connect} />}
         </div>
       </Show>
     </div>

@@ -20,7 +20,6 @@ outbound = [
   "dep:agent_secrets",
   "hosted_runtimes/ports",
   "dep:harnesses",
-  "dep:harness_id",
   "dep:reqwest",
   "dep:sqlx",
   "dep:teams",
@@ -39,7 +38,7 @@ lazy-regex = { workspace = true }
 feature_flags = { path = "../feature_flags" }
 hosted_runtimes = { path = "../hosted_runtimes", default-features = false }
 harnesses = { path = "../harnesses", optional = true, default-features = false, features = ["ports"] }
-harness_id = { path = "../harness_id", optional = true }
+harness_id = { path = "../harness_id" }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response", optional = true }

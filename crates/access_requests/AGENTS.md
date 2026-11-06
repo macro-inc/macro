@@ -43,4 +43,11 @@ the durable notification/realtime dispatcher.
   and preserves the deadline. Approval clears it for a further upgrade, while
   denial replaces it with the 24-hour cooldown.
 
+- Ordinary harness requests and grants stay within the human owner's team.
+  Agent computers use their own team instead: their human owner and team
+  administrators review, while their assigned agent never reviews. State,
+  submissions, approvals and direct grants expose/accept only View on agent
+  computers, classified by `harness_is_agent_computer` even while one of the
+  persona/account links is missing. Human sessions are required to decide;
+  API credentials may request access but never approve it.
 - `ShareEntityType::ExternalChat` uses the generic direct-access/request workflow; viewing requires no provider account.

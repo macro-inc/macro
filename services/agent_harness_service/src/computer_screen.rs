@@ -10,10 +10,11 @@
 //! `screen_open` (`GET /harnesses/me/screen?stream=`). The load balancer
 //! may land them on different replicas, so their bytes always cross Redis
 //! (`agent-harness.screen.<stream_id>.up|down`), never an in-process shortcut.
-//! A viewer without manage rights cannot connect with `control=true`; one
+//! A viewer without use rights cannot connect with `control=true`; one
 //! without it gets view-only: [`rfb::ClientFilter`] drops keyboard, pointer,
 //! clipboard and desktop-resize messages before they leave this process.
 
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -28,7 +29,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures::{SinkExt as _, StreamExt as _};
 use harness_id::HarnessId;
-use harnesses::domain::models::{ClaudeMode, HarnessAccess};
+use harnesses::domain::models::{ClaudeMode, HarnessPermission};
 use harnesses::domain::ports::{HarnessError, HarnessService};
 use macro_authorization::{
     HarnessOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
@@ -52,6 +53,9 @@ const FIRST_FRAME_TIMEOUT: Duration = Duration::from_secs(20);
 const STREAM_BINDING_SECONDS: u64 = 120;
 /// Keep static desktops alive through the websocket load balancer.
 const SCREEN_PING_INTERVAL: Duration = Duration::from_secs(20);
+/// Bound the lifetime of permissions on an already-open viewer socket.
+const VIEWER_ACCESS_INTERVAL: Duration = Duration::from_secs(5);
+const VIEWER_ACCESS_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// State for the computer routes.
 pub struct ComputerScreenState<Harnesses, Auth> {
@@ -168,7 +172,7 @@ pub struct ClaudeModeResponse {
 /// `GET /harnesses/{harness_id}/screen` query.
 #[derive(Debug, Default, serde::Deserialize)]
 pub struct ViewerQuery {
-    /// Ask to send keyboard and pointer input; needs manage rights.
+    /// Ask to send keyboard and pointer input; needs use rights.
     #[serde(default)]
     control: bool,
 }
@@ -202,7 +206,7 @@ where
     Auth: MacroAuthorizationService,
 {
     state
-        .authorize_computer(caller, path.harness_id, HarnessAccess::Manage)
+        .authorize_computer(caller, path.harness_id, HarnessPermission::Manage)
         .await?;
     let account_change = bus::AccountChange::claim(&state.redis, path.harness_id).await?;
     let result = match state
@@ -241,7 +245,7 @@ where
     Auth: MacroAuthorizationService,
 {
     state
-        .authorize_computer(caller, path.harness_id, HarnessAccess::Manage)
+        .authorize_computer(caller, path.harness_id, HarnessPermission::Manage)
         .await?;
     let account_change = bus::AccountChange::claim(&state.redis, path.harness_id).await?;
     let result = match state
@@ -287,7 +291,7 @@ where
     Auth: MacroAuthorizationService,
 {
     state
-        .authorize_computer(caller, path.harness_id, HarnessAccess::Manage)
+        .authorize_computer(caller, path.harness_id, HarnessPermission::Manage)
         .await?;
     let account_change = bus::AccountChange::claim(&state.redis, path.harness_id).await?;
     let result = match state
@@ -329,7 +333,7 @@ where
     Auth: MacroAuthorizationService,
 {
     let harness = state
-        .authorize_computer(caller, path.harness_id, HarnessAccess::Manage)
+        .authorize_computer(caller, path.harness_id, HarnessPermission::Manage)
         .await?;
     Ok(Json(ClaudeModeResponse {
         mode: harness.claude_mode,
@@ -337,7 +341,7 @@ where
 }
 
 /// The viewer's side of a screen stream: RFB over a binary websocket, for
-/// noVNC. `control=true` needs manage rights; without it input is dropped.
+/// noVNC. `control=true` needs use rights; without it input is dropped.
 pub async fn viewer_screen_handler<Harnesses, Auth>(
     State(state): State<ComputerScreenState<Harnesses, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -350,12 +354,14 @@ where
     Auth: MacroAuthorizationService,
 {
     let access = if query.control {
-        HarnessAccess::Manage
+        HarnessPermission::Use
     } else {
-        HarnessAccess::View
+        HarnessPermission::View
     };
+    let viewer = caller.authorization.user.macro_user_id;
     let harness = state
-        .authorize_computer(caller, path.harness_id, access)
+        .harnesses
+        .authorize_harness(viewer.clone(), path.harness_id, access)
         .await?;
     if !harness.capabilities.screen {
         return Err(ComputerRouteError::Conflict(
@@ -394,9 +400,19 @@ where
     } else {
         rfb::ClientFilter::view_only()
     };
-    Ok(upgrade
-        .protocols(["binary"])
-        .on_upgrade(move |socket| relay_viewer(socket, relay, filter).instrument(span)))
+    let reauthorize = move || {
+        let harnesses = Arc::clone(&state.harnesses);
+        let viewer = viewer.clone();
+        async move {
+            harnesses
+                .authorize_harness(viewer, path.harness_id, access)
+                .await
+                .map(|_| ())
+        }
+    };
+    Ok(upgrade.protocols(["binary"]).on_upgrade(move |socket| {
+        relay_viewer(socket, relay, filter, reauthorize).instrument(span)
+    }))
 }
 
 /// macrod's side of a screen stream it was asked to open.
@@ -415,7 +431,29 @@ where
     Ok(upgrade.on_upgrade(move |socket| relay_computer(socket, relay)))
 }
 
-async fn relay_viewer(socket: WebSocket, relay: bus::ScreenRelay, mut filter: rfb::ClientFilter) {
+/// Renew through the shared domain authorization policy, failing closed on
+/// an outage. Forwarding stays paused while this future is awaited.
+async fn renew_viewer_access<F, Fut>(authorize: &F) -> Result<(), &'static str>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<(), HarnessError>>,
+{
+    match tokio::time::timeout(VIEWER_ACCESS_TIMEOUT, authorize()).await {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(_)) => Err("access_revoked"),
+        Err(_) => Err("authorization_timeout"),
+    }
+}
+
+async fn relay_viewer<F, Fut>(
+    socket: WebSocket,
+    relay: bus::ScreenRelay,
+    mut filter: rfb::ClientFilter,
+    reauthorize: F,
+) where
+    F: Fn() -> Fut + Send + 'static,
+    Fut: Future<Output = Result<(), HarnessError>> + Send,
+{
     let (mut sender, mut receiver) = socket.split();
     let bus::ScreenRelay {
         mut publisher,
@@ -428,8 +466,19 @@ async fn relay_viewer(socket: WebSocket, relay: bus::ScreenRelay, mut filter: rf
     let mut first_frame = Box::pin(tokio::time::sleep(FIRST_FRAME_TIMEOUT));
     let mut ping = tokio::time::interval(SCREEN_PING_INTERVAL);
     ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut access_interval = tokio::time::interval(VIEWER_ACCESS_INTERVAL);
+    access_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let outcome = loop {
         tokio::select! {
+            biased;
+            _ = access_interval.tick() => {
+                // Forward neither video nor input while a renewal is pending.
+                // A control downgrade closes this socket; reconnecting creates
+                // a fresh view-only RFB filter and handshake.
+                if let Err(outcome) = renew_viewer_access(&reauthorize).await {
+                    break outcome;
+                }
+            },
             () = &mut first_frame, if to_viewer == 0 => break "computer_never_connected",
             _ = ping.tick() => {
                 if sender.send(Message::Ping(Default::default())).await.is_err() {
@@ -540,7 +589,7 @@ where
         &self,
         caller: MacroAuthorizationExtractor<Auth, UserOrInternal>,
         harness_id: HarnessId,
-        access: HarnessAccess,
+        access: HarnessPermission,
     ) -> Result<harnesses::domain::models::Harness, ComputerRouteError> {
         let harness = self
             .harnesses

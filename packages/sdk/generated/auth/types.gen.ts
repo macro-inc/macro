@@ -1452,6 +1452,11 @@ export type InviteEntry = {
  */
 export type InviteToTeamRequest = {
     /**
+     * Runtimes the caller owns to share with each person who accepts. Others
+     * are ignored. Honored only from the caller's own session.
+     */
+    harness_ids?: Array<string>;
+    /**
      * The invites to send, each with an email and tier
      */
     invites: Array<InviteEntry>;
@@ -2481,6 +2486,24 @@ export type TeamAgent = {
      * The agent's Macro user id (`macro|<email>`).
      */
     userId: string;
+};
+
+/**
+ * Minimal own-team discovery; this conveys no runtime permission.
+ */
+export type TeamAgentComputer = {
+    /**
+     * Computer bound to the requested agent account.
+     */
+    computerId: string;
+    /**
+     * Paired runtime, absent until enrollment establishes it.
+     */
+    harnessId?: string | null;
+    /**
+     * Always true: a bound team-agent account classifies its computer as an agent computer.
+     */
+    isAgentComputer: boolean;
 };
 
 /**
@@ -5652,6 +5675,34 @@ export type DeleteTeamAgentResponses = {
 };
 
 export type DeleteTeamAgentResponse = DeleteTeamAgentResponses[keyof DeleteTeamAgentResponses];
+
+export type GetTeamAgentComputerData = {
+    body?: never;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/computer';
+};
+
+export type GetTeamAgentComputerErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetTeamAgentComputerError = GetTeamAgentComputerErrors[keyof GetTeamAgentComputerErrors];
+
+export type GetTeamAgentComputerResponses = {
+    200: TeamAgentComputer;
+};
+
+export type GetTeamAgentComputerResponse = GetTeamAgentComputerResponses[keyof GetTeamAgentComputerResponses];
 
 export type RetryTeamAgentData = {
     body?: never;

@@ -132,6 +132,7 @@ import type {
   SystemStatusHistory,
   Team,
   TeamAgent,
+  TeamAgentComputer,
   TeamAgentConflict,
   TeamAgentFailure,
   TeamAgentQuote,
@@ -7541,6 +7542,82 @@ export const deleteTeamAgent = async (
     status: res.status,
     headers: res.headers,
   } as deleteTeamAgentResponse;
+};
+
+/**
+ * @summary Minimal own-team computer discovery; does not grant runtime access.
+ */
+export type getTeamAgentComputerResponse200 = {
+  data: TeamAgentComputer;
+  status: 200;
+};
+
+export type getTeamAgentComputerResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getTeamAgentComputerResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamAgentComputerResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getTeamAgentComputerResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getTeamAgentComputerResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamAgentComputerResponseSuccess =
+  getTeamAgentComputerResponse200 & {
+    headers: Headers;
+  };
+export type getTeamAgentComputerResponseError = (
+  | getTeamAgentComputerResponse400
+  | getTeamAgentComputerResponse401
+  | getTeamAgentComputerResponse403
+  | getTeamAgentComputerResponse404
+  | getTeamAgentComputerResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTeamAgentComputerResponse =
+  | getTeamAgentComputerResponseSuccess
+  | getTeamAgentComputerResponseError;
+
+export const getGetTeamAgentComputerUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/computer`;
+};
+
+export const getTeamAgentComputer = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<getTeamAgentComputerResponse> => {
+  const res = await fetch(getGetTeamAgentComputerUrl(agentUserId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamAgentComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamAgentComputerResponse;
 };
 
 /**

@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            source_id,\n            source_type::text AS \"source_type!\",\n            access_level AS \"access_level: _\",\n            granted_from_project_id,\n            created_at,\n            updated_at\n        FROM entity_access\n        WHERE entity_id = $1 AND entity_type = $2\n        ORDER BY source_type::text, source_id, granted_from_project_id NULLS FIRST\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "access_level: _",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "granted_from_project_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "bfe2aad9217b95d669f2a2155ad4d73f3b9b79af66cabd2a70b30792a6c3eedc"
+}

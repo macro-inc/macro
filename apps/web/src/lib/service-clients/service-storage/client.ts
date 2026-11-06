@@ -139,6 +139,8 @@ import type { GithubPullRequestTasksResponse } from './generated/schemas/githubP
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
+import type { Harness } from './generated/schemas/harness';
+import type { HarnessResident } from './generated/schemas/harnessResident';
 import type { ImportPage } from './generated/schemas/importPage';
 import type { ImportProgress } from './generated/schemas/importProgress';
 import type { Item } from './generated/schemas/item';
@@ -339,24 +341,9 @@ type WithBotId = { bot_id: string };
 type WithAgentId = { agent_id: string };
 type WithChannelId = { channel_id: string };
 
-/** Who owns a registered harness: the registering user or their team. */
-export type HarnessOwner =
-  | { type: 'user'; user_id: string }
-  | { type: 'team'; team_id: string };
-
-/** A macrod harness registered with the workspace. */
-export type Harness = {
-  allow_permission_bypass: boolean;
-  id: string;
-  kind: 'macrod';
-  name: string;
-  owner: HarnessOwner;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-  connected: boolean;
-  last_connected_at: string | null;
-};
+export type { Harness } from './generated/schemas/harness';
+export type { HarnessOwner } from './generated/schemas/harnessOwner';
+export type { HarnessResident } from './generated/schemas/harnessResident';
 
 /** A pending macrod pairing request, looked up by its printed code. */
 export type HarnessPairing = PairingDetails;
@@ -856,6 +843,34 @@ export const storageServiceClient = {
         method: 'GET',
       })
     ).map((result) => result);
+  },
+
+  async getHarnessDirectory() {
+    return (
+      await dssFetch<Harness[]>(`/harnesses/directory`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async getHarnessResidents(args: { harness_id: string }) {
+    return (
+      await dssFetch<HarnessResident[]>(
+        `/harnesses/${args.harness_id}/residents`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async setHarnessTeamAccess(args: {
+    harness_id: string;
+    team_id: string;
+    enabled: boolean;
+  }) {
+    return await dssFetch(`/harnesses/${args.harness_id}/team-access`, {
+      method: 'PUT',
+      body: JSON.stringify({ team_id: args.team_id, enabled: args.enabled }),
+    });
   },
 
   async getHarnessPairing(args: { code: string }) {

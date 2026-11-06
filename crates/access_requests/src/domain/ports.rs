@@ -13,6 +13,12 @@ pub trait RequestTransaction: Send {
         &mut self,
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<AccessRequest>, RequestError>> + Send;
+    /// Whether two people share a team.
+    fn shares_team(
+        &mut self,
+        a: &MacroUserIdStr<'_>,
+        b: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, RequestError>> + Send;
     /// An entity-scoped request identity.
     fn request(
         &mut self,

@@ -97,6 +97,15 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         is_agent: bool,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
+    /// Offer runtimes the inviter owns with their new invites, to grant when each
+    /// is accepted. Runtimes the inviter does not own are ignored.
+    fn offer_harnesses_with_invites(
+        &self,
+        invite_ids: &[uuid::Uuid],
+        invited_by: &MacroUserIdStr<'_>,
+        harness_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<(), InviteUsersToTeamError>> + Send;
+
     /// Compares the list of users you are trying to invite to ones already invited
     /// to return a list of emails who will be newly invited
     fn get_new_invites(
@@ -421,6 +430,15 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<stripe::SubscriptionId>, TeamError>> + Send;
+
+    /// Offer runtimes the inviter owns with their new invites, to grant when each
+    /// is accepted. Runtimes the inviter does not own are ignored.
+    fn offer_harnesses_with_invites(
+        &self,
+        invite_ids: &[uuid::Uuid],
+        invited_by: &MacroUserIdStr<'_>,
+        harness_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<(), InviteUsersToTeamError>> + Send;
 
     /// Invites users to a team
     /// This will also handle the teams subscription.

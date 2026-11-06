@@ -20,7 +20,7 @@ use agent_session::domain::model::AgentSessionId;
 use anyhow::Context;
 use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
-use harnesses::domain::models::CreateHostedPairing;
+use harnesses::domain::models::{CreateHostedPairing, HarnessTeamAccess};
 use harnesses::domain::ports::{HarnessError, HarnessService};
 use hosted_runtimes::domain::models::{Computer, ControlPlaneId, EnrollmentDefaults};
 use hosted_runtimes::domain::operator::{ComputerOperator, SessionActivity};
@@ -381,6 +381,11 @@ impl Harnesses for HostedHarnesses {
             .service
             .create_hosted_pairing(CreateHostedPairing {
                 team_id: computer.team_id,
+                team_access: if computer.persona.is_some() {
+                    HarnessTeamAccess::Read
+                } else {
+                    HarnessTeamAccess::User
+                },
                 name: computer.name.clone(),
                 created_by,
                 // The computer is the team's own isolated VM, run for agents.

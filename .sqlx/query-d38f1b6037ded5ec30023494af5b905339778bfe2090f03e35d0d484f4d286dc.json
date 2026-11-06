@@ -1,0 +1,142 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                h.id, h.kind, h.name, h.owner_user_id, h.created_by, h.allow_permission_bypass,\n                h.created_at, h.updated_at, h.last_connected_at, h.last_disconnected_at,\n                h.capabilities AS \"capabilities: Json<HarnessCapabilities>\", h.computer_id, h.claude_mode,\n                EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = h.id AND c.lease_expires_at > now()) AS \"has_live_connection!\",\n                EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = h.id) AS \"has_connection_record!\",\n                harness_access_level(h.id, $1) AS \"access?: AccessLevel\",\n                ARRAY(SELECT ea.source_id FROM entity_access ea WHERE ea.entity_id = h.id AND ea.entity_type = 'harness' AND ea.source_type = 'team') AS shared_team_ids,\n                harness_is_agent_computer(h.id) AS \"is_agent_computer!\",\n                EXISTS (SELECT 1 FROM team_agents a JOIN hosted_runtime c ON c.id = a.computer_id AND c.team_id = a.team_id WHERE a.computer_id = h.computer_id AND a.user_id = $1) AS \"is_resident!\"\n            FROM harnesses h\n            WHERE h.deleted_at IS NULL\n              AND (\n                h.computer_id IN (SELECT c.id FROM hosted_runtime c WHERE c.team_id IN (\n                    SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1\n                    UNION SELECT t.id FROM team t WHERE t.owner_id = $1\n                )) OR\n                COALESCE(h.owner_user_id, h.created_by) = $1\n                OR COALESCE(h.owner_user_id, h.created_by) IN (\n                    SELECT theirs.user_id\n                    FROM team_user mine\n                    JOIN team_user theirs ON theirs.team_id = mine.team_id\n                    WHERE mine.user_id = $1\n                )\n              )\n            ORDER BY h.created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "allow_permission_bypass",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_connected_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "last_disconnected_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "capabilities: Json<HarnessCapabilities>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "claude_mode",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "has_live_connection!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "has_connection_record!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 15,
+        "name": "access?: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "shared_team_ids",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 17,
+        "name": "is_agent_computer!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 18,
+        "name": "is_resident!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "d38f1b6037ded5ec30023494af5b905339778bfe2090f03e35d0d484f4d286dc"
+}

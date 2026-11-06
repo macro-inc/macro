@@ -2,10 +2,7 @@
 
 use std::sync::Arc;
 
-use harnesses::domain::{
-    models::{HarnessOwner, PersonaHealth},
-    ports::HarnessRepo,
-};
+use harnesses::domain::{models::PersonaHealth, ports::HarnessRepo};
 
 use hosted_runtimes::domain::{
     lifecycle::PaymentOutcome,
@@ -138,6 +135,24 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
+    async fn harness_id(
+        &self,
+        team_id: Uuid,
+        computer_id: Uuid,
+    ) -> Result<Option<harness_id::HarnessId>, TeamAgentError> {
+        let computer = self
+            .repo
+            .get(computer_id)
+            .await
+            .map_err(TeamAgentError::internal)?
+            .filter(|computer| computer.team_id == team_id)
+            .ok_or(TeamAgentError::NotFound)?;
+        Ok(computer
+            .harness_id
+            .map(harness_id::HarnessId::new_from_uuid))
+    }
+
+    #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
     async fn persona(&self, team_id: Uuid, computer_id: Uuid) -> Result<Persona, TeamAgentError> {
         let computer = self
             .repo
@@ -212,10 +227,7 @@ impl<Repo: ComputerRepo, Bill, Time, Harness: HarnessRepo, Policy>
             .get_harness(harness_id::HarnessId::new_from_uuid(harness_id))
             .await
             .map_err(|_| TeamAgentError::internal_message("harness health is unavailable"))?
-            .filter(|harness| {
-                harness.computer_id == Some(computer_id)
-                    && harness.owner == HarnessOwner::Team { team_id }
-            })
+            .filter(|harness| harness.computer_id == Some(computer_id))
         else {
             return Ok(None);
         };

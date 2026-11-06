@@ -1,5 +1,7 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { requestHarnessAccess } from '@queries/harnesses/harnesses';
 import type { JSX } from 'solid-js';
 import type { RosterAgent } from '../agents-view/core/roster';
 import { openAgentsPage } from '../agents-view/primitives/open-page';
@@ -27,6 +29,13 @@ function ConnectedPicker(props: RoutineExecutionPickerProps): JSX.Element {
   const { openSettings } = useSettingsState();
 
   function connect(agent: RosterAgent): void {
+    if (agent.needsRuntimeAccess && agent.harnessId) {
+      fireAndForget(
+        requestHarnessAccess(agent.harnessId),
+        'runtime-sharing.request'
+      );
+      return;
+    }
     if (agent.harness === 'cursor') openSettings('Harness');
   }
 

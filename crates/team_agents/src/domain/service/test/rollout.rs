@@ -104,6 +104,11 @@ async fn each_admin_operation_loads_once_and_self_operations_load_no_flags() {
         Err(TeamAgentError::RetryUnavailable(_))
     ));
     assert_eq!(*calls.lock().expect("lock"), vec![user(ADMIN); 6]);
+    service.computer(
+        EntityAccessReceipt::<entity_access::domain::models::MemberTeamRole>::dangerously_assert_authenticated_user(user(ADMIN), TEAM_ID, EntityType::Team),
+        &agent.user_id,
+    ).await.expect("member computer discovery");
+    assert_eq!(*calls.lock().expect("lock"), vec![user(ADMIN); 7]);
 
     service.me(&agent.user_id).await.expect("self profile");
     service
@@ -131,5 +136,5 @@ async fn each_admin_operation_loads_once_and_self_operations_load_no_flags() {
         )
         .await
         .expect("send mail");
-    assert_eq!(calls.lock().expect("lock").len(), 6);
+    assert_eq!(calls.lock().expect("lock").len(), 7);
 }

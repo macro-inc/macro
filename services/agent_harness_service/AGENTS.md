@@ -48,6 +48,13 @@ Pulumi stacks; they do not host extra agent processes.
   `incus` or local-only `docker`; unset disables the control plane.
   `COMPUTERS_IMAGE` selects the local Incus image alias or Docker image;
   an Incus override must not silently use the shared `macro-box` alias.
+  HostedHarnesses pairing retains the buying admin as the harness owner and
+  grants the team User access for ordinary computers or Read access for persona
+  computers. The bound agent account is a view-only Account resident, with no
+  generic execution as the host user. `computers.rs` selects team access from
+  the persona; PostgreSQL inserts and grant changes use the shared
+  `harness_grant_level` normalization for either a bound account or agent-computer
+  classification.
 - `src/brain_gateway.rs` supplies computer facts and the same prompt-wake path
   to the standalone-brain Anthropic gateway authorization boundary in
   `team_agents::domain::gateway`. `/brain/anthropic/v1/messages` and
@@ -58,7 +65,8 @@ Pulumi stacks; they do not host extra agent processes.
   computers are woken). These routes share the session gateway's model allowlist,
   budgets, forwarding and meter; `ai_usage.user_id` is the agent and `entity` is
   its team. See `hosted_runtimes/AGENTS.md` Contracts for the credential contract.
-- `src/computer_screen.rs` + `src/computer_screen/`: Macro computer routes.
+- `src/computer_screen.rs` + `src/computer_screen/`: runtime screen and Macro
+  computer account routes.
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
   `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`,
   `POST /harnesses/{id}/claude-sign-out` → `{mode}` (manage rights; mode is
@@ -67,9 +75,12 @@ Pulumi stacks; they do not host extra agent processes.
   requests from persisting out of order; concurrent requests get 409),
   `GET /harnesses/{id}/claude-mode` → `{mode}` (manage rights), and two
   websockets: the viewer's `GET /harnesses/{id}/screen[?control=true]` (view
-  rights; `control` needs manage, else `rfb.rs` drops input messages and
-  fails closed on anything unreadable) and macrod's
-  `GET /harnesses/me/screen?stream=` (harness token). Commands reach
+  rights; `control` needs use rights from the harness domain; `rfb.rs` drops
+  view-only input and fails closed on unreadable messages; screen-capable paired
+  runtimes also qualify without a hosted-computer ID) and macrod's
+  `GET /harnesses/me/screen?stream=` (harness token). Viewer sockets renew View/Use
+  authorization every five seconds, pause forwarding during the bounded renewal,
+  and close on revocation or authorization failure. Commands reach
   macrod as `computerControl` runtime messages; `bus.rs` carries them over
   Redis (`agent-harness.computer-control`: claim with `SET NX`, ack within
   3 s or 409, then the answer) when the runtime is on another replica, and

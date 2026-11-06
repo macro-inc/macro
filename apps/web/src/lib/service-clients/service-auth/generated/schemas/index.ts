@@ -308,6 +308,8 @@ export * from './systemStatusOneOfThree';
 export * from './systemStatusOneOfThreeStatus';
 export * from './team';
 export * from './teamAgent';
+export * from './teamAgentComputer';
+export * from './teamAgentComputerHarnessId';
 export * from './teamAgentComputerId';
 export * from './teamAgentConflict';
 export * from './teamAgentConflictCode';

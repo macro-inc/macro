@@ -7,7 +7,6 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
-use sqlx::Row as _;
 use sqlx::types::chrono::{DateTime, Utc};
 use sqlx::{Pool, Postgres, Transaction};
 
@@ -121,29 +120,21 @@ struct Row {
 }
 
 async fn fetch_channel_rows(pool: &Pool<Postgres>, channel_id: &str) -> Vec<Row> {
-    // Runtime query (not the compile-time macro) so this test file does not
-    // require a `.sqlx` cache entry to build.
-    sqlx::query(
+    sqlx::query_as!(
+        Row,
         r#"
         SELECT
             entity_id,
             entity_type,
             source_id,
-            access_level,
+            access_level AS "access_level: _",
             granted_from_project_id
         FROM entity_access
         WHERE source_id = $1 AND source_type = 'channel'
         ORDER BY entity_type, entity_id, granted_from_project_id NULLS FIRST
         "#,
+        channel_id,
     )
-    .bind(channel_id)
-    .map(|r: sqlx::postgres::PgRow| Row {
-        entity_id: r.get("entity_id"),
-        entity_type: r.get("entity_type"),
-        source_id: r.get("source_id"),
-        access_level: r.get("access_level"),
-        granted_from_project_id: r.get("granted_from_project_id"),
-    })
     .fetch_all(pool)
     .await
     .unwrap()
@@ -168,9 +159,7 @@ async fn insert_entity_access_for_test(
     access_level: AccessLevel,
     granted_from_project_id: Option<&str>,
 ) {
-    // Runtime query (not the compile-time macro) so this test helper does not
-    // require a `.sqlx` cache entry to build.
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO entity_access (
             entity_id,
@@ -182,13 +171,13 @@ async fn insert_entity_access_for_test(
         )
         VALUES ($1, $2, $3, $4, $5, $6)
         "#,
+        entity_id,
+        entity_type.as_ref(),
+        source_id,
+        source_type as _,
+        access_level as _,
+        granted_from_project_id,
     )
-    .bind(entity_id)
-    .bind(entity_type.as_ref())
-    .bind(source_id)
-    .bind(source_type)
-    .bind(access_level)
-    .bind(granted_from_project_id)
     .execute(transaction.as_mut())
     .await
     .unwrap();
@@ -199,32 +188,23 @@ async fn fetch_entity_access_rows(
     entity_id: &Uuid,
     entity_type: EntityType,
 ) -> Vec<EntityAccessRow> {
-    // Runtime query (not the compile-time macro) so this test helper does not
-    // require a `.sqlx` cache entry to build.
-    sqlx::query(
+    sqlx::query_as!(
+        EntityAccessRow,
         r#"
         SELECT
             source_id,
-            source_type::text AS source_type,
-            access_level,
+            source_type::text AS "source_type!",
+            access_level AS "access_level: _",
             granted_from_project_id,
             created_at,
             updated_at
         FROM entity_access
         WHERE entity_id = $1 AND entity_type = $2
-        ORDER BY source_type, source_id, granted_from_project_id NULLS FIRST
+        ORDER BY source_type::text, source_id, granted_from_project_id NULLS FIRST
         "#,
+        entity_id,
+        entity_type.as_ref(),
     )
-    .bind(entity_id)
-    .bind(entity_type.as_ref())
-    .map(|r: sqlx::postgres::PgRow| EntityAccessRow {
-        source_id: r.get("source_id"),
-        source_type: r.get("source_type"),
-        access_level: r.get("access_level"),
-        granted_from_project_id: r.get("granted_from_project_id"),
-        created_at: r.get("created_at"),
-        updated_at: r.get("updated_at"),
-    })
     .fetch_all(pool)
     .await
     .unwrap()
@@ -922,7 +902,7 @@ async fn delete_user_entity_access_rows_keeps_team_and_channel_grants_that_share
         &mut tx,
         &initiative_id,
         EntityType::Initiative,
-        &[alice.clone()],
+        std::slice::from_ref(&alice),
     )
     .await
     .unwrap();

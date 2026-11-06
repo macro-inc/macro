@@ -118,6 +118,37 @@ describe('buildAgentRoster', () => {
     });
     expect(roster.at(-1)?.unavailableReason).toBeUndefined();
   });
+
+  it.each(['none', 'read', 'resident'] as const)(
+    'offers access to a coding agent whose runtime the viewer has as %s',
+    (access) => {
+      const roster = buildAgentRoster({
+        ...EMPTY,
+        runtimes: [{ id: 'h1', name: 'box', connected: true, access }],
+        agents: [persisted({ harness: 'macrod', harness_id: 'h1' })],
+      });
+      expect(roster.at(-1)?.needsRuntimeAccess).toBe(true);
+      expect(roster.at(-1)?.connectLabel).toBe('Request access');
+    }
+  );
+
+  it('lets anyone reach a resident, and users start a coding agent', () => {
+    const resident = buildAgentRoster({
+      ...EMPTY,
+      runtimes: [{ id: 'h1', name: 'box', connected: true, access: 'none' }],
+      agents: [
+        persisted({ harness: 'macrod', harness_id: 'h1', is_coding: false }),
+      ],
+    });
+    expect(resident.at(-1)?.needsRuntimeAccess).toBe(false);
+
+    const user = buildAgentRoster({
+      ...EMPTY,
+      runtimes: [{ id: 'h1', name: 'box', connected: true, access: 'user' }],
+      agents: [persisted({ harness: 'macrod', harness_id: 'h1' })],
+    });
+    expect(user.at(-1)?.needsRuntimeAccess).toBe(false);
+  });
 });
 
 describe('rosterForAgentPicker and kindForBot', () => {

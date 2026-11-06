@@ -16,6 +16,21 @@ vi.mock('@queries/team/invites', () => ({
     mutate: mocks.mutate,
   }),
 }));
+vi.mock('@queries/harnesses/harnesses', () => ({
+  useHarnessesQuery: () => ({
+    isSuccess: true,
+    data: [
+      { id: 'mine', name: 'Mac mini', access: 'owner' },
+      { id: 'shared', name: 'Build box', access: 'user' },
+      {
+        id: 'agent-computer',
+        name: 'Agent computer',
+        access: 'owner',
+        is_agent_computer: true,
+      },
+    ],
+  }),
+}));
 vi.mock('./TeamInviteLinkSection', () => ({
   TeamInviteLinkSection: () => null,
   CopyTeamInviteLinkButton: () => (
@@ -36,7 +51,11 @@ afterEach(() => {
   mocks.mutate.mockReset();
 });
 
-function sendInvite(asAgent: boolean, onClose: () => void = () => {}) {
+function sendInvite(
+  asAgent: boolean,
+  onClose: () => void = () => {},
+  runtime?: string
+) {
   render(() => (
     <InviteToTeamDialog
       teamId="team-1"
@@ -49,6 +68,7 @@ function sendInvite(asAgent: boolean, onClose: () => void = () => {}) {
   const email = screen.getByRole('textbox');
   fireEvent.input(email, { target: { value: 'invitee@signup.test' } });
   if (asAgent) fireEvent.click(screen.getByLabelText('Invite as agent'));
+  if (runtime) fireEvent.click(screen.getByLabelText(runtime));
   fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
 }
 
@@ -58,7 +78,11 @@ describe('InviteToTeamDialog', () => {
 
     expect(mocks.mutate.mock.calls[0]?.[0]).toEqual({
       teamId: 'team-1',
-      request: { invites: [{ email: 'invitee@signup.test' }], is_agent: false },
+      request: {
+        invites: [{ email: 'invitee@signup.test' }],
+        is_agent: false,
+        harness_ids: [],
+      },
     });
   });
 
@@ -67,7 +91,11 @@ describe('InviteToTeamDialog', () => {
 
     expect(mocks.mutate.mock.calls[0]?.[0]).toEqual({
       teamId: 'team-1',
-      request: { invites: [{ email: 'invitee@signup.test' }], is_agent: true },
+      request: {
+        invites: [{ email: 'invitee@signup.test' }],
+        is_agent: true,
+        harness_ids: [],
+      },
     });
   });
 
@@ -137,5 +165,15 @@ describe('InviteToTeamDialog', () => {
     mocks.mutate.mock.calls[0]?.[1]?.onSuccess?.();
 
     expect(screen.queryByText("Let them know it's coming")).toBeNull();
+  });
+
+  it('offers only runtimes the inviter owns', () => {
+    sendInvite(false, () => {}, 'Mac mini');
+
+    expect(screen.queryByLabelText('Build box')).toBeNull();
+    expect(screen.queryByLabelText('Agent computer')).toBeNull();
+    expect(mocks.mutate.mock.calls[0]?.[0].request.harness_ids).toEqual([
+      'mine',
+    ]);
   });
 });

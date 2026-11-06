@@ -182,6 +182,9 @@ external chat replies depend on it. Direct session controls still mint IDs.
 
 ## Gotchas
 
+- Paired credentials remain scope-free. Resolve webhook scope from current
+  `shared_team_ids`, never a team owner variant; every harness has a human owner.
+
 - Persona enrollment requires an `agent-` Linux username. Reject old names before
   side effects; local preview agents with old names must be re-invited.
 

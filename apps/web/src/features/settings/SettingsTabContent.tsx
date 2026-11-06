@@ -3,6 +3,7 @@ import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { Show, Suspense } from 'solid-js';
 import { CalendarSettings } from '../calendar/calendar-settings';
+import { SettingsComputerScreen } from '../computer-screen/settings-computer-screen';
 import { CrmSettings as Crm } from '../crm/crm-settings';
 import { Usage } from '../usage/usage';
 import { Account } from './Account';
@@ -36,82 +37,84 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
   const isCurrentTab = (tab: SettingsTab) =>
     props.tab === tab && isAvailable(tab);
   return (
-    <Suspense
-      fallback={
-        <div role="status" class="p-8 text-center text-sm text-ink-muted">
-          Loading settings…
-        </div>
-      }
-    >
-      <Show when={isCurrentTab('Account')}>
-        <Account />
-      </Show>
-      <Show when={isCurrentTab('Email')}>
-        <EmailSettings />
-      </Show>
-      <Show when={isCurrentTab('Calendar')}>
-        <CalendarSettings />
-      </Show>
-      <Show when={isCurrentTab('API Keys')}>
-        <ApiKeys />
-      </Show>
-      <Show when={isCurrentTab('Account Managers')}>
-        <AccountManagers />
-      </Show>
-      <Show when={isCurrentTab('Notifications')}>
-        <Notifications />
-      </Show>
-      <Show when={isCurrentTab('Billing')}>
-        <Billing />
-      </Show>
-      <Show when={isCurrentTab('Usage')}>
-        <Usage />
-      </Show>
-      <Show when={isCurrentTab('Appearance')}>
-        <Appearance />
-      </Show>
-      <Show when={isCurrentTab('Shortcuts')}>
-        <Shortcuts />
-      </Show>
-      <Show when={isCurrentTab('Team')}>
-        <TeamPage>{(team) => <TeamGeneral team={team} />}</TeamPage>
-      </Show>
-      <Show when={isCurrentTab('Team Members')}>
-        <TeamPage>{(team) => <TeamMembers team={team} />}</TeamPage>
-      </Show>
-      <Show when={isCurrentTab('Tags')}>
-        <Tags />
-      </Show>
-      <Show when={isCurrentTab('CRM')}>
-        <Crm />
-      </Show>
-      <Show when={isCurrentTab('Connected')}>
-        <IntegrationsPage />
-      </Show>
-      <Show when={isCurrentTab('Desktop App')}>
-        <DesktopApp />
-      </Show>
-      <Show when={isCurrentTab('Mobile App')}>
-        <MobileApp />
-      </Show>
-      <Show when={isCurrentTab('Agent')}>
-        <Agent />
-      </Show>
-      <Show when={isCurrentTab('Agents')}>
-        <AgentSettings />
-      </Show>
-      <Show when={isCurrentTab('Routines')}>
-        <RoutineSettings />
-      </Show>
-      <Show when={isCurrentTab('Harness')}>
-        <AgentSettings initialSection="runtimes" />
-      </Show>
-      <Show when={isCurrentTab('Bots')}>
-        <Bots />
-      </Show>
-      <Show when={isCurrentTab('Admin')}>
-        <Admin />
-      </Show>
-    </Suspense>
+    <SettingsComputerScreen>
+      <Suspense
+        fallback={
+          <div role="status" class="p-8 text-center text-sm text-ink-muted">
+            Loading settings…
+          </div>
+        }
+      >
+        <Show when={isCurrentTab('Account')}>
+          <Account />
+        </Show>
+        <Show when={isCurrentTab('Email')}>
+          <EmailSettings />
+        </Show>
+        <Show when={isCurrentTab('Calendar')}>
+          <CalendarSettings />
+        </Show>
+        <Show when={isCurrentTab('API Keys')}>
+          <ApiKeys />
+        </Show>
+        <Show when={isCurrentTab('Account Managers')}>
+          <AccountManagers />
+        </Show>
+        <Show when={isCurrentTab('Notifications')}>
+          <Notifications />
+        </Show>
+        <Show when={isCurrentTab('Billing')}>
+          <Billing />
+        </Show>
+        <Show when={isCurrentTab('Usage')}>
+          <Usage />
+        </Show>
+        <Show when={isCurrentTab('Appearance')}>
+          <Appearance />
+        </Show>
+        <Show when={isCurrentTab('Shortcuts')}>
+          <Shortcuts />
+        </Show>
+        <Show when={isCurrentTab('Team')}>
+          <TeamPage>{(team) => <TeamGeneral team={team} />}</TeamPage>
+        </Show>
+        <Show when={isCurrentTab('Team Members')}>
+          <TeamPage>{(team) => <TeamMembers team={team} />}</TeamPage>
+        </Show>
+        <Show when={isCurrentTab('Tags')}>
+          <Tags />
+        </Show>
+        <Show when={isCurrentTab('CRM')}>
+          <Crm />
+        </Show>
+        <Show when={isCurrentTab('Connected')}>
+          <IntegrationsPage />
+        </Show>
+        <Show when={isCurrentTab('Desktop App')}>
+          <DesktopApp />
+        </Show>
+        <Show when={isCurrentTab('Mobile App')}>
+          <MobileApp />
+        </Show>
+        <Show when={isCurrentTab('Agent')}>
+          <Agent />
+        </Show>
+        <Show when={isCurrentTab('Agents')}>
+          <AgentSettings />
+        </Show>
+        <Show when={isCurrentTab('Routines')}>
+          <RoutineSettings />
+        </Show>
+        <Show when={isCurrentTab('Harness')}>
+          <AgentSettings initialSection="runtimes" />
+        </Show>
+        <Show when={isCurrentTab('Bots')}>
+          <Bots />
+        </Show>
+        <Show when={isCurrentTab('Admin')}>
+          <Admin />
+        </Show>
+      </Suspense>
+    </SettingsComputerScreen>
   );
 }
