@@ -173,8 +173,10 @@ Inline Tags property rows retain their compact treatment.
 
 ## Side-panel row actions
 
-Compose `PropertyRowActions.Root`, `.Pin`, and `.Remove` through children so
-callers own action order. Multi-value layouts and collections accept JSX children,
+Compose `PropertyRowActions.Root`, `.Remove`, and `.Pin` through children, in
+that order, so the trash sits left of the pin. When the panel supports an action
+a row cannot take, the action renders an empty slot of the same size, keeping
+every row's pin in one column. Multi-value layouts and collections accept JSX children,
 not action render callbacks. Each collection row owns one saving signal shared
 with its collection editor and row actions.
 
