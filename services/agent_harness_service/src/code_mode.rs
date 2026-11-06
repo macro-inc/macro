@@ -72,12 +72,7 @@ impl UserExecutionCredentials for UserRunCredentials {
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
         let token = self
             .signer
-            .mint_for_agent(
-                user,
-                60,
-                Some(agent.as_uuid()),
-                caller.via(),
-            )
+            .mint_for_agent(user, 60, Some(agent.as_uuid()), caller.via())
             .await
             .map_err(|error| {
                 tracing::error!(?error, "could not mint execution credential");

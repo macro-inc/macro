@@ -1,6 +1,6 @@
 use super::*;
-use mcp_client_label::{McpClientKind, McpClientLabel};
 use crate::macro_api_token::{EncodeMacroApiTokenArgs, encode_macro_api_token};
+use mcp_client_label::{McpClientKind, McpClientLabel};
 
 #[test]
 fn signed_execution_token_preserves_owner_agent_and_lifetime() {

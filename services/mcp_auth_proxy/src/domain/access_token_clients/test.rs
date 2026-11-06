@@ -1,6 +1,6 @@
 use super::*;
-use mcp_client_label::McpClientKind;
 use crate::{domain::models::RegisteredClient, test_support::FakeClientRegistry};
+use mcp_client_label::McpClientKind;
 
 fn clients(registry: &Arc<FakeClientRegistry>) -> AccessTokenClients {
     AccessTokenClients::new(

@@ -31,9 +31,11 @@ pub fn classify(client_name: &str, redirect_uris: &[String]) -> Option<McpClient
 
     let allowed = destinations(kind);
     let consistent = !redirect_uris.is_empty()
-        && redirect_uris
-            .iter()
-            .all(|uri| allowed.iter().any(|destination| points_to(uri, *destination)));
+        && redirect_uris.iter().all(|uri| {
+            allowed
+                .iter()
+                .any(|destination| points_to(uri, *destination))
+        });
 
     consistent.then_some(kind)
 }

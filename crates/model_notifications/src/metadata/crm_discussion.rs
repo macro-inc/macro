@@ -1,8 +1,8 @@
 //! Notifications for comments on CRM companies and contacts, using shared
 //! message/thread identities.
 
-use mcp_client_label::McpClientKind;
 use super::*;
+use mcp_client_label::McpClientKind;
 
 #[cfg(test)]
 mod test;

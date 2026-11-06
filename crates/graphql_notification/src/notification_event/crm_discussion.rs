@@ -1,7 +1,7 @@
 //! CRM company and contact discussion notification projection.
 
-use async_graphql::{Enum, ID, SimpleObject};
 use super::GraphqlMcpClientKind;
+use async_graphql::{Enum, ID, SimpleObject};
 use model_notifications::{CrmDiscussionMetadata, CrmDiscussionReason};
 
 /// Why a CRM discussion notification was sent.

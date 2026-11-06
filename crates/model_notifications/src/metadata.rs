@@ -6,13 +6,13 @@ pub use access_request::{
     RequestedAccessLevel,
 };
 pub use calendar_join_request::CalendarEventJoinRequestMetadata;
-use mcp_client_label::McpClientKind;
 use chrono::{DateTime, NaiveDate, Utc};
 pub use invite_email::{
     ChannelInviteMetadata, ColleagueJoinedMacro, InviteToTeamMetadata, InviteePlan,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
+use mcp_client_label::McpClientKind;
 use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;

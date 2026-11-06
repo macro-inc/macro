@@ -754,7 +754,10 @@ impl MessageRepository for PgMessageRepository {
             command.input.thread_id,
             command.actor.as_ref(),
             command.triggered_by,
-            command.triggered_via.as_ref().map(|client| client.name.as_str()),
+            command
+                .triggered_via
+                .as_ref()
+                .map(|client| client.name.as_str()),
             command
                 .triggered_via
                 .as_ref()

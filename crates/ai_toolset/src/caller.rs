@@ -29,7 +29,9 @@ impl ToolCaller {
     /// MCP client that registered no name is shown as a generic one.
     pub fn via(&self) -> Option<McpClientLabel> {
         match self {
-            Self::McpClient { client: Some(client) } => Some(client.clone()),
+            Self::McpClient {
+                client: Some(client),
+            } => Some(client.clone()),
             Self::McpClient { client: None } => Some(McpClientLabel {
                 name: "MCP client".to_owned(),
                 kind: None,

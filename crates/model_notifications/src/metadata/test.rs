@@ -848,7 +848,10 @@ fn channel_message_send_carries_the_mcp_client_kind_of_a_bot_sender() {
 
     assert_eq!(value["senderClientKind"], "claude_code");
     let round_trip: ChannelMessageSendMetadata = serde_json::from_value(value).unwrap();
-    assert_eq!(round_trip.sender_client_kind, Some(McpClientKind::ClaudeCode));
+    assert_eq!(
+        round_trip.sender_client_kind,
+        Some(McpClientKind::ClaudeCode)
+    );
 }
 
 #[test]

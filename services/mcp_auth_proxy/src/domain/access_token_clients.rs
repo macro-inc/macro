@@ -10,8 +10,8 @@
 mod test;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use sha2::{Digest, Sha256};
 use mcp_client_label::McpClientLabel;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 use super::{

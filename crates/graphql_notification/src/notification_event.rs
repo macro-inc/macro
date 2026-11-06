@@ -22,8 +22,8 @@ pub use calendar_join_request::GraphqlCalendarEventJoinRequestMetadata;
 mod channel_access_request;
 pub use channel_access_request::GraphqlChannelAccessRequestedMetadata;
 
-use mcp_client_label::McpClientKind;
 use async_graphql::{Enum, ID, Object, Union};
+use mcp_client_label::McpClientKind;
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionSettledMetadata,
     AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,

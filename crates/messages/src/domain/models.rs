@@ -1,7 +1,7 @@
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 pub use mcp_client_label::{McpClientKind, McpClientLabel};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[cfg(test)]

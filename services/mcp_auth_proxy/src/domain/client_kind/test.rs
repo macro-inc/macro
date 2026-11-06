@@ -46,7 +46,10 @@ fn claude_on_loopback_is_unknown() {
 #[test]
 fn claude_on_a_lookalike_host_is_unknown() {
     assert_eq!(
-        classify("Claude", &uris(&["https://claude.ai.evil.example/callback"])),
+        classify(
+            "Claude",
+            &uris(&["https://claude.ai.evil.example/callback"])
+        ),
         None
     );
     assert_eq!(
@@ -61,7 +64,12 @@ fn claude_on_a_lookalike_host_is_unknown() {
 
 #[test]
 fn claude_code_names_its_server_in_parentheses() {
-    for name in ["Claude Code", "Claude Code (macro)", "Claude Code (Macro)", "claude code (work)"] {
+    for name in [
+        "Claude Code",
+        "Claude Code (macro)",
+        "Claude Code (Macro)",
+        "claude code (work)",
+    ] {
         assert_eq!(
             classify(name, &uris(&["http://localhost:53581/callback"])),
             Some(McpClientKind::ClaudeCode),
@@ -73,7 +81,10 @@ fn claude_code_names_its_server_in_parentheses() {
 #[test]
 fn claude_code_off_loopback_is_unknown() {
     assert_eq!(
-        classify("Claude Code (macro)", &uris(&["https://evil.example/callback"])),
+        classify(
+            "Claude Code (macro)",
+            &uris(&["https://evil.example/callback"])
+        ),
         None
     );
 }
@@ -118,11 +129,17 @@ fn native_clients_on_loopback_are_recognized() {
         Some(McpClientKind::Codex)
     );
     assert_eq!(
-        classify("OpenCode", &uris(&["http://127.0.0.1:19876/mcp/oauth/callback"])),
+        classify(
+            "OpenCode",
+            &uris(&["http://127.0.0.1:19876/mcp/oauth/callback"])
+        ),
         Some(McpClientKind::OpenCode)
     );
     assert_eq!(
-        classify("opencode", &uris(&["http://[::1]:19876/mcp/oauth/callback"])),
+        classify(
+            "opencode",
+            &uris(&["http://[::1]:19876/mcp/oauth/callback"])
+        ),
         Some(McpClientKind::OpenCode)
     );
 }
@@ -152,5 +169,8 @@ fn a_registration_without_redirect_uris_gets_no_kind() {
 #[test]
 fn unparseable_redirect_uris_get_no_kind() {
     assert_eq!(classify("Codex", &uris(&["not a uri"])), None);
-    assert_eq!(classify("Codex", &uris(&["cursor://anysphere/callback"])), None);
+    assert_eq!(
+        classify("Codex", &uris(&["cursor://anysphere/callback"])),
+        None
+    );
 }

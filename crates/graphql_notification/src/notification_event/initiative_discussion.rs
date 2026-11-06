@@ -1,7 +1,7 @@
 //! Project discussion notification projection.
 
-use async_graphql::{Enum, ID, SimpleObject};
 use super::GraphqlMcpClientKind;
+use async_graphql::{Enum, ID, SimpleObject};
 use model_notifications::{InitiativeDiscussionMetadata, InitiativeDiscussionReason};
 
 /// Why a project discussion notification was sent.

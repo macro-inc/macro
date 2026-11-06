@@ -281,12 +281,12 @@ mod code_mode {
     };
     use agent_inmem::domain::tool_mode::ToolModeSelector;
     use ai_toolset::{ToolAnnotated, ToolAnnotations};
-    use mcp_client_label::{McpClientKind, McpClientLabel};
     use axum::{
         body::{Body, to_bytes},
         http::Request,
     };
     use code_execution::domain::ExecuteRequest;
+    use mcp_client_label::{McpClientKind, McpClientLabel};
     use rmcp::transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
     };
