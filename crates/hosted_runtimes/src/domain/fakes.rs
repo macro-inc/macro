@@ -43,6 +43,7 @@ pub struct FakeError;
 #[derive(Default)]
 pub struct FakeRepo {
     pub sold_units: u32,
+    pub timers: Mutex<Vec<DueTimer>>,
     pub fail_next_apply: AtomicBool,
     pub enrollment_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
     pub payment_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
@@ -200,6 +201,7 @@ impl ComputerRepo for FakeRepo {
                 effect,
                 attempts: 0,
             });
+            self.effect_run_after.lock().unwrap().insert(id, now);
         }
         Ok(Some(computer.clone()))
     }
@@ -283,24 +285,48 @@ impl ComputerRepo for FakeRepo {
         worker: EffectWorker,
         limit: u32,
         now: DateTime<Utc>,
-        _lease_until: DateTime<Utc>,
+        lease_until: DateTime<Utc>,
     ) -> Result<Vec<PendingEffect>, FakeError> {
-        Ok(self
-            .effects
-            .lock()
-            .unwrap()
+        let effects = self.effects.lock().unwrap();
+        let mut due = self.effect_run_after.lock().unwrap();
+        let selected: Vec<PendingEffect> = effects
             .iter()
             .filter(|pending| pending.effect.worker() == worker)
+            .filter(|pending| due.get(&pending.id).is_none_or(|at| *at <= now))
             .filter(|pending| {
-                self.effect_run_after
-                    .lock()
-                    .unwrap()
-                    .get(&pending.id)
-                    .is_none_or(|at| *at <= now)
+                !effects.iter().any(|earlier| {
+                    earlier.id < pending.id
+                        && earlier.computer_id == pending.computer_id
+                        && earlier.effect.worker() == worker
+                })
             })
             .take(limit as usize)
             .cloned()
-            .collect())
+            .collect();
+        for pending in &selected {
+            due.insert(pending.id, lease_until);
+        }
+        Ok(selected)
+    }
+
+    async fn release_effects(
+        &self,
+        ids: &[i64],
+        lease_until: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        let effects = self.effects.lock().unwrap();
+        let mut due = self.effect_run_after.lock().unwrap();
+        for id in ids {
+            if effects
+                .iter()
+                .any(|pending| pending.id == *id && pending.effect.worker() == EffectWorker::Fleet)
+                && due.get(id) == Some(&lease_until)
+            {
+                due.insert(*id, now);
+            }
+        }
+        Ok(())
     }
 
     async fn complete_effect(&self, id: i64) -> Result<(), FakeError> {
@@ -310,6 +336,27 @@ impl ComputerRepo for FakeRepo {
             .unwrap()
             .retain(|pending| pending.id != id);
         Ok(())
+    }
+
+    async fn finish_effect(
+        &self,
+        id: i64,
+        completion: Option<Event>,
+        now: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        let computer_id = self
+            .effects
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|pending| pending.id == id)
+            .map(|pending| pending.computer_id);
+        if let Some(computer_id) = computer_id
+            && let Some(event) = completion
+        {
+            self.apply(computer_id, event, now).await?;
+        }
+        self.complete_effect(id).await
     }
 
     async fn retry_effect(
@@ -327,21 +374,30 @@ impl ComputerRepo for FakeRepo {
         Ok(())
     }
 
-    async fn due_timers(
-        &self,
-        _now: DateTime<Utc>,
-        _limit: u32,
-    ) -> Result<Vec<DueTimer>, FakeError> {
-        Ok(vec![])
+    async fn due_timers(&self, now: DateTime<Utc>, limit: u32) -> Result<Vec<DueTimer>, FakeError> {
+        Ok(self
+            .timers
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|timer| timer.fire_at <= now)
+            .take(limit as usize)
+            .cloned()
+            .collect())
     }
 
     async fn fire_timer(
         &self,
-        _timer: DueTimer,
-        _instance_status: Option<crate::domain::ports::InstanceStatus>,
-        _now: DateTime<Utc>,
+        timer: DueTimer,
+        instance_status: Option<crate::domain::ports::InstanceStatus>,
+        now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
-        Ok(None)
+        self.timers
+            .lock()
+            .unwrap()
+            .retain(|pending| *pending != timer);
+        self.apply(timer.computer_id, timer.kind.event(instance_status), now)
+            .await
     }
 
     async fn postpone_macrod_timers(

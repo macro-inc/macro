@@ -162,8 +162,26 @@ pub trait ComputerRepo: Send + Sync + 'static {
         lease_until: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<PendingEffect>, Self::Err>> + Send;
 
+    /// Return only these unfinished fleet leases, provided they still have this deadline.
+    /// Never release another worker's leases or overwrite a recorded retry backoff.
+    fn release_effects(
+        &self,
+        ids: &[i64],
+        lease_until: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Delete a successfully executed outbox effect.
     fn complete_effect(&self, id: i64) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Atomically complete a fleet effect and apply its completion event.
+    /// A lost write leaves both the effect and the lifecycle unchanged for retry.
+    fn finish_effect(
+        &self,
+        id: i64,
+        completion: Option<Event>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Record a failed attempt and run the effect again at `retry_at`.
     fn retry_effect(

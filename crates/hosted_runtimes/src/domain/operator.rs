@@ -34,6 +34,12 @@ const EFFECT_BATCH: u32 = 16;
 const TIMER_BATCH: u32 = 64;
 /// How long a leased effect stays hidden from other workers.
 const EFFECT_LEASE: Duration = Duration::minutes(10);
+/// Includes lease acquisition, fleet I/O and persistence; less than the lease.
+const EFFECT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(8 * 60);
+/// Bound composite fleet calls below both the batch deadline and the lease.
+const FLEET_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(7 * 60);
+/// Shutdown waits for the active effect before cancelling it and returning its lease.
+const EFFECT_DRAIN: std::time::Duration = std::time::Duration::from_secs(30);
 
 fn internal<Err: std::error::Error + Send + Sync + 'static>(error: Err) -> ComputerError {
     ComputerError::Internal(rootcause::Report::new(error).into_dynamic())
@@ -151,18 +157,83 @@ where
     /// Carry out due fleet effects; returns how many ran.
     #[tracing::instrument(skip(self), err)]
     pub async fn run_fleet_effects(&self) -> Result<usize, ComputerError> {
-        self.host_id().await?;
+        self.run_fleet_effects_until(std::future::pending()).await
+    }
+
+    /// Stop leasing on shutdown, drain the active effect, then return unfinished leases.
+    /// Every effect in the batch shares a deadline measured before leasing, so
+    /// queued effects and slow composite fleet calls cannot outlive their lease.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn run_fleet_effects_until(
+        &self,
+        shutdown: impl Future<Output = ()> + Send,
+    ) -> Result<usize, ComputerError> {
+        let mut shutdown = std::pin::pin!(shutdown);
+        tokio::select! {
+            biased;
+            () = &mut shutdown => return Ok(0),
+            result = self.host_id() => { result?; }
+        }
+        let deadline = tokio::time::Instant::now() + EFFECT_DEADLINE;
         let now = self.clock.now();
+        let lease_until = now + EFFECT_LEASE;
+        // Never cancel a lease query: the database might commit it after its
+        // future is dropped, leaving an untracked lease until expiry.
         let effects = self
             .repo
-            .lease_effects(EffectWorker::Fleet, EFFECT_BATCH, now, now + EFFECT_LEASE)
+            .lease_effects(EffectWorker::Fleet, EFFECT_BATCH, now, lease_until)
             .await
             .map_err(internal)?;
-        let count = effects.len();
-
+        let ids: Vec<i64> = effects.iter().map(|effect| effect.id).collect();
+        let mut count = 0;
+        let mut outcome = Ok(());
         for pending in effects {
-            self.run_one(pending).await?;
+            tokio::select! {
+                biased;
+                () = &mut shutdown => break,
+                () = std::future::ready(()) => {}
+            }
+            if tokio::time::Instant::now() >= deadline {
+                break;
+            }
+            let mut stopping = false;
+            let result = {
+                let mut running =
+                    std::pin::pin!(tokio::time::timeout_at(deadline, self.run_one(pending)));
+                tokio::select! {
+                    result = &mut running => Some(result),
+                    () = &mut shutdown => {
+                        stopping = true;
+                        tracing::info!("draining computer effect");
+                        tokio::time::timeout(EFFECT_DRAIN, &mut running).await.ok()
+                    }
+                }
+            }; // Drop the effect future before making its lease available again.
+            count += 1;
+            match result {
+                Some(Ok(Ok(()))) => {}
+                Some(Ok(Err(error))) => {
+                    outcome = Err(error);
+                    break;
+                }
+                Some(Err(error)) => {
+                    outcome = Err(internal(error));
+                    break;
+                }
+                None => {
+                    tracing::warn!("computer effect drain deadline reached; returning leases");
+                    break;
+                }
+            }
+            if stopping {
+                break;
+            }
         }
+        self.repo
+            .release_effects(&ids, lease_until, self.clock.now())
+            .await
+            .map_err(internal)?;
+        outcome?;
         Ok(count)
     }
 
@@ -172,18 +243,19 @@ where
         err
     )]
     async fn run_one(&self, pending: PendingEffect) -> Result<(), ComputerError> {
-        match self.carry_out(pending.computer_id, &pending.effect).await {
+        let result = tokio::time::timeout(
+            FLEET_CALL_TIMEOUT,
+            self.carry_out(pending.computer_id, &pending.effect),
+        )
+        .await
+        .map_err(internal)
+        .and_then(std::convert::identity);
+        match result {
             Ok(follow_up) => {
                 self.repo
-                    .complete_effect(pending.id)
+                    .finish_effect(pending.id, follow_up, self.clock.now())
                     .await
                     .map_err(internal)?;
-                if let Some(event) = follow_up {
-                    self.repo
-                        .apply(pending.computer_id, event, self.clock.now())
-                        .await
-                        .map_err(internal)?;
-                }
             }
             Err(error) if pending.attempts + 1 < MAX_EFFECT_ATTEMPTS => {
                 tracing::warn!(error = ?error, "computer effect failed; retrying");
@@ -196,15 +268,11 @@ where
             Err(error) => {
                 tracing::error!(error = ?error, "computer effect failed for good");
                 self.repo
-                    .complete_effect(pending.id)
-                    .await
-                    .map_err(internal)?;
-                self.repo
-                    .apply(
-                        pending.computer_id,
-                        Event::EffectFailed {
+                    .finish_effect(
+                        pending.id,
+                        Some(Event::EffectFailed {
                             reason: error.to_string(),
-                        },
+                        }),
                         self.clock.now(),
                     )
                     .await
@@ -272,8 +340,20 @@ where
             }
             Effect::Start { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
             Effect::Resume { .. } => fleet_completion(self.fleet.resume(computer_id).await, None),
-            Effect::Restart { .. } => fleet_completion(self.fleet.restart(computer_id).await, None),
+            // Crash recovery must not reboot a guest whose start succeeded
+            // before the previous worker lost its completion write.
+            Effect::Restart { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
             Effect::RestartMacrod { .. } => {
+                let computer = self.computer(computer_id).await?;
+                if computer.state.macrod_connected
+                    || computer.state.macrod_misses < crate::domain::lifecycle::MAX_MACROD_MISSES
+                    || !matches!(
+                        computer.state.phase,
+                        Phase::Booting { .. } | Phase::Running { .. }
+                    )
+                {
+                    return Ok(None);
+                }
                 fleet_completion(self.fleet.restart_macrod(computer_id).await, None)
             }
             Effect::Freeze { .. } => fleet_completion(self.fleet.freeze(computer_id).await, None),

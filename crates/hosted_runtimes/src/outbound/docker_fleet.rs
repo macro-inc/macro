@@ -331,7 +331,6 @@ impl Fleet for DockerFleet {
         Ok(())
     }
 
-    #[tracing::instrument(name = "docker_fleet.freeze", skip(self), err)]
     #[tracing::instrument(name = "docker_fleet.restart_macrod", skip(self), err)]
     async fn restart_macrod(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         self.docker(
@@ -348,6 +347,7 @@ impl Fleet for DockerFleet {
         Ok(())
     }
 
+    #[tracing::instrument(name = "docker_fleet.freeze", skip(self), err)]
     async fn freeze(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         if self.state(computer_id).await? != Some(ContainerState::Paused) {
             self.docker("pause", &verb_args("pause", computer_id))
@@ -637,6 +637,7 @@ async fn docker(command: &str, args: &[String]) -> Result<String, DockerFleetErr
     let output = tokio::process::Command::new("docker")
         .args(args)
         .stdin(Stdio::null())
+        .kill_on_drop(true)
         .output()
         .await
         .map_err(DockerFleetError::Spawn)?;

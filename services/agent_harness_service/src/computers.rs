@@ -214,14 +214,30 @@ async fn run_pass(
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
+            biased;
             () = shutdown.cancelled() => return,
             _ = interval.tick() => {}
         }
         let outcome = match pass {
-            Pass::Effects => operator.run_fleet_effects().await.map(|_| ()),
-            Pass::Timers => operator.fire_timers().await.map(|_| ()),
-            Pass::Reconcile => operator.reconcile().await,
-            Pass::SleepIdle => operator.sleep_idle(&activity).await.map(|_| ()),
+            Pass::Effects => operator
+                .run_fleet_effects_until(shutdown.cancelled())
+                .await
+                .map(|_| ()),
+            Pass::Timers => shutdown
+                .run_until_cancelled(operator.fire_timers())
+                .await
+                .transpose()
+                .map(|_| ()),
+            Pass::Reconcile => shutdown
+                .run_until_cancelled(operator.reconcile())
+                .await
+                .transpose()
+                .map(|_| ()),
+            Pass::SleepIdle => shutdown
+                .run_until_cancelled(operator.sleep_idle(&activity))
+                .await
+                .transpose()
+                .map(|_| ()),
         };
         if let Err(error) = outcome {
             let name: &'static str = pass.into();

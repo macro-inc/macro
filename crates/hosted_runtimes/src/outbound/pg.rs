@@ -646,10 +646,53 @@ impl ComputerRepo for PgComputerRepo {
             .collect()
     }
 
+    #[tracing::instrument(skip(self, ids), fields(count = ids.len() as i64), err)]
+    async fn release_effects(
+        &self,
+        ids: &[i64],
+        lease_until: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<(), PgComputerError> {
+        sqlx::query!(
+            "UPDATE hosted_runtime_effect SET run_after = $3 WHERE id = ANY($1) AND worker = 'fleet' AND run_after = $2",
+            ids,
+            lease_until,
+            now,
+        ).execute(&self.pool).await?;
+        Ok(())
+    }
+
     async fn complete_effect(&self, id: i64) -> Result<(), PgComputerError> {
         sqlx::query!("DELETE FROM hosted_runtime_effect WHERE id = $1", id)
             .execute(&self.pool)
             .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn finish_effect(
+        &self,
+        id: i64,
+        completion: Option<Event>,
+        now: DateTime<Utc>,
+    ) -> Result<(), PgComputerError> {
+        let mut tx = self.pool.begin().await?;
+        let deleted = sqlx::query!(
+            "DELETE FROM hosted_runtime_effect WHERE id = $1 AND worker = 'fleet' RETURNING computer_id",
+            id,
+        ).fetch_optional(&mut *tx).await?;
+        if let Some(deleted) = deleted
+            && let Some(event) = completion
+        {
+            Self::apply_locked(
+                &mut tx,
+                ComputerId::new_from_uuid(deleted.computer_id),
+                &event,
+                now,
+            )
+            .await?;
+        }
+        tx.commit().await?;
         Ok(())
     }
 
