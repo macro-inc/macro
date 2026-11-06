@@ -23,6 +23,7 @@ import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
 import tabs from './en/tabs';
+import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
 
 /**
@@ -55,5 +56,6 @@ export default {
   settingsNav,
   splitMenu,
   tabs,
+  tutorials,
   viewMenus,
 };

@@ -41,6 +41,11 @@ pub enum StreamAudience {
         /// Access entity type of `entity_id`.
         entity_type: EntityType,
     },
+    /// The intended recipient of a private notification.
+    User {
+        /// Intended recipient.
+        user_id: String,
+    },
     /// Anyone whose personal or team webhook workspace is this workspace.
     Workspace {
         /// Owning workspace id.
@@ -165,6 +170,9 @@ where
         audience: &StreamAudience,
     ) -> Result<bool, rootcause::Report> {
         match audience {
+            StreamAudience::User { user_id } => Ok(
+                self.scope == WebhookScope::User && self.subscriber.as_ref() == user_id.as_str()
+            ),
             StreamAudience::Any(audiences) => {
                 for audience in audiences {
                     if Box::pin(self.subscriber_in_audience(audience)).await? {

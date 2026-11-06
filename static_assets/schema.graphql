@@ -261,7 +261,7 @@ input ClearNotificationInboxInput {
 	"""
 	Clear only unread rows.
 	"""
-	unreadOnly: Boolean
+	unreadOnly: Boolean @deprecated(reason: "Set scope.unreadOnly. Remove after 2026-12-06.")
 	"""
 	RFC 3339 time; clear only rows whose newest notification arrived at or
 	after it.
@@ -11320,6 +11320,11 @@ input NotificationInboxScopeInput {
 	Row kinds to include; omitted or empty means every kind.
 	"""
 	rowTypes: [NotificationInboxRowType!]
+	"""
+	Only unread rows; pages, cursors and updates then cover unread rows
+	alone. Defaults to false.
+	"""
+	unreadOnly: Boolean
 }
 
 """

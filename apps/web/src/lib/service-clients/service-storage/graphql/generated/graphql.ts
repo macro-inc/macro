@@ -174,7 +174,10 @@ export type ClearNotificationInboxInput = {
    * after it.
    */
   since?: string | null | undefined;
-  /** Clear only unread rows. */
+  /**
+   * Clear only unread rows.
+   * @deprecated Set scope.unreadOnly. Remove after 2026-12-06.
+   */
   unreadOnly?: boolean | null | undefined;
 };
 
@@ -2396,6 +2399,11 @@ export type NotificationInboxRowType =
 export type NotificationInboxScopeInput = {
   /** Row kinds to include; omitted or empty means every kind. */
   rowTypes?: Array<NotificationInboxRowType> | null | undefined;
+  /**
+   * Only unread rows; pages, cursors and updates then cover unread rows
+   * alone. Defaults to false.
+   */
+  unreadOnly?: boolean | null | undefined;
 };
 
 /** The notification state as represented by GraphQL variables and responses. */

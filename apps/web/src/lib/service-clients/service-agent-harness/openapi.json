@@ -4151,6 +4151,25 @@
           }
         }
       },
+      "AgentActor": {
+        "type": "object",
+        "description": "An agent acting for a person.",
+        "required": ["bot", "on_behalf_of", "lineage"],
+        "properties": {
+          "bot": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "The agent."
+          },
+          "lineage": {
+            "$ref": "#/components/schemas/Lineage",
+            "description": "Where the agent's own work came from."
+          },
+          "on_behalf_of": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The person it acts for."
+          }
+        }
+      },
       "AgentConfigKindDto": {
         "oneOf": [
           {
@@ -4869,6 +4888,10 @@
             "type": "string",
             "description": "User-facing session name."
           },
+          "origin": {
+            "$ref": "#/components/schemas/TriggerOrigin",
+            "description": "What opened the session: who or what started it, and what it is about.\n`unknown` when nothing recorded it."
+          },
           "originatingMessageId": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -5146,6 +5169,45 @@
           }
         },
         "additionalProperties": false
+      },
+      "Caller": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A person.",
+            "required": ["user", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["person"]
+              },
+              "user": {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who."
+              }
+            }
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentActor",
+                "description": "An agent, which always acts for a person on a path that opens a session."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["agent"]
+                  }
+                }
+              }
+            ],
+            "description": "An agent, which always acts for a person on a path that opens a session."
+          }
+        ],
+        "description": "Who did something that opened a session."
       },
       "CapabilityHarnessDto": {
         "type": "string",
@@ -6577,6 +6639,42 @@
           }
         }
       },
+      "Lineage": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The session the agent acted from, and so where the chain started.",
+            "required": ["session", "root", "type"],
+            "properties": {
+              "root": {
+                "$ref": "#/components/schemas/Root",
+                "description": "The first non-agent cause of its work."
+              },
+              "session": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The acting session."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["session"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An agent acted, but its session was not captured.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["unattributed"]
+              }
+            }
+          }
+        ],
+        "description": "Where an acting agent's work came from."
+      },
       "LinkShare": {
         "type": "string",
         "description": "Defines who can access an item through its share link.",
@@ -6639,6 +6737,9 @@
             "description": "Which way the frame travelled."
           }
         }
+      },
+      "MacroUserIdStr": {
+        "type": "string"
       },
       "MessageParent": {
         "oneOf": [
@@ -7401,6 +7502,85 @@
         ],
         "description": "Full UI record, fetched outside the model context."
       },
+      "Root": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A person.",
+            "required": ["user", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["person"]
+              },
+              "user": {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A routine.",
+            "required": ["routine", "type"],
+            "properties": {
+              "routine": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The routine."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["routine"]
+              }
+            }
+          }
+        ],
+        "description": "The first non-agent cause. An agent cannot be one, so a chain always ends\nat a person or a routine."
+      },
+      "RoutineCause": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "One of its schedules came due.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["scheduled"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Its owner started it by hand.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["manual"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An event it watches happened.",
+            "required": ["event_id", "type"],
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The event."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["event"]
+              }
+            }
+          }
+        ],
+        "description": "What made a routine fire."
+      },
       "SandboxSize": {
         "type": "string",
         "description": "Named compute tier for a managed sandbox.\n\nThe API and database store the name. CPU, RAM, and disk live in\n`crates/agent_harness/sandbox_sizes.json`.",
@@ -7892,6 +8072,155 @@
         "type": "string",
         "description": "Where a held tool call stands once answered.",
         "enum": ["pending", "approved", "denied", "cancelled", "expired"]
+      },
+      "TriggerOrigin": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A message mentioned the agent.",
+            "required": ["by", "message_id", "origin"],
+            "properties": {
+              "by": {
+                "$ref": "#/components/schemas/Caller",
+                "description": "Who posted it."
+              },
+              "message_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The message."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["mentioned"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A person wrote in their private conversation with the agent.",
+            "required": ["by", "message_id", "origin"],
+            "properties": {
+              "by": {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who wrote."
+              },
+              "message_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The message."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["conversation"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The agent was added to a task's assignees.",
+            "required": ["by", "task", "origin"],
+            "properties": {
+              "by": {
+                "$ref": "#/components/schemas/Caller",
+                "description": "Who assigned it."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["task_assigned"]
+              },
+              "task": {
+                "type": "string",
+                "description": "The task."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The task joined a project, and inherited the project's agents.",
+            "required": ["by", "task", "project", "origin"],
+            "properties": {
+              "by": {
+                "$ref": "#/components/schemas/Caller",
+                "description": "Who added the task to the project."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["project_inherited"]
+              },
+              "project": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The project."
+              },
+              "task": {
+                "type": "string",
+                "description": "The task."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A person opened the session directly, from the composer.",
+            "required": ["by", "origin"],
+            "properties": {
+              "by": {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who opened it."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["requested"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A tool handed the agent work. The tool knows only whose authority it\nruns under, not which agent called it.",
+            "required": ["on_behalf_of", "origin"],
+            "properties": {
+              "on_behalf_of": {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose authority the work runs under."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["dispatched"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A routine fired. Its owner owns the session, so the owner is not repeated.",
+            "required": ["routine", "firing", "origin"],
+            "properties": {
+              "firing": {
+                "$ref": "#/components/schemas/RoutineCause",
+                "description": "What made it fire."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["routine"]
+              },
+              "routine": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The routine."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Not known: an unclaimed warm session, a producer that predates this\nrecord, or a kind this build does not know.",
+            "required": ["origin"],
+            "properties": {
+              "origin": {
+                "type": "string",
+                "enum": ["unknown"]
+              }
+            }
+          }
+        ],
+        "description": "What opened a session."
       },
       "UpdateChannelSharePermission": {
         "type": "object",

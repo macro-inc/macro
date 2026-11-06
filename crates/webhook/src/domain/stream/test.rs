@@ -52,6 +52,35 @@ fn workspace_candidate(event_name: &str, workspace_id: &str) -> StreamCandidateE
     candidate
 }
 
+#[tokio::test]
+async fn private_call_event_streams_only_to_the_recipient() {
+    let (service, sender) = service(FakeAccessService::allowing(&[]));
+    let stream = service
+        .open_stream(subscriber(), WebhookScope::User, filter(&["call.invited"]))
+        .await
+        .unwrap();
+    sender
+        .send(StreamCandidateEvent {
+            event: normalized("call.invited", DOCUMENT_ID),
+            audience: StreamAudience::User {
+                user_id: "macro|other@example.com".to_string(),
+            },
+        })
+        .unwrap();
+    sender
+        .send(StreamCandidateEvent {
+            event: normalized("call.invited", DOCUMENT_ID),
+            audience: StreamAudience::User {
+                user_id: SUBSCRIBER_ID.to_string(),
+            },
+        })
+        .unwrap();
+
+    let delivered: Vec<_> = stream.take(1).collect().await;
+    assert_eq!(delivered.len(), 1);
+    assert_eq!(delivered[0].event_name, "call.invited");
+}
+
 fn filter(events: &[&str]) -> WebhookFilters {
     vec![WebhookFilter {
         events: events.iter().map(|event| event.to_string()).collect(),

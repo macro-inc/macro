@@ -79,6 +79,8 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
+- `call_participants.client` defaults to `person` for older call writers;
+  programmatic joins set `agent` or `api_key` after recording attendance.
 - Never hand-edit `.sqlx/query-*.json` or invent a migration timestamp.
 - Keep concurrent index migrations to one statement with `-- no-transaction`;
   build replacement indexes before dropping old constraints, and validate large

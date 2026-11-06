@@ -21,6 +21,10 @@ enforced by the ordinary backend APIs.
 - `src/entities/search/namespace.ts`: `macro.search`, one unified search across
   every kind of item with the direct search tools' filters (types, exact match,
   tags, inbox, agent session transcripts), returning typed handles.
+- `src/entities/calendar/booking-namespace.ts`: `macro.calendar.booking`, booking links
+  (`BookingLink`), settings, booked meetings (`Booking`) and insights over calendar
+  `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the
+  route rejects when blank; `BookingLink` handles keep their `team` for edits.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
   `harnesses.directory()` lists teammates' hosts and `Harness.requestAccess()`
   asks for one. Granting takes a human authorized reviewer's session, so the
@@ -64,6 +68,8 @@ enforced by the ordinary backend APIs.
   bot-management tools in its favour; `IssueBotCredential` stays, because its
   chat card mints a token the model never reads.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
+- `../sdk-calls/`: optional Node and browser LiveKit room helpers for call handles.
+- `src/entities/calls/`: live and recorded call handles; token-bearing `CallConnection` never serializes its token.
 
 ## Boundaries
 
@@ -72,6 +78,8 @@ enforced by the ordinary backend APIs.
 - Keep hosted-computer management, team-agent provisioning and recovery, and
   internal provisioning routes in app-only coverage exclusions; retain agent
   quote specifications in the generated contract.
+
+- Use POST to start channel calls and call-id scoped joins/leaves; the legacy GET starts a call as a side effect.
 - Keep notification mute, unmute, and snooze endpoints, including bulk item preferences, in the app-only coverage exclusions.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the

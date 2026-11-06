@@ -92,27 +92,7 @@ describe('createInboxList', () => {
       expect(list.view()).toMatchObject({ t: 'ready', rows: [] });
 
       setHasMore(false);
-      expect(list.view()).toEqual({ t: 'empty', filtered: false });
-      dispose();
-    });
-  });
-
-  it('shows only the rows the filter admits, and says when it hid them all', () => {
-    createRoot((dispose) => {
-      const { feed, setRows } = fakeFeed();
-      const [unreadOnly, setUnreadOnly] = createSignal(false);
-      const read = { ...row('b#task'), unseen: false };
-      const list = createInboxList(
-        feed,
-        notices().value,
-        (candidate) => !unreadOnly() || candidate.unseen
-      );
-      setRows([row('a#task'), read]);
-      setUnreadOnly(true);
-      expect(list.view()).toMatchObject({ t: 'ready', rows: [row('a#task')] });
-
-      setRows([read]);
-      expect(list.view()).toEqual({ t: 'empty', filtered: true });
+      expect(list.view()).toEqual({ t: 'empty' });
       dispose();
     });
   });

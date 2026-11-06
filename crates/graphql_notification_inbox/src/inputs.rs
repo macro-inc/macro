@@ -102,6 +102,9 @@ impl From<InboxRowType> for GraphqlNotificationInboxRowType {
 pub struct NotificationInboxScopeInput {
     /// Row kinds to include; omitted or empty means every kind.
     pub row_types: Option<Vec<GraphqlNotificationInboxRowType>>,
+    /// Only unread rows; pages, cursors and updates then cover unread rows
+    /// alone. Defaults to false.
+    pub unread_only: Option<bool>,
 }
 
 impl NotificationInboxScopeInput {
@@ -114,6 +117,7 @@ impl NotificationInboxScopeInput {
                 .into_iter()
                 .map(Into::into)
                 .collect(),
+            unread_only: self.unread_only.unwrap_or(false),
         }
     }
 }
@@ -158,6 +162,7 @@ pub struct ClearNotificationInboxInput {
     /// Which rows are cleared; the inbox the caller shows.
     pub scope: Option<NotificationInboxScopeInput>,
     /// Clear only unread rows.
+    #[graphql(deprecation = "Set scope.unreadOnly. Remove after 2026-12-06.")]
     pub unread_only: Option<bool>,
     /// RFC 3339 time; clear only rows whose newest notification arrived at or
     /// after it.
@@ -184,9 +189,10 @@ impl ClearNotificationInboxInput {
             .transpose()
             .map_err(|_| async_graphql::Error::new("invalid notification inbox clear time"))?
             .map(|since| since.with_timezone(&Utc));
+        let mut scope = self.scope.unwrap_or_default().into_scope();
+        scope.unread_only |= self.unread_only.unwrap_or(false);
         Ok(InboxClearRequest {
-            scope: self.scope.unwrap_or_default().into_scope(),
-            unread_only: self.unread_only.unwrap_or(false),
+            scope,
             since,
             limit: u16::try_from(limit).expect("limit is capped below u16::MAX"),
             after,

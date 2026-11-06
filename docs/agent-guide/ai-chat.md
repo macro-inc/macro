@@ -610,6 +610,7 @@ the shimmer.
   every card has **Chat about this** (adds a mention of that session to the
   composer draft) and **Open session**. Answered cards leave once the session
   stops waiting. Check with a coding session blocked on a permission prompt.
+- The Agents view's New conversation page shows the Agents `TutorialPill` centered under the composer (from `features/video-tutorials`) once that video is in its catalog (Home's agent input does not).
 - Selecting an agent changes the heading: **What should we work on?** for chat
   agents and **What should we build?** for coding agents. The draft stays intact
   when changing agents. Unsent New conversation text and attachments also come

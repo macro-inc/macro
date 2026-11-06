@@ -2,12 +2,12 @@
 //! workspace on PRs that touch manifests. Generated into `cargo_deny.yml`
 //! (replaces the hand-written `cargo-deny.yml`).
 
-use gh_workflow::{Event, Job, PullRequest, PullRequestType, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::{Event, Job, Step, Use, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
-use crate::workflows::{runners, vars};
+use crate::workflows::runners;
 
-/// Files whose change runs the check, on a push and in `PR CI`.
+/// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("Cargo.toml"),
     xtask_paths::repo_glob!("crates/**/Cargo.toml"),
@@ -20,22 +20,8 @@ pub const PATHS: &[RepoGlob<'static>] = &[
 
 /// Build the workflow.
 pub fn cargo_deny() -> Workflow {
-    let pull_request = PullRequest::default()
-        .add_branch("main")
-        .add_type(PullRequestType::Opened)
-        .add_type(PullRequestType::Synchronize)
-        .add_type(PullRequestType::Reopened)
-        .add_type(PullRequestType::ReadyForReview);
-
     Workflow::new("cargo deny check")
-        .on(Event::default()
-            .pull_request(
-                PATHS
-                    .iter()
-                    .fold(pull_request, |trigger, path| trigger.add_path(*path)),
-            )
-            .workflow_call(WorkflowCall::default()))
-        .concurrency(vars::concurrency("cargo-deny"))
+        .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("cargo-deny", cargo_deny_job())
 }
 

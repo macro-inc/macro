@@ -13377,6 +13377,12 @@ export interface SessionConversation {
    */
   status: string;
   /**
+   * What opened the session: who or what started it, and what it is about.
+   */
+  origin: {
+    [k: string]: unknown;
+  };
+  /**
    * Messages in the requested turn, or the latest messages, oldest first.
    */
   messages: SessionConversationMessage[];

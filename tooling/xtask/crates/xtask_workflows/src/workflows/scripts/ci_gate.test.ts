@@ -2,7 +2,20 @@
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { forkOutcome, GATE_JOB, gateOutcome, isOpenRequest, START_JOB } from './ci_gate.ts';
+import {
+  ciSourceChanges,
+  CONFLICTS,
+  labelBlocker,
+  STALE_MERGE,
+  FORK_CHANGES_CI,
+  forkOutcome,
+  forkRunDistrust,
+  GATE_JOB,
+  gateOutcome,
+  isOpenRequest,
+  PR_CI_PATH,
+  START_JOB,
+} from './ci_gate.ts';
 
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
 
@@ -129,5 +142,68 @@ describe('isOpenRequest', () => {
       false,
     );
     assert.equal(isOpenRequest(undefined), false);
+  });
+});
+
+describe('ciSourceChanges', () => {
+  const base = { '.github': 'aaa', 'tooling/xtask/crates/xtask_workflows': 'bbb' };
+
+  test('a fork that left the CI sources alone changes nothing', () => {
+    assert.deepEqual(ciSourceChanges({ ...base }, base), []);
+  });
+
+  test('names each source whose tree differs', () => {
+    assert.deepEqual(ciSourceChanges({ ...base, '.github': 'ccc' }, base), ['.github']);
+    assert.deepEqual(
+      ciSourceChanges({ '.github': 'ccc', 'tooling/xtask/crates/xtask_workflows': 'ddd' }, base),
+      ['.github', 'tooling/xtask/crates/xtask_workflows'],
+    );
+  });
+
+  test('a source missing on either side counts as changed', () => {
+    assert.deepEqual(ciSourceChanges({ ...base, '.github': null }, base), ['.github']);
+    assert.deepEqual(
+      ciSourceChanges(base, { ...base, 'tooling/xtask/crates/xtask_workflows': null }),
+      ['tooling/xtask/crates/xtask_workflows'],
+    );
+  });
+});
+
+describe('forkRunDistrust', () => {
+  test('trusts a pr-ci.yml run of a fork that left the CI sources alone', () => {
+    assert.equal(forkRunDistrust(PR_CI_PATH, []), null);
+  });
+
+  test('a fork that changed the CI sources fails, whatever its jobs say', () => {
+    assert.equal(forkRunDistrust(PR_CI_PATH, ['.github']), FORK_CHANGES_CI);
+    assert.equal(forkRunDistrust('.github/workflows/other.yml', ['.github']), FORK_CHANGES_CI);
+  });
+
+  test('another workflow named PR CI is not trusted', () => {
+    assert.equal(
+      forkRunDistrust('.github/workflows/other.yml', []),
+      `The run came from .github/workflows/other.yml, not ${PR_CI_PATH}`,
+    );
+  });
+});
+
+describe('labelBlocker', () => {
+  test('a mergeable PR whose merge commit holds PR CI can start it', () => {
+    assert.equal(labelBlocker(true, true), null);
+    assert.equal(labelBlocker(null, true), null);
+  });
+
+  test('a conflicting PR runs no pull_request workflow', () => {
+    assert.equal(labelBlocker(false, false), CONFLICTS);
+  });
+
+  test('a merge commit from before PR CI, or none, starts nothing', () => {
+    assert.equal(labelBlocker(true, false), STALE_MERGE);
+    assert.equal(labelBlocker(null, false), STALE_MERGE);
+  });
+
+  test('both explanations fit a commit status', () => {
+    assert.ok(STALE_MERGE.length <= 140);
+    assert.ok(CONFLICTS.length <= 140);
   });
 });

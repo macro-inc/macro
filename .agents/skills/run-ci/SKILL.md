@@ -23,9 +23,8 @@ instead of local checks: every run costs CI compute.
 CI runs when someone asks for it, not on every push. Adding the `run-ci` label
 to a PR runs every check on its head commit (the `PR CI` workflow), and the
 label disappears as the run starts. The result is the `CI gate` commit status on
-that commit. The merge gate is `CI gate` passing on the PR's latest commit, so
-every push needs a new run before the PR can merge (see the end of this page
-for the switch-over).
+that commit. `main` requires `CI gate` to pass on the PR's latest commit, so
+every push needs a new run before the PR can merge.
 
 Request CI on a stacked PR's actual base; the gate accepts feature branches too.
 
@@ -65,7 +64,13 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 | pass, `Passed on <sha>` | Every check passed or was path-skipped | Done |
 | fail, `Failed: <jobs>` | Those called workflows failed | Open the linked run, fix, push, run again |
 | fail, `The PR moved on ...` or `The merge commit did not include ...` | Labelled too soon after a push | Add the label again |
-| missing | A fork PR, before its first run | A maintainer adds the label |
+| fail, `PR CI can't start: ...` | The PR conflicts with `main`, or was last pushed before `PR CI` existed | Merge `main` in, push, add the label again |
+| missing | A fork PR before its first run, or a PR that conflicts with `main` | A maintainer adds the label; or merge `main` in and push |
+
+GitHub takes `PR CI` from the PR's merge commit with `main`, which it rebuilds
+on a push but not when `main` moves, and runs nothing on a conflicting PR. So on
+such a PR the label alone starts nothing; `CI Gate Label Check` then removes it
+and says why in `CI gate`.
 
 ## Fix a failure
 
@@ -78,14 +83,13 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 
 ## Fork PRs
 
-A maintainer adds the label after reading the diff, workflow files included:
-the run uses the fork's copies. The fork's token can't set statuses, so
-`CI Gate for Forks` removes the label and sets `CI gate` to `Running on <sha>`
-on the head the label went on, then copies the run's verdict onto that head.
+A maintainer adds the label after reading the diff: the run executes the
+fork's code. The fork's token can't set statuses, so `CI Gate for Forks`
+removes the label and sets `CI gate` to `Running on <sha>` on the head the
+label went on, then copies the verdict of the `pr-ci.yml` run onto that head.
 Re-running a fork's failed jobs doesn't update `CI gate`; add the label again.
 
-## While the switch is in progress
-
-The checks still run on every push as well, and `main` still requires their
-old status checks (`Web App Status Check`, `Cloud Storage Status Check`,
-`Infra Status Check`) until its ruleset requires `CI gate`.
+A fork run uses the fork's workflow files, so a fork that changes `.github/` or
+`tooling/xtask/crates/xtask_workflows` gets `CI gate` failure (`fork changes CI
+workflows`). To test it, a maintainer reviews it, pushes it to a branch here,
+and runs CI on a PR from that branch.
