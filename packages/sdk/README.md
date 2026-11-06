@@ -556,6 +556,30 @@ when mutations invalidate metadata. `update`, `cancel`, `invite(email)`,
 `call.meeting()` creates or reads its shareable meeting; calls also expose
 `editTranscript(assignments)` and `toggleTeamShare()`.
 
+### Programmatic calls
+
+Use `macro.calls.active()` to find joinable live calls and reconcile missed
+`call.*` events. `macro.calls.summaries(calls)` previews live or archived call
+handles in one request. `channel.activeCall()` checks without starting a call; use
+`channel.startCall()` only when intending to ring channel members. A live
+`call.join()` never creates a replacement call. `meeting.join()` enters with
+an account and `meeting.joinAsGuest(name)` uses the invitation link.
+
+Each entry returns a `CallConnection` with the LiveKit URL, token, identity,
+room name, call handle, and `started` flag. Pass the token directly to a
+LiveKit client; it is omitted from JSON and console inspection. Call
+`connection.leave()` when finished. Joins default to `onOtherCall: 'fail'`;
+pass `{ onOtherCall: 'switch' }` to move intentionally, or `{ replace: true }`
+to take over an existing connection for the same identity. Branch on
+`InOtherCallError`, `AlreadyConnectedError`, and `CallEndedError`.
+
+`call.ringState()` reads this account's ring state, `call.participants()` reads
+the live roster with user handles, `call.decline()` declines its ring,
+`call.discussion()` returns the call chat or its channel thread, and
+`call.recording.bytes()` downloads through the Macro host. Historical
+participants remain available as `call.historicParticipants()`.
+
+
 `calendar.occurrences(viewport)` auto-paginates and seeds event handles.
 `calendar.teamPage(viewport)` includes the roster and an optional next cursor;
 `teamOutOfOffice(viewport)` reports `hasMore` when its bounded results are truncated.
@@ -932,3 +956,10 @@ for (const shared of await personal.externalChats.list()) {
 Keep the same idempotency key when retrying the same request. A delivery state of
 `unknown` must be reconciled; never automatically resend it. Uploads, quoted
 messages, mentions, mutations, and delivery references must belong to the same chat.
+
+## Live call media
+
+Use `@macro-inc/sdk/calls/node` or `@macro-inc/sdk/calls/browser` for room
+connections and screen sharing. Install the optional LiveKit runtime only when
+using those helpers. The core import does not load or bundle call media code.
+See [Call rooms](CALLS.md) for installation and examples.

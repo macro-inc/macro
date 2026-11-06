@@ -1,3 +1,8 @@
+-- Serialize cutover with old settings writers. They retain ROW EXCLUSIVE
+-- through their company/contact purge, so none can cross this commit boundary.
+SET LOCAL lock_timeout = '5s';
+LOCK TABLE team_crm_settings IN SHARE ROW EXCLUSIVE MODE;
+
 -- Consent is deliberately empty on rollout. A team enabling CRM previously
 -- did not constitute individual permission to share a mailbox.
 -- Fail closed for old readers/workers during rollout. Current code ignores
@@ -15,9 +20,25 @@ END;
 $$;
 
 CREATE TRIGGER team_crm_settings_keep_email_sharing_disabled
-BEFORE INSERT OR UPDATE OF crm_enabled ON team_crm_settings
+BEFORE INSERT ON team_crm_settings
 FOR EACH ROW WHEN (NEW.crm_enabled)
 EXECUTE FUNCTION crm_disable_legacy_email_sharing();
+
+-- Old disable always follows its settings upsert with a destructive purge,
+-- even when the flag is already false. A statement trigger also rejects the
+-- UPDATE arm of INSERT ON CONFLICT when the settings row does not exist.
+-- Raising aborts the old transaction; silently ignoring a row would not.
+CREATE FUNCTION crm_reject_legacy_team_switch() RETURNS TRIGGER
+LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION USING ERRCODE = '55000',
+        MESSAGE = 'Team CRM enablement is retired; use individual email consent';
+END;
+$$;
+
+CREATE TRIGGER team_crm_settings_reject_legacy_switch
+BEFORE UPDATE OF crm_enabled ON team_crm_settings
+FOR EACH STATEMENT EXECUTE FUNCTION crm_reject_legacy_team_switch();
 
 CREATE TABLE crm_email_consent (
     team_id UUID NOT NULL,

@@ -95,7 +95,7 @@ outbound = [
   "ports",
 ]
 ports = ["dep:shared_entity_registry", "dep:tokio", "dep:tokio-retry"]
-schema = ["dep:utoipa", "macro_user_id/schema"]
+schema = ["dep:utoipa", "macro_user_id/schema", "pptx_engine?/openapi"]
 service = [
   "dep:entity_access_management",
   "dep:foreign_entity",

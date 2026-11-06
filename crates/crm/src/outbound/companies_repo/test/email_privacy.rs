@@ -1,3 +1,6 @@
+#[cfg(feature = "inbound")]
+mod http;
+
 use super::helpers::*;
 use crate::domain::companies_repo::CompaniesRepository;
 use crate::domain::email_privacy::{EmailBlockScope, EmailPrivacyChange, EmailPrivacyRepository};
@@ -33,6 +36,46 @@ async fn rollout_and_rollback_preserve_records_and_do_not_inherit_consent(
     enable_crm_for_team(&pool, team).await?;
     let company = insert_company(&pool, team, false, &["acme.example.com"]).await?;
     insert_contact(&pool, company, "pat@acme.example.com").await?;
+    // An old writer keeps its settings-table lock through the entire purge
+    // transaction. Cutover must wait or fail atomically, never straddle it.
+    let mut old_writer = pool.begin().await?;
+    sqlx::query!(
+        "UPDATE team_crm_settings SET crm_enabled=crm_enabled WHERE team_id=$1",
+        team
+    )
+    .execute(&mut *old_writer)
+    .await?;
+    let mut cutover = pool.begin().await?;
+    let error = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        sqlx::raw_sql(include_str!(
+            "../../../../../macro_db_client/migrations/20261106021950_crm_email_contribution.up.sql"
+        ))
+        .execute(&mut *cutover),
+    )
+    .await
+    .expect("cutover lock wait is bounded")
+    .unwrap_err();
+    assert_eq!(
+        error.as_database_error().and_then(|e| e.code()).as_deref(),
+        Some("55P03")
+    );
+    cutover.rollback().await?;
+    assert!(
+        sqlx::query_scalar!("SELECT to_regclass('crm_email_consent')::text AS table_name")
+            .fetch_one(&pool)
+            .await?
+            .is_none()
+    );
+    assert!(
+        sqlx::query_scalar!(
+            "SELECT crm_enabled FROM team_crm_settings WHERE team_id=$1",
+            team
+        )
+        .fetch_one(&pool)
+        .await?
+    );
+    old_writer.commit().await?;
     MACRO_DB_MIGRATIONS.run(&pool).await?;
     assert!(
         !sqlx::query_scalar!(
@@ -45,24 +88,30 @@ async fn rollout_and_rollback_preserve_records_and_do_not_inherit_consent(
     let new_team = Uuid::now_v7();
     seed_team(&pool, new_team, "macro|new-owner@example.com").await?;
     for legacy_team in [team, new_team] {
-        assert!(
-            !sqlx::query_scalar!(
-                "INSERT INTO team_crm_settings (team_id, crm_enabled) VALUES ($1, TRUE) ON CONFLICT (team_id) DO UPDATE SET crm_enabled = EXCLUDED.crm_enabled RETURNING crm_enabled",
-                legacy_team
-            )
-            .fetch_one(&pool)
-            .await?,
-            "legacy inserts and upserts cannot restore team-wide email sharing"
+        let error = sqlx::query!(
+            "INSERT INTO team_crm_settings (team_id, crm_enabled) VALUES ($1, TRUE) ON CONFLICT (team_id) DO UPDATE SET crm_enabled = EXCLUDED.crm_enabled",
+            legacy_team
+        ).execute(&pool).await.unwrap_err();
+        assert_eq!(
+            error.as_database_error().and_then(|e| e.code()).as_deref(),
+            Some("55000")
         );
     }
-    assert!(
-        !sqlx::query_scalar!(
-            "UPDATE team_crm_settings SET crm_enabled = TRUE WHERE team_id = $1 RETURNING crm_enabled",
-            team
-        )
-        .fetch_one(&pool)
-        .await?,
-        "legacy updates cannot bypass individual consent"
+    // A plain legacy team-creation insert remains compatible and cannot opt in.
+    assert!(!sqlx::query_scalar!(
+        "INSERT INTO team_crm_settings (team_id, crm_enabled) VALUES ($1, TRUE) RETURNING crm_enabled",
+        new_team
+    ).fetch_one(&pool).await?);
+    let error = sqlx::query!(
+        "UPDATE team_crm_settings SET crm_enabled = TRUE WHERE team_id = $1",
+        team
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        error.as_database_error().and_then(|e| e.code()).as_deref(),
+        Some("55000")
     );
     assert_eq!(
         sqlx::query_scalar!("SELECT count(*) FROM crm_email_consent")
@@ -72,6 +121,25 @@ async fn rollout_and_rollback_preserve_records_and_do_not_inherit_consent(
     );
     assert_eq!(count_contacts(&pool, company).await?, 1);
     assert_eq!(fetch_company_hidden(&pool, company).await?, Some(false));
+    // Ordinary governance/personal-provider settings do not touch the retired
+    // switch. Both the conflict and absent-row paths must remain available.
+    sqlx::query!("DELETE FROM team_crm_settings WHERE team_id=$1", new_team)
+        .execute(&pool)
+        .await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    for settings_team in [team, new_team] {
+        let settings = repo
+            .update_team_settings(
+                &settings_team,
+                &crate::domain::model::CrmTeamSettingsPatch {
+                    exclude_personal_emails: Some(false),
+                    ..Default::default()
+                },
+            )
+            .await?;
+        assert!(!settings.exclude_personal_emails);
+    }
+
     sqlx::raw_sql(include_str!(
         "../../../../../macro_db_client/migrations/20261106031523_crm_email_backfill_trace_context.down.sql"
     )).execute(&pool).await?;

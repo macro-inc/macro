@@ -31,6 +31,7 @@ import {
   sessionActivity,
 } from './activity';
 import { CodeExecution } from './code-execution';
+import { type SessionOrigin, sessionOrigin } from './origin';
 import { QueuedAction } from './queued-action';
 import { type CreateReviewOptions, SessionReview } from './review';
 import { ToolApproval } from './tool-approval';
@@ -277,6 +278,19 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
 
   /** The session's user-facing display name. */
   readonly name = this.field('name');
+
+  /**
+   * What opened the session: who or what started it, and what it is about.
+   * Readable by anyone who can view the session, including other agents.
+   */
+  async origin(): Promise<SessionOrigin> {
+    const detail = await this.detail.get();
+    return sessionOrigin(
+      this.client,
+      detail.origin ?? { origin: 'unknown' },
+      detail.threadChannelId ?? undefined,
+    );
+  }
 
   /**
    * Who archived the session, making it read-only: `'user'`,

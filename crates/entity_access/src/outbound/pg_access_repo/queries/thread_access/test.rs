@@ -380,13 +380,17 @@ async fn crm_consent_withdrawal_revokes_direct_access_but_keeps_mailbox_owner_ac
         access_as_requester(&pool, &thread).await,
         Some(AccessLevel::Comment)
     );
-    sqlx::query!(
+    let error = sqlx::query!(
         "UPDATE team_crm_settings SET crm_enabled = FALSE WHERE team_id = $1",
         team
     )
     .execute(&pool)
     .await
-    .unwrap();
+    .unwrap_err();
+    assert_eq!(
+        error.as_database_error().and_then(|e| e.code()).as_deref(),
+        Some("55000")
+    );
     assert_eq!(
         access_as_requester(&pool, &thread).await,
         Some(AccessLevel::Comment),

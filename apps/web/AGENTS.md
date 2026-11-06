@@ -507,13 +507,16 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Probe identity on deploy-preview origins even without a local login hint;
   shared HttpOnly dev cookies are not visible to JavaScript or localStorage.
 - Leave the login hint (`syncLoginStorage(true)`) before a full-page hosted
-  SSO redirect; the callback sets only HttpOnly cookies, and a load without the
-  hint never checks identity, so the returning user sees sign-in again.
+  SSO redirect, and as soon as a native sign-in redeems its session code; the
+  cookies are HttpOnly or in the native jar, and a load without the hint never
+  checks identity, so the user sees sign-in again over a valid session.
 - Hold automatic reloads (`holdAutomaticReload`) across anything a reload would
   lose. `createNativeAuthSession` holds them for the sheet: its result reaches
   only the JavaScript that opened it, and leaving the app for a sign-in code
-  hides the page, the moment OTA bundles apply. Holds also reach the native
-  updater, whose foreground handler never asks the page. See
+  hides the page, the moment OTA bundles apply. Native sign-in (`useSsoLogin`)
+  holds them on until the session code is redeemed and the login hint is down.
+  Holds also reach the native updater, whose foreground handler never asks the
+  page. See
   [reload diagnostics](tauri/src-tauri/README.md#diagnosing-unexpected-webview-reloads).
 - Disable GraphQL cache sessions and clear login hints on confirmed auth 401s,
   even with retained user data; preserve session state on transient failures.

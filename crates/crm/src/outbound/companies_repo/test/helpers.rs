@@ -322,7 +322,7 @@ pub(super) async fn fetch_contact_id(
 pub(super) async fn enable_crm_for_team(pool: &PgPool, team_id: Uuid) -> sqlx::Result<()> {
     sqlx::query(
         r#"INSERT INTO team_crm_settings (team_id, crm_enabled) VALUES ($1, TRUE)
-           ON CONFLICT (team_id) DO UPDATE SET crm_enabled = TRUE"#,
+           ON CONFLICT (team_id) DO NOTHING"#,
     )
     .bind(team_id)
     .execute(pool)
