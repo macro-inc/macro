@@ -76,18 +76,21 @@ pub(crate) fn resolve(
     let mut assumed = Assumed::default();
     if let Some(minutes) = phrase.offset {
         let start = TimeDelta::minutes(minutes);
-        let end = match (pick, phrase.length) {
-            (Pick::Span, Some(Length::Minutes(length))) => {
-                Some(Moment::After(start + TimeDelta::minutes(length)))
-            }
-            (Pick::Span, Some(Length::Days(days))) => {
-                Some(Moment::After(start + TimeDelta::days(days)))
-            }
-            _ => None,
-        };
+        let end = phrase
+            .length
+            .map(|length| {
+                start
+                    .checked_add(&match length {
+                        Length::Minutes(minutes) => TimeDelta::minutes(minutes),
+                        Length::Days(days) => TimeDelta::days(days),
+                    })
+                    .ok_or(Error::OutOfRange)
+            })
+            .transpose()?;
+        let (start, end) = picked(pick, start, end);
         return Ok(Reading {
             start: Moment::After(start),
-            end,
+            end: end.map(Moment::After),
             assumed,
         });
     }
@@ -129,16 +132,21 @@ pub(crate) fn resolve(
             .transpose()?,
     };
 
-    let (start, end) = match (pick, end) {
-        (Pick::End, Some(end)) => (end, None),
-        (Pick::Start, _) => (start, None),
-        (_, end) => (start, end),
-    };
+    let (start, end) = picked(pick, start, end);
     Ok(Reading {
         start: start.moment(),
         end: end.map(Point::moment),
         assumed,
     })
+}
+
+/// The part of a start and an optional end that `pick` names.
+fn picked<T>(pick: Pick, start: T, end: Option<T>) -> (T, Option<T>) {
+    match (pick, end) {
+        (Pick::End, Some(end)) => (end, None),
+        (Pick::Start, _) => (start, None),
+        (_, end) => (start, end),
+    }
 }
 
 /// The day a phrase starts on, and how it moves when its time has passed.

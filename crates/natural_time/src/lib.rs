@@ -30,8 +30,9 @@
 //! - A date with no time is at the caller's default time when one is given,
 //!   and otherwise a whole day.
 //! - A range end or a length (`for 45 min`) is kept by [`Pick::Span`];
-//!   [`Pick::End`] reads the range's end and [`Pick::Start`] its start.
-//!   `in 2 hours` is elapsed time from now.
+//!   [`Pick::End`] takes the end and [`Pick::Start`] the start. `in 2 hours`
+//!   is elapsed time from now, so `in 2 hours for 30 min` ends 150 minutes
+//!   from now.
 //! - Day and month names take common abbreviations (`tues`, `thurs`, `sept`)
 //!   and typos: one in a name of six or seven letters (`fridya`), two from
 //!   eight letters up (`thrsdy`). The closest name wins; a tie isn't read.

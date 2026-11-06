@@ -560,6 +560,8 @@ fn due_dates_and_reminders_take_one_end_of_a_range() {
             ("mon-wed", "2026-11-11"),
             ("tomorrow 2-3pm", "2026-11-07 15:00"),
             ("friday until 5pm", "2026-11-06 17:00"),
+            ("tomorrow 3pm for 45 minutes", "2026-11-07 15:45"),
+            ("in 2 hours for 30 minutes", "+150m"),
         ],
     );
     check(
@@ -568,6 +570,7 @@ fn due_dates_and_reminders_take_one_end_of_a_range() {
         &[
             ("tomorrow 2-3pm", "2026-11-07 14:00"),
             ("nov 12-14", "2026-11-12 09:00 [time]"),
+            ("in 2 hours for 30 minutes", "+120m"),
         ],
     );
 }
