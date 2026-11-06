@@ -96,3 +96,75 @@ fn legacy_capability_reports_default_to_no_personas() {
         HarnessCapabilities::default()
     );
 }
+
+#[tokio::test]
+async fn capability_reports_follow_changed_dns_after_a_healthy_connection_returns_not_found() {
+    use reqwest::dns::{Addrs, Name, Resolve, Resolving};
+    use std::net::SocketAddr;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{header, method, path},
+    };
+
+    struct StorageDns {
+        stale: SocketAddr,
+        current: SocketAddr,
+        changed: AtomicBool,
+    }
+    impl Resolve for StorageDns {
+        fn resolve(&self, name: Name) -> Resolving {
+            assert_eq!(name.as_str(), "storage.test");
+            let address = if self.changed.load(Ordering::SeqCst) {
+                self.current
+            } else {
+                self.stale
+            };
+            Box::pin(async move { Ok(Box::new(std::iter::once(address)) as Addrs) })
+        }
+    }
+
+    let stale = MockServer::start().await;
+    let current = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/harnesses/me/capabilities"))
+        .and(header(HARNESS_TOKEN_HEADER, "test-harness-token"))
+        .respond_with(ResponseTemplate::new(404))
+        .expect(1)
+        .mount(&stale)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path("/harnesses/me/capabilities"))
+        .and(header(HARNESS_TOKEN_HEADER, "test-harness-token"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&current)
+        .await;
+    let dns = Arc::new(StorageDns {
+        stale: *stale.address(),
+        current: *current.address(),
+        changed: AtomicBool::new(false),
+    });
+    let http = report_client_builder()
+        .no_proxy()
+        .dns_resolver(dns.clone())
+        .build()
+        .unwrap();
+    let capabilities = HarnessCapabilities::default();
+    let url = "http://storage.test/harnesses/me/capabilities";
+    assert!(
+        report(&http, url, "test-harness-token", &capabilities)
+            .await
+            .is_err()
+    );
+
+    dns.changed.store(true, Ordering::SeqCst);
+    report(&http, url, "test-harness-token", &capabilities)
+        .await
+        .unwrap();
+    stale.verify().await;
+    current.verify().await;
+}

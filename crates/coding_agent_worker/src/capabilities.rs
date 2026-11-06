@@ -46,8 +46,7 @@ pub fn spawn_reporter(
     cancel: CancellationToken,
     tasks: &TaskTracker,
 ) -> rootcause::Result<()> {
-    let http = reqwest::Client::builder()
-        .timeout(REPORT_TIMEOUT)
+    let http = report_client_builder()
         .build()
         .context("could not build the capability report client")?;
     let url = format!(
@@ -104,6 +103,13 @@ pub fn spawn_reporter(
         }
     });
     Ok(())
+}
+
+fn report_client_builder() -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
+        .timeout(REPORT_TIMEOUT)
+        // Repeated health polls must not pin a reassigned service IP forever.
+        .pool_max_idle_per_host(0)
 }
 
 fn track_reporter(

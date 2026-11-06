@@ -45,6 +45,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `127.0.0.1:5900`) to `PUT /harnesses/me/capabilities` when the serving core
   starts and on change. Display probing stays once a minute; enrolled persona
   health is sampled every 15 seconds and stored in the same JSON report.
+  Open a fresh connection for each report so recurring polls cannot pin a
+  reassigned service IP after backend restarts.
 - `src/domain/personas.rs`: unit recovery/backoff policy, independent of I/O.
   A stopped unit is started; a failed unit is reset and restarted. Attempts
   back off from 5 seconds to 5 minutes until health recovers. Units already
