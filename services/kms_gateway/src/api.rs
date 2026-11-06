@@ -116,7 +116,7 @@ async fn handle(
 }
 
 fn create_key() -> Value {
-    let id = uuid::Uuid::new_v4().to_string();
+    let id = uuid::Uuid::now_v7().to_string();
     json!({
         "KeyMetadata": {
             "KeyId": id,

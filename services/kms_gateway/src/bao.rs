@@ -4,6 +4,9 @@ use reqwest::StatusCode;
 use rootcause::{Report, bail};
 use serde_json::{Value, json};
 
+/// Callers wait on this request, so a stuck OpenBao must not hang them.
+const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 #[derive(Clone)]
 pub struct Transit {
     client: reqwest::Client,
@@ -19,18 +22,23 @@ pub enum DecryptError {
 }
 
 impl Transit {
-    pub fn new(addr: String, token: String) -> Self {
-        Self {
-            client: reqwest::Client::new(),
+    pub fn new(addr: String, token: String) -> Result<Self, Report> {
+        Ok(Self {
+            client: reqwest::Client::builder()
+                .timeout(REQUEST_TIMEOUT)
+                .build()?,
             addr,
             token,
-        }
+        })
     }
 
     async fn post(&self, path: &str, body: &Value) -> Result<reqwest::Response, Report> {
+        let mut trace = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut trace);
         Ok(self
             .client
             .post(format!("{}/v1/transit/{path}", self.addr))
+            .headers(trace)
             .header("X-Vault-Token", &self.token)
             .json(body)
             .send()

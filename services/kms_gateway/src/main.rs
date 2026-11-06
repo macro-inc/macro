@@ -15,7 +15,7 @@ use crate::{bao::Transit, config::Config};
 async fn main() -> Result<(), Report> {
     let config = Config::from_env()?;
     let entrypoint = MacroEntrypoint::new(config.environment).init();
-    let transit = Transit::new(config.openbao_addr, config.openbao_token);
+    let transit = Transit::new(config.openbao_addr, config.openbao_token)?;
     let listener = TcpListener::bind(("0.0.0.0", config.port)).await?;
     tracing::info!(port = config.port, "kms gateway listening");
     axum::serve(listener, api::router(transit))
