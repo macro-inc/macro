@@ -44,8 +44,9 @@ Leaving the tools step starts the scheduler picking routines from the inbox
 and tools connected so far (`POST /scheduled-actions/suggestions/refresh`,
 with `enable-routine-suggestions` and `enable-routine-code-steps` on).
 
-- It lists only catalog routines, grouped by area, each with a switch, its
-  sentence with editable knobs, and why AI picked it. Requests the drafter
+- It lists only catalog routines, grouped by area, each as a Routines page
+  template card (area icon, name, trigger → step line) with a switch in the
+  corner, its sentence with editable knobs, and why AI picked it. Requests the drafter
   would write wait for the sidebars.
 - Switched on to start: only routines the catalog marks safe by default
   (code that changes the person's own mail and tasks), most likely kept

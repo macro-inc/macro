@@ -1,5 +1,4 @@
 import { RoutineSparkGlyph } from '@app/features/routine-suggestions/components/routine-spark-glyph';
-import { SuggestionIcon } from '@app/features/routine-suggestions/components/suggestion-icon';
 import {
   ROUTINE_SURFACES,
   SURFACE_COPY,
@@ -8,10 +7,17 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { RoutineSuggestion } from '@service-scheduled-action/generated/schemas';
 import { cn, ToggleSwitch } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { RoutineSurface } from '../../routines/components/routine-editor';
 import {
   KnobSettings,
   StepSentence,
 } from '../../routines/components/routine-step-knobs';
+import {
+  RoutineCardChain,
+  surfaceLook,
+  templateCard,
+} from '../../routines/components/routine-template-strip';
 import { knobsOutsideSentence } from '../../routines/core/knobs';
 import { ContinueButton, SkipButton } from '../components/controls';
 import { useOnboardingContext } from '../context/onboarding-context';
@@ -19,7 +25,11 @@ import { createRoutinesStep } from '../primitives/routines-step';
 
 type StarterSuggestion = Extract<RoutineSuggestion, { kind: 'starter' }>;
 
-/** One routine: its switch, what it does with its knobs in place, and why. */
+/**
+ * One routine as a routine card, the look of the Routines page templates:
+ * its area icon, name, what it does with its knobs in place, its trigger →
+ * step line and why AI picked it, with its switch in the corner.
+ */
 function RoutineChoice(props: {
   suggestion: StarterSuggestion;
   step: ReturnType<typeof createRoutinesStep>;
@@ -36,73 +46,79 @@ function RoutineChoice(props: {
   const created = () => props.step.created(props.suggestion);
   const onKnob = (name: string, value: Parameters<typeof props.step.edit>[2]) =>
     props.step.edit(props.suggestion, name, value);
+  const look = () => surfaceLook(props.suggestion.surface);
   return (
     <Show when={entry()}>
       {(entry) => (
-        <li
-          class={cn(
-            'flex list-none items-start gap-3 rounded-xl border border-transparent p-3',
-            props.step.isOn(props.suggestion) && 'border-edge-muted bg-control'
-          )}
-        >
-          <ToggleSwitch
-            checked={props.step.isOn(props.suggestion)}
-            disabled={props.disabled || created()}
-            size="sm"
-            class="mt-1 shrink-0"
-            label={<span class="sr-only">Turn on {entry().title}</span>}
-            onChange={(on) => props.step.setOn(props.suggestion, on)}
-          />
-          <SuggestionIcon
-            surface={props.suggestion.surface}
-            catalogKey={props.suggestion.key}
-          />
-          <div class="min-w-0 flex-1">
-            <p class="text-sm font-medium text-ink">{entry().title}</p>
-            <Show
-              when={code()?.sentence}
-              fallback={
-                <p class="text-[15px] leading-7 text-ink-muted">
-                  {entry().description}
-                </p>
-              }
-            >
-              {(sentence) => (
-                <StepSentence
-                  sentence={sentence()}
-                  knobs={code()?.knobs ?? []}
-                  onKnob={onKnob}
+        <li class="list-none">
+          <RoutineSurface
+            class={cn(
+              props.step.isOn(props.suggestion) && 'ring-1 ring-edge-muted'
+            )}
+          >
+            <div class="flex min-w-0 items-start gap-3 px-4 py-3.5">
+              <div class="flex min-w-0 flex-1 flex-col items-start gap-1.5">
+                <Dynamic
+                  component={look().icon}
+                  class={cn('size-4 shrink-0', look().tint)}
+                  aria-hidden="true"
                 />
-              )}
-            </Show>
-            <Show
-              when={
-                knobsOutsideSentence(code()?.sentence, code()?.knobs ?? [])
-                  .length
-              }
-            >
-              <div class="mt-2">
-                <KnobSettings
-                  knobs={knobsOutsideSentence(
-                    code()?.sentence,
-                    code()?.knobs ?? []
+                <p class="text-sm font-medium text-ink">{entry().title}</p>
+                <Show
+                  when={code()?.sentence}
+                  fallback={
+                    <p class="text-xs leading-4 text-ink-muted">
+                      {entry().description}
+                    </p>
+                  }
+                >
+                  {(sentence) => (
+                    <StepSentence
+                      sentence={sentence()}
+                      knobs={code()?.knobs ?? []}
+                      onKnob={onKnob}
+                    />
                   )}
-                  onKnob={onKnob}
-                />
+                </Show>
+                <Show
+                  when={
+                    knobsOutsideSentence(code()?.sentence, code()?.knobs ?? [])
+                      .length
+                  }
+                >
+                  <KnobSettings
+                    knobs={knobsOutsideSentence(
+                      code()?.sentence,
+                      code()?.knobs ?? []
+                    )}
+                    onKnob={onKnob}
+                  />
+                </Show>
+                <span class="mt-1 min-w-0 max-w-full">
+                  <RoutineCardChain card={templateCard(entry())} />
+                </span>
+                <p class="text-xs text-ink-extra-muted">
+                  {props.suggestion.reason}
+                </p>
+                <Show when={props.step.failed(props.suggestion)}>
+                  <p role="alert" class="text-xs text-failure">
+                    Couldn’t turn this on. Try again, or leave it off.
+                  </p>
+                </Show>
+                <Show when={created()}>
+                  <p class="text-xs text-success">On</p>
+                </Show>
               </div>
-            </Show>
-            <p class="mt-1 text-xs text-ink-extra-muted">
-              {props.suggestion.reason}
-            </p>
-            <Show when={props.step.failed(props.suggestion)}>
-              <p role="alert" class="mt-1 text-xs text-failure">
-                Couldn’t turn this on. Try again, or leave it off.
-              </p>
-            </Show>
-            <Show when={created()}>
-              <p class="mt-1 text-xs text-success">On</p>
-            </Show>
-          </div>
+              <ToggleSwitch
+                checked={props.step.isOn(props.suggestion)}
+                disabled={props.disabled || created()}
+                size="sm"
+                class="shrink-0"
+                label={<span class="sr-only">Turn on {entry().title}</span>}
+                onChange={(on) => props.step.setOn(props.suggestion, on)}
+              />
+            </div>
+          </RoutineSurface>
         </li>
       )}
     </Show>
@@ -154,7 +170,7 @@ export function RoutinesStep(props: { finishing: boolean; onFinish(): void }) {
                   >
                     {SURFACE_COPY[group.surface].label}
                   </h2>
-                  <ul class="flex flex-col gap-1">
+                  <ul class="grid gap-2.5">
                     <For each={group.suggestions}>
                       {(suggestion) => (
                         <RoutineChoice
