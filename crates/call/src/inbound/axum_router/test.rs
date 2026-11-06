@@ -211,3 +211,129 @@ mod public_routes {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }
+
+#[cfg(test)]
+mod authenticated_join_routes {
+    use std::sync::Arc;
+
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use entity_access::domain::ports::NoOpEntityAccessService;
+    use macro_authorization::{
+        InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
+        MacroAuthorizationState, ValidatedCredential,
+    };
+    use model_user::UserContext;
+    use rootcause::Report;
+    use tower::ServiceExt;
+    use uuid::Uuid;
+
+    use crate::domain::{
+        models::{CallError, CallTokenResponse},
+        ports::MockCallService,
+    };
+    use crate::inbound::axum_router::{CallRouterState, call_router};
+
+    #[derive(Clone)]
+    struct Auth;
+
+    impl MacroAuthorizationService for Auth {
+        async fn authorize(
+            &self,
+            jwt: &str,
+        ) -> Result<UserContext, Report<MacroAuthorizationError>> {
+            let user_id = match jwt {
+                "member" => "macro|member@example.com",
+                "viewer" => "macro|viewer@example.com",
+                _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
+            };
+            Ok(UserContext {
+                user_id: user_id.to_string(),
+                fusion_user_id: "00000000-0000-0000-0000-000000000001".to_string(),
+                permissions: None,
+                organization_id: None,
+            })
+        }
+
+        async fn authorize_identity(
+            &self,
+            jwt: &str,
+        ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
+            self.authorize(jwt).await.map(ValidatedCredential::session)
+        }
+
+        async fn authorize_internal(
+            &self,
+            _key: &str,
+            _claims: InternalIdentityClaims,
+        ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+            Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+        }
+    }
+
+    fn router(service: MockCallService) -> axum::Router {
+        call_router(CallRouterState::new(
+            Arc::new(service),
+            Arc::new(NoOpEntityAccessService),
+            MacroAuthorizationState::new(Arc::new(Auth)),
+        ))
+    }
+
+    fn join(call_id: Uuid, actor: &str) -> Request<Body> {
+        Request::post(format!("/record/{call_id}/join"))
+            .header("authorization", format!("Bearer {actor}"))
+            .header("content-type", "application/json")
+            .body(Body::from("{}"))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn join_route_returns_forbidden_for_view_only_access() {
+        let call_id = Uuid::now_v7();
+        let mut service = MockCallService::new();
+        service.expect_join_call().times(1).returning(|_, _, _, _| {
+            Box::pin(async {
+                Err(CallError::Forbidden(
+                    "view access does not admit a participant".to_string(),
+                ))
+            })
+        });
+
+        let response = router(service)
+            .oneshot(join(call_id, "viewer"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn join_route_returns_a_token_for_joinable_access() {
+        let call_id = Uuid::now_v7();
+        let mut service = MockCallService::new();
+        service
+            .expect_join_call()
+            .times(1)
+            .returning(move |_, _, _, _| {
+                Box::pin(async move {
+                    Ok(CallTokenResponse {
+                        started: false,
+                        participant_id: "macro|member@example.com".to_string(),
+                        share_token: None,
+                        call_id,
+                        channel_id: None,
+                        token: "test-token".to_string(),
+                        room_name: call_id.to_string(),
+                        server_url: "wss://example.com".to_string(),
+                    })
+                })
+            });
+
+        let response = router(service)
+            .oneshot(join(call_id, "member"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+}
