@@ -268,6 +268,13 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 
 ## Gotchas
 
+- Preserve undecodable rows as `ComputerRecord::NeedsAttention` with row id, team,
+  host and a static field-and-rule reason; never include parser errors or stored
+  values in quarantine logs. Keep their ids in expected instances and treat
+  quarantine as present in orphan checks. Only validated computers receive
+  lifecycle events or have effects/timers selected; repair resumes pending work.
+  Retain raw purchase metadata for display only; quarantine reports null payment.
+
 - DockerFleet enforces recorded vCPU and memory limits through cgroups without
   CPU pinning; dev-only Docker guests still see host totals in `/proc` and
   `nproc`. Do not add lxcfs; Incus VMs see their real CPU and memory limits.

@@ -191,7 +191,15 @@ async fn timer_delivery_consults_fleet_before_applying_missing_macrod() {
                 fire_at: now(),
             });
         operator.fire_timers().await.unwrap();
-        let state = operator.repo.get(id).await.unwrap().unwrap().state;
+        let state = operator
+            .repo
+            .get(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap()
+            .state;
         assert_eq!(
             state.phase,
             if observed == Some(InstanceStatus::Running) {

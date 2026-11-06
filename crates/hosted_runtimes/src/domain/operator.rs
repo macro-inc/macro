@@ -13,7 +13,7 @@ use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::lifecycle::{
     Effect, EffectWorker, Event, HostId, MACROD_GRACE, Phase, TimerKind,
 };
-use crate::domain::models::{Computer, EnrollmentDefaults};
+use crate::domain::models::{Computer, ComputerRecord, EnrollmentDefaults};
 use crate::domain::persona_credentials::{EnrollmentGeneration, PersonaCredentialError};
 use crate::domain::ports::{
     ComputerRepo, Fleet, FleetEnrollment, FleetError, FleetInstance, Harnesses, InstanceStatus,
@@ -466,7 +466,10 @@ where
             .collect();
         let expected = self.repo.instances_expected(host).await.map_err(internal)?;
 
-        for computer in &expected {
+        for record in &expected {
+            let Some(computer) = record.healthy() else {
+                continue;
+            };
             let observed = instances.get(&computer.id).map(|instance| instance.status);
             if observed.is_some() {
                 match self.fleet.resources_match(computer).await {
@@ -515,7 +518,7 @@ where
             {
                 continue;
             }
-            let known = expected.iter().any(|computer| computer.id == *orphan);
+            let known = expected.iter().any(|computer| computer.id() == *orphan);
             if !known
                 && self
                     .repo
@@ -540,7 +543,10 @@ where
         self.host_id().await?;
         let since = self.clock.now() - IDLE_AFTER;
         let mut frozen = 0;
-        for computer in self.repo.running().await.map_err(internal)? {
+        for record in self.repo.running().await.map_err(internal)? {
+            let Some(computer) = record.healthy() else {
+                continue;
+            };
             if computer.persona.is_some() {
                 continue;
             }
@@ -634,7 +640,11 @@ where
             .get(computer_id)
             .await
             .map_err(internal)?
-            .ok_or(ComputerError::NotFound)
+            .ok_or(ComputerError::NotFound)?
+            .into_healthy()
+            .map_err(|_| {
+                ComputerError::BadRequest("computer needs attention; contact support".to_owned())
+            })
     }
 }
 
@@ -652,8 +662,10 @@ fn fleet_completion(
     }
 }
 
-fn is_gone(computer: Computer) -> bool {
-    computer.state.phase == Phase::Destroyed
+fn is_gone(record: ComputerRecord) -> bool {
+    record
+        .healthy()
+        .is_some_and(|computer| computer.state.phase == Phase::Destroyed)
 }
 
 fn effect_host(effect: &Effect) -> Option<HostId> {

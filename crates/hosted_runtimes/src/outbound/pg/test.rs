@@ -8,6 +8,8 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
+use crate::domain::models::ComputerName;
+use crate::domain::size::{DiskGib, MemoryGib, Vcpus};
 
 mod purchase;
 
@@ -310,7 +312,7 @@ async fn lifecycle_selectors_read_the_nested_phase_tag(pool: PgPool) {
             .await
             .unwrap()
             .iter()
-            .map(|c| c.id)
+            .map(|c| c.id())
             .collect::<Vec<_>>(),
         vec![id]
     );
@@ -538,9 +540,11 @@ async fn payment_provenance_migration_backfills_legacy_rows_and_preserves_resolv
             .get(ComputerId::new_from_uuid(Uuid::from_u128(id)))
             .await
             .unwrap()
+            .unwrap()
+            .into_healthy()
             .unwrap();
         assert_eq!(computer.state.payment, expected);
-        assert_eq!(computer.status().payment, expected);
+        assert_eq!(computer.status().payment.unwrap(), expected);
     }
 }
 
@@ -564,7 +568,13 @@ async fn comped_reservation_commits_provisioning_without_payment_recovery(pool: 
     let reserved = repo.reserve(request, now()).await.unwrap();
     assert!(matches!(reserved.state.phase, Phase::Provisioning { .. }));
     assert_eq!(reserved.price_id, None);
-    let comped = repo.get(reserved.id).await.unwrap().unwrap();
+    let comped = repo
+        .get(reserved.id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert!(matches!(comped.state.phase, Phase::Provisioning { .. }));
     assert!(
         repo.lease_effects(
@@ -591,6 +601,8 @@ async fn comped_reservation_commits_provisioning_without_payment_recovery(pool: 
         repo.get(reserved.id)
             .await
             .unwrap()
+            .unwrap()
+            .into_healthy()
             .unwrap()
             .status()
             .comp_reason
@@ -622,6 +634,8 @@ async fn capacity_counts_recorded_resources_independently_of_size(pool: PgPool) 
         .get(ComputerId::new_from_uuid(Uuid::from_u128(50)))
         .await
         .unwrap()
+        .unwrap()
+        .into_healthy()
         .unwrap();
     assert_eq!(stored.size, ComputerSize::Standard);
     assert_eq!(

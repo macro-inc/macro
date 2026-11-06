@@ -29,6 +29,8 @@ async fn generations_and_create_outbox_never_persist_issuance_material(pool: PgP
             .await
             .unwrap()
             .unwrap()
+            .into_healthy()
+            .unwrap()
             .enrollment_generation,
         EnrollmentGeneration::new(0)
     );
@@ -65,6 +67,8 @@ async fn generations_and_create_outbox_never_persist_issuance_material(pool: PgP
             .await
             .unwrap()
             .unwrap()
+            .into_healthy()
+            .unwrap()
             .enrollment_generation,
         EnrollmentGeneration::new(1)
     );
@@ -78,6 +82,8 @@ async fn generations_and_create_outbox_never_persist_issuance_material(pool: PgP
         repo.get(computer.id)
             .await
             .unwrap()
+            .unwrap()
+            .into_healthy()
             .unwrap()
             .enrollment_generation,
         EnrollmentGeneration::new(2)
@@ -121,6 +127,8 @@ async fn cleanup_removes_bootstrap_values_from_both_maps_and_keeps_non_secret_co
         .get(computer.id)
         .await
         .unwrap()
+        .unwrap()
+        .into_healthy()
         .unwrap()
         .persona
         .unwrap();
@@ -213,7 +221,15 @@ async fn personas_decode_after_forward_bootstrap_cleanup(pool: PgPool) {
     assert!(repo.get(id).await.is_err());
     // Apply the original strip and every forward migration before decoding.
     MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
-    let persona = repo.get(id).await.unwrap().unwrap().persona.unwrap();
+    let persona = repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap()
+        .persona
+        .unwrap();
     assert_eq!(persona.config.len(), 1);
     assert_eq!(
         persona.config.get("REPO_URL").unwrap(),
@@ -242,7 +258,15 @@ async fn personas_decode_after_forward_bootstrap_cleanup(pool: PgPool) {
     sqlx::raw_sql(include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
         "/../macro_db_client/migrations/20261106183859_strip_persona_bootstrap_keys_case_sensitively.sql")))
         .execute(&pool).await.unwrap();
-    let persona = repo.get(id).await.unwrap().unwrap().persona.unwrap();
+    let persona = repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap()
+        .persona
+        .unwrap();
     assert_eq!(persona.config.len(), 2);
     assert_eq!(persona.config.get("lower_key").unwrap(), "non-secret");
     assert_eq!(persona.extra_service.env.len(), 1);

@@ -117,7 +117,14 @@ async fn completion_and_boot_timer_commit_together_or_roll_back_together(pool: P
         .await
         .unwrap()
         .remove(0);
-    let state = repo.get(id).await.unwrap().unwrap().state;
+    let state = repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap()
+        .state;
     sqlx::query!(
         "UPDATE hosted_runtime SET state = '{}'::jsonb WHERE id = $1",
         id.as_uuid()
@@ -150,7 +157,14 @@ async fn completion_and_boot_timer_commit_together_or_roll_back_together(pool: P
         .await
         .unwrap();
     assert_eq!(
-        repo.get(id).await.unwrap().unwrap().state.phase,
+        repo.get(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap()
+            .state
+            .phase,
         Phase::Booting { host: host.id }
     );
     assert_eq!(

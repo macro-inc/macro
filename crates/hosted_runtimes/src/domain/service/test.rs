@@ -13,6 +13,7 @@ use crate::domain::models::{BillingInterval, SubscriptionItem};
 
 mod comped;
 mod purchase;
+mod quarantine;
 mod rollout;
 mod sold_resources;
 
@@ -173,7 +174,14 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
             format!("computer-add:{computer_id}"),
         )]
     );
-    let stored = service.repo.get(computer_id).await.unwrap().unwrap();
+    let stored = service
+        .repo
+        .get(computer_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(
         stored.resources,
         crate::domain::size::ComputerResources {
@@ -265,7 +273,7 @@ async fn declined_payment_drops_the_reservation() {
         vec!["quote", "add_computer"]
     );
     assert!(service.billing.charged.lock().unwrap().is_empty());
-    assert_eq!(computers[0].payment, PaymentOutcome::Unbilled);
+    assert_eq!(computers[0].payment.unwrap(), PaymentOutcome::Unbilled);
     let released = service
         .release_now(TEAM, computers[0].id, "Build box")
         .await
@@ -274,9 +282,14 @@ async fn declined_payment_drops_the_reservation() {
         released.status,
         crate::domain::models::ComputerStatusKind::Released
     );
-    assert_eq!(released.payment, PaymentOutcome::Unbilled);
+    assert_eq!(released.payment.unwrap(), PaymentOutcome::Unbilled);
     assert_eq!(
-        service.status(TEAM, released.id).await.unwrap().payment,
+        service
+            .status(TEAM, released.id)
+            .await
+            .unwrap()
+            .payment
+            .unwrap(),
         PaymentOutcome::Unbilled
     );
     assert_eq!(service.run_billing_effects().await.unwrap(), 0);
@@ -376,9 +389,14 @@ async fn release_now_needs_the_name_and_removes_the_item_once() {
         released.status,
         crate::domain::models::ComputerStatusKind::Released
     );
-    assert_eq!(released.payment, PaymentOutcome::Paid);
+    assert_eq!(released.payment.unwrap(), PaymentOutcome::Paid);
     assert_eq!(
-        service.status(TEAM, computer_id).await.unwrap().payment,
+        service
+            .status(TEAM, computer_id)
+            .await
+            .unwrap()
+            .payment
+            .unwrap(),
         PaymentOutcome::Paid
     );
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
@@ -492,6 +510,8 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
         .get(ComputerId::new_from_uuid(Uuid::from_u128(2)))
         .await
         .unwrap()
+        .unwrap()
+        .into_healthy()
         .unwrap();
     assert_eq!(newest.state.power, Power::Off);
     assert!(matches!(
@@ -547,7 +567,14 @@ async fn retry_failed_computer_restarts_without_billing() {
 
     let status = result.unwrap();
     assert_eq!(status, service.status(TEAM, computer_id).await.unwrap());
-    let computer = service.repo.get(computer_id).await.unwrap().unwrap();
+    let computer = service
+        .repo
+        .get(computer_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(computer.state.phase, Phase::Booting { host: HOST });
     assert_eq!(
         *service.repo.events.lock().unwrap(),
@@ -731,6 +758,8 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
             .await
             .unwrap()
             .unwrap()
+            .into_healthy()
+            .unwrap()
             .state
             .phase,
         Phase::Provisioning {
@@ -794,7 +823,16 @@ async fn provider_error_stays_pending_and_confirmation_keeps_retrying() {
     service.repo.effect_run_after.lock().unwrap().clear();
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
     assert_eq!(
-        service.repo.get(id).await.unwrap().unwrap().state.phase,
+        service
+            .repo
+            .get(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap()
+            .state
+            .phase,
         Phase::PendingPayment {
             host: HOST,
             since: now()
@@ -901,7 +939,16 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
     service.repo.effect_run_after.lock().unwrap().clear();
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
     assert_eq!(
-        service.repo.get(id).await.unwrap().unwrap().state.phase,
+        service
+            .repo
+            .get(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap()
+            .state
+            .phase,
         Phase::PaymentFailed
     );
     assert!(service.repo.effects.lock().unwrap().is_empty());

@@ -11,8 +11,8 @@ use crate::domain::enrollment::Persona;
 use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, Phase};
 use crate::domain::models::{
-    Computer, ComputerName, ComputerStatus, NewComputer, PurchaseBilling, PurchaseRequest, Quote,
-    SizeOffer,
+    Computer, ComputerName, ComputerRecord, ComputerStatus, NewComputer, PurchaseBilling,
+    PurchaseRequest, Quote, SizeOffer,
 };
 use crate::domain::ports::{
     Billing, BillingError, CompPolicy, ComputerRepo, NoComps, ReserveError,
@@ -348,14 +348,14 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         team_id: Uuid,
         computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
-        Ok(self.team_computer(team_id, computer_id).await?.status())
+        Ok(self.team_record(team_id, computer_id).await?.status())
     }
 
     /// The team's computers, oldest first.
     #[tracing::instrument(skip(self), err)]
     pub async fn list(&self, team_id: Uuid) -> Result<Vec<ComputerStatus>, ComputerError> {
         let computers = self.repo.list_for_team(team_id).await.map_err(internal)?;
-        Ok(computers.iter().map(Computer::status).collect())
+        Ok(computers.iter().map(ComputerRecord::status).collect())
     }
 
     /// Apply the team-requested power state.
@@ -460,6 +460,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         let computers = self.repo.list_for_team(team_id).await.map_err(internal)?;
         let mut paid: Vec<&Computer> = computers
             .iter()
+            .filter_map(ComputerRecord::healthy)
             .filter(|computer| computer.is_billed())
             .collect();
         paid.sort_by_key(|computer| computer.created_at);
@@ -566,7 +567,9 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
             .get(computer_id)
             .await
             .map_err(internal)?
-            .ok_or(ComputerError::NotFound)?;
+            .ok_or(ComputerError::NotFound)?
+            .into_healthy()
+            .map_err(internal)?;
         if matches!(computer.state.phase, Phase::PaymentFailed) {
             return Err(BillingError::PaymentFailed.into());
         }
@@ -622,7 +625,9 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
             .get(computer_id)
             .await
             .map_err(internal)?
-            .ok_or(ComputerError::NotFound)?;
+            .ok_or(ComputerError::NotFound)?
+            .into_healthy()
+            .map_err(internal)?;
         if computer.state.payment != crate::domain::lifecycle::PaymentOutcome::Paid {
             return Ok(());
         }
@@ -639,17 +644,30 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         Ok(())
     }
 
+    async fn team_record(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<ComputerRecord, ComputerError> {
+        self.repo
+            .get(computer_id)
+            .await
+            .map_err(internal)?
+            .filter(|computer| computer.team_id() == team_id)
+            .ok_or(ComputerError::NotFound)
+    }
+
     async fn team_computer(
         &self,
         team_id: Uuid,
         computer_id: ComputerId,
     ) -> Result<Computer, ComputerError> {
-        self.repo
-            .get(computer_id)
-            .await
-            .map_err(internal)?
-            .filter(|computer| computer.team_id == team_id)
-            .ok_or(ComputerError::NotFound)
+        self.team_record(team_id, computer_id)
+            .await?
+            .into_healthy()
+            .map_err(|_| {
+                ComputerError::BadRequest("computer needs attention; contact support".to_owned())
+            })
     }
 
     async fn apply_for_team(

@@ -69,7 +69,15 @@ async fn boot_timeout_uses_durable_timer_and_refreshes_grace_after_downtime(pool
         .await
         .unwrap();
     assert_eq!(
-        restarted.get(id).await.unwrap().unwrap().state.phase,
+        restarted
+            .get(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap()
+            .state
+            .phase,
         Phase::Running { host: host.id }
     );
 }

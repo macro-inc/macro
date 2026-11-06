@@ -13,8 +13,8 @@ use crate::domain::enrollment::{DeviceSecret, Enrollment};
 use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, TimerKind};
 use crate::domain::models::{
-    BillingInterval, Computer, ControlPlaneId, Host, HostRegistration, NewComputer, Quote,
-    SubscriptionItem,
+    BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostRegistration, NewComputer,
+    Quote, SubscriptionItem,
 };
 use crate::domain::persona_credentials::{
     EnrollmentGeneration, PersonaCredentialError, PersonaEnrollment,
@@ -97,7 +97,7 @@ pub trait ComputerRepo: Send + Sync + 'static {
 
     /// Lock the computer and its host, run the lifecycle transition, and
     /// store the new state, its effects and its timers in one transaction.
-    /// `None` when the computer does not exist.
+    /// `None` when the computer does not exist; quarantine rejects events without changing work.
     fn apply(
         &self,
         computer_id: ComputerId,
@@ -105,17 +105,17 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
 
-    /// Read a computer by identity.
+    /// Read a computer by identity, preserving quarantined rows as present.
     fn get(
         &self,
         computer_id: ComputerId,
-    ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<ComputerRecord>, Self::Err>> + Send;
 
     /// The team's computers that are not released, oldest first.
     fn list_for_team(
         &self,
         team_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<Computer>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<ComputerRecord>, Self::Err>> + Send;
 
     /// The computer whose harness this is.
     fn find_by_harness(
@@ -137,23 +137,23 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Running computers with their harness, for the idle sweep.
-    fn running(&self) -> impl Future<Output = Result<Vec<Computer>, Self::Err>> + Send;
+    /// Running computers and explicit quarantines; only healthy records enter the idle sweep.
+    fn running(&self) -> impl Future<Output = Result<Vec<ComputerRecord>, Self::Err>> + Send;
 
-    /// The frozen computer on `host` that has been frozen longest.
+    /// The healthy frozen computer on `host` that has been frozen longest.
     fn coldest_frozen(
         &self,
         host: HostId,
     ) -> impl Future<Output = Result<Option<ComputerId>, Self::Err>> + Send;
 
-    /// Computers the fleet should hold an instance for on `host`.
+    /// Computers the fleet should hold an instance for on `host`, including quarantined ids.
     fn instances_expected(
         &self,
         host: HostId,
-    ) -> impl Future<Output = Result<Vec<Computer>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<ComputerRecord>, Self::Err>> + Send;
 
     /// Lease up to `limit` due effects for `worker`; a leased effect is
-    /// hidden from other workers until `lease_until`.
+    /// hidden from other workers until `lease_until`. Exclude quarantined owners before the limit.
     fn lease_effects(
         &self,
         worker: EffectWorker,
@@ -191,7 +191,7 @@ pub trait ComputerRepo: Send + Sync + 'static {
         retry_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Timers due at `now`, oldest first.
+    /// Timers due at `now`, oldest first; exclude quarantined owners before the limit.
     fn due_timers(
         &self,
         now: DateTime<Utc>,
@@ -207,7 +207,7 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
 
-    /// Give pending macrod timers a fresh grace after operator startup, scoped to its host.
+    /// Give healthy computers' macrod timers a fresh grace after startup, scoped to the host.
     fn postpone_macrod_timers(
         &self,
         host: HostId,

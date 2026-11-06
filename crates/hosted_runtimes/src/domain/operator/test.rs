@@ -395,7 +395,14 @@ async fn idle_sleep_keeps_personas_running_and_freezes_session_only_computers() 
             operator.sleep_idle(&IdleSessions).await.unwrap(),
             expected_frozen
         );
-        let computer = operator.repo.get(id).await.unwrap().unwrap();
+        let computer = operator
+            .repo
+            .get(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap();
         assert_eq!(
             computer.state.phase,
             if expected_frozen == 0 {
@@ -453,11 +460,25 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
             true,
         )]
     );
-    let booting = operator.repo.get(id).await.unwrap().unwrap();
+    let booting = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(booting.state.phase, Phase::Booting { host: HOST });
 
     assert!(operator.macrod_connected(HARNESS).await.unwrap());
-    let ready = operator.repo.get(id).await.unwrap().unwrap();
+    let ready = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(ready.state.phase, Phase::Running { host: HOST });
     assert_eq!(ready.harness_id, Some(HARNESS));
     assert!(!operator.prompt_arrived(HARNESS).await.unwrap());
@@ -481,7 +502,14 @@ async fn an_effect_that_keeps_failing_fails_the_computer() {
         assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
     }
 
-    let failed = operator.repo.get(id).await.unwrap().unwrap();
+    let failed = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(failed.state.phase, Phase::Failed { host: HOST });
     // The page goes out, then nothing is left to do.
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
@@ -516,7 +544,14 @@ async fn reconcile_turns_a_missing_instance_into_a_crash_and_removes_orphans() {
 
     operator.reconcile().await.unwrap();
 
-    let crashed = operator.repo.get(id).await.unwrap().unwrap();
+    let crashed = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(crashed.state.phase, Phase::Restarting { host: HOST });
     assert_eq!(
         *operator.fleet.calls.lock().unwrap(),
@@ -553,7 +588,14 @@ async fn retry_of_a_lost_guest_reprovisions_the_same_computer_and_harness() {
         .unwrap();
 
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
-    let lost = operator.repo.get(id).await.unwrap().unwrap();
+    let lost = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(
         lost.state.phase,
         Phase::Provisioning {
@@ -564,7 +606,14 @@ async fn retry_of_a_lost_guest_reprovisions_the_same_computer_and_harness() {
     assert!(!lost.state.macrod_connected);
     assert_eq!(lost.harness_id, Some(HARNESS));
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
-    let recreated = operator.repo.get(id).await.unwrap().unwrap();
+    let recreated = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(recreated.id, id);
     assert_eq!(recreated.harness_id, Some(HARNESS));
     assert_eq!(recreated.state.phase, Phase::Booting { host: HOST });
@@ -621,7 +670,14 @@ async fn reconcile_recreates_missing_cold_or_failed_guests_but_keeps_existing_gu
                     });
             }
             operator.reconcile().await.unwrap();
-            let computer = operator.repo.get(id).await.unwrap().unwrap();
+            let computer = operator
+                .repo
+                .get(id)
+                .await
+                .unwrap()
+                .unwrap()
+                .into_healthy()
+                .unwrap();
             assert_eq!(
                 computer.state.phase,
                 if present {
@@ -705,7 +761,14 @@ async fn a_lost_guest_is_recreated_with_the_saved_persona_and_fresh_pairing() {
         .unwrap();
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
 
-    let recreated = operator.repo.get(id).await.unwrap().unwrap();
+    let recreated = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(recreated.id, id);
     assert_eq!(recreated.harness_id, Some(HARNESS));
     assert_eq!(recreated.persona, Some(saved_persona.clone()));
@@ -856,42 +919,50 @@ mod capacity;
 
 #[tokio::test]
 async fn reconcile_keeps_quarantined_guests_and_processes_healthy_computers() {
-    let operator = operator(FakeFleet::default()).await;
-    let healthy = paid_computer(&operator).await;
-    let corrupt = ComputerId::new_from_uuid(Uuid::now_v7());
-    {
-        let mut computers = operator.repo.computers.lock().unwrap();
-        let mut computer = computers.get(&healthy).unwrap().clone();
-        computer.state.phase = Phase::Running { host: HOST };
-        computers.insert(healthy, computer.clone());
-        computer.id = corrupt;
-        computers.insert(corrupt, computer);
+    for expected in [true, false] {
+        let operator = operator(FakeFleet::default()).await;
+        let healthy = paid_computer(&operator).await;
+        let corrupt = ComputerId::new_from_uuid(Uuid::now_v7());
+        {
+            let mut computers = operator.repo.computers.lock().unwrap();
+            let mut computer = computers.get(&healthy).unwrap().clone();
+            computer.state.phase = Phase::Running { host: HOST };
+            computers.insert(healthy, computer.clone());
+            computer.id = corrupt;
+            if !expected {
+                computer.state.phase = Phase::PendingPayment {
+                    host: HOST,
+                    since: now(),
+                };
+            }
+            computers.insert(corrupt, computer);
+        }
+        operator.repo.corrupt_ids.lock().unwrap().push(corrupt);
+        operator.repo.events.lock().unwrap().clear();
+        *operator.fleet.instances.lock().unwrap() = [healthy, corrupt]
+            .into_iter()
+            .map(|computer_id| FleetInstance {
+                computer_id,
+                status: InstanceStatus::Stopped,
+                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                created_at: Some(now() - Duration::minutes(11)),
+            })
+            .collect();
+
+        operator.reconcile().await.unwrap();
+
+        assert_eq!(
+            *operator.repo.events.lock().unwrap(),
+            vec![(healthy, Event::VmCrashed)]
+        );
+        assert!(
+            operator
+                .fleet
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|call| !call.starts_with("destroy "))
+        );
     }
-    operator.repo.corrupt_ids.lock().unwrap().push(corrupt);
-    operator.repo.events.lock().unwrap().clear();
-    *operator.fleet.instances.lock().unwrap() = [healthy, corrupt]
-        .into_iter()
-        .map(|computer_id| FleetInstance {
-            computer_id,
-            status: InstanceStatus::Stopped,
-            control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
-            created_at: Some(now() - Duration::minutes(11)),
-        })
-        .collect();
-
-    operator.reconcile().await.unwrap();
-
-    assert_eq!(
-        *operator.repo.events.lock().unwrap(),
-        vec![(healthy, Event::VmCrashed)]
-    );
-    assert!(
-        operator
-            .fleet
-            .calls
-            .lock()
-            .unwrap()
-            .iter()
-            .all(|call| !call.starts_with("destroy "))
-    );
 }

@@ -15,7 +15,10 @@ use uuid::Uuid;
 use crate::domain::lifecycle::{
     ComputerState, Context, Effect, EffectWorker, Event, HostId, Phase, transition,
 };
-use crate::domain::models::{Computer, Host, HostRegistration, NewComputer};
+use crate::domain::models::{
+    Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostRegistration, NewComputer,
+    SanitizedReason,
+};
 use crate::domain::ports::{ComputerRepo, DueTimer, PendingEffect, ReserveError};
 use crate::domain::service::Clock;
 use crate::domain::size::ComputerSize;
@@ -53,6 +56,24 @@ pub struct FakeRepo {
     pub corrupt_ids: Mutex<Vec<ComputerId>>,
     pub effects: Mutex<Vec<PendingEffect>>,
     pub events: Mutex<Vec<(ComputerId, Event)>>,
+}
+
+impl FakeRepo {
+    fn record(&self, computer: Computer) -> ComputerRecord {
+        if self.corrupt_ids.lock().unwrap().contains(&computer.id) {
+            ComputerRecord::NeedsAttention {
+                id: computer.id,
+                team_id: computer.team_id,
+                host_id: computer.state.host(),
+                display: ComputerDisplayMetadata::from(&computer),
+                reason: SanitizedReason::new(
+                    "persona.config keys must not be reserved credential keys",
+                ),
+            }
+        } else {
+            computer.into()
+        }
+    }
 }
 
 impl ComputerRepo for FakeRepo {
@@ -217,22 +238,31 @@ impl ComputerRepo for FakeRepo {
         Ok(Some(computer.clone()))
     }
 
-    async fn get(&self, computer_id: ComputerId) -> Result<Option<Computer>, FakeError> {
-        Ok(self.computers.lock().unwrap().get(&computer_id).cloned())
+    async fn get(&self, computer_id: ComputerId) -> Result<Option<ComputerRecord>, FakeError> {
+        Ok(self
+            .computers
+            .lock()
+            .unwrap()
+            .get(&computer_id)
+            .map(|computer| self.record(computer.clone())))
     }
 
-    async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<Computer>, FakeError> {
+    async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<ComputerRecord>, FakeError> {
         let mut computers: Vec<Computer> = self
             .computers
             .lock()
             .unwrap()
             .values()
-            .filter(|computer| computer.team_id == team_id)
-            .filter(|computer| computer.state.phase != Phase::Destroyed)
+            .filter(|computer| {
+                computer.team_id == team_id && computer.state.phase != Phase::Destroyed
+            })
             .cloned()
             .collect();
         computers.sort_by_key(|computer| computer.created_at);
-        Ok(computers)
+        Ok(computers
+            .into_iter()
+            .map(|computer| self.record(computer))
+            .collect())
     }
 
     async fn find_by_harness(&self, harness_id: HarnessId) -> Result<Option<Computer>, FakeError> {
@@ -264,7 +294,7 @@ impl ComputerRepo for FakeRepo {
         Ok(())
     }
 
-    async fn running(&self) -> Result<Vec<Computer>, FakeError> {
+    async fn running(&self) -> Result<Vec<ComputerRecord>, FakeError> {
         Ok(self
             .computers
             .lock()
@@ -272,6 +302,7 @@ impl ComputerRepo for FakeRepo {
             .values()
             .filter(|computer| matches!(computer.state.phase, Phase::Running { .. }))
             .cloned()
+            .map(|computer| self.record(computer))
             .collect())
     }
 
@@ -279,10 +310,7 @@ impl ComputerRepo for FakeRepo {
         Ok(None)
     }
 
-    async fn instances_expected(&self, host: HostId) -> Result<Vec<Computer>, FakeError> {
-        if !self.corrupt_ids.lock().unwrap().is_empty() {
-            return Err(FakeError);
-        }
+    async fn instances_expected(&self, host: HostId) -> Result<Vec<ComputerRecord>, FakeError> {
         Ok(self
             .computers
             .lock()
@@ -291,6 +319,7 @@ impl ComputerRepo for FakeRepo {
             .filter(|computer| computer.state.host() == Some(host))
             .filter(|computer| !matches!(computer.state.phase, Phase::PendingPayment { .. }))
             .cloned()
+            .map(|computer| self.record(computer))
             .collect())
     }
 

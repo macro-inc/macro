@@ -35,7 +35,14 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
         })
         .await
         .unwrap();
-    let computer = service.repo.get(id).await.unwrap().unwrap();
+    let computer = service
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(computer.state.payment, PaymentOutcome::Comped);
     assert!(!computer.is_billed());
     assert_eq!(
@@ -48,7 +55,16 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
     service.run_billing_effects().await.unwrap();
     service.reconcile_billed_counts(TEAM, &[]).await.unwrap();
     assert_eq!(
-        service.repo.get(id).await.unwrap().unwrap().state.billing,
+        service
+            .repo
+            .get(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap()
+            .state
+            .billing,
         BillingState::Active
     );
     let canceled = service.cancel(TEAM, id).await.unwrap();
@@ -80,6 +96,8 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
             .get(paid_id)
             .await
             .unwrap()
+            .unwrap()
+            .into_healthy()
             .unwrap()
             .state
             .payment,
@@ -134,7 +152,7 @@ async fn comped_reservation_recovers_without_charging_and_release_skips_billing(
     service.repo.effect_run_after.lock().unwrap().clear();
     service.run_billing_effects().await.unwrap();
     assert_eq!(
-        service.status(TEAM, id).await.unwrap().payment,
+        service.status(TEAM, id).await.unwrap().payment.unwrap(),
         PaymentOutcome::Comped
     );
     service.release_now(TEAM, id, "Build box").await.unwrap();

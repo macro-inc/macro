@@ -1,0 +1,116 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,\n                   created_at, enrolled_at, enrollment_generation\n            FROM hosted_runtime\n            WHERE awake\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "host_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "size",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "vcpus",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "memory_gib",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "disk_gib",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "catalog_entry",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "price_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "state",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "harness_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "persona",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "enrolled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "enrollment_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "6808052177504a32ac64a67b4470dd87aad97d2749e1e22789e07fbcbe5f6e50"
+}

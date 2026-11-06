@@ -27,7 +27,14 @@ async fn both_stripe_purchase_entry_points_provision_before_returning() {
         } else {
             service.purchase(request).await.unwrap()
         };
-        let computer = service.repo.get(id).await.unwrap().unwrap();
+        let computer = service
+            .repo
+            .get(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap();
         assert_eq!(
             computer.state.phase,
             Phase::Provisioning {
@@ -102,7 +109,14 @@ async fn comped_purchase_needs_no_post_reservation_payment_write() {
         })
         .await
         .unwrap();
-    let computer = service.repo.get(id).await.unwrap().unwrap();
+    let computer = service
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(
         computer.state.phase,
         Phase::Provisioning {
@@ -166,7 +180,7 @@ async fn unknown_payment_is_creating_while_delayed_recovery_stays_pending() {
             .clone();
         assert!(matches!(computer.state.phase, Phase::PendingPayment { .. }));
         let status = service.status(TEAM, computer.id).await.unwrap();
-        assert_eq!(status.payment, PaymentOutcome::Pending);
+        assert_eq!(status.payment.unwrap(), PaymentOutcome::Pending);
         assert_eq!(
             status.setup,
             Some(SetupProgress {

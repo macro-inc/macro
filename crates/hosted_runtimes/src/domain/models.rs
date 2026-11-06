@@ -14,9 +14,7 @@ use uuid::Uuid;
 use crate::domain::enrollment::Persona;
 use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{Billing, ComputerState, HostId, PaymentOutcome, Phase, Power};
-use crate::domain::size::{
-    CatalogEntryId, ComputerResources, ComputerSize, DiskGib, MemoryGib, Vcpus,
-};
+use crate::domain::size::{CatalogEntryId, ComputerResources, ComputerSize};
 
 /// Stable identity shared by replicas of one computer control plane.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -78,6 +76,111 @@ pub struct Computer {
     pub created_at: DateTime<Utc>,
     /// When macrod first connected; setup is over from then on.
     pub enrolled_at: Option<DateTime<Utc>>,
+}
+
+/// A persisted row, including identities whose payload cannot be trusted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ComputerRecord {
+    /// Fully validated computer, eligible for lifecycle processing.
+    Healthy(Box<Computer>),
+    /// Preserved identity, excluded from lifecycle processing until repaired.
+    NeedsAttention {
+        /// Stable resource identity.
+        id: ComputerId,
+        /// Owning team.
+        team_id: Uuid,
+        /// Host recorded independently of the lifecycle payload.
+        host_id: Option<HostId>,
+        /// Field and validation rule, without stored values.
+        reason: SanitizedReason,
+        /// Uninterpreted display metadata; never used for lifecycle decisions.
+        display: ComputerDisplayMetadata,
+    },
+}
+
+/// Display-only purchase metadata retained even when the domain payload is invalid.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComputerDisplayMetadata {
+    /// Stored display name.
+    pub name: String,
+    /// Stored size identifier.
+    pub size: String,
+    /// Recorded virtual CPU count.
+    pub vcpus: i64,
+    /// Recorded memory in GiB.
+    pub memory_gib: i64,
+    /// Recorded disk size in GiB.
+    pub disk_gib: i64,
+    /// Stored catalog identifier.
+    pub catalog_entry: String,
+    /// Reservation timestamp.
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<&Computer> for ComputerDisplayMetadata {
+    fn from(computer: &Computer) -> Self {
+        Self {
+            name: computer.name.as_str().to_owned(),
+            size: computer.size.as_ref().to_owned(),
+            vcpus: i64::from(computer.resources.vcpus.get()),
+            memory_gib: i64::from(computer.resources.memory_gib.get()),
+            disk_gib: i64::from(computer.resources.disk_gib.get()),
+            catalog_entry: computer.catalog_entry.as_str().to_owned(),
+            created_at: computer.created_at,
+        }
+    }
+}
+
+/// A static field-and-rule diagnostic; parser errors and stored values cannot enter it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("{0}")]
+pub struct SanitizedReason(&'static str);
+
+impl SanitizedReason {
+    /// Construct a diagnostic from a static field-and-rule message.
+    pub const fn new(reason: &'static str) -> Self {
+        Self(reason)
+    }
+}
+
+impl ComputerRecord {
+    /// Identity survives payload decoding failure.
+    pub fn id(&self) -> ComputerId {
+        match self {
+            Self::Healthy(computer) => computer.id,
+            Self::NeedsAttention { id, .. } => *id,
+        }
+    }
+
+    /// Ownership survives payload decoding failure.
+    pub fn team_id(&self) -> Uuid {
+        match self {
+            Self::Healthy(computer) => computer.team_id,
+            Self::NeedsAttention { team_id, .. } => *team_id,
+        }
+    }
+
+    /// Borrow a validated computer; quarantined records are never lifecycle inputs.
+    pub fn healthy(&self) -> Option<&Computer> {
+        match self {
+            Self::Healthy(computer) => Some(computer),
+            Self::NeedsAttention { .. } => None,
+        }
+    }
+
+    /// Take the validated computer, preserving quarantine as an explicit error.
+    pub fn into_healthy(self) -> Result<Computer, SanitizedReason> {
+        match self {
+            Self::Healthy(computer) => Ok(*computer),
+            Self::NeedsAttention { reason, .. } => Err(reason),
+        }
+    }
+}
+
+impl From<Computer> for ComputerRecord {
+    fn from(computer: Computer) -> Self {
+        Self::Healthy(Box::new(computer))
+    }
 }
 
 /// A computer to reserve units for.
@@ -250,6 +353,8 @@ impl HostRegistration {
 pub enum ComputerStatusKind {
     /// Initial setup is in progress.
     SettingUp,
+    /// Stored data requires operator repair.
+    NeedsAttention,
     /// Wake is blocked by the host's awake capacity.
     WaitingForCapacity,
     /// Guest is connected and ready.
@@ -308,26 +413,26 @@ pub struct ComputerStatus {
     pub id: ComputerId,
     /// Display name.
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
-    pub name: ComputerName,
+    pub name: String,
     /// Purchased catalog size.
-    pub size: ComputerSize,
+    pub size: String,
     /// Virtual CPU count.
-    pub vcpus: Vcpus,
+    pub vcpus: i64,
     /// Memory limit saved at purchase.
-    pub memory_gib: MemoryGib,
+    pub memory_gib: i64,
     /// Root disk limit saved at purchase.
-    pub disk_gib: DiskGib,
+    pub disk_gib: i64,
     /// Versioned catalog entry saved at purchase.
-    pub catalog_entry: CatalogEntryId,
+    pub catalog_entry: String,
     /// Observed guest status.
     pub status: ComputerStatusKind,
-    /// Latched purchase outcome.
-    pub payment: PaymentOutcome,
+    /// Latched purchase outcome; unknown for quarantined records.
+    pub payment: Option<PaymentOutcome>,
     /// Present for a comped purchase, including after release.
     pub comp_reason: Option<String>,
     /// Present until the computer first connects.
     pub setup: Option<SetupProgress>,
-    /// Whether power is requested on.
+    /// Whether validated state requests power on; false for quarantined records.
     pub powered_on: bool,
     /// When billing stops, for a computer canceled at period end.
     pub cancels_at: Option<DateTime<Utc>>,
@@ -387,14 +492,14 @@ impl Computer {
 
         ComputerStatus {
             id: self.id,
-            name: self.name.clone(),
-            size: self.size,
-            vcpus: self.resources.vcpus,
-            memory_gib: self.resources.memory_gib,
-            disk_gib: self.resources.disk_gib,
-            catalog_entry: self.catalog_entry.clone(),
+            name: self.name.as_str().to_owned(),
+            size: self.size.as_ref().to_owned(),
+            vcpus: i64::from(self.resources.vcpus.get()),
+            memory_gib: i64::from(self.resources.memory_gib.get()),
+            disk_gib: i64::from(self.resources.disk_gib.get()),
+            catalog_entry: self.catalog_entry.as_str().to_owned(),
             status,
-            payment: self.state.payment,
+            payment: Some(self.state.payment),
             comp_reason: self.state.comp_reason.clone(),
             setup,
             powered_on: self.state.power == Power::On,
@@ -403,6 +508,34 @@ impl Computer {
             harness_id: self.harness_id,
             persona_name: self.persona.as_ref().map(|persona| persona.name.clone()),
             created_at: self.created_at,
+        }
+    }
+}
+
+impl ComputerRecord {
+    /// Expose quarantine without inventing metadata from an invalid payload.
+    pub fn status(&self) -> ComputerStatus {
+        match self {
+            Self::Healthy(computer) => computer.status(),
+            Self::NeedsAttention { id, display, .. } => ComputerStatus {
+                id: *id,
+                status: ComputerStatusKind::NeedsAttention,
+                name: display.name.clone(),
+                size: display.size.clone(),
+                vcpus: display.vcpus,
+                memory_gib: display.memory_gib,
+                disk_gib: display.disk_gib,
+                catalog_entry: display.catalog_entry.clone(),
+                payment: None,
+                comp_reason: None,
+                setup: None,
+                powered_on: false,
+                cancels_at: None,
+                retained_until: None,
+                harness_id: None,
+                persona_name: None,
+                created_at: display.created_at,
+            },
         }
     }
 }

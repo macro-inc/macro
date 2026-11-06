@@ -47,7 +47,14 @@ async fn catalog_changes_only_apply_to_new_purchases() {
         })
         .await
         .unwrap();
-    let old = service.repo.get(first).await.unwrap().unwrap();
+    let old = service
+        .repo
+        .get(first)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(old.catalog_entry.as_str(), "standard@2026-11");
     assert_eq!(
         old.resources,
@@ -58,7 +65,14 @@ async fn catalog_changes_only_apply_to_new_purchases() {
         }
     );
     assert_eq!(old.resources.units(), 1);
-    let new = service.repo.get(second).await.unwrap().unwrap();
+    let new = service
+        .repo
+        .get(second)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(new.catalog_entry.as_str(), "standard@2026-12");
     assert_eq!(
         new.resources,
@@ -120,14 +134,36 @@ async fn price_rotation_does_not_cancel_an_existing_paid_computer() {
         )
         .await
         .unwrap();
-    assert!(service.repo.get(old).await.unwrap().unwrap().is_billed());
-    assert!(!service.repo.get(new).await.unwrap().unwrap().is_billed());
+    assert!(
+        service
+            .repo
+            .get(old)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap()
+            .is_billed()
+    );
+    assert!(
+        !service
+            .repo
+            .get(new)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap()
+            .is_billed()
+    );
     assert_eq!(
         service
             .repo
             .get(old)
             .await
             .unwrap()
+            .unwrap()
+            .into_healthy()
             .unwrap()
             .price_id
             .unwrap()
