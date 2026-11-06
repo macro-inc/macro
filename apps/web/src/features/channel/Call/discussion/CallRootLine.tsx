@@ -5,7 +5,7 @@ import { callDuration } from '@channel/core/system-activity';
 import { UserGroup } from '@core/component/UserGroup';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PhoneFillIcon from '@icon/system/fill/phone-fill.svg';
-import PhoneIcon from '@icon/system/regular/phone-call.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
 import { useLiveCallRecordQuery } from '@queries/call/call';
 import type { CallEntryStatus, Message } from '@service-storage/messages';
 import { Button } from '@ui';

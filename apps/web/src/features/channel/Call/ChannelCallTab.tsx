@@ -4,7 +4,7 @@ import { UserGroup } from '@core/component/UserGroup';
 import { useChannel } from '@core/context/channels';
 import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName, tryMacroId } from '@core/user';
-import PhoneIcon from '@icon/system/regular/phone-call.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { useActiveCallQuery, useLiveCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';

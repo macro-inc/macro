@@ -179,6 +179,7 @@ export function CallControlBar(props: {
           size={isMobile() ? 'icon-md' : 'icon-lg'}
           variant="danger"
           aria-label="Leave call"
+          class="min-w-14 rounded-full"
           tooltip={{ content: 'Leave call', placement: 'top' }}
           onClick={props.onLeave}
         >

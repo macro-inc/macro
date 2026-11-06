@@ -16,7 +16,8 @@ import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
 import PhoneIncomingIcon from '@icon/system/fill/phone-incoming-fill.svg';
 import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
 import AtIcon from '@icon/system/regular/at.svg';
-import XIcon from '@icon/system/regular/x.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import PhoneDisconnectIcon from '@icon/system/regular/phone-disconnect.svg';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { Button, cn, Tooltip } from '@ui';
 import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
@@ -160,7 +161,7 @@ export function IncomingCallActions(props: {
               dismissIncomingCallEverywhere(callId(), userId());
             }}
           >
-            <XIcon class="size-3" />
+            <PhoneDisconnectIcon class="size-3" />
             <Show when={isWide()}>Decline</Show>
           </Button>
           <Button
@@ -181,7 +182,7 @@ export function IncomingCallActions(props: {
               });
             }}
           >
-            <PhoneIncomingIcon class="incoming-call-shake size-3" />
+            <PhoneIcon class="size-3" />
             <Show when={isWide()}>Join</Show>
           </Button>
         </span>
