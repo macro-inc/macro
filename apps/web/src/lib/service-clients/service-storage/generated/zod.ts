@@ -5817,6 +5817,12 @@ export const createCrmCompanyResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -5931,6 +5937,12 @@ export const getCompanyResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -6039,6 +6051,12 @@ export const listCompanyContactsResponseItem = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -6109,6 +6127,12 @@ export const createCrmContactResponse = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -6238,6 +6262,12 @@ export const searchContactsResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -6301,6 +6331,12 @@ export const createCrmTeamContactResponse = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -6360,6 +6396,12 @@ export const getContactByEmailResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -6416,6 +6458,138 @@ export const getContactResponse = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Update an existing team-owned contact without merging its identity.
+ */
+export const setCrmContactCompanyParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const setCrmContactCompanyBody = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .describe(
+        'Destination company in the same team. Unlinking is not supported.'
+      ),
+  })
+  .describe('Link or switch a contact with a known personal-provider email.');
+
+export const setCrmContactCompanyResponse = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's email address; absent for contacts added by name\nalone."
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Update an existing team-owned contact without merging its identity.
+ */
+export const setCrmContactEmailParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const setCrmContactEmailBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe('The address to add. An identical retry is accepted.'),
+  })
+  .describe('Add a missing contact email. Existing addresses are read-only.');
+
+export const setCrmContactEmailResponse = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's email address; absent for contacts added by name\nalone."
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -20609,6 +20783,245 @@ export const getDocumentBranchNameResponse = zod
     shortId: zod.string().describe('The short id of the document.'),
   })
   .describe('Branch name response.');
+
+/**
+ * @summary Edit a canvas by natural-language instructions with edit access, through
+EditCanvas's editor, AI admission and billing.
+ */
+export const editCanvasWithAiParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const editCanvasWithAiBody = zod
+  .object({
+    instructions: zod
+      .string()
+      .min(1)
+      .describe(
+        'Natural-language instructions, naming items by id where they exist.'
+      ),
+  })
+  .describe('What to change, in words.');
+
+export const editCanvasWithAiResponseOperationsAppliedMin = 0;
+
+export const editCanvasWithAiResponse = zod
+  .object({
+    clarification: zod
+      .string()
+      .nullish()
+      .describe(
+        'What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays.'
+      ),
+    operationsApplied: zod
+      .number()
+      .min(editCanvasWithAiResponseOperationsAppliedMin)
+      .describe('Operations the live scene acknowledged.'),
+    summary: zod.string().describe('What the editor did, in words.'),
+  })
+  .describe('A completed edit by instructions.');
+
+/**
+ * @summary Apply one batch of CanvasEditor code with edit access, against the revision
+it was planned on, without a model. The batch validates, measures text and
+commits once, or not at all.
+ */
+export const applyCanvasEditsParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const applyCanvasEditsBody = zod
+  .object({
+    code: zod
+      .string()
+      .min(1)
+      .describe(
+        'JavaScript using `editor` (and `snippets`), as ApplyCanvasEdits runs it.'
+      ),
+    expectedRevision: zod
+      .string()
+      .describe(
+        'The revision the batch was planned against, from a fresh scene read.'
+      ),
+    snippets: zod
+      .record(zod.string(), zod.string())
+      .nullish()
+      .describe('Plain text values the code reads as `snippets.<key>`.'),
+  })
+  .describe('One batch of CanvasEditor code to apply against a revision.');
+
+export const applyCanvasEditsResponseOperationsAppliedMin = 0;
+
+export const applyCanvasEditsResponse = zod
+  .object({
+    operationsApplied: zod
+      .number()
+      .min(applyCanvasEditsResponseOperationsAppliedMin)
+      .describe('Operations the live scene acknowledged.'),
+    revision: zod.string().describe("The scene's revision after the batch."),
+    scene: zod
+      .object({})
+      .describe(
+        'The scene after the batch, with `textLayout` for measured text.'
+      ),
+    summary: zod.string().describe('What happened, in words.'),
+  })
+  .describe('A committed batch.');
+
+/**
+ * @summary Render a canvas to a PNG with view access, with the Canvas renderer, and
+keep it as a static file owned by the caller. No model runs.
+ */
+export const renderCanvasParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const renderCanvasBody = zod
+  .object({
+    crop: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            height: zod.number().describe('Positive world height.'),
+            width: zod.number().describe('Positive world width.'),
+            x: zod.number().describe('World x coordinate.'),
+            y: zod.number().describe('World y coordinate.'),
+          })
+          .describe('World-space crop or object bounds.'),
+      ])
+      .optional(),
+    itemIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe('Items to fit the image to, at most 100.'),
+  })
+  .describe('What to render.');
+
+export const renderCanvasResponseHeightMin = 0;
+
+export const renderCanvasResponseWidthMin = 0;
+
+export const renderCanvasResponse = zod
+  .object({
+    crop: zod
+      .object({
+        height: zod.number().describe('Positive world height.'),
+        width: zod.number().describe('Positive world width.'),
+        x: zod.number().describe('World x coordinate.'),
+        y: zod.number().describe('World y coordinate.'),
+      })
+      .describe('World-space crop or object bounds.'),
+    fileId: zod.string().describe('Static file id of the PNG.'),
+    height: zod
+      .number()
+      .min(renderCanvasResponseHeightMin)
+      .describe('Image height in pixels.'),
+    objects: zod
+      .array(
+        zod
+          .object({
+            bounds: zod
+              .object({
+                height: zod.number().describe('Positive world height.'),
+                width: zod.number().describe('Positive world width.'),
+                x: zod.number().describe('World x coordinate.'),
+                y: zod.number().describe('World y coordinate.'),
+              })
+              .describe('World-space crop or object bounds.'),
+            id: zod.string().describe('Canvas item ID.'),
+          })
+          .describe('Stable object-to-image mapping.')
+      )
+      .describe('Items in the image, with their world bounds.'),
+    revision: zod.string().describe('Revision of the scene the image shows.'),
+    textLayout: zod
+      .array(
+        zod
+          .object({
+            bounds: zod
+              .object({
+                height: zod.number().describe('Positive world height.'),
+                width: zod.number().describe('Positive world width.'),
+                x: zod.number().describe('World x coordinate.'),
+                y: zod.number().describe('World y coordinate.'),
+              })
+              .describe('World-space crop or object bounds.'),
+            id: zod.string().describe('Stable item ID.'),
+            overflow: zod
+              .boolean()
+              .describe(
+                'Whether the DOM text exceeds its intended text frame.'
+              ),
+          })
+          .describe(
+            'Actual browser text bounds and overflow for a read-only render.'
+          )
+      )
+      .describe('Rendered text bounds and whether text overflows its frame.'),
+    unavailable: zod
+      .array(
+        zod
+          .object({
+            id: zod.string().describe('Canvas item ID.'),
+            reason: zod
+              .string()
+              .describe('Why no referenced resource was loaded.'),
+          })
+          .describe('Explicitly unavailable referenced content.')
+      )
+      .describe('Referenced content the renderer could not show, and why.'),
+    url: zod.string().describe('Permanent URL of the PNG.'),
+    width: zod
+      .number()
+      .min(renderCanvasResponseWidthMin)
+      .describe('Image width in pixels.'),
+  })
+  .describe(
+    'A PNG of the canvas, stored as a static file owned by the caller.'
+  );
+
+/**
+ * @summary Read a canvas's live scene with view access: stable item ids, containment
+and order, transforms, world bounds, shapes and text. No model runs.
+ */
+export const readCanvasSceneParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const readCanvasSceneBody = zod
+  .object({
+    format: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['scene', 'overview'])
+          .describe('Scene representation requested by a reader.'),
+      ])
+      .optional(),
+    itemIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'Stable item ids to read, at most 100; omit for the whole scene, up to\n300 items.'
+      ),
+  })
+  .describe('Which part of the scene to read.');
+
+export const readCanvasSceneResponse = zod
+  .object({
+    revision: zod
+      .string()
+      .describe(
+        "The scene's immutable revision; pass it as `expectedRevision` to edit."
+      ),
+    scene: zod
+      .object({})
+      .describe(
+        'The scene: `rootId`, `totalItems`, `matchedItems`, `truncated` and\n`items` with stable ids, transforms, world bounds, shapes and text.'
+      ),
+  })
+  .describe('The live scene at one revision.');
 
 /**
  * Copies an existing document, creating a new document with the same content.

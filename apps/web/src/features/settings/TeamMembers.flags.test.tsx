@@ -4,10 +4,20 @@ import type {
   TeamAgent,
   TeamMember,
 } from '@service-auth/generated/schemas';
+import { MemoryRouter } from '@solidjs/router';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, type ParentProps, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { MobileSettingsProvider } from './context/mobile-settings';
 import { TeamMembers } from './TeamMembers';
+
+function SettingsTestProvider(props: ParentProps) {
+  return (
+    <MobileSettingsProvider>
+      <MemoryRouter root={() => props.children} />
+    </MobileSettingsProvider>
+  );
+}
 
 const mocks = vi.hoisted(() => ({
   read: () => ({ enabled: false, loading: true }),
@@ -176,7 +186,9 @@ beforeEach(() => {
 afterEach(cleanup);
 
 it('keeps agent data as an ordinary member while loading/off, with no agent management controls', async () => {
-  render(() => <TeamMembers team={team} />);
+  render(() => <TeamMembers team={team} />, {
+    wrapper: SettingsTestProvider,
+  });
   expect(screen.getByText('Loading agent features…')).toBeTruthy();
   expect(screen.getByText('Assistant')).toBeTruthy();
   expect(screen.getByText('Agent', { exact: true })).toBeTruthy();
@@ -206,7 +218,9 @@ it('keeps agent data as an ordinary member while loading/off, with no agent mana
 
 it('gates both invitation choices and stale callbacks when the remote flag switches off', () => {
   setFlag({ enabled: true, loading: false });
-  render(() => <TeamMembers team={team} />);
+  render(() => <TeamMembers team={team} />, {
+    wrapper: SettingsTestProvider,
+  });
   expect(mocks.enabled()).toBe(true);
   expect(document.querySelectorAll('[data-member-kind="human"]')).toHaveLength(
     1
@@ -234,7 +248,9 @@ it('gates both invitation choices and stale callbacks when the remote flag switc
 it('rejects an old roster-error retry after the rollout is disabled', () => {
   mocks.rosterError = true;
   setFlag({ enabled: true, loading: false });
-  render(() => <TeamMembers team={team} />);
+  render(() => <TeamMembers team={team} />, {
+    wrapper: SettingsTestProvider,
+  });
   const retry = screen.getByRole('button', { name: 'Try again' });
   setFlag({ enabled: false, loading: false });
   fireEvent.click(retry);
@@ -244,7 +260,9 @@ it('rejects an old roster-error retry after the rollout is disabled', () => {
 it('lets a non-admin creator open a computer without loading the management roster and revokes stale actions', async () => {
   mocks.viewerRole = () => 'member';
   setFlag({ enabled: true, loading: false });
-  render(() => <TeamMembers team={team} />);
+  render(() => <TeamMembers team={team} />, {
+    wrapper: SettingsTestProvider,
+  });
   expect(mocks.enabled()).toBe(false);
   expect(screen.queryByRole('button', { name: 'Invite agent' })).toBeNull();
 
@@ -264,7 +282,9 @@ it('lets a non-admin creator open a computer without loading the management rost
 
 it('keeps voice and computer actions together and revokes voice settings with the rollout', async () => {
   setFlag({ enabled: true, loading: false });
-  render(() => <TeamMembers team={team} />);
+  render(() => <TeamMembers team={team} />, {
+    wrapper: SettingsTestProvider,
+  });
   fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
     key: 'ArrowDown',
   });

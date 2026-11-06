@@ -25,7 +25,6 @@ outbound = ["dep:incus_client", "dep:macro_env", "dep:sqlx", "ports", "tokio/fs"
 ports = ["dep:tokio"]
 
 [dependencies]
-anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 computer_id = { workspace = true }

@@ -18,3 +18,9 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 sqlx = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
+
+[package.metadata.cargo-shear]
+# Unused, but apps/web/tauri locks this crate by path, and changing its
+# lockfiles trips the native store-release version gates. Remove with the
+# next native release.
+ignored = ["tracing"]

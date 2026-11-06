@@ -1,6 +1,6 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
-import { For, Match, onMount, Show, Switch } from 'solid-js';
+import { createSignal, For, Match, onMount, Show, Switch } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { render } from 'solid-js/web';
 import { OnboardingProvider } from '../../onboarding/context/onboarding-context';
@@ -77,6 +77,24 @@ const auth = createFakeAuth(
     verifyLatencyMs,
   }
 );
+// A verified code can precede a failed local cache/session cleanup. Keep the
+// mounted view signed out until completion succeeds, as the real identity gate does.
+if (params.cleanupFailure === 'once') {
+  const session = auth.context.session;
+  const completeLogin = auth.context.completeLogin;
+  const [ready, setReady] = createSignal(false);
+  let failed = false;
+  auth.context.session = () => (ready() ? session() : { t: 'signed-out' });
+  auth.context.completeLogin = async () => {
+    if (!failed) {
+      failed = true;
+      auth.context.notifyFailure('Local cleanup failed. Try signing in again.');
+      throw new Error('Injected login cleanup failure');
+    }
+    await completeLogin();
+    setReady(true);
+  };
+}
 write(FIXTURE_KEYS.auth, structuredClone(unwrap(auth.world)));
 
 /** The onboarding backend, which sees the account auth just signed in. */

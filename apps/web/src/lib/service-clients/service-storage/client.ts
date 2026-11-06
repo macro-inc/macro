@@ -24,7 +24,7 @@ import { registerClient } from '@core/util/mockClient';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import type { ResultError } from '@core/util/result';
-import type { SafeFetchInit } from '@core/util/safeFetch';
+import { type SafeFetchInit, statusError } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
@@ -174,6 +174,8 @@ import type { SearchContactsResponse } from './generated/schemas/searchContactsR
 import type { SetChannelLabelRequest } from './generated/schemas/setChannelLabelRequest';
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
+import type { SetContactCompanyRequest } from './generated/schemas/setContactCompanyRequest';
+import type { SetContactEmailRequest } from './generated/schemas/setContactEmailRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
 import type { SkillDescriptionBody } from './generated/schemas/skillDescriptionBody';
@@ -278,6 +280,16 @@ async function calendarJoinRequestErrorHandler(response: Response) {
     code: 'HTTP_ERROR' as const,
     message: `HTTP error! status: ${response.status}`,
   };
+}
+
+async function contactEditErrorHandler(response: Response) {
+  if (response.status === 400) {
+    return {
+      code: 'BAD_REQUEST' as const,
+      message: 'Contact change unavailable',
+    };
+  }
+  return statusError(response.status);
 }
 
 export async function getDocumentPermissionToken(
@@ -2994,6 +3006,32 @@ export const storageServiceClient = {
       method: 'PUT',
       body: JSON.stringify(body),
     });
+  },
+  async setContactEmail({
+    contactId,
+    ...body
+  }: { contactId: string } & SetContactEmailRequest) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/email`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
+    );
+  },
+  async setContactCompany({
+    contactId,
+    ...body
+  }: { contactId: string } & SetContactCompanyRequest) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/company`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
+    );
   },
   async setContactHidden({
     contactId,

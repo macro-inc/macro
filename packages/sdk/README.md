@@ -539,6 +539,14 @@ with `setImportant` and `delete`. Omit the inbox to select the caller's primary.
 caller-persisted operation IDs. `email.reminders({ inboxes })` auto-paginates and
 returns thread handles alongside reminder snapshots.
 
+### CRM contact fields
+
+`macro.crm.contactById(id).setEmail(address)` adds an address only when absent;
+an identical retry is safe. Existing addresses cannot be replaced or cleared.
+`setCompany(company)` links or switches a known personal-provider contact to a
+Company handle in the same team. Unlinking is not supported. Both preserve
+identity and reject same-team email conflicts without merging records.
+
 ### CRM pipelines and initiatives
 
 `macro.crm.pipelines.create/list/byId` returns pipeline handles. Rename, sharing,
@@ -637,6 +645,29 @@ It returns the new revision, not a diff; read `content()` to see what changed.
 `options.signal` cancels the edit, keeping what was applied before the abort. A
 refused edit throws `DocumentEditRefusedError` with the editor's reason;
 `EditOutcomeUnknownError` means read the document before retrying.
+
+### Canvases
+
+`document.canvas()` reads and edits a native canvas's live, shared scene:
+
+```ts
+const canvas = document.canvas();
+const scene = await canvas.scene(); // stable item ids, geometry, text, revision
+await canvas.apply(
+  "editor.move(['box'], 0, 40); editor.text('box', snippets.label)",
+  { expectedRevision: scene.revision, snippets: { label: 'Shipped' } },
+);
+await canvas.edit('Arrange the boxes left to right as a flowchart.');
+const image = await canvas.render({ items: ['box'] }); // a StaticImage
+```
+
+`apply` runs CanvasEditor code without a model and commits the batch whole or
+not at all: `CanvasRevisionConflictError` (the scene changed since
+`expectedRevision`) and `CanvasEditRejectedError` (the code failed) mean nothing
+changed; `EditOutcomeUnknownError` means read the scene before retrying. `edit`
+takes natural-language instructions, like `document.edit`, and is billed as an
+AI edit. `render` keeps the PNG as a static file you own, ready to attach to a
+message.
 
 ### Spreadsheets
 

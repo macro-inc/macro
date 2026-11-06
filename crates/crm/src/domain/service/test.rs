@@ -262,6 +262,16 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn update_contact(
+        &self,
+        _team_id: &uuid::Uuid,
+        _contact_id: &uuid::Uuid,
+        _update: &crate::domain::contact_update::ContactFieldUpdate,
+        _include_hidden: bool,
+    ) -> Result<CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
     async fn set_contact_hidden(
         &self,
         _team_id: &uuid::Uuid,
