@@ -48,6 +48,10 @@ enforced by the ordinary backend APIs.
   contact sets are 404, but authorization/service errors must propagate.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
+- `src/entities/databases/saved-query.ts`: `database.saveQuery()` / `table.saveQuery()`
+  save a checked `SELECT` server-side and return a `SavedQuery` whose `toBlock()` is the
+  document's `<m-db-query>` block. The block format must match lexical-core's
+  `parseDatabaseQueryData`; `withView()` follows the AI editor's `setDatabaseQueryView` rules.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type

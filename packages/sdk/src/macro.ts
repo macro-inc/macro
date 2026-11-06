@@ -388,6 +388,18 @@ export type {
   QueryTableVersion,
 } from './entities/databases/query';
 export {
+  SAVED_QUERY_CHART_MODES,
+  SAVED_QUERY_HEIGHT_RANGE,
+  SAVED_QUERY_MAX_SERIES,
+  SavedQuery,
+  type SavedQueryChart,
+  type SavedQueryChartMode,
+  type SavedQueryDisplay,
+  type SavedQueryDisplayMode,
+  type SavedQueryView,
+  type SaveQueryOptions,
+} from './entities/databases/saved-query';
+export {
   type DocumentEditOptions,
   DocumentEditRefusedError,
   type DocumentEditResult,

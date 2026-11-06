@@ -7767,6 +7767,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "email",
+ "macro_tower_layers",
  "model",
  "models_email",
  "reqwest 0.13.4",
@@ -7774,6 +7775,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -13138,6 +13140,7 @@ dependencies = [
  "channel_sender",
  "cool_asserts",
  "either",
+ "lazy-regex",
  "macro_user_id",
  "nom 8.0.0",
  "serde",
