@@ -19,6 +19,8 @@ ports = ["dep:tokio"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]
+computer_id = { workspace = true, features = ["schema", "sqlx"] }
+pairing_id = { workspace = true, features = ["schema", "sqlx"] }
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id", features = ["schema"] }

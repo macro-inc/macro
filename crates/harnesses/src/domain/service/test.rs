@@ -53,7 +53,7 @@ fn pending_pairing() -> PairingRow {
 struct Calls {
     inserted_pairings: Vec<NewPairing>,
     approved: Vec<(String, NewHarness)>,
-    claimed: Vec<Uuid>,
+    claimed: Vec<PairingId>,
     deleted: Vec<HarnessId>,
     updated: Vec<(HarnessId, HarnessChanges)>,
     team_lookups: Vec<(String, Uuid)>,
@@ -155,11 +155,17 @@ impl HarnessRepo for FakeRepo {
         Ok(self.hosted_upsert)
     }
 
-    async fn computer_harness(&self, _computer_id: Uuid) -> Result<Option<HarnessId>, Self::Err> {
+    async fn computer_harness(
+        &self,
+        _computer_id: ComputerId,
+    ) -> Result<Option<HarnessId>, Self::Err> {
         Ok(self.harness.as_ref().map(|harness| harness.id))
     }
 
-    async fn harness_computer(&self, _harness_id: HarnessId) -> Result<Option<Uuid>, Self::Err> {
+    async fn harness_computer(
+        &self,
+        _harness_id: HarnessId,
+    ) -> Result<Option<ComputerId>, Self::Err> {
         Ok(self
             .harness
             .as_ref()
@@ -194,14 +200,14 @@ impl HarnessRepo for FakeRepo {
 
     async fn pairing_claim_facts(
         &self,
-        _pairing_id: Uuid,
+        _pairing_id: PairingId,
     ) -> Result<Option<PairingClaimFacts>, Self::Err> {
         Ok(self.claim_facts.clone())
     }
 
     async fn claim_pairing(
         &self,
-        pairing_id: Uuid,
+        pairing_id: PairingId,
         _token_id: Uuid,
         _token: HashedHarnessToken,
     ) -> Result<Option<Harness>, Self::Err> {
@@ -513,7 +519,7 @@ fn claim_facts(status: PairingStatus, secret: &str) -> PairingClaimFacts {
 #[tokio::test]
 async fn claim_verifies_the_secret_then_walks_pending_to_claimed() {
     let secret = "device-secret";
-    let pairing_id = Uuid::new_v4();
+    let pairing_id = PairingId::new_from_uuid(Uuid::new_v4());
 
     let repo = FakeRepo {
         claim_facts: Some(claim_facts(PairingStatus::Pending, secret)),
@@ -556,7 +562,7 @@ async fn claim_verifies_the_secret_then_walks_pending_to_claimed() {
 #[tokio::test]
 async fn claim_rejects_bad_secrets_and_dead_pairings() {
     let secret = "device-secret";
-    let pairing_id = Uuid::new_v4();
+    let pairing_id = PairingId::new_from_uuid(Uuid::new_v4());
 
     let repo = FakeRepo {
         claim_facts: Some(claim_facts(PairingStatus::Approved, secret)),
@@ -840,7 +846,7 @@ async fn only_a_harness_manager_may_patch() {
     assert!(matches!(result, Err(HarnessError::NotFound(_))));
 }
 
-const COMPUTER_ID: Uuid = Uuid::from_u128(42);
+const COMPUTER_ID: ComputerId = ComputerId::new_from_uuid(Uuid::from_u128(42));
 
 fn hosted_request() -> CreateHostedPairing {
     CreateHostedPairing {
@@ -890,7 +896,7 @@ async fn hosted_pairing_registers_an_approved_team_harness_past_the_throttle() {
 
 #[tokio::test]
 async fn hosted_pairing_rotates_before_claim_and_returns_fresh_pairing_after_rekey() {
-    let existing = Uuid::from_u128(99);
+    let existing = PairingId::new_from_uuid(Uuid::from_u128(99));
     let repo = FakeRepo {
         hosted_upsert: HostedPairingUpsert::Rotated {
             pairing_id: existing,
@@ -1090,7 +1096,7 @@ async fn claude_mode_reaches_the_repo() {
 #[test]
 fn hosted_pairing_redacts_its_credential() {
     let pairing = HostedPairing {
-        pairing_id: Uuid::now_v7(),
+        pairing_id: PairingId::new_from_uuid(Uuid::now_v7()),
         device_secret: super::super::models::DeviceSecret::new("enrollment-credential".to_owned()),
     };
     assert!(!format!("{pairing:?}").contains(pairing.device_secret.expose()));

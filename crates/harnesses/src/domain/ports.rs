@@ -1,5 +1,7 @@
 //! Harness ports.
 
+use computer_id::ComputerId;
+use pairing_id::PairingId;
 use std::future::Future;
 
 use chrono::{DateTime, Utc};
@@ -19,7 +21,7 @@ use super::models::{
 #[derive(Debug, Clone)]
 pub struct NewPairing {
     /// Pairing id.
-    pub id: Uuid,
+    pub id: PairingId,
     /// Normalized pairing code, `XXXX-XXXX`.
     pub code: String,
     /// SHA-256 of the device secret.
@@ -55,7 +57,7 @@ pub struct NewHarness {
     /// The approving user.
     pub created_by: MacroUserIdStr<'static>,
     /// The Macro computer this harness runs on, for hosted harnesses.
-    pub computer_id: Option<Uuid>,
+    pub computer_id: Option<ComputerId>,
 }
 
 /// A pairing row as the lookup and approval paths see it.
@@ -75,7 +77,7 @@ pub enum HostedPairingUpsert {
     /// The computer already had an unclaimed pairing; its secret was rotated.
     Rotated {
         /// The existing pairing's id.
-        pairing_id: Uuid,
+        pairing_id: PairingId,
     },
     /// Revoked the claimed harness's credentials and created a fresh approved pairing.
     Rekeyed,
@@ -143,7 +145,7 @@ pub trait HarnessRepo: Send + Sync + 'static {
     /// The live harness running on a computer.
     fn computer_harness(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> impl Future<Output = Result<Option<HarnessId>, Self::Err>> + Send;
 
     /// The computer a live harness runs on; `None` for unknown harnesses and
@@ -151,7 +153,7 @@ pub trait HarnessRepo: Send + Sync + 'static {
     fn harness_computer(
         &self,
         harness_id: HarnessId,
-    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<ComputerId>, Self::Err>> + Send;
 
     /// Replace an active harness's reported capabilities. Returns `false`
     /// when the harness is unknown or deleted.
@@ -172,7 +174,7 @@ pub trait HarnessRepo: Send + Sync + 'static {
     /// Get the facts the claim path verifies.
     fn pairing_claim_facts(
         &self,
-        pairing_id: Uuid,
+        pairing_id: PairingId,
     ) -> impl Future<Output = Result<Option<PairingClaimFacts>, Self::Err>> + Send;
 
     /// Release an approved pairing's credential atomically.
@@ -182,7 +184,7 @@ pub trait HarnessRepo: Send + Sync + 'static {
     /// expired, or already claimed).
     fn claim_pairing(
         &self,
-        pairing_id: Uuid,
+        pairing_id: PairingId,
         token_id: Uuid,
         token: HashedHarnessToken,
     ) -> impl Future<Output = Result<Option<Harness>, Self::Err>> + Send;
@@ -265,7 +267,7 @@ pub trait HarnessService: Send + Sync + 'static {
     /// Poll an approved pairing's credential with the device secret.
     fn claim_pairing(
         &self,
-        pairing_id: Uuid,
+        pairing_id: PairingId,
         req: ClaimPairingRequest,
     ) -> impl Future<Output = Result<ClaimOutcome, HarnessError>> + Send;
 
@@ -344,14 +346,14 @@ pub trait HarnessService: Send + Sync + 'static {
     /// Trusted in-process callers only, like [`Self::create_hosted_pairing`].
     fn revoke_hosted_harness(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), HarnessError>> + Send;
 
     /// The computer a live harness runs on, if it is a Macro computer's.
     fn harness_computer(
         &self,
         harness_id: HarnessId,
-    ) -> impl Future<Output = Result<Option<Uuid>, HarnessError>> + Send;
+    ) -> impl Future<Output = Result<Option<ComputerId>, HarnessError>> + Send;
 
     /// The harness, when `caller` may access it as asked.
     ///

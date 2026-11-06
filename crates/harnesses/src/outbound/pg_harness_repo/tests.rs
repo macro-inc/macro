@@ -43,7 +43,7 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
 
 fn new_pairing(code: &str, secret: &str) -> NewPairing {
     NewPairing {
-        id: Uuid::new_v4(),
+        id: PairingId::new_from_uuid(Uuid::new_v4()),
         code: code.to_owned(),
         device_secret_hash: harness_token::hash_token(secret),
         requested_name: "erics-macbook".to_owned(),
@@ -589,7 +589,7 @@ async fn update_harness_changes_only_the_named_columns(pool: PgPool) {
     );
 }
 
-fn hosted_pairing(pairing_id: Uuid, secret: &str) -> NewPairing {
+fn hosted_pairing(pairing_id: PairingId, secret: &str) -> NewPairing {
     NewPairing {
         id: pairing_id,
         code: format!("hosted:{pairing_id}"),
@@ -601,7 +601,7 @@ fn hosted_pairing(pairing_id: Uuid, secret: &str) -> NewPairing {
     }
 }
 
-fn hosted_harness(team_id: Uuid, computer_id: Uuid) -> NewHarness {
+fn hosted_harness(team_id: Uuid, computer_id: ComputerId) -> NewHarness {
     NewHarness {
         allow_permission_bypass: false,
         id: HarnessId::new_from_uuid(Uuid::new_v4()),
@@ -625,8 +625,8 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     .execute(&pool)
     .await
     .unwrap();
-    let computer_id = Uuid::new_v4();
-    let pairing_id = Uuid::new_v4();
+    let computer_id = ComputerId::new_from_uuid(Uuid::new_v4());
+    let pairing_id = PairingId::new_from_uuid(Uuid::new_v4());
     let harness = hosted_harness(team_id, computer_id);
     let harness_id = harness.id;
 
@@ -675,7 +675,7 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     // A retry keeps the pairing and harness and takes the new secret.
     let rotated = repo
         .upsert_hosted_pairing(
-            hosted_pairing(Uuid::new_v4(), "second-secret"),
+            hosted_pairing(PairingId::new_from_uuid(Uuid::new_v4()), "second-secret"),
             hosted_harness(team_id, computer_id),
         )
         .await
@@ -731,7 +731,7 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     ).execute(&pool).await.unwrap();
 
     // Re-enrollment replaces credentials without replacing the harness.
-    let replacement_id = Uuid::now_v7();
+    let replacement_id = PairingId::new_from_uuid(Uuid::now_v7());
     let after_claim = repo
         .upsert_hosted_pairing(
             hosted_pairing(replacement_id, "third-secret"),
@@ -814,12 +814,12 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     // Re-key still works after cleanup removes a claimed pairing.
     sqlx::query!(
         "DELETE FROM harness_pairing_requests WHERE id = $1",
-        replacement_id
+        replacement_id.as_uuid()
     )
     .execute(&pool)
     .await
     .unwrap();
-    let next_pairing = Uuid::now_v7();
+    let next_pairing = PairingId::new_from_uuid(Uuid::now_v7());
     assert_eq!(
         repo.upsert_hosted_pairing(
             hosted_pairing(next_pairing, "fourth-secret"),
@@ -844,7 +844,7 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     assert_eq!(repo.harness_computer(harness_id).await.unwrap(), None);
     assert_eq!(
         repo.upsert_hosted_pairing(
-            hosted_pairing(Uuid::new_v4(), "fresh-secret"),
+            hosted_pairing(PairingId::new_from_uuid(Uuid::new_v4()), "fresh-secret"),
             hosted_harness(team_id, computer_id),
         )
         .await

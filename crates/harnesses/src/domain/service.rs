@@ -1,5 +1,7 @@
 //! Harness domain service.
 
+use computer_id::ComputerId;
+use pairing_id::PairingId;
 #[cfg(test)]
 mod test;
 
@@ -124,7 +126,7 @@ where
         let device_secret = tokens::generate_device_secret();
         let device_secret_hash = harness_token::hash_token(&device_secret);
         let expires_at = Utc::now() + Duration::minutes(PAIRING_TTL_MINUTES);
-        let pairing_id = Uuid::new_v4();
+        let pairing_id = PairingId::new_from_uuid(Uuid::now_v7());
 
         for _ in 0..CODE_ATTEMPTS {
             let code = tokens::generate_pairing_code();
@@ -238,7 +240,7 @@ where
     #[tracing::instrument(skip(self, req), err)]
     async fn claim_pairing(
         &self,
-        pairing_id: Uuid,
+        pairing_id: PairingId,
         req: ClaimPairingRequest,
     ) -> Result<ClaimOutcome, HarnessError> {
         let facts = self
@@ -429,7 +431,7 @@ where
     ) -> Result<HostedPairing, HarnessError> {
         let name = validated_name(&req.name)?;
         let device_secret = super::models::DeviceSecret::new(tokens::generate_device_secret());
-        let new_pairing_id = Uuid::now_v7();
+        let new_pairing_id = PairingId::new_from_uuid(Uuid::now_v7());
         let upserted = self
             .repo
             .upsert_hosted_pairing(
@@ -468,7 +470,7 @@ where
     }
 
     #[tracing::instrument(skip(self), fields(harness_id = tracing::field::Empty), err)]
-    async fn revoke_hosted_harness(&self, computer_id: Uuid) -> Result<(), HarnessError> {
+    async fn revoke_hosted_harness(&self, computer_id: ComputerId) -> Result<(), HarnessError> {
         let Some(harness_id) = self
             .repo
             .computer_harness(computer_id)
@@ -487,7 +489,10 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn harness_computer(&self, harness_id: HarnessId) -> Result<Option<Uuid>, HarnessError> {
+    async fn harness_computer(
+        &self,
+        harness_id: HarnessId,
+    ) -> Result<Option<ComputerId>, HarnessError> {
         Ok(self
             .repo
             .harness_computer(harness_id)

@@ -91,6 +91,8 @@ members = [
   "crates/graphql_soup_filter_input",
   "crates/graphql_work_feed",
   "crates/gtm_invite",
+  "crates/computer_id",
+  "crates/pairing_id",
   "crates/harness_id",
   "crates/harness_token",
   "crates/harnesses",
@@ -211,6 +213,8 @@ members = [
 ]
 
 [workspace.dependencies]
+computer_id = { path = "crates/computer_id" }
+pairing_id = { path = "crates/pairing_id" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"

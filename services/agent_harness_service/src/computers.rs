@@ -327,14 +327,21 @@ impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for S
         &self,
         computer_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<(), HarnessError>> + Send + '_>> {
-        Box::pin(HarnessService::revoke_hosted_harness(self, computer_id))
+        Box::pin(HarnessService::revoke_hosted_harness(
+            self,
+            computer_id::ComputerId::new_from_uuid(computer_id),
+        ))
     }
 
     fn harness_computer(
         &self,
         harness_id: HarnessId,
     ) -> Pin<Box<dyn Future<Output = Result<Option<Uuid>, HarnessError>> + Send + '_>> {
-        Box::pin(HarnessService::harness_computer(self, harness_id))
+        Box::pin(async move {
+            Ok(HarnessService::harness_computer(self, harness_id)
+                .await?
+                .map(computer_id::ComputerId::as_uuid))
+        })
     }
 }
 
@@ -366,11 +373,11 @@ impl Harnesses for HostedHarnesses {
                 created_by,
                 // The computer is the team's own isolated VM, run for agents.
                 allow_permission_bypass: true,
-                computer_id: computer.id.into_inner(),
+                computer_id: computer_id::ComputerId::new_from_uuid(computer.id.into_inner()),
             })
             .await?;
         Ok(HostedPairing {
-            pairing_id: PairingId::new(pairing.pairing_id),
+            pairing_id: PairingId::new(pairing.pairing_id.as_uuid()),
             device_secret: hosted_runtimes::domain::enrollment::DeviceSecret::new(
                 pairing.device_secret.expose().to_owned(),
             ),

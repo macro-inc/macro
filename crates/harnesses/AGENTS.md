@@ -65,3 +65,5 @@ already authorized the team admin, never for an HTTP route.
 - Skill: `cloud-storage-hexagonal-architecture`
 
 - `HostedPairing.device_secret` redacts formatting and zeroizes on drop; use `expose()` only at enrollment boundaries.
+
+- Pairing and computer ports use the leaf `pairing_id::PairingId` and `computer_id::ComputerId`; unwrap UUIDs only at adapter boundaries.
