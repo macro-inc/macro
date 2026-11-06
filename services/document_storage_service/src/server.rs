@@ -1471,23 +1471,23 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     );
     let admission = macro_agent_tool_context.admission.clone();
-    // Document and canvas AI edits over HTTP share the channel agent's admission.
     let editing_worker = Arc::new(
         documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
             AiEditingWorkerUrl::new()?.to_string(),
         ),
     );
-    let editing_usage =
+    let document_ai_usage =
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement);
+    // Document and canvas AI edits over HTTP share the channel agent's admission.
     let document_ai_editing = Arc::new(documents_hex::domain::ai_editing::AiEditingService::new(
         editing_worker.clone(),
         admission.clone(),
-        editing_usage.clone(),
+        document_ai_usage.clone(),
     ));
     let canvas_routes = documents_hex::inbound::axum_router::CanvasRouteDeps {
         worker: editing_worker.clone(),
         admission: admission.clone(),
-        recorder: editing_usage,
+        recorder: document_ai_usage.clone(),
         // Off when PostHog isn't configured, as for the agents' Canvas tools.
         artifacts: ai_tools::canvas_artifacts_rollout_from_env()?
             .unwrap_or_else(|| Arc::new(|_| Box::pin(async { false }))),
@@ -1499,15 +1499,21 @@ async fn run_server() -> anyhow::Result<()> {
         )),
     };
     // The spreadsheet tools' engine, for SDK spreadsheet reads and edits.
-    let document_spreadsheet = Arc::new(documents_hex::domain::spreadsheet::SpreadsheetService::new(
-        document_service.clone(),
-        Arc::new(
-            documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
-                AiEditingWorkerUrl::new()?.to_string(),
-            ),
+    let document_spreadsheet =
+        Arc::new(documents_hex::domain::spreadsheet::SpreadsheetService::new(
+            document_service.clone(),
+            editing_worker.clone(),
+            config.document_permission_jwt.as_ref().to_string(),
+        ));
+    let document_spreadsheet_ai_edit = Arc::new(
+        documents_hex::domain::spreadsheet::SpreadsheetAiEditService::new(
+            document_service.clone(),
+            editing_worker.clone(),
+            config.document_permission_jwt.as_ref().to_string(),
+            admission.clone(),
+            document_ai_usage,
         ),
-        config.document_permission_jwt.as_ref().to_string(),
-    ));
+    );
     // The file-document routes read and write what the matching AI tools do.
     let document_files = Arc::new(
         documents_hex::outbound::s3_document_files::S3DocumentFiles::new(
@@ -2502,6 +2508,7 @@ async fn run_server() -> anyhow::Result<()> {
             ai_editing: document_ai_editing,
             canvas: canvas_routes,
             spreadsheet: document_spreadsheet,
+            spreadsheet_ai_edit: document_spreadsheet_ai_edit,
             presentations: Arc::new(
                 documents_hex::domain::presentation::PresentationService::new(
                     document_files.clone(),

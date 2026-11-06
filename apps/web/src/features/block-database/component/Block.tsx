@@ -23,6 +23,7 @@ import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import {
   onDatabaseBatchCommitted,
   undoDatabaseChange,
@@ -234,7 +235,13 @@ const Block: Component = () => {
       onCleanup(stop);
     },
     offer: (label, undo) =>
-      toast.success(label, { actions: [{ label: 'Undo', onClick: undo }] }),
+      toast.success(label, {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
+        actions: [
+          { label: 'Undo', icon: ArrowCounterClockwise, onClick: undo },
+        ],
+      }),
   });
   // Without input focus, so a cell editor keeps Ctrl+Z for its own text.
   registerHotkey({

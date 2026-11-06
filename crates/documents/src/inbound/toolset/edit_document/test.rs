@@ -595,6 +595,18 @@ impl EditingWorkerService for FakeEditingWorker {
         panic!("unexpected spreadsheet call")
     }
 
+    async fn spreadsheet_instructions(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _instructions: &str,
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetWriterResult,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
+        panic!("unexpected spreadsheet instructions call")
+    }
+
     async fn word_document(
         &self,
         _document_id: &str,

@@ -7,7 +7,11 @@ import type {
 } from '../../../generated/storage/types.gen';
 import type { MacroClient } from '../../utils/client';
 import { MacroApiError, MacroError, unwrap } from '../../utils/unwrap';
-import { EditOutcomeUnknownError } from './ai-edit';
+import {
+  DocumentEditRefusedError,
+  EditOutcomeUnknownError,
+  isRefusal,
+} from './ai-edit';
 import { Document } from './document';
 
 /** A sheet to address: its exact name, or a summary from `read().sheets`. */
@@ -241,6 +245,60 @@ export class Spreadsheet extends Document {
 
     const { action: _, ...edited } = response;
     return { ...edited, webUrl: this.webUrl() };
+  }
+
+  /**
+   * Edit the workbook by natural-language instructions, which an AI writer
+   * carries out in one atomic batch, as `applyEdits` would.
+   *
+   * Write instructions like a precise request: name the sheet and the cells,
+   * columns or table to change, describe the outcome ("add a Total row that
+   * sums Cost"), and say what must stay as it is. The writer reads the cells
+   * it needs, checks formulas, and saves every change at once or nothing. It
+   * can do anything `applyEdits` can; it cannot read other documents. Use
+   * `applyEdits` instead when you already know the exact operations: it is
+   * exact, immediate and uses no AI.
+   *
+   * Throws `DocumentEditRefusedError` with the writer's reason when it can't
+   * do the edit (nothing changed), `RevisionConflictError` when someone
+   * changed the workbook while it worked (nothing changed: retry),
+   * `EditOutcomeUnknownError` when the save may have happened (read before
+   * retrying), and `AbortError` when `options.signal` aborts. An abort before
+   * the save changes nothing. AI usage is billed as for any AI edit, and an
+   * edit can take tens of seconds.
+   *
+   * @example Add a summary.
+   * ```js
+   * const sheet = macro.documents.spreadsheet(document);
+   * const { changes, warnings, webUrl } = await sheet.edit(
+   *   'On the "Expenses" sheet, add a Total row under the last item that sums the Cost column, in bold.',
+   * );
+   * return { data: { changes, warnings, webUrl } };
+   * ```
+   */
+  override async edit(
+    instructions: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<SpreadsheetEdited> {
+    options.signal?.throwIfAborted();
+
+    const result = await this.client.storage.editSpreadsheetWithAi({
+      path: { document_id: this.id },
+      body: { instructions },
+      signal: options.signal,
+    });
+    options.signal?.throwIfAborted();
+
+    const status = result.response?.status;
+    if (status === 422 && isRefusal(result.error))
+      throw new DocumentEditRefusedError(result.error);
+    if (status === 409) throw new RevisionConflictError(result.error);
+    if (status === 502 || status === 504)
+      throw new EditOutcomeUnknownError(result.error, status);
+    if (result.error !== undefined && result.response === undefined)
+      throw new EditOutcomeUnknownError(result.error, 0);
+
+    return { ...unwrap(result), webUrl: this.webUrl() };
   }
 
   /** The spreadsheet's URL in the Macro web app. */

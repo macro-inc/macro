@@ -126,16 +126,13 @@ pixel; see [read receipts in a thread](email.md#read-receipts) for the status.
 
 ### Notification permission prompt
 
-After onboarding, an eligible desktop app user sees **Enable Desktop
-Notifications**. Select **Enable** to request permission through the native
-notification provider; macOS uses its system permission dialog. The Android app
-says **Enable Notifications** and requests the Android notification permission
-through the same native provider. The web prompt says **Enable Browser
-Notifications** and uses browser permissions.
-**Enable** is its only action; closing the prompt (its corner **Close** on
-desktop, a swipe on phones) counts as a decline and stops it returning on the
-next load. It waits in the same region as other prompts, one card at a time. On
-phones it stays under open sheets and their pickers.
+After onboarding, eligible desktop, Android, and web users see **Enable
+notifications**. Select **Enable** to request permission through the native
+notification provider on desktop and Android, or browser permissions on the web;
+macOS uses its system permission dialog. **Not now** dismisses the prompt and
+stops it returning on the next load, as does swiping it away on phones. It appears
+with other persistent prompts; on phones it stays under open sheets and their
+pickers.
 
 ### Notification snoozes
 

@@ -269,6 +269,7 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::spreadsheet::read_spreadsheet_handler,
         documents_hex::inbound::axum_router::spreadsheet::calculate_spreadsheet_handler,
         documents_hex::inbound::axum_router::spreadsheet::edit_spreadsheet_handler,
+        documents_hex::inbound::axum_router::spreadsheet::ai_edit_spreadsheet_handler,
         documents_hex::inbound::axum_router::presentation::read_presentation_handler,
         documents_hex::inbound::axum_router::presentation::edit_presentation_handler,
         documents_hex::inbound::axum_router::presentation::copy_presentation_handler,

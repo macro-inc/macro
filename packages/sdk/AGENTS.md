@@ -16,8 +16,10 @@ enforced by the ordinary backend APIs.
   `StaticImage` the server stored, since static file storage rejects API keys.
 - `documents.createSpreadsheet()` and `documents.spreadsheet(document)` return a
   `Spreadsheet` (`src/entities/documents/spreadsheet.ts`) whose `read`,
-  `calculate` and `applyEdits` run the spreadsheet tools' engine; code mode
-  hides `ReadSpreadsheet`, `CalculateSpreadsheet` and `EditSpreadsheet`.
+  `calculate` and `applyEdits` run the spreadsheet tools' engine, and whose
+  `edit(instructions)` overrides `Document.edit` with the worker's spreadsheet
+  writer model; code mode hides `ReadSpreadsheet`, `CalculateSpreadsheet` and
+  `EditSpreadsheet`.
 - File bytes must work inside code mode, whose sandbox reaches only Macro hosts:
   `documents.upload()` posts them to storage's `/documents/upload`, and
   `Document.bytes()` downloads through the CloudFront export host (`document-content`

@@ -1151,6 +1151,18 @@ fn test_state(
         #[cfg(feature = "ai_tools")]
         canvas: canvas_routes("http://localhost/unused-editing-worker"),
         #[cfg(feature = "ai_tools")]
+        spreadsheet_ai_edit: Arc::new(crate::domain::spreadsheet::SpreadsheetAiEditService::new(
+            document_service.clone(),
+            Arc::new(
+                crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                    "http://localhost/unused-editing-worker".to_string(),
+                ),
+            ),
+            "unused-jwt-secret".to_string(),
+            Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
+            Arc::new(ai_usage::NoOpUsageRecorder),
+        )),
+        #[cfg(feature = "ai_tools")]
         presentations: Arc::new(crate::domain::presentation::PresentationService::new(
             Arc::new(crate::domain::presentation::NoPresentationFiles),
         )),
