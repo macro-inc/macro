@@ -761,7 +761,7 @@ the row context menu offers the same Share action, plus Rename (edit or owner),
 Favorite, Copy Link, and Delete (owner).
 
 The toolbar's **Database actions** (`…`) menu, beside **AI**, contains **Rename**,
-**Import CSV**, **Webhooks**, **Download**, and owner-only **Delete**. Rename focuses the inline
+**Import CSV**, **Webhooks**, **Sync from…**, **Download**, and owner-only **Delete**. Rename focuses the inline
 title in the split header; Delete opens the standard confirmation dialog.
 **Download** offers **Current table as CSV**.
 Exports contain all records, regardless of the current filters. CSV uses column
@@ -813,6 +813,20 @@ column you delete or retype stops syncing (listed in `detachedColumns`); new
 Notion properties add columns. Writes act as the sync's creator and stop with
 `status.failure = "creator_lost_access"` if they lose edit access. Verify by
 running a sync and reading the table, then changing the source and choosing run.
+
+In the web app, **Database actions → Sync from…** (editors only) opens
+**Synced tables** (a drawer on phones). It lists the database's syncs with
+their source (Granola meetings or the Notion database's title), the table they
+write, their status (waiting for the first sync, up to date, or last sync
+failed with the reason), when they last succeeded, and any columns that stopped
+syncing. **Sync now** asks for a run; **Stop syncing** removes the sync and keeps
+the table and rows. **Add a synced table** offers Granola meetings and each
+readable Notion database; a source that isn't connected links to
+**Settings → Integrations**, and a source the database already mirrors reads
+**Already synced**. Choosing one adds the table and switches to it; the list
+polls until its first run finishes. **Create → Synced database** (in the
+launcher and command menu) opens the same source choice and opens the new
+database, named after its source.
 
 ## Side panel and activity
 

@@ -145,7 +145,7 @@ function setup(
             ({ table: { id: 'table', name: 'Contacts' } } as TableDetail)
           }
           entityActions={entityActions}
-          onImported={vi.fn()}
+          onTableAdded={vi.fn()}
           onRename={() => editTitle?.()}
           onDelete={remove}
         />
@@ -277,7 +277,7 @@ describe('database page actions', () => {
             tables: [{ table: { id: 'contacts', name: ' contacts ' } }],
           } as unknown as DatabaseDetail
         }
-        onImported={vi.fn()}
+        onTableAdded={vi.fn()}
         onRename={vi.fn()}
         onDelete={vi.fn(() => okAsync(undefined))}
       />
