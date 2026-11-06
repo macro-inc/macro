@@ -248,7 +248,8 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 - Team agent retry is admin-only and reuses the original computer and persona.
   Its adapter receives the same computer repository for scoped bootstrap reads
   and the harness domain repository for enrolled-persona health and last-turn
-  time. Repo recovery uses the internal git `ensure` API without token rotation.
+  time. The fleet issues new credentials through the InternalOnly enrollment route;
+  repo recovery reissues its token while preserving repository contents.
 
 - `src/outbound/computer_urls.rs` resolves bootstrap addresses separately from
   browser and service-internal URLs. Enabled local fleets require complete
@@ -265,3 +266,12 @@ Computer billing requires all six
 nonblank whenever `COMPUTERS_FLEET` is set. Validate this at startup and in the
 Doppler config check; unset or explicitly disabled fleets require no computer price config; partial price groups are always rejected. Prices
 have no fallback. See [required computer config](../../docs/development/running-locally.md#macro-computers).
+
+## Persona enrollment contract
+
+`POST /internal/team_agent_enrollment/{computer}/{generation}` requires
+`InternalOnly`, never an ordinary user or agent key. It returns one-time
+`PersonaEnrollment` with `Cache-Control: no-store`. The team-agent domain verifies
+the generation, team, agent account and persona identity, locks the agent row,
+replaces its Brain API key and reissues the repo token. No bootstrap plaintext is
+persisted. A failed issuance may be repeated to revoke the incomplete attempt.

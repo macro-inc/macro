@@ -339,5 +339,16 @@ commits the selected model. Spans never include transcripts, synthesis text or k
 - `harness_bindings.rs` resolves runtime routing through the harness, bot assignment, and session lookup ports; each owning crate reads its own table.
 
 Computer operator construction requires an explicit persona credential source.
-The composition currently passes `NoPersonaCredentials`, which returns empty
-material only for computers without a persona and rejects persona computers.
+The composition uses the auth service enrollment source below, which returns
+empty material for computers without a persona and fails closed if persona
+credentials cannot be issued.
+
+## Persona enrollment credentials
+
+The computer operator uses the auth service's InternalOnly enrollment source
+with `AUTHENTICATION_SERVICE_SECRET_KEY` to issue fresh per-agent bootstrap
+credentials. A persona fails closed when that credential is absent; ordinary
+non-persona computers need no issuance. Request and response bodies are never
+logged or cached. The fleet skips issuance for an already claimed generation;
+unclaimed retries and recreated guests receive fresh credentials through the
+transient `PersonaEnrollment` payload, installed mode 0600 before pairing claim.

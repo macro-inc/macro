@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE team_agents SET computer_id = $1\n               WHERE user_id = $2 AND (computer_id IS NULL OR computer_id = $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f8ea04f0f7ae9f57beded5c4ce842bb6a9f6e7457f101438541123a8f93e4188"
+}

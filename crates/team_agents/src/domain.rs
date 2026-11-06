@@ -1,5 +1,6 @@
 //! Team agents domain: models, ports, and the service.
 
+pub mod enrollment;
 pub mod gateway;
 pub mod included;
 pub mod mail;

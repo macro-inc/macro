@@ -1,6 +1,5 @@
 //! Team agent service implementation.
 
-use agent_credentials::RepoToken;
 use hosted_runtimes::domain::ids::ComputerId;
 
 use crate::domain::mail::{MailMessageId, MailboxId};
@@ -15,16 +14,18 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    AgentApiKey, AgentRepo, ComputerPayment, ComputerPurchase, ComputerSize, ComputerStatus,
-    ComputerStatusKind, CreateTeamAgent, EmailMessage, EmailMessages, MAX_NAME_CHARS,
-    MAX_PROFILE_CHARS, NewAgentAccount, Persona, PersonaConfigKey, PersonaOsUser, PersonaSeed,
-    PersonaService, SendEmail, SentEmail, SystemdUnitName, TeamAgent, TeamAgentComputer,
-    TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
+    AgentRepo, ComputerPayment, ComputerPurchase, ComputerSize, ComputerStatus, ComputerStatusKind,
+    CreateTeamAgent, EmailMessage, EmailMessages, MAX_NAME_CHARS, MAX_PROFILE_CHARS,
+    NewAgentAccount, Persona, PersonaConfigKey, PersonaOsUser, PersonaSeed, PersonaService,
+    SendEmail, SentEmail, SystemdUnitName, TeamAgent, TeamAgentComputer, TeamAgentError,
+    TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
     AgentApiKeys, AgentRepos, Computers, Mailboxes, TeamAgentRepository, TeamAgentService,
     TeamMembership,
 };
+
+mod enrollment;
 
 #[cfg(test)]
 mod test;
@@ -196,16 +197,11 @@ fn persona(
     gateway_url: &str,
     anthropic_base_url: &str,
     repo: &AgentRepo,
-    api_key: &AgentApiKey,
 ) -> Result<Persona, TeamAgentError> {
     let config = BTreeMap::from([
         (
             config_keys::ANTHROPIC_BASE_URL.to_string(),
             anthropic_base_url.trim_end_matches('/').to_string(),
-        ),
-        (
-            config_keys::ANTHROPIC_AUTH_TOKEN.to_string(),
-            api_key.expose().to_string(),
         ),
         (
             config_keys::AGENT_USER_ID.to_string(),
@@ -224,14 +220,6 @@ fn persona(
             BRAIN_HEALTH_PORT.to_string(),
         ),
         (config_keys::REPO_URL.to_string(), repo.url.clone()),
-        (
-            config_keys::REPO_TOKEN.to_string(),
-            repo.token.expose().to_string(),
-        ),
-        (
-            config_keys::API_KEY.to_string(),
-            api_key.expose().to_string(),
-        ),
     ])
     .into_iter()
     .map(|(key, value)| {
@@ -414,8 +402,6 @@ where
             .await?;
         undo.joined_team = true;
 
-        let api_key = self.api_keys.mint(&user_id).await?;
-
         let repo = self.repos.create(&user_id, team_id, &seed).await?;
         undo.repo = true;
 
@@ -431,7 +417,6 @@ where
                 &self.gateway_url,
                 &self.anthropic_base_url,
                 &repo,
-                &api_key,
             )?),
             extra_items: seat.into_iter().collect(),
         };
@@ -860,8 +845,7 @@ where
         if !agent.retryable {
             return Ok(agent);
         }
-        let mut seed = self
-            .repository
+        self.repository
             .persona_seed(agent_user_id)
             .await
             .map_err(TeamAgentError::internal)?
@@ -870,9 +854,6 @@ where
                     "the agent predates saved recovery inputs".to_string(),
                 )
             })?;
-        if seed.creator_id.is_none() {
-            seed.creator_id = agent.created_by.clone();
-        }
         let persona = self.computers.persona(agent.team_id, computer_id).await?;
         if !lazy_regex::regex_is_match!(
             r"^agent-[a-z0-9][a-z0-9_-]{0,24}$",
@@ -892,21 +873,8 @@ where
                 "the saved persona belongs to another agent",
             ));
         }
-        let token = persona.config.get(config_keys::REPO_TOKEN).ok_or_else(|| {
-            TeamAgentError::RetryUnavailable("the saved repo credential is missing".to_string())
-        })?;
-        self.repos
-            .ensure(
-                agent_user_id,
-                agent.team_id,
-                &seed,
-                &RepoToken::parse(token.clone()).map_err(|_| {
-                    TeamAgentError::RetryUnavailable(
-                        "the saved repo credential is invalid".to_string(),
-                    )
-                })?,
-            )
-            .await?;
+        // The Create effect restores the repo from this saved seed and issues
+        // fresh bootstrap credentials. Never recover credentials from state.
         let computer = self.computers.retry(agent.team_id, computer_id).await?;
         self.apply_computer_status(agent, computer).await
     }

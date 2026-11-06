@@ -35,7 +35,7 @@ chrono = { workspace = true, features = ["serde"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 lazy-regex = { workspace = true }
 feature_flags = { path = "../feature_flags" }
-hosted_runtimes = { path = "../hosted_runtimes", default-features = false }
+hosted_runtimes = { path = "../hosted_runtimes", default-features = false, features = ["ports"] }
 harnesses = { path = "../harnesses", optional = true, default-features = false, features = ["ports"] }
 harness_id = { path = "../harness_id" }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
@@ -55,6 +55,8 @@ uuid = { workspace = true, features = ["serde", "v7"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+hosted_runtimes = { path = "../hosted_runtimes", default-features = false, features = ["outbound"] }
+user_api_key = { path = "../user_api_key", features = ["postgres"] }
 serde_json = { workspace = true }
 harnesses = { path = "../harnesses", default-features = false, features = ["test-utils"] }
 axum = { workspace = true }

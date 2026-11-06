@@ -13,6 +13,8 @@ use uuid::Uuid;
 use crate::domain::models::{NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentStatus};
 use crate::domain::ports::TeamAgentRepository;
 
+mod enrollment;
+
 #[cfg(test)]
 mod test;
 

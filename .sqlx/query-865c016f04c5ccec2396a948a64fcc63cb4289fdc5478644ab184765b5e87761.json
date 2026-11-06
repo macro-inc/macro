@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.user_id, a.team_id, a.created_by,\n                      a.persona_seed AS \"persona_seed: sqlx::types::Json<PersonaSeed>\",\n                      u.\"isAgent\" AS \"is_agent!\"\n               FROM team_agents a JOIN \"User\" u ON u.id = a.user_id\n               WHERE a.computer_id = $1 OR (a.computer_id IS NULL AND a.user_id = $2 AND a.team_id = $3)\n               FOR UPDATE OF a",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "persona_seed: sqlx::types::Json<PersonaSeed>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_agent!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "865c016f04c5ccec2396a948a64fcc63cb4289fdc5478644ab184765b5e87761"
+}

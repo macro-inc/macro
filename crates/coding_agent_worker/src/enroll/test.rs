@@ -473,6 +473,10 @@ fn issued_credentials_and_environment_are_written_only_to_the_private_env_file()
     let issued = PersonaEnrollment {
         secrets: PersonaCredentials::new(BTreeMap::from([
             (
+                PersonaConfigKey::parse("ANTHROPIC_AUTH_TOKEN").unwrap(),
+                "fixture-api-value".to_owned(),
+            ),
+            (
                 PersonaConfigKey::parse("MACRO_API_KEY").unwrap(),
                 "fixture-api-value".to_owned(),
             ),
@@ -492,6 +496,7 @@ fn issued_credentials_and_environment_are_written_only_to_the_private_env_file()
     files.install(&FakeHost::default()).unwrap();
     let env = std::fs::read_to_string(&files.env_path).unwrap();
     assert!(env.contains("MACRO_API_KEY=\"fixture-api-value\""));
+    assert!(env.contains("ANTHROPIC_AUTH_TOKEN=\"fixture-api-value\""));
     assert!(env.contains("MACRO_REPO_TOKEN=\"fixture-repo-value\""));
     assert!(env.contains("OVERRIDE_APP_SERVICE_URL=\"https://app.example.com\""));
     assert!(env.contains("PERSONA=\"ada\""));

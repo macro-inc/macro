@@ -30,7 +30,7 @@ impl<S: UserApiKeyService> AgentApiKeys for UserApiKeys<S> {
     ) -> Result<AgentApiKey, TeamAgentError> {
         let created = self
             .service
-            .create_key(agent_user_id, BRAIN_KEY_NAME)
+            .replace_key(agent_user_id, BRAIN_KEY_NAME)
             .await
             .map_err(TeamAgentError::internal)?;
 

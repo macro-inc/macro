@@ -123,9 +123,9 @@ pub trait TeamMembership: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<SeatQuote>, TeamAgentError>> + Send;
 }
 
-/// Mints the agent's own API key.
+/// Replaces the agent's bootstrap API key, revoking the earlier named keys.
 pub trait AgentApiKeys: Send + Sync + 'static {
-    /// Mints a key for the agent and returns its secret.
+    /// Mint a fresh key and revoke earlier bootstrap keys before returning its secret.
     fn mint(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,

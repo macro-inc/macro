@@ -13,6 +13,7 @@ mod github_access_token;
 mod google_access_token;
 mod microsoft_access_token;
 mod microsoft_grant;
+mod persona_enrollment;
 mod post_get_existing_users;
 mod relocate_inbox_grant;
 mod remove_link;
@@ -23,6 +24,15 @@ mod fusionauth_fixture;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()
+        .route(
+            "/team_agent_enrollment/{computer}/{generation}",
+            post(
+                persona_enrollment::handler::<
+                    crate::api::context::TeamAgentsServiceType,
+                    crate::api::context::AuthorizationService,
+                >,
+            ),
+        )
         .route("/github_access_token", get(github_access_token::handler))
         .route("/google_access_token", get(google_access_token::handler))
         .route("/microsoft_grant", get(microsoft_grant::handler))

@@ -3,8 +3,8 @@
 //! its own Macro computer.
 //!
 //! Inviting one creates a verified account (no sign-in), its inbox, team
-//! membership, API key and workspace repo, then buys its computer with the
-//! seat in the same Stripe update. The brain on that computer does the rest.
+//! membership and workspace repo, then buys its computer with the
+//! seat in the same Stripe update. Bootstrap credentials are issued only at enrollment.
 //!
 //! # Architecture
 //!
