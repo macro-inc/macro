@@ -68,7 +68,7 @@ This convention starts with `database_entities`; it is new for databases and is
 the convention for new entities going forward. It does not require renaming
 existing entity tables. `database_entities.database_id` is both the entity's key
 and a reference to `databases.id`. See the
-[database backend](../../crates/databases/README.md) for the storage boundary and
+[database backend](../../crates/databases/databases/README.md) for the storage boundary and
 the explicitly destructive database cutover.
 
 ### Compatible migrations

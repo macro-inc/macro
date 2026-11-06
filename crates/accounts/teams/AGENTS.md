@@ -40,7 +40,7 @@ event contract (schema, sanitization, delivery semantics).
 - Owns: the `"Team"` table's lifecycle, membership, invites, and the
   `macro.teams` Kafka producer.
 - Not here: billing/seat pricing logic → `crates/ai_billing` (consumes this
-  crate); CRM company/contact sync → `crates/crm` (this crate only enqueues).
+  crate); CRM company/contact sync → `crates/databases/crm` (this crate only enqueues).
 
 ## Boundaries
 

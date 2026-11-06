@@ -36,10 +36,10 @@ this feature does not add one.
 
 ## Starting point before this change
 
-- [`saved_views`](../../crates/saved_views/src/lib.rs) already stores `id`,
+- [`saved_views`](../../crates/databases/saved_views/src/lib.rs) already stores `id`,
   `user_id`, `name`, arbitrary JSON `config`, and timestamps in `saved_view`.
   Configuration is explicitly consumer-owned.
-- [Its PostgreSQL adapter](../../crates/saved_views/src/pgsql.rs) previously
+- [Its PostgreSQL adapter](../../crates/databases/saved_views/src/pgsql.rs) previously
   implemented personal CRUD with shallow-merge PATCH. Ownership checks lived in
   the [DSS REST adapter](../../services/document_storage_service/src/api/saved_views.rs).
   This change moves policy into the domain service and adds GraphQL operations.

@@ -16,10 +16,10 @@ follow-up fix; those misses are called out inline.
 
 | Building | Copy | Why |
 | --- | --- | --- |
-| The smallest correct registration | `CrmPipeline` (`crates/crm`, `crm_pipeline_entities`) | Newest kind; touches every core registration point with the least feature code |
-| A full-stack kind outside Soup | Forms (`crates/forms`, `apps/web/src/features/block-form`) | Newest end-to-end launch: access, public audience, entity mutation, mentions, Drive catalog, AI tools, SDK entity, agent guide |
+| The smallest correct registration | `CrmPipeline` (`crates/databases/crm`, `crm_pipeline_entities`) | Newest kind; touches every core registration point with the least feature code |
+| A full-stack kind outside Soup | Forms (`crates/databases/forms`, `apps/web/src/features/block-form`) | Newest end-to-end launch: access, public audience, entity mutation, mentions, Drive catalog, AI tools, SDK entity, agent guide |
 | A Soup kind with properties, discussions, activity, MCP | Initiatives (`crates/projects/initiative`, `crates/graphql/graphql_initiative`) | Built in clean layers; the [design doc](../design/initiatives-projects.md) records the order |
-| A kind on reusable storage | Databases (`crates/databases`, `database_entities`) | Separates storage from the app entity; read the [database-core skill](../../.agents/skills/database-core/SKILL.md) |
+| A kind on reusable storage | Databases (`crates/databases/databases`, `database_entities`) | Separates storage from the app entity; read the [database-core skill](../../.agents/skills/database-core/SKILL.md) |
 
 Collaborative markdown on the entity (descriptions, notes) follows the
 [collab-surface-core skill](../../.agents/skills/collab-surface-core/SKILL.md).
@@ -117,7 +117,7 @@ migrations, the SQLx cache, and tests.
   paths in `src/api/swagger.rs`.
 - Other services build the same domain service (agent harness, agent trigger,
   authentication, MCP, document cognition). Give the crate one `wiring.rs` that
-  every host calls, as `crates/forms/src/wiring.rs` does. Hosts built separately
+  every host calls, as `crates/databases/forms/src/wiring.rs` does. Hosts built separately
   drift: tools in one host have pointed at the wrong service, and writes from a
   host with a no-op event broker never reached the activity feed.
 - If it calls `sqlx::query!`, run `nix develop --command just prepare_db` and
@@ -167,7 +167,7 @@ Postgres repo.
   for kinds with `entity_access` rows.
 - **Entity mutation:** implement the `crates/entities/entity_mutation` capability traits
   (`RenameEntity`, `TrashEntity`, `RestoreEntity`, `DeleteEntityPermanently`, ...)
-  in the domain crate, as `crates/forms/src/domain/entity_mutation.rs` does, then
+  in the domain crate, as `crates/databases/forms/src/domain/entity_mutation.rs` does, then
   add the arms in `services/document_storage_service/src/service/entity_mutation.rs`
   and the adapters in `src/outbound/entity_mutation.rs`. GraphQL mutations
   (`crates/graphql/graphql_entity_mutation`) are generic. Initiatives still use a
@@ -193,13 +193,13 @@ Postgres repo.
 - `crates/types/models_properties/src/shared/entity_type.rs` (maps to the Postgres enum
   `property_entity_type`; see the enum rule in section 2) and
   `src/api/property_target.rs`.
-- `crates/properties/src/domain/model.rs` (`canonical_entity_type`,
+- `crates/databases/properties/src/domain/model.rs` (`canonical_entity_type`,
   `storage_entity_type`; return `None` if the kind has no properties), plus
   `inbound/axum_router/extract.rs`, `outbound/permission_queries.rs`,
   `outbound/permission_service.rs`, and `domain/activity.rs`.
-- System properties: `crates/system_properties/src/domain/model/constants/system_property_key.rs`
+- System properties: `crates/databases/system_properties/src/domain/model/constants/system_property_key.rs`
   and an `attach_<kind>_properties` call at create in
-  `crates/system_properties/src/domain/service.rs`.
+  `crates/databases/system_properties/src/domain/service.rs`.
 - Filters: `crates/graphql/graphql_common/src/property_filter.rs` and
   `crates/graphql/graphql_properties`.
 - **Lessons:** a create that fails after properties are attached must remove

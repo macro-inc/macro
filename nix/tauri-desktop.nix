@@ -200,7 +200,7 @@
         }
         {
           name = "database_sql";
-          crate = "crates/database_sql";
+          crate = "crates/databases/database_sql";
           dir = "database-sql";
         }
         {

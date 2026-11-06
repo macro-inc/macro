@@ -107,7 +107,7 @@ copy `channel_labels`:
   derive `ToSchema`.
 - **Register the handler** in the service's `#[openapi(paths(...))]` list and its
   types in `components(schemas(...))`, in `services/<svc>/src/api/swagger.rs`
-  (properties: `crates/properties_service/src/api/swagger.rs`). An unregistered
+  (properties: `crates/databases/properties_service/src/api/swagger.rs`). An unregistered
   handler serves traffic but never reaches any client. A domain crate was once merged with
   its routes unwired and needed a second PR to mount and register them.
 - Schema names are global per spec. Give types domain-specific names (or

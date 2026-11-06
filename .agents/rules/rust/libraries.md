@@ -30,7 +30,7 @@ them instead of their generic equivalents.
   `catch_unwind` or a `JoinError`; fix the code that panics. No
   `Box<dyn Error>` or `Result<_, String>` either.
 - **CS-58** Parse structured text with `nom` (and `logos` for tokenizing a real
-  grammar, as `crates/database_sql` does), not hand-rolled `split_once` /
+  grammar, as `crates/databases/database_sql` does), not hand-rolled `split_once` /
   `strip_prefix` / index scanners.
 - **CS-59** Enum string forms (CS-11) use `strum` derives (`EnumString`,
   `Display`, `AsRefStr`, `IntoStaticStr`, `EnumIter`) with `serialize_all`

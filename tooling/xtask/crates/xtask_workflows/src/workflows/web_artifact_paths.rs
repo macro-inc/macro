@@ -17,7 +17,7 @@ pub const WEB_ARTIFACT_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new("crates/client/cache-turso/**"),
     RepoGlob::new("crates/client/cache-wasm/**"),
     RepoGlob::new("crates/client/turso-opfs/**"),
-    RepoGlob::new("crates/database_sql/**"),
+    RepoGlob::new("crates/databases/database_sql/**"),
     RepoGlob::new("crates/types/filter_ast/**"),
     RepoGlob::new("crates/search/item_filters/**"),
     RepoGlob::new("static_assets/schema.graphql"),

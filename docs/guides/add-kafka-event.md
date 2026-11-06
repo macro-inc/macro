@@ -16,12 +16,12 @@ section below is one place, in order; past misses are called out inline.
 | --- | --- | --- |
 | A topic | The `macro.messages` registration: `crates/platform/macro_event_topics/src/lib.rs`, its `test.rs`, `.github/kafka-cluster-topics.json` | Three files, shipped as its own PR ahead of the producer |
 | Events on a topic | `crates/integrations/github_pull_requests/src/broker.rs` (one variant), `crates/comms/messages/src/outbound/broker.rs` (several) | Topic enum, keyed envelope, broker-backed adapter for a domain port |
-| A durable consumer | `crates/crm/src/inbound/call_archived.rs` | Smallest grouped consumer: poison commit, bounded retry, commit after work, cancel-safe |
+| A durable consumer | `crates/databases/crm/src/inbound/call_archived.rs` | Smallest grouped consumer: poison commit, bounded retry, commit after work, cancel-safe |
 | An at-least-once consumer that must not skip | `crates/integrations/webhook/src/inbound/kafka_consumer.rs` | Transient vs permanent errors; exits uncommitted so a restart redelivers |
 | A per-process fan-out (GraphQL subscription, SSE) | `crates/agent_session_realtime/src/outbound/log_topic_consumer.rs` | Ungrouped, starts at `Latest`, commits nothing |
 
 Background: `crates/platform/macro_event_broker/AGENTS.md` maps the broker crate;
-`crates/properties/README.md` ("Delivery semantics and compatibility") states the
+`crates/databases/properties/README.md` ("Delivery semantics and compatibility") states the
 delivery contract every producer has.
 
 ## 1. Register the topic (new topics only)
@@ -69,7 +69,7 @@ Put the types next to the domain that owns the fact
 - Define a publisher port in the domain and implement it in an adapter over
   `MacroEventBroker` (`GithubPullRequestEventPublisher` +
   `BrokerGithubPullRequestPublisher`, `MessageEventPublisher` +
-  `BrokerMessagePublisher`). Small domains such as `crates/forms` take
+  `BrokerMessagePublisher`). Small domains such as `crates/databases/forms` take
   `B: MacroEventBroker` directly; either keeps Kafka types out of
   `src/domain/**` ([CS-51](../../.agents/rules/rust/architecture.md)).
 - Publish only after the transaction commits, from committed state (see
