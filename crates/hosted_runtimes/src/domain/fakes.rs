@@ -50,6 +50,7 @@ pub struct FakeRepo {
     pub payment_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
     pub effect_run_after: Mutex<HashMap<i64, DateTime<Utc>>>,
     pub computers: Mutex<HashMap<ComputerId, Computer>>,
+    pub corrupt_ids: Mutex<Vec<ComputerId>>,
     pub effects: Mutex<Vec<PendingEffect>>,
     pub events: Mutex<Vec<(ComputerId, Event)>>,
 }
@@ -279,6 +280,9 @@ impl ComputerRepo for FakeRepo {
     }
 
     async fn instances_expected(&self, host: HostId) -> Result<Vec<Computer>, FakeError> {
+        if !self.corrupt_ids.lock().unwrap().is_empty() {
+            return Err(FakeError);
+        }
         Ok(self
             .computers
             .lock()

@@ -1,3 +1,4 @@
+mod quarantine;
 mod redeploy;
 
 mod boot;

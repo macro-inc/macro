@@ -853,3 +853,45 @@ async fn unconfigured_credentials_fail_closed_for_persona_computers() {
 mod credentials;
 
 mod capacity;
+
+#[tokio::test]
+async fn reconcile_keeps_quarantined_guests_and_processes_healthy_computers() {
+    let operator = operator(FakeFleet::default()).await;
+    let healthy = paid_computer(&operator).await;
+    let corrupt = ComputerId::new_from_uuid(Uuid::now_v7());
+    {
+        let mut computers = operator.repo.computers.lock().unwrap();
+        let mut computer = computers.get(&healthy).unwrap().clone();
+        computer.state.phase = Phase::Running { host: HOST };
+        computers.insert(healthy, computer.clone());
+        computer.id = corrupt;
+        computers.insert(corrupt, computer);
+    }
+    operator.repo.corrupt_ids.lock().unwrap().push(corrupt);
+    operator.repo.events.lock().unwrap().clear();
+    *operator.fleet.instances.lock().unwrap() = [healthy, corrupt]
+        .into_iter()
+        .map(|computer_id| FleetInstance {
+            computer_id,
+            status: InstanceStatus::Stopped,
+            control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+            created_at: Some(now() - Duration::minutes(11)),
+        })
+        .collect();
+
+    operator.reconcile().await.unwrap();
+
+    assert_eq!(
+        *operator.repo.events.lock().unwrap(),
+        vec![(healthy, Event::VmCrashed)]
+    );
+    assert!(
+        operator
+            .fleet
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|call| !call.starts_with("destroy "))
+    );
+}
