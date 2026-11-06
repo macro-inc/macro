@@ -168,7 +168,7 @@ Operators are installed once per cluster.
 | DynamoDB | ExtendDB on the instance's Postgres | Apache-2.0 (AWS-maintained) | **Tested:** async create → ACTIVE, `TransactWriteItems`, conditional `ADD`, `begins_with` query, TTL, conditional-put failure. Imported fixed access keys. v0.1.x, so treat as early. |
 | S3 | RustFS | Apache-2.0 | **Tested** as celld's backing store. Upstream still marks distributed mode as "under testing". Fallback: SeaweedFS (Apache-2.0). |
 | Cloudflare Workers + Durable Objects, KV, D1, R2, Queues, Cron | celld | Apache-2.0 | **Tested** on RustFS: a Durable Object counter kept its state across a node restart. v0.6.3 covers every binding our workers use except Browser Rendering and rate limits. One fleet per worker per instance. `wrangler.toml` must become `wrangler.jsonc`. |
-| Lambda | Plain Deployments, scaled by KEDA (Apache-2.0) on Kafka consumer lag | Apache-2.0 | The handlers already have local-worker forms (`document_upload_finalizer_local_worker`). No FaaS framework: Knative, Fission, and OpenFaaS add a runtime we don't need. |
+| Lambda | Plain Deployments, scaled by KEDA (Apache-2.0) on queue depth | Apache-2.0 | The handlers already have local-worker forms (`document_upload_finalizer_local_worker`). No FaaS framework: Knative, Fission, and OpenFaaS add a runtime we don't need. |
 | S3 event → SQS → Lambda | RustFS bucket notifications → Kafka topic → worker | — | To verify: RustFS's Kafka notification target. Fallback: a small poller that publishes to Kafka. |
 | MSK (Kafka) | Strimzi, KRaft | Apache-2.0 | Same Kafka protocol; topics declared from `macro_event_topics`. |
 | ElastiCache Redis | Valkey | BSD-3 | Drop-in. |
@@ -212,7 +212,11 @@ restart, and each instance runs one gateway replica. Both are acceptable for ins
 and would not be for production, which is another reason it stays on SQS. Share groups
 (KIP-932) could replace the in-memory tracking once `rdkafka` exposes them.
 
-Lambda-style scaling is still planned: KEDA's Kafka scaler on consumer lag.
+Queue-driven Lambdas scale with KEDA's SQS scaler pointed at this gateway, from zero
+locally. It was chosen over the planned Kafka lag scaler: Kafka advertises a name that
+only resolves inside its instance's namespace, the same resources work unchanged on real
+SQS, and in-flight messages count, so a worker is not scaled away mid-invocation. The
+self-host chart keeps fixed replicas, so it does not require KEDA.
 
 ### Service decomposition and gRPC
 
@@ -283,7 +287,7 @@ environment changes).
 - **Per cluster:**
   - Traefik, Argo CD, the forge and its runners, in their own namespaces, deployed
     by `cargo x platform cluster` and then managed by Argo CD;
-  - planned, as they land: the operators (CNPG, Strimzi, OpenSearch, KEDA, External
+  - planned, as they land: the operators (CNPG, Strimzi, OpenSearch, External
     Secrets, cert-manager) and Istio (ambient);
   - the image registry, outside the cluster.
 - **Hostnames:** `<instance>.<cluster domain>`, with wildcard DNS and
@@ -398,7 +402,6 @@ the NixOS host, and a forge job would need network access to the instance.
 
 Not built yet:
 
-- KEDA.
 - The bots, and deploys on the forge.
 - Phase 6's deployment: the terranix configuration renders and passes `tofu validate`
   in CI (`.#platform.awsCheck`), but it has never been planned against an account or

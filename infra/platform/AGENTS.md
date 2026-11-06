@@ -109,6 +109,11 @@ deploy repo, which Argo CD syncs.
   fixing the image (forge runners).
 - RustFS reports a blocked private webhook target as `dns_failure`, while uploads
   still succeed. Add a new target's origin to `RUSTFS_OUTBOUND_ALLOW_ORIGINS`.
+- KEDA owns a queue worker's replica count (`scaleOnQueue` in `components.nix`), so it
+  renders no `replicas`. A queue a scaled worker reads must be in `xtask_local`'s
+  `resources.rs`: at zero replicas, nothing else creates it.
+- The Lambda runner delivers one message per invocation, as every stack's event mapping
+  does, and hides it past the handler's deadline. Some handlers reject larger batches.
 - Credentials are generated once per instance and recorded in its
   `platform-state.json`. Databases keep what they were first created with, so losing
   that state while keeping the volumes locks services out: `platform down` both.
