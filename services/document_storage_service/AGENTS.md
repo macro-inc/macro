@@ -121,3 +121,15 @@ threads, pins, recents, notifications, folders, activity.
 - Negotiate Mail cache profiles through `x-macro-mail-cache-profile` (CORS-enabled HTTP) and `mailCacheProfile` (WebSocket connection init); preserve authenticated connection data and default unknown capabilities to v2.
 
 - The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.
+
+## Passwords vault
+
+`/passwords` hosts the `passwords` crate's human-only team vault routes. Domain
+membership, sharing and reauthentication policy lives in that crate. Provision
+`OPENBAO_ADDRESS`, `PASSWORDS_JWT_ISSUER`, and `PASSWORDS_JWT_SIGNING_KEY` together;
+partial configuration fails startup, and absent configuration leaves vault routes
+explicitly unavailable. Hosted human operations evaluate remote `enable-passwords`;
+Local uses an explicit enabled snapshot. Cleanup runs independently of rollout.
+The existing primary pool stores metadata only; values stay in OpenBao.
+`src/passwords_cleanup.rs` runs durable enrollment cleanup through the domain
+service every minute; the consumer task tracker cancels and drains it on shutdown.
