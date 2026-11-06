@@ -46,7 +46,7 @@ interface ToastAction {
   icon?: Component<{ class?: string }>;
   /** Directional actions place their icon after the label. */
   trailingIcon?: boolean;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | 'accent';
   onClick: () => void;
 }
 
@@ -89,6 +89,8 @@ export interface CustomToastConfig {
   icon?: Component<{ class?: string }>;
   /** Any CSS color value, e.g. 'var(--color-success)' or '#ff6600' */
   color?: string;
+  /** Subtle brand surface for informational product updates. */
+  appearance?: 'accent';
   actions?: ToastAction[];
   actionLayout?: ToastActionLayout;
   /** Label for the secondary dismissal action; defaults to Dismiss. */
@@ -328,6 +330,7 @@ export function ToastContent(props: {
       data-toast-id={props.toastId}
       data-mobile={isMobile() ? '' : undefined}
       data-single-row={singleRow() ? '' : undefined}
+      data-appearance={props.custom?.appearance}
       class="macro-toast"
       style={{ '--toast-height': height() ? `${height()}px` : undefined }}
       persistent={props.persistent}

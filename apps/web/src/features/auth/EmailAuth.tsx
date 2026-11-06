@@ -166,7 +166,7 @@ function promptForEmailAccess(scopes: ConsentScopes | undefined) {
     {
       title: 'Email access required',
       icon: EnvelopeIcon,
-      color: 'var(--color-accent)',
+      color: 'var(--color-failure)',
       dismissLabel: t('common.maybeLater'),
       content: () =>
         "Macro connects an account's email and calendar together, so keep the email permissions checked. The account was not connected.",

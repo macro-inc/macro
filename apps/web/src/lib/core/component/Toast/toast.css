@@ -65,6 +65,12 @@
   box-shadow: inset 0 -1px 0 rgb(0 0 0 / 20%);
 }
 
+/* Product updates use a quiet brand tint without changing toast behavior. */
+.macro-toast[data-appearance='accent'] .macro-toast-surface {
+  border-color: color-mix(in oklch, var(--color-accent) 28%, var(--color-edge-muted));
+  background: color-mix(in oklch, var(--color-accent) 6%, var(--color-toast));
+}
+
 .macro-toast[data-mobile][data-single-row] .macro-toast-surface {
   padding: 8px 12px;
 }

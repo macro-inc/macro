@@ -8,7 +8,7 @@ import Bell from '@icon/system/regular/bell.svg';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
-import FileTextIcon from '@icon/system/regular/file-text.svg';
+import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import SplitIcon from '@icon/system/regular/square-half.svg';
@@ -180,7 +180,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       custom: {
         title: 'Reconnect inbox',
         icon: EnvelopeIcon,
-        color: 'var(--color-accent)',
+        color: 'var(--color-failure)',
         dismissLabel: t('common.maybeLater'),
         content: () =>
           'Sync stopped for user@example.com. Reconnect to restore email sync.',
@@ -200,7 +200,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       custom: {
         title: 'Reconnect email and calendar',
         icon: CalendarIcon,
-        color: 'var(--color-accent)',
+        color: 'var(--color-failure)',
         dismissLabel: t('common.maybeLater'),
         content: () =>
           'Sync stopped for user@example.com. Reconnect to restore email and calendar sync.',
@@ -220,7 +220,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       custom: {
         title: 'Reconnect GitHub',
         icon: PlugIcon,
-        color: 'var(--color-accent)',
+        color: 'var(--color-failure)',
         dismissLabel: t('common.maybeLater'),
         content: () =>
           'Your GitHub authorization has expired. Reconnect GitHub to restore pull request details.',
@@ -241,7 +241,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       custom: {
         title: 'Email access required',
         icon: EnvelopeIcon,
-        color: 'var(--color-accent)',
+        color: 'var(--color-failure)',
         dismissLabel: t('common.maybeLater'),
         content: () =>
           "Macro connects an account's email and calendar together, so keep the email permissions checked. The account was not connected.",
@@ -262,8 +262,9 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         title: 'A new version of Macro is ready',
         icon: MacroLogo,
         color: 'var(--color-accent)',
+        appearance: 'accent',
         dismissLabel: t('common.maybeLater'),
-        actions: [{ label: 'Reload', onClick: dismiss }],
+        actions: [{ label: 'Reload', variant: 'accent', onClick: dismiss }],
       },
     }),
   },
@@ -279,8 +280,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       dismissStyle: 'icon',
       custom: {
         title: 'Draft could not be saved',
-        icon: FileTextIcon,
-        color: 'var(--color-accent)',
+        icon: ExclamationIcon,
+        color: 'var(--color-failure)',
         content: () =>
           'Your edits are still in this editor. Save them as a new draft before closing.',
         actions: [

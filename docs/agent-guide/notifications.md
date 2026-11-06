@@ -298,12 +298,14 @@ setup prompts use **Not now** instead of **Dismiss**. Recovery and update-ready
 prompts use **Maybe later**, except draft-save recovery uses a desktop close icon
 and keeps **Save as new draft** as its only action. Dismissal keeps the same
 suppression behavior.
-Recovery and update-ready prompts have accent-colored subject icons: mail for
-inbox-only reconnect and email access, a calendar for **Reconnect email and
-calendar**, a plug for integration reconnect, a draft for draft-save recovery,
-and the Macro logo for app updates. Other error notices retain their
-failure-colored icons. Leading icons align with the title's first line even when
-the title or actions wrap.
+Recovery prompts have danger-colored subject icons: mail for inbox-only
+reconnect and email access, a calendar for **Reconnect email and calendar**, and
+a plug for integration reconnect. Draft-save recovery uses the default error
+icon and danger color. Their Save, Reconnect, and Try again buttons remain
+neutral, not destructive. The update-ready prompt is distinct: it uses the Macro
+logo, a subtle accent-tinted surface and border, an accent **Reload** button, and
+secondary **Maybe later**. Its title remains **A new version of Macro is ready**.
+Leading icons align with the title's first line even when the title or actions wrap.
 
 Staff Noise emails still create in-app notification rows, but do not send a new-notification
 event over GraphQL or the legacy WebSocket gateway, so they do not trigger browser popups.

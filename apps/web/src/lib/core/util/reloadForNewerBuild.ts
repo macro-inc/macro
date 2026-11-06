@@ -70,8 +70,9 @@ const browserPage: ReloadPage = {
         title: 'A new version of Macro is ready',
         icon: MacroLogo,
         color: 'var(--color-accent)',
+        appearance: 'accent',
         dismissLabel: t('common.maybeLater'),
-        actions: [{ label: 'Reload', onClick: reload }],
+        actions: [{ label: 'Reload', variant: 'accent', onClick: reload }],
       },
       { persistent: true }
     );

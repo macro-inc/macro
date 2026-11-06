@@ -25,7 +25,6 @@ import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { handleFileFolderDrop } from '@core/util/upload';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg?component-solid';
-import FileTextIcon from '@icon/system/regular/file-text.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import {
@@ -314,10 +313,8 @@ export function createEmailComposeContext(
                 title: message,
                 dismissLabel: t('common.maybeLater'),
                 content: () => options.subtext,
-                icon: isDraftRecovery ? FileTextIcon : ExclamationIcon,
-                color: isDraftRecovery
-                  ? 'var(--color-accent)'
-                  : 'var(--color-failure)',
+                icon: ExclamationIcon,
+                color: 'var(--color-failure)',
                 actions: notice(options).actions,
               },
               {

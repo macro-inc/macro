@@ -321,6 +321,8 @@ function ActionsDemo(props: ToastDemoProps = {}) {
         title: 'Reconnect inbox',
         content: () => 'Reconnect your account to resume syncing.',
         icon: LinkIcon,
+        color: 'var(--color-failure)',
+        dismissLabel: t('common.maybeLater'),
         actions: [
           {
             label: 'Reconnect',
@@ -700,6 +702,8 @@ export default defineDoc({
       'Keep a single action beside the title when there is no description.',
       'Use a desktop close icon on navigation notices and put secondary Open split before primary Open.',
       'Use Not now for optional setup prompts and Maybe later for recovery and update-ready prompts.',
+      'Use danger-colored recovery icons with neutral action buttons; keep the default error icon for draft-save failures.',
+      'Use the subtle accent appearance, Macro logo, and accent Reload action for app updates.',
       'Omit the close icon on mobile; retain swipe dismissal in either direction.',
       'Place actions below descriptions; use actionLayout inline only for multiple actions without a description.',
       'Use consistent 16px icons where meaningful; put the Open icon after its label and keep View and generic forward actions text-only.',

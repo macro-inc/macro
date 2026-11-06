@@ -41,7 +41,7 @@ export function GmailReauthenticationPrompt() {
         reconnectScopes(link) === 'gmail_and_calendar'
           ? CalendarIcon
           : EnvelopeIcon,
-      color: 'var(--color-accent)',
+      color: 'var(--color-failure)',
       dismissLabel: t('common.maybeLater'),
       content(): string {
         return `Sync stopped for ${link.email_address}. Reconnect to restore ${reconnectScopes(link) === 'gmail_and_calendar' ? 'email and calendar' : 'email'} sync.`;
