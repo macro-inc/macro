@@ -52,7 +52,16 @@ export type {
   StructuredCompletionRequest,
   StructuredCompletionResponse,
 } from './entities/ai/namespace';
+export { CallRecord } from './entities/calls/call-record';
+export { CallConnection, type JoinOptions } from './entities/calls/connection';
+export {
+  AlreadyConnectedError,
+  CallEndedError,
+  InOtherCallError,
+} from './entities/calls/errors';
 export type { CallMessage } from './entities/calls/message';
+export type { CallSummary } from './entities/calls/namespace';
+export { CallParticipant } from './entities/calls/participant';
 export {
   ConnectedApp,
   ConnectedTool,
@@ -300,6 +309,12 @@ export {
   AgentConversation,
   ConversationTurn,
 } from './entities/agent-sessions/conversation';
+export type {
+  SessionOrigin,
+  SessionOriginCaller,
+  SessionOriginLineage,
+  SessionOriginRoot,
+} from './entities/agent-sessions/origin';
 export type {
   CreateReviewOptions,
   ReviewCalendarDraft,

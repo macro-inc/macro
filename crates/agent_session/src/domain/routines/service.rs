@@ -185,6 +185,7 @@ where
                         model: selection.model.clone(),
                         source: command.source,
                         visibility: command.visibility,
+                        origin: command.origin,
                     })
                     .await
             }
@@ -198,6 +199,7 @@ where
                         model: selection.model.clone(),
                         source: command.source,
                         visibility: command.visibility,
+                        origin: command.origin,
                     })
                     .await
             }

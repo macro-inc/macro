@@ -2427,6 +2427,52 @@ export const getActiveCallsResponse = zod
   );
 
 /**
+ * @summary List all channel and standalone calls this account can join.
+ */
+export const getLiveCallsResponse = zod
+  .object({
+    calls: zod
+      .array(
+        zod
+          .object({
+            callId: zod.uuid().describe('Session identifier.'),
+            channelId: zod
+              .uuid()
+              .nullish()
+              .describe('Channel identifier, if present.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the session was created.'),
+            createdBy: zod.string().describe('Caller identifier.'),
+            kind: zod
+              .enum(['channel', 'standalone'])
+              .describe('Whether a live call is associated with a channel.'),
+            meetingId: zod
+              .uuid()
+              .nullish()
+              .describe('Invitation identifier, if present.'),
+            participantCount: zod
+              .number()
+              .describe('Number of active people and guests.'),
+            ringing: zod
+              .boolean()
+              .describe('Whether this account is currently being rung.'),
+            shareToken: zod
+              .string()
+              .nullish()
+              .describe('Invitation capability, if present.'),
+            title: zod
+              .string()
+              .nullish()
+              .describe('Invitation title, if present.'),
+          })
+          .describe('A live call visible to an account that can join it.')
+      )
+      .describe('Joinable live calls.'),
+  })
+  .describe('Response containing every live call this account may join.');
+
+/**
  * @summary Read the live call discussion as a verified guest.
  */
 export const guestCallChatReadParams = zod.object({
@@ -2563,6 +2609,7 @@ export const meetingGuestJoinResponse = zod
       .string()
       .nullish()
       .describe('Meeting link capability, when joined using a link.'),
+    started: zod.boolean().describe('Whether this request allocated the call.'),
     token: zod.string().describe('The RTC token for connecting to the room.'),
   })
   .describe('Response returned when creating or joining a call.');
@@ -2826,6 +2873,23 @@ export const meetingJoinParams = zod.object({
   token: zod.string(),
 });
 
+export const meetingJoinBody = zod
+  .object({
+    name: zod
+      .string()
+      .nullish()
+      .describe('Optional display name in the RTC room.'),
+    onOtherCall: zod
+      .enum(['fail', 'switch'])
+      .optional()
+      .describe('Policy for another active call.'),
+    replace: zod
+      .boolean()
+      .optional()
+      .describe('Disconnect an existing RTC connection for this identity.'),
+  })
+  .describe('Options for an authenticated call join.');
+
 export const meetingJoinResponse = zod
   .object({
     callId: zod.uuid().describe('The call identifier.'),
@@ -2842,6 +2906,7 @@ export const meetingJoinResponse = zod
       .string()
       .nullish()
       .describe('Meeting link capability, when joined using a link.'),
+    started: zod.boolean().describe('Whether this request allocated the call.'),
     token: zod.string().describe('The RTC token for connecting to the room.'),
   })
   .describe('Response returned when creating or joining a call.');
@@ -3387,6 +3452,66 @@ export const declineCallParams = zod.object({
 });
 
 /**
+ * @summary Join a live call by its session id.
+ */
+export const joinCallParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const joinCallBody = zod
+  .object({
+    name: zod
+      .string()
+      .nullish()
+      .describe('Optional display name in the RTC room.'),
+    onOtherCall: zod
+      .enum(['fail', 'switch'])
+      .optional()
+      .describe('Policy for another active call.'),
+    replace: zod
+      .boolean()
+      .optional()
+      .describe('Disconnect an existing RTC connection for this identity.'),
+  })
+  .describe('Options for an authenticated call join.');
+
+export const joinCallResponse = zod
+  .object({
+    callId: zod.uuid().describe('The call identifier.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe('The channel this call is associated with.'),
+    participantId: zod.string().describe('RTC participant identity.'),
+    roomName: zod.string().describe('The RTC room name.'),
+    serverUrl: zod
+      .string()
+      .describe('The RTC server URL for the frontend SDK to connect to.'),
+    shareToken: zod
+      .string()
+      .nullish()
+      .describe('Meeting link capability, when joined using a link.'),
+    started: zod.boolean().describe('Whether this request allocated the call.'),
+    token: zod.string().describe('The RTC token for connecting to the room.'),
+  })
+  .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Leave a specific live call.
+ */
+export const leaveCallParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const leaveCallResponse = zod
+  .object({
+    callEnded: zod
+      .boolean()
+      .describe('Whether the entire call was ended (room deleted).'),
+  })
+  .describe('Response for the leave\/end call operation.');
+
+/**
  * @summary Handle `POST /call/record/{call_id}/link` through the call domain service.
  */
 export const meetingShareParams = zod.object({
@@ -3424,6 +3549,88 @@ export const meetingShareResponse = zod
   .describe(
     'Persistent meeting metadata. No channel contents or archived media are exposed.'
   );
+
+/**
+ * @summary Read live participants and track state for a joinable call.
+ */
+export const getCallParticipantsParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const getCallParticipantsResponse = zod
+  .object({
+    participants: zod
+      .array(
+        zod
+          .object({
+            displayName: zod
+              .string()
+              .describe('Name displayed to room members.'),
+            identity: zod.string().describe('RTC identity.'),
+            isProgram: zod
+              .boolean()
+              .describe('Whether the caller is a program.'),
+            joinedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('RTC connection time.'),
+            kind: zod
+              .enum(['user', 'guest', 'bot'])
+              .describe('Participant kind in the live room.'),
+            tracks: zod
+              .array(
+                zod
+                  .object({
+                    muted: zod
+                      .boolean()
+                      .describe('Whether the track is muted.'),
+                    source: zod
+                      .enum([
+                        'microphone',
+                        'camera',
+                        'screen_share',
+                        'screen_share_audio',
+                        'unknown',
+                      ])
+                      .describe('A live media track.'),
+                  })
+                  .describe('A live media track.')
+              )
+              .describe('Published media tracks.'),
+            userId: zod
+              .string()
+              .nullish()
+              .describe('Macro account identifier, if this is a user.'),
+          })
+          .describe('A connected participant in an RTC room.')
+      )
+      .describe('Connected participants.'),
+  })
+  .describe('A live RTC room roster.');
+
+/**
+ * @summary Stream the recording bytes for a call record the caller may view.
+ */
+export const getCallRecordingParams = zod.object({
+  call_id: zod.uuid().describe('Call ID'),
+});
+
+/**
+ * @summary Read this account's ring state for a call.
+ */
+export const getCallRingStateParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const getCallRingStateResponse = zod
+  .object({
+    status: zod
+      .enum(['ringing', 'answered', 'declined', 'ended'])
+      .describe(
+        'Per-user status of an incoming-call ring, as reported by the\nring-status endpoint while a native client is ringing.'
+      ),
+  })
+  .describe('Response body for `GET \/call\/ring-status\/{call_id}`.');
 
 /**
  * Flips the live call's share-with-team toggle and returns the new value as
@@ -3536,6 +3743,52 @@ export const getOrCreateCallResponse = zod
       .string()
       .nullish()
       .describe('Meeting link capability, when joined using a link.'),
+    started: zod.boolean().describe('Whether this request allocated the call.'),
+    token: zod.string().describe('The RTC token for connecting to the room.'),
+  })
+  .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Start or join a channel call explicitly.
+ */
+export const startCallParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const startCallBody = zod
+  .object({
+    name: zod
+      .string()
+      .nullish()
+      .describe('Optional display name in the RTC room.'),
+    onOtherCall: zod
+      .enum(['fail', 'switch'])
+      .optional()
+      .describe('Policy for another active call.'),
+    replace: zod
+      .boolean()
+      .optional()
+      .describe('Disconnect an existing RTC connection for this identity.'),
+  })
+  .describe('Options for an authenticated call join.');
+
+export const startCallResponse = zod
+  .object({
+    callId: zod.uuid().describe('The call identifier.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe('The channel this call is associated with.'),
+    participantId: zod.string().describe('RTC participant identity.'),
+    roomName: zod.string().describe('The RTC room name.'),
+    serverUrl: zod
+      .string()
+      .describe('The RTC server URL for the frontend SDK to connect to.'),
+    shareToken: zod
+      .string()
+      .nullish()
+      .describe('Meeting link capability, when joined using a link.'),
+    started: zod.boolean().describe('Whether this request allocated the call.'),
     token: zod.string().describe('The RTC token for connecting to the room.'),
   })
   .describe('Response returned when creating or joining a call.');

@@ -254,54 +254,47 @@ export function NotificationsView(props: NotificationsViewProps) {
   const context = useNotificationsInboxContext();
   const { pushUndo } = useMutationUndoContext();
   const filters = createInboxFilters(context.filterStorage);
-  const feed = context.createFeed(() => ({ rowTypes: filters.rowTypes() }));
-  const inbox = createInboxList(
-    feed,
-    {
-      pushUndo: (entry) => pushUndo(entry),
-      announceDone: (count, undo) => {
-        const id = toast.success(
-          t('notificationsInbox.markedDone', { count }),
+  const feed = context.createFeed(filters.scope);
+  const inbox = createInboxList(feed, {
+    pushUndo: (entry) => pushUndo(entry),
+    announceDone: (count, undo) => {
+      const id = toast.success(t('notificationsInbox.markedDone', { count }), {
+        actions: [
           {
-            actions: [
-              {
-                label: t('notificationsInbox.undo'),
-                icon: ArrowCounterClockwise,
-                onClick: () => fireAndForget(undo(), 'notifications-inbox'),
-              },
-            ],
-            duration: 3_000,
-            stack: true,
-            hideOnMobile: true,
-          }
-        );
-        return () => {
-          if (id !== undefined) toast.dismiss(id);
-        };
-      },
-      announceCleared: (count, undo) => {
-        const id =
-          count === 0
-            ? toast.success(t('notificationsInbox.clearedNothing'))
-            : toast.success(t('notificationsInbox.cleared', { count }), {
-                actions: [
-                  {
-                    label: t('notificationsInbox.undo'),
-                    icon: ArrowCounterClockwise,
-                    onClick: () => fireAndForget(undo(), 'notifications-inbox'),
-                  },
-                ],
-                duration: 8_000,
-                stack: true,
-              });
-        return () => {
-          if (id !== undefined) toast.dismiss(id);
-        };
-      },
-      announceFailure: (message) => toast.failure(message),
+            label: t('notificationsInbox.undo'),
+            icon: ArrowCounterClockwise,
+            onClick: () => fireAndForget(undo(), 'notifications-inbox'),
+          },
+        ],
+        duration: 3_000,
+        stack: true,
+        hideOnMobile: true,
+      });
+      return () => {
+        if (id !== undefined) toast.dismiss(id);
+      };
     },
-    filters.includesRow
-  );
+    announceCleared: (count, undo) => {
+      const id =
+        count === 0
+          ? toast.success(t('notificationsInbox.clearedNothing'))
+          : toast.success(t('notificationsInbox.cleared', { count }), {
+              actions: [
+                {
+                  label: t('notificationsInbox.undo'),
+                  icon: ArrowCounterClockwise,
+                  onClick: () => fireAndForget(undo(), 'notifications-inbox'),
+                },
+              ],
+              duration: 8_000,
+              stack: true,
+            });
+      return () => {
+        if (id !== undefined) toast.dismiss(id);
+      };
+    },
+    announceFailure: (message) => toast.failure(message),
+  });
 
   onMount(() => panel.handle.setDisplayName(t('nav.notifications')));
 
@@ -369,7 +362,6 @@ export function NotificationsView(props: NotificationsViewProps) {
 
   const markSeen = (row: NotificationInboxRow) => {
     if (!row.unseen) return;
-    filters.keepRead(row.id);
     fireAndForget(feed.markSeen([row]), 'notifications-inbox');
   };
 

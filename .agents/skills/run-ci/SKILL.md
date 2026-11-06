@@ -62,7 +62,13 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 | pass, `Passed on <sha>` | Every check passed or was path-skipped | Done |
 | fail, `Failed: <jobs>` | Those called workflows failed | Open the linked run, fix, push, run again |
 | fail, `The PR moved on ...` or `The merge commit did not include ...` | Labelled too soon after a push | Add the label again |
-| missing | A fork PR, before its first run | A maintainer adds the label |
+| fail, `PR CI can't start: ...` | The PR conflicts with `main`, or was last pushed before `PR CI` existed | Merge `main` in, push, add the label again |
+| missing | A fork PR before its first run, or a PR that conflicts with `main` | A maintainer adds the label; or merge `main` in and push |
+
+GitHub takes `PR CI` from the PR's merge commit with `main`, which it rebuilds
+on a push but not when `main` moves, and runs nothing on a conflicting PR. So on
+such a PR the label alone starts nothing; `CI Gate Label Check` then removes it
+and says why in `CI gate`.
 
 ## Fix a failure
 

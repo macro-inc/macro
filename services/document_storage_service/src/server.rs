@@ -897,11 +897,21 @@ async fn run_server() -> anyhow::Result<()> {
     .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
         call::outbound::channel_threads::FlaggedChannelThreads::new(
-            flags,
+            flags.clone(),
             call_root_poster.clone(),
         ),
     ));
-    let call_service = Arc::new(call_service_builder);
+    let call_service_builder = call_service_builder.with_programmatic_call_gate(
+        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
+    );
+    let call_public_rate_limiter = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client.clone(),
+        },
+    };
+    let call_service = Arc::new(call_service_builder.with_start_limiter(
+        call::inbound::axum_router::RateLimitedCallStarts(call_public_rate_limiter.clone()),
+    ));
 
     consumer_tracker.spawn({
         let service = call_service.clone();
@@ -922,11 +932,6 @@ async fn run_server() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
-    let call_public_rate_limiter = RateLimitServiceImpl {
-        repo: RedisRateLimitAdapter {
-            redis: redis_client.clone(),
-        },
-    };
 
     let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
     let webhook_endpoint_scheme_policy = if matches!(env, Environment::Local) {
