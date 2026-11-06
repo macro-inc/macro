@@ -298,22 +298,24 @@ impl Config {
     }
 
     /// The Stripe price of each computer size per billing interval.
-    pub fn computer_prices(&self) -> crate::domain::computer_billing::ComputerPrices {
-        let price = |id: Option<&str>| nonblank_value(id).map(str::to_owned);
-        crate::domain::computer_billing::ComputerPrices {
+    pub fn computer_prices(
+        &self,
+    ) -> anyhow::Result<crate::domain::computer_billing::ComputerPrices> {
+        let price = |id: Option<&str>| id.map(stripe_price_id::StripePriceId::parse).transpose();
+        Ok(crate::domain::computer_billing::ComputerPrices {
             standard: crate::domain::computer_billing::IntervalPrices {
-                monthly: price(self.stripe_computer_standard_monthly_price_id.value()),
-                yearly: price(self.stripe_computer_standard_yearly_price_id.value()),
+                monthly: price(self.stripe_computer_standard_monthly_price_id.value())?,
+                yearly: price(self.stripe_computer_standard_yearly_price_id.value())?,
             },
             large: crate::domain::computer_billing::IntervalPrices {
-                monthly: price(self.stripe_computer_large_monthly_price_id.value()),
-                yearly: price(self.stripe_computer_large_yearly_price_id.value()),
+                monthly: price(self.stripe_computer_large_monthly_price_id.value())?,
+                yearly: price(self.stripe_computer_large_yearly_price_id.value())?,
             },
             xl: crate::domain::computer_billing::IntervalPrices {
-                monthly: price(self.stripe_computer_xl_monthly_price_id.value()),
-                yearly: price(self.stripe_computer_xl_yearly_price_id.value()),
+                monthly: price(self.stripe_computer_xl_monthly_price_id.value())?,
+                yearly: price(self.stripe_computer_xl_yearly_price_id.value())?,
             },
-        }
+        })
     }
 
     pub fn from_env() -> anyhow::Result<Self> {
@@ -326,6 +328,7 @@ impl Config {
         config.enable_ai_usage_enforcement = enforcement;
         config.enable_ai_usage_billing = billing;
         config.validate_computer_config()?;
+        config.computer_prices()?;
         Ok(config)
     }
 

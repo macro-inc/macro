@@ -1283,7 +1283,10 @@ impl CustomerRepository for MockCustomerRepository {
         unimplemented!("not exercised by team service tests")
     }
 
-    async fn price(&self, _: &str) -> Result<crate::domain::model::PriceInfo, CustomerError> {
+    async fn price(
+        &self,
+        _: &stripe_price_id::StripePriceId,
+    ) -> Result<crate::domain::model::PriceInfo, CustomerError> {
         unimplemented!("not exercised by team service tests")
     }
 
@@ -9026,7 +9029,7 @@ async fn subscription_item_changes_go_to_the_team_subscription() {
         NoOpTeamCrmSettingsRepository,
     );
     let change = ItemQuantityChange {
-        price_id: "price_computer".to_string(),
+        price_id: stripe_price_id::StripePriceId::parse("price_computer").unwrap(),
         delta: 1,
     };
 
@@ -9063,7 +9066,7 @@ async fn subscription_item_changes_need_a_team_subscription() {
         .change_team_subscription_items(
             &uuid::Uuid::nil(),
             vec![ItemQuantityChange {
-                price_id: "price_computer".to_string(),
+                price_id: stripe_price_id::StripePriceId::parse("price_computer").unwrap(),
                 delta: 1,
             }],
             "purchase-1",

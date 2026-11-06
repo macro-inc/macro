@@ -48,6 +48,6 @@ pub trait TeamSubscriptionItems: Clone + Send + Sync + 'static {
     /// What a price charges per unit.
     fn price(
         &self,
-        price_id: &str,
+        price_id: &stripe_price_id::StripePriceId,
     ) -> impl Future<Output = Result<PriceInfo, TeamSubscriptionItemsError>> + Send;
 }

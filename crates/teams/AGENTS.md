@@ -87,6 +87,10 @@ event contract (schema, sanitization, delivery semantics).
   without a separate acceptance. Existing accounts accept like any other invite.
   Its email links to the agent signup page (`/app/signup/agent?team_invite=<id>`).
 
+## Billing identifiers
+
+- Use `stripe_price_id::StripePriceId` for seat price configuration, item quantity changes, and price lookups; convert to provider strings only in the Stripe adapter.
+
 ## Checks
 
 - `cargo test -p teams` (`SQLX_OFFLINE` unset).

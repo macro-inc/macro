@@ -418,7 +418,7 @@ pub async fn run() -> anyhow::Result<()> {
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
     let customer_repo_impl = CustomerRepositoryImpl::new(
         stripe_client.clone(),
-        stripe_prices.seat_prices(),
+        stripe_prices.seat_prices()?,
         db.clone(),
     );
     let favorites_service = favorites::domain::service::FavoritesServiceImpl::new(
@@ -584,14 +584,14 @@ pub async fn run() -> anyhow::Result<()> {
 
     let plan_customer = CustomerRepositoryImpl::new(
         stripe_client.clone(),
-        stripe_prices.seat_prices(),
+        stripe_prices.seat_prices()?,
         db.clone(),
     );
     let stripe_client = Arc::new(stripe_client);
     let plan_gateway = crate::outbound::subscription_plan::StripePlanGateway::new(
         db.clone(),
         stripe_client.clone(),
-        stripe_prices.seat_prices(),
+        stripe_prices.seat_prices()?,
         plan_customer,
     );
     let subscription_plan = Arc::new(crate::service::subscription_plan::PlanService::new(
@@ -613,7 +613,7 @@ pub async fn run() -> anyhow::Result<()> {
                 db.clone(),
                 stripe_client.clone(),
                 gtm_invite_service.clone(),
-                stripe_prices.seat_prices(),
+                stripe_prices.seat_prices()?,
             ),
         ));
     let ai_payment_gateway = ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone());
@@ -685,7 +685,7 @@ pub async fn run() -> anyhow::Result<()> {
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup)
     .with_invite_rewarder(Arc::new(invite_rewards));
-    let computer_prices = config.computer_prices();
+    let computer_prices = config.computer_prices()?;
     let computer_service = Arc::new(
         hosted_runtimes::domain::service::ComputerService::new(
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone()),

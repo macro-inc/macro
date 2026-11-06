@@ -41,6 +41,10 @@ key issuance, and account merge/link flows.
   `authentication-service` → verify with
   `authentication_service_doppler_config`.
 
+## Computer billing identifiers
+
+- Store computer interval prices as `Option<stripe_price_id::StripePriceId>` and reject malformed configured IDs during configuration loading, including when the fleet is disabled. `Config::computer_prices` returns a validation result.
+
 ## Checks
 
 - `cargo test -p authentication_service` (`SQLX_OFFLINE` unset).

@@ -51,13 +51,13 @@ impl<Teams: TeamSubscriptionItems> TeamComputerBilling<Teams> {
         &self,
         team_id: Uuid,
         size: ComputerSize,
-    ) -> Result<(String, BillingInterval), BillingError> {
+    ) -> Result<(StripePriceId, BillingInterval), BillingError> {
         let interval = self.interval(team_id).await?;
         let price_id = self
             .prices
             .price_id(size, interval)
             .ok_or(BillingError::IntervalNotSold(interval))?;
-        Ok((price_id.to_string(), interval))
+        Ok((price_id.clone(), interval))
     }
 }
 
@@ -68,9 +68,7 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
         let price = self.teams.price(&price_id).await.map_err(billing_error)?;
         Ok(Quote {
             size,
-            price_id: StripePriceId::parse(&price_id).map_err(|error| {
-                BillingError::Provider(rootcause::Report::new(error).into_dynamic())
-            })?,
+            price_id,
             amount: price.amount,
             currency: price.currency,
             interval,
@@ -96,7 +94,7 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
         let (price_id, _) = self.computer_price(team_id, size).await?;
         let changes = std::iter::once(ItemQuantityChange { price_id, delta: 1 })
             .chain(extra_items.iter().map(|item| ItemQuantityChange {
-                price_id: item.price_id.as_str().to_owned(),
+                price_id: item.price_id.clone(),
                 delta: i64::from(item.quantity),
             }))
             .collect();

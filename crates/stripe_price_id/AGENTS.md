@@ -12,7 +12,9 @@ The shared validated Stripe price identifier for billing domain contracts.
 ## Boundaries
 
 - Used by: `hosted_runtimes` subscription items and quotes.
-- Serde is enabled by default; `schema` enables utoipa string schemas.
+- Serde is enabled by default; `schema` enables utoipa string schemas and `sqlx` enables validated PostgreSQL text encoding/decoding.
+- Use transparent serialization and constructor-based deserialization; serde rejects combining `transparent` with its `try_from` container attribute.
+- Used by teams seat configuration, quantity changes and price lookups, and authentication service computer price configuration.
 - Reject identifiers without a 1–64 character ASCII alphanumeric or underscore suffix after `price_`.
 
 ## Checks

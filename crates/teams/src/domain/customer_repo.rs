@@ -155,7 +155,7 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
     /// What a price charges per unit.
     fn price(
         &self,
-        price_id: &str,
+        price_id: &stripe_price_id::StripePriceId,
     ) -> impl Future<Output = Result<PriceInfo, CustomerError>> + Send;
 
     /// Cancels a subscription immediately. A subscription that is already
