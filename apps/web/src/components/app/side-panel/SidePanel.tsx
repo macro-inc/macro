@@ -201,7 +201,7 @@ function Layout(
     /** Compose content around the standard sections in every panel mode. */
     panel?: (sections: JSX.Element) => JSX.Element;
     narrowThreshold?: number;
-    /** Use the unframed section rows already used by sheets and floating panels. */
+    /** Render unframed section rows with spacing instead of dividers. */
     plainSections?: boolean;
     /** Optional pinned chrome below the touch drawer handle. */
     drawerHeader?: JSX.Element;
@@ -394,6 +394,7 @@ function SidePanelLayoutInner(
                 {renderPanel(
                   <SidePanelOutlet
                     floating
+                    plainSections={props.plainSections}
                     scrollable={false}
                     sections={props.sections}
                     openIds={props.openIds}
@@ -438,6 +439,7 @@ function SidePanelLayoutInner(
                 {renderPanel(
                   <SidePanelOutlet
                     floating
+                    plainSections={props.plainSections}
                     sections={props.sections}
                     openIds={props.openIds}
                     setOpenIds={props.setOpenIds}
@@ -595,11 +597,15 @@ function SidePanelOutlet(props: {
       onChange={(value) => props.setOpenIds(value as string[])}
       class={cn(
         'flex flex-col min-h-0',
-        plainSections() ? 'p-0 gap-0' : 'p-2 gap-2'
+        props.plainSections
+          ? 'p-0 gap-3'
+          : plainSections()
+            ? 'p-0 gap-0'
+            : 'p-2 gap-2'
       )}
     >
       <For each={sortedSections().filter((section) => !section.footer)}>
-        {(section) => section.component(plainSections())}
+        {(section) => section.component(plainSections(), !props.plainSections)}
       </For>
     </Accordion>
   );
@@ -629,7 +635,9 @@ function SidePanelOutlet(props: {
   function Metadata() {
     return (
       <For each={sortedSections().filter((section) => section.footer)}>
-        {(section) => section.component(props.floating ?? false)}
+        {(section) =>
+          section.component(props.floating ?? false, !props.plainSections)
+        }
       </For>
     );
   }
@@ -646,10 +654,13 @@ function Footer(props: ParentProps) {
       title: 'Metadata',
       defaultOpen: false,
       footer: true,
-      component: () => (
+      component: (_floating, dividers = true) => (
         <section
           aria-label="Details"
-          class="border-b border-edge-muted p-3 text-xs leading-relaxed text-ink-muted"
+          class={cn(
+            'p-3 text-xs leading-relaxed text-ink-muted',
+            dividers && 'border-b border-edge-muted'
+          )}
         >
           <Suspense fallback={<Loading />}>{props.children}</Suspense>
         </section>
@@ -702,12 +713,12 @@ function Section(
       title: props.title,
       defaultOpen: props.defaultOpen ?? false,
       order: props.order,
-      component: (floating) => (
+      component: (floating, dividers = true) => (
         <Accordion.Item
           value={props.id}
           class={cn(
             'group/sidebar-section',
-            floating && 'border-b border-edge-muted last:border-b-0'
+            floating && dividers && 'border-b border-edge-muted last:border-b-0'
           )}
         >
           <Show
