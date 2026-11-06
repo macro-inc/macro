@@ -26,6 +26,7 @@ import {
   unwrap,
 } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { Canvas } from '../canvases/canvas';
 import { PropertiedEntity } from '../entity';
 import {
   MessageThread,
@@ -477,6 +478,15 @@ export class Document
     options: DocumentEditOptions = {},
   ): Promise<DocumentEditResult> {
     return editWithInstructions(this.client, this, instructions, options);
+  }
+
+  /**
+   * This document as a canvas, to read, edit and render its live scene; never
+   * use `content()` or `edit()` on a canvas. Calls on it fail when the
+   * document is not a native canvas.
+   */
+  canvas(): Canvas {
+    return new Canvas(this.client, this);
   }
 
   /**

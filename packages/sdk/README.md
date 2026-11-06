@@ -638,6 +638,29 @@ It returns the new revision, not a diff; read `content()` to see what changed.
 refused edit throws `DocumentEditRefusedError` with the editor's reason;
 `EditOutcomeUnknownError` means read the document before retrying.
 
+### Canvases
+
+`document.canvas()` reads and edits a native canvas's live, shared scene:
+
+```ts
+const canvas = document.canvas();
+const scene = await canvas.scene(); // stable item ids, geometry, text, revision
+await canvas.apply(
+  "editor.move(['box'], 0, 40); editor.text('box', snippets.label)",
+  { expectedRevision: scene.revision, snippets: { label: 'Shipped' } },
+);
+await canvas.edit('Arrange the boxes left to right as a flowchart.');
+const image = await canvas.render({ items: ['box'] }); // a StaticImage
+```
+
+`apply` runs CanvasEditor code without a model and commits the batch whole or
+not at all: `CanvasRevisionConflictError` (the scene changed since
+`expectedRevision`) and `CanvasEditRejectedError` (the code failed) mean nothing
+changed; `EditOutcomeUnknownError` means read the scene before retrying. `edit`
+takes natural-language instructions, like `document.edit`, and is billed as an
+AI edit. `render` keeps the PNG as a static file you own, ready to attach to a
+message.
+
 ### Spreadsheets
 
 `documents.createSpreadsheet({ name })` creates a blank native spreadsheet, and

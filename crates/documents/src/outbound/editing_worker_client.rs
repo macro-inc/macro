@@ -103,7 +103,8 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
         document_token: &DocumentPermissionToken,
         request: &crate::domain::canvas::CanvasRequest,
         artifacts: bool,
-    ) -> anyhow::Result<crate::domain::canvas::CanvasResult> {
+    ) -> Result<crate::domain::canvas::CanvasResult, crate::domain::canvas::CanvasError> {
+        use crate::domain::canvas::CanvasError;
         // Sent only when on: a worker that predates the field rejects unknown keys.
         let mut body = serde_json::json!({ "documentId": document_id, "documentToken": document_token.as_str(), "request": request });
         if artifacts {
@@ -118,16 +119,28 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             .timeout(std::time::Duration::from_secs(130))
             .json(&body)
             .send()
-            .await?;
+            .await
+            .map_err(|error| CanvasError::Failed(error.into()))?;
         let status = response.status();
-        let body: serde_json::Value = response.json().await?;
-        anyhow::ensure!(
-            status.is_success(),
-            "{} (HTTP {status}). Read the canvas before retrying; earlier edits may have applied.",
-            body.get("error")
+        let body: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|error| CanvasError::Failed(error.into()))?;
+        if !status.is_success() {
+            let error = body
+                .get("error")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("Canvas operation failed")
-        );
+                .to_owned();
+            let outcome = body.get("outcome").and_then(serde_json::Value::as_str);
+            return Err(match (status.as_u16(), outcome) {
+                (409, Some("conflict")) => CanvasError::Conflict(error),
+                (422, Some("rejected")) => CanvasError::Rejected(error),
+                _ => CanvasError::Failed(anyhow::anyhow!(
+                    "{error} (HTTP {status}). Read the canvas before retrying; earlier edits may have applied."
+                )),
+            });
+        }
         let usage = body
             .get("usage")
             .and_then(serde_json::Value::as_array)
@@ -155,7 +168,8 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                 .get("error")
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_owned),
-            response: serde_json::from_value(body)?,
+            response: serde_json::from_value(body)
+                .map_err(|error| CanvasError::Failed(error.into()))?,
             usage,
         })
     }

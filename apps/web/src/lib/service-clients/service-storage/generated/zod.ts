@@ -20608,6 +20608,245 @@ export const getDocumentBranchNameResponse = zod
   .describe('Branch name response.');
 
 /**
+ * @summary Edit a canvas by natural-language instructions with edit access, through
+EditCanvas's editor, AI admission and billing.
+ */
+export const editCanvasWithAiParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const editCanvasWithAiBody = zod
+  .object({
+    instructions: zod
+      .string()
+      .min(1)
+      .describe(
+        'Natural-language instructions, naming items by id where they exist.'
+      ),
+  })
+  .describe('What to change, in words.');
+
+export const editCanvasWithAiResponseOperationsAppliedMin = 0;
+
+export const editCanvasWithAiResponse = zod
+  .object({
+    clarification: zod
+      .string()
+      .nullish()
+      .describe(
+        'What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays.'
+      ),
+    operationsApplied: zod
+      .number()
+      .min(editCanvasWithAiResponseOperationsAppliedMin)
+      .describe('Operations the live scene acknowledged.'),
+    summary: zod.string().describe('What the editor did, in words.'),
+  })
+  .describe('A completed edit by instructions.');
+
+/**
+ * @summary Apply one batch of CanvasEditor code with edit access, against the revision
+it was planned on, without a model. The batch validates, measures text and
+commits once, or not at all.
+ */
+export const applyCanvasEditsParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const applyCanvasEditsBody = zod
+  .object({
+    code: zod
+      .string()
+      .min(1)
+      .describe(
+        'JavaScript using `editor` (and `snippets`), as ApplyCanvasEdits runs it.'
+      ),
+    expectedRevision: zod
+      .string()
+      .describe(
+        'The revision the batch was planned against, from a fresh scene read.'
+      ),
+    snippets: zod
+      .record(zod.string(), zod.string())
+      .nullish()
+      .describe('Plain text values the code reads as `snippets.<key>`.'),
+  })
+  .describe('One batch of CanvasEditor code to apply against a revision.');
+
+export const applyCanvasEditsResponseOperationsAppliedMin = 0;
+
+export const applyCanvasEditsResponse = zod
+  .object({
+    operationsApplied: zod
+      .number()
+      .min(applyCanvasEditsResponseOperationsAppliedMin)
+      .describe('Operations the live scene acknowledged.'),
+    revision: zod.string().describe("The scene's revision after the batch."),
+    scene: zod
+      .object({})
+      .describe(
+        'The scene after the batch, with `textLayout` for measured text.'
+      ),
+    summary: zod.string().describe('What happened, in words.'),
+  })
+  .describe('A committed batch.');
+
+/**
+ * @summary Render a canvas to a PNG with view access, with the Canvas renderer, and
+keep it as a static file owned by the caller. No model runs.
+ */
+export const renderCanvasParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const renderCanvasBody = zod
+  .object({
+    crop: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            height: zod.number().describe('Positive world height.'),
+            width: zod.number().describe('Positive world width.'),
+            x: zod.number().describe('World x coordinate.'),
+            y: zod.number().describe('World y coordinate.'),
+          })
+          .describe('World-space crop or object bounds.'),
+      ])
+      .optional(),
+    itemIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe('Items to fit the image to, at most 100.'),
+  })
+  .describe('What to render.');
+
+export const renderCanvasResponseHeightMin = 0;
+
+export const renderCanvasResponseWidthMin = 0;
+
+export const renderCanvasResponse = zod
+  .object({
+    crop: zod
+      .object({
+        height: zod.number().describe('Positive world height.'),
+        width: zod.number().describe('Positive world width.'),
+        x: zod.number().describe('World x coordinate.'),
+        y: zod.number().describe('World y coordinate.'),
+      })
+      .describe('World-space crop or object bounds.'),
+    fileId: zod.string().describe('Static file id of the PNG.'),
+    height: zod
+      .number()
+      .min(renderCanvasResponseHeightMin)
+      .describe('Image height in pixels.'),
+    objects: zod
+      .array(
+        zod
+          .object({
+            bounds: zod
+              .object({
+                height: zod.number().describe('Positive world height.'),
+                width: zod.number().describe('Positive world width.'),
+                x: zod.number().describe('World x coordinate.'),
+                y: zod.number().describe('World y coordinate.'),
+              })
+              .describe('World-space crop or object bounds.'),
+            id: zod.string().describe('Canvas item ID.'),
+          })
+          .describe('Stable object-to-image mapping.')
+      )
+      .describe('Items in the image, with their world bounds.'),
+    revision: zod.string().describe('Revision of the scene the image shows.'),
+    textLayout: zod
+      .array(
+        zod
+          .object({
+            bounds: zod
+              .object({
+                height: zod.number().describe('Positive world height.'),
+                width: zod.number().describe('Positive world width.'),
+                x: zod.number().describe('World x coordinate.'),
+                y: zod.number().describe('World y coordinate.'),
+              })
+              .describe('World-space crop or object bounds.'),
+            id: zod.string().describe('Stable item ID.'),
+            overflow: zod
+              .boolean()
+              .describe(
+                'Whether the DOM text exceeds its intended text frame.'
+              ),
+          })
+          .describe(
+            'Actual browser text bounds and overflow for a read-only render.'
+          )
+      )
+      .describe('Rendered text bounds and whether text overflows its frame.'),
+    unavailable: zod
+      .array(
+        zod
+          .object({
+            id: zod.string().describe('Canvas item ID.'),
+            reason: zod
+              .string()
+              .describe('Why no referenced resource was loaded.'),
+          })
+          .describe('Explicitly unavailable referenced content.')
+      )
+      .describe('Referenced content the renderer could not show, and why.'),
+    url: zod.string().describe('Permanent URL of the PNG.'),
+    width: zod
+      .number()
+      .min(renderCanvasResponseWidthMin)
+      .describe('Image width in pixels.'),
+  })
+  .describe(
+    'A PNG of the canvas, stored as a static file owned by the caller.'
+  );
+
+/**
+ * @summary Read a canvas's live scene with view access: stable item ids, containment
+and order, transforms, world bounds, shapes and text. No model runs.
+ */
+export const readCanvasSceneParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const readCanvasSceneBody = zod
+  .object({
+    format: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['scene', 'overview'])
+          .describe('Scene representation requested by a reader.'),
+      ])
+      .optional(),
+    itemIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'Stable item ids to read, at most 100; omit for the whole scene, up to\n300 items.'
+      ),
+  })
+  .describe('Which part of the scene to read.');
+
+export const readCanvasSceneResponse = zod
+  .object({
+    revision: zod
+      .string()
+      .describe(
+        "The scene's immutable revision; pass it as `expectedRevision` to edit."
+      ),
+    scene: zod
+      .object({})
+      .describe(
+        'The scene: `rootId`, `totalItems`, `matchedItems`, `truncated` and\n`items` with stable ids, transforms, world bounds, shapes and text.'
+      ),
+  })
+  .describe('The live scene at one revision.');
+
+/**
  * Copies an existing document, creating a new document with the same content.
 Does not require re-uploading the document file.
  * @summary Handler for `POST /documents/{document_id}/copy`.
