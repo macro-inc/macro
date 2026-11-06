@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Press B — email to event</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+@font-face { font-family: "Inter"; src: url("fonts/inter-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+@font-face { font-family: "display"; src: url("fonts/roboto-slab-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+:root {
+  --b0: #000; --c0: #fff; --c1: #dedede; --c2: #bebebe; --c3: #9e9e9e; --c4: #808080;
+  --a0: oklch(0.7 0.12 250);
+  --card: oklch(0.17 0.002 250);
+  --edge: rgba(255,255,255,.09); --edge-muted: rgba(255,255,255,.06);
+  --hover: rgba(255,255,255,.06);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #000; }
+body { display: flex; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
+html.render body { display: block; min-height: 0; }
+#stage {
+  position: relative; overflow: hidden; flex: none; background: #000; color: var(--c1);
+  font-family: "Inter", system-ui, sans-serif; font-weight: 450; font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision;
+}
+#rings { position: absolute; width: 2600px; height: 2600px; margin: -1300px 0 0 -1300px; transform-origin: 50% 50%;
+  background:
+    repeating-radial-gradient(circle at 50% 50%, transparent 0 37px, rgba(255,255,255,.055) 37px 38px),
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.035), transparent 45%);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 12%, rgba(0,0,0,.55) 30%, transparent 52%);
+          mask-image: radial-gradient(circle at 50% 50%, #000 12%, rgba(0,0,0,.55) 30%, transparent 52%); }
+#world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+#shape { position: absolute; overflow: hidden; transform-origin: 50% 50%; background: var(--card);
+  box-shadow: 0 10px 40px -8px #0004; }
+.layer { position: absolute; left: 0; top: 0; }
+.rim::after, .glass::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 1px;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.rim::after { background: linear-gradient(135deg, #ffffff18, transparent 45%) border-box, #ffffff08; }
+.glass::after { background: linear-gradient(135deg, rgba(199,199,199,.135) 0%, transparent 24%, transparent 76%, rgba(199,199,199,.09) 100%); }
+.av { display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 600; flex: none;
+  background: #2a2a2c; color: var(--c1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px 0 8px; border-radius: 999px;
+  background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1px var(--edge); color: var(--c1); font-size: 13px; white-space: nowrap; }
+.pill.ghost { color: var(--c3); }
+.prop { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--edge-muted); background: rgba(255,255,255,.03); color: var(--c2); font-size: 12.5px; white-space: nowrap; }
+.prop em { font-style: normal; color: var(--c4); }
+.kc { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 4px;
+  border: 1px solid var(--edge); color: var(--c3); font-size: 11px; font-weight: 550; }
+.pop { position: absolute; z-index: 5; border-radius: 14px; background: rgba(18,18,20,.94); backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: 0 10px 40px -8px #0004; overflow: hidden; }
+.row { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 14px; color: var(--c1); white-space: nowrap; }
+.day { position: absolute; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: var(--c1); }
+.hair { height: 1px; background: var(--edge-muted); }
+#labels .lab { position: absolute; left: 0; text-align: center; font-family: display; font-weight: 330; letter-spacing: -0.035em;
+  color: var(--c0); white-space: nowrap; line-height: 1; }
+#curPos { position: absolute; left: 0; top: 0; width: 160px; height: 160px; transform-origin: 80px 80px; pointer-events: none; z-index: 8; }
+#curRot { position: absolute; left: 80px; top: 80px; width: 0; height: 0; transform-origin: 0 0; }
+#cursor { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+</style>
+<script src="phx.js"></script>
+<script src="icons.js"></script>
+</head>
+<body>
+<div id="stage">
+  <div id="rings"></div>
+  <div id="world">
+    <div id="shape" class="rim"></div>
+  </div>
+  <div id="labels"></div>
+  <svg width="0" height="0" style="position:absolute"><filter id="mb" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB"><feGaussianBlur id="mbg" stdDeviation="0 0"/></filter></svg>
+  <div id="curPos"><div id="curRot">
+    <svg id="cursor" viewBox="-2 -2 18 26" width="18" height="26" overflow="visible">
+      <path d="M1 1 L1 18.2 L5.1 14.4 L8.2 21.2 L11.2 19.9 L8.2 13.3 L13.9 13.3 Z" fill="#fff" stroke="#000" stroke-width="1.3" stroke-linejoin="round"/>
+    </svg>
+  </div></div>
+</div>
+<script>
+"use strict";
+// Press B on an email thread. Synchronous prefill from email-event.ts:
+// title = subject, guests = other participants, time = next full hour (here
+// 6:00–7:00 PM), conference = Macro call, description empty. The cursor then
+// moves the start day (the end follows, keeping the length) and picks a 30 min end.
+const FMT = new URLSearchParams(location.search).get("fmt") || "11";
+const [W, H] = { "916": [1080, 1920], "11": [1440, 1440], "169": [1920, 1080] }[FMT];
+const LABEL = { "916": { top: Math.round(H * 0.14), size: 76 }, "11": { top: 68, size: 64 }, "169": { top: 32, size: 52 } }[FMT];
+
+const stage = document.getElementById("stage");
+stage.style.width = W + "px"; stage.style.height = H + "px";
+const rings = document.getElementById("rings");
+rings.style.left = (W / 2) + "px"; rings.style.top = (H / 2) + "px";
+
+const MUSIC = [["ambient", 78.01, Array(24).fill(1)]]; // 6 bars, Kodama Night Town
+const STEP_T = [0];
+for (const [, bpm, beats] of MUSIC) for (const n of beats) STEP_T.push(STEP_T[STEP_T.length - 1] + (n * 60) / bpm);
+const BEATS = STEP_T.length - 1, T = STEP_T[BEATS];
+function B(x) {
+  const k = Math.floor(x / BEATS), r = x - k * BEATS, i = Math.min(BEATS - 1, Math.floor(r));
+  return k * T + STEP_T[i] + (r - i) * (STEP_T[i + 1] - STEP_T[i]);
+}
+function stepAt(t) { let i = 0; while (i < BEATS - 1 && STEP_T[i + 1] <= t) i++; return i + (t - STEP_T[i]) / (STEP_T[i + 1] - STEP_T[i]); }
+
+const clamp = (x, a = 0, b = 1) => (x < a ? a : x > b ? b : x);
+const lerp = (a, b, p) => a + (b - a) * p;
+const sm = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
+const TAU = Math.PI * 2;
+function spr(t, resp = 0.42, damp = 0.86) {
+  if (t <= 0) return 0;
+  const w = TAU / resp;
+  if (damp >= 1) { const e = Math.exp(-w * t); return 1 - e * (1 + w * t); }
+  const wd = w * Math.sqrt(1 - damp * damp), e = Math.exp(-damp * w * t);
+  return 1 - e * (Math.cos(wd * t) + (damp * w / wd) * Math.sin(wd * t));
+}
+const mj = (x) => { x = clamp(x); return x * x * x * (10 + x * (-15 + 6 * x)); };
+const bell = (x) => (x <= 0 || x >= 1 ? 0 : 16 * x * x * (1 - x) * (1 - x));
+function Track(evs, resp = 0.42, damp = 0.86) {
+  const E = evs.map(([bt, v, r, d]) => ({ t: B(bt), v, r: r ?? resp, d: d ?? damp }));
+  const n = E.length;
+  E.forEach((e, i) => { e.dv = e.v - E[(i + n - 1) % n].v; });
+  const base = E[n - 1].v;
+  const f = (t) => { let v = base; for (const e of E) if (e.dv) v += e.dv * (spr(t - e.t, e.r, e.d) + spr(t + T - e.t, e.r, e.d)); return v; };
+  return f;
+}
+function Path(segs) {
+  const S = segs.map(([b0, b1, x, y, bow]) => ({ t0: B(b0), t1: B(b1), x, y, bow: bow ?? 0.06 }));
+  const n = S.length;
+  S.forEach((s, i) => { const p = S[(i + n - 1) % n]; s.dx = s.x - p.x; s.dy = s.y - p.y; });
+  const bx = S[n - 1].x, by = S[n - 1].y;
+  return (t) => {
+    let x = bx, y = by;
+    for (const s of S) for (const tt of [t, t + T]) {
+      const u = (tt - s.t0) / (s.t1 - s.t0);
+      if (u <= 0) continue;
+      const m = mj(u), bb = bell(u) * s.bow;
+      x += s.dx * m - s.dy * bb; y += s.dy * m + s.dx * bb;
+    }
+    return [x, y];
+  };
+}
+function visAmt(t, tin, tout, inResp = 0.28) {
+  const f = (tt) => {
+    if (tt < tin) return null;
+    const pin = spr(tt - tin, inResp, 1);
+    const pout = tout == null ? 0 : sm((tt - tout) / 0.12);
+    return { pin, pout, o: pin * (1 - pout) };
+  };
+  let r = f(t) || { pin: 0, pout: 0, o: 0 };
+  if (tout != null && tout > T) { const r2 = f(t + T); if (r2 && r2.o > r.o) r = r2; }
+  return r;
+}
+function tap(t, at, depth = 1) { return depth * (spr(t - at + 0.03, 0.1, 1) - spr(t - at - 0.07, 0.16, 0.85)); }
+
+const ph = (n, size, color = "currentColor") =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 256 256" fill="${color}" style="display:block">${window.PHX[n]}</svg>`;
+const USERS = `<svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" style="display:block"><path d="M117.25,157.92a60,60,0,1,0-66.5,0A95.83,95.83,0,0,0,12.67,208a8,8,0,0,0,16,0,80,80,0,0,1,134.66,0,8,8,0,0,0,16,0A95.83,95.83,0,0,0,117.25,157.92ZM40,108a44,44,0,1,1,44,44A44.05,44.05,0,0,1,40,108Zm210.14,98.26a8,8,0,0,1-6.4,9.4,8,8,0,0,1-1.74.2,8,8,0,0,1-7.66-5.6A79.55,79.55,0,0,0,172,168a8,8,0,0,1,0-16,44,44,0,1,0-16.34-84.87,8,8,0,1,1-5.94-14.85,60,60,0,0,1,55.53,99.64,95.83,95.83,0,0,1,38.09,40.74A8,8,0,0,1,250.14,206.26Z"/></svg>`;
+const PIN = `<svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" style="display:block"><path d="M128,64a40,40,0,1,0,40,40A40,40,0,0,0,128,64Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,128Zm0-112a88.1,88.1,0,0,0-88,88c0,31.4,14.51,64.68,42,96.25a254.19,254.19,0,0,0,41.45,38.3,8,8,0,0,0,9.18,0A254.19,254.19,0,0,0,174,200.25c27.45-31.57,42-64.85,42-96.25A88.1,88.1,0,0,0,128,16Zm0,206c-16.53-13-72-60.75-72-118a72,72,0,0,1,144,0C200,161.23,144.53,209,128,222Z"/></svg>`;
+const avatar = (ch, size, bg) => `<div class="av" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.4)}px;${bg ? `background:${bg}` : ""}">${ch}</div>`;
+
+// Settled rects. Width only grows: 660 → 800 → 1120, then back on the loop.
+const EMAIL = [-330, -250, 330, 230];
+const COMP = [-400, -250, 400, 250];
+const CAL = [-560, -390, 560, 390];
+const SH = [0.44, 0.88];
+const KF = [[0, EMAIL], [5, COMP], [17, CAL], [22, EMAIL]];
+const X0 = Track(KF.map((k) => [k[0], k[1][0]]), ...SH);
+const Y0 = Track(KF.map((k) => [k[0], k[1][1]]), ...SH);
+const X1 = Track(KF.map((k) => [k[0], k[1][2]]), ...SH);
+const Y1 = Track(KF.map((k) => [k[0], k[1][3]]), ...SH);
+const RAD = Track([[0, 24], [5, 26], [17, 28], [22, 24]], ...SH);
+
+const SUBJECT = "Q4 roadmap review — can we find 30 min next week?";
+const EO = [EMAIL[0], EMAIL[1]], CO = [COMP[0], COMP[1]], KO = [CAL[0], CAL[1]];
+const add = (o, x, y) => [o[0] + x, o[1] + y];
+const dayCenter = (d) => { const i = d - 1; return [14 + (i % 7) * 38 + 16, 70 + Math.floor(i / 7) * 36 + 16]; };
+const M_DATE = [24, 168], M_TIME = [500, 168], M_GUEST = [248, 286], M_ACT = [360, 148];
+const P_DATE = add(CO, 24 + 75, 64 + 16);
+const P_DAY = add(CO, M_DATE[0] + dayCenter(10)[0], M_DATE[1] + dayCenter(10)[1]);
+const P_END = add(CO, 458 + 44, 64 + 16);
+const P_30 = add(CO, M_TIME[0] + 100, M_TIME[1] + 8 + 36 + 16);
+const P_GUEST = add(CO, 292, 248 + 14);
+const P_CREATE = add(CO, 626 + 75, 432 + 20);
+const P_KEY = add(EO, M_ACT[0] + 214, M_ACT[1] + 48 + 18);
+const P_REST = add(EO, 300, 360);
+const P_EVENT = add(KO, 72 + ((1120 - 72) / 5) + 8 + 96, 128 + 2 * 124 + 32);
+
+const CUR = Path([
+  [2.1, 3.45, ...P_KEY],
+  [4.35, 5.7, ...add(CO, 80, 128)],
+  [6.25, 6.9, ...P_GUEST],
+  [9.15, 9.85, ...add(CO, 180, 200)],
+  [10.15, 10.85, ...P_DATE],
+  [11.2, 11.85, ...P_DAY],
+  [12.25, 12.85, ...P_END],
+  [13.2, 13.85, ...P_30],
+  [14.45, 15.75, ...P_CREATE],
+  [16.4, 17.9, ...P_EVENT],
+  [21.05, 23.35, ...P_REST],
+]);
+const CLICKS = [7, 11, 12, 13, 14, 16].map(B);
+function cursorPress(t) { let p = 0; for (const c of CLICKS) p += tap(t, c, 1); return clamp(p, 0, 1.1); }
+
+const LABELS = [[1.5, 3.55, "Email"], [3.55, 10.5, "Press B"], [16.85, 22, "Calendar"]];
+const labelOn = (bt) => LABELS.some(([a, b]) => bt >= a && bt < b);
+function focusOf(bt) {
+  if (bt >= 22 || bt < 5) return EMAIL;
+  if (bt >= 17) return CAL;
+  return COMP;
+}
+function camTarget(t) {
+  const bt = stepAt(((t % T) + T) % T), rc = focusOf(bt), lab = labelOn(bt);
+  const w = rc[2] - rc[0] + 88, h = rc[3] - rc[1] + 72;
+  const top = lab ? LABEL.top + LABEL.size + 28 : 36, bot = 36;
+  const s = Math.min((W * 0.9) / w, (H - top - bot) / h);
+  const cx = (rc[0] + rc[2]) / 2;
+  const cy = (rc[1] + rc[3]) / 2 - ((top - bot) / 2) / s;
+  return [Math.log(s), cx, cy];
+}
+const CAM_N = Math.round(T * 240), CR = 0.5, CD = 0.92;
+const camEv = [[], [], []];
+let camBase;
+(function buildCam() {
+  camBase = camTarget((CAM_N - 1) / 240); let prev = camBase;
+  for (let i = 0; i < CAM_N; i++) {
+    const v = camTarget(i / 240);
+    for (let k = 0; k < 3; k++) { const dv = v[k] - prev[k]; if (Math.abs(dv) > 1e-9) camEv[k].push([i / 240, dv]); }
+    prev = v;
+  }
+})();
+function camAt(t) {
+  const out = [0, 0, 0];
+  for (let k = 0; k < 3; k++) { let v = camBase[k]; for (const [te, dv] of camEv[k]) v += dv * (spr(t - te, CR, CD) + spr(t + T - te, CR, CD)); out[k] = v; }
+  return out;
+}
+
+const CUES = [];
+const cue = (beat, type, gain = 1) => CUES.push({ t: +B(beat).toFixed(4), type, gain });
+cue(2, "swish", 0.62); cue(4, "key", 1); cue(5, "swoosh", 0.5);
+cue(7, "click", 0.85); cue(11, "click", 0.8); cue(12, "click", 0.75);
+cue(13, "click", 0.8); cue(14, "tick", 0.7); cue(16, "click", 1);
+cue(17, "pop", 0.8); cue(22, "swoosh", 0.4);
+
+// ---------- DOM ----------
+const shape = document.getElementById("shape");
+const world = document.getElementById("world");
+const phIcon = (n, s, c) => ph(n, s, c);
+const days = Array.from({ length: 30 }, (_, i) => {
+  const d = i + 1, col = i % 7, row = Math.floor(i / 7);
+  return `<div class="day" id="day${d}" style="left:${14 + col * 38}px;top:${70 + row * 36}px">${d}</div>`;
+}).join("");
+shape.innerHTML = `
+<div class="layer" id="email" style="width:660px;height:480px">
+  <div style="position:absolute;left:28px;top:26px;display:flex;align-items:center;gap:8px;color:var(--c4);font-size:13px">${phIcon("envelope", 16, "var(--c4)")} Inbox</div>
+  <div style="position:absolute;left:28px;top:58px;right:28px;font-size:22px;font-weight:620;letter-spacing:-0.02em;color:var(--c0);line-height:1.25">${SUBJECT}</div>
+  <div style="position:absolute;left:28px;top:128px;color:var(--c4);font-size:13px">Jacob to Julia, Austin, Dana</div>
+  <div style="position:absolute;left:28px;right:28px;top:164px;height:1px" class="hair"></div>
+  <div style="position:absolute;left:28px;top:188px">${avatar("J", 36)}</div>
+  <div style="position:absolute;left:76px;top:188px;font-size:15px;font-weight:600;color:var(--c0)">Jacob</div>
+  <div style="position:absolute;left:138px;top:190px;font-size:13px;color:var(--c4)">2:41 PM</div>
+  <div style="position:absolute;left:76px;top:212px;font-size:13px;color:var(--c3)">To Julia, Austin, Dana</div>
+  <div style="position:absolute;left:28px;top:258px;right:36px;font-size:16px;line-height:1.45;color:var(--c1)">Can we find 30 minutes next week to walk the Q4 roadmap? I'll send the doc ahead, and we can pick whatever time is still open.</div>
+  <div style="position:absolute;left:28px;top:372px;display:flex;gap:8px">
+    <span class="pill">Reply</span><span class="pill ghost">Reply all</span><span class="pill ghost">Forward</span>
+  </div>
+</div>
+<div class="layer" id="composer" style="width:800px;height:500px">
+  <div style="position:absolute;left:24px;top:18px;font-size:13px;font-weight:600;color:var(--c3)">New event</div>
+  <div id="when" style="position:absolute;left:24px;top:64px;display:flex;align-items:center;gap:8px">
+    <span class="pill" id="sd">${phIcon("calendar-blank", 14, "var(--c3)")}<span id="sdT">Nov 6, 2026</span></span>
+    <span class="pill" id="stT">6:00 PM</span>
+    <span style="color:var(--c4)">${phIcon("caret-right", 12, "var(--c4)")}</span>
+    <span class="pill" id="ed">${phIcon("calendar-blank", 14, "var(--c3)")}<span id="edT">Nov 6, 2026</span></span>
+    <span class="pill" id="et">7:00 PM</span>
+    <span style="margin-left:8px;display:inline-flex;align-items:center;gap:8px;color:var(--c3);font-size:12px">All day <span style="width:28px;height:16px;border-radius:99px;background:rgba(255,255,255,.08);position:relative;box-shadow:inset 0 0 0 1px var(--edge)"><span style="position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;background:#9a9a9a"></span></span></span>
+  </div>
+  <div id="evTitle" style="position:absolute;left:22px;top:114px;right:24px;font-size:20px;font-weight:640;letter-spacing:-0.02em;color:var(--c0)">${SUBJECT}</div>
+  <div style="position:absolute;left:24px;top:158px;right:24px;height:72px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--edge-muted);color:var(--c4);font-size:14px;padding:12px 14px">Add description...</div>
+  <div style="position:absolute;left:24px;top:248px;display:flex;gap:8px;align-items:center">
+    <span class="prop">Event</span>
+    <span class="prop">Does not repeat</span>
+    <span class="prop" id="gPill" style="color:var(--c0)">${USERS} 3 guests</span>
+    <span class="prop" style="color:var(--c0)">${phIcon("video-camera", 14, "var(--c3)")} Macro call</span>
+    <span class="prop"><span style="color:var(--c4)">${PIN}</span><em>Add location</em></span>
+  </div>
+  <div style="position:absolute;right:24px;top:432px;display:flex;gap:10px;align-items:center">
+    <span style="color:var(--c3);font-size:14px;padding:8px 12px">Cancel</span>
+    <span id="createBtn" style="display:inline-flex;align-items:center;height:40px;padding:0 18px;border-radius:999px;background:#fff;color:#0a0a0a;font-size:14px;font-weight:600">Create event</span>
+  </div>
+</div>
+<div class="layer" id="cal" style="width:1120px;height:780px">
+  <div style="position:absolute;left:28px;top:22px;display:flex;align-items:center;gap:10px;color:var(--c0);font-size:18px;font-weight:620;letter-spacing:-0.02em">${phIcon("calendar", 20, "var(--a0)")} November 2026</div>
+  <div style="position:absolute;left:240px;top:26px;color:var(--c4);font-size:13px">Week of Nov 9</div>
+  <div id="cols" style="position:absolute;left:72px;top:72px;right:16px;height:36px"></div>
+  <div id="grid" style="position:absolute;left:0;top:112px;right:0;bottom:16px"></div>
+</div>`;
+
+const hours = [4, 5, 6, 7];
+const hourLabel = (h) => (h === 12 ? "12 PM" : h > 12 ? (h - 12) + " PM" : h + " PM");
+document.getElementById("grid").innerHTML = hours.map((h, i) =>
+  `<div style="position:absolute;left:16px;top:${16 + i * 124}px;width:48px;color:var(--c4);font-size:12px">${hourLabel(h)}</div>
+   <div class="hair" style="position:absolute;left:72px;right:16px;top:${28 + i * 124}px"></div>`
+).join("") + `<div id="ev" style="position:absolute;left:${72 + (1120 - 72) / 5 + 8}px;top:${28 + 2 * 124}px;width:${(1120 - 72) / 5 - 16}px;height:62px;border-radius:8px;background:oklch(0.7 0.12 250 / .18);box-shadow:inset 3px 0 0 var(--a0);padding:8px 10px 8px 12px;overflow:hidden">
+  <div style="font-size:13px;font-weight:620;color:var(--c0);white-space:nowrap">Q4 roadmap review</div>
+  <div style="font-size:12px;color:var(--c2);margin-top:2px">6:00 – 6:30 PM</div>
+</div>
+<div style="position:absolute;left:${72 + 4 * (1120 - 72) / 5 + 8}px;top:${28 + 124 + 62}px;width:${(1120 - 72) / 5 - 16}px;height:56px;border-radius:8px;background:rgba(255,255,255,.045);box-shadow:inset 3px 0 0 rgba(255,255,255,.3);padding:6px 10px;font-size:12px;color:var(--c2)">Dana · hiring<br>5:30 PM</div>`;
+document.getElementById("cols").innerHTML = ["Mon 9", "Tue 10", "Wed 11", "Thu 12", "Fri 13"].map((name, i) =>
+  `<div style="position:absolute;left:${i * (1120 - 72) / 5}px;width:${(1120 - 72) / 5}px;text-align:center;font-size:13px;color:${i === 1 ? "var(--c0)" : "var(--c4)"};font-weight:${i === 1 ? 650 : 450}">${name}</div>`
+).join("");
+
+world.insertAdjacentHTML("beforeend", `
+<div class="pop glass" id="act">
+  <div class="row" style="margin:6px">Create task</div>
+  <div class="row" id="actEv" style="margin:0 6px;background:rgba(255,255,255,.06)">Create event <span style="margin-left:auto" class="kc" id="bChip">B</span></div>
+  <div class="row" style="margin:6px">Copy subject</div>
+</div>
+<div class="pop glass" id="gmenu">
+  <div style="padding:10px 12px 4px;font-size:11px;color:var(--c4);font-weight:600">Guests</div>
+  ${[["J", "Jacob"], ["A", "Austin"], ["D", "Dana"]].map(([ch, name]) => `<div class="row" style="margin:2px 6px">${avatar(ch, 22)} ${name}</div>`).join("")}
+</div>
+<div class="pop glass" id="dmenu" style="width:288px;height:292px">
+  <div style="position:absolute;left:14px;top:12px;font-size:13px;font-weight:620;color:var(--c0)">November 2026</div>
+  ${["S", "M", "T", "W", "T", "F", "S"].map((d, i) => `<div style="position:absolute;left:${14 + i * 38}px;top:42px;width:32px;text-align:center;font-size:11px;color:var(--c4)">${d}</div>`).join("")}
+  ${days}
+</div>
+<div class="pop glass" id="tmenu" style="width:210px">
+  ${[["6:15 PM", "15min"], ["6:30 PM", "30min"], ["6:45 PM", "45min"], ["7:00 PM", "1h"]].map((r, i) =>
+    `<div class="row" id="opt${i}" style="margin:4px 6px;justify-content:space-between"><span>${r[0]}</span><span style="color:var(--c4);font-size:12px">${r[1]}</span></div>`).join("")}
+</div>
+<div id="keycap" style="position:absolute;z-index:6;width:72px;height:72px;border-radius:16px;background:#161618;color:#fff;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:560;box-shadow:0 12px 28px -10px #000, inset 0 0 0 1px rgba(255,255,255,.16), inset 0 -5px 0 rgba(255,255,255,.06)">B</div>
+`);
+document.getElementById("act").style.width = "270px";
+document.getElementById("gmenu").style.width = "240px";
+
+const labelsEl = document.getElementById("labels");
+labelsEl.innerHTML = LABELS.map(([, , txt], i) => `<div class="lab" id="lab${i}">${txt}</div>`).join("");
+document.querySelectorAll("#labels .lab").forEach((el) => { el.style.top = LABEL.top + "px"; el.style.width = W + "px"; el.style.fontSize = LABEL.size + "px"; });
+
+const $ = (id) => document.getElementById(id);
+const E = {};
+["email", "composer", "cal", "act", "gmenu", "dmenu", "tmenu", "keycap", "ev", "createBtn", "sdT", "edT", "et", "actEv", "bChip", "opt0", "opt1", "opt2", "opt3", "day6", "day10"].forEach((id) => { E[id] = $(id); });
+const curPos = $("curPos"), curRot = $("curRot"), cursorEl = $("cursor"), mbg = $("mbg");
+
+let BLUR = 3;
+const px = (v) => v.toFixed(2) + "px";
+function show(el, o) { if (!el) return false; if (o <= 0.004) { el.style.display = "none"; return false; } el.style.display = ""; el.style.opacity = Math.min(1, o).toFixed(4); return true; }
+function fx(el, o, blur, tr) {
+  if (!show(el, o)) return false;
+  el.style.filter = blur > 0.05 ? `blur(${blur.toFixed(2)}px)` : "none";
+  el.style.transform = tr || "none";
+  return true;
+}
+function place(el, x, y) { el.style.left = px(x); el.style.top = px(y); }
+function screenPos(tt) {
+  tt = ((tt % T) + T) % T; const c = camAt(tt), u = CUR(tt), k = Math.exp(c[0]);
+  return [W / 2 + (u[0] - c[1]) * k, H / 2 + (u[1] - c[2]) * k];
+}
+function paintDay(el, mode) {
+  el.style.background = mode === "on" ? "var(--a0)" : "transparent";
+  el.style.color = mode === "on" ? "#0a0a0a" : "var(--c1)";
+  el.style.boxShadow = mode === "today" ? "inset 0 0 0 1px var(--a0)" : "none";
+  el.style.fontWeight = mode === "on" ? "700" : "450";
+}
+
+function seek(tIn) {
+  const t = ((tIn % T) + T) % T, bt = stepAt(t);
+  const [ls, cx, cy] = camAt(t), s = Math.exp(ls);
+  BLUR = 8 / s;
+  world.style.transform = `translate(${px(W / 2)},${px(H / 2)}) scale(${s.toFixed(5)}) translate(${px(-cx)},${px(-cy)})`;
+  rings.style.transform = `translate(${px(-cx * s * 0.08)},${px(-cy * s * 0.08)}) scale(${Math.pow(s / 2.2, 0.35).toFixed(4)})`;
+
+  const x0 = X0(t), y0 = Y0(t), x1 = X1(t), y1 = Y1(t), w = x1 - x0, h = y1 - y0;
+  const st = shape.style;
+  st.left = px(x0); st.top = px(y0); st.width = px(w); st.height = px(h);
+  st.borderRadius = px(Math.min(RAD(t), w / 2, h / 2));
+  st.transform = "none";
+
+  const emailV = visAmt(t, B(22.15), B(5.08) + T, 0.3);
+  const compV = visAmt(t, B(5.16), B(17.02));
+  const calV = visAmt(t, B(17.18), B(22.02));
+  fx(E.email, emailV.o, ((1 - emailV.pin) + emailV.pout) * BLUR, `translate3d(0,${px((1 - emailV.pin) * 8)}px,0)`);
+  fx(E.composer, compV.o, ((1 - compV.pin) + compV.pout) * BLUR, `translate3d(0,${px((1 - compV.pin) * 10)}px,0)`);
+  fx(E.cal, calV.o, ((1 - calV.pin) + calV.pout) * BLUR, `translate3d(0,${px((1 - calV.pin) * 10)}px,0)`);
+
+  const nextWeek = bt >= 12, half = bt >= 14;
+  E.sdT.textContent = nextWeek ? "Nov 10, 2026" : "Nov 6, 2026";
+  E.edT.textContent = E.sdT.textContent;
+  E.et.textContent = half ? "6:30 PM" : "7:00 PM";
+  const press = tap(t, B(16), 1);
+  E.createBtn.style.transform = `scale(${(1 - 0.06 * press).toFixed(4)})`;
+
+  // Menus live outside the card so they overflow instead of resizing it.
+  E.act.style.display = "none"; E.gmenu.style.display = "none"; E.dmenu.style.display = "none"; E.tmenu.style.display = "none"; E.keycap.style.display = "none";
+  const act = visAmt(t, B(1.55), B(5.02));
+  if (fx(E.act, act.o, (1 - act.pin + act.pout) * BLUR, `translate3d(0,${px((1 - act.pin) * 8)}px,0) scale(${(0.98 + 0.02 * act.pin).toFixed(4)})`))
+    place(E.act, x0 + M_ACT[0], y0 + M_ACT[1]);
+  const keyOn = bt >= 3.7 && bt < 4.35;
+  E.bChip.style.color = keyOn ? "var(--c0)" : "";
+  E.bChip.style.borderColor = keyOn ? "var(--a0)" : "";
+  const kv = visAmt(t, B(3.55), B(4.7), 0.22);
+  const depress = tap(t, B(4), 1);
+  if (fx(E.keycap, kv.o, (1 - kv.pin) * 4, `translate3d(0,${px(depress * 4)}px,0) scale(${(0.86 + 0.14 * kv.pin - 0.05 * depress).toFixed(4)})`))
+    place(E.keycap, x0 + 560, y0 + 292);
+
+  const gv = visAmt(t, B(7.02), B(9.7));
+  if (fx(E.gmenu, gv.o, (1 - gv.pin + gv.pout) * BLUR, `translate3d(0,${px((1 - gv.pin) * 8)}px,0)`))
+    place(E.gmenu, x0 + M_GUEST[0], y0 + M_GUEST[1]);
+  const dv = visAmt(t, B(10.55), B(12.4));
+  if (fx(E.dmenu, dv.o, (1 - dv.pin + dv.pout) * BLUR, `translate3d(0,${px((1 - dv.pin) * 8)}px,0)`))
+    place(E.dmenu, x0 + M_DATE[0], y0 + M_DATE[1]);
+  paintDay(E.day6, nextWeek ? "today" : "on");
+  paintDay(E.day10, nextWeek ? "on" : "");
+  const tv = visAmt(t, B(12.6), B(14.45));
+  if (fx(E.tmenu, tv.o, (1 - tv.pin + tv.pout) * BLUR, `translate3d(0,${px((1 - tv.pin) * 8)}px,0)`))
+    place(E.tmenu, x0 + M_TIME[0], y0 + M_TIME[1]);
+  [0, 1, 2, 3].forEach((i) => {
+    const on = half ? i === 1 : i === 3;
+    E["opt" + i].style.background = on ? "rgba(255,255,255,.07)" : "transparent";
+  });
+
+  const evIn = spr(t - B(17.15), 0.32, 0.8);
+  E.ev.style.opacity = (calV.o * clamp(evIn * 1.4)).toFixed(3);
+  E.ev.style.transform = `scale(${(0.92 + 0.08 * evIn).toFixed(4)})`;
+  E.ev.style.transformOrigin = "0 0";
+
+  LABELS.forEach(([a, b], i) => {
+    const r = visAmt(t, B(a) + 0.06, B(b) - 0.02, 0.32);
+    fx($("lab" + i), r.o, (1 - r.pin) * 10 + r.pout * 8, `translate3d(0,${px((1 - r.pin) * 12)}px,0)`);
+  });
+
+  const [wx, wy] = CUR(t), sx = W / 2 + (wx - cx) * s, sy = H / 2 + (wy - cy) * s;
+  const cs = (34 * Math.sqrt(s)) / 26 * (1 - 0.12 * cursorPress(t));
+  const dt = 1 / 960, pa = screenPos(t - dt), pb = screenPos(t + dt);
+  const vx = (pb[0] - pa[0]) / (2 * dt), vy = (pb[1] - pa[1]) / (2 * dt);
+  const sigma = Math.hypot(vx, vy) / 480 * 0.45, ang = Math.atan2(vy, vx) * 180 / Math.PI;
+  curPos.style.transform = `translate(${px(sx - 80)},${px(sy - 80)}) rotate(${ang.toFixed(2)}deg)`;
+  curRot.style.transform = `rotate(${(-ang).toFixed(2)}deg)`;
+  curPos.style.filter = sigma > 0.25 ? "url(#mb)" : "none";
+  if (sigma > 0.25) mbg.setAttribute("stdDeviation", sigma.toFixed(2) + " 0");
+  cursorEl.style.transform = `scale(${cs.toFixed(4)}) translate(-3px,-3px)`;
+  cursorEl.style.filter = "drop-shadow(0 1px 2px rgba(0,0,0,.5))";
+}
+
+window.seek = seek; window.DURATION = T; window.CUES = CUES; window.B = B; window.MUSIC = MUSIC;
+window.SONGS = { ambient: ["song-ambient-kodama-night-town.mp3", 11.6186] };
+window.FMT = [W, H];
+window.probe = (t) => {
+  t = ((t % T) + T) % T; const c = camAt(t), u = CUR(t);
+  return [X0(t), Y0(t), X1(t), Y1(t), RAD(t), Math.exp(c[0]), c[1], c[2], u[0], u[1]];
+};
+window.ready = Promise.all(['400 16px "Inter"', '600 22px "Inter"', '640 20px "Inter"', '330 40px "display"'].map((f) => document.fonts.load(f)))
+  .then(() => document.fonts.ready).then(() => { seek(0); return true; });
+
+const params = new URLSearchParams(location.search);
+if (params.has("render")) document.documentElement.classList.add("render");
+else {
+  const fit = () => { const k = Math.min(innerWidth / W, innerHeight / H);
+    Object.assign(stage.style, { position: "fixed", left: "50%", top: "50%", transformOrigin: "50% 50%", transform: `translate(-50%,-50%) scale(${k})` }); };
+  addEventListener("resize", fit); fit();
+  let playing = false, t0 = 0;
+  addEventListener("click", () => { if (playing) return; playing = true; t0 = performance.now();
+    const loop = (now) => { seek(((now - t0) / 1000) % T); requestAnimationFrame(loop); }; requestAnimationFrame(loop); });
+}
+</script>
+</body>
+</html>

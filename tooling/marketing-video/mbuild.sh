@@ -4,6 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 FF=${FF:-ffmpeg}; FR=${FRAMES:-/tmp/macro-mobile-frames}; WORKERS=${WORKERS:-4}
 [ -f audio/song-funk-gimme-that-groove.mp3 ] || curl -sSL -o audio/song-funk-gimme-that-groove.mp3 https://assets.mixkit.co/music/872/872.mp3
+[ -f audio/song-ambient-kodama-night-town.mp3 ] || curl -sSL -o audio/song-ambient-kodama-night-town.mp3 https://assets.mixkit.co/music/114/114.mp3
 PAGE=${PAGE:-mobile.html} FMT=916 node render.mjs cues audio/cues.json
 (cd audio && FF="$FF" python3 mix.py)
 for f in ${FMTS:-916 11 169}; do
