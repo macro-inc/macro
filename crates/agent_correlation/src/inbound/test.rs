@@ -40,6 +40,7 @@ fn token(correlation: Option<Uuid>, agent: Option<Uuid>) -> String {
         agent_via: None,
         agent_correlation_id: correlation,
         agent_session_id: None,
+        routine_id: None,
     })
     .unwrap()
 }
