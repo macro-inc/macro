@@ -12,11 +12,18 @@ const WORKSPACE_ID: uuid::Uuid = uuid::uuid!("11111111-1111-1111-1111-1111111111
 const ENGINEERING_ID: uuid::Uuid = uuid::uuid!("aaaaaaaa-0000-0000-0000-000000000001");
 const DESIGN_ID: uuid::Uuid = uuid::uuid!("aaaaaaaa-0000-0000-0000-000000000002");
 
+/// Who a team was created with: its manager and other members.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CreatedWith {
+    manager: String,
+    members: Vec<String>,
+}
+
 /// Keeps teams in memory; enforces nothing the service is supposed to.
 #[derive(Clone, Default)]
 struct FakeRepository {
     subteams: Arc<Mutex<Vec<Subteam>>>,
-    created_with: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    created_with: Arc<Mutex<Vec<CreatedWith>>>,
 }
 
 impl FakeRepository {
@@ -57,10 +64,10 @@ impl SubteamRepository for FakeRepository {
         manager_id: &MacroUserIdStr<'_>,
         member_ids: &[MacroUserIdStr<'static>],
     ) -> anyhow::Result<CreateSubteamOutcome> {
-        self.created_with.lock().unwrap().push((
-            manager_id.to_string(),
-            member_ids.iter().map(|id| id.to_string()).collect(),
-        ));
+        self.created_with.lock().unwrap().push(CreatedWith {
+            manager: manager_id.to_string(),
+            members: member_ids.iter().map(|id| id.to_string()).collect(),
+        });
 
         let mut members = vec![SubteamMember {
             user_id: MacroUserIdStr::try_from(manager_id.to_string())?,
@@ -250,10 +257,10 @@ async fn the_creator_manages_a_new_team_and_is_not_added_twice() {
     assert_eq!(created.name, "Platform");
     assert_eq!(
         repository.created_with.lock().unwrap().clone(),
-        vec![(
-            "macro|member@macro.com".to_string(),
-            vec!["macro|lead@macro.com".to_string()]
-        )]
+        vec![CreatedWith {
+            manager: "macro|member@macro.com".to_string(),
+            members: vec!["macro|lead@macro.com".to_string()],
+        }]
     );
     assert_eq!(
         created.role_of(&user("macro|member@macro.com")),

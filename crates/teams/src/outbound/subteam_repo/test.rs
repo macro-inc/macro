@@ -274,9 +274,12 @@ async fn leaving_the_workspace_leaves_its_teams(pool: Pool<Postgres>) -> anyhow:
         .save_subteam_member(TEAM1, engineering.id, &member, SubteamRole::Member)
         .await?;
 
-    sqlx::query("DELETE FROM team_user WHERE user_id = 'macro|grace@example.com'")
-        .execute(&pool)
-        .await?;
+    sqlx::query!(
+        "DELETE FROM team_user WHERE user_id = $1",
+        "macro|grace@example.com"
+    )
+    .execute(&pool)
+    .await?;
 
     let engineering = repository
         .get_subteam(TEAM1, engineering.id)
