@@ -51,6 +51,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 clap = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 proptest = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [[example]]

@@ -50,6 +50,11 @@ pub enum PersonaCredentialError {
 
 /// A validated map of credentials, redacted in Debug and wiped on drop.
 /// It deliberately does not implement Serialize.
+///
+/// ```compile_fail
+/// use hosted_runtimes::domain::persona_credentials::PersonaCredentials;
+/// let _ = serde_json::to_string(&PersonaCredentials::default());
+/// ```
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct PersonaCredentials(BTreeMap<PersonaConfigKey, String>);
 
@@ -90,6 +95,11 @@ impl<'de> Deserialize<'de> for PersonaCredentials {
 }
 
 /// Validated non-secret env supplied at issuance, also excluded from persistence.
+///
+/// ```compile_fail
+/// use hosted_runtimes::domain::persona_credentials::PersonaEnv;
+/// let _ = serde_json::to_string(&PersonaEnv::default());
+/// ```
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct PersonaEnv(BTreeMap<PersonaConfigKey, String>);
 

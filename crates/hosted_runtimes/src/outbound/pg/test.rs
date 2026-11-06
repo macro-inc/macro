@@ -654,3 +654,5 @@ async fn reservation_rejects_a_missing_purchaser(pool: PgPool) {
     assert_eq!(error.code().as_deref(), Some("23503"));
     assert_eq!(error.constraint(), Some("hosted_runtime_created_by_fkey"));
 }
+
+mod credentials;

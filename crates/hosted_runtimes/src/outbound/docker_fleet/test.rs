@@ -317,3 +317,5 @@ fn listing_ignores_foreign_and_unlabelled_instances() {
         }]
     );
 }
+
+mod enrollment;

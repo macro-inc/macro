@@ -1104,3 +1104,5 @@ fn hosted_pairing_redacts_its_credential() {
     assert_eq!(format!("{}", pairing.device_secret), "**redacted**");
     assert_eq!(format!("{:?}", pairing.device_secret), "**redacted**");
 }
+
+mod hosted_claim;

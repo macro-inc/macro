@@ -43,6 +43,7 @@ struct FakeFleet {
     host_attempts: AtomicU32,
     failures: Mutex<u32>,
     missing: bool,
+    lose_during_create: std::sync::atomic::AtomicBool,
     calls: Mutex<Vec<String>>,
     enrollments: Mutex<Vec<(Enrollment, bool)>>,
     created: Mutex<HashMap<ComputerId, (EnrollmentGeneration, PairingId)>>,
@@ -84,6 +85,9 @@ impl Fleet for FakeFleet {
             }
         }
         let enrollment = enrollment.issue().await?;
+        if self.lose_during_create.swap(false, Ordering::SeqCst) {
+            return Err(FakeFleetError::Missing);
+        }
         self.created
             .lock()
             .unwrap()
@@ -758,6 +762,7 @@ fn control_plane_identity_rejects_missing_or_invalid_values() {
 #[derive(Default)]
 struct FixedCredentials {
     include_persona: std::sync::atomic::AtomicBool,
+    fail_response: std::sync::atomic::AtomicBool,
     issues: Mutex<Vec<(EnrollmentGeneration, String, bool)>>,
 }
 impl PersonaCredentialSource for FixedCredentials {
@@ -775,6 +780,9 @@ impl PersonaCredentialSource for FixedCredentials {
         }
         let value = format!("fixture-issued-value-{}", issues.len() + 1);
         issues.push((generation, value.clone(), false));
+        if self.fail_response.swap(false, Ordering::SeqCst) {
+            return Err(PersonaCredentialError::IssuanceFailed);
+        }
         if !self.include_persona.load(Ordering::SeqCst) {
             return Ok(Default::default());
         }
@@ -821,3 +829,5 @@ async fn unconfigured_credentials_fail_closed_for_persona_computers() {
         ));
     }
 }
+
+mod credentials;

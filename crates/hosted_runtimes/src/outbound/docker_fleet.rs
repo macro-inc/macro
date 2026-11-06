@@ -43,6 +43,11 @@ pub const COMPUTER_ID_LABEL: &str = "macro.computer_id";
 const ENROLLMENT_MOUNT: &str = "/run/macro";
 const ENROLLMENT_FILE: &str = "enrollment.json";
 
+#[cfg(test)]
+trait DockerCommand: std::fmt::Debug + Send + Sync {
+    fn run(&self, command: &str, args: &[String]) -> Result<String, DockerFleetError>;
+}
+
 /// What the Docker fleet runs and how it reports its host.
 #[derive(Debug, Clone)]
 pub struct DockerFleetConfig {
@@ -93,6 +98,8 @@ pub enum DockerFleetError {
 #[derive(Debug, Clone)]
 pub struct DockerFleet {
     config: DockerFleetConfig,
+    #[cfg(test)]
+    command: Option<std::sync::Arc<dyn DockerCommand>>,
 }
 
 impl DockerFleet {
@@ -103,7 +110,11 @@ impl DockerFleet {
         environment: Environment,
     ) -> Result<Self, DockerFleetError> {
         match environment {
-            Environment::Local => Ok(Self { config }),
+            Environment::Local => Ok(Self {
+                config,
+                #[cfg(test)]
+                command: None,
+            }),
             other => Err(DockerFleetError::NotLocal(other)),
         }
     }
@@ -117,7 +128,7 @@ impl DockerFleet {
         &self,
         computer_id: ComputerId,
     ) -> Result<Option<ContainerState>, DockerFleetError> {
-        let output = docker("ps", &state_args(computer_id)).await?;
+        let output = self.docker("ps", &state_args(computer_id)).await?;
         output
             .lines()
             .map(str::trim)
@@ -155,6 +166,13 @@ impl DockerFleet {
             .map_err(io_error(&file))?;
         Ok(dir)
     }
+    async fn docker(&self, command: &str, args: &[String]) -> Result<String, DockerFleetError> {
+        #[cfg(test)]
+        if let Some(runner) = &self.command {
+            return runner.run(command, args);
+        }
+        docker(command, args).await
+    }
 }
 
 impl FleetError for DockerFleetError {
@@ -180,7 +198,7 @@ impl Fleet for DockerFleet {
         start: bool,
     ) -> Result<(), DockerFleetError> {
         if self.state(computer.id).await?.is_some() {
-            let identity = docker("inspect", &[
+            let identity = self.docker("inspect", &[
                 "inspect".to_owned(), "--format".to_owned(),
                 format!("{{{{index .Config.Labels \"{CONTROL_PLANE_LABEL}\"}}}} {{{{index .Config.Labels \"{GENERATION_LABEL}\"}}}} {{{{index .Config.Labels \"{PAIRING_LABEL}\"}}}}"),
                 container_name(computer.id),
@@ -228,7 +246,7 @@ impl Fleet for DockerFleet {
                 vcpus: computer.resources.vcpus.get(),
                 enrollment_dir: dir,
             };
-            docker("create", &create_args(&spec)).await?;
+            self.docker("create", &create_args(&spec)).await?;
             if start {
                 self.start(computer.id).await?;
             }
@@ -240,10 +258,12 @@ impl Fleet for DockerFleet {
     async fn start(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         match self.state(computer_id).await? {
             Some(ContainerState::Paused) => {
-                docker("unpause", &verb_args("unpause", computer_id)).await?;
+                self.docker("unpause", &verb_args("unpause", computer_id))
+                    .await?;
             }
             _ => {
-                docker("start", &verb_args("start", computer_id)).await?;
+                self.docker("start", &verb_args("start", computer_id))
+                    .await?;
             }
         }
         Ok(())
@@ -254,7 +274,10 @@ impl Fleet for DockerFleet {
         match self.state(computer_id).await? {
             None => return Ok(()),
             Some(ContainerState::Paused) => {
-                if let Err(error) = docker("unpause", &verb_args("unpause", computer_id)).await {
+                if let Err(error) = self
+                    .docker("unpause", &verb_args("unpause", computer_id))
+                    .await
+                {
                     return if error.is_missing() {
                         Ok(())
                     } else {
@@ -264,7 +287,7 @@ impl Fleet for DockerFleet {
             }
             _ => {}
         }
-        if let Err(error) = docker("stop", &verb_args("stop", computer_id)).await {
+        if let Err(error) = self.docker("stop", &verb_args("stop", computer_id)).await {
             return if error.is_missing() {
                 Ok(())
             } else {
@@ -277,16 +300,19 @@ impl Fleet for DockerFleet {
     #[tracing::instrument(name = "docker_fleet.restart", skip(self), err)]
     async fn restart(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         if self.state(computer_id).await? == Some(ContainerState::Paused) {
-            docker("unpause", &verb_args("unpause", computer_id)).await?;
+            self.docker("unpause", &verb_args("unpause", computer_id))
+                .await?;
         }
-        docker("restart", &verb_args("restart", computer_id)).await?;
+        self.docker("restart", &verb_args("restart", computer_id))
+            .await?;
         Ok(())
     }
 
     #[tracing::instrument(name = "docker_fleet.freeze", skip(self), err)]
     async fn freeze(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         if self.state(computer_id).await? != Some(ContainerState::Paused) {
-            docker("pause", &verb_args("pause", computer_id)).await?;
+            self.docker("pause", &verb_args("pause", computer_id))
+                .await?;
         }
         Ok(())
     }
@@ -296,7 +322,8 @@ impl Fleet for DockerFleet {
         match self.state(computer_id).await? {
             None => return Err(DockerFleetError::Missing { computer_id }),
             Some(ContainerState::Paused) => {
-                docker("unpause", &verb_args("unpause", computer_id)).await?;
+                self.docker("unpause", &verb_args("unpause", computer_id))
+                    .await?;
             }
             _ => {}
         }
@@ -308,12 +335,13 @@ impl Fleet for DockerFleet {
         match self.state(computer_id).await? {
             None => return Err(DockerFleetError::Missing { computer_id }),
             Some(ContainerState::Paused) => {
-                docker("unpause", &verb_args("unpause", computer_id)).await?;
+                self.docker("unpause", &verb_args("unpause", computer_id))
+                    .await?;
             }
             _ => {}
         }
         // Unlike stop, suspend must report a guest lost during the operation.
-        docker("stop", &verb_args("stop", computer_id)).await?;
+        self.docker("stop", &verb_args("stop", computer_id)).await?;
         Ok(())
     }
 
@@ -324,7 +352,7 @@ impl Fleet for DockerFleet {
 
     #[tracing::instrument(name = "docker_fleet.destroy", skip(self), err)]
     async fn destroy(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
-        if let Err(error) = docker("rm", &remove_args(computer_id)).await
+        if let Err(error) = self.docker("rm", &remove_args(computer_id)).await
             && !error.is_missing()
         {
             return Err(error);
@@ -351,16 +379,17 @@ impl Fleet for DockerFleet {
 
     #[tracing::instrument(name = "docker_fleet.resources_match", skip_all, fields(computer_id = %computer.id), err)]
     async fn resources_match(&self, computer: &Computer) -> Result<bool, Self::Err> {
-        let output = docker(
-            "inspect",
-            &[
-                "inspect".to_owned(),
-                "--format".to_owned(),
-                "{{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}".to_owned(),
-                container_name(computer.id),
-            ],
-        )
-        .await?;
+        let output = self
+            .docker(
+                "inspect",
+                &[
+                    "inspect".to_owned(),
+                    "--format".to_owned(),
+                    "{{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}".to_owned(),
+                    container_name(computer.id),
+                ],
+            )
+            .await?;
         // Docker overlayfs has no disk quota; only CPU and memory are enforced.
         Ok(output.trim()
             == format!(
@@ -372,11 +401,12 @@ impl Fleet for DockerFleet {
 
     #[tracing::instrument(name = "docker_fleet.instances", skip(self), err)]
     async fn instances(&self) -> Result<Vec<FleetInstance>, DockerFleetError> {
-        let output = docker(
-            "ps",
-            &list_args(&self.config.network, &self.config.control_plane_id),
-        )
-        .await?;
+        let output = self
+            .docker(
+                "ps",
+                &list_args(&self.config.network, &self.config.control_plane_id),
+            )
+            .await?;
         parse_instances(&output, &self.config.control_plane_id)
     }
 
