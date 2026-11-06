@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 /// flips, x grows to the right and y downward.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+// utoipa ignores `rename_all_fields`, so each struct variant repeats it.
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(
     rename_all = "camelCase",
@@ -17,6 +18,7 @@ use serde::{Deserialize, Serialize};
 )]
 pub enum PathCommand {
     /// Starts a sub-path at a point (every path starts with one).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     MoveTo {
         /// X (points).
         x: f32,
@@ -24,6 +26,7 @@ pub enum PathCommand {
         y: f32,
     },
     /// A straight line to a point.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     LineTo {
         /// X (points).
         x: f32,
@@ -31,6 +34,7 @@ pub enum PathCommand {
         y: f32,
     },
     /// A cubic Bézier curve to `(x, y)` with control points `(x1, y1)` and `(x2, y2)`.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     CubicBezTo {
         /// First control point X (points).
         x1: f32,
@@ -46,6 +50,7 @@ pub enum PathCommand {
         y: f32,
     },
     /// A quadratic Bézier curve to `(x, y)` with control point `(x1, y1)`.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     QuadBezTo {
         /// Control point X (points).
         x1: f32,
@@ -60,6 +65,7 @@ pub enum PathCommand {
     /// `arcTo`: the ellipse has radii `wR` and `hR`, the arc starts at angle
     /// `stAng` on it and sweeps `swAng` (degrees, clockwise on screen; 0° is
     /// the ellipse's rightmost point).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     ArcTo {
         /// Horizontal radius (points).
         w_r: f32,

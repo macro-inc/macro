@@ -43,6 +43,7 @@ pub use smartart::{SmartArtEdit, SmartArtItem, SmartArtPosition, SmartArtTarget}
 /// One edit operation.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+// utoipa ignores `rename_all_fields`, so each struct variant repeats it.
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(
     rename_all = "camelCase",
@@ -53,6 +54,7 @@ pub use smartart::{SmartArtEdit, SmartArtItem, SmartArtPosition, SmartArtTarget}
 pub enum EditOp {
     /// Replaces all text of a shape (`\n` separates paragraphs, `\u{b}` is a line
     /// break), keeping the formatting of the first run of each paragraph.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetText {
         /// Slide id.
         slide: u32,
@@ -65,6 +67,7 @@ pub enum EditOp {
         text: String,
     },
     /// Inserts text at a position (`\n` splits paragraphs).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     InsertText {
         /// Slide id.
         slide: u32,
@@ -79,6 +82,7 @@ pub enum EditOp {
         text: String,
     },
     /// Deletes text between two positions (may span paragraphs).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     DeleteText {
         /// Slide id.
         slide: u32,
@@ -93,6 +97,7 @@ pub enum EditOp {
         end: TextPos,
     },
     /// Applies character formatting to a range (whole shape when omitted).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     FormatText {
         /// Slide id.
         slide: u32,
@@ -111,6 +116,7 @@ pub enum EditOp {
         props: RunPatch,
     },
     /// Applies paragraph formatting to paragraphs `from..=to` (all when omitted).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     FormatParagraphs {
         /// Slide id.
         slide: u32,
@@ -129,6 +135,7 @@ pub enum EditOp {
         props: ParaPatch,
     },
     /// Changes text box properties.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     FormatBody {
         /// Slide id.
         slide: u32,
@@ -143,6 +150,7 @@ pub enum EditOp {
     /// Moves, resizes, rotates, or flips a shape (omitted fields stay).
     /// Values are in slide space, also for group members (as the outline
     /// reports them); their group grows or shrinks to fit.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetTransform {
         /// Slide id.
         slide: u32,
@@ -171,6 +179,7 @@ pub enum EditOp {
         flip_v: Option<bool>,
     },
     /// Sets a shape's fill.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetFill {
         /// Slide id.
         slide: u32,
@@ -180,6 +189,7 @@ pub enum EditOp {
         fill: FillSpec,
     },
     /// Changes a shape's outline.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetLine {
         /// Slide id.
         slide: u32,
@@ -189,6 +199,7 @@ pub enum EditOp {
         line: LinePatch,
     },
     /// Changes a shape's preset geometry.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetGeometry {
         /// Slide id.
         slide: u32,
@@ -198,6 +209,7 @@ pub enum EditOp {
         preset: String,
     },
     /// Adds a shape (its id is reported in the result).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     AddShape {
         /// Slide id.
         slide: u32,
@@ -213,6 +225,7 @@ pub enum EditOp {
         h: f32,
     },
     /// Deletes a shape.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     DeleteShape {
         /// Slide id.
         slide: u32,
@@ -220,6 +233,7 @@ pub enum EditOp {
         shape: u32,
     },
     /// Duplicates a shape, offset by (dx, dy) points.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     DuplicateShape {
         /// Slide id.
         slide: u32,
@@ -233,6 +247,7 @@ pub enum EditOp {
         dy: f32,
     },
     /// Changes a shape's z-order.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     ReorderShape {
         /// Slide id.
         slide: u32,
@@ -242,6 +257,7 @@ pub enum EditOp {
         to: ZOrder,
     },
     /// Replaces a picture's image.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     ReplaceImage {
         /// Slide id.
         slide: u32,
@@ -251,6 +267,7 @@ pub enum EditOp {
         data: String,
     },
     /// Sets the text of a table cell.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetCellText {
         /// Slide id.
         slide: u32,
@@ -264,6 +281,7 @@ pub enum EditOp {
         text: String,
     },
     /// Inserts a table row (copying the formatting of an adjacent row).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     InsertTableRow {
         /// Slide id.
         slide: u32,
@@ -273,6 +291,7 @@ pub enum EditOp {
         at: usize,
     },
     /// Deletes a table row.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     DeleteTableRow {
         /// Slide id.
         slide: u32,
@@ -282,6 +301,7 @@ pub enum EditOp {
         row: usize,
     },
     /// Inserts a table column (copying the formatting of an adjacent column).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     InsertTableColumn {
         /// Slide id.
         slide: u32,
@@ -291,6 +311,7 @@ pub enum EditOp {
         at: usize,
     },
     /// Deletes a table column.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     DeleteTableColumn {
         /// Slide id.
         slide: u32,
@@ -303,6 +324,7 @@ pub enum EditOp {
     /// The top-left cell keeps its formatting; the text of the other cells is
     /// appended to it as paragraphs. Merged cells already inside the rectangle
     /// are absorbed; a rectangle that cuts through a merged cell is rejected.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     MergeCells {
         /// Slide id.
         slide: u32,
@@ -315,6 +337,7 @@ pub enum EditOp {
     },
     /// Splits a merged cell back into the grid cells it covers. The revealed
     /// cells are empty and take the merged cell's fill and outer borders.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SplitCell {
         /// Slide id.
         slide: u32,
@@ -325,6 +348,7 @@ pub enum EditOp {
     },
     /// Formats the table cells in the rectangle between two corners (widened
     /// to whole merged cells). Omitted fields stay unchanged.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     FormatCells {
         /// Slide id.
         slide: u32,
@@ -351,6 +375,7 @@ pub enum EditOp {
     /// (omitted fields stay unchanged). Applying a different style clears
     /// fills and borders set directly on cells, as PowerPoint does, so the
     /// table shows the new style.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetTableStyle {
         /// Slide id.
         slide: u32,
@@ -382,6 +407,7 @@ pub enum EditOp {
     },
     /// Sets table column widths and minimum row heights in points (rows still
     /// grow to fit their text). The frame is resized to match.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetTableGrid {
         /// Slide id.
         slide: u32,
@@ -395,6 +421,7 @@ pub enum EditOp {
         row_heights: Option<Vec<f32>>,
     },
     /// Adds a slide based on a layout (its id is reported in the result).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     AddSlide {
         /// Layout name (e.g. "Title and Content"); defaults to the layout of the reference slide.
         #[serde(default)]
@@ -410,16 +437,19 @@ pub enum EditOp {
         body: Option<String>,
     },
     /// Duplicates a slide right after itself.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     DuplicateSlide {
         /// Slide id.
         slide: u32,
     },
     /// Deletes a slide.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     DeleteSlide {
         /// Slide id.
         slide: u32,
     },
     /// Moves a slide to a 0-based position.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     MoveSlide {
         /// Slide id.
         slide: u32,
@@ -427,6 +457,7 @@ pub enum EditOp {
         to: usize,
     },
     /// Hides or shows a slide in slideshows.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetSlideHidden {
         /// Slide id.
         slide: u32,
@@ -434,6 +465,7 @@ pub enum EditOp {
         hidden: bool,
     },
     /// Replaces the speaker notes of a slide.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetNotes {
         /// Slide id.
         slide: u32,
@@ -441,6 +473,7 @@ pub enum EditOp {
         text: String,
     },
     /// Sets a slide's background.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetBackground {
         /// Slide id.
         slide: u32,
@@ -452,6 +485,7 @@ pub enum EditOp {
     /// in the outline). Existing series keep their formatting; new series
     /// copy the last one's with the next theme accent color. The embedded
     /// workbook is rewritten to match.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetChartData {
         /// Slide id.
         slide: u32,
@@ -463,6 +497,7 @@ pub enum EditOp {
         series: Vec<ChartSeriesData>,
     },
     /// Changes a chart's type (the chart must be `editable` in the outline).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetChartType {
         /// Slide id.
         slide: u32,
@@ -475,6 +510,7 @@ pub enum EditOp {
         grouping: Option<String>,
     },
     /// Changes a chart's title, legend, data labels, or series colors (omitted fields stay).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     FormatChart {
         /// Slide id.
         slide: u32,
@@ -498,6 +534,7 @@ pub enum EditOp {
     /// shapes) into a new group placed at the z-position of the topmost of
     /// them. They keep their order and exactly where they are. The group's id
     /// is reported in the result. Placeholders cannot be grouped.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     GroupShapes {
         /// Slide id.
         slide: u32,
@@ -508,6 +545,7 @@ pub enum EditOp {
     /// exactly where and how they appear (the group's offset, scale,
     /// rotation, and flips are applied to each). The members' ids are
     /// reported in the result, back to front.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     UngroupShape {
         /// Slide id.
         slide: u32,
@@ -520,6 +558,7 @@ pub enum EditOp {
     /// theme fonts, and style references take this presentation's theme
     /// (PowerPoint's "Use Destination Theme"). The new top-level shape ids are
     /// reported in the result, back to front.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     PasteShapes {
         /// Slide id.
         slide: u32,
@@ -538,6 +577,7 @@ pub enum EditOp {
     /// types, else "Title and Content", else the first layout; theme colors
     /// and fonts follow this deck's theme. New slide ids are reported in the
     /// result, in order.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     PasteSlides {
         /// Insert after this slide (end of deck when omitted).
         #[serde(default)]
@@ -549,6 +589,7 @@ pub enum EditOp {
     /// placeholders by type and index and take their position; placeholders
     /// without a match stay where they are. Content is kept, and the new
     /// layout's other placeholders are added empty.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetSlideLayout {
         /// Slide id.
         slide: u32,
@@ -557,6 +598,7 @@ pub enum EditOp {
     },
     /// Sets the transition into a slide. Omitted fields keep the slide's
     /// current value, or take the effect's default for a new transition.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetTransition {
         /// Slide id.
         slide: u32,
@@ -594,6 +636,7 @@ pub enum EditOp {
     /// keeps it, with its other settings unless the entry gives them, so
     /// listing the current animations in a new order reorders them.
     /// Animations started by clicking a shape (triggers) are kept.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetAnimations {
         /// Slide id.
         slide: u32,
@@ -601,6 +644,7 @@ pub enum EditOp {
         animations: Vec<AnimationSpec>,
     },
     /// Adds a new animation to a slide's sequence.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     AddAnimation {
         /// Slide id.
         slide: u32,
@@ -613,6 +657,7 @@ pub enum EditOp {
     /// Removes animations from a slide's sequence: every animation of the
     /// listed shapes and the animations at the listed playback positions.
     /// Give at least one of the lists (`setAnimations` with `[]` removes all).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     RemoveAnimations {
         /// Slide id.
         slide: u32,
@@ -627,6 +672,7 @@ pub enum EditOp {
     /// or on every slide. A match may span differently formatted runs but not
     /// paragraphs; the replacement takes the formatting of the first matched
     /// character. The number of replacements is reported in the result.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     ReplaceText {
         /// Text to find (within one paragraph).
         find: String,
@@ -643,6 +689,7 @@ pub enum EditOp {
         slide: Option<u32>,
     },
     /// Sets a shape's alt text (its description for screen readers); `""` removes it.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetAltText {
         /// Slide id.
         slide: u32,
@@ -652,6 +699,7 @@ pub enum EditOp {
         text: String,
     },
     /// Renames a shape (the name shown in the selection pane).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetShapeName {
         /// Slide id.
         slide: u32,
@@ -662,6 +710,7 @@ pub enum EditOp {
     },
     /// Links whole shapes: clicking one in a slide show follows the link.
     /// Links on text are set with formatText's `link`.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetShapeLink {
         /// Slide id.
         slide: u32,
@@ -676,6 +725,7 @@ pub enum EditOp {
         tip: Option<String>,
     },
     /// Hides or shows a shape (hidden shapes are not drawn).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetShapeHidden {
         /// Slide id.
         slide: u32,
@@ -688,6 +738,7 @@ pub enum EditOp {
     /// outline, effects, theme style, and text margins and anchoring.
     /// Character and paragraph formatting are not copied (use formatText and
     /// formatParagraphs). Group targets paint every member.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     PasteFormat {
         /// Slide id of the shapes to restyle.
         slide: u32,
@@ -708,6 +759,7 @@ pub enum EditOp {
     /// image is instead cropped (`fill`) or padded (`fit`) to the frame's
     /// aspect ratio, centered, and the frame stays. To crop to a shape, use
     /// `setGeometry` on the picture.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     CropPicture {
         /// Slide id.
         slide: u32,
@@ -731,6 +783,7 @@ pub enum EditOp {
     },
     /// Adjusts pictures (PowerPoint's Corrections, Color, and Transparency).
     /// Omitted fields keep their current value.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     FormatPicture {
         /// Slide id.
         slide: u32,
@@ -764,6 +817,7 @@ pub enum EditOp {
     /// omitted (or null), removed with `"none"`, or set from a preset name
     /// or an options object (omitted options keep the current values). A
     /// shape that inherits effects from the theme starts from those.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetShapeEffects {
         /// Slide id.
         slide: u32,
@@ -801,6 +855,7 @@ pub enum EditOp {
     /// text, rotation, and flips stay. Works on drawn shapes, text boxes,
     /// placeholders, and pictures (it reshapes their crop outline). The
     /// text area keeps its place on the slide.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetCustomGeometry {
         /// Slide id.
         slide: u32,
@@ -826,6 +881,7 @@ pub enum EditOp {
     /// the result keeps (`fragment` adds the other pieces as new shapes).
     /// Lines, connectors, tables, charts, and groups cannot be merged; a
     /// merge that leaves nothing is an error.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     MergeShapes {
         /// Slide id.
         slide: u32,
@@ -839,6 +895,7 @@ pub enum EditOp {
     /// Recolors the deck: sets theme color slots in every slide master's
     /// theme, so everything that uses theme colors (most text, shapes,
     /// charts, and tables) follows. Omitted slots keep their color.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetThemeColors {
         /// Slots to set.
         colors: Vec<ThemeColor>,
@@ -848,6 +905,7 @@ pub enum EditOp {
     },
     /// Sets the theme's heading (`major`) and body (`minor`) Latin fonts in
     /// every slide master's theme; text that uses theme fonts follows.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetThemeFonts {
         /// Heading font (kept when omitted).
         #[serde(default)]
@@ -865,6 +923,7 @@ pub enum EditOp {
     /// placeholder that takes its position and style from the slide's
     /// layout; a slide whose layout has no such placeholder cannot show it.
     /// Omitted fields keep each slide's current state.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetHeaderFooter {
         /// Slide ids to change; omit (or null) for every slide ("Apply to
         /// All", which also makes slides added later show the same elements).
@@ -906,6 +965,7 @@ pub enum EditOp {
     /// Changes the slide size of the deck (PowerPoint's Design ▸ Slide
     /// Size). Every slide, layout, and master changes; speaker notes keep
     /// their size.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetSlideSize {
         /// Width in points, 72-4032 (960 for 16:9 widescreen, 720 for 4:3
         /// and 16:9 on-screen show, 780 for A4).
@@ -925,6 +985,7 @@ pub enum EditOp {
     /// slides after it in its current section. In a deck without sections,
     /// the slides before it go into a "Default Section", as in PowerPoint.
     /// The new section's id is reported in the result.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     AddSection {
         /// Section name.
         name: String,
@@ -932,6 +993,7 @@ pub enum EditOp {
         before_slide: u32,
     },
     /// Renames a section.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     RenameSection {
         /// Section id (a GUID from the deck outline's `sections`).
         id: String,
@@ -941,6 +1003,7 @@ pub enum EditOp {
     /// Removes a section. Its slides join the previous section (the next
     /// one when it is the first), or are deleted with `deleteSlides`.
     /// Removing the only section leaves the deck without sections.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     RemoveSection {
         /// Section id.
         id: String,
@@ -950,6 +1013,7 @@ pub enum EditOp {
     },
     /// Moves a section and all its slides to a 0-based position among the
     /// sections; the slides are reordered to match.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     MoveSection {
         /// Section id.
         id: String,
@@ -961,6 +1025,7 @@ pub enum EditOp {
     /// shapes snap to while dragged. Pass the whole list (the deck outline's
     /// `guides`, changed); an empty list removes every guide. Guides that
     /// slide layouts and masters define are not affected.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetGuides {
         /// The guides, in order.
         guides: Vec<GuideSpec>,
@@ -972,6 +1037,7 @@ pub enum EditOp {
     /// copy of that layout. Masters and layouts are listed in the deck
     /// outline's `masters`. The new layout's id is reported in the result
     /// (as `slide`); it addresses the layout's shapes like a slide id.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     AddLayout {
         /// Id of the master to add it to (default: the master of `after`
         /// or `duplicate`, else the first master).
@@ -992,6 +1058,7 @@ pub enum EditOp {
     },
     /// Renames a slide layout, or a slide master (a master's name is its
     /// theme's name, as PowerPoint shows it).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     RenameLayout {
         /// Layout or master id.
         layout: u32,
@@ -1002,6 +1069,7 @@ pub enum EditOp {
     /// layout with `setSlideLayout` first). A master keeps at least one
     /// layout. With a master's id, deletes that master and its layouts when
     /// no slide uses any of them and another master remains.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     DeleteLayout {
         /// Layout or master id.
         layout: u32,
@@ -1012,6 +1080,7 @@ pub enum EditOp {
     /// layout is applied again (`setSlideLayout`). Content and text
     /// placeholders take the master's text styles. The new shape's id is
     /// reported in the result.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     InsertPlaceholder {
         /// Layout id.
         layout: u32,
@@ -1034,6 +1103,7 @@ pub enum EditOp {
     /// Sets what a slide layout shows (PowerPoint's Slide Master ▸ Title,
     /// Footers, and Hide Background Graphics). Omitted fields keep the
     /// layout's current state.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetLayoutOptions {
         /// Layout id.
         layout: u32,
@@ -1055,6 +1125,7 @@ pub enum EditOp {
     /// theme's colors and background fills. Styles 1-4 are the theme's
     /// first background fill (usually solid) in Light 1, Dark 1, Light 2,
     /// and Dark 2; 5-8 its second and 9-12 its third, in the same colors.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetBackgroundStyle {
         /// Slide, master, or layout id.
         slide: u32,
@@ -1066,6 +1137,7 @@ pub enum EditOp {
     /// Comment), attached to a shape or to the slide. Written as PowerPoint
     /// for Microsoft 365 writes comments. Read threads and their ids from
     /// the slide outline's `comments`.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     AddComment {
         /// Slide id.
         slide: u32,
@@ -1092,6 +1164,7 @@ pub enum EditOp {
         shape: Option<u32>,
     },
     /// Replies to a comment thread.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     ReplyComment {
         /// Slide id.
         slide: u32,
@@ -1107,6 +1180,7 @@ pub enum EditOp {
         initials: Option<String>,
     },
     /// Replaces the text of a comment: a thread's first comment or a reply.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     EditComment {
         /// Slide id.
         slide: u32,
@@ -1117,6 +1191,7 @@ pub enum EditOp {
     },
     /// Resolves a comment thread, or reopens it (PowerPoint's Resolve
     /// thread / Reopen). Legacy comments cannot be resolved.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     ResolveComment {
         /// Slide id.
         slide: u32,
@@ -1126,6 +1201,7 @@ pub enum EditOp {
         resolved: bool,
     },
     /// Deletes a comment thread with its replies, or a single reply.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     DeleteComment {
         /// Slide id.
         slide: u32,
@@ -1134,6 +1210,7 @@ pub enum EditOp {
     },
     /// Deletes every comment on a slide, or with `slide` omitted (or null)
     /// every comment in the presentation.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     DeleteAllComments {
         /// Slide id (omit or null: all slides).
         #[serde(default)]
@@ -1156,6 +1233,7 @@ pub enum EditOp {
     /// symbols (`\infty \pm \times \cdot \le \ge \ne \approx \to
     /// \Rightarrow \partial \nabla`...), `\mathrm{}`, `\mathbf{}`,
     /// `\mathbb{}`, `\mathcal{}`, `\text{}`, and spaces (`\, \; \quad`).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     InsertEquation {
         /// Slide id.
         slide: u32,
@@ -1182,6 +1260,7 @@ pub enum EditOp {
     },
     /// Replaces an equation (one of a paragraph's `equations` in the
     /// outline) with new linear text, keeping its size and color.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetEquation {
         /// Slide id.
         slide: u32,
@@ -1210,6 +1289,7 @@ pub enum EditOp {
     /// `smartArt.nodes`; a new node's id appears there afterwards. Diagrams
     /// whose layout the outline reports as not `supported` take text edits,
     /// colors, styles, and a new supported layout, but not node changes.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     EditSmartArt {
         /// Slide id.
         slide: u32,
@@ -1221,6 +1301,7 @@ pub enum EditOp {
     /// Converts a SmartArt graphic into ordinary shapes (a group that looks
     /// the same) or into a bulleted text box. The new shape's id is reported
     /// in the result.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     ConvertSmartArt {
         /// Slide id.
         slide: u32,

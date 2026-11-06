@@ -272,6 +272,7 @@ pub struct LinePatch {
 /// What to add with [`EditOp::AddShape`](super::EditOp::AddShape).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+// utoipa ignores `rename_all_fields`, so each struct variant repeats it.
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(
     rename_all = "camelCase",
@@ -281,12 +282,14 @@ pub struct LinePatch {
 )]
 pub enum NewShape {
     /// A text box.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     TextBox {
         /// Initial text (`\n` separates paragraphs).
         #[serde(default, deserialize_with = "nullable")]
         text: String,
     },
     /// A preset shape (`rect`, `roundRect`, `ellipse`, `rightArrow`...).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     Shape {
         /// Preset geometry name.
         preset: String,
@@ -295,12 +298,14 @@ pub enum NewShape {
         text: String,
     },
     /// A straight line from the top-left to the bottom-right of the box.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     Line {
         /// Arrowhead at the end.
         #[serde(default, deserialize_with = "nullable")]
         arrow: bool,
     },
     /// A picture.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     Image {
         /// Base64-encoded PNG, JPEG, or GIF bytes.
         data: String,
@@ -310,6 +315,7 @@ pub enum NewShape {
     },
     /// A video, played when clicked in a slide show. A zero width or height
     /// takes the poster's aspect ratio.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     Video {
         /// Base64-encoded MP4, M4V, MOV, WebM, WMV, or AVI bytes.
         data: String,
@@ -323,6 +329,7 @@ pub enum NewShape {
     },
     /// An audio clip, shown as its poster (a speaker icon) and played when
     /// clicked in a slide show.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     Audio {
         /// Base64-encoded MP3, M4A, WAV, or OGG bytes.
         data: String,
@@ -335,11 +342,13 @@ pub enum NewShape {
         description: String,
     },
     /// A table.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     Table {
         /// Cell text, row by row.
         cells: Vec<Vec<String>>,
     },
     /// A chart with an embedded workbook holding its data.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     Chart {
         /// `bar` (horizontal), `column`, `line`, `pie`, `doughnut`, or `area`.
         chart_type: String,
@@ -357,6 +366,7 @@ pub enum NewShape {
     /// A SmartArt graphic (PowerPoint's Insert ▸ SmartArt), laid out to
     /// fill the box. PowerPoint's default box on a 16:9 slide is 640 x 426.7
     /// points at (160, 56.7).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SmartArt {
         /// Layout: `default` (Basic Block List), `vList2` (Vertical Bullet
         /// List), `hList1` (Horizontal Bullet List), `process1` (Basic

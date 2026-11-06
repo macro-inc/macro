@@ -43,6 +43,7 @@ pub enum SmartArtPosition {
 /// One change to a SmartArt graphic.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+// utoipa ignores `rename_all_fields`, so each struct variant repeats it.
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(
     rename_all = "camelCase",
@@ -53,6 +54,7 @@ pub enum SmartArtPosition {
 pub enum SmartArtEdit {
     /// Replaces a node's text, keeping the formatting of its first run
     /// (`\n` separates paragraphs inside the node, `\u{b}` is a line break).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetText {
         /// Node id (from the outline's `smartArt.nodes`).
         node: String,
@@ -60,6 +62,7 @@ pub enum SmartArtEdit {
         text: String,
     },
     /// Adds a node (PowerPoint's Add Shape).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     AddNode {
         /// The node to add next to; omit to add a last top-level node.
         #[serde(default)]
@@ -72,39 +75,46 @@ pub enum SmartArtEdit {
         text: String,
     },
     /// Deletes a node; its children move up into its place.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     DeleteNode {
         /// Node id.
         node: String,
     },
     /// Moves a node one level up (Promote, Shift+Tab in the text pane).
     /// Its following siblings become its children.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     Promote {
         /// Node id.
         node: String,
     },
     /// Moves a node one level down (Demote, Tab in the text pane): it
     /// becomes the last child of its previous sibling, with its children.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     Demote {
         /// Node id.
         node: String,
     },
     /// Swaps a node (with its children) with its previous sibling.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     MoveUp {
         /// Node id.
         node: String,
     },
     /// Swaps a node (with its children) with its next sibling.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     MoveDown {
         /// Node id.
         node: String,
     },
     /// Replaces all the text: one node per item, as typed in the text pane.
     /// Existing nodes are reused in order, keeping their formatting.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetNodes {
         /// The bullets, in order.
         items: Vec<SmartArtItem>,
     },
     /// Changes the layout (PowerPoint's Layouts gallery), keeping the text.
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetLayout {
         /// Layout: `default` (Basic Block List), `vList2` (Vertical Bullet
         /// List), `hList1` (Horizontal Bullet List), `process1` (Basic
@@ -117,6 +127,7 @@ pub enum SmartArtEdit {
         layout: String,
     },
     /// Changes the colors (PowerPoint's Change Colors).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetColors {
         /// Color variation: `accent0_1` Dark 1 Outline, `accent0_2` Dark 2
         /// Outline, `accent0_3` Dark 2 Fill, `colorful1` Colorful - Accent
@@ -130,6 +141,7 @@ pub enum SmartArtEdit {
         colors: String,
     },
     /// Changes the SmartArt style (PowerPoint's SmartArt Styles gallery).
+    #[cfg_attr(feature = "openapi", schema(rename_all = "camelCase"))]
     SetStyle {
         /// Style: `simple1` Simple Fill (the default), `simple2` White
         /// Outline, `simple3` Subtle Effect, `simple4` Moderate Effect, or

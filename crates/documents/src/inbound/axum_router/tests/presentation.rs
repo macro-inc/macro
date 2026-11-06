@@ -282,3 +282,46 @@ async fn copy_into_a_project_without_edit_access_creates_nothing() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert!(documents.created_documents.lock().unwrap().is_empty());
 }
+
+/// Every property name anywhere in a JSON schema document.
+fn property_names(schema: &Value, names: &mut std::collections::BTreeSet<String>) {
+    match schema {
+        Value::Object(object) => {
+            if let Some(Value::Object(properties)) = object.get("properties") {
+                names.extend(properties.keys().cloned());
+            }
+            for value in object.values() {
+                property_names(value, names);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                property_names(item, names);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The OpenAPI schema clients are generated from names the fields serde
+/// reads, as the tools' JSON Schema does.
+fn assert_openapi_matches_json_schema<T: utoipa::ToSchema + schemars::JsonSchema>() {
+    let mut openapi = vec![("root".to_string(), T::schema())];
+    T::schemas(&mut openapi);
+    let mut openapi_names = std::collections::BTreeSet::new();
+    property_names(&serde_json::to_value(&openapi).unwrap(), &mut openapi_names);
+
+    let mut json_schema_names = std::collections::BTreeSet::new();
+    property_names(
+        &serde_json::to_value(schemars::schema_for!(T)).unwrap(),
+        &mut json_schema_names,
+    );
+
+    assert_eq!(openapi_names, json_schema_names);
+}
+
+#[test]
+fn edit_operations_name_the_same_fields_in_both_schemas() {
+    assert_openapi_matches_json_schema::<pptx_engine::EditOp>();
+    assert_openapi_matches_json_schema::<crate::domain::word_document::WordDocumentOperation>();
+}
