@@ -190,6 +190,11 @@ passwords and verification codes only in that browser, never in agent messages.
 For browsers using the Custom Tabs fallback, verify that the callback returns to
 the original Macro task. A callback for another attempt must leave the current
 attempt pending; a callback after process death must not restore that attempt.
+The first Google sign-in after a fresh install must land in the app, even while
+an over-the-air update finishes downloading: an update reload during the sheet
+or the session-code redemption used to return the user to `Login`, with the
+second tap then signing straight in. Check that PostHog shows no
+`native_webview_started` reload onto `#/login` right after the `login` event.
 
 After signing in, test background/foreground, force-stop/relaunch, logout, and
 signing in as another account. An entity link opened while signed out should
