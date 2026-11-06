@@ -3205,6 +3205,156 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/runtime-bypass": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "What stopping this session's permission requests would change - its\nruntime's bypass, and the agent's own choice when that asks too - when\nthe caller may make every change.",
+        "operationId": "get_agent_session_runtime_bypass",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeBypassOfferResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No edit access, or not a person",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Turn on the session's runtime bypass, and the agent's own choice to\nbypass when that asks too. The session stops asking once a person answers\nthe request in front of them, or from its next turn.",
+        "operationId": "stop_agent_session_runtime_asking",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What was changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeBypassOfferDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No edit access, or a change was refused",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Nothing the caller may change would stop the asking",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/sandbox-size": {
       "put": {
         "tags": ["agent-sessions"],
@@ -7096,6 +7246,38 @@
           }
         ],
         "description": "Full UI record, fetched outside the model context."
+      },
+      "RuntimeBypassOfferDto": {
+        "type": "object",
+        "description": "What stopping the asking changes for the session.",
+        "required": ["harnessId", "enablesAgentAutoAccept"],
+        "properties": {
+          "enablesAgentAutoAccept": {
+            "type": "boolean",
+            "description": "The agent is set to bypass too, because it asks by its own choice."
+          },
+          "harnessId": {
+            "type": "string",
+            "description": "The registered runtime whose bypass is turned on."
+          }
+        }
+      },
+      "RuntimeBypassOfferResponse": {
+        "type": "object",
+        "description": "Response body for reading the offer.",
+        "properties": {
+          "offer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RuntimeBypassOfferDto",
+                "description": "`null` when nothing the caller may change would stop the session\nasking."
+              }
+            ]
+          }
+        }
       },
       "SandboxSize": {
         "type": "string",

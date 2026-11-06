@@ -2480,6 +2480,27 @@ export type ReviewRecord = {
 };
 
 /**
+ * What stopping the asking changes for the session.
+ */
+export type RuntimeBypassOfferDto = {
+    /**
+     * The agent is set to bypass too, because it asks by its own choice.
+     */
+    enablesAgentAutoAccept: boolean;
+    /**
+     * The registered runtime whose bypass is turned on.
+     */
+    harnessId: string;
+};
+
+/**
+ * Response body for reading the offer.
+ */
+export type RuntimeBypassOfferResponse = {
+    offer?: null | RuntimeBypassOfferDto;
+};
+
+/**
  * Named compute tier for a managed sandbox.
  *
  * The API and database store the name. CPU, RAM, and disk live in
@@ -4266,6 +4287,73 @@ export type DecideSessionReviewResponses = {
 };
 
 export type DecideSessionReviewResponse = DecideSessionReviewResponses[keyof DecideSessionReviewResponses];
+
+export type GetAgentSessionRuntimeBypassData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/runtime-bypass';
+};
+
+export type GetAgentSessionRuntimeBypassErrors = {
+    401: string;
+    /**
+     * No edit access, or not a person
+     */
+    403: string;
+    404: string;
+    500: string;
+};
+
+export type GetAgentSessionRuntimeBypassError = GetAgentSessionRuntimeBypassErrors[keyof GetAgentSessionRuntimeBypassErrors];
+
+export type GetAgentSessionRuntimeBypassResponses = {
+    200: RuntimeBypassOfferResponse;
+};
+
+export type GetAgentSessionRuntimeBypassResponse = GetAgentSessionRuntimeBypassResponses[keyof GetAgentSessionRuntimeBypassResponses];
+
+export type StopAgentSessionRuntimeAskingData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/runtime-bypass';
+};
+
+export type StopAgentSessionRuntimeAskingErrors = {
+    401: string;
+    /**
+     * No edit access, or a change was refused
+     */
+    403: string;
+    404: string;
+    /**
+     * Nothing the caller may change would stop the asking
+     */
+    409: string;
+    500: string;
+};
+
+export type StopAgentSessionRuntimeAskingError = StopAgentSessionRuntimeAskingErrors[keyof StopAgentSessionRuntimeAskingErrors];
+
+export type StopAgentSessionRuntimeAskingResponses = {
+    /**
+     * What was changed
+     */
+    200: RuntimeBypassOfferDto;
+};
+
+export type StopAgentSessionRuntimeAskingResponse = StopAgentSessionRuntimeAskingResponses[keyof StopAgentSessionRuntimeAskingResponses];
 
 export type PutAgentSessionSandboxSizeData = {
     body: SandboxSizeBody;

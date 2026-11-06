@@ -32,6 +32,8 @@ import type {
   PreviewAgentSessionsResponse,
   PullRequestSessionsResponse,
   PullRequestsSessionsResponse,
+  RuntimeBypassOfferDto,
+  RuntimeBypassOfferResponse,
   SandboxSize,
   SandboxSizeBody,
   SessionAutoArchiveResponse,
@@ -497,6 +499,29 @@ export const agentHarnessServiceClient = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answer }),
       }
+    );
+  },
+
+  /**
+   * What stopping the session's permission requests on its runtime would
+   * change, when the caller may make every change; `offer` is null otherwise.
+   */
+  runtimeBypassOffer(sessionId: string) {
+    return fetchWithToken<RuntimeBypassOfferResponse>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/runtime-bypass`,
+      { errorResponseHandler: sessionError }
+    );
+  },
+
+  /**
+   * Turn on the session's runtime bypass, and the agent's own choice when
+   * that asks too. The session stops asking once a permission request is
+   * answered. 409 when nothing the caller may change would stop it.
+   */
+  stopAskingOnRuntime(sessionId: string) {
+    return fetchWithToken<RuntimeBypassOfferDto>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/runtime-bypass`,
+      { method: 'POST', errorResponseHandler: sessionError }
     );
   },
 
