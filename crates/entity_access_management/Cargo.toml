@@ -24,19 +24,19 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 # Domain models (always included)
-macro_user_id = { path = "../macro_user_id" }
-model-entity = { path = "../model-entity" }
-models_entity_access_management = { path = "../models_entity_access_management", default-features = false }
-models_permissions = { path = "../models_permissions" }
+macro_user_id = { workspace = true }
+model-entity = { workspace = true }
+models_entity_access_management = { workspace = true }
+models_permissions = { workspace = true }
 
 # Database
-entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+entity_access_db_utils = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 cool_asserts = "2"
-macro_db_migrator = { path = "../macro_db_migrator" }
+macro_db_migrator = { workspace = true }
 mockall = { workspace = true }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

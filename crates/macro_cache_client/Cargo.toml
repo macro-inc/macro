@@ -23,7 +23,7 @@ verify_email_rate_limit = ["dep:email_validator"]
 
 [dependencies]
 anyhow = { workspace = true }
-email_validator = { path = "../email_validator", optional = true }
-macro_redis = { path = "../macro_redis" }
+email_validator = { workspace = true, optional = true }
+macro_redis = { workspace = true }
 redis = { workspace = true, features = ["tokio-rustls-comp"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

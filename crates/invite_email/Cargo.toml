@@ -7,10 +7,10 @@ version = "0.1.0"
 
 [dependencies]
 askama = { workspace = true }
-macro_env = { path = "../macro_env" }
-macro_user_id = { path = "../macro_user_id" }
-model-entity = { path = "../model-entity" }
-notification = { path = "../notification", default-features = false }
+macro_env = { workspace = true }
+macro_user_id = { workspace = true }
+model-entity = { workspace = true }
+notification = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 url = { workspace = true, features = ["serde"] }

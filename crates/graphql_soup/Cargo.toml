@@ -13,35 +13,35 @@ futures = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }
 chrono = { workspace = true }
-document_sub_type = { path = "../document_sub_type" }
-email = { path = "../email", default-features = false, features = [
+document_sub_type = { workspace = true, default-features = true }
+email = { workspace = true, features = [
   "axum",
   "inbound",
   "ports",
 ] }
-entity_access = { path = "../entity_access", default-features = false, features = [
+entity_access = { workspace = true, features = [
   "inbound",
 ] }
-filter_ast = { path = "../filter_ast" }
-graphql_common = { path = "../graphql_common" }
-graphql_soup_filter_input = { path = "../graphql_soup_filter_input", features = ["server"] }
-graphql_email = { path = "../graphql_email" }
-graphql_permission = { path = "../graphql_permission" }
-item_filters = { path = "../item_filters" }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
-macro_user_id = { path = "../macro_user_id" }
-model-entity = { path = "../model-entity" }
-model_file_type = { path = "../model_file_type" }
-models_grouping = { path = "../models_grouping" }
-models_pagination = { path = "../models_pagination" }
-models_soup = { path = "../models_soup" }
-predicate-index = { path = "../predicate_index" }
+filter_ast = { workspace = true }
+graphql_common = { workspace = true }
+graphql_soup_filter_input = { workspace = true, features = ["server"] }
+graphql_email = { workspace = true }
+graphql_permission = { workspace = true }
+item_filters = { workspace = true, default-features = true }
+macro_authorization = { workspace = true, features = ["axum"] }
+macro_user_id = { workspace = true }
+model-entity = { workspace = true }
+model_file_type = { workspace = true }
+models_grouping = { workspace = true }
+models_pagination = { workspace = true }
+models_soup = { workspace = true }
+predicate-index = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-soup = { path = "../soup", default-features = false, features = ["ports"] }
-soup-filter-projection = { path = "../soup_filter_projection" }
-soup_realtime = { path = "../soup_realtime", default-features = false, features = ["ports"] }
+soup = { workspace = true, features = ["ports"] }
+soup-filter-projection = { workspace = true, default-features = true }
+soup_realtime = { workspace = true, features = ["ports"] }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
@@ -50,5 +50,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 either = { workspace = true }
-model_owner = { path = "../model_owner" }
-models_properties = { path = "../models_properties" }
+model_owner = { workspace = true }
+models_properties = { workspace = true }

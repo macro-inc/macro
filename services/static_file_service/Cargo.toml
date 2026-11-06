@@ -30,19 +30,19 @@ aws-sdk-sqs.workspace = true
 axum = { workspace = true, features = ["tower-log", "ws"] }
 chrono = { workspace = true }
 doppler-config = { workspace = true }
-macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization" }
-macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
-macro_config = { path = "../../crates/macro_config" }
-macro_cors = { path = "../../crates/macro_cors" }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env = { path = "../../crates/macro_env" }
-macro_env_var = { path = "../../crates/macro_env_var" }
-macro_queues = { path = "../../crates/macro_queues" }
-model = { path = "../../crates/model" }
-models_sfs = { path = "../../crates/models_sfs" }
-s3_key = { path = "../../crates/s3_key" }
-secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+macro_auth = { workspace = true }
+macro_authorization = { workspace = true, default-features = true }
+macro_aws_config = { workspace = true, features = ["s3"] }
+macro_config = { workspace = true }
+macro_cors = { workspace = true }
+macro_entrypoint = { workspace = true }
+macro_env = { workspace = true }
+macro_env_var = { workspace = true }
+macro_queues = { workspace = true }
+model = { workspace = true }
+models_sfs = { workspace = true }
+s3_key = { workspace = true }
+secretsmanager_client = { workspace = true }
 serde = { workspace = true }
 serde_dynamo = { workspace = true }
 serde_json = { workspace = true }
@@ -56,5 +56,5 @@ utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid.workspace = true
 
-macro_service_urls = { path = "../../crates/macro_service_urls" }
+macro_service_urls = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

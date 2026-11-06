@@ -6,21 +6,21 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
-model = { path = "../model" }
-model_owner = { path = "../model_owner" }
-models_bulk_upload = { path = "../models_bulk_upload" }
-models_permissions = { path = "../models_permissions" }
+model = { workspace = true }
+model_owner = { workspace = true }
+models_bulk_upload = { workspace = true }
+models_permissions = { workspace = true }
 reqwest = { workspace = true, features = ["query"] }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-shared_entity_registry = { path = "../entity_registry/shared_entity_registry" }
+shared_entity_registry = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-bot_id = { path = "../bot_id" }
+bot_id = { workspace = true }
 tokio = { workspace = true }
 wiremock = { workspace = true }

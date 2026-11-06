@@ -55,7 +55,7 @@ ports = [
 
 [dependencies]
 # Core
-ai_toolset = { path = "../ai_toolset", optional = true }
+ai_toolset = { workspace = true, optional = true }
 anyhow = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",
@@ -63,57 +63,57 @@ async-stripe = { workspace = true, default-features = false, features = [
   "runtime-tokio-hyper",
 ] }
 async-trait = { workspace = true, optional = true }
-bot_id = { path = "../bot_id" }
+bot_id = { workspace = true }
 chrono = { workspace = true }
-channels = { path = "../channels", default-features = false, features = ["ports"] }
-contacts = { path = "../contacts", default-features = false, optional = true }
-database_env_vars = { path = "../database_env_vars", optional = true }
-macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+channels = { workspace = true, features = ["ports"] }
+contacts = { workspace = true, optional = true }
+database_env_vars = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = [
   "axum",
 ] }
-macro_entrypoint = { path = "../macro_entrypoint", optional = true }
-macro_event_broker = { path = "../macro_event_broker", default-features = false }
-macro_event_topics = { path = "../macro_event_topics" }
-macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid" }
-model_owner = { path = "../model_owner" }
-models_permissions = { path = "../models_permissions" }
-non_empty = { path = "../non_empty" }
-roles_and_permissions = { path = "../roles_and_permissions", default-features = false, features = [
+macro_entrypoint = { workspace = true, optional = true }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+model_owner = { workspace = true }
+models_permissions = { workspace = true }
+non_empty = { workspace = true }
+roles_and_permissions = { workspace = true, features = [
   "ports",
 ] }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-shared_entity_registry = { path = "../entity_registry/shared_entity_registry" }
+shared_entity_registry = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 
-entity_access = { path = "../entity_access", default-features = false }
-generic_email_domains = { path = "../generic_email_domains" }
+entity_access = { workspace = true }
+generic_email_domains = { workspace = true }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
-model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user" }
+model-error-response = { workspace = true, optional = true }
+model_user = { workspace = true }
 utoipa = { workspace = true, optional = true }
 
 # Notification dependencies (for ports)
-model-entity = { path = "../model-entity", optional = true }
-model_notifications = { path = "../model_notifications", optional = true }
-notification = { path = "../notification", optional = true, default-features = false }
+model-entity = { workspace = true, optional = true }
+model_notifications = { workspace = true, optional = true }
+notification = { workspace = true, optional = true }
 
 # Outbound dependencies
-analytics_client = { path = "../analytics_client", optional = true }
-entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
-models_email = { path = "../models_email", optional = true }
+analytics_client = { workspace = true, optional = true }
+entity_access_db_utils = { workspace = true, optional = true }
+models_email = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
-sqs_client = { path = "../sqs_client", default-features = false, features = [
+sqs_client = { workspace = true, features = [
   "email",
 ], optional = true }
 url = { workspace = true, optional = true }
@@ -121,7 +121,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 wiremock = { workspace = true }
-macro_db_migrator = { path = "../macro_db_migrator" }
-models_pagination = { path = "../models_pagination" }
+macro_db_migrator = { workspace = true }
+models_pagination = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

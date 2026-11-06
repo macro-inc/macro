@@ -5,18 +5,18 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-entity_access_db_utils = { path = "../../entity_access_db_utils" }
-entity_registry = { path = "../entity_registry" }
+entity_access_db_utils = { workspace = true }
+entity_registry = { workspace = true }
 chrono = { workspace = true }
-model_owner = { path = "../../model_owner", features = ["sqlx"] }
+model_owner = { workspace = true, features = ["sqlx"] }
 rootcause = { workspace = true }
-shared_entity_registry = { path = "../shared_entity_registry" }
+shared_entity_registry = { workspace = true }
 sqlx = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
-bot_id = { path = "../../bot_id" }
-macro_db_migrator = { path = "../../macro_db_migrator" }
+bot_id = { workspace = true }
+macro_db_migrator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

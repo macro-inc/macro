@@ -13,22 +13,22 @@ aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["sqs"] }
 chrono = { workspace = true }
-connection_gateway_client = { path = "../../crates/connection_gateway_client" }
-document_storage_service_client = { path = "../../crates/document_storage_service_client" }
-dynamodb_client = { path = "../../crates/dynamodb_client" }
+connection_gateway_client = { workspace = true }
+document_storage_service_client = { workspace = true }
+dynamodb_client = { workspace = true }
 futures = { workspace = true }
 lambda_runtime = { workspace = true }
-macro_aws_config = { path = "../../crates/macro_aws_config" }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env_var = { path = "../../crates/macro_env_var" }
-model = { path = "../../crates/model" }
-model-entity = { path = "../../crates/model-entity" }
-models_bulk_upload = { path = "../../crates/models_bulk_upload" }
+macro_aws_config = { workspace = true }
+macro_entrypoint = { workspace = true }
+macro_env_var = { workspace = true }
+model = { workspace = true }
+model-entity = { workspace = true }
+models_bulk_upload = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-macro_service_urls = { path = "../../crates/macro_service_urls" }
+macro_service_urls = { workspace = true }
 sha2 = { workspace = true }
-sqs_client = { path = "../../crates/sqs_client" }
+sqs_client = { workspace = true, default-features = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }

@@ -7,15 +7,15 @@ publish = false
 [dependencies]
 # The agent-session id vocabulary only. `default-features = false` drops the
 # fold's developer binaries, which want clap and tokio; the newtype does not.
-agent_fold = { path = "../folds/agent_fold", default-features = false }
-ai_toolset = { path = "../ai_toolset" }
+agent_fold = { workspace = true }
+ai_toolset = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true, features = ["ws", "form"] }
 base64 = { workspace = true }
 bytes = { workspace = true }
-entity_access = { path = "../entity_access", default-features = false, features = ["ports", "inbound"] }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
-macro_user_id = { path = "../macro_user_id" }
+entity_access = { workspace = true, features = ["ports", "inbound"] }
+macro_authorization = { workspace = true, features = ["axum"] }
+macro_user_id = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true, features = ["client", "http1"] }
 hyper-util = { workspace = true }
@@ -37,10 +37,10 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 uuid = { workspace = true, features = ["v7", "serde"] }
 sqlx = { workspace = true }
 chrono = { workspace = true }
-macro_tower_layers = { path = "../macro_tower_layers" }
+macro_tower_layers = { workspace = true }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../macro_db_migrator" }
+macro_db_migrator = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 tempfile = "3"
 tower = { workspace = true }

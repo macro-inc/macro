@@ -6,25 +6,25 @@ version = "0.1.0"
 
 [dependencies]
 aws-sdk-sqs = { workspace = true }
-bot_id = { path = "../../crates/bot_id" }
-channel_sender = { path = "../../crates/channel_sender" }
-channels = { path = "../../crates/channels", features = ["outbound"] }
+bot_id = { workspace = true }
+channel_sender = { workspace = true }
+channels = { workspace = true, features = ["outbound"] }
 chrono = { workspace = true }
-database_env_vars = { path = "../../crates/database_env_vars" }
-entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
-import = { path = "../../crates/import" }
-macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
-macro_config = { path = "../../crates/macro_config" }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_queues = { path = "../../crates/macro_queues" }
-macro_service_urls = { path = "../../crates/macro_service_urls" }
-macro_user_id = { path = "../../crates/macro_user_id" }
-mention_utils = { path = "../../crates/mention_utils" }
-messages = { path = "../../crates/messages", features = ["outbound"] }
+database_env_vars = { workspace = true }
+entity_access = { workspace = true, features = ["outbound"] }
+import = { workspace = true }
+macro_aws_config = { workspace = true, features = ["s3"] }
+macro_config = { workspace = true }
+macro_entrypoint = { workspace = true }
+macro_queues = { workspace = true }
+macro_service_urls = { workspace = true }
+macro_user_id = { workspace = true }
+mention_utils = { workspace = true }
+messages = { workspace = true, features = ["outbound"] }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-slack_integration = { path = "../../crates/slack_integration", features = ["postgres", "s3", "sqs", "search", "worker"] }
+slack_integration = { workspace = true, features = ["postgres", "s3", "sqs", "search", "worker"] }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }

@@ -32,7 +32,7 @@ redis-tests = []
 schema = ["dep:utoipa", "macro_user_id/schema", "notification_state/schema"]
 
 [dependencies]
-ai_toolset = { path = "../ai_toolset", optional = true }
+ai_toolset = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 aquamarine = { version = "0.6", optional = true }
 async-trait = { workspace = true, optional = true }
@@ -40,32 +40,32 @@ aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, optional = true }
-broadcast = { path = "../broadcast" }
+broadcast = { workspace = true }
 chrono = { workspace = true }
-cowlike = { path = "../cowlike" }
+cowlike = { workspace = true }
 either = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 hmac = { workspace = true }
 itertools = { workspace = true }
-kafka_util = { path = "../kafka_util", optional = true }
-last_online_tracker = { path = "../last_online_tracker" }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+kafka_util = { workspace = true, optional = true }
+last_online_tracker = { workspace = true }
+macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
-macro_env = { path = "../macro_env" }
-macro_event_broker = { path = "../macro_event_broker", default-features = false }
-macro_event_topics = { path = "../macro_event_topics" }
-macro_service_urls = { path = "../macro_service_urls" }
-macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid" }
-model-entity = { path = "../model-entity" }
-model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true }
-models_pagination = { path = "../models_pagination" }
-notification_state = { path = "../notification_state", features = ["postgres"] }
+macro_env = { workspace = true }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_service_urls = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+model-entity = { workspace = true }
+model-error-response = { workspace = true, optional = true }
+model_user = { workspace = true, optional = true }
+models_pagination = { workspace = true }
+notification_state = { workspace = true, features = ["postgres"] }
 opentelemetry = { workspace = true, features = ["trace"] }
-rate_limit = { path = "../rate_limit" }
+rate_limit = { workspace = true }
 rdkafka = { workspace = true, optional = true }
 redis = { workspace = true, features = [
   "aio",
@@ -96,8 +96,8 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
 tracing-subscriber = { workspace = true }
 http-body-util = { workspace = true }
-macro_db_migrator = { path = "../macro_db_migrator" }
-rate_limit = { path = "../rate_limit", features = ["testing"] }
+macro_db_migrator = { workspace = true }
+rate_limit = { workspace = true, features = ["testing"] }
 tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 tower = { workspace = true }
 wiremock = { workspace = true }

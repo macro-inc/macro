@@ -8,14 +8,14 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true }
-macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
+macro_aws_config = { workspace = true, features = ["s3"] }
 aws-sdk-sns = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["s3"] }
 lambda_runtime = { workspace = true }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env_var = { path = "../../crates/macro_env_var" }
-s3_client = { path = "../../crates/s3_client" }
-sns_client = { path = "../../crates/sns_client" }
+macro_entrypoint = { workspace = true }
+macro_env_var = { workspace = true }
+s3_client = { workspace = true }
+sns_client = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

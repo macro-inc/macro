@@ -61,38 +61,38 @@ postgres = [
 ]
 
 [dependencies]
-database_sql = { path = "../database_sql" }
-activity = { path = "../activity", default-features = false }
-ai_toolset = { path = "../ai_toolset", optional = true }
+database_sql = { workspace = true }
+activity = { workspace = true }
+ai_toolset = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
-bot_id = { path = "../bot_id" }
+bot_id = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
-connection_gateway_client = { path = "../connection_gateway_client", optional = true }
-database_env_vars = { path = "../database_env_vars", optional = true }
-entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
-entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
-entity_mutation = { path = "../entity_mutation", optional = true }
-macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
-macro_entrypoint = { path = "../macro_entrypoint", optional = true }
-macro_event_broker = { path = "../macro_event_broker", default-features = false }
-macro_event_topics = { path = "../macro_event_topics" }
-macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid" }
-model-entity = { path = "../model-entity" }
-model-error-response = { path = "../model-error-response", optional = true }
-models_databases = { path = "../models_databases" }
-models_properties = { path = "../models_properties" }
-models_permissions = { path = "../models_permissions" }
-properties = { path = "../properties", optional = true, default-features = false, features = ["outbound"] }
+connection_gateway_client = { workspace = true, optional = true }
+database_env_vars = { workspace = true, optional = true }
+entity_access = { workspace = true, optional = true, features = ["ports"] }
+entity_access_db_utils = { workspace = true, optional = true }
+entity_mutation = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+macro_entrypoint = { workspace = true, optional = true }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+model-entity = { workspace = true }
+model-error-response = { workspace = true, optional = true }
+models_databases = { workspace = true }
+models_properties = { workspace = true }
+models_permissions = { workspace = true }
+properties = { workspace = true, optional = true, features = ["outbound"] }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
+share_permission_db_utils = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
@@ -104,10 +104,10 @@ url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
-macro_db_migrator = { path = "../macro_db_migrator" }
-model_owner = { path = "../model_owner" }
+entity_access = { workspace = true, features = ["outbound"] }
+macro_db_migrator = { workspace = true }
+model_owner = { workspace = true }
 # The palette the fakes colour new options from.
-properties = { path = "../properties", default-features = false }
+properties = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }

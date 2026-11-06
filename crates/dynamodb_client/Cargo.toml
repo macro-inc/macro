@@ -10,10 +10,10 @@ local = []
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
-macro_aws_config = { path = "../macro_aws_config" }
+macro_aws_config = { workspace = true }
 chrono = { workspace = true }
-models_bulk_upload = { path = "../models_bulk_upload" }
-s3_key = { path = "../s3_key" }
+models_bulk_upload = { workspace = true }
+s3_key = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }

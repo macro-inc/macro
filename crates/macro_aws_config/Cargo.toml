@@ -10,7 +10,7 @@ sqs = ["dep:aws-sdk-sqs"]
 
 [dependencies]
 aws-config = { workspace = true }
-macro_env_var = { path = "../macro_env_var" }
+macro_env_var = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }

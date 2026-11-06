@@ -12,15 +12,15 @@ schema = ["dep:schemars", "dep:utoipa", "notification_state/schema"]
 
 [dependencies]
 chrono = { workspace = true }
-document_sub_type = { path = "../document_sub_type", default-features = false }
+document_sub_type = { workspace = true }
 either = { workspace = true }
-filter_ast = { path = "../filter_ast" }
-macro_user_id = { path = "../macro_user_id" }
-model_file_type = { path = "../model_file_type" }
-model_owner = { path = "../model_owner" }
+filter_ast = { workspace = true }
+macro_user_id = { workspace = true }
+model_file_type = { workspace = true }
+model_owner = { workspace = true }
 nom = { workspace = true }
-non_empty = { path = "../non_empty" }
-notification_state = { path = "../notification_state" }
+non_empty = { workspace = true }
+notification_state = { workspace = true }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true, features = ["rc"] }

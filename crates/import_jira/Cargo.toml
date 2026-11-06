@@ -7,13 +7,13 @@ publish = false
 [dependencies]
 async-trait = { workspace = true }
 http = { workspace = true }
-macro_user_id = { path = "../macro_user_id" }
-pipedream_mcp = { path = "../pipedream_mcp" }
+macro_user_id = { workspace = true }
+pipedream_mcp = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-import_tracker = { path = "../import_tracker" }
+import_tracker = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

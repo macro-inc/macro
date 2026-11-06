@@ -18,39 +18,39 @@ name = "contacts_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
-agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
+agent_correlation = { workspace = true, features = ["http", "postgres"] }
 anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
-contacts = { path = "../../crates/contacts", features = ["axum"] }
-macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization", features = [
+contacts = { workspace = true, default-features = true, features = ["axum"] }
+macro_auth = { workspace = true }
+macro_authorization = { workspace = true, default-features = true, features = [
   "postgres",
 ] }
-macro_aws_config = { path = "../../crates/macro_aws_config" }
-macro_cors = { path = "../../crates/macro_cors" }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env = { path = "../../crates/macro_env" }
-macro_user_id = { path = "../../crates/macro_user_id" }
-model = { path = "../../crates/model" }
-rate_limit = { path = "../../crates/rate_limit", features = ["axum"] }
+macro_aws_config = { workspace = true }
+macro_cors = { workspace = true }
+macro_entrypoint = { workspace = true }
+macro_env = { workspace = true }
+macro_user_id = { workspace = true }
+model = { workspace = true }
+rate_limit = { workspace = true, features = ["axum"] }
 redis = { workspace = true }
-secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+secretsmanager_client = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
-sqs_worker = { path = "../../crates/sqs_worker" }
+sqs_worker = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
-macro_service_urls = { path = "../../crates/macro_service_urls" }
+macro_service_urls = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
-macro_env_var = { path = "../../crates/macro_env_var" }
-macro_queues = { path = "../../crates/macro_queues" }
-macro_config = { path = "../../crates/macro_config" }
-database_env_vars = { path = "../../crates/database_env_vars" }
+macro_env_var = { workspace = true }
+macro_queues = { workspace = true }
+macro_config = { workspace = true }
+database_env_vars = { workspace = true }
 doppler-config = { workspace = true }
 
 [features]

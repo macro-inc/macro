@@ -5,7 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-macro_env_var = { path = "../macro_env_var" }
+macro_env_var = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 serde_json = { workspace = true }
 tracing = { workspace = true }

@@ -7,7 +7,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 dotenvy = { workspace = true }
-macro_auth = { path = "../macro_auth" }
+macro_auth = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 url = { workspace = true }

@@ -12,7 +12,7 @@ postgres = ["dep:sqlx"]
 [dependencies]
 async-trait = { workspace = true }
 axum = { workspace = true, optional = true }
-macro_auth = { path = "../macro_auth", optional = true }
+macro_auth = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_urlencoded = { workspace = true, optional = true }
@@ -24,8 +24,8 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-macro_auth = { path = "../macro_auth", features = ["testing"] }
-macro_db_migrator = { path = "../macro_db_migrator" }
+macro_auth = { workspace = true, features = ["testing"] }
+macro_db_migrator = { workspace = true }
 serde_json = { workspace = true }
 tower = { workspace = true, features = ["util"] }
 

@@ -5,18 +5,18 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-cache-core = { path = "../client/cache-core" }
+cache-core = { workspace = true }
 chrono = { workspace = true }
-graphql_soup_filter_input = { path = "../graphql_soup_filter_input" }
+graphql_soup_filter_input = { workspace = true }
 indexmap = { workspace = true }
-item-filter-index = { path = "../item_filter_index" }
-predicate-index = { path = "../predicate_index" }
+item-filter-index = { workspace = true }
+predicate-index = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
-soup-filter-projection = { path = "../soup_filter_projection", default-features = false }
+soup-filter-projection = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-cache-turso = { path = "../client/cache-turso" }
+cache-turso = { workspace = true }
 pollster = { workspace = true }

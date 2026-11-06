@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 chrono = { workspace = true }
-macro_tower_layers = { path = "../macro_tower_layers" }
+macro_tower_layers = { workspace = true }
 reqwest = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

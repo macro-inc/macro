@@ -14,11 +14,11 @@ path = "src/openapi.rs"
 
 [dependencies]
 axum = { workspace = true, features = ["tower-log", "ws"] }
-entity_access = { path = "../entity_access" }
-macro_authorization = { path = "../macro_authorization" }
-models_properties = { path = "../models_properties" }
-notification = { path = "../notification" }
-properties = { path = "../properties" }
+entity_access = { workspace = true, default-features = true }
+macro_authorization = { workspace = true, default-features = true }
+models_properties = { workspace = true }
+notification = { workspace = true, default-features = true }
+properties = { workspace = true, default-features = true }
 serde_json = { workspace = true }
 utoipa = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

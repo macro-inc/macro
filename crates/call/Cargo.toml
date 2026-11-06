@@ -38,56 +38,56 @@ outbound = [
 ports = ["dep:entity_access", "dep:tokio", "dep:async-trait", "dep:messages", "dep:futures"]
 
 [dependencies]
-activity = { path = "../activity", default-features = false }
-agent = { path = "../agent", optional = true }
-ai_usage = { path = "../ai_usage", optional = true }
-ai_toolset = { path = "../ai_toolset", optional = true }
+activity = { workspace = true }
+agent = { workspace = true, optional = true }
+ai_usage = { workspace = true, optional = true }
+ai_toolset = { workspace = true, optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
-bot_id = { path = "../bot_id" }
+bot_id = { workspace = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 cloudfront_sign = { workspace = true, optional = true }
-ip_extractor = { path = "../ip_extractor", optional = true }
-rate_limit = { path = "../rate_limit", features = ["axum"], optional = true }
-channels = { path = "../channels", default-features = false, optional = true }
-connection = { path = "../connection", default-features = false, features = [
+ip_extractor = { workspace = true, optional = true }
+rate_limit = { workspace = true, features = ["axum"], optional = true }
+channels = { workspace = true, optional = true }
+connection = { workspace = true, features = [
   "ports",
 ] }
-entity_access = { path = "../entity_access", optional = true, default-features = false, features = [
+entity_access = { workspace = true, optional = true, features = [
   "ports",
 ] }
-entity_mutation = { path = "../entity_mutation" }
-entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
-filter_ast = { path = "../filter_ast" }
+entity_mutation = { workspace = true }
+entity_access_db_utils = { workspace = true, optional = true }
+filter_ast = { workspace = true }
 futures = { workspace = true, optional = true }
-item_filters = { path = "../item_filters" }
-invite_email = { path = "../invite_email" }
+item_filters = { workspace = true, default-features = true }
+invite_email = { workspace = true }
 livekit-api = { workspace = true, optional = true }
 livekit-protocol = { workspace = true, optional = true }
-macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+macro_authorization = { workspace = true, optional = true, features = [
   "axum",
 ] }
-macro_aws_config = { path = "../macro_aws_config", optional = true, features = [
+macro_aws_config = { workspace = true, optional = true, features = [
   "s3",
 ] }
-macro_event_broker = { path = "../macro_event_broker", default-features = false }
-macro_event_topics = { path = "../macro_event_topics" }
-macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid" }
-feature_flags = { path = "../feature_flags", optional = true }
-messages = { path = "../messages", default-features = false, features = ["ports"], optional = true }
-model-entity = { path = "../model-entity" }
-model-error-response = { path = "../model-error-response", optional = true }
-models_pagination = { path = "../models_pagination" }
-models_permissions = { path = "../models_permissions" }
-notification = { path = "../notification" }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+feature_flags = { workspace = true, optional = true }
+messages = { workspace = true, features = ["ports"], optional = true }
+model-entity = { workspace = true }
+model-error-response = { workspace = true, optional = true }
+models_pagination = { workspace = true }
+models_permissions = { workspace = true }
+notification = { workspace = true, default-features = true }
 rootcause = { workspace = true }
 pgvector = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
-share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
+share_permission_db_utils = { workspace = true, optional = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
@@ -102,10 +102,10 @@ subtle = { workspace = true }
 
 [dev-dependencies]
 base64 = { workspace = true }
-macro_db_migrator = { path = "../macro_db_migrator" }
+macro_db_migrator = { workspace = true }
 mockall = { workspace = true }
-model_user = { path = "../model_user" }
-rate_limit = { path = "../rate_limit", features = ["axum", "testing"] }
+model_user = { workspace = true }
+rate_limit = { workspace = true, features = ["axum", "testing"] }
 rootcause = { workspace = true }
 sha2 = { workspace = true }
 sqlx = { workspace = true }

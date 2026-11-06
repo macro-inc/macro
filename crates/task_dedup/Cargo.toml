@@ -37,20 +37,20 @@ default = ["backfill"]
 
 [dependencies]
 rootcause = { workspace = true }
-agent = { path = "../agent" }
-ai_usage = { path = "../ai_usage" }
+agent = { workspace = true }
+ai_usage = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-connection_gateway_client = { path = "../connection_gateway_client" }
-embedding = { path = "../embedding" }
+connection_gateway_client = { workspace = true }
+embedding = { workspace = true }
 futures = { workspace = true }
-lexical_client = { path = "../lexical_client" }
-model-entity = { path = "../model-entity" }
+lexical_client = { workspace = true }
+model-entity = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
-system_properties = { path = "../system_properties" }
+system_properties = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
@@ -59,21 +59,21 @@ uuid = { workspace = true }
 # Optional — only compiled in for the `backfill` feature (the backfill binary).
 aws-sdk-secretsmanager = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
-macro_aws_config = { path = "../macro_aws_config", optional = true }
-macro_entrypoint = { path = "../macro_entrypoint", optional = true }
-macro_env = { path = "../macro_env", optional = true }
-secretsmanager_client = { path = "../secretsmanager_client", optional = true }
+macro_aws_config = { workspace = true, optional = true }
+macro_entrypoint = { workspace = true, optional = true }
+macro_env = { workspace = true, optional = true }
+secretsmanager_client = { workspace = true, optional = true }
 tokio = { workspace = true, features = [
   "macros",
   "rt-multi-thread",
 ], optional = true }
-macro_env_var = { path = "../macro_env_var", optional = true }
+macro_env_var = { workspace = true, optional = true }
 
-macro_service_urls = { path = "../macro_service_urls" }
+macro_service_urls = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 automod = { workspace = true }
-macro_db_migrator = { path = "../macro_db_migrator" }
-macro_env_var = { path = "../macro_env_var" }
+macro_db_migrator = { workspace = true }
+macro_env_var = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

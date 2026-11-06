@@ -14,11 +14,11 @@ axum = { workspace = true }
 axum-extra = { workspace = true, features = ["cookie", "typed-header"] }
 cookie = { workspace = true }
 jsonwebtoken = { workspace = true }
-macro_env = { path = "../macro_env" }
-macro_env_var = { path = "../macro_env_var" }
-macro_user_id = { path = "../macro_user_id" }
+macro_env = { workspace = true }
+macro_env_var = { workspace = true }
+macro_user_id = { workspace = true }
 rand = { workspace = true }
-remote_env_var = { path = "../remote_env_var" }
+remote_env_var = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

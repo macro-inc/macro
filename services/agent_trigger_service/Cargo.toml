@@ -9,40 +9,40 @@ name = "agent_trigger_service"
 path = "src/main.rs"
 
 [dependencies]
-ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
-roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
-teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
-initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
-crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
-call = { path = "../../crates/call", default-features = false, features = ["outbound"] }
-agent_session = { path = "../../crates/agent_session" }
-agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
-jev = { path = "../../crates/jev", features = ["outbound"] }
-ai_usage = { path = "../../crates/ai_usage" }
+ai_billing = { workspace = true, features = ["pg-admission"] }
+roles_and_permissions = { workspace = true, features = ["outbound"] }
+teams = { workspace = true, features = ["outbound"] }
+initiative = { workspace = true, features = ["postgres"] }
+crm = { workspace = true, features = ["lookup"] }
+call = { workspace = true, features = ["outbound"] }
+agent_session = { workspace = true, default-features = true }
+agent_trigger = { workspace = true, features = ["outbound"] }
+jev = { workspace = true, features = ["outbound"] }
+ai_usage = { workspace = true }
 anyhow = { workspace = true }
-bots = { path = "../../crates/bots", default-features = false, features = ["outbound", "ports"] }
-channels = { path = "../../crates/channels", default-features = false, features = ["outbound", "ports"] }
-connection_gateway_client = { path = "../../crates/connection_gateway_client" }
-database_env_vars = { path = "../../crates/database_env_vars" }
-document_storage_service_client = { path = "../../crates/document_storage_service_client" }
-entity_access = { path = "../../crates/entity_access" }
-entity_registry = { path = "../../crates/entity_registry/entity_registry", default-features = false }
-entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
-kafka_util = { path = "../../crates/kafka_util" }
-lexical_client = { path = "../../crates/lexical_client" }
-macro_config = { path = "../../crates/macro_config" }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env_var = { path = "../../crates/macro_env_var" }
-macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
-macro_service_urls = { path = "../../crates/macro_service_urls" }
-messages = { path = "../../crates/messages", features = ["broker", "delivery", "outbound"] }
-properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
+bots = { workspace = true, features = ["outbound", "ports"] }
+channels = { workspace = true, features = ["outbound", "ports"] }
+connection_gateway_client = { workspace = true }
+database_env_vars = { workspace = true }
+document_storage_service_client = { workspace = true }
+entity_access = { workspace = true, default-features = true }
+entity_registry = { workspace = true }
+entity_registry_db_utils = { workspace = true }
+kafka_util = { workspace = true }
+lexical_client = { workspace = true }
+macro_config = { workspace = true }
+macro_entrypoint = { workspace = true }
+macro_env_var = { workspace = true }
+macro_event_broker = { workspace = true, default-features = true, features = ["outbound"] }
+macro_service_urls = { workspace = true }
+messages = { workspace = true, features = ["broker", "delivery", "outbound"] }
+properties = { workspace = true, features = ["outbound"] }
 rdkafka = { workspace = true }
 rootcause = { workspace = true }
-system_properties = { path = "../../crates/system_properties" }
+system_properties = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
-static_file = { path = "../../crates/static_file" }
+static_file = { workspace = true, default-features = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

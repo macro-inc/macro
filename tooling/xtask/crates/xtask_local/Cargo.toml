@@ -20,14 +20,14 @@ aws-sdk-kms = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 clap = { workspace = true }
-macro_aws_config = { path = "../../../../crates/macro_aws_config" }
-macro_queues = { path = "../../../../crates/macro_queues" }
+macro_aws_config = { workspace = true }
+macro_queues = { workspace = true }
 serde = { workspace = true }
 # Content-address the init snapshots (`stack up` restore/save keys).
 sha2 = { workspace = true }
 tokio = { workspace = true }
 # Source of truth for the declared Kafka topics (local-stack provisioning).
-macro_event_topics = { path = "../../../../crates/macro_event_topics" }
+macro_event_topics = { workspace = true }
 # AdminClient for creating the declared topics on the local broker. Optional
 # (behind `local-stack`) so plain xtask builds don't spend time compiling the
 # bundled static librdkafka dependency.
@@ -48,8 +48,8 @@ dotenvy = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 # Signal the frontend dev server's whole process group on shutdown.
 libc = "0.2"
-macro_env_var = { path = "../../../../crates/macro_env_var" }
-xtask_paths = { path = "../xtask_paths" }
+macro_env_var = { workspace = true }
+xtask_paths = { workspace = true }
 
 [dev-dependencies]
 jsonwebtoken = { workspace = true }

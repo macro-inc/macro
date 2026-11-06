@@ -36,41 +36,41 @@ schema = ["channel_sender/schema", "dep:utoipa", "activity/schema"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]
-activity = { path = "../activity", default-features = false }
-ai_toolset = { path = "../ai_toolset", optional = true }
+activity = { workspace = true }
+ai_toolset = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
-ip_extractor = { path = "../ip_extractor", optional = true }
-rate_limit = { path = "../rate_limit", features = ["axum"], optional = true }
+ip_extractor = { workspace = true, optional = true }
+rate_limit = { workspace = true, features = ["axum"], optional = true }
 futures = { workspace = true, optional = true }
-bot_id = { path = "../bot_id" }
-channel_sender = { path = "../channel_sender" }
+bot_id = { workspace = true }
+channel_sender = { workspace = true }
 chrono = { workspace = true }
-connection_gateway_client = { path = "../connection_gateway_client", optional = true }
-entity_access = { path = "../entity_access", default-features = false, optional = true }
-initiative = { path = "../initiative", default-features = false, features = ["ports"], optional = true }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+connection_gateway_client = { workspace = true, optional = true }
+entity_access = { workspace = true, optional = true }
+initiative = { workspace = true, features = ["ports"], optional = true }
+macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
-macro_event_broker = { path = "../macro_event_broker", default-features = false, optional = true }
-macro_event_topics = { path = "../macro_event_topics", optional = true }
-macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid", optional = true }
+macro_event_broker = { workspace = true, optional = true }
+macro_event_topics = { workspace = true, optional = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true, optional = true }
 mockall = { workspace = true, optional = true }
-model = { path = "../model", optional = true }
-model-entity = { path = "../model-entity", optional = true }
-model_notifications = { path = "../model_notifications", optional = true }
-model_owner = { path = "../model_owner", optional = true }
-models_pagination = { path = "../models_pagination" }
-models_properties = { path = "../models_properties", optional = true }
-properties = { path = "../properties", default-features = false, features = ["ports"], optional = true }
-notification = { path = "../notification", optional = true }
+model = { workspace = true, optional = true }
+model-entity = { workspace = true, optional = true }
+model_notifications = { workspace = true, optional = true }
+model_owner = { workspace = true, optional = true }
+models_pagination = { workspace = true }
+models_properties = { workspace = true, optional = true }
+properties = { workspace = true, features = ["ports"], optional = true }
+notification = { workspace = true, default-features = true, optional = true }
 rootcause = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
-system_properties = { path = "../system_properties", optional = true }
+system_properties = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
@@ -78,7 +78,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-initiative = { path = "../initiative", default-features = false, features = ["postgres"] }
-macro_db_migrator = { path = "../macro_db_migrator" }
-models_permissions = { path = "../models_permissions" }
+initiative = { workspace = true, features = ["postgres"] }
+macro_db_migrator = { workspace = true }
+models_permissions = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

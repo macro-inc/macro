@@ -8,4 +8,4 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 guppy = { workspace = true }
-xtask_paths = { path = "../xtask_paths" }
+xtask_paths = { workspace = true }

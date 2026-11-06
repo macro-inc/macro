@@ -28,21 +28,21 @@ outbound = [
 ]
 
 [dependencies]
-ai_usage = { path = "../ai_usage" }
+ai_usage = { workspace = true }
 async-openai = { workspace = true, optional = true, features = ["audio"] }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 backoff = { workspace = true, optional = true }
 bytes = { workspace = true }
 infer = { workspace = true }
-macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+macro_authorization = { workspace = true, optional = true, features = [
   "axum",
 ] }
-macro_env_var = { path = "../macro_env_var", optional = true }
-macro_user_id = { path = "../macro_user_id" }
-model-error-response = { path = "../model-error-response", optional = true }
+macro_env_var = { workspace = true, optional = true }
+macro_user_id = { workspace = true }
+model-error-response = { workspace = true, optional = true }
 opus-pure = { workspace = true, optional = true }
-rate_limit = { path = "../rate_limit", optional = true, default-features = false }
+rate_limit = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
@@ -55,8 +55,8 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
-model_user = { path = "../model_user" }
-rate_limit = { path = "../rate_limit", default-features = false, features = [
+model_user = { workspace = true }
+rate_limit = { workspace = true, features = [
   "axum",
   "testing",
 ] }

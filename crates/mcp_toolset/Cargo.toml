@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-ai_toolset = { path = "../ai_toolset" }
+ai_toolset = { workspace = true }
 anyhow.workspace = true
 futures.workspace = true
 rmcp = { workspace = true, features = ["client"] }

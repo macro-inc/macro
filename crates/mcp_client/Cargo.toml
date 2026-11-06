@@ -10,22 +10,22 @@ providers = ["macro_env_var"]
 
 [dependencies]
 aes-gcm = "0.10"
-agent = { path = "../agent" }
-ai_toolset = { path = "../ai_toolset" }
+agent = { workspace = true }
+ai_toolset = { workspace = true }
 anyhow.workspace = true
-authentication_service_client = { path = "../authentication_service_client" }
+authentication_service_client = { workspace = true }
 async-trait.workspace = true
 oauth2 = { version = "5.0", default-features = false }
 base64.workspace = true
 async-openai.workspace = true
 axum.workspace = true
 futures.workspace = true
-macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+macro_authorization = { workspace = true, features = [
   "axum",
 ] }
-macro_env_var = { path = "../macro_env_var", optional = true }
-macro_user_id = { path = "../macro_user_id" }
-model-error-response = { path = "../model-error-response" }
+macro_env_var = { workspace = true, optional = true }
+macro_user_id = { workspace = true }
+model-error-response = { workspace = true }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
 reqwest.workspace = true
 rmcp = { workspace = true, features = ["auth", "client", "transport-streamable-http-client-reqwest"] }

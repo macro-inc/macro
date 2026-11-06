@@ -33,12 +33,12 @@ ports = []
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }
-cognition = { path = "../cognition" }
+cognition = { workspace = true }
 futures = { workspace = true }
-document_sub_type = { path = "../document_sub_type" }
-entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
-macro_user_id = { path = "../macro_user_id" }
-system_skills = { path = "../system_skills" }
+document_sub_type = { workspace = true, default-features = true }
+entity_access = { workspace = true, features = ["ports"] }
+macro_user_id = { workspace = true }
+system_skills = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "time"] }
@@ -47,37 +47,37 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 # AI toolset dependencies
-ai_toolset = { path = "../ai_toolset", optional = true }
+ai_toolset = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 
 # HTTP dependencies
 axum = { workspace = true, optional = true }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
 utoipa = { workspace = true, features = ["chrono"], optional = true }
 
 # Outbound dependencies
-cowlike = { path = "../cowlike", optional = true }
-documents = { path = "../documents", default-features = false, features = ["ports"], optional = true }
-email = { path = "../email", default-features = false, optional = true }
-filter_ast = { path = "../filter_ast", optional = true }
-item_filters = { path = "../item_filters", optional = true }
-lexical_client = { path = "../lexical_client", optional = true }
-models_pagination = { path = "../models_pagination", optional = true }
-models_search = { path = "../models_search", optional = true }
-models_soup = { path = "../models_soup", optional = true }
-search_service_client = { path = "../search_service_client", optional = true }
-soup = { path = "../soup", default-features = false, features = ["ports"], optional = true }
+cowlike = { workspace = true, optional = true }
+documents = { workspace = true, features = ["ports"], optional = true }
+email = { workspace = true, optional = true }
+filter_ast = { workspace = true, optional = true }
+item_filters = { workspace = true, default-features = true, optional = true }
+lexical_client = { workspace = true, optional = true }
+models_pagination = { workspace = true, optional = true }
+models_search = { workspace = true, optional = true }
+models_soup = { workspace = true, optional = true }
+search_service_client = { workspace = true, optional = true }
+soup = { workspace = true, features = ["ports"], optional = true }
 
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 async-trait = { workspace = true }
 axum = { workspace = true }
-model_user = { path = "../model_user" }
+model_user = { workspace = true }
 rootcause = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 tower = { workspace = true, features = ["util"] }

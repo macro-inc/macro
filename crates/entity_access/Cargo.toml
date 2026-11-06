@@ -40,26 +40,26 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 # Domain models (always included)
-bot_id = { path = "../bot_id" }
+bot_id = { workspace = true }
 rootcause = { workspace = true }
-macro_user_id = { path = "../macro_user_id" }
-model-entity = { path = "../model-entity" }
-models_entity_access_management = { path = "../models_entity_access_management" }
-models_permissions = { path = "../models_permissions" }
+macro_user_id = { workspace = true }
+model-entity = { workspace = true }
+models_entity_access_management = { workspace = true, default-features = true }
+models_permissions = { workspace = true }
 
 clap = { workspace = true, optional = true }
-database_env_vars = { path = "../database_env_vars", optional = true }
-macro_entrypoint = { path = "../macro_entrypoint", optional = true }
+database_env_vars = { workspace = true, optional = true }
+macro_entrypoint = { workspace = true, optional = true }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
-macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
-model = { path = "../model", optional = true }
-model-error-response = { path = "../model-error-response", optional = true }
-model_owner = { path = "../model_owner" }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+model = { workspace = true, optional = true }
+model-error-response = { workspace = true, optional = true }
+model_owner = { workspace = true }
 
 # OpenAPI schema (optional)
 utoipa = { workspace = true, optional = true }
@@ -71,10 +71,10 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 cool_asserts = "2"
-harness_id = { path = "../harness_id" }
-macro_db_migrator = { path = "../macro_db_migrator" }
+harness_id = { workspace = true }
+macro_db_migrator = { workspace = true }
 mockall = { workspace = true }
-model_user = { path = "../model_user" }
+model_user = { workspace = true }
 rootcause = { workspace = true }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

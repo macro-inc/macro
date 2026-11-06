@@ -17,23 +17,23 @@ macro_db_client = ["dep:macro_db_client", "dep:sqlx"]
 tracking = ["dep:ip_extractor"]
 
 [dependencies]
-agent_correlation = { path = "../agent_correlation" }
+agent_correlation = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 axum-extra = { workspace = true }
-entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+entity_access_db_utils = { workspace = true, optional = true }
 http-body-util = { workspace = true }
-ip_extractor = { path = "../ip_extractor", optional = true }
-macro_db_client = { path = "../macro_db_client", optional = true }
-macro_env = { path = "../macro_env" }
-macro_env_var = { path = "../macro_env_var" }
-macro_user_id = { path = "../macro_user_id", optional = true }
-macro_uuid = { path = "../macro_uuid" }
-model = { path = "../model" }
-model-entity = { path = "../model-entity" }
-model_user = { path = "../model_user", optional = true }
-models_permissions = { path = "../models_permissions" }
-remote_env_var = { path = "../remote_env_var" }
+ip_extractor = { workspace = true, optional = true }
+macro_db_client = { workspace = true, default-features = true, optional = true }
+macro_env = { workspace = true }
+macro_env_var = { workspace = true }
+macro_user_id = { workspace = true, optional = true }
+macro_uuid = { workspace = true }
+model = { workspace = true }
+model-entity = { workspace = true }
+model_user = { workspace = true, optional = true }
+models_permissions = { workspace = true }
+remote_env_var = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }

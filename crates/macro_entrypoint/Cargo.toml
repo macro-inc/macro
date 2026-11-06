@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 dotenvy = { workspace = true }
-macro_env = { path = "../macro_env" }
+macro_env = { workspace = true }
 opentelemetry = { workspace = true, features = ["logs", "trace"] }
 opentelemetry_sdk = { workspace = true, features = ["logs", "rt-tokio", "trace"] }
 opentelemetry-appender-tracing = { workspace = true }
@@ -22,7 +22,7 @@ tracing-panic = "0.1"
 tracing-subscriber = { workspace = true }
 tracing-tree = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-macro_env_var = { path = "../macro_env_var" }
+macro_env_var = { workspace = true }
 
 [dev-dependencies]
 opentelemetry_sdk = { workspace = true, features = ["testing"] }

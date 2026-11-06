@@ -15,12 +15,12 @@ postgres = ["dep:recursion", "dep:serde_json", "dep:sqlx", "outbound"]
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
-cowlike = { path = "../cowlike" }
-filter_ast = { path = "../filter_ast" }
-item_filters = { path = "../item_filters" }
-macro_user_id = { path = "../macro_user_id" }
+cowlike = { workspace = true }
+filter_ast = { workspace = true }
+item_filters = { workspace = true, default-features = true }
+macro_user_id = { workspace = true }
 mockall = { workspace = true, optional = true }
-model-entity = { path = "../model-entity" }
+model-entity = { workspace = true }
 num-traits = { version = "0.2" }
 ordered-float = { workspace = true }
 recursion = { workspace = true, optional = true }
@@ -35,8 +35,8 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 cool_asserts = "2"
-item_filters = { path = "../item_filters", features = ["mock"] }
-macro_db_migrator = { path = "../macro_db_migrator" }
+item_filters = { workspace = true, default-features = true, features = ["mock"] }
+macro_db_migrator = { workspace = true }
 rand = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }

@@ -13,26 +13,26 @@ name = "email_focus_worker_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
-ai_usage = { path = "../../crates/ai_usage" }
-calendar_events = { path = "../../crates/calendar_events", features = ["postgres"] }
+ai_usage = { workspace = true }
+calendar_events = { workspace = true, features = ["postgres"] }
 chrono = { workspace = true }
-connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+connection_gateway_client = { workspace = true }
 doppler-config = { workspace = true }
-email = { path = "../../crates/email", default-features = false, features = ["outbound", "ports"] }
-jev = { path = "../../crates/jev", features = ["outbound"] }
-kafka_util = { path = "../../crates/kafka_util" }
-macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization", default-features = false, features = ["axum"] }
-macro_config = { path = "../../crates/macro_config" }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env = { path = "../../crates/macro_env" }
-macro_env_var = { path = "../../crates/macro_env_var" }
-macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
-macro_service_urls = { path = "../../crates/macro_service_urls" }
-macro_tower_layers = { path = "../../crates/macro_tower_layers" }
-macro_user_id = { path = "../../crates/macro_user_id" }
-memory = { path = "../../crates/memory" }
-models_email = { path = "../../crates/models_email" }
+email = { workspace = true, features = ["outbound", "ports"] }
+jev = { workspace = true, features = ["outbound"] }
+kafka_util = { workspace = true }
+macro_auth = { workspace = true }
+macro_authorization = { workspace = true, features = ["axum"] }
+macro_config = { workspace = true }
+macro_entrypoint = { workspace = true }
+macro_env = { workspace = true }
+macro_env_var = { workspace = true }
+macro_event_broker = { workspace = true, default-features = true, features = ["outbound"] }
+macro_service_urls = { workspace = true }
+macro_tower_layers = { workspace = true }
+macro_user_id = { workspace = true }
+memory = { workspace = true }
+models_email = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 rdkafka = { workspace = true }
 reqwest = { workspace = true }
@@ -44,10 +44,10 @@ tokio = { workspace = true, features = ["signal", "time"] }
 tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
-universal_input = { path = "../../crates/universal_input" }
+universal_input = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+macro_db_migrator = { workspace = true }
 wiremock = { workspace = true }

@@ -22,7 +22,7 @@ ports = ["dep:entity_access", "dep:tokio", "dep:tracing"]
 postgres = ["dep:sqlx", "outbound"]
 
 [dependencies]
-ai_toolset = { path = "../ai_toolset", optional = true }
+ai_toolset = { workspace = true, optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
@@ -30,13 +30,13 @@ axum = { workspace = true, optional = true }
 # repeated query keys into a vector; `axum::extract::Query` keeps only one.
 axum-extra = { workspace = true, optional = true, features = ["query"] }
 chrono = { workspace = true, features = ["serde"] }
-cowlike = { path = "../cowlike" }
-entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
-macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
-macro_user_id = { path = "../macro_user_id" }
+cowlike = { workspace = true }
+entity_access = { workspace = true, optional = true, features = ["ports"] }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+macro_user_id = { workspace = true }
 mockall = { workspace = true, optional = true }
-model-entity = { path = "../model-entity" }
-model-error-response = { path = "../model-error-response", optional = true }
+model-entity = { workspace = true }
+model-error-response = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
@@ -49,8 +49,8 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
-macro_db_migrator = { path = "../macro_db_migrator" }
-model_user = { path = "../model_user" }
+macro_db_migrator = { workspace = true }
+model_user = { workspace = true }
 rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

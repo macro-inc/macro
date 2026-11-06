@@ -6,10 +6,10 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
-email = { path = "../email", features = ["axum", "inbound"] }
-macro_tower_layers = { path = "../macro_tower_layers" }
-model = { path = "../model" }
-models_email = { path = "../models_email" }
+email = { workspace = true, features = ["axum", "inbound"] }
+macro_tower_layers = { workspace = true }
+model = { workspace = true }
+models_email = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
