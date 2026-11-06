@@ -259,11 +259,11 @@ export type ImportKind =
 
 /**  Which source's staged plan an import review presents. */
 export type ImportReviewSource =
-/**  A Notion workspace plan, staged by ImportFromNotion. */
+/**  A Notion workspace plan (`macro.imports.notion.plan()`). */
 "notion" |
-/**  A Linear plan, staged by ImportFromLinear. */
+/**  A Linear workspace plan (`macro.imports.linear.plan()`). */
 "linear" |
-/**  A Jira plan, staged by ImportFromJira. */
+/**  A Jira workspace plan (`macro.imports.jira.plan()`). */
 "jira";
 
 /**  Review item state, shared with notification consumers. */
