@@ -273,6 +273,7 @@ impl Fixture {
 
     fn prepare(&self) -> PrepareRoutineSession {
         PrepareRoutineSession {
+            origin: trigger_context::TriggerOrigin::Unknown,
             selection: self.selection(),
             session_id: self.session.id,
             source: SessionSource::Routine,
@@ -331,6 +332,7 @@ async fn external_preparation_uses_requested_identity_and_model() {
         assert_eq!(
             requests.as_slice(),
             &[RequestedExternalSession {
+                origin: trigger_context::TriggerOrigin::Unknown,
                 repo_url: None,
                 session_id: fx.session.id,
                 bot_id: fx.session.bot_id,
@@ -626,6 +628,7 @@ async fn a_routine_app_must_be_connected_to_save_and_to_run() {
     assert_eq!(
         fx.service
             .prepare(PrepareRoutineSession {
+                origin: trigger_context::TriggerOrigin::Unknown,
                 selection,
                 ..fx.prepare()
             })
