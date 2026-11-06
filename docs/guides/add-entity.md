@@ -309,11 +309,11 @@ appear in Home or Recent; say so in the PR.
 
 ## 10. Discussions and notifications (optional)
 
-- **Parent:** a `MessageParent` variant in `crates/messages/src/domain/models.rs`
+- **Parent:** a `MessageParent` variant in `crates/comms/messages/src/domain/models.rs`
   and a migration widening the parent-type CHECK (two-step, section 2). The
-  compiler then walks you through `crates/messages`, `agent_trigger`,
+  compiler then walks you through `crates/comms/messages`, `agent_trigger`,
   `agent_harness`, `agent_session`, `channel_bots`, and `coding_agent_worker`.
-  The discussion-parent authorization in `crates/messages/src/domain/service.rs`
+  The discussion-parent authorization in `crates/comms/messages/src/domain/service.rs`
   ends in a `Forbidden` arm.
 - **Not caught by the compiler:** the zod enum in
   `services/lexical-service/src/endpoints/agent-context.ts` and
@@ -322,7 +322,7 @@ appear in Home or Recent; say so in the PR.
 - **Notifications:** a metadata module in `crates/notifications/model_notifications/src/metadata/`
   with its `define_notif_event!` variant, a GraphQL event in
   `crates/graphql/graphql_notification/src/notification_event/`, the sender in
-  `crates/messages/src/outbound/notification_sender.rs`, and
+  `crates/comms/messages/src/outbound/notification_sender.rs`, and
   `BLOCKABLE_NOTIFICATIONS` in `services/notification_service/src/api/user_notification.rs`.
   The web list in `apps/web/src/features/notifications/notification-event-catalog.ts`
   must match it by hand.
@@ -336,14 +336,14 @@ Four vocabularies must agree:
 1. `packages/lexical-core/utils/mentions.ts` (block name to reference type). Its
    match ends in `P._ => 'document'`, so a missing kind becomes a document.
 2. `packages/lexical-core/utils/message-references.ts` (allowed reference kinds).
-3. `crates/messages/src/domain/mentions.rs` `MessageReferenceKind` and the
-   reference authorization in `crates/messages/src/domain/service.rs`. Unknown
+3. `crates/comms/messages/src/domain/mentions.rs` `MessageReferenceKind` and the
+   reference authorization in `crates/comms/messages/src/domain/service.rs`. Unknown
    kinds are stored without an access check.
-4. `crates/channels/src/domain/models.rs` `ReferencedShareItemType` and
+4. `crates/comms/channels/src/domain/models.rs` `ReferencedShareItemType` and
    `reference_sharing.rs`. **`grant_level` defaults any kind to View**, so
    posting a mention shares the entity with the whole channel unless you decide
    otherwise (initiatives opt out). Add the kind to the `matches!` list in
-   `crates/channels/src/outbound/pg_channel_reference_share_permissions.rs`, or it
+   `crates/comms/channels/src/outbound/pg_channel_reference_share_permissions.rs`, or it
    falls through to legacy share permissions and fails at runtime.
 
 - **Agent prompt:** add the kind to `crates/prompt/src/mentions.rs` and, if it has

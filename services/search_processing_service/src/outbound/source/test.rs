@@ -84,7 +84,7 @@ async fn empty_channel_scope_never_reads_or_publishes() {
 #[sqlx::test(
     migrations = "../../crates/macro_db_client/migrations",
     fixtures(
-        path = "../../../../../crates/comms_db_client/fixtures",
+        path = "../../../../../crates/comms/comms_db_client/fixtures",
         scripts("channels")
     )
 )]

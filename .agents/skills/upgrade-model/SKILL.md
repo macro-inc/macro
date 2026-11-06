@@ -21,7 +21,7 @@ These are separate choices; the application no longer has a two-entry
   requested change affects one of those predefined models.
 - Check provider-specific behavior and speed support in `crates/agent/src/model/`
   before assigning a new model the capabilities of its predecessor.
-- `crates/chat/src/domain/models/model_access.rs` owns the selectable chat
+- `crates/comms/chat/src/domain/models/model_access.rs` owns the selectable chat
   `CHAT_MODELS`, `PAID_DEFAULT_MODEL`, and `FREE_MODEL`. Change the relevant
   catalog/default and preserve the intended plan restrictions.
 

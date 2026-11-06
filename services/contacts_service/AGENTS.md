@@ -10,21 +10,21 @@ outbox worker that notifies `connection_gateway`.
 
 - `src/main.rs`: wires `contacts::domain::service::ContactsDomainService`,
   `contacts::inbound::http::contacts_router`, and the SQS/outbox workers — the
-  actual logic lives in `crates/contacts`, not here.
+  actual logic lives in `crates/comms/contacts`, not here.
 - `src/config.rs`: env vars and per-environment DB pool sizing.
 - `src/health.rs`: health check endpoint.
 
 ## Scope
 
-- Owns: process startup, config, and composing `crates/contacts`'s
+- Owns: process startup, config, and composing `crates/comms/contacts`'s
   inbound/outbound adapters.
 - Not here: contact-matching/connection domain logic, repository queries, or
-  the gateway-notification adapter — all in `crates/contacts`
+  the gateway-notification adapter — all in `crates/comms/contacts`
   (`domain/service`, `outbound/repository`, `outbound/gateway`).
 
 ## Recipes
 
-- Add an HTTP route: `crates/contacts` (`inbound/http`) → wired automatically
+- Add an HTTP route: `crates/comms/contacts` (`inbound/http`) → wired automatically
   via `contacts_router` in `src/main.rs`.
 - Test the local SQS/outbox pipeline: `just create-localstack` → `just create-queue`
   → `just sqs-worker` → `just sqs-test-message`.
@@ -42,6 +42,6 @@ outbox worker that notifies `connection_gateway`.
 
 ## Related
 
-- Domain crate: `crates/contacts`
+- Domain crate: `crates/comms/contacts`
 
 - The HTTP boundary validates optional signed agent correlation without changing existing authorization.

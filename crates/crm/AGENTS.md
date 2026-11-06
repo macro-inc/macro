@@ -27,7 +27,7 @@ tools/HTTP/GraphQL surfaces over them.
 
 - Owns: CRM company/contact records, pipelines, and their HTTP/AI-tool/search
   surfaces for a team.
-- Not here: the contact *graph* (who a user knows) → `crates/contacts`;
+- Not here: the contact *graph* (who a user knows) → `crates/comms/contacts`;
   shared database storage/positions → `crates/databases`.
 
 ## Boundaries

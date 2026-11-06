@@ -100,14 +100,14 @@ and deleted from the static file service by DSS's drain.
 
 ## Code
 
-`crates/external_chat` is the provider-neutral domain: timeline and read
+`crates/comms/external_chat` is the provider-neutral domain: timeline and read
 state, sharing, sends, uploads, attachment import, notification effects, the
 `external_chat_changed`/`external_chat_effects` signals, the
 `/external-chats` router and the Postgres adapters for the `external_chat*`
 tables. It reaches a provider only through its `ChatProvider` port
 (accounts, who can send, members and names, adding and detaching, the send
 outbox); `ExternalChatService<P: ChatProvider>` is generic over it, with no
-trait objects or registry. `crates/whatsapp_linked` implements the port
+trait objects or registry. `crates/whatsapp/whatsapp_linked` implements the port
 (`WhatsAppProvider`) and keeps everything WhatsApp: pairing, the account's
 chat list (with saved contacts) and phone-number lookups, rosters, ingest,
 dispatch and the `/whatsapp` router; its ingest

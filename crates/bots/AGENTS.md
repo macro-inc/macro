@@ -23,7 +23,7 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 - Owns: bot CRUD, ownership (user or team), and bot lifecycle events.
 - Not here: agent sessions, channel message triggers, or trigger detection →
-  `crates/agent_session`, `crates/channel_bots`.
+  `crates/agent_session`, `crates/comms/channel_bots`.
 
 ## Boundaries
 
