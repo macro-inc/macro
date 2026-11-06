@@ -17,6 +17,7 @@ export type CallReaction = {
   emoji: CallReactionEmoji;
 };
 export const CALL_REACTION_TOPIC = 'macro.call.reaction.v1';
+export const CALL_REACTION_LIFETIME_MS = 3200;
 
 export function decodeCallReaction(
   payload: Uint8Array
@@ -50,7 +51,7 @@ export function createCallReactions(room: Accessor<Room | null | undefined>) {
     const timer = setTimeout(() => {
       timers.delete(timer);
       setEntries((items) => items.filter((item) => item.id !== id));
-    }, 1800);
+    }, CALL_REACTION_LIFETIME_MS);
     timers.add(timer);
   };
   createEffect(

@@ -67,6 +67,8 @@ it('publishes ephemeral messages, uses transport sender identity, and expires re
   );
   expect(reactions.entries()).toHaveLength(2);
   vi.advanceTimersByTime(1800);
+  expect(reactions.entries()).toHaveLength(2);
+  vi.advanceTimersByTime(1400);
   expect(reactions.entries()).toEqual([]);
   dispose();
   expect(off).toHaveBeenCalled();

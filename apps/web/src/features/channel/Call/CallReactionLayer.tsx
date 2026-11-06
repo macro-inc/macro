@@ -1,5 +1,5 @@
 import { type Accessor, For } from 'solid-js';
-import type { CallReaction } from './call-reactions';
+import { CALL_REACTION_LIFETIME_MS, type CallReaction } from './call-reactions';
 import './call-reactions.css';
 
 export function CallReactionLayer(props: {
@@ -39,12 +39,16 @@ export function CallReactionLayer(props: {
     <div
       class="pointer-events-none absolute inset-0 z-40 overflow-hidden"
       aria-hidden="true"
+      style={{ '--call-reaction-duration': `${CALL_REACTION_LIFETIME_MS}ms` }}
     >
       <For each={props.reactions}>
         {(reaction) => (
           <span
             class="call-reaction absolute rounded-full bg-surface/80 p-2 text-3xl"
-            style={position(reaction)}
+            style={{
+              ...position(reaction),
+              'margin-left': `${((reaction.id * 13) % 33) - 16}px`,
+            }}
           >
             {reaction.emoji}
           </span>

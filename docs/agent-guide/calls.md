@@ -368,9 +368,10 @@ controlled through More. Tracks stay mounted and audio continues.
 Desktop **Reactions** beside Team opens a one-row picker with arrow-key navigation.
 The picker stays open for repeated reactions; in compact panes it moves into More.
 Choosing an emoji sends a temporary reaction to the connected room, not
-chat history. The emoji rises above its sender's name tag and fades; when the
+chat history. The emoji pops in, rises gently with a slight sway and fades over 3.2 seconds;
+quick repeats start at slightly different horizontal positions. When the
 sender's tile is off screen it appears at the stage's bottom-left. Reduced motion
-fades without movement. Reactions have no sound and disappear when leaving.
+fades in, holds, then fades out without movement or scale. Reactions have no sound and disappear when leaving.
 
 Desktop **More → Full screen** expands only the call area. The same item becomes
 **Exit full screen**; browser Escape also exits. Call menus and tooltips remain
