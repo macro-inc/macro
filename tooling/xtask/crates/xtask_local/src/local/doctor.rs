@@ -1,7 +1,7 @@
 //! `doctor-local`: preflight checks for tools, toolchain, ports, env, images.
 
 use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Result, bail};
@@ -249,23 +249,44 @@ fn check_checkout_ownership() -> Status {
     };
 
     let mut foreign = 0;
-    let mut affected = Vec::new();
+    let mut foreign_paths = Vec::new();
+    let mut unreadable = Vec::new();
     for path in CONTAINER_WRITTEN_PATHS {
-        let count = count_foreign(&root.join(path), checkout.uid());
-        if count > 0 {
-            foreign += count;
-            affected.push(*path);
+        match count_foreign(&root.join(path), checkout.uid()) {
+            Ok(0) => {}
+            Ok(count) => {
+                foreign += count;
+                foreign_paths.push(*path);
+            }
+            // The checkout owner failing to read its own checkout means
+            // another user owns part of it.
+            Err(err) => unreadable.push((*path, err)),
         }
     }
 
-    if affected.is_empty() {
+    if foreign_paths.is_empty() && unreadable.is_empty() {
         return Status::Ok("container-written files belong to the checkout owner".into());
     }
-    Status::Fail {
-        msg: format!(
+    let mut problems = Vec::new();
+    if !foreign_paths.is_empty() {
+        problems.push(format!(
             "{foreign} file(s) not owned by the checkout owner under {}",
-            affected.join(", ")
-        ),
+            foreign_paths.join(", ")
+        ));
+    }
+    if !unreadable.is_empty() {
+        let paths: Vec<String> = unreadable
+            .iter()
+            .map(|(path, err)| format!("{path} ({err})"))
+            .collect();
+        problems.push(format!("could not read {}", paths.join(", ")));
+    }
+    let affected: Vec<&str> = foreign_paths
+        .into_iter()
+        .chain(unreadable.iter().map(|(path, _)| *path))
+        .collect();
+    Status::Fail {
+        msg: problems.join("; "),
         hint: Some(format!(
             "from the repository root: sudo chown -R {}:{} {}",
             checkout.uid(),
@@ -276,22 +297,22 @@ fn check_checkout_ownership() -> Status {
 }
 
 /// Count the entries at or under `path` (not following symlinks) whose owner
-/// is not `uid`. A missing path counts nothing.
-fn count_foreign(path: &Path, uid: u32) -> usize {
-    let Ok(meta) = std::fs::symlink_metadata(path) else {
-        return 0;
+/// is not `uid`. A missing path counts nothing; any other error is returned, so
+/// an unreadable directory never passes as clean.
+fn count_foreign(path: &Path, uid: u32) -> std::io::Result<usize> {
+    let meta = match std::fs::symlink_metadata(path) {
+        Ok(meta) => meta,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(err) => return Err(err),
     };
 
     let mut count = usize::from(meta.uid() != uid);
     if meta.is_dir() {
-        let children: Vec<PathBuf> = std::fs::read_dir(path)
-            .map(|entries| entries.flatten().map(|entry| entry.path()).collect())
-            .unwrap_or_default();
-        for child in children {
-            count += count_foreign(&child, uid);
+        for entry in std::fs::read_dir(path)? {
+            count += count_foreign(&entry?.path(), uid)?;
         }
     }
-    count
+    Ok(count)
 }
 
 fn check_ports(instance: &Instance) -> Status {
