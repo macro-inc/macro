@@ -34,6 +34,7 @@ mod meeting_participants;
 mod meeting_startup;
 mod orphan_rooms;
 mod recording;
+mod team_share_consent;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
@@ -2183,6 +2184,14 @@ fn team_edit(
     }
 }
 
+/// Nobody else is on the call, so a team-sharing change takes effect at once.
+fn expect_nobody_else_on_call(repo: &mut MockCallRepository) {
+    repo.expect_get_team_share_change()
+        .returning(|_| Box::pin(async { Ok(None) }));
+    repo.expect_team_share_approvers()
+        .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+}
+
 /// Repo that serves `facts` once, returns `record`, and asserts the command
 /// forwarded to `patch_call_record` targets `expected_target` (`None` = clear).
 fn mock_team_share_repo(
@@ -2191,6 +2200,7 @@ fn mock_team_share_repo(
     expected_target: Option<TeamShareLevel>,
 ) -> MockCallRepository {
     let mut repo = MockCallRepository::new();
+    expect_nobody_else_on_call(&mut repo);
     repo.expect_get_team_share_facts()
         .times(1)
         .return_once(move |call_id| {
@@ -2391,6 +2401,7 @@ async fn team_share_rejects_missing_team_and_contradictory_inputs() {
 #[tokio::test]
 async fn team_share_repo_conflict_publishes_nothing() {
     let mut repo = MockCallRepository::new();
+    expect_nobody_else_on_call(&mut repo);
     repo.expect_get_team_share_facts()
         .times(1)
         .returning(|_| Box::pin(async { Ok(team_share_facts()) }));
@@ -2428,6 +2439,7 @@ fn live_record() -> CallRecord {
 /// toggle instead of a command.
 fn mock_live_edit_repo(expected_toggle: bool) -> MockCallRepository {
     let mut repo = MockCallRepository::new();
+    expect_nobody_else_on_call(&mut repo);
     repo.expect_get_call_record_by_call_id()
         .times(1)
         .returning(|_| Box::pin(async { Ok(Some(live_record())) }));
@@ -2511,6 +2523,7 @@ async fn live_call_team_share_rejects_non_view_levels_and_contradictions() {
 #[tokio::test]
 async fn toggle_share_with_team_publishes_updated_event() {
     let mut repo = MockCallRepository::new();
+    expect_nobody_else_on_call(&mut repo);
     repo.expect_get_call_record_by_call_id()
         .times(1)
         .returning(|_| Box::pin(async { Ok(Some(live_record())) }));

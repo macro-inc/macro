@@ -3245,7 +3245,7 @@
       "patch": {
         "tags": ["call::inbound::axum_router"],
         "summary": "Handler for `PATCH /call/record/{call_id}`.",
-        "description": "Edits a call record: link/channel share permissions, display name, and\nteam sharing. Edit access (channel membership) is required for the request.\n`sharePermission.teamShareAccessLevel` only accepts `view` or `null`; while\nthe call is live it sets the pending share-with-team toggle, and once the\ncall is archived it is additionally authorized against the call's creator.",
+        "description": "Edits a call record: link/channel share permissions, display name, and\nteam sharing. Edit access (channel membership) is required for the request.\n`sharePermission.teamShareAccessLevel` only accepts `view` or `null`; while\nthe call is live it proposes changing the pending share-with-team toggle, and\nonce the call is archived it is additionally authorized against the call's\ncreator. On a channel call a team-sharing change is held until the other\nparticipants approve it; read it from the pending route below.",
         "operationId": "edit_call_record",
         "parameters": [
           {
@@ -3271,7 +3271,7 @@
         },
         "responses": {
           "204": {
-            "description": "Call record updated"
+            "description": "Call record updated; a team-sharing change may still await approval"
           },
           "400": {
             "description": "Invalid team-share level, contradictory inputs, or the creator has no team",
@@ -3314,7 +3314,7 @@
             }
           },
           "409": {
-            "description": "Team-sharing facts changed, or the call was archived mid-request; reload and retry",
+            "description": "Team-sharing facts changed, an opposite change is awaiting approval, or the call was archived mid-request; reload and retry",
             "content": {
               "application/json": {
                 "schema": {
@@ -3684,11 +3684,165 @@
         }
       }
     },
+    "/call/record/{call_id}/share-with-team/pending": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/record/{call_id}/share-with-team/pending`.",
+        "description": "The call's team sharing and any change awaiting approval.",
+        "operationId": "get_team_share_state",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallTeamShareState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/record/{call_id}/share-with-team/pending/respond": {
+      "post": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `POST /call/record/{call_id}/share-with-team/pending/respond`.",
+        "description": "Approves or declines the call's pending team-sharing change and returns the\nstate that leaves. The last approval applies the change; one decline drops\nit. An agent run cannot answer for the person it runs as.",
+        "operationId": "respond_to_team_share_change",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondToTeamShareChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallTeamShareState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the change's requester and the people on the call may answer, and never through an agent run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The change or the call moved on; reload and retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/record/{call_id}/share-with-team/toggle": {
       "post": {
         "tags": ["call::inbound::axum_router"],
         "summary": "Handler for `POST /call/record/{call_id}/share-with-team/toggle`.",
-        "description": "Flips the live call's share-with-team toggle and returns the new value as\nthe JSON body. The toggle is applied as canonical team sharing (View for\nthe creator's team) when the call is archived; archived calls answer 409\nand are edited through `PATCH /call/record/{call_id}` instead.",
+        "description": "Proposes flipping the live call's share-with-team toggle and returns its\ncurrent value as the JSON body: it flips at once only when nobody else has\nto approve. The toggle is applied as canonical team sharing (View for the\ncreator's team) when the call is archived; archived calls answer 409 and are\nedited through `PATCH /call/record/{call_id}` instead.",
         "operationId": "toggle_share_with_team",
         "parameters": [
           {
@@ -3704,7 +3858,7 @@
         ],
         "responses": {
           "200": {
-            "description": "New value of the share-with-team toggle",
+            "description": "Current value of the share-with-team toggle",
             "content": {
               "application/json": {
                 "schema": {
@@ -3734,7 +3888,7 @@
             }
           },
           "409": {
-            "description": "The call is no longer active",
+            "description": "The call is no longer active, or an opposite change is awaiting approval",
             "content": {
               "application/json": {
                 "schema": {
@@ -26890,6 +27044,28 @@
         "description": "Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.",
         "enum": ["ATTENDED", "MISSED", "UNATTENDED"]
       },
+      "CallTeamShareState": {
+        "type": "object",
+        "description": "A call's team sharing as it stands, and any change awaiting approval.",
+        "required": ["shared"],
+        "properties": {
+          "pending": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PendingTeamShareChange",
+                "description": "The change awaiting approval, if any."
+              }
+            ]
+          },
+          "shared": {
+            "type": "boolean",
+            "description": "Whether the call is shared with the team now: the pending toggle while\nthe call is live, canonical sharing once it is archived."
+          }
+        }
+      },
       "CallTokenResponse": {
         "type": "object",
         "description": "Response returned when creating or joining a call.",
@@ -32886,7 +33062,7 @@
               },
               {
                 "$ref": "#/components/schemas/UpdateSharePermissionRequestV2",
-                "description": "Updated share permissions. `teamShareAccessLevel` shares the call with\nthe creator's team and only accepts `view` or `null` (revoke). While\nthe call is live it sets the pending share-with-team toggle, which is\napplied when the call is archived; afterwards only the call's creator\nmay change it."
+                "description": "Updated share permissions. `teamShareAccessLevel` shares the call with\nthe creator's team and only accepts `view` or `null` (revoke). While\nthe call is live it proposes changing the pending share-with-team\ntoggle, which is applied when the call is archived; afterwards only the\ncall's creator may propose a change. On a channel call, a change takes\neffect once the other participants approve it."
               }
             ]
           },
@@ -45297,6 +45473,28 @@
           }
         }
       },
+      "PendingTeamShareChange": {
+        "type": "object",
+        "description": "A team-sharing change that takes effect once everyone on the call approves.",
+        "required": ["shared", "requestedBy", "waitingOn"],
+        "properties": {
+          "requestedBy": {
+            "type": "string",
+            "description": "The user who proposed the change."
+          },
+          "shared": {
+            "type": "boolean",
+            "description": "Whether the call would be shared with the team afterwards."
+          },
+          "waitingOn": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The users who have not approved it yet."
+          }
+        }
+      },
       "PinRequest": {
         "type": "object",
         "required": ["pinType"],
@@ -46866,6 +47064,17 @@
           "decision": {
             "$ref": "#/components/schemas/AccountManagerDecision",
             "description": "The response."
+          }
+        }
+      },
+      "RespondToTeamShareChangeRequest": {
+        "type": "object",
+        "description": "An answer to a call's pending team-sharing change.",
+        "required": ["approve"],
+        "properties": {
+          "approve": {
+            "type": "boolean",
+            "description": "True to approve the change, false to decline it."
           }
         }
       },

@@ -2777,6 +2777,18 @@ export type CallRecordTranscriptSegment = {
 export type CallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
 
 /**
+ * A call's team sharing as it stands, and any change awaiting approval.
+ */
+export type CallTeamShareState = {
+    pending?: null | PendingTeamShareChange;
+    /**
+     * Whether the call is shared with the team now: the pending toggle while
+     * the call is live, canonical sharing once it is archived.
+     */
+    shared: boolean;
+};
+
+/**
  * Response returned when creating or joining a call.
  */
 export type CallTokenResponse = {
@@ -14164,6 +14176,24 @@ export type PendingClaimResponse = {
     status: string;
 };
 
+/**
+ * A team-sharing change that takes effect once everyone on the call approves.
+ */
+export type PendingTeamShareChange = {
+    /**
+     * The user who proposed the change.
+     */
+    requestedBy: string;
+    /**
+     * Whether the call would be shared with the team afterwards.
+     */
+    shared: boolean;
+    /**
+     * The users who have not approved it yet.
+     */
+    waitingOn: Array<string>;
+};
+
 export type PinRequest = {
     /**
      * The type of the pin
@@ -15094,6 +15124,16 @@ export type RespondToAccountManagerRequestBody = {
      * The response.
      */
     decision: AccountManagerDecision;
+};
+
+/**
+ * An answer to a call's pending team-sharing change.
+ */
+export type RespondToTeamShareChangeRequest = {
+    /**
+     * True to approve the change, false to decline it.
+     */
+    approve: boolean;
 };
 
 /**
@@ -21704,7 +21744,7 @@ export type EditCallRecordErrors = {
     403: ErrorResponse;
     404: ErrorResponse;
     /**
-     * Team-sharing facts changed, or the call was archived mid-request; reload and retry
+     * Team-sharing facts changed, an opposite change is awaiting approval, or the call was archived mid-request; reload and retry
      */
     409: ErrorResponse;
     500: ErrorResponse;
@@ -21714,7 +21754,7 @@ export type EditCallRecordError = EditCallRecordErrors[keyof EditCallRecordError
 
 export type EditCallRecordResponses = {
     /**
-     * Call record updated
+     * Call record updated; a team-sharing change may still await approval
      */
     204: void;
 };
@@ -21882,6 +21922,66 @@ export type GetCallRingStateResponses = {
 
 export type GetCallRingStateResponse = GetCallRingStateResponses[keyof GetCallRingStateResponses];
 
+export type GetTeamShareStateData = {
+    body?: never;
+    path: {
+        /**
+         * Call ID
+         */
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/share-with-team/pending';
+};
+
+export type GetTeamShareStateErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetTeamShareStateError = GetTeamShareStateErrors[keyof GetTeamShareStateErrors];
+
+export type GetTeamShareStateResponses = {
+    200: CallTeamShareState;
+};
+
+export type GetTeamShareStateResponse = GetTeamShareStateResponses[keyof GetTeamShareStateResponses];
+
+export type RespondToTeamShareChangeData = {
+    body: RespondToTeamShareChangeRequest;
+    path: {
+        /**
+         * Call ID
+         */
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/share-with-team/pending/respond';
+};
+
+export type RespondToTeamShareChangeErrors = {
+    401: ErrorResponse;
+    /**
+     * Only the change's requester and the people on the call may answer, and never through an agent run
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    /**
+     * The change or the call moved on; reload and retry
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RespondToTeamShareChangeError = RespondToTeamShareChangeErrors[keyof RespondToTeamShareChangeErrors];
+
+export type RespondToTeamShareChangeResponses = {
+    200: CallTeamShareState;
+};
+
+export type RespondToTeamShareChangeResponse = RespondToTeamShareChangeResponses[keyof RespondToTeamShareChangeResponses];
+
 export type ToggleShareWithTeamData = {
     body?: never;
     path: {
@@ -21898,7 +21998,7 @@ export type ToggleShareWithTeamErrors = {
     401: ErrorResponse;
     404: ErrorResponse;
     /**
-     * The call is no longer active
+     * The call is no longer active, or an opposite change is awaiting approval
      */
     409: ErrorResponse;
     500: ErrorResponse;
@@ -21908,7 +22008,7 @@ export type ToggleShareWithTeamError = ToggleShareWithTeamErrors[keyof ToggleSha
 
 export type ToggleShareWithTeamResponses = {
     /**
-     * New value of the share-with-team toggle
+     * Current value of the share-with-team toggle
      */
     200: boolean;
 };

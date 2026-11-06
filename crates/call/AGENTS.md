@@ -15,6 +15,8 @@ in-call chat.
   call discussion; message storage and delivery belong to `messages`.
 - `src/domain/meetings.rs`: scheduled-meeting ↔ call association (used by
   `calendar_events`/`calendar_scheduling` meeting links).
+- `src/domain/service/team_share_consent.rs`: the one path every team-sharing
+  change takes on a channel call; it applies once everyone on the call approves.
 - `src/domain/notification_events.rs`: public call event contract for
   access-checked webhook and stream subscribers.
 - `src/inbound/axum_router.rs`, `src/inbound/stale_call_sweeper.rs`: HTTP routes

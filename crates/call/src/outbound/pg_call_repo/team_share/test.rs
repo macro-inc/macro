@@ -17,7 +17,8 @@ use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use super::super::test::{
-    CALL_ARCHIVED, CALL1, CH1, CH2, USER_A, give_user_a_team, repo, team_entity_access_count,
+    CALL_ARCHIVED, CALL1, CH1, CH2, USER_A, USER_B, give_user_a_team, repo,
+    team_entity_access_count,
 };
 use crate::domain::models::{CallError, CallRecordPage, EditCallRecordRepoArgs};
 use crate::domain::ports::CallRepository;
@@ -878,5 +879,180 @@ async fn list_read_reports_live_toggle_and_canonical_state(
     assert!(archived.share_with_team);
     assert_eq!(archived.team_share_access_level, Some(AccessLevel::View));
 
+    Ok(())
+}
+
+// -- private by default and team-sharing consent ------------------------------
+
+async fn channel_of_type(pool: &Pool<Postgres>, channel_type: &str) -> Uuid {
+    let id = Uuid::now_v7();
+    let name = (channel_type != "direct_message").then_some("named");
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, name, channel_type, owner_id, created_at, updated_at)
+         VALUES ($1, $2, $3::text::comms_channel_type, $4, now(), now())",
+        id,
+        name,
+        channel_type,
+        USER_A.as_ref(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    id
+}
+
+async fn start_call_in(repo: &PgCallRepo, channel_id: Uuid) -> Uuid {
+    let call_id = Uuid::now_v7();
+    repo.create_call(
+        &call_id,
+        &channel_id,
+        &call_id.to_string(),
+        USER_A.copied(),
+        false,
+    )
+    .await
+    .unwrap()
+    .expect("call created");
+    call_id
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn calls_in_dms_and_private_channels_start_private(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    for (channel_type, expected) in [
+        ("direct_message", false),
+        ("private", false),
+        ("public", true),
+    ] {
+        let channel_id = channel_of_type(&pool, channel_type).await;
+        let call_id = start_call_in(&repo, channel_id).await;
+        assert_eq!(
+            live_toggle(&pool, call_id).await,
+            expected,
+            "{channel_type}"
+        );
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn approvers_are_everyone_who_joined_and_a_dms_other_member(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    // The fixture's channel call: its two participants, not its other member.
+    let user_a = USER_A.as_ref().to_string();
+    let user_b = USER_B.as_ref().to_string();
+    assert_eq!(
+        repo.team_share_approvers(&CALL1).await?,
+        vec![user_a.clone(), user_b.clone()]
+    );
+    // Leaving the call does not take away a say over its sharing.
+    repo.remove_participant(&CALL1, USER_B.copied()).await?;
+    assert_eq!(
+        repo.team_share_approvers(&CALL1).await?,
+        vec![user_a.clone(), user_b.clone()]
+    );
+    // Nor does archiving it.
+    repo.archive_call(&CALL1).await?;
+    assert_eq!(
+        repo.team_share_approvers(&CALL1).await?,
+        vec![user_a.clone(), user_b.clone()]
+    );
+
+    // A DM's other member counts before joining; a bot member never does.
+    let dm = channel_of_type(&pool, "direct_message").await;
+    for member in [
+        user_a.as_str(),
+        user_b.as_str(),
+        "bot|00000000-0000-0000-0000-000000000001",
+    ] {
+        sqlx::query!(
+            "INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at)
+             VALUES ($1, $2, 'member', now())",
+            dm,
+            member,
+        )
+        .execute(&pool)
+        .await?;
+    }
+    let dm_call = start_call_in(&repo, dm).await;
+    assert_eq!(
+        repo.team_share_approvers(&dm_call).await?,
+        vec![user_a, user_b]
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_team_share_change_collects_approvals_and_survives_archiving(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let user_a = USER_A.as_ref().to_string();
+    let user_b = USER_B.as_ref().to_string();
+
+    assert_eq!(repo.get_team_share_change(&CALL1).await?, None);
+
+    let opened = repo
+        .approve_team_share_change(&CALL1, false, USER_A.copied())
+        .await?
+        .expect("opened");
+    assert_eq!(opened.requested_by, user_a);
+    assert_eq!(opened.approved_by, vec![user_a.clone()]);
+
+    // A change the other way does not touch the open one.
+    assert_eq!(
+        repo.approve_team_share_change(&CALL1, true, USER_B.copied())
+            .await?,
+        None
+    );
+
+    // Approving twice counts once.
+    for _ in 0..2 {
+        let change = repo
+            .approve_team_share_change(&CALL1, false, USER_B.copied())
+            .await?
+            .expect("still open");
+        assert_eq!(change.requested_by, user_a);
+        assert_eq!(change.approved_by, vec![user_a.clone(), user_b.clone()]);
+    }
+
+    repo.archive_call(&CALL1).await?;
+    assert!(repo.get_team_share_change(&CALL1).await?.is_some());
+
+    repo.clear_team_share_change(&CALL1).await?;
+    repo.clear_team_share_change(&CALL1).await?;
+    assert_eq!(repo.get_team_share_change(&CALL1).await?, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn deleting_a_call_record_deletes_its_team_share_change(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    repo.approve_team_share_change(&CALL_ARCHIVED, true, USER_A.copied())
+        .await?;
+    repo.delete_call_record(&CALL_ARCHIVED).await?;
+
+    assert_eq!(repo.get_team_share_change(&CALL_ARCHIVED).await?, None);
     Ok(())
 }

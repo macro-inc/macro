@@ -1,7 +1,8 @@
 //! Canonical team-share persistence for calls.
 //!
 //! While a call is live, "share with team" is a pending intent on the active
-//! `calls` row (`share_with_team`), toggled by participants. Archiving
+//! `calls` row (`share_with_team`), which participants change by consent (see
+//! `team_share_change`). Archiving
 //! translates that intent into the shared `SharePermission.team_share_*` state
 //! and the `entity_access` team grant managed by `share_permission_db_utils`;
 //! from then on the creator edits it through the canonical path. Active and

@@ -18,6 +18,7 @@ import {
   updatePipelineTeamShare,
 } from '@app/features/crm/sharing-adapter';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
@@ -74,6 +75,8 @@ import UsersIcon from '@icon/system/regular/users.svg';
 import IconX from '@icon/system/regular/x.svg';
 import { updateAgentSessionSharePermissions } from '@queries/agent-session/share-permissions';
 import {
+  fetchCallTeamShareState,
+  invalidateCallRecord,
   setCallRecordTeamShareCache,
   sharePermissionFromCallRecord,
   updateCallTeamShare,
@@ -1520,6 +1523,12 @@ export function ShareModal(props: ShareModalProps) {
       fireAndForget(refetch(), 'share-modal');
       const scope = getTeamShareScope(sharePermission.teamShareAccessLevel);
       if (props.itemType === 'call') {
+        invalidateCallRecord(props.id);
+        const state = await fetchCallTeamShareState(props.id);
+        if (state.isOk() && state.value.pending) {
+          toast.success(t('calls.teamShareRequestSent'));
+          return;
+        }
         setCallRecordTeamShareCache(props.id, shared);
       }
       if (scope === 'NONE') {

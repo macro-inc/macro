@@ -302,16 +302,60 @@ export function setCallRecordTeamShareCache(callId: string, shared: boolean) {
   );
 }
 
-function invalidateCallRecord(callId: string) {
+export function invalidateCallRecord(callId: string) {
   queryClient.invalidateQueries({
     queryKey: callKeys.record(callId).queryKey,
   });
 }
 
+function callTeamShareStateQueryOptions(callId: string) {
+  return queryOptions({
+    queryKey: callKeys.teamShare(callId).queryKey,
+    queryFn: () =>
+      throwOnErr(() => callServiceClient.getTeamShareState(callId)),
+    enabled: !!callId,
+  });
+}
+
+/** The call's team sharing and any change awaiting approval. */
+export function useCallTeamShareStateQuery(callId: Accessor<string>) {
+  return useQuery(() => callTeamShareStateQueryOptions(callId()));
+}
+
+/** Read the state fresh, to learn whether a write took effect or awaits approval. */
+export function fetchCallTeamShareState(callId: string) {
+  return callServiceClient.getTeamShareState(callId);
+}
+
 /**
- * Flip the live call's share-with-team toggle. Any participant with edit
- * access may do this; the toggle is applied as canonical team sharing when
- * the call is archived.
+ * Approve or decline the call's pending team-sharing change. The last approval
+ * applies it; one decline drops it.
+ */
+export function useRespondToCallTeamShareChangeMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: (params: { callId: string; approve: boolean }) =>
+      throwOnErr(() =>
+        callServiceClient.respondToTeamShareChange(
+          params.callId,
+          params.approve
+        )
+      ),
+    onSuccess(state, { callId }) {
+      setCallRecordTeamShareCache(callId, state.shared);
+      invalidateCallRecord(callId);
+    },
+    onError(error: Error) {
+      console.error('failed to answer call team-sharing change', error);
+      toast.failure("Couldn't save your answer. Try again.");
+    },
+  }));
+}
+
+/**
+ * Propose flipping the live call's share-with-team toggle. Any participant
+ * with edit access may do this; it takes effect once the others approve, and
+ * is applied as canonical team sharing when the call is archived.
  */
 export function useToggleShareWithTeamMutation() {
   return useMutation(() => ({
@@ -329,8 +373,9 @@ export function useToggleShareWithTeamMutation() {
 }
 
 /**
- * Share an archived call with the creator's team, or revoke it. Only the
- * creator may change this; the backend answers 403 otherwise.
+ * Propose sharing an archived call with the creator's team, or revoking it.
+ * Only the creator may propose this; the backend answers 403 otherwise. Reads
+ * the outcome back, since the change may still await the other participants.
  */
 export function useSetCallRecordTeamShareMutation() {
   return useMutation(() => ({
@@ -339,8 +384,7 @@ export function useSetCallRecordTeamShareMutation() {
       await throwOnErr(() => updateCallTeamShare(params.callId, params.shared));
       return params;
     },
-    onSuccess({ callId, shared }) {
-      setCallRecordTeamShareCache(callId, shared);
+    onSuccess({ callId }) {
       invalidateCallRecord(callId);
     },
     onError(error: Error) {

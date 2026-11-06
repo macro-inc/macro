@@ -269,6 +269,8 @@ hear it alongside microphones, even away from the Call tab. Leave call is a
 separate button. Live channel calls also include **Call sharing** in the toolbar:
 its menu offers **Team sharing** and **Private**, each with a short explanation
 and a checkmark on the current choice. The icon changes between team and lock.
+The menu also shows a sharing change awaiting approval, with **Approve** and
+**Decline** or **Cancel request**, and its options wait until that change settles.
 Audio settings, video settings, screen share settings, and call sharing use
 bottom drawers on phones, with a handle and scrollable options; desktop and
 tablet keep dropdowns.
@@ -430,13 +432,22 @@ While a call is live, the controls bar instead has a **Call sharing** dropdown w
 **Team sharing** and **Private** options. Each option explains the resulting team
 access under its name; choosing the current option does not save again. Controls
 are disabled while connecting or saving. Team sharing is canonical **view** access
-(the same `Team access` model documents and AI chats use), enabled by default for
-channel calls. Any participant with edit access can change it, and other
-participants see it update live. When the call ends, **Team sharing** lets the
-creator's team open the recorded call, read the transcript and AI summary, and find
-it under Calls and in search; **Private** grants no automatic team access.
-Afterwards only the call's **creator** can change it; everyone else sees the
-side-panel checkbox read-only with a note saying so.
+(the same `Team access` model documents and AI chats use). Calls in DMs and private
+channels start **Private**; calls in team and public channels start with team sharing.
+
+A change in either direction applies only once everyone on the call agrees. Choosing
+it opens a request: the people it waits on get a prompt with **Approve** and **Decline**
+during the call, and the Call sharing menu and the side panel's `Sharing` section keep
+those choices, live or after the call. One decline drops the request; the requester can
+**Cancel request**. "Everyone" means each person who has joined, even if they left, and
+in a DM its other member before they join. Bots and guests have no say, and an agent can
+propose a change for its person but never approve one. If nobody else is on the call, the change applies at once.
+
+Any participant with edit access can propose a change during the call. When the call
+ends, **Team sharing** lets the creator's team open the recorded call, read the
+transcript and AI summary, and find it under Calls and in search; **Private** grants no
+automatic team access. Afterwards only the call's **creator** can propose a change, and
+an open request carries over; everyone else sees the side-panel checkbox read-only.
 Team sharing is independent of channel access and of link sharing.
 
 Standalone instant and scheduled calls are excluded from team memory. They have no

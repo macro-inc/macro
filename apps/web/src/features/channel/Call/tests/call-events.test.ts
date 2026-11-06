@@ -138,6 +138,24 @@ describe('parseCallEvent', () => {
     expect(parseCallEvent(type, wire(payload))).toBe(null);
   });
 
+  it('parses call_share_with_team_change_updated', () => {
+    expect(
+      parseCallEvent('call_share_with_team_change_updated', {
+        channel_id: 'c1',
+        call_id: 'call-1',
+      })
+    ).toEqual({
+      type: 'call_share_with_team_change_updated',
+      channelId: 'c1',
+      callId: 'call-1',
+    });
+    expect(
+      parseCallEvent('call_share_with_team_change_updated', {
+        call_id: 'call-1',
+      })
+    ).toBeNull();
+  });
+
   it('returns null when share_with_team is not a boolean', () => {
     expect(
       parseCallEvent(

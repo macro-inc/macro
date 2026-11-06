@@ -554,7 +554,9 @@ channel meetings and other invitations. A seeded meeting retains its lookup toke
 when mutations invalidate metadata. `update`, `cancel`, `invite(email)`,
 `inviteUsers(users)`, `invitePermissions` and `webUrl` live on the meeting.
 `call.meeting()` creates or reads its shareable meeting; calls also expose
-`editTranscript(assignments)` and `toggleTeamShare()`.
+`editTranscript(assignments)`, `toggleTeamShare()` and `teamShareState()`. A
+channel call's sharing changes once its other participants approve, which only
+a person can do in the app.
 
 ### Programmatic calls
 

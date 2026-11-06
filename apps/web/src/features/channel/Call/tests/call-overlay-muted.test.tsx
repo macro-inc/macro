@@ -119,6 +119,14 @@ vi.mock('../use-toggle-share-with-team', () => ({
     toggle: () => Promise.resolve(),
     canToggle: () => true,
     isPending: () => false,
+    change: {
+      callId: () => 'call-1',
+      pending: () => null,
+      awaitsMyAnswer: () => false,
+      isMine: () => false,
+      isAnswering: () => false,
+      answer: () => Promise.resolve(),
+    },
   }),
 }));
 

@@ -540,9 +540,10 @@ pub struct CallTranscriptCustomSpeakerResult {
 pub struct EditCallRecordRequest {
     /// Updated share permissions. `teamShareAccessLevel` shares the call with
     /// the creator's team and only accepts `view` or `null` (revoke). While
-    /// the call is live it sets the pending share-with-team toggle, which is
-    /// applied when the call is archived; afterwards only the call's creator
-    /// may change it.
+    /// the call is live it proposes changing the pending share-with-team
+    /// toggle, which is applied when the call is archived; afterwards only the
+    /// call's creator may propose a change. On a channel call, a change takes
+    /// effect once the other participants approve it.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
     /// Deprecated alias for `sharePermission.teamShareAccessLevel`:
@@ -576,6 +577,60 @@ pub struct EditCallRecordRepoArgs {
     /// Pending share-with-team intent for a call that is still live; applied
     /// as canonical team sharing when the call is archived.
     pub live_share_with_team: Option<bool>,
+}
+
+/// A team-sharing change as stored while it awaits approval.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TeamShareChange {
+    /// Whether the call would be shared with the team afterwards.
+    pub shared: bool,
+    /// The user who proposed the change.
+    pub requested_by: String,
+    /// Everyone who has agreed to it so far, including its requester.
+    pub approved_by: Vec<String>,
+}
+
+/// A team-sharing change that takes effect once everyone on the call approves.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PendingTeamShareChange {
+    /// Whether the call would be shared with the team afterwards.
+    pub shared: bool,
+    /// The user who proposed the change.
+    pub requested_by: String,
+    /// The users who have not approved it yet.
+    pub waiting_on: Vec<String>,
+}
+
+/// A call's team sharing as it stands, and any change awaiting approval.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CallTeamShareState {
+    /// Whether the call is shared with the team now: the pending toggle while
+    /// the call is live, canonical sharing once it is archived.
+    pub shared: bool,
+    /// The change awaiting approval, if any.
+    pub pending: Option<PendingTeamShareChange>,
+}
+
+/// An answer to a call's pending team-sharing change.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct RespondToTeamShareChangeRequest {
+    /// True to approve the change, false to decline it.
+    pub approve: bool,
+}
+
+/// What became of a call record edit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditCallRecordOutcome {
+    /// Everything the request asked for took effect.
+    Saved,
+    /// Its other fields were saved; its team-sharing change awaits approval.
+    TeamShareAwaitingApproval,
 }
 
 /// One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].

@@ -7,6 +7,7 @@ mod meetings;
 mod preparations;
 mod property_clauses;
 mod team_share;
+mod team_share_change;
 
 #[cfg(test)]
 mod test;
@@ -31,6 +32,7 @@ use uuid::Uuid;
 use crate::domain::meetings::{
     GuestId, Meeting, MeetingPreparation, MeetingToken, UpdateMeetingRequest,
 };
+use crate::domain::models::TeamShareChange;
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
     CallPeople, CallRecord, CallRecordGuest, CallRecordPage, CallRecordParticipant,
@@ -501,13 +503,17 @@ impl CallRepository for PgCallRepo {
         )
         .await?;
 
-        // `share_with_team` keeps its column default (on): it is the pending
-        // intent participants toggle during the call, translated into
-        // canonical team sharing when the call is archived.
+        // `share_with_team` is the pending intent participants change during
+        // the call, translated into canonical team sharing when the call is
+        // archived. Conversations between named people start private; calls
+        // in team and public channels start shared.
         let row = sqlx::query!(
             r#"
-            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id, share_with_team)
+            VALUES (
+                $1, $2, $3, $4, $5,
+                (SELECT c.channel_type NOT IN ('direct_message', 'private') FROM comms_channels c WHERE c.id = $2)
+            )
             ON CONFLICT (channel_id) DO NOTHING
             RETURNING id, channel_id, room_name, created_by, created_at, egress_id
             "#,
@@ -1129,6 +1135,30 @@ impl CallRepository for PgCallRepo {
         .await?
         .ok_or_else(|| edit::archived_call_conflict(call_id))?;
         Ok((row.share_with_team, row.channel_id))
+    }
+
+    async fn get_team_share_change(
+        &self,
+        call_id: &Uuid,
+    ) -> Result<Option<TeamShareChange>, CallError> {
+        team_share_change::get(&self.pool, call_id).await
+    }
+
+    async fn team_share_approvers(&self, call_id: &Uuid) -> Result<Vec<String>, CallError> {
+        team_share_change::approvers(&self.pool, call_id).await
+    }
+
+    async fn approve_team_share_change(
+        &self,
+        call_id: &Uuid,
+        shared: bool,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Option<TeamShareChange>, CallError> {
+        team_share_change::approve(&self.pool, call_id, shared, user_id).await
+    }
+
+    async fn clear_team_share_change(&self, call_id: &Uuid) -> Result<(), CallError> {
+        team_share_change::clear(&self.pool, call_id).await
     }
 
     async fn archive_call(&self, call_id: &Uuid) -> Result<ArchivedCall, CallError> {

@@ -45,4 +45,8 @@ export const callKeys = {
     }),
     { _def: record }
   ),
+  // Under the record's key so invalidating a record refreshes this too.
+  teamShare: (callId: string) => ({
+    queryKey: [...record, callId, 'team-share'] as const,
+  }),
 } as const;

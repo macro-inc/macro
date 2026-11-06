@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO call_team_share_change_requests (call_id, shared, requested_by, approved_by)\n        VALUES ($1, $2, $3, ARRAY[$3])\n        ON CONFLICT (call_id) DO UPDATE\n            SET approved_by = CASE\n                WHEN $3 = ANY(call_team_share_change_requests.approved_by)\n                    THEN call_team_share_change_requests.approved_by\n                ELSE array_append(call_team_share_change_requests.approved_by, $3)\n            END\n            WHERE call_team_share_change_requests.shared = $2\n        RETURNING shared, requested_by, approved_by\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "shared",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "requested_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "approved_by",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "060bf7e9ec5f73917b1b3aad911e749e5851419e23487cc721037936363f1c77"
+}

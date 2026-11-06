@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT user_id AS \"user_id!\" FROM (\n            SELECT user_id FROM call_participants WHERE call_id = $1\n            UNION\n            SELECT user_id FROM call_record_participants WHERE call_record_id = $1\n            UNION\n            SELECT member.user_id\n            FROM call_entities call\n            JOIN comms_channels channel ON channel.id = call.channel_id\n            JOIN comms_channel_participants member ON member.channel_id = channel.id\n            WHERE call.id = $1\n              AND channel.channel_type = 'direct_message'\n              AND member.left_at IS NULL\n        ) people\n        WHERE user_id LIKE 'macro|%'\n        ORDER BY 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7769469558449e9ad5d38acc6d6a25f3149f01033a74694782c9a0b71ff53730"
+}

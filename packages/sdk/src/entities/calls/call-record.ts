@@ -1,4 +1,5 @@
 import type {
+  CallTeamShareState,
   EditCallTranscriptRequest,
   GetCallRecordResponses,
   LiveCallSummary,
@@ -153,10 +154,23 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
     );
   }
 
-  /** Toggle the server's share-with-team setting and return its new value. */
+  /**
+   * Propose flipping the server's share-with-team setting and return its current
+   * value. On a channel call the change only takes effect once the other
+   * participants approve it; read {@link CallRecord.teamShareState} to see it.
+   */
   async toggleTeamShare(): Promise<boolean> {
     return this.mutate((c) =>
       c.storage.toggleShareWithTeam({ path: { call_id: this.id } }),
+    );
+  }
+
+  /** The call's team sharing and any change awaiting approval. */
+  async teamShareState(): Promise<CallTeamShareState> {
+    return unwrap(
+      await this.client.storage.getTeamShareState({
+        path: { call_id: this.id },
+      }),
     );
   }
 

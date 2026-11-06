@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT shared, requested_by, approved_by\n        FROM call_team_share_change_requests\n        WHERE call_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "shared",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "requested_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "approved_by",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "180838bceb605d98f8f23e6b5f870ce4503e563f5b97d76c54f1a2b5bc18addf"
+}

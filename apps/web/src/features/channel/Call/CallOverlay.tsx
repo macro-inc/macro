@@ -36,7 +36,9 @@ import {
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
 import { CallSharingMenu } from './CallControls/CallSharingMenu';
+import { CallTeamShareChangeStatus } from './CallControls/CallTeamShareChangeStatus';
 import { CallParticipantsList } from './CallParticipantsList';
+import { CallTeamShareChangePrompt } from './CallTeamShareChangePrompt';
 import {
   CallChatPanel,
   type CallPanelTab,
@@ -771,9 +773,23 @@ export function CallOverlay(props: {
                       onSettingsOpenChange={setSettingsOpen}
                     >
                       <Show when={canShareWithTeam()}>
+                        <CallTeamShareChangePrompt change={teamShare.change} />
                         <CallSharingMenu
                           sharedWithTeam={sharedWithTeam()}
                           disabled={teamShareLocked()}
+                          changePending={!!teamShare.change.pending()}
+                          status={
+                            <CallTeamShareChangeStatus
+                              change={{
+                                ...teamShare.change,
+                                answer: (approve) =>
+                                  fireAndForget(
+                                    teamShare.change.answer(approve),
+                                    'channel-call'
+                                  ),
+                              }}
+                            />
+                          }
                           onToggle={() =>
                             fireAndForget(teamShare.toggle(), 'channel-call')
                           }

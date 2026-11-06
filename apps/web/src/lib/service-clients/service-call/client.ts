@@ -6,6 +6,7 @@ import type { ActiveCallsResponse } from '@service-storage/generated/schemas/act
 import type { ActiveMeeting as ApiActiveMeeting } from '@service-storage/generated/schemas/activeMeeting';
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import type { CallTeamShareState } from '@service-storage/generated/schemas/callTeamShareState';
 import type { CallTokenResponse as ApiCallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
 import type { CreateMeetingRequest } from '@service-storage/generated/schemas/createMeetingRequest';
 import type { EditCallRecordRequest } from '@service-storage/generated/schemas/editCallRecordRequest';
@@ -21,6 +22,7 @@ import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/
 
 export type {
   CallRecord,
+  CallTeamShareState,
   CreateMeetingRequest,
   GuestChatMessage,
   GuestChatPage,
@@ -265,8 +267,9 @@ export const callServiceClient = {
   },
 
   /**
-   * `POST /call/record/{id}/share-with-team/toggle`: flips the live call's
-   * share-with-team toggle and returns the new value. The toggle becomes
+   * `POST /call/record/{id}/share-with-team/toggle`: proposes flipping the
+   * live call's share-with-team toggle and returns its current value, which
+   * only changes at once if nobody else has to approve. The toggle becomes
    * canonical team sharing (view for the creator's team) when the call is
    * archived; archived calls answer 409 and are edited via `editCallRecord`.
    */
@@ -279,6 +282,22 @@ export const callServiceClient = {
       { method: 'POST' }
     );
     return result.map((r) => r as unknown as boolean);
+  },
+
+  /** The call's team sharing and any change awaiting approval. */
+  async getTeamShareState(callId: string) {
+    return fetchWithToken<CallTeamShareState>(
+      `${host}/call/record/${callId}/share-with-team/pending`,
+      { method: 'GET' }
+    );
+  },
+
+  /** Approve or decline the call's pending team-sharing change. */
+  async respondToTeamShareChange(callId: string, approve: boolean) {
+    return fetchWithToken<CallTeamShareState>(
+      `${host}/call/record/${callId}/share-with-team/pending/respond`,
+      { method: 'POST', body: JSON.stringify({ approve }) }
+    );
   },
 
   /**

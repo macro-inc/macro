@@ -7,7 +7,7 @@ description: >-
 
 # UpdateCallRecord
 
-Rename a recorded call or change whether it is shared with the team, as the call's header menu does. Requires edit access to the call; only the call's creator can change team sharing on a finished call. Find calls with ListEntities or NameSearch.
+Rename a recorded call or change whether it is shared with the team, as the call's header menu does. Requires edit access to the call; only the call's creator can propose a team-sharing change on a finished call, and a change on a channel call only takes effect once the other participants approve it. Find calls with ListEntities or NameSearch.
 
 ## Parameters
 
@@ -15,4 +15,4 @@ Rename a recorded call or change whether it is shared with the team, as the call
 | --- | --- | --- | --- |
 | `callId` | string | Yes | The id of the call. |
 | `name` | string | No | New display name for the call. An empty string clears the custom name. Omit to leave it unchanged. |
-| `shareWithTeam` | boolean | No | True to share the call with the creator's team (view access), false to stop sharing it. Omit to leave it unchanged. |
+| `shareWithTeam` | boolean | No | True to propose sharing the call with the creator's team (view access), false to propose no longer sharing it. Takes effect once the other participants approve. Omit to leave it unchanged. |

@@ -1,4 +1,9 @@
 export default {
+  teamShareAskShare: '{{name}} wants to share this call with the team',
+  teamShareAskPrivate: '{{name}} wants to make this call private',
+  teamShareApprove: 'Approve',
+  teamShareDecline: 'Decline',
+  teamShareRequestSent: 'Asked the others on this call to approve',
   panel: 'Call sidebar',
   chat: 'Chat',
   someone: 'Someone',

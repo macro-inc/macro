@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM call_team_share_change_requests WHERE call_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8d525253327b767d7182561ec5ae147933a83b3ca7b2f3accd57a3c30fd358a6"
+}

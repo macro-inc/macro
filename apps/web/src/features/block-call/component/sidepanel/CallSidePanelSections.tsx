@@ -1,6 +1,8 @@
 import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
 import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
 import { useCallContextOptional } from '@channel/Call/CallContext';
+import { CallTeamShareChangeStatus } from '@channel/Call/CallControls/CallTeamShareChangeStatus';
+import { useCallTeamShareChange } from '@channel/Call/use-call-team-share-change';
 import { SidePanel } from '@components/app/side-panel';
 import {
   EntityMetadata,
@@ -128,28 +130,39 @@ function SharingSectionContent(props: { record: CallRecord }) {
   const toggleLiveShare = useToggleShareWithTeamMutation();
   const setTeamShare = useSetCallRecordTeamShareMutation();
 
+  const change = useCallTeamShareChange(() => record().callId);
+
   // While the call is live this is the pending toggle; once archived it is
   // the canonical `SharePermission` team share (`view` or nothing).
   const isShared = () => isCallSharedWithTeam(record());
-  // Any participant with edit access may flip the toggle during the call;
-  // once archived only the creator may change it (the backend enforces both).
+  // Any participant with edit access may propose a change during the call;
+  // once archived only the creator may (the backend enforces both). Either way
+  // it takes effect once the other participants approve.
   const canEdit = () => record().isActive || record().createdBy === userId();
   const isPending = () => toggleLiveShare.isPending || setTeamShare.isPending;
-  const isDisabled = () => isPending() || !canEdit();
+  const isDisabled = () => isPending() || !canEdit() || !!change.pending();
+  const answer = (approve: boolean) =>
+    fireAndForget(answerChange(approve), 'call-sharing');
+  const answerChange = async (approve: boolean) => {
+    const state = await change.answer(approve);
+    if (state && callCtx?.activeCallId() === record().callId) {
+      callCtx.setSharedWithTeam(state.shared);
+    }
+  };
 
   const handleChange = async (checked: boolean) => {
     const current = record();
     if (!current.channelId) return;
     try {
-      const newValue = current.isActive
-        ? await toggleLiveShare.mutateAsync(current.callId)
-        : (
-            await setTeamShare.mutateAsync({
-              callId: current.callId,
-              shared: checked,
-            })
-          ).shared;
+      if (!current.isActive) {
+        await setTeamShare.mutateAsync({
+          callId: current.callId,
+          shared: checked,
+        });
+        return;
+      }
 
+      const newValue = await toggleLiveShare.mutateAsync(current.callId);
       if (callCtx?.activeCallId() === current.callId) {
         callCtx.setSharedWithTeam(newValue);
       }
@@ -160,14 +173,14 @@ function SharingSectionContent(props: { record: CallRecord }) {
 
   const description = () => {
     if (record().isActive) {
-      return "Lets everyone on the creator's team view this call's chat, transcript, and AI summary once it ends.";
+      return "Lets everyone on the creator's team view this call's chat, transcript, and AI summary once it ends. Changes apply once everyone on the call approves.";
     }
     if (canEdit()) {
-      return "Lets everyone on your team view this call's chat, transcript, and AI summary.";
+      return "Lets everyone on your team view this call's chat, transcript, and AI summary. Changes apply once everyone on the call approves.";
     }
     return isShared()
       ? "Everyone on the creator's team can view this call's chat, transcript, and AI summary."
-      : "Only the call's creator can share it with their team.";
+      : "Only the call's creator can propose sharing it with their team.";
   };
 
   return (
@@ -192,6 +205,7 @@ function SharingSectionContent(props: { record: CallRecord }) {
         <span class="whitespace-nowrap">Share with team</span>
       </button>
       <p class="text-ink-muted leading-5">{description()}</p>
+      <CallTeamShareChangeStatus change={{ ...change, answer }} />
     </div>
   );
 }

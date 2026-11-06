@@ -81,6 +81,12 @@ export type CallShareWithTeamToggledEvent = {
   toggledBy: string | null;
 };
 
+/** A team-sharing change opened, gained an approval, or was settled. */
+export type CallShareWithTeamChangeUpdatedEvent = {
+  channelId: string;
+  callId: string;
+};
+
 export type CallEvent =
   | ({ type: 'call_started' } & CallStartedEvent)
   | ({ type: 'call_ended' } & CallEndedEvent)
@@ -88,7 +94,10 @@ export type CallEvent =
   | ({ type: 'call_declined' } & CallDeclinedEvent)
   | ({
       type: 'call_share_with_team_toggled';
-    } & CallShareWithTeamToggledEvent);
+    } & CallShareWithTeamToggledEvent)
+  | ({
+      type: 'call_share_with_team_change_updated';
+    } & CallShareWithTeamChangeUpdatedEvent);
 
 export type CallEventType = CallEvent['type'];
 
@@ -98,6 +107,7 @@ const CALL_EVENT_TYPES = new Set<string>([
   'call_answered',
   'call_declined',
   'call_share_with_team_toggled',
+  'call_share_with_team_change_updated',
 ]);
 
 export function isCallEventType(type: string): type is CallEventType {
@@ -187,6 +197,12 @@ export function parseCallEvent(
         toggledBy: toggledBy ?? null,
       };
     })
+    .with('call_share_with_team_change_updated', (eventType) => {
+      const { channel_id: channelId, call_id: callId } =
+        payload as CallShareWithTeamToggledWirePayload;
+      if (!channelId || !callId) return null;
+      return { type: eventType, channelId, callId };
+    })
     .exhaustive();
 }
 
@@ -201,6 +217,9 @@ type CallEventHandlers = {
   onCallAnswered?: (event: CallAnsweredEvent) => void;
   onCallDeclined?: (event: CallDeclinedEvent) => void;
   onShareWithTeamToggled?: (event: CallShareWithTeamToggledEvent) => void;
+  onShareWithTeamChangeUpdated?: (
+    event: CallShareWithTeamChangeUpdatedEvent
+  ) => void;
 };
 
 /**
@@ -261,6 +280,12 @@ export function createCallEventsEffect(handlers: CallEventHandlers) {
           callId: event.callId,
           shareWithTeam: event.shareWithTeam,
           toggledBy: event.toggledBy,
+        });
+      })
+      .with({ type: 'call_share_with_team_change_updated' }, (event) => {
+        handlers.onShareWithTeamChangeUpdated?.({
+          channelId: event.channelId,
+          callId: event.callId,
         });
       })
       .exhaustive();

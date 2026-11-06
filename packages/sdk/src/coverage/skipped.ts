@@ -306,6 +306,8 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Consent from a person, in the app. Agent runs are refused it by design.
+  'respondToTeamShareChange',
   // Asking to join a channel-shared event, and its sharer's request list,
   // are web-app actions.
   'listJoinRequests',
