@@ -64,6 +64,11 @@ tools/HTTP/GraphQL surfaces over them.
 
 ## Gotchas
 
+- A generic pipeline has `record_type: None` and an unprotected primary column,
+  which can change type or be deleted, leaving `primary_column_id` naming no
+  column. Don't pass one to `referencing_rows`: its SQL reads primary cells as
+  reference arrays. Don't add `ON DELETE` actions touching the pipeline row: they
+  wait on the row lock the write guard holds, and the request hangs.
 - Pipeline board-position reads require a pipeline View receipt, hold its live
   lifecycle guard, and scope the view to its backing table/database through
   `DatabaseStorage::storage_view_positions`.

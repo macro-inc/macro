@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_auth::macro_api_token::EncodeMacroApiTokenArgs;
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use sqlx::PgPool;
 use utoipa::ToSchema;
 
@@ -44,7 +44,7 @@ pub struct MacroApiTokenQuery {
 pub async fn handler(
     State(db): State<PgPool>,
     State(macro_api_token_context): State<MacroApiTokenContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
     Query(query): Query<MacroApiTokenQuery>,
 ) -> Result<Response, Response> {
     let user_context = &authorization.authorization.user.user_context;
@@ -89,6 +89,8 @@ pub async fn handler(
 
     let macro_api_token =
         macro_auth::macro_api_token::encode_macro_api_token(EncodeMacroApiTokenArgs {
+            agent_correlation_id: None,
+            agent_session_id: None,
             agent_id: authorization
                 .authorization
                 .user

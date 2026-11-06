@@ -2,6 +2,41 @@ import { expect, test } from '@playwright/test';
 
 // Production controls and mutations with synthetic transport responses;
 // these checks do not establish hosted persistence.
+test('successful email additions retain keyboard focus in header and Record details', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Desktop keyboard completion');
+  for (const details of [false, true]) {
+    for (const submit of ['Enter', 'Save']) {
+      await page.goto('/?empty');
+      if (details)
+        await page
+          .getByRole('button', { name: 'Show details', exact: true })
+          .click();
+      const trigger = page.getByRole('button', {
+        name: 'Add email',
+        exact: true,
+      });
+      const origin = details ? trigger.last() : trigger.first();
+      await origin.focus();
+      await page.keyboard.press('Enter');
+      const input = page.getByRole('textbox', { name: 'Email', exact: true });
+      await input.fill('focus@example.com');
+      if (submit === 'Save')
+        await page
+          .getByRole('button', { name: 'Save', exact: true })
+          .press('Enter');
+      else await input.press('Enter');
+      await expect(input).toBeHidden();
+      const values = page.getByText('focus@example.com', { exact: true });
+      await expect(
+        (details ? values.last() : values.first()).locator('..')
+      ).toBeFocused();
+    }
+  }
+});
+
 test('email add validates, retains a rejected draft and becomes read-only after commit', async ({
   page,
 }, info) => {
@@ -304,7 +339,7 @@ test('property controls keep compact faces and distinct expanded touch targets',
 }) => {
   for (const width of isMobile ? [320, 390, 820] : [1280]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/?shortCompany&personal');
+    await page.goto('/?companyName=I&personal');
     const email = page
       .getByText(/^person1@/)
       .first()
@@ -371,6 +406,9 @@ test('property controls keep compact faces and distinct expanded touch targets',
     await expect(page.getByPlaceholder('Search companies…')).not.toBeAttached();
     await page.touchscreen.tap(goToBox.x + goToBox.width / 2, goToBox.y - 5);
     await expect(page).toHaveURL(/opened=company-1/);
+    await expect(
+      page.getByRole('textbox', { name: 'Company name' })
+    ).toBeVisible();
     expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
   }
 });

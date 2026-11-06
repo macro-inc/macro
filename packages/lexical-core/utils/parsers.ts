@@ -136,6 +136,14 @@ function githubPullRequestRef(url: string): string | undefined {
   return match ? `${match[1]}/${match[2]}#${match[3]}` : undefined;
 }
 
+/** Account manager cards read as what they are; their payload is only an id. */
+export function parseAccountManagerRequests(text: string): string {
+  return text.replace(
+    /<m-account-manager-request>.*?<\/m-account-manager-request>/g,
+    'Account manager request'
+  );
+}
+
 /** `<m-connect-app>` chips read as their call to action. */
 export function parseConnectApps(text: string): string {
   return text.replace(/<m-connect-app>(.*?)<\/m-connect-app>/g, (_, json) => {
@@ -321,6 +329,7 @@ function flattenMarkdown(
     parseAgentSessionMentions,
     parseTagMentions,
     parseConnectApps,
+    parseAccountManagerRequests,
     parseCursorSystemNotifications,
     parseDatabaseQueries,
     parseSnapshots,
@@ -522,6 +531,11 @@ export function markdownToEmbeddingText(markdown: string): string {
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
   text = replaceJsonTag(text, 'm-connect-app', (data) =>
     data.name ? `Connect ${data.name}` : ''
+  );
+  text = replaceJsonTag(
+    text,
+    'm-account-manager-request',
+    () => 'Account manager request'
   );
   text = replaceJsonTag(
     text,

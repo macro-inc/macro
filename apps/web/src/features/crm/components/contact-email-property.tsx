@@ -20,6 +20,7 @@ export function ContactEmailProperty(props: {
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string>();
   let triggerElement: HTMLButtonElement | undefined;
+  let valueElement: HTMLSpanElement | undefined;
   const [emailInput, setEmailInput] = createSignal<HTMLInputElement>();
   useSearchInputFocus(emailInput, () => open() && !isTouchDevice());
   let active = true;
@@ -44,7 +45,7 @@ export function ContactEmailProperty(props: {
       await props.save(value);
       if (active) {
         setOpen(false);
-        if (!isTouchDevice()) triggerElement?.focus();
+        if (!isTouchDevice()) (valueElement ?? triggerElement)?.focus();
       }
     } catch (cause) {
       if (active) setError(props.errorMessage(cause));
@@ -123,7 +124,13 @@ export function ContactEmailProperty(props: {
     <Show
       when={!props.email}
       fallback={
-        <Badge variant="ghost" size="sm" class="min-w-0 max-w-full">
+        <Badge
+          ref={valueElement}
+          tabIndex={-1}
+          variant="ghost"
+          size="sm"
+          class="min-w-0 max-w-full focus-visible:ring-2 focus-visible:ring-accent/20"
+        >
           <EnvelopeIcon class="size-3 shrink-0" />
           <span class="truncate">{props.email}</span>
         </Badge>

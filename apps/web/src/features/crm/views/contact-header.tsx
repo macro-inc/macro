@@ -99,7 +99,7 @@ export function ContactHeader(props: {
               onOpenCompany={props.onOpenCompany}
             />
             <Tooltip label={formatDateAndTime(contact().lastInteraction)}>
-              <Badge variant="outline" size="sm">
+              <Badge variant="ghost" size="sm">
                 <ClockIcon class="size-3" />
                 Last interacted{' '}
                 {formatRelativeTimestamp(contact().lastInteraction)}

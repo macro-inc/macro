@@ -113,7 +113,6 @@ test('chip explanation has its own keyboard and touch lifecycle with narrow layo
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 844 });
       await expect(restore).toBeInViewport({ ratio: 1 });
-      expect((await restore.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth
@@ -140,6 +139,110 @@ test('chip explanation has its own keyboard and touch lifecycle with narrow layo
   await expect(page.getByRole('tooltip')).toHaveCount(0);
   await page.evaluate(() => window.archiveFixture.setRole('member'));
   await expect(restore).toBeDisabled();
+});
+
+test('compact record controls keep separate full-height touch targets', async ({
+  page,
+  isMobile,
+}) => {
+  for (const width of isMobile ? [390, 320, 820] : [1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const kind of ['contact', 'company']) {
+      const companyName = width === 320 ? 'I' : 'Example company';
+      await page.goto(
+        `/?kind=${kind}&archived&companyName=${encodeURIComponent(companyName)}${kind === 'company' ? '&companyArchived' : ''}`
+      );
+      const chip = page.getByRole('button', { name: 'Archived — details' });
+      const restore = page.getByRole('button', {
+        name: 'Restore',
+        exact: true,
+      });
+      await expect(restore).toBeVisible();
+      const controls = [chip, restore];
+      const companyNavigation = page.getByRole('button', {
+        name: 'Go to company',
+        exact: true,
+      });
+      if (kind === 'contact') controls.push(companyNavigation);
+
+      for (const control of controls) {
+        const bounds = (await control.boundingBox())!;
+        expect(bounds.height).toBe(24);
+        await expect(control).toHaveCSS('font-size', '12px');
+        if (!isMobile) continue;
+        if (control !== companyNavigation)
+          expect(bounds.width).toBeGreaterThanOrEqual(44);
+        else
+          expect(
+            await control.evaluate(
+              (element) => getComputedStyle(element, '::before').width
+            )
+          ).toBe('44px');
+        // The visible face is compact; the reserved margin and transparent
+        // extension must still deliver taps across a separate 44px target.
+        for (const y of [bounds.y - 9.5, bounds.y + bounds.height + 9.5]) {
+          expect(
+            await control.evaluate(
+              (element, point) =>
+                document
+                  .elementFromPoint(point.x, point.y)
+                  ?.closest('button') === element,
+              { x: bounds.x + bounds.width / 2, y }
+            )
+          ).toBe(true);
+        }
+      }
+      const chipBounds = (await chip.boundingBox())!;
+      const restoreBounds = (await restore.boundingBox())!;
+      expect(chipBounds.y).toBe(restoreBounds.y);
+      expect(chipBounds.x + chipBounds.width).toBeLessThan(restoreBounds.x);
+
+      if (isMobile) {
+        await page.touchscreen.tap(
+          chipBounds.x + chipBounds.width / 2,
+          chipBounds.y - 9
+        );
+        await expect(page.getByRole('dialog')).toContainText('Excluded from');
+        expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(
+          0
+        );
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+        await page.touchscreen.tap(
+          restoreBounds.x + restoreBounds.width / 2,
+          restoreBounds.y + restoreBounds.height + 9
+        );
+      } else {
+        await restore.focus();
+        await expect(restore).toBeFocused();
+        await page.keyboard.press('Enter');
+      }
+      if (kind === 'company') {
+        const dialog = page.getByRole('dialog');
+        await expect(dialog).toContainText(
+          'including people archived individually'
+        );
+        await expect(dialog).not.toHaveAttribute('data-transitioning');
+        await dialog
+          .getByRole('button', { name: 'Cancel', exact: true })
+          .click();
+        await expect(dialog).toHaveCount(0);
+        await expect(restore).toBeFocused();
+      } else {
+        await expect(
+          page.getByRole('button', { name: 'Archive', exact: true })
+        ).toBeVisible();
+        const company = companyNavigation;
+        const bounds = (await company.boundingBox())!;
+        if (isMobile)
+          await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y - 9);
+        else await company.click();
+        await expect(
+          page.getByRole('textbox', { name: 'Company name' })
+        ).toBeVisible();
+      }
+    }
+  }
 });
 
 test('restoring a person whose company is archived routes to company confirmation', async ({

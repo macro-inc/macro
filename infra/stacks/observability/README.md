@@ -5,8 +5,8 @@
 `tooling/xtask/crates/xtask_workflows/src/workflows/export_ci_telemetry.rs` defines
 this workflow. Run `cargo x workflows` to regenerate
 `.github/workflows/export-ci-telemetry.yml`; CI checks it for drift. The JavaScript
-preflight and shell credential reader are embedded from adjacent `scripts/` files
-at generation time, so runtime checkout is unnecessary.
+preflight, TypeScript event steps and shell credential reader are embedded from
+adjacent `scripts/` files at generation time, so runtime checkout is unnecessary.
 
 The generated workflow observes completed workflows on its
 explicit name list using Grafana's
@@ -14,16 +14,76 @@ explicit name list using Grafana's
 action, pinned to that reviewed commit. It reads the triggering attempt's GitHub
 metadata and sends OTLP/HTTP protobuf traces to our existing endpoint. The trace
 hierarchy is workflow → jobs → steps, stored in Tempo with
-`service.name=github-actions` and `deployment.environment=ci`. There is no custom
-telemetry exporter, triggering PR checkout, artifact download, raw build-log
-collection, or Datadog export. Individual test cases are outside this integration.
+`service.name=github-actions` and `deployment.environment=ci`. There is no
+triggering PR checkout, artifact download, raw build-log collection, or Datadog
+export. Individual test cases are outside this integration.
 
-`/d/macro-ci` provides workflow traces, failed/cancelled jobs and steps, and jobs
+### CI events in Loki
+
+Tempo refuses metrics queries over three hours and keeps traces for seven days, so
+it cannot answer daily percentiles. The exporter therefore also writes one log line
+per finished push, job and step to Loki, with `service_name="ci-telemetry"`. They
+keep for 30 days and give exact percentiles. Fields are structured metadata, read
+without a parser; each line's `trace_id` links to the run's trace.
+
+| `event` | Fields |
+| --- | --- |
+| `push` | `pr_type`, `wall_seconds`, `wall_start`, `start_lag_seconds`, `conclusion`, `last_workflow`, `last_job`, `slowest_job`, `queue_max_seconds`, `cold_volumes`, `files_changed`, `rust_crates_changed`, `experiment`, `rerun`, `pr_draft` |
+| `job` | `workflow`, `job`, `conclusion`, `run_seconds`, `queue_seconds`, `runner_profile`, `volume_state`, `dev_shell_seconds` |
+| `step` | `workflow`, `job`, `step`, `conclusion`, `run_seconds` |
+| `export` | The exporter's own cost: `collect_seconds`, `api_calls`, `rate_remaining`, `rate_limit` |
+
+`pr_type` is `web`, `rust-small`, `rust-medium`, `rust-large`, `mixed`, `infra`,
+`other` or `unknown`. Rust size counts changed crates: up to 2, up to 9, then large,
+or any root manifest change. `wall_seconds` runs from the push, or from opening the
+PR when that came later, to the last job. If neither fits, such as a reopen or
+leaving draft, it runs from the first workflow run and `wall_start` says
+`first_run`. A push counts as finished when every workflow it started has finished,
+so a workflow a PR runs must be on the exporter's list; a test enforces this. A run
+that starts after everything on its head has finished came from something else, such
+as a PR edit, a label or leaving draft. It forms its own line with `rerun=true`,
+which also leaves a commit's first full run after draft out of the real PR numbers.
+
+Real PR numbers exclude experiments, reruns and drafts, and pushes where only one
+workflow ran: a lone CLA run means CI didn't run, as on a PR into another branch.
+Metadata makes an ungrouped query return one series per combination, so always group:
+
+```logql
+quantile_over_time(0.9, {service_name="ci-telemetry"} | event="push"
+  | experiment="false" | rerun="false" | pr_draft="false" | conclusion="success"
+  | workflows > 1 | unwrap wall_seconds [1d]) by (pr_type)
+```
+
+Lines never carry branch names, actors, titles or file paths. A line's time and
+body are the same from every exporter that sees it, so Loki drops the duplicate
+when two workflows finish together. A workflow that starts after the rest finished
+produces a second `push` line for that head. `volume_state` is `cold` when the dev
+shell step takes 30 s or more, an inference from step timing.
+
+Collection and sending are best effort and cannot fail the exporter, and neither
+touches the observed PR's jobs. Collection runs before any credential is read.
+
+`nixos/ci-report.json` holds the queries over these events: real PR wall time
+overall and by PR type, what finished last, the slowest PR jobs and steps, queue
+by runner and job, warm and cold cache volumes, CI hours by trigger, and the
+exporter's own cost. The top of `/d/macro-ci` renders them over the selected
+range, and the daily report prints the same tables as Markdown, plus one summary
+row per UTC day:
+
+```sh
+GRAFANA_TOKEN=$(cat <token file>) bun infra/stacks/observability/scripts/ci-report.ts --range 24h --days 7
+```
+
+The token needs only Viewer access. `--loki <url>` points it at another Loki API
+root, such as a local one. Change a query in the JSON and both follow. PR steps
+grouped by workflow, job and step pass Loki's default cap of 500 series in a day,
+so `backend-config.nix` raises `max_query_series` to 2000.
+
+Below them, `/d/macro-ci` provides workflow traces, failed/cancelled jobs and steps, and jobs
 running longer than five minutes. Open a trace for its execution waterfall and
 GitHub URL. Search tables are limited to 100 traces and 100 matching spans per
 trace; narrow the time range to investigate further. These are bounded searches,
-not complete counts or p95 summaries. The action does not emit our old structured
-Loki events. Job durations exclude runner queue time. Workflow root duration
+not complete counts or p95 summaries. Job durations exclude runner queue time. Workflow root duration
 includes waiting and, on reruns, starts at the original run creation time because
 of an upstream limitation; do not treat it as attempt execution time.
 

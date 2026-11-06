@@ -165,6 +165,13 @@ export const macroConnect = defineFlag({
   env: 'ENABLE_MACRO_CONNECT',
 });
 
+/** HTML artifact nodes on Canvas, including running their scripts in a sandbox. */
+export const enableCanvasArtifacts = defineFlag({
+  key: 'enable-canvas-artifacts',
+  env: 'ENABLE_CANVAS_ARTIFACTS',
+  default: onInDev,
+});
+
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',
@@ -844,9 +851,27 @@ export const enableActivityFeed = defineFlag({
   default: onInDev,
 });
 
+// The unified notifications view: the /notifications route (redirects to Home
+// when off), the rail bell, its go-to hotkey, and the mobile dock bell's
+// target. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_UNIFIED_NOTIFICATIONS.
+export const enableUnifiedNotifications = defineFlag({
+  key: 'enable-unified-notifications',
+  env: 'ENABLE_UNIFIED_NOTIFICATIONS',
+  default: onInDev,
+});
+
 // Agents home: pending updates from coding agents shown as a stack under the
 // new-chat composer, and the Open PRs section in the Agents sidebar.
 // Override with VITE_ENABLE_AGENT_UPDATES.
+// Work: what an account registered as its work, in DMs with agent accounts and
+// in calls.
+export const enableAgentWork = defineFlag({
+  key: 'enable-agent-work',
+  env: 'ENABLE_AGENT_WORK',
+  default: onInDev,
+});
+
 export const enableAgentUpdates = defineFlag({
   key: 'enable-agent-updates',
   env: 'ENABLE_AGENT_UPDATES',
@@ -899,6 +924,24 @@ export const enableCodexAgents = defineFlag({
 export const enableRoutineConditions = defineFlag({
   key: 'enable-routine-conditions',
   env: 'ENABLE_ROUTINE_CONDITIONS',
+  default: onInDev,
+});
+
+// Macro's built-in routine templates (Sort my inbox, Morning brief, ...): the
+// strip above the routines list and New routine's Templates section. Not
+// shared templates, which follow enable-routine-sharing.
+export const enableRoutineStarterTemplates = defineFlag({
+  key: 'enable-routine-starter-templates',
+  env: 'ENABLE_ROUTINE_STARTER_TEMPLATES',
+  default: onInDev,
+});
+
+// AI writes routine steps as code (Draft it, the add-step box, code starter
+// templates). Off, it writes Ask AI steps only; code steps a routine already
+// has still show, run and change.
+export const enableRoutineCodeSteps = defineFlag({
+  key: 'enable-routine-code-steps',
+  env: 'ENABLE_ROUTINE_CODE_STEPS',
   default: onInDev,
 });
 

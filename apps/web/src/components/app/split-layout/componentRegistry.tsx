@@ -42,6 +42,10 @@ const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
 );
+const NotificationsRouteView = lazyNamed(
+  () => import('@app/features/notifications-inbox/route-views'),
+  'NotificationsRouteView'
+);
 const AgentsRouteView = lazyNamed(
   () => import('@app/features/agents-view/route-views'),
   'AgentsRouteView'
@@ -325,6 +329,11 @@ registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent(
+  'notifications',
+  () => <NotificationsRouteView />,
+  () => composableLayout()
+);
+registerComponent(
   'routines',
   () => <AgentsRouteView />,
   () => composableLayout()
@@ -408,9 +417,9 @@ registerComponent('email-compose', (params) => {
 });
 registerComponent('routine-compose', (params) => (
   <RoutineCreator
-    onCreated={
-      typeof params.onCreated === 'function'
-        ? (params.onCreated as (id: string) => void)
+    onStart={
+      typeof params.onStart === 'function'
+        ? (params.onStart as () => void)
         : undefined
     }
   />

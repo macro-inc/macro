@@ -335,7 +335,7 @@ fn parent_only_bulk_body(args: &UpsertDocumentArgs) -> Vec<String> {
 /// (e.g. archives, media). Writes the same full-overwrite parent body as
 /// the chunked paths — `node_id`/`content` on `args` are ignored — and
 /// touches no children.
-#[tracing::instrument(skip(client), err)]
+#[tracing::instrument(skip(client))]
 pub(crate) async fn upsert_parent_document(
     client: &opensearch::OpenSearch,
     args: &UpsertDocumentArgs,
