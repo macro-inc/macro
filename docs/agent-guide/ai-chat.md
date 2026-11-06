@@ -1621,6 +1621,11 @@ two answers is the rollout's decision, not a second choice in the menu.
 
 ## Agent sessions
 
+With `enableAgentSessionActivity`, an open floating details panel stays open
+when the transcript is clicked in panes at least 900px wide. The transcript and
+composer clear its width, and the panel's open state is remembered. In narrower
+panes, clicking outside the panel closes it.
+
 An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
 `Create` → `Agent`) leaves that composer focused. Type `/` to

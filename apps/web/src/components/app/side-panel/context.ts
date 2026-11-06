@@ -34,13 +34,15 @@ export type SidePanelContextType = {
   /** Which section IDs are currently expanded in the accordion. */
   openSectionIds: Accessor<string[]>;
   /**
-   * Floating panels are always overlays. Legacy docked panels also use
-   * an overlay on narrow layouts.
+   * Floating panels use overlays unless wide persistence is opted in.
+   * Legacy docked panels also use an overlay on narrow layouts.
    */
   isOverlayMode: Accessor<boolean>;
   setIsOverlayMode: Setter<boolean>;
   /** Whether the panel is rendered as a single floating bubble. */
   isFloating: Accessor<boolean>;
+  /** Keep an opted-in floating panel open across visits in wide panes. */
+  persistentFloating: Accessor<boolean>;
 };
 
 export const SidePanelContext = createContext<SidePanelContextType>();

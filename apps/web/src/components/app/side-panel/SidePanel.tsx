@@ -1,5 +1,6 @@
 import { CollapsibleSection } from '@app/components/view-shell/CollapsibleSection';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { useMaybeBlockAliasedName } from '@core/block';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
@@ -87,6 +88,8 @@ function Root(
     defaultOpen?: boolean;
     persistKey?: string;
     floating?: boolean;
+    /** Persist wide floating state and leave its content clickable at 900px+. */
+    persistentFloating?: boolean;
   }>
 ) {
   const splitPanel = useSplitPanel();
@@ -174,6 +177,7 @@ function Root(
     setOpenSectionIds: setOpenIds,
     openSectionIds: openIds,
     isFloating: () => props.floating ?? false,
+    persistentFloating: () => props.persistentFloating ?? false,
   };
 
   return (
@@ -198,6 +202,8 @@ function Layout(
     headerToggle?: boolean;
     /** Render the panel over the block instead of reserving horizontal space. */
     floating?: boolean;
+    /** Match Root's persistent floating behavior when Layout owns the Root. */
+    persistentFloating?: boolean;
   }>
 ) {
   const parentContext = useContext(SidePanelContext);
@@ -222,6 +228,9 @@ function Layout(
             setIsOpen={ctx.setIsOpen}
             setIsOverlayMode={ctx.setIsOverlayMode}
             floating={props.floating ?? ctx.isFloating()}
+            persistentFloating={
+              props.persistentFloating ?? ctx.persistentFloating()
+            }
           >
             {props.children}
           </SidePanelLayoutInner>
@@ -238,6 +247,7 @@ function Layout(
           defaultOpen={props.defaultOpen}
           persistKey={props.persistKey}
           floating={props.floating}
+          persistentFloating={props.persistentFloating}
         >
           <Panels />
         </Root>
@@ -257,6 +267,7 @@ function SidePanelLayoutInner(
     setIsOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
     setIsOverlayMode: Setter<boolean>;
     floating: boolean;
+    persistentFloating: boolean;
   }>
 ) {
   const resolved = children(() => props.children);
@@ -270,9 +281,17 @@ function SidePanelLayoutInner(
     () => isMobile() || zoneCtx.size() < NARROW_THRESHOLD_PX
   );
   const hasSections = createMemo(() => props.sections().length > 0);
+  const persistentFloatingWide = () =>
+    props.floating &&
+    props.persistentFloating &&
+    !isTouchDevice() &&
+    zoneCtx.size() >= 900;
 
   createEffect(() =>
-    props.setIsOverlayMode(props.floating || isTouchDevice() || isNarrow())
+    props.setIsOverlayMode(
+      !persistentFloatingWide() &&
+        (props.floating || isTouchDevice() || isNarrow())
+    )
   );
 
   const showSplit = createMemo(
@@ -373,8 +392,9 @@ function SidePanelLayoutInner(
       </Show>
       <Show when={props.floating && !isTouchDevice()}>
         <div class="absolute inset-0 z-split-panel-chrome pointer-events-none">
-          <Show when={showFloating()}>
+          <Show when={showFloating() && !persistentFloatingWide()}>
             <div
+              data-side-panel-scrim
               class="absolute inset-0 pointer-events-auto bg-transparent"
               onClick={() => props.setIsOpen(false)}
             />
@@ -416,7 +436,8 @@ function SidePanelLayoutInner(
   );
 }
 
-function Toggle(props: { size?: 'sm' | 'md' } = {}) {
+/** `unseenCount` is supplied by the owning section; zero hides the badge. */
+function Toggle(props: { size?: 'sm' | 'md'; unseenCount?: number } = {}) {
   const ctx = useContext(SidePanelContext);
   if (!ctx) {
     throw new Error('<SidePanel.Toggle> must be inside <SidePanel.Root>');
@@ -464,6 +485,16 @@ function Toggle(props: { size?: 'sm' | 'md' } = {}) {
             <InfoIcon
               class={cn('size-6 shrink-0', ctx.isOpen() && 'text-accent')}
             />
+          </Show>
+          <Show when={(props.unseenCount ?? 0) > 0 && !ctx.isOpen()}>
+            <span
+              aria-label={t('nav.unseenItems', {
+                count: props.unseenCount ?? 0,
+              })}
+              class="absolute -right-1 -top-1 flex min-w-4 h-4 items-center justify-center rounded-full bg-button-accent-bg px-0.5 text-[10px] font-semibold text-button-accent-ink"
+            >
+              {props.unseenCount}
+            </span>
           </Show>
         </ButtonGroup.Button>
       </HeaderActionGroup>
