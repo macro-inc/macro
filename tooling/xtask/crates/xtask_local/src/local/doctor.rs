@@ -1,5 +1,7 @@
 //! `doctor-local`: preflight checks for tools, toolchain, ports, env, images.
 
+use std::os::unix::fs::MetadataExt;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Result, bail};
@@ -44,6 +46,7 @@ pub fn run(args: &InstanceArgs) -> Result<()> {
         ("rust target", check_rust_target()),
         ("ports", check_ports(&instance)),
         ("port forwarding", check_port_forwarding(&instance)),
+        ("checkout ownership", check_checkout_ownership()),
     ];
 
     let mut failed = false;
@@ -223,6 +226,72 @@ fn check_port_forwarding(instance: &Instance) -> Status {
             ),
         }
     }
+}
+
+/// Checkout paths that local-stack containers write into: the wrangler workers'
+/// state, caches and secrets, the proxy's preview CA and the init snapshots.
+const CONTAINER_WRITTEN_PATHS: &[&str] = &[
+    "services/ai-editing-worker/.wrangler",
+    "services/ai-editing-worker/.dev.vars",
+    "services/ai-editing-worker/node_modules/.mf",
+    "services/analytics-proxy/.wrangler",
+    "services/analytics-proxy/node_modules/.mf",
+    "infra/local/generated",
+];
+
+/// Stacks started before those containers ran as the checkout owner left
+/// root-owned files there, which the containers can no longer overwrite and
+/// `git worktree remove` cannot delete.
+fn check_checkout_ownership() -> Status {
+    let root = super::repo_root();
+    let Ok(checkout) = std::fs::metadata(&root) else {
+        return Status::Warn("could not read the checkout owner".into());
+    };
+
+    let mut foreign = 0;
+    let mut affected = Vec::new();
+    for path in CONTAINER_WRITTEN_PATHS {
+        let count = count_foreign(&root.join(path), checkout.uid());
+        if count > 0 {
+            foreign += count;
+            affected.push(*path);
+        }
+    }
+
+    if affected.is_empty() {
+        return Status::Ok("container-written files belong to the checkout owner".into());
+    }
+    Status::Fail {
+        msg: format!(
+            "{foreign} file(s) not owned by the checkout owner under {}",
+            affected.join(", ")
+        ),
+        hint: Some(format!(
+            "from the repository root: sudo chown -R {}:{} {}",
+            checkout.uid(),
+            checkout.gid(),
+            affected.join(" ")
+        )),
+    }
+}
+
+/// Count the entries at or under `path` (not following symlinks) whose owner
+/// is not `uid`. A missing path counts nothing.
+fn count_foreign(path: &Path, uid: u32) -> usize {
+    let Ok(meta) = std::fs::symlink_metadata(path) else {
+        return 0;
+    };
+
+    let mut count = usize::from(meta.uid() != uid);
+    if meta.is_dir() {
+        let children: Vec<PathBuf> = std::fs::read_dir(path)
+            .map(|entries| entries.flatten().map(|entry| entry.path()).collect())
+            .unwrap_or_default();
+        for child in children {
+            count += count_foreign(&child, uid);
+        }
+    }
+    count
 }
 
 fn check_ports(instance: &Instance) -> Status {
