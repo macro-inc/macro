@@ -790,6 +790,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "trigger_context",
  "url",
  "uuid",
  "workspace-hack",

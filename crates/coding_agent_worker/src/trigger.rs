@@ -48,7 +48,7 @@ pub enum TriggerWork {
         /// Why the agent was called, forwarded with the prompt.
         context: Option<TriggerContext>,
         /// What opened the session, copied onto its create request.
-        origin: TriggerOrigin,
+        origin: Box<TriggerOrigin>,
     },
     /// Open a session somebody asked for from the composer, under the id
     /// they are waiting on. No thread, so nothing is announced anywhere;
@@ -133,7 +133,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 thread_id: assigned.discussion_id,
                 message_id: assigned.discussion_id,
                 context: assigned.context,
-                origin: assigned.origin,
+                origin: Box::new(assigned.origin),
             })
         }
         AgentTriggerTopicEvent::New(event) => {
@@ -158,7 +158,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 message_id: message.message_id,
                 content: message.content,
                 context,
-                origin,
+                origin: Box::new(origin),
             })
         }
         AgentTriggerTopicEvent::Existing(event) => {

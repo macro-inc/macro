@@ -103,7 +103,10 @@ fn document_triggers_become_work_on_the_document() {
     assert_eq!(
         trigger_to_work(opened).expect("a document mention is work"),
         TriggerWork::OpenAndPrompt {
-            origin: trigger_context::TriggerOrigin::Unknown,
+            origin: Box::new(trigger_context::TriggerOrigin::Mentioned {
+                by: trigger_context::origin::Caller::Person { user: sender() },
+                message_id: Uuid::from_u128(2),
+            }),
             reuse_origin_message: false,
             bot: bot_id::BotId::TEST_A,
             sender: sender(),
@@ -150,7 +153,7 @@ fn a_task_assignment_opens_and_prompts_in_the_task_discussion() {
     assert_eq!(
         trigger_to_work(event).expect("a task assignment is work"),
         TriggerWork::OpenAndPrompt {
-            origin: trigger_context::TriggerOrigin::Unknown,
+            origin: Box::new(trigger_context::TriggerOrigin::Unknown),
             reuse_origin_message: true,
             bot: BotId::TEST_A,
             sender: sender(),
@@ -169,7 +172,10 @@ fn a_mention_becomes_open_and_prompt_rooting_its_own_thread() {
     assert_eq!(
         work,
         TriggerWork::OpenAndPrompt {
-            origin: trigger_context::TriggerOrigin::Unknown,
+            origin: Box::new(trigger_context::TriggerOrigin::Mentioned {
+                by: trigger_context::origin::Caller::Person { user: sender() },
+                message_id: Uuid::from_u128(2),
+            }),
             reuse_origin_message: false,
             bot: bot_id::BotId::TEST_A,
             sender: sender(),
@@ -319,7 +325,7 @@ fn a_mention_tells_the_runtime_what_opened_its_session() {
     };
 
     assert!(matches!(
-        origin,
+        *origin,
         trigger_context::TriggerOrigin::Mentioned { .. }
     ));
 }

@@ -189,7 +189,7 @@ impl WorkExecutor for Dispatcher {
                     // Likewise the model: an external session runs on
                     // whatever this runtime is configured with.
                     model: None,
-                    origin,
+                    origin: *origin,
                 };
                 let created = match self.api.create_session(&request, &sender).await {
                     Ok(created) => created,
