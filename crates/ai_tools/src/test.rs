@@ -194,6 +194,28 @@ fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
 }
 
 #[test]
+fn code_mode_manages_booking_links_through_the_sdk() {
+    let tools = tools_for_agent_code_mode();
+    for name in [
+        "ListBookingLinks",
+        "CreateBookingLink",
+        "EditBookingLink",
+        "ReadBookingSettings",
+        "UpdateBookingSettings",
+        "ListBookings",
+        "GetBookingInsights",
+        "GetBookingRescheduleSlots",
+        "ChangeBooking",
+    ] {
+        assert!(!tools.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn code_mode_manages_bots_through_the_sdk_but_keeps_the_credential_card() {
     let tools = tools_for_agent_code_mode();
     for name in [

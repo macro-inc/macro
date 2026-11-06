@@ -276,6 +276,16 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "DeleteBot"
                 | "GetBotWebhooks"
                 | "ManageBotChannelAccess"
+                // macro.bookings, BookingLink, Booking and BookingSettings.
+                | "ListBookingLinks"
+                | "CreateBookingLink"
+                | "EditBookingLink"
+                | "ReadBookingSettings"
+                | "UpdateBookingSettings"
+                | "ListBookings"
+                | "GetBookingInsights"
+                | "GetBookingRescheduleSlots"
+                | "ChangeBooking"
                 // macro.agents.list() and macro.agentSessions.createManaged.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"
