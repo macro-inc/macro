@@ -5,11 +5,11 @@ import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import Bell from '@icon/system/regular/bell.svg';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
-import HistoryIcon from '@icon/system/regular/clock-counter-clockwise.svg';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import SplitIcon from '@icon/system/regular/square-half.svg';
+import ImportIcon from '@icon/system/regular/tray-arrow-down.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import PhoneIncoming from '@phosphor/phone-incoming.svg';
 import type { ComponentProps } from 'solid-js';
@@ -40,6 +40,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         dismissLabel: t('common.notNow'),
         title: 'Enable calendar',
         icon: CalendarIcon,
+        color: 'var(--color-accent)',
         content: () =>
           'Macro can now sync your calendar. Grant calendar access for user@example.com to turn it on.',
         actions: [{ label: 'Grant access', onClick: dismiss }],
@@ -57,6 +58,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         dismissLabel: t('common.notNow'),
         title: t('localRuntime.promptTitle'),
         icon: DesktopIcon,
+        color: 'var(--color-accent)',
         content: () => t('localRuntime.promptBody'),
         actions: [{ label: t('localRuntime.setUp'), onClick: dismiss }],
       },
@@ -72,7 +74,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       custom: {
         dismissLabel: t('common.notNow'),
         title: 'Import WhatsApp history',
-        icon: HistoryIcon,
+        icon: ImportIcon,
+        color: 'var(--color-accent)',
         content: () =>
           'Open WhatsApp on your phone and keep it open, then import earlier messages of 3 chats.',
         actions: [{ label: 'Import', onClick: dismiss }],

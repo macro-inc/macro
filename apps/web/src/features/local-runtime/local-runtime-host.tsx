@@ -50,6 +50,7 @@ export function LocalRuntimeHost() {
     toast: (_key, dismiss) => ({
       title: t('localRuntime.promptTitle'),
       icon: DesktopIcon,
+      color: 'var(--color-accent)',
       dismissLabel: t('common.notNow'),
       content(): string {
         return t('localRuntime.promptBody');

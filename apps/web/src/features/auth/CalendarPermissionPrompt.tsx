@@ -60,6 +60,7 @@ export function CalendarPermissionPrompt() {
     toast: (link, dismiss) => ({
       title: 'Enable calendar',
       icon: CalendarIcon,
+      color: 'var(--color-accent)',
       dismissLabel: t('common.notNow'),
       content(): string {
         return `Macro can now sync your calendar. Grant calendar access for ${link.email_address} to turn it on.`;

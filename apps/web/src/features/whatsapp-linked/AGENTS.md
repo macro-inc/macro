@@ -33,8 +33,9 @@ own shareable external chat (`POST /external-chats` with `provider:
   import earlier messages of the owner's chats waiting for their phone
   (`core/history-import.ts`). It and the chat view's import bar
   (`features/external-chat`) are the only things that ask the phone
-  (`POST /whatsapp/history-import`). The prompt uses a leading history icon and
-  a text-only **Not now** action that retains dismissal until another chat needs history.
+  (`POST /whatsapp/history-import`). The prompt uses an accent-colored import-tray
+  icon and a text-only **Not now** action that retains dismissal until another
+  chat needs history.
 - `core/chat.ts`: chat sections, search matching and row wording.
 
 ## Scope
