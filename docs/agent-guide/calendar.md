@@ -358,7 +358,9 @@ neutral styling. Reduced-motion preferences skip the crossfade and spin.
 Collapsible `Upcoming events` and `Calendars` sections follow; calendar
 account rows use Drive-style trailing disclosure buttons and animated nested
 branches. Their 14px visibility checkboxes precede the swatch and label, with
-separate account and individual-calendar visibility controls. `Team out of office`
+separate account and individual-calendar visibility controls. `Tasks` is the last
+row in that section, off until checked, and remembered in the same browser
+preferences. Checking it shows tasks that have a due date. `Team out of office`
 is feature-gated and lists teammates with 24px avatars; its header has the same
 14px checkbox before the title, which shows or hides the grid overlay and is saved
 with the calendar visibility preferences. The teammate rows have no checkboxes and
@@ -572,6 +574,17 @@ name, per-calendar checkbox). Accounts start collapsed. Subscribed system calend
 (Google holidays, birthdays) carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
 warning icon whose tooltip shows the provider error; the account keeps syncing its other
 calendars and the badge clears on its own once that calendar syncs again.
+`Tasks` uses the same checkbox row. It stays off until checked, including for
+someone who already saved calendar preferences. While it is on, the calendar
+loads the tasks the viewer can see, most recently updated first, and draws each
+one that has a due date as an all-day chip on that local date. The time of day
+on the due date does not move the chip. Clicking a chip opens the task beside
+the calendar when another pane fits, and in place on a phone. Completed tasks
+stay on their due date with a line through the title. The load stops after 500
+tasks, so a due date on a task updated less recently than those can be missing.
+Phones, which have no sidebar, use the same `Show tasks` control in Calendar
+settings. The section is shown even when only one calendar is connected, so
+the Tasks row still has a place.
 
 On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and

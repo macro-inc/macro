@@ -225,6 +225,11 @@ export const [CalendarViewContextProvider, useCalendarView] =
           setPreferences('weekStartsOn', weekStartsOn),
         setTimeFormat: (timeFormat: CalendarTimeFormat) =>
           setPreferences('timeFormat', timeFormat),
+        get showDueTasks() {
+          return preferences.showDueTasks === true;
+        },
+        setShowDueTasks: (showDueTasks: boolean) =>
+          setPreferences('showDueTasks', showDueTasks),
         closeEventDetails,
         selectEvent,
         reanchorSelectedEvent: selection.reanchor,

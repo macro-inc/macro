@@ -14,7 +14,10 @@ import {
   useHasTeammates,
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
-import { TEAM_OOO_SOURCE_ID } from '@app/features/calendar/types';
+import {
+  TASKS_CALENDAR_COLOR,
+  TEAM_OOO_SOURCE_ID,
+} from '@app/features/calendar/types';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
@@ -98,28 +101,56 @@ function UpcomingEventsSection() {
   );
 }
 
+function CalendarTasksToggle() {
+  const calendarView = useCalendarView();
+
+  return (
+    <Checkbox
+      size="sm"
+      checked={calendarView.showDueTasks}
+      onChange={calendarView.setShowDueTasks}
+      title="Show tasks with due dates"
+      class="flex h-(--sidebar-row-height) w-full min-w-0 gap-3 rounded-lg px-(--sidebar-item-inset) text-sm text-ink-muted hover:bg-hover hover:text-ink touch:h-11"
+    >
+      <Checkbox.Control />
+      <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
+        <span
+          aria-hidden="true"
+          class="size-2.5 shrink-0 rounded-sm"
+          style={{ 'background-color': TASKS_CALENDAR_COLOR }}
+        />
+        <span class="min-w-0 flex-1 truncate">Tasks</span>
+      </Checkbox.Label>
+    </Checkbox>
+  );
+}
+
 function CalendarSourcesSection() {
   const calendarView = useCalendarView();
   const [open, setOpen] = createSignal(true);
+  const showAccounts = () => calendarView.sources().length > 1;
 
   return (
-    <Show when={calendarView.sources().length > 1}>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Calendars</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
-        <CollapsibleSection.Content>
-          <SourceControls
-            ref={tourTarget(CALENDAR_TOUR.sources)}
-            sources={calendarView.sources()}
-            isVisible={calendarView.isSourceVisible}
-            onVisibilityChange={calendarView.setSourceVisibility}
-            onGroupVisibilityChange={calendarView.setSourcesVisibility}
-          />
-        </CollapsibleSection.Content>
-      </CollapsibleSection.Root>
-    </Show>
+    <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
+      <CollapsibleSection.Trigger>
+        <span class="min-w-0 truncate">Calendars</span>
+        <CollapsibleSection.Indicator />
+      </CollapsibleSection.Trigger>
+      <CollapsibleSection.Content>
+        <div class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
+          <Show when={showAccounts()}>
+            <SourceControls
+              ref={tourTarget(CALENDAR_TOUR.sources)}
+              sources={calendarView.sources()}
+              isVisible={calendarView.isSourceVisible}
+              onVisibilityChange={calendarView.setSourceVisibility}
+              onGroupVisibilityChange={calendarView.setSourcesVisibility}
+            />
+          </Show>
+          <CalendarTasksToggle />
+        </div>
+      </CollapsibleSection.Content>
+    </CollapsibleSection.Root>
   );
 }
 

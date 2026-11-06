@@ -149,10 +149,24 @@ export interface CalendarEvent {
   location?: string;
   /** Optional event description. */
   description?: string;
+  /**
+   * A task drawn on its due date. Absent on calendar events. The chip opens
+   * the task and is not an event the viewer can edit.
+   */
+  taskDue?: {
+    taskId: string;
+    completed: boolean;
+  };
 }
 
 /** Source id every teammate out-of-office event carries; hiding it hides the overlay. */
 export const TEAM_OOO_SOURCE_ID = 'team-ooo';
+
+/** Calendar id for due-date task chips, so they color as one source. */
+export const TASKS_SOURCE_ID = 'tasks';
+
+/** Swatch and chip color for due-date tasks. */
+export const TASKS_CALENDAR_COLOR = 'var(--color-success)';
 
 /** Google's default guest policy, for events Macro builds itself. */
 export const DEFAULT_GUEST_POLICY: GuestPolicy = {

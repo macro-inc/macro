@@ -1,5 +1,7 @@
 import type { EventContentArg } from '@fullcalendar/core';
+import CheckSquareIcon from '@icon/system/regular/check-square.svg';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
+import SquareIcon from '@icon/system/regular/square.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
@@ -93,6 +95,18 @@ export function EventContent(props: EventContentProps) {
           <span class="calendar-event-response-dot" aria-hidden="true" />
         </Show>
         <span class="calendar-event-title-row flex max-w-full min-w-0 shrink-0 items-center gap-0.5">
+          <Show when={props.event.taskDue}>
+            {(task) => (
+              <Show
+                when={task().completed}
+                fallback={
+                  <SquareIcon aria-hidden="true" class="size-2.5 shrink-0" />
+                }
+              >
+                <CheckSquareIcon aria-hidden="true" class="size-2.5 shrink-0" />
+              </Show>
+            )}
+          </Show>
           <Show when={everyoneElseDeclined()}>
             <span
               role="img"
