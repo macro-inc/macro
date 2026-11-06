@@ -26,13 +26,13 @@ key issuance, and account merge/link flows.
   status banner API (`crates/system_status`), shared-mailbox
   relocation signup, Cursor/Codex API key endpoints, introductory trial
   eligibility and subscription checkout, and the `/team_agents` routes
-  (`crates/team_agents` and `crates/agent_secrets`; optional
+  (`crates/team_agents`; optional
   `DEAD_SIMPLE_MAIL_API_KEY`). The agents adapter shares the hosted
   `ComputerService` used for computer billing, passing the seat as an extra
   purchase item so both charges use one subscription update. The admin-only
   `/team_agents/sizes` catalog does not require a subscription; quote conflicts
   expose `code: "no_subscription"` for the invitation billing prompt.
-  Every team-agent admin operation (including roster, catalog and admin secrets)
+  Every team-agent admin operation (including roster, catalog and voice settings)
   shares one fail-closed `enable-team-agents` snapshot per authenticated actor.
   Teammates discover their own team’s agent computer through the member-authorized
   `/team_agents/{agent_user_id}/computer` route. Agent self-service and runtime

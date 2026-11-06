@@ -134,16 +134,10 @@ be shipped in the image. macrod's `/health` contract is unchanged.
 | Tiers | `respond` (talk only, short), `heartbeat` (gated by a cheap snapshot), `work` (hand-off → Macro task + worktree, reports back, receives injected follow-ups). |
 | `Schedules` | Macro routines targeting the agent itself. |
 | `Memory` | `remember`/`recall`/`forget` and the self-state record, files under `memory/`. |
-| `Secrets` | `agent_secrets`, fetched per use. |
 | `Budget` | Per-run and per-day spend caps. |
 | `Presence` | Online and typing. |
 
-## Secrets
-
-`agent_secrets (agent_user_id, name, ciphertext)`, KMS direct encrypt with
-encryption context `{agent_user_id, name}` (the `cursor_api_key` pattern).
-`PUT/GET/DELETE /auth/team_agents/me/secrets/{name}` for the agent; list and
-delete for team admins. Never in prompts, files or the config drive.
+## Bootstrap credentials
 
 The bootstrap API key and repo token follow the
 [persona config contract](../../crates/team_agents/AGENTS.md). The agent's own

@@ -67,11 +67,10 @@ The authentication service also applies this shared eligibility policy to direct
 team computer purchases through `MacroStaffCompPolicy`.
 
 The `enable-team-agents` rollout gates management operations: roster, voice
-discovery/samples/settings, sizes, quote, create, retry, remove and admin secret
-list/delete. Load one snapshot for the authenticated user and read it synchronously.
+discovery/samples/settings, sizes, quote, create, retry and remove. Load one snapshot for the authenticated user and read it synchronously.
 Missing configuration, a missing key, off or load failure denies with HTTP 403.
-Team authorization remains independent. Agent self profile/mail, own secrets,
-brain gateway and git access never consult this rollout policy.
+Team authorization remains independent. Agent self profile/mail, brain gateway
+and git access never consult this rollout policy.
 
 ## Start here
 
@@ -89,8 +88,7 @@ brain gateway and git access never consult this rollout policy.
 - Owns: the `team_agents` table, agent account creation and deletion, the
   persona sent to the computer, agent email.
 - Not here: membership and seat pricing → `crates/teams`; computers →
-  `crates/hosted_runtimes`; repos → `crates/agent_git`; secrets →
-  `crates/agent_secrets` (this crate implements its `TeamAgentDirectory`).
+  `crates/hosted_runtimes`; repos → `crates/agent_git`.
 
 ## Checks
 
@@ -115,8 +113,7 @@ brain gateway and git access never consult this rollout policy.
   log their contents. Saved credentials are parsed again before recovery.
 - The config file `/etc/macro/personas/<os_user>.env` holds the bootstrap
   credentials: `MACRO_API_KEY` (also `ANTHROPIC_AUTH_TOKEN`) and the repo-scoped
-  `MACRO_REPO_TOKEN`. Write it with mode 600, owned by `os_user`. Every other
-  secret goes through `agent_secrets`, fetched per use.
+  `MACRO_REPO_TOKEN`. Write it with mode 600, owned by `os_user`.
 - Require the `agent-` prefix on every persona OS user, including stored enrollment
   input. Local preview agents created with old names must be re-invited; no legacy
   persona-name type or implicit OS-user migration is supported.

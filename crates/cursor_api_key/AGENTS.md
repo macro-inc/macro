@@ -11,7 +11,7 @@ model.
 
 - Depends on: AWS KMS (via `aws-sdk-kms`).
 - Used by: `agent_harness`, `authentication_service`, `agent_harness_service`;
-  `agent_api_keys` and `agent_secrets` reuse its `KmsCiphertexts` seam and CMK.
+  `agent_api_keys` reuses its `KmsCiphertexts` seam and CMK.
 
 ## Recipes
 
