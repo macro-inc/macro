@@ -33,7 +33,7 @@ pub struct LayerConfig {
 pub struct Layer {
     pub name: String,
     /// Workspace-relative crate directory globs (`crates/types/**`,
-    /// `crates/bot_id`).
+    /// `crates/types/bot_id`).
     pub paths: Vec<String>,
     /// Layers whose crates this layer may depend on, its own included.
     pub may_depend_on: Vec<String>,
