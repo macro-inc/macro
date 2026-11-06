@@ -143,14 +143,6 @@ export function clearIncludes(
   );
 }
 
-/** Whether a row's read state passes the status filter. */
-export function statusIncludes(status: InboxStatus, unseen: boolean): boolean {
-  return match(status)
-    .with('all', () => true)
-    .with('unread', () => unseen)
-    .exhaustive();
-}
-
 /**
  * How many kinds of notification are hidden, for the filter trigger's badge.
  * The All and Unread toggle shows its own state.
