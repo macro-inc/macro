@@ -10,6 +10,49 @@ export type ClientOptions = {
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
 /**
+ * One activity row on the wire — the realtime projection of an inserted
+ * `activity_events` row.
+ */
+export type ActivityWireRow = {
+    /**
+     * The stored action tag.
+     */
+    action: string;
+    /**
+     * The stored action payload, if any.
+     */
+    action_payload?: unknown;
+    /**
+     * Who mechanically acted, as a principal string (`macro|…` / `bot|…`).
+     */
+    actor_id: string;
+    /**
+     * Originating code-mode invocation, absent on older events.
+     */
+    agent_correlation_id?: string | null;
+    /**
+     * The entity acted on.
+     */
+    entity_id: string;
+    /**
+     * The kind of entity acted on.
+     */
+    entity_type: EntityType;
+    /**
+     * The stored activity id.
+     */
+    id: string;
+    /**
+     * When it happened.
+     */
+    occurred_at: string;
+    /**
+     * Whose activity this is (a principal string).
+     */
+    subject_id: string;
+};
+
+/**
  * One thing a caller wants an agent to do.
  */
 export type AgentAction = (AgentPromptAction & {
@@ -42,6 +85,49 @@ export type AgentAction = (AgentPromptAction & {
  * not uuids and stay `None`.
  */
 export type AgentActionId = string;
+
+/**
+ * Stable chronological resume position.
+ */
+export type AgentActivityCursor = {
+    /**
+     * Tie-breaking activity identity.
+     */
+    id: string;
+    /**
+     * Last stored event time.
+     */
+    occurredAt: string;
+};
+
+/**
+ * One page of the activity caused by this session.
+ */
+export type AgentActivityPage = {
+    /**
+     * Original activity rows, also retained in the affected entities' histories.
+     */
+    activities: Array<ActivityWireRow>;
+    nextCursor?: null | AgentActivityCursor;
+};
+
+/**
+ * An agent acting for a person.
+ */
+export type AgentActor = {
+    /**
+     * The agent.
+     */
+    bot: BotId;
+    /**
+     * Where the agent's own work came from.
+     */
+    lineage: Lineage;
+    /**
+     * The person it acts for.
+     */
+    on_behalf_of: MacroUserIdStr;
+};
 
 /**
  * Type-specific state for one agent session setting.
@@ -584,6 +670,11 @@ export type AgentSessionResponse = {
      */
     name: string;
     /**
+     * What opened the session: who or what started it, and what it is about.
+     * `unknown` when nothing recorded it.
+     */
+    origin?: TriggerOrigin;
+    /**
      * The exact message that invoked the bot, if any.
      */
     originatingMessageId?: string | null;
@@ -812,6 +903,19 @@ export type CallSearchSuggestions = {
      */
     status?: string | null;
 };
+
+/**
+ * Who did something that opened a session.
+ */
+export type Caller = {
+    type: 'person';
+    /**
+     * Who.
+     */
+    user: MacroUserIdStr;
+} | (AgentActor & {
+    type: 'agent';
+});
 
 /**
  * Harness names accepted by the capability-discovery endpoint.
@@ -1627,6 +1731,11 @@ export type EmailSuggestions = {
 };
 
 /**
+ * The type of an entity in Macro
+ */
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+
+/**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
  */
 export type ExecutionActivity = {
@@ -1871,6 +1980,23 @@ export type IntentScore = {
 };
 
 /**
+ * Where an acting agent's work came from.
+ */
+export type Lineage = {
+    /**
+     * The first non-agent cause of its work.
+     */
+    root: Root;
+    /**
+     * The acting session.
+     */
+    session: string;
+    type: 'session';
+} | {
+    type: 'unattributed';
+};
+
+/**
  * Defines who can access an item through its share link.
  */
 export type LinkShare = 'PUBLIC' | 'TEAM';
@@ -1934,6 +2060,8 @@ export type LogFrameDto = {
      */
     direction: LogDirectionDto;
 };
+
+export type MacroUserIdStr = string;
 
 /**
  * The entity whose permissions and lifecycle govern a message.
@@ -2447,6 +2575,39 @@ export type ReviewRecord = {
 };
 
 /**
+ * The first non-agent cause. An agent cannot be one, so a chain always ends
+ * at a person or a routine.
+ */
+export type Root = {
+    type: 'person';
+    /**
+     * Who.
+     */
+    user: MacroUserIdStr;
+} | {
+    /**
+     * The routine.
+     */
+    routine: string;
+    type: 'routine';
+};
+
+/**
+ * What made a routine fire.
+ */
+export type RoutineCause = {
+    type: 'scheduled';
+} | {
+    type: 'manual';
+} | {
+    /**
+     * The event.
+     */
+    event_id: string;
+    type: 'event';
+};
+
+/**
  * Named compute tier for a managed sandbox.
  *
  * The API and database store the name. CPU, RAM, and disk live in
@@ -2686,6 +2847,79 @@ export type ToolApprovalAnswerDto = 'approve' | 'approve_and_remember' | 'deny' 
  */
 export type ToolApprovalStatusDto = 'pending' | 'approved' | 'denied' | 'cancelled' | 'expired';
 
+/**
+ * What opened a session.
+ */
+export type TriggerOrigin = {
+    /**
+     * Who posted it.
+     */
+    by: Caller;
+    /**
+     * The message.
+     */
+    message_id: string;
+    origin: 'mentioned';
+} | {
+    /**
+     * Who wrote.
+     */
+    by: MacroUserIdStr;
+    /**
+     * The message.
+     */
+    message_id: string;
+    origin: 'conversation';
+} | {
+    /**
+     * Who assigned it.
+     */
+    by: Caller;
+    origin: 'task_assigned';
+    /**
+     * The task.
+     */
+    task: string;
+} | {
+    /**
+     * Who added the task to the project.
+     */
+    by: Caller;
+    origin: 'project_inherited';
+    /**
+     * The project.
+     */
+    project: string;
+    /**
+     * The task.
+     */
+    task: string;
+} | {
+    /**
+     * Who opened it.
+     */
+    by: MacroUserIdStr;
+    origin: 'requested';
+} | {
+    /**
+     * The user whose authority the work runs under.
+     */
+    on_behalf_of: MacroUserIdStr;
+    origin: 'dispatched';
+} | {
+    /**
+     * What made it fire.
+     */
+    firing: RoutineCause;
+    origin: 'routine';
+    /**
+     * The routine.
+     */
+    routine: string;
+} | {
+    origin: 'unknown';
+};
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -2743,6 +2977,28 @@ export type WithAgentSessionId = {
      * The session id.
      */
     id: string;
+};
+
+/**
+ * One account's active registration of one session as its work.
+ */
+export type WorkRegistrationResponse = {
+    /**
+     * The account whose work this is.
+     */
+    accountId: string;
+    /**
+     * The session registered.
+     */
+    agentSessionId: string;
+    /**
+     * The registration.
+     */
+    id: string;
+    /**
+     * When the account registered it.
+     */
+    registeredAt: string;
 };
 
 export type GetAgentAutoArchivePreferencesData = {
@@ -3326,6 +3582,44 @@ export type GetAgentSessionResponses = {
 };
 
 export type GetAgentSessionResponse = GetAgentSessionResponses[keyof GetAgentSessionResponses];
+
+export type GetAgentSessionActivityData = {
+    body?: never;
+    path: {
+        session_id: string;
+    };
+    query?: {
+        /**
+         * Restrict activity to one code-mode invocation within this session.
+         */
+        agentCorrelationId?: string | null;
+        /**
+         * Cursor timestamp from the previous page.
+         */
+        beforeAt?: string | null;
+        /**
+         * Cursor activity ID from the previous page.
+         */
+        beforeId?: string | null;
+        /**
+         * Page size, from 1 to 100; defaults to 50.
+         */
+        limit?: number | null;
+    };
+    url: '/agent-sessions/{session_id}/activity';
+};
+
+export type GetAgentSessionActivityErrors = {
+    400: unknown;
+    401: unknown;
+    403: unknown;
+};
+
+export type GetAgentSessionActivityResponses = {
+    200: AgentActivityPage;
+};
+
+export type GetAgentSessionActivityResponse = GetAgentSessionActivityResponses[keyof GetAgentSessionActivityResponses];
 
 export type ReportAgentSessionAppConnectedData = {
     body: AppConnectedRequest;
@@ -4261,6 +4555,81 @@ export type PresentSessionViewResponses = {
 };
 
 export type PresentSessionViewResponse = PresentSessionViewResponses[keyof PresentSessionViewResponses];
+
+export type UnregisterAgentSessionWorkData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/work-registration';
+};
+
+export type UnregisterAgentSessionWorkErrors = {
+    401: string;
+    500: string;
+};
+
+export type UnregisterAgentSessionWorkError = UnregisterAgentSessionWorkErrors[keyof UnregisterAgentSessionWorkErrors];
+
+export type UnregisterAgentSessionWorkResponses = {
+    /**
+     * The caller has no active registration of the session
+     */
+    204: void;
+};
+
+export type UnregisterAgentSessionWorkResponse = UnregisterAgentSessionWorkResponses[keyof UnregisterAgentSessionWorkResponses];
+
+export type RegisterAgentSessionWorkData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/work-registration';
+};
+
+export type RegisterAgentSessionWorkErrors = {
+    401: string;
+    403: string;
+    409: string;
+    500: string;
+};
+
+export type RegisterAgentSessionWorkError = RegisterAgentSessionWorkErrors[keyof RegisterAgentSessionWorkErrors];
+
+export type RegisterAgentSessionWorkResponses = {
+    200: WorkRegistrationResponse;
+};
+
+export type RegisterAgentSessionWorkResponse = RegisterAgentSessionWorkResponses[keyof RegisterAgentSessionWorkResponses];
+
+export type ListAgentWorkRegistrationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-work-registrations';
+};
+
+export type ListAgentWorkRegistrationsErrors = {
+    401: string;
+    500: string;
+};
+
+export type ListAgentWorkRegistrationsError = ListAgentWorkRegistrationsErrors[keyof ListAgentWorkRegistrationsErrors];
+
+export type ListAgentWorkRegistrationsResponses = {
+    200: Array<WorkRegistrationResponse>;
+};
+
+export type ListAgentWorkRegistrationsResponse = ListAgentWorkRegistrationsResponses[keyof ListAgentWorkRegistrationsResponses];
 
 export type ListCodingAgentsData = {
     body?: never;

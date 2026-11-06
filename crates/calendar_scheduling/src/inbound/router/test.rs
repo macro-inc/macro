@@ -278,3 +278,129 @@ async fn http_booking_receipt_recovery_reschedule_cancel_and_team_auth(pool: sql
     );
     task.abort();
 }
+
+#[sqlx::test(migrations = false)]
+async fn http_booking_links_require_confirmation_and_revision(pool: sqlx::PgPool) {
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::raw_sql("CREATE TABLE \"User\" (id text PRIMARY KEY); CREATE TABLE team (id uuid PRIMARY KEY); INSERT INTO \"User\" VALUES ('macro|host@example.test');").execute(&pool).await.unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../../macro_db_client/migrations/20260918164303_calendar_scheduling.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../../macro_db_client/migrations/20260918175703_scheduling_recovery.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let app: Router = router(RouterState::new(
+        Arc::new(Service::new(
+            PostgresRepository::new(pool.clone()),
+            Calendar(AtomicBool::new(false)),
+            People,
+        )),
+        MacroAuthorizationState::new(Arc::new(Identity)),
+    ));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let client = reqwest::Client::new();
+    let draft = serde_json::json!({
+        "event": {"title":"Intro","slug":"intro","description":"","durationMinutes":30,"location":"Office","googleMeet":false,"enabled":true,"mode":"individual","hosts":["macro|host@example.test"],"beforeMinutes":0,"afterMinutes":0,"noticeMinutes":60,"horizonDays":30,"intervalMinutes":30,"dailyLimit":null,"requiresConfirmation":false,"questions":[]},
+        "schedule": {"name":"Working hours","timeZone":"UTC","weekly":(0..7).map(|day| serde_json::json!({"day":day,"windows":[{"start":"09:00","end":"17:00"}]})).collect::<Vec<_>>(),"overrides":[]}
+    });
+
+    let empty: serde_json::Value = client
+        .get(format!("{base}/links"))
+        .bearer_auth("host")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(empty["links"], serde_json::json!([]));
+    assert_eq!(empty["userId"], "macro|host@example.test");
+
+    let unconfirmed = client
+        .post(format!("{base}/links"))
+        .bearer_auth("host")
+        .json(&serde_json::json!({"draft": draft, "userConfirmation": " \n"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unconfirmed.status(), 400);
+
+    let created = client
+        .post(format!("{base}/links"))
+        .bearer_auth("host")
+        .json(&serde_json::json!({"draft": draft, "userConfirmation": "Yes, create it."}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(created.status(), 200);
+    let created: serde_json::Value = created.json().await.unwrap();
+    assert_eq!(created["draft"], draft);
+    let link = created["eventTypeId"].as_str().unwrap().to_owned();
+    let revision = created["revision"].as_i64().unwrap();
+
+    let listed: serde_json::Value = client
+        .get(format!("{base}/links?query=intro"))
+        .bearer_auth("host")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(listed["links"][0]["eventTypeId"], link.as_str());
+    assert_eq!(listed["revision"], revision);
+
+    let mut edited = draft.clone();
+    edited["event"]["title"] = serde_json::json!("Intro call");
+    let saved = client
+        .put(format!("{base}/links/{link}"))
+        .bearer_auth("host")
+        .json(&serde_json::json!({"expectedRevision": revision, "draft": edited, "userConfirmation": "Yes, rename it."}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), 200);
+    let saved: serde_json::Value = saved.json().await.unwrap();
+    assert_eq!(saved["draft"]["event"]["title"], "Intro call");
+    assert!(saved["revision"].as_i64().unwrap() > revision);
+
+    let mut stale = draft.clone();
+    stale["event"]["title"] = serde_json::json!("Stale title");
+    assert_eq!(
+        client
+            .put(format!("{base}/links/{link}"))
+            .bearer_auth("host")
+            .json(&serde_json::json!({"expectedRevision": revision, "draft": stale, "userConfirmation": "Yes."}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+
+    let team = Uuid::now_v7();
+    assert_eq!(
+        client
+            .get(format!("{base}/links?teamId={team}"))
+            .bearer_auth("stranger")
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        403
+    );
+    task.abort();
+}

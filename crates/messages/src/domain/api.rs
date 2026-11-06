@@ -189,6 +189,22 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageReader for MessageSe
     }
 }
 
+/// Creates a channel call's thread root, for the call domain.
+#[async_trait::async_trait]
+pub trait CallRootPoster: Send + Sync + 'static {
+    /// Create the root once, however often it is asked for.
+    async fn ensure_call_root(&self, call_id: Uuid) -> Result<(), MessageError>;
+}
+
+#[async_trait::async_trait]
+impl<R: MessageRepository, E: MessageEventPublisher> CallRootPoster for MessageService<R, E> {
+    async fn ensure_call_root(&self, call_id: Uuid) -> Result<(), MessageError> {
+        MessageService::ensure_call_root(self, call_id)
+            .await
+            .map(drop)
+    }
+}
+
 #[async_trait::async_trait]
 impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for MessageService<R, E> {
     async fn post(

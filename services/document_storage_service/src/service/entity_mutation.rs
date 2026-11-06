@@ -770,14 +770,14 @@ where
         let receipt = self.receipt(actor, requested).await?;
         let requested = requested.clone();
         let user_id = actor.user_id.clone();
-        tokio::spawn(
+        tokio::spawn(agent_correlation::context::capture(
             async move {
                 duplicator
                     .duplicate_entity(requested, receipt, user_id, display_name)
                     .await
             }
             .in_current_span(),
-        )
+        ))
         .await
         .map_err(|error| EntityMutationErrorCode::internal(rootcause::report!(error)))?
     }

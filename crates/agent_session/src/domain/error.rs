@@ -10,6 +10,9 @@ pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// Invalid session activity paging input.
+    #[error("{0}")]
+    InvalidActivityQuery(&'static str),
     /// Speculative sessions cannot belong to a conversation or a message.
     #[error("a warm session cannot have conversation or message provenance")]
     InvalidSessionPurpose,

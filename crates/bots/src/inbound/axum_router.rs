@@ -27,8 +27,9 @@ use entity_access::{
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
 use macro_authorization::{
-    AnyPrincipal, BotOnly, MacroAuthorization, MacroAuthorizationExtractor,
-    MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    AccountHolderOrInternal, AnyPrincipal, BotOnly, MacroAuthorization,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
@@ -593,7 +594,7 @@ pub async fn create_token_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<BotsRouterState<S, Svc, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
     Path(path): Path<BotPath>,
     Json(req): Json<CreateBotTokenRequest>,
 ) -> Result<(StatusCode, Json<CreateBotTokenResponse>), BotsHandlerErr> {

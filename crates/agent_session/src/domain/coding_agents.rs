@@ -247,6 +247,9 @@ impl<Directory: CodingAgentDirectory, Sessions: RoutineSessions, Updates: Coding
                     session_id,
                     source: SessionSource::Agent,
                     visibility: SessionVisibility::Listed,
+                    origin: trigger_context::TriggerOrigin::Dispatched {
+                        on_behalf_of: command.user_id.clone(),
+                    },
                 })
                 .await
                 .map_err(failed)?;

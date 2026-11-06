@@ -74,3 +74,54 @@ async fn unknown_key_returns_none(pool: PgPool) {
 
     assert!(repo.find_key_owner("mak_unknown").await.unwrap().is_none());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_manager_credential_resolves_to_the_managed_account_until_revoked(pool: PgPool) {
+    const MANAGER_KEY: &str = "mak_manager_secret";
+    const MANAGER_ID: &str = "macro|manager-credential@example.com";
+
+    insert_user_and_key(&pool, USER_ID, USER_EMAIL, API_KEY).await;
+    insert_user_and_key(
+        &pool,
+        MANAGER_ID,
+        "manager-credential@example.com",
+        "mak_own",
+    )
+    .await;
+    let grant_id = Uuid::now_v7();
+    sqlx::query!(
+        r#"
+        INSERT INTO account_manager_grants
+            (id, managed_user_id, manager_user_id, requested_by, status, key_hash)
+        VALUES ($1, $2, $3, 'manager', 'active', $4)
+        "#,
+        grant_id,
+        USER_ID,
+        MANAGER_ID,
+        &hash_user_api_key(MANAGER_KEY)[..],
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgUserApiKeyAuthorizationRepo::new(pool.clone());
+
+    let owner = repo.find_key_owner(MANAGER_KEY).await.unwrap().unwrap();
+    let credential = owner.account_manager.unwrap();
+    assert_eq!(owner.macro_user_id.as_ref(), USER_ID);
+    assert_eq!(credential.grant_id, grant_id);
+    assert_eq!(credential.manager_user_id.as_ref(), MANAGER_ID);
+
+    let own_key = repo.find_key_owner("mak_own").await.unwrap().unwrap();
+    assert_eq!(own_key.macro_user_id.as_ref(), MANAGER_ID);
+    assert_eq!(own_key.account_manager, None);
+
+    sqlx::query!(
+        "UPDATE account_manager_grants SET status = 'revoked', key_hash = NULL WHERE id = $1",
+        grant_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(repo.find_key_owner(MANAGER_KEY).await.unwrap().is_none());
+}

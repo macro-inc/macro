@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
       isActive: false,
       participants: [],
       roomName: 'room',
+      discussion: { kind: 'call_chat', call_id: 'call-1' },
       shareWithTeam: false,
       startedAt: '2026-10-02T00:00:00Z',
       transcript: [],

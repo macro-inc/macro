@@ -16,11 +16,20 @@ enforced by the ordinary backend APIs.
   `Document.bytes()` downloads through the CloudFront export host (`document-content`
   in the harness's `sdk_hosts`). Never return a presigned S3 URL as the only path.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
+- `Document.readPresentation`/`editPresentation`/`copyPresentation`,
+  `readWord`/`editWord`, and `readDesign`/`readPhotoshop`/`readIllustrator`
+  run the matching direct tools' services through storage routes; the edit
+  operation unions are generated from `pptx_engine::EditOp` and
+  `WordDocumentOperation` (`office-files.ts` aliases them).
 - `src/entities/workspace/namespace.ts`: filtered activity pages and iteration,
   agent sessions included.
 - `src/entities/search/namespace.ts`: `macro.search`, one unified search across
   every kind of item with the direct search tools' filters (types, exact match,
   tags, inbox, agent session transcripts), returning typed handles.
+- `src/entities/calendar/booking-namespace.ts`: `macro.calendar.booking`, booking links
+  (`BookingLink`), settings, booked meetings (`Booking`) and insights over calendar
+  `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the
+  route rejects when blank; `BookingLink` handles keep their `team` for edits.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
@@ -61,11 +70,14 @@ enforced by the ordinary backend APIs.
   bot-management tools in its favour; `IssueBotCredential` stays, because its
   chat card mints a token the model never reads.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
+- `../sdk-calls/`: optional Node and browser LiveKit room helpers for call handles. It publishes with this package at the same version; `just bump` moves both.
+- `src/entities/calls/`: live and recorded call handles; token-bearing `CallConnection` never serializes its token.
 
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
+- Use POST to start channel calls and call-id scoped joins/leaves; the legacy GET starts a call as a side effect.
 - Keep notification mute, unmute, and snooze endpoints, including bulk item preferences, in the app-only coverage exclusions.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
@@ -172,3 +184,5 @@ the existing gateway prefixes.
 
 - Workspace-import report/cancel endpoints remain app-only review plumbing,
   explicitly classified alongside the existing Notion routes in coverage skips.
+
+- `AgentSession.activity()` and invocation handles iterate durable agent-correlated history lazily; session visibility controls the feed.
