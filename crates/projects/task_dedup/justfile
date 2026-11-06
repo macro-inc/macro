@@ -1,4 +1,4 @@
-import '../../tooling/just/database.just'
+import '../../../tooling/just/database.just'
 
 # Run the real task-dedup semantic eval (the opt-in #[ignore] tests): real
 # OpenAI embeddings + Anthropic judge over the labeled corpus, reporting

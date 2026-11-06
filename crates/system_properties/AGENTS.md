@@ -25,9 +25,9 @@ for their fixed property catalogs.
 ## Boundaries
 
 - Depends on: `macro_user_id`, `macro_uuid`, `models_properties`, `sqlx`.
-- Used by: `crates/crm`, `crates/initiative`, `crates/projects`,
+- Used by: `crates/crm`, `crates/projects/initiative`, `crates/projects/projects`,
   `crates/comms/messages`, `crates/search/soup`, `crates/search/soup_realtime`, `crates/ai_tools`,
-  `crates/agent_trigger`, `crates/item_filter_index`, `crates/task_dedup`,
+  `crates/agent_trigger`, `crates/item_filter_index`, `crates/projects/task_dedup`,
   `services/agent_harness_service`, `services/agent_trigger_service`,
   `services/email_service`, `crates/scheduled_action`.
 

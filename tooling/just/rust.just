@@ -99,12 +99,12 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/saved_views/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/channels/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/documents/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/projects/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entities/foreign_entity/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/platform/stream/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entities/entity_access/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/github/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/initiative/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/initiative/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/referral/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/chat/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/memory/.env
@@ -117,7 +117,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entities/entity_registry_db_utils/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/clients/mcp_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/document_storage_service/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/task_dedup/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/task_dedup/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/crm/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/bots/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/call_recording_preview_handler/.env

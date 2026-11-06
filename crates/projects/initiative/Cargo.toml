@@ -57,7 +57,7 @@ tracing = { workspace = true, optional = true }
 unicode-segmentation = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true, features = ["serde", "v7"] }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 mockall = { workspace = true }
 
 [dev-dependencies]

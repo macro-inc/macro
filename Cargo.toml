@@ -104,8 +104,6 @@ members = [
   "crates/import_linear",
   "crates/import_notion",
   "crates/import_tracker",
-  "crates/initiative",
-  "crates/initiative_description",
   "crates/integration_tests/local_e2e",
   "crates/item_filter_index",
   "crates/jev",
@@ -127,6 +125,9 @@ members = [
   "crates/platform/worker_rs_otel",
   "crates/pptx_engine",
   "crates/predicate_index",
+  "crates/projects/initiative",
+  "crates/projects/initiative_description",
+  "crates/projects/task_dedup",
   "crates/prompt",
   "crates/properties_service",
   "crates/psd_engine",
@@ -143,7 +144,6 @@ members = [
   "crates/soup_filter_projection",
   "crates/sync_router",
   "crates/system_skills",
-  "crates/task_dedup",
   "crates/types/bot_id",
   "crates/types/bot_token",
   "crates/types/cowlike",
@@ -674,8 +674,8 @@ import_jira = { path = "crates/import_jira" }
 import_linear = { path = "crates/import_linear" }
 import_notion = { path = "crates/import_notion" }
 import_tracker = { path = "crates/import_tracker" }
-initiative = { path = "crates/initiative", default-features = false }
-initiative_description = { path = "crates/initiative_description" }
+initiative = { path = "crates/projects/initiative", default-features = false }
+initiative_description = { path = "crates/projects/initiative_description" }
 invite_email = { path = "crates/email/invite_email" }
 ip_extractor = { path = "crates/platform/ip_extractor" }
 item-filter-index = { path = "crates/item_filter_index" }
@@ -759,8 +759,8 @@ opensearch_query_builder = { path = "crates/clients/opensearch_query_builder" }
 pipedream_mcp = { path = "crates/pipedream_mcp" }
 pptx_engine = { path = "crates/pptx_engine", default-features = false }
 predicate-index = { path = "crates/predicate_index" }
-projects = { path = "crates/projects", default-features = false }
-projects_hex = { package = "projects", path = "crates/projects" }
+projects = { path = "crates/projects/projects", default-features = false }
+projects_hex = { package = "projects", path = "crates/projects/projects" }
 prompt = { path = "crates/prompt" }
 properties = { path = "crates/properties", default-features = false }
 psd_engine = { path = "crates/psd_engine" }
@@ -802,7 +802,7 @@ sync_service_hex = { path = "crates/sync_service" }
 system_properties = { path = "crates/system_properties" }
 system_skills = { path = "crates/system_skills" }
 system_status = { path = "crates/accounts/system_status" }
-task_dedup = { path = "crates/task_dedup" }
+task_dedup = { path = "crates/projects/task_dedup" }
 teams = { path = "crates/accounts/teams", default-features = false }
 trigger_context = { path = "crates/types/trigger_context" }
 turso-opfs = { path = "crates/client/turso-opfs" }

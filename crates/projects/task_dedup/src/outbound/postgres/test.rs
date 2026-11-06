@@ -264,7 +264,7 @@ fn detection_task(document_id: &str) -> NewTask {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../documents/fixtures",
+        path = "../../../../../documents/fixtures",
         scripts("documents_test_data")
     )
 )]
@@ -337,7 +337,7 @@ async fn upsert_embeddings_inserts_and_updates(pool: PgPool) {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../documents/fixtures",
+        path = "../../../../../documents/fixtures",
         scripts("documents_test_data")
     )
 )]
@@ -379,7 +379,7 @@ async fn cross_field_match_query_title_to_stored_body(pool: PgPool) {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../documents/fixtures",
+        path = "../../../../../documents/fixtures",
         scripts("documents_test_data")
     )
 )]
@@ -406,7 +406,7 @@ async fn lists_active_duplicates_for_either_side_of_pair(pool: PgPool) {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../documents/fixtures",
+        path = "../../../../../documents/fixtures",
         scripts("documents_test_data")
     )
 )]
@@ -427,7 +427,7 @@ async fn dismissed_matches_are_hidden(pool: PgPool) {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../documents/fixtures",
+        path = "../../../../../documents/fixtures",
         scripts("documents_test_data")
     )
 )]
@@ -455,7 +455,7 @@ async fn deleted_duplicate_tasks_are_hidden(pool: PgPool) {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../documents/fixtures",
+        path = "../../../../../documents/fixtures",
         scripts("documents_test_data")
     )
 )]
@@ -477,7 +477,7 @@ async fn closed_duplicate_tasks_are_hidden(pool: PgPool) {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../documents/fixtures",
+        path = "../../../../../documents/fixtures",
         scripts("documents_test_data")
     )
 )]
@@ -495,7 +495,7 @@ async fn open_duplicate_tasks_stay_visible(pool: PgPool) {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../documents/fixtures",
+        path = "../../../../../documents/fixtures",
         scripts("documents_test_data")
     )
 )]
@@ -531,7 +531,7 @@ async fn similarity_search_excludes_closed_tasks(pool: PgPool) {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../documents/fixtures",
+        path = "../../../../../documents/fixtures",
         scripts("documents_test_data")
     )
 )]
@@ -556,7 +556,7 @@ async fn detection_skips_closed_tasks(pool: PgPool) {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../documents/fixtures",
+        path = "../../../../../documents/fixtures",
         scripts("documents_test_data")
     )
 )]
@@ -578,7 +578,7 @@ async fn detection_inserts_match_for_similar_existing_task(pool: PgPool) {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../documents/fixtures",
+        path = "../../../../../documents/fixtures",
         scripts("documents_test_data")
     )
 )]
@@ -608,7 +608,7 @@ async fn detection_closes_existing_duplicate_component(pool: PgPool) {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../documents/fixtures",
+        path = "../../../../../documents/fixtures",
         scripts("documents_test_data")
     )
 )]
