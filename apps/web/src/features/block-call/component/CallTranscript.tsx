@@ -36,6 +36,7 @@ export function CallTranscript(props: {
   channelId?: string | null;
   record?: { guests: Array<{ id: string; displayName: string }> };
   timelineStartMs: number | null;
+  durationSeconds?: number;
   activeSequenceNum?: number | null;
   videoSeekGeneration?: number;
   onSeekToSeconds?: (seconds: number) => void;
@@ -64,7 +65,8 @@ export function CallTranscript(props: {
       (message) => {
         const seconds = messageVideoSeconds(
           message.created_at,
-          props.timelineStartMs
+          props.timelineStartMs,
+          props.durationSeconds
         );
         return seconds === null
           ? []

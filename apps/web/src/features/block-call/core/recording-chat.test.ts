@@ -28,6 +28,8 @@ describe('recording chat timeline', () => {
     expect(messageVideoSeconds('2026-01-01T00:00:15Z', start)).toBe(10);
     expect(messageVideoSeconds('2026-01-01T00:00:00Z', start)).toBeNull();
     expect(messageVideoSeconds('invalid', start)).toBeNull();
+    expect(messageVideoSeconds('2026-01-01T00:00:15Z', start, 5)).toBeNull();
+    expect(messageVideoSeconds('2026-01-01T00:00:15Z', start, 10)).toBe(10);
     expect(messageVideoSeconds('2026-01-01T00:00:15Z', null)).toBeNull();
   });
 });

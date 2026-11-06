@@ -14,9 +14,12 @@ export function recordingChatMessages<
 
 export function messageVideoSeconds(
   createdAt: string,
-  timelineStartMs: number | null
+  timelineStartMs: number | null,
+  durationSeconds = Infinity
 ): number | null {
   if (timelineStartMs === null) return null;
   const seconds = (Date.parse(createdAt) - timelineStartMs) / 1000;
-  return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+  return Number.isFinite(seconds) && seconds >= 0 && seconds <= durationSeconds
+    ? seconds
+    : null;
 }

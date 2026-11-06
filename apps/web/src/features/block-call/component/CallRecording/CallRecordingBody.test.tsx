@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   callAgain: vi.fn(),
   canCallAgain: true,
   activeCallId: null as string | null,
+  mobile: false,
 }));
 
 vi.mock('../use-call-again', () => ({
@@ -44,7 +45,7 @@ vi.mock('@components/app/side-panel', () => ({
 vi.mock('@core/component/CustomScrollbar', () => ({
   CustomScrollbar: () => null,
 }));
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mocks.mobile }));
 vi.mock('@ui', () => ({
   Tabs: () => null,
   Button: (props: { onClick: () => void; children: JSX.Element }) => (
@@ -55,9 +56,17 @@ vi.mock('./CallRecordingParticipants', () => ({
   CallRecordingAvatars: () => null,
 }));
 vi.mock('./CallRecordingSummary', () => ({
-  CallRecordingSummarySection: () => null,
+  CallRecordingSummarySection: () => <p>Summary content</p>,
 }));
-vi.mock('./CallRecordingChat', () => ({ CallRecordingChat: () => null }));
+vi.mock('./CallRecordingChat', () => ({
+  CallRecordingChat: () => <p>Chat history</p>,
+}));
+vi.mock('./CallRecordingMobileActions', () => ({
+  CallRecordingMobileActions: () => null,
+}));
+vi.mock('./CallRecordingMobilePlayback', () => ({
+  CallRecordingMobilePlayback: () => null,
+}));
 
 function callRecord(isActive: boolean): CallRecord {
   return {
@@ -78,6 +87,7 @@ beforeEach(() => {
   mocks.callAgain.mockReset();
   mocks.canCallAgain = true;
   mocks.activeCallId = null;
+  mocks.mobile = false;
 });
 
 afterEach(cleanup);
@@ -105,4 +115,17 @@ describe('CallRecordingBody join button', () => {
     ));
     expect(screen.queryByRole('button', { name: 'Join call' })).toBeNull();
   });
+});
+
+it('opens a linked message in the phone Chat tab instead of Summary', () => {
+  mocks.mobile = true;
+  render(() => (
+    <CallRecordingBody
+      record={callRecord(false)}
+      callId="call-id"
+      messageTarget="reply-id"
+    />
+  ));
+  expect(screen.getByText('Chat history')).toBeTruthy();
+  expect(screen.queryByText('Summary content')).toBeNull();
 });

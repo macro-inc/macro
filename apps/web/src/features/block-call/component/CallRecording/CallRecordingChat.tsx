@@ -14,6 +14,7 @@ import {
 export function CallRecordingChat(props: {
   source: CallDiscussionSource;
   timelineStartMs: number | null;
+  durationSeconds?: number;
   onSeek?: (seconds: number) => void;
   targetId?: string;
   requestKey?: string | number;
@@ -44,7 +45,13 @@ export function CallRecordingChat(props: {
       <Show when={props.source.loading()}>
         <p class="text-sm text-ink-muted">Loading chat…</p>
       </Show>
-      <Show when={props.source.empty()}>
+      <Show
+        when={
+          !props.source.loading() &&
+          !props.source.failed() &&
+          messages().length === 0
+        }
+      >
         <p class="text-sm text-ink-muted">
           No messages were sent during this call.
         </p>
@@ -68,7 +75,11 @@ export function CallRecordingChat(props: {
           <For each={messages()}>
             {(message) => {
               const seconds = () =>
-                messageVideoSeconds(message.created_at, props.timelineStartMs);
+                messageVideoSeconds(
+                  message.created_at,
+                  props.timelineStartMs,
+                  props.durationSeconds
+                );
               return (
                 <Message.Root
                   message={message}

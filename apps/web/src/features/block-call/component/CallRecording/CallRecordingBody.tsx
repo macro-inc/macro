@@ -170,8 +170,17 @@ export function CallRecordingBody(props: {
 
   createEffect(
     on(
-      () => props.transcriptTarget,
-      (target) => {
+      () =>
+        [
+          props.transcriptTarget,
+          props.messageTarget,
+          props.messageTargetRequestKey,
+        ] as const,
+      ([target, messageTarget]) => {
+        if (messageTarget) {
+          setContentTab(isMobile() ? 'chat' : 'summary');
+          return;
+        }
         if (!target) return;
         setContentTab('transcript');
         goToTranscriptSegment(target.transcriptId);
@@ -241,6 +250,7 @@ export function CallRecordingBody(props: {
                       channelId={record().channelId}
                       record={record()}
                       timelineStartMs={timelineStartMs()}
+                      durationSeconds={playback.duration() || undefined}
                       activeSequenceNum={activeSequenceNum()}
                       videoSeekGeneration={videoSeekGeneration()}
                       onSeekToSeconds={seekToSeconds}
@@ -351,6 +361,9 @@ export function CallRecordingBody(props: {
                               <CallRecordingChat
                                 source={discussion}
                                 timelineStartMs={timelineStartMs()}
+                                durationSeconds={
+                                  playback.duration() || undefined
+                                }
                                 onSeek={
                                   record().recordingUrl
                                     ? seekToSeconds
@@ -368,6 +381,7 @@ export function CallRecordingBody(props: {
                               channelId={record().channelId}
                               record={record()}
                               timelineStartMs={timelineStartMs()}
+                              durationSeconds={playback.duration() || undefined}
                               activeSequenceNum={activeSequenceNum()}
                               videoSeekGeneration={videoSeekGeneration()}
                               onSeekToSeconds={seekToSeconds}
@@ -382,6 +396,7 @@ export function CallRecordingBody(props: {
                             <CallRecordingChat
                               source={discussion}
                               timelineStartMs={timelineStartMs()}
+                              durationSeconds={playback.duration() || undefined}
                               onSeek={
                                 record().recordingUrl
                                   ? seekToSeconds
