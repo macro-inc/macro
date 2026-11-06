@@ -5,6 +5,9 @@ name = "xtask_graph"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dependencies]
 anyhow = { workspace = true }
 guppy = { workspace = true }

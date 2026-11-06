@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[[bin]]
+name = "export_review_types"
+path = "src/bin/export_review_types.rs"
+test = false
+
 [dependencies]
 agent_runtime_protocol = { path = "../agent_runtime_protocol", features = ["utoipa"] }
 chrono = { workspace = true }

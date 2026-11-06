@@ -7,6 +7,7 @@ version = "0.1.0"
 [[bin]]
 name = "ai-billing"
 path = "src/main.rs"
+test = false
 
 [dependencies]
 ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }

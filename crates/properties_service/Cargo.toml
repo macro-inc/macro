@@ -7,10 +7,12 @@ version = "0.1.0"
 [lib]
 name = "properties_service"
 path = "src/lib.rs"
+test = false
 
 [[bin]]
 name = "properties_service_openapi"
 path = "src/openapi.rs"
+test = false
 
 [dependencies]
 axum = { workspace = true, features = ["tower-log", "ws"] }

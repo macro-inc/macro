@@ -8,6 +8,7 @@ version = "0.1.0"
 [[bin]]
 name = "convert_service_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
 [features]
 disable_cleanup = []

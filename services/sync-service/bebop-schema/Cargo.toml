@@ -6,6 +6,9 @@ name = "sync_service_bebop_schema"
 version = "0.1.0"
 publish = false
 
+[lib]
+test = false
+
 [features]
 bebop-owned-all = []
 

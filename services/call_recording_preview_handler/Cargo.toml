@@ -4,6 +4,11 @@ name = "call_recording_preview_handler"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "call_recording_preview_handler"
+path = "src/main.rs"
+test = false
+
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true }

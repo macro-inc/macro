@@ -4,6 +4,9 @@ name = "entity_mutation"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dependencies]
 entity_access = { path = "../entity_access", default-features = false, features = [
   "ports",

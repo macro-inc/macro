@@ -11,19 +11,23 @@ path = "src/lib.rs"
 [[bin]]
 name = "connection_gateway_service"
 path = "src/main.rs"
+test = false
 
 [[bin]]
 name = "connection_gateway_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
 
 [[bin]]
 name = "stale_connections"
 path = "scripts/stale_connections.rs"
+test = false
 
 [[bin]]
 name = "connection_gateway_openapi"
 path = "src/openapi.rs"
+test = false
 
 [features]
 local_auth = ["macro_authorization/local_auth"]

@@ -12,10 +12,12 @@ path = "src/main.rs"
 [[bin]]
 name = "contacts_service_openapi"
 path = "src/openapi.rs"
+test = false
 
 [[bin]]
 name = "contacts_service_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }

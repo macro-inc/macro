@@ -4,6 +4,9 @@ name = "models_bulk_upload"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dependencies]
 serde = { workspace = true }
 strum = { workspace = true }

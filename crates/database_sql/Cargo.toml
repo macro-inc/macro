@@ -23,6 +23,7 @@ schema = ["dep:schemars", "models_databases/schema"]
 [[bin]]
 name = "database_sql_types"
 required-features = ["cli"]
+test = false
 
 [dependencies]
 chrono = { workspace = true }

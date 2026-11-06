@@ -4,6 +4,9 @@ name = "search_service_client"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dependencies]
 anyhow = { workspace = true }
 models_search = { path = "../models_search" }

@@ -8,6 +8,7 @@ version = "0.1.0"
 name = "backfill_formula_cells"
 path = "src/bin/backfill_formula_cells.rs"
 required-features = ["backfill_binary"]
+test = false
 
 [features]
 default = []

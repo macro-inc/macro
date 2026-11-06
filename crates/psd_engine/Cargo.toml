@@ -17,6 +17,7 @@ cli = ["dep:clap"]
 [[bin]]
 name = "psd_render"
 required-features = ["cli"]
+test = false
 
 [dependencies]
 clap = { workspace = true, optional = true }

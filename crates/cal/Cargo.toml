@@ -4,6 +4,9 @@ name = "cal"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [features]
 all = ["axum", "outbound"]
 axum = ["dep:axum", "dep:model-error-response", "dep:utoipa"]

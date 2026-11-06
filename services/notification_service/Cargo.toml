@@ -12,10 +12,12 @@ path = "src/main.rs"
 [[bin]]
 name = "notification_service_openapi"
 path = "src/openapi.rs"
+test = false
 
 [[bin]]
 name = "notification_service_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
 [features]
 default = ["push_notification_event_handler"]

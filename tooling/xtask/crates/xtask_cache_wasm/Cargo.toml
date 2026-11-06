@@ -8,6 +8,7 @@ version = "0.1.0"
 [[bin]]
 name = "xtask_cache_wasm"
 path = "src/main.rs"
+test = false
 
 [dependencies]
 anyhow = { workspace = true }

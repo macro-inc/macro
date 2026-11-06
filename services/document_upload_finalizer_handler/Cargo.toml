@@ -42,3 +42,9 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 [[bin]]
 name = "document_upload_finalizer_local_worker"
 path = "src/bin/local_worker.rs"
+test = false
+
+[[bin]]
+name = "document_upload_finalizer_handler"
+path = "src/main.rs"
+test = false

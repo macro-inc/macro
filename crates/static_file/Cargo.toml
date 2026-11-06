@@ -4,6 +4,9 @@ name = "static_file"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [features]
 default = ["outbound"]
 attachment = ["dep:futures", "dep:attachment", "dep:model-entity"]

@@ -11,6 +11,7 @@ path = "src/main.rs"
 [[bin]]
 name = "email_focus_worker_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
 [dependencies]
 ai_usage = { path = "../../crates/ai_usage" }

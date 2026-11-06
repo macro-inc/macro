@@ -4,6 +4,9 @@ name = "readonly_pool"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dependencies]
 sqlx = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

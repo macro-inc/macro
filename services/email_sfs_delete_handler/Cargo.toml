@@ -4,6 +4,11 @@ name = "email_sfs_delete_handler"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "email_sfs_delete_handler"
+path = "src/main.rs"
+test = false
+
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-sqs = { workspace = true }

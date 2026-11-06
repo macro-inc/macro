@@ -6,6 +6,9 @@ version = "0.1.0"
 license = "MPL-2.0"
 description = "Protobuf types of the whatsmeow Rust port, generated from whatsmeow's proto/ tree."
 
+[lib]
+test = false
+
 [dependencies]
 prost = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

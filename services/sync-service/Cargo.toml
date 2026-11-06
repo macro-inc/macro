@@ -27,6 +27,7 @@ crate-type = ["cdylib", "rlib"]
 name = "sync_service_openapi"
 path = "src/bins/openapi.rs"
 required-features = ["openapi"]
+test = false
 
 [package.metadata.release]
 release = false

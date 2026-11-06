@@ -21,6 +21,7 @@ cli = ["dep:clap"]
 [[bin]]
 name = "fig_render"
 required-features = ["cli"]
+test = false
 
 [dependencies]
 brotli-decompressor = { workspace = true }

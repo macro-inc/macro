@@ -8,16 +8,19 @@ version = "0.1.0"
 name = "backfill_task_embeddings"
 path = "src/bin/backfill_task_embeddings.rs"
 required-features = ["backfill"]
+test = false
 
 [[bin]]
 name = "pull_task_corpus"
 path = "src/bin/pull_task_corpus.rs"
 required-features = ["backfill"]
+test = false
 
 [[bin]]
 name = "expand_eval_corpus"
 path = "src/bin/expand_eval_corpus.rs"
 required-features = ["backfill"]
+test = false
 
 [features]
 # Pulls in everything the `backfill_task_embeddings` binary needs. The library

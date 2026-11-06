@@ -4,6 +4,9 @@ name = "static_file_service_client"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dependencies]
 anyhow = { workspace = true }
 bytes = { workspace = true }

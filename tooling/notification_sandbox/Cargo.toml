@@ -4,6 +4,11 @@ name = "notification_sandbox"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "notification_sandbox"
+path = "src/main.rs"
+test = false
+
 [dependencies]
 aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
