@@ -16,7 +16,7 @@ import {
 import {
   type AgentConversationEntity,
   conversationMode,
-  partitionArchived,
+  listedConversations,
 } from '../core/recent-conversations';
 import { AgentsSidebar } from './AgentsSidebar';
 
@@ -176,7 +176,9 @@ describe('mixed Agents sidebar', () => {
         onGroupingChange={vi.fn()}
         activePage="new"
         onOpenPage={openPage}
-        {...partitionArchived(conversations)}
+        conversations={listedConversations(conversations, false)}
+        showArchived={false}
+        onShowArchivedChange={vi.fn()}
         modeForConversation={(conversation) =>
           conversation.type === 'chat' ? 'chat' : 'code'
         }
@@ -205,15 +207,9 @@ describe('mixed Agents sidebar', () => {
         .getAllByRole('heading', { level: 3 })
         .map((heading) => heading.textContent)
     ).toEqual(['Needs you1', 'Recent1']);
-    // Archived starts collapsed; its header expands it.
-    const archivedToggle = screen.getByRole('button', { name: /Archived/ });
-    expect(archivedToggle.getAttribute('aria-expanded')).toBe('false');
+    // Archived sessions have no section of their own.
+    expect(screen.queryByText('Archived')).toBeNull();
     expect(screen.queryByRole('button', { name: /Old spike/ })).toBeNull();
-    fireEvent.click(archivedToggle);
-    expect(archivedToggle.getAttribute('aria-expanded')).toBe('true');
-    expect(
-      await screen.findByRole('button', { name: /Old spike/ })
-    ).toBeTruthy();
     const chat = screen.getByRole('button', { name: /Plan launch/ });
     expect(chat.getAttribute('data-kind')).toBe('chat');
     expect(chat.getAttribute('aria-current')).toBe('page');
@@ -225,7 +221,7 @@ describe('mixed Agents sidebar', () => {
     const code = await screen.findByRole('button', { name: /Fix build/ });
     expect(code.closest('[data-kind]')?.getAttribute('data-kind')).toBe('code');
     expect(screen.queryByRole('button', { name: /Plan launch/ })).toBeNull();
-    expect(screen.getByRole('button', { name: /Old spike/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Old spike/ })).toBeNull();
     fireEvent.click(code, { shiftKey: true });
     expect(open).toHaveBeenLastCalledWith(
       conversations[0],
@@ -266,7 +262,8 @@ describe('mixed Agents sidebar', () => {
         conversations={[
           { type: 'chat', id: 'chat', name: 'Plan launch', ownerId: 'me' },
         ]}
-        archived={[]}
+        showArchived={false}
+        onShowArchivedChange={vi.fn()}
         modeForConversation={() => 'chat'}
         activeConversationId={undefined}
         search=""
@@ -290,9 +287,11 @@ describe('mixed Agents sidebar', () => {
     expect(clear).toHaveBeenCalledOnce();
   });
 
-  it('toggles hidden routine runs from the filter menu and marks the runs it lists', async () => {
+  it('toggles hidden routine runs and archived sessions from the filter menu', async () => {
     const [show, setShow] = createSignal(false);
     const change = vi.fn(setShow);
+    const [showArchived, setShowArchived] = createSignal(false);
+    const changeArchived = vi.fn(setShowArchived);
     const clear = vi.fn();
     render(() => (
       <AgentsSidebar
@@ -326,7 +325,6 @@ describe('mixed Agents sidebar', () => {
             status: 'acp_ready',
           },
         ]}
-        archived={[]}
         modeForConversation={() => 'chat'}
         activeConversationId={undefined}
         search=""
@@ -337,6 +335,8 @@ describe('mixed Agents sidebar', () => {
         onSearchChange={vi.fn()}
         showUnlistedRuns={show()}
         onShowUnlistedRunsChange={change}
+        showArchived={showArchived()}
+        onShowArchivedChange={changeArchived}
         onOpenConversation={vi.fn()}
         onRetry={vi.fn()}
         onLoadMore={vi.fn()}
@@ -372,9 +372,19 @@ describe('mixed Agents sidebar', () => {
     await waitFor(() =>
       expect(filterMenu.getAttribute('aria-expanded')).toBe('false')
     );
+    fireEvent.keyDown(await openOption('Show archived', 'menuitemcheckbox'), {
+      key: 'Enter',
+    });
+    await waitFor(() => expect(changeArchived).toHaveBeenLastCalledWith(true));
+    expect(badge()?.textContent).toBe('2');
+
+    await waitFor(() =>
+      expect(filterMenu.getAttribute('aria-expanded')).toBe('false')
+    );
     fireEvent.keyDown(await openOption('Clear filters'), { key: 'Enter' });
     await waitFor(() => expect(clear).toHaveBeenCalledOnce());
     expect(change).toHaveBeenLastCalledWith(false);
+    expect(changeArchived).toHaveBeenLastCalledWith(false);
     expect(badge()).toBeNull();
   });
 
@@ -390,7 +400,9 @@ describe('mixed Agents sidebar', () => {
         onGroupingChange={vi.fn()}
         activePage="new"
         onOpenPage={vi.fn()}
-        {...partitionArchived([
+        showArchived
+        onShowArchivedChange={vi.fn()}
+        conversations={[
           {
             type: 'agent_session',
             id: 'code',
@@ -410,7 +422,7 @@ describe('mixed Agents sidebar', () => {
             status: 'disconnected',
           },
           { type: 'chat', id: 'chat', name: 'Plan launch', ownerId: 'me' },
-        ])}
+        ]}
         modeForConversation={() => 'chat'}
         activeConversationId={undefined}
         search=""
@@ -441,7 +453,15 @@ describe('mixed Agents sidebar', () => {
       sessionMenu.getByRole('menuitem', { name: 'Copy Link' })
     ).toBeTruthy();
     // Archive and Unarchive come from the shared entity menu, like Search's.
-    expect(screen.getByText('Archived')).toBeTruthy();
+    const archived = screen
+      .getByRole('button', { name: /Old session/ })
+      .closest('[data-agent-session-row]') as HTMLElement;
+    expect(within(archived).getByLabelText('Archived')).toBeTruthy();
+    expect(
+      within(
+        session.closest('[data-agent-session-row]') as HTMLElement
+      ).queryByLabelText('Archived')
+    ).toBeNull();
 
     const chat = screen.getByRole('button', { name: /Plan launch/ });
     fireEvent.contextMenu(chat);
@@ -507,7 +527,8 @@ describe('Open PRs sidebar section', () => {
         activePage="new"
         onOpenPage={vi.fn()}
         conversations={items}
-        archived={[]}
+        showArchived={false}
+        onShowArchivedChange={vi.fn()}
         modeForConversation={(conversation) =>
           conversationMode(conversation, () => 'agent')
         }
@@ -538,14 +559,20 @@ describe('Open PRs sidebar section', () => {
     });
     expect(screen.getByRole('button', { name: 'Open PRs 2' })).toBeTruthy();
     expect(
-      within(section)
-        .getAllByRole('button')
-        .map((row) => row.getAttribute('aria-label'))
+      [...section.querySelectorAll('[data-agent-session-row] > button')].map(
+        (row) => row.getAttribute('aria-label')
+      )
     ).toEqual(['Add tests', 'Fix build']);
-    expect(within(section).getByText('#42')).toBeTruthy();
+    // One line per row: the merge status icon stands in for repo and number.
+    expect(within(section).queryByText('#42')).toBeNull();
     expect(
-      within(section).getAllByText('macro-inc/macro · fix/build')
-    ).toHaveLength(2);
+      within(section).queryByText('macro-inc/macro · fix/build')
+    ).toBeNull();
+    expect(
+      within(section).getByRole('button', {
+        name: 'Open pull request #42, Open on GitHub',
+      })
+    ).toBeTruthy();
     expect(
       section.querySelectorAll('[data-agent-status-indicator]')
     ).toHaveLength(2);
@@ -649,7 +676,8 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
           activePage="new"
           onOpenPage={vi.fn()}
           conversations={[entity()]}
-          archived={[]}
+          showArchived={false}
+          onShowArchivedChange={vi.fn()}
           modeForConversation={() => 'code'}
           activeConversationId={undefined}
           search=""
@@ -668,11 +696,19 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     );
     return { open, view, setEntity };
   }
+  // Home links the PR beneath the title; Agents rows show a status button.
+  const pullRequestRole = surface === 'home' ? 'link' : 'button';
 
   it('shows saved working branch and reactive PR state without taking over session navigation', () => {
     const { open, view, setEntity } = setup();
     const session = screen.getByRole('button', { name: 'Fix build' });
-    expect(screen.getByText('macro-inc/macro · fix/build')).toBeTruthy();
+    // Agents rows keep to one line: the branch is an icon with its context.
+    expect(screen.queryByText('macro-inc/macro · fix/build') !== null).toBe(
+      surface === 'home'
+    );
+    expect(
+      view.container.querySelector('[data-agent-pull-request-status]')
+    ).toBeNull();
     expect(screen.queryByText('main')).toBeNull();
     expect(screen.queryByRole('link')).toBeNull();
     setEntity({
@@ -680,19 +716,24 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
       pullRequestUrl: 'https://github.com/macro-inc/macro/pull/42',
       pullRequestState: 'open',
     });
-    const pr = screen.getByRole('link', {
+    const pr = screen.getByRole(pullRequestRole, {
       name: 'Open pull request #42, Open on GitHub',
     });
-    expect(pr.getAttribute('href')).toBe(
-      'https://github.com/macro-inc/macro/pull/42'
-    );
-    expect(pr.closest('button')).toBeNull();
+    const openGithub = vi.spyOn(window, 'open').mockReturnValue(null);
+    if (surface === 'home') {
+      expect(pr.getAttribute('href')).toBe(
+        'https://github.com/macro-inc/macro/pull/42'
+      );
+    }
+    expect(pr.parentElement?.closest('button')).toBeNull();
     expect(view.container.querySelector('[data-kind="code"]')).toBeTruthy();
-    expect(screen.getByText('#42')).toBeTruthy();
+    expect(screen.queryByText('#42') !== null).toBe(surface === 'home');
     expect(screen.queryByText('Open')).toBeNull();
     fireEvent.mouseDown(pr, { button: 0, detail: 1 });
     fireEvent.click(pr);
     expect(open).not.toHaveBeenCalled();
+    expect(openGithub.mock.calls.length).toBe(surface === 'home' ? 0 : 1);
+    openGithub.mockRestore();
     fireEvent.click(session, { shiftKey: true });
     expect(open).toHaveBeenCalledOnce();
     const event = open.mock.calls[0][surface === 'home' ? 0 : 1];
@@ -703,11 +744,11 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
       pullRequestState: 'merged',
     });
     expect(
-      screen.getByRole('link', {
+      screen.getByRole(pullRequestRole, {
         name: 'Open pull request #42, Merged on GitHub',
       })
     ).toBeTruthy();
-    expect(screen.getByText('#42')).toBeTruthy();
+    expect(screen.queryByText('#42') !== null).toBe(surface === 'home');
     expect(screen.queryByText('Merged')).toBeNull();
     expect(screen.queryByText('Open')).toBeNull();
   });
@@ -724,6 +765,9 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     expect(view.container.querySelector('[data-kind="chat"]')).toBeTruthy();
     expect(
       view.container.querySelector('[data-agent-code-details]')
+    ).toBeNull();
+    expect(
+      view.container.querySelector('[data-agent-pull-request-status]')
     ).toBeNull();
     expect(screen.queryByRole('link')).toBeNull();
   });
@@ -780,7 +824,9 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
       pullRequestUrl: 'https://github.com/macro-inc/macro/pull/42',
     });
     expect(
-      screen.getByRole('link', { name: 'Open pull request #42 on GitHub' })
+      screen.getByRole(pullRequestRole, {
+        name: 'Open pull request #42 on GitHub',
+      })
     ).toBeTruthy();
     expect(screen.queryByText('Open')).toBeNull();
   });
@@ -800,45 +846,36 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     expect(view.container.querySelector('[data-kind="code"]')).toBeTruthy();
   });
 
-  it('combines unread and activity in the Agents dot while Home keeps its trailing unread dot', () => {
+  it('shows a spinner while the agent works and one trailing dot otherwise', () => {
     unreadFilter.mockReturnValue(true);
     const { view, setEntity } = setup();
-    const dot = () => screen.getByLabelText('Unread');
-    const isInCodeDetails = () => !!dot().closest('[data-agent-code-details]');
-    const isTrailing = () =>
-      !dot().closest('[data-view-sidebar-icon]') &&
-      !dot().closest('[data-agent-code-details]');
-    expect(dot().classList.contains('motion-safe:animate-pulse')).toBe(false);
+    const indicators = () =>
+      view.container.querySelectorAll('[data-agent-status-indicator]');
+    const isTrailing = (element: Element) =>
+      !element.closest('[data-view-sidebar-icon]') &&
+      !element.closest('[data-agent-code-details]');
 
     for (const turnState of ['running', 'blocked', 'idle']) {
       setEntity({ ...conversation, turnState });
       expect(screen.getAllByLabelText('Unread')).toHaveLength(1);
+      expect(isTrailing(screen.getByLabelText('Unread'))).toBe(true);
+      expect(indicators()).toHaveLength(surface === 'sidebar' ? 1 : 0);
       expect(
-        view.container.querySelectorAll('[data-agent-status-indicator]')
-      ).toHaveLength(surface === 'sidebar' ? 1 : 0);
-      if (surface === 'sidebar') {
-        expect(isInCodeDetails()).toBe(true);
-      } else {
-        expect(isTrailing()).toBe(true);
-      }
-      expect(dot().classList.contains('motion-safe:animate-pulse')).toBe(
-        surface === 'sidebar' && turnState === 'running'
-      );
-      expect(dot().classList.contains('bg-warning')).toBe(
-        surface === 'sidebar' && turnState === 'blocked'
-      );
+        view.container.querySelector('[data-agent-working]') !== null
+      ).toBe(surface === 'sidebar' && turnState === 'running');
+      expect(
+        screen.getByLabelText('Unread').classList.contains('bg-warning')
+      ).toBe(surface === 'sidebar' && turnState === 'blocked');
     }
 
     unreadFilter.mockReturnValue(false);
     setEntity({ ...conversation, turnState: 'running' });
     expect(screen.queryByLabelText('Unread')).toBeNull();
     expect(
-      view.container.querySelectorAll('[data-agent-status-indicator]')
+      view.container.querySelectorAll('[data-agent-working]')
     ).toHaveLength(surface === 'sidebar' ? 1 : 0);
     setEntity({ ...conversation, turnState: 'idle' });
-    expect(
-      view.container.querySelector('[data-agent-status-indicator]')
-    ).toBeNull();
+    expect(indicators()).toHaveLength(0);
   });
 
   it('opens a synced PR in Macro without activating its session', () => {
@@ -850,7 +887,9 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
       pullRequestState: 'merged',
     });
     fireEvent.click(
-      screen.getByRole('link', { name: 'Open pull request #42, Merged' })
+      screen.getByRole(pullRequestRole, {
+        name: 'Open pull request #42, Merged',
+      })
     );
     expect(open).not.toHaveBeenCalled();
     expect(openWithSplit).toHaveBeenLastCalledWith(

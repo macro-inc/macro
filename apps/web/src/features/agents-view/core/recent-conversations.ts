@@ -89,24 +89,20 @@ export function conversationMode(
       );
 }
 
-export type PartitionedConversations = {
-  conversations: AgentConversationEntity[];
-  archived: AgentConversationEntity[];
-};
-
-const isArchived = (conversation: AgentConversationEntity) =>
+/** Whether the row is an agent session someone, or the runtime, archived. */
+export const isArchivedConversation = (conversation: AgentConversationEntity) =>
   conversation.type === 'agent_session' && isSessionArchived(conversation);
 
-/** Splits archived agent sessions out, keeping the query's newest-first order. */
-export function partitionArchived(
-  conversations: readonly AgentConversationEntity[]
-): PartitionedConversations {
-  return {
-    conversations: conversations.filter(
-      (conversation) => !isArchived(conversation)
-    ),
-    archived: conversations.filter(isArchived),
-  };
+/** The rows the list shows: archived sessions only when asked for, in place. */
+export function listedConversations(
+  conversations: readonly AgentConversationEntity[],
+  showArchived: boolean
+): AgentConversationEntity[] {
+  if (showArchived) return [...conversations];
+
+  return conversations.filter(
+    (conversation) => !isArchivedConversation(conversation)
+  );
 }
 
 export type BotUsage = {

@@ -88,7 +88,7 @@ describe('groupConversations', () => {
     ]);
   });
 
-  it('puts conversations waiting on you first when grouping by status', () => {
+  it('puts conversations waiting on you first and keeps working ones in Recent', () => {
     expect(
       groupConversations(items, (item) => item.facts, 'status').map((group) => [
         group.label,
@@ -96,8 +96,7 @@ describe('groupConversations', () => {
       ])
     ).toEqual([
       ['Needs you', ['review']],
-      ['Working', ['hiring']],
-      ['Recent', ['kanban']],
+      ['Recent', ['kanban', 'hiring']],
     ]);
   });
 
