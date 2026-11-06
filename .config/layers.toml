@@ -349,26 +349,6 @@ may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "do
 name = "graphql"
 paths = [
   "crates/graphql/**",
-  "crates/complete_graph",
-  "crates/graphql_activity",
-  "crates/graphql_calendar",
-  "crates/graphql_channel",
-  "crates/graphql_common",
-  "crates/graphql_crm",
-  "crates/graphql_databases",
-  "crates/graphql_email",
-  "crates/graphql_entity_mutation",
-  "crates/graphql_favorite",
-  "crates/graphql_initiative",
-  "crates/graphql_notification",
-  "crates/graphql_notification_inbox",
-  "crates/graphql_permission",
-  "crates/graphql_properties",
-  "crates/graphql_registered_work",
-  "crates/graphql_scheduled_action",
-  "crates/graphql_soup",
-  "crates/graphql_soup_filter_input",
-  "crates/graphql_work_feed",
 ]
 may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "domain", "graphql"]
 

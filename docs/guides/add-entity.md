@@ -18,7 +18,7 @@ follow-up fix; those misses are called out inline.
 | --- | --- | --- |
 | The smallest correct registration | `CrmPipeline` (`crates/crm`, `crm_pipeline_entities`) | Newest kind; touches every core registration point with the least feature code |
 | A full-stack kind outside Soup | Forms (`crates/forms`, `apps/web/src/features/block-form`) | Newest end-to-end launch: access, public audience, entity mutation, mentions, Drive catalog, AI tools, SDK entity, agent guide |
-| A Soup kind with properties, discussions, activity, MCP | Initiatives (`crates/initiative`, `crates/graphql_initiative`) | Built in clean layers; the [design doc](../design/initiatives-projects.md) records the order |
+| A Soup kind with properties, discussions, activity, MCP | Initiatives (`crates/initiative`, `crates/graphql/graphql_initiative`) | Built in clean layers; the [design doc](../design/initiatives-projects.md) records the order |
 | A kind on reusable storage | Databases (`crates/databases`, `database_entities`) | Separates storage from the app entity; read the [database-core skill](../../.agents/skills/database-core/SKILL.md) |
 
 Collaborative markdown on the entity (descriptions, notes) follows the
@@ -57,7 +57,7 @@ until the backend is complete.
 - **`crates/model_entity/src/lib.rs`:** add the `EntityType` variant (strum
   `snake_case`; that string is stored in `entity_access.entity_type`) and its arm
   in `is_valid_entity_access_entity`. Add a round-trip case in `src/tests.rs`.
-- **`crates/graphql_common/src/entity_type.rs`:** both directions of
+- **`crates/graphql/graphql_common/src/entity_type.rs`:** both directions of
   `GraphqlEntityType`, and `GraphqlSoupEntityType::try_new` (`None` unless it is a
   Soup kind).
 - Fix every exhaustive match the compiler now reports. Do not add `_ =>` arms to
@@ -170,7 +170,7 @@ Postgres repo.
   in the domain crate, as `crates/forms/src/domain/entity_mutation.rs` does, then
   add the arms in `services/document_storage_service/src/service/entity_mutation.rs`
   and the adapters in `src/outbound/entity_mutation.rs`. GraphQL mutations
-  (`crates/graphql_entity_mutation`) are generic. Initiatives still use a
+  (`crates/graphql/graphql_entity_mutation`) are generic. Initiatives still use a
   hand-written delete route; don't copy that.
 - **Owned content:** purge owned documents through the documents domain
   (`crates/documents/src/domain/purge.rs`). Initiatives first reimplemented the
@@ -200,8 +200,8 @@ Postgres repo.
 - System properties: `crates/system_properties/src/domain/model/constants/system_property_key.rs`
   and an `attach_<kind>_properties` call at create in
   `crates/system_properties/src/domain/service.rs`.
-- Filters: `crates/graphql_common/src/property_filter.rs` and
-  `crates/graphql_properties`.
+- Filters: `crates/graphql/graphql_common/src/property_filter.rs` and
+  `crates/graphql/graphql_properties`.
 - **Lessons:** a create that fails after properties are attached must remove
   them (`entity_properties` has no foreign key). Reusing another kind's property
   definition (task status) exposed options that are invalid for the new kind;
@@ -223,7 +223,7 @@ Required for anything people act on; Recent is built from activity.
   use `CommonAction`; new `Action` variants go in
   `crates/activity/src/domain/models.rs` (codec and `ActionTag`),
   `crates/activity/src/inbound/toolset/read_activity.rs`, and
-  `crates/graphql_activity/src/objects.rs`.
+  `crates/graphql/graphql_activity/src/objects.rs`.
 - Register the topic in `services/document_storage_service/src/service/activity.rs`
   (`declare_topics!` and an `ingest` arm). Hard deletes return `Ingest::Purge`.
 - **`crates/activity/src/outbound/pg_activity_repo.rs`:** the const fn
@@ -284,21 +284,21 @@ appear in Home or Recent; say so in the PR.
 
 ## 9. GraphQL
 
-- **Soup object:** in `crates/graphql_soup/src/objects.rs`, a `GraphqlSoup<Kind>`
+- **Soup object:** in `crates/graphql/graphql_soup/src/objects.rs`, a `GraphqlSoup<Kind>`
   implementing `GraphqlSoupEntity`, its `type_name` and `SoupItem` arms, and
   `impl_common_interface_edges!`; re-export in `lib.rs`. Add the filter input to
-  `crates/graphql_soup_filter_input`, edges to `crates/complete_graph/src/edges.rs`,
+  `crates/graphql/graphql_soup_filter_input`, edges to `crates/graphql/complete_graph/src/edges.rs`,
   and the possible-types assertion (and count) in
   `crates/client/cache-core/src/meta/test.rs`.
 - **Kind crate (optional):** `crates/graphql_<kind>` with `context`, `inputs`,
-  `loaders`, `mutation`, `objects`, `query`, copied from `crates/graphql_initiative`.
-  Compose it in `crates/complete_graph/src/schema.rs`; viewer-scoped reads go under
-  `GraphqlUser` (see `crates/complete_graph/AGENTS.md`). Wire it in
+  `loaders`, `mutation`, `objects`, `query`, copied from `crates/graphql/graphql_initiative`.
+  Compose it in `crates/graphql/complete_graph/src/schema.rs`; viewer-scoped reads go under
+  `GraphqlUser` (see `crates/graphql/complete_graph/AGENTS.md`). Wire it in
   `services/document_storage_service/src/api/graphql_soup.rs` and `src/server.rs`.
 - **Read-after-create goes to the primary.** GraphQL Soup reads the replica, which
   lags seconds in production and not at all locally. A new agent session read
   back as "not accessible" and lost its first prompt. Build the by-id loader from
-  `primary_entity_soup` in `server.rs`, as `crates/graphql_initiative/src/mutation.rs`
+  `primary_entity_soup` in `server.rs`, as `crates/graphql/graphql_initiative/src/mutation.rs`
   does, and test with an empty replica fake.
 - **Regenerate:** `cargo run -p complete_graph --bin graphql_schema -- static_assets/schema.graphql`,
   then `cd apps/web && bun run gen-graphql` (codegen plus the cache entity resolver
@@ -321,7 +321,7 @@ appear in Home or Recent; say so in the PR.
   discussions missed both, and agents mentioned there got no context.
 - **Notifications:** a metadata module in `crates/model_notifications/src/metadata/`
   with its `define_notif_event!` variant, a GraphQL event in
-  `crates/graphql_notification/src/notification_event/`, the sender in
+  `crates/graphql/graphql_notification/src/notification_event/`, the sender in
   `crates/messages/src/outbound/notification_sender.rs`, and
   `BLOCKABLE_NOTIFICATIONS` in `services/notification_service/src/api/user_notification.rs`.
   The web list in `apps/web/src/features/notifications/notification-event-catalog.ts`

@@ -252,7 +252,7 @@ enqueue time (`enqueuedAtMs`), so they survive reloads; when it is missing or
 skewed, `mutation_queue.age_known` is false and the age is omitted rather than
 zero. The runner sends inside it, so
 `dssGraphqlFetch` injects `traceparent` and the DSS `graphql.execute` span and
-the instrumented resolvers (`crates/graphql_entity_mutation`,
+the instrumented resolvers (`crates/graphql/graphql_entity_mutation`,
 `graphql_properties`, `graphql_notification`) join the same trace. A loop that
 can repeat forever reports counters instead of lines: each item logs a failure
 class once, and `graphql.mutation_queue.summary` flushes counters every five

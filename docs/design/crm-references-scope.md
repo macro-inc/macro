@@ -102,7 +102,7 @@ Key entry points:
   equivalents where the new selector is supported, and delegated source queries.
 - CRM directory/access ports and the owning reference read adapter.
 - `crates/soup/src/inbound/axum_router.rs` and
-  `crates/graphql_soup_filter_input/src/lib.rs`.
+  `crates/graphql/graphql_soup_filter_input/src/lib.rs`.
 
 ### 3. Record CRM references correctly
 

@@ -137,14 +137,14 @@ producer redeploys.
 
 ## 4. GraphQL (required)
 
-In `crates/graphql_notification/src/notification_event.rs`:
+In `crates/graphql/graphql_notification/src/notification_event.rs`:
 
 - A wrapper `pub struct Graphql<Name>Metadata(<Name>Metadata);` with an
   `#[Object]` impl exposing each field (ids as `ID`).
 - A variant in the `GraphqlNotifEvent` union and an arm in
   `From<NotifEvent> for GraphqlNotifEvent`.
 
-Regenerate the SDL and the web client (see `crates/complete_graph/AGENTS.md`):
+Regenerate the SDL and the web client (see `crates/graphql/complete_graph/AGENTS.md`):
 
 ```sh
 cargo run -p complete_graph --bin graphql_schema -- static_assets/schema.graphql
@@ -239,7 +239,7 @@ kinds introduced by a newer backend.
   so done still acknowledges it. Give the row its actor in `actor` and any
   buttons in `actions` (as data; the client performs them). A new row type or
   action kind also needs `InboxRowType` or `InboxRowActionKind`, its GraphQL
-  enum in `crates/graphql_notification_inbox`, and the regenerated
+  enum in `crates/graphql/graphql_notification_inbox`, and the regenerated
   `static_assets/schema.graphql`; adding enum values is compatible, removing
   them is not.
 - **Channel unread scoping:** channel thread SQL in

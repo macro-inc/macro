@@ -1,6 +1,6 @@
 # Adding a GraphQL field, query, mutation, or subscription
 
-The GraphQL API is composed in `crates/complete_graph` from per-domain adapter
+The GraphQL API is composed in `crates/graphql/complete_graph` from per-domain adapter
 crates (`crates/graphql_<domain>`), served by `document_storage_service`, and read
 by the web app through a normalized cache. One change touches the adapter crate,
 the composed schema, the service wiring, the committed SDL, the web documents,
@@ -10,7 +10,7 @@ as a `null`, an empty list, or a stuck mutation queue; they're called out inline
 This guide covers fields, types, and operations on existing entities. For a whole
 new entity kind, see [add-entity.md](add-entity.md).
 
-Read first: [`crates/complete_graph/AGENTS.md`](../../crates/complete_graph/AGENTS.md)
+Read first: [`crates/graphql/complete_graph/AGENTS.md`](../../crates/graphql/complete_graph/AGENTS.md)
 (the `id` convention, the viewer pattern, the Soup entity interface), the owning
 `crates/graphql_<domain>/AGENTS.md`, and section 8 of
 [the normalized cache plan](../../apps/web/docs/graphql-normalized-cache-plan.md).
@@ -19,11 +19,11 @@ Read first: [`crates/complete_graph/AGENTS.md`](../../crates/complete_graph/AGEN
 
 | Adding | Copy |
 | --- | --- |
-| User-scoped reads | `crates/graphql_calendar/src/user_query.rs`, flattened into `GraphqlUser` |
-| A mutation with typed errors | `crates/graphql_calendar/src/mutation.rs` + `src/writes.rs` |
-| A field on a Soup entity backed by another domain | `pipelineEntries`: `crates/graphql_crm/src/loaders.rs` + `SoupCrmRecordEdges` in `crates/complete_graph/src/edges.rs` |
-| A filter or limit argument on an edge | `GraphqlNotificationFilter` in `crates/graphql_notification/src/query.rs` |
-| A subscription | `agentSessionLogAppended`: `crates/complete_graph/src/realtime.rs` |
+| User-scoped reads | `crates/graphql/graphql_calendar/src/user_query.rs`, flattened into `GraphqlUser` |
+| A mutation with typed errors | `crates/graphql/graphql_calendar/src/mutation.rs` + `src/writes.rs` |
+| A field on a Soup entity backed by another domain | `pipelineEntries`: `crates/graphql/graphql_crm/src/loaders.rs` + `SoupCrmRecordEdges` in `crates/graphql/complete_graph/src/edges.rs` |
+| A filter or limit argument on an edge | `GraphqlNotificationFilter` in `crates/graphql/graphql_notification/src/query.rs` |
+| A subscription | `agentSessionLogAppended`: `crates/graphql/complete_graph/src/realtime.rs` |
 
 ## 1. Design the shape
 
@@ -46,7 +46,7 @@ Read first: [`crates/complete_graph/AGENTS.md`](../../crates/complete_graph/AGEN
   draw unread dots; the fix added a server-side filter and a one-row limit.
 - **Document every type, field, and argument.** `#![deny(missing_docs)]` and the
   `schema_types_and_fields_have_descriptions` test in
-  `crates/complete_graph/src/sdl_test.rs` both enforce it. Doc comments become
+  `crates/graphql/complete_graph/src/sdl_test.rs` both enforce it. Doc comments become
   the SDL descriptions.
 
 ## 2. The adapter crate (`crates/graphql_<domain>`)
@@ -60,15 +60,15 @@ domain operation doesn't exist, add it to the domain crate first.
   `ctx.data::<CalendarGraphqlContext>()?`. Don't add another type parameter to
   the schema; older adapters carry generics, but new ones don't.
 - **Authorize.** Use `require_authenticated_user` / `require_authorized_user` from
-  `crates/graphql_common/src/authorization.rs`. The viewer comes from the request
+  `crates/graphql/graphql_common/src/authorization.rs`. The viewer comes from the request
   context, never an argument. Lookups must cover every access path (owned,
   shared, team). A direct load that only queried owned email threads returned
   `null` for shared ones. See the [security rules](../../.agents/rules/rust/security.md).
 - **Batch per-entity edges with a DataLoader.** A field resolved once per list row
-  goes through a keyed `Loader` (copy `crates/graphql_crm/src/loaders.rs`). Poll
+  goes through a keyed `Loader` (copy `crates/graphql/graphql_crm/src/loaders.rs`). Poll
   hydration futures concurrently so the loader can batch them.
 - **Typed errors.** Set `extensions.code` with the crate's helper (copy `bad_input`
-  / `unavailable` in `crates/graphql_calendar/src/lib.rs`, or `mutation_error` in
+  / `unavailable` in `crates/graphql/graphql_calendar/src/lib.rs`, or `mutation_error` in
   `src/mutation.rs`). Log internal details and return a generic message. The web
   reads codes with `thrownResultErrorHasCode` (`apps/web/src/lib/core/util/result.ts`).
 - **Never make a committed write look retryable.** The web's durable mutation
@@ -84,18 +84,18 @@ domain operation doesn't exist, add it to the domain crate first.
   the calendar resolvers do ([observability rule](../../.agents/rules/observability.md)).
 - **Cross-domain fields on Soup entities.** `graphql_soup` can't depend on your
   crate. Declare an associated type and constructor on `SoupEntityEdges`
-  (`crates/graphql_soup/src/objects.rs`), flatten it into the entity object
-  (`crates/graphql_soup/src/objects/crm_contact.rs`), and implement it in
-  `crates/complete_graph/src/edges.rs`. Every test implementation of
-  `SoupEntityEdges` also needs the new type: `crates/graphql_initiative/src/test.rs`,
-  `crates/graphql_favorite/src/mutations/test.rs`, and
-  `crates/graphql_entity_mutation/src/mutations/test.rs`.
+  (`crates/graphql/graphql_soup/src/objects.rs`), flatten it into the entity object
+  (`crates/graphql/graphql_soup/src/objects/crm_contact.rs`), and implement it in
+  `crates/graphql/complete_graph/src/edges.rs`. Every test implementation of
+  `SoupEntityEdges` also needs the new type: `crates/graphql/graphql_initiative/src/test.rs`,
+  `crates/graphql/graphql_favorite/src/mutations/test.rs`, and
+  `crates/graphql/graphql_entity_mutation/src/mutations/test.rs`.
 - **New crate?** Add it to `members` in the root `Cargo.toml` and as a dependency
   of `complete_graph` and `document_storage_service`. Then run `cargo x deps` and
   commit `crates/workspace-hack` and `.github/workspace-dep-closures.json`. Add an
   `AGENTS.md` from `.agents/templates/`.
 
-## 3. Compose it in `crates/complete_graph/src/schema.rs`
+## 3. Compose it in `crates/graphql/complete_graph/src/schema.rs`
 
 - **Query:** flatten onto `GraphqlUser`, like the calendar fields:
   `#[graphql(flatten)] async fn calendar(&self) -> GraphqlCalendarQuery`.
@@ -121,8 +121,8 @@ insert their own data, so they don't catch it.
 (`readonly_db`). In production it lags 1–9 s. Mutation replies, `soupUpdates`
 hydration, and anything read right after a write (a just-created entity, a
 subscribe-then-query log), need a primary-backed loader. Copy
-`AgentSessionEntityLoader` in `crates/graphql_soup/src/loaders.rs` or
-`email_mutation_thread_loader` in `crates/graphql_soup/src/mutation_thread.rs`.
+`AgentSessionEntityLoader` in `crates/graphql/graphql_soup/src/loaders.rs` or
+`email_mutation_thread_loader` in `crates/graphql/graphql_soup/src/mutation_thread.rs`.
 A new agent session read from the replica came back `null` and the client
 reported "not accessible". Local stacks can't reproduce this because their
 replica URL is the primary, so decide deliberately.
@@ -216,7 +216,7 @@ new fields needs the regenerated SDL in the same change.
   3. After the date, delete it.
   If the backing feature is already gone, keep an inert stub: a nullable field
   returning `None`, an ignored input field, or an uninhabited type (see
-  `crates/graphql_soup/src/objects/reminder.rs`).
+  `crates/graphql/graphql_soup/src/objects/reminder.rs`).
 - `cargo x graphql-schema-compat` enforces this. It compares
   `static_assets/schema.graphql` with the schema at the merge base with
   `origin/main` and fails on removals before their date, output types that

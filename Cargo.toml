@@ -44,7 +44,6 @@ members = [
   "crates/coding_agent_worker",
   "crates/cognition",
   "crates/collab_surface",
-  "crates/complete_graph",
   "crates/connect_client",
   "crates/cowlike",
   "crates/crm",
@@ -78,25 +77,26 @@ members = [
   "crates/gmail_client",
   "crates/google_token",
   "crates/granola_sync",
-  "crates/graphql_activity",
-  "crates/graphql_calendar",
-  "crates/graphql_channel",
-  "crates/graphql_common",
-  "crates/graphql_crm",
-  "crates/graphql_databases",
-  "crates/graphql_email",
-  "crates/graphql_entity_mutation",
-  "crates/graphql_favorite",
-  "crates/graphql_initiative",
-  "crates/graphql_notification",
-  "crates/graphql_notification_inbox",
-  "crates/graphql_permission",
-  "crates/graphql_properties",
-  "crates/graphql_registered_work",
-  "crates/graphql_scheduled_action",
-  "crates/graphql_soup",
-  "crates/graphql_soup_filter_input",
-  "crates/graphql_work_feed",
+  "crates/graphql/complete_graph",
+  "crates/graphql/graphql_activity",
+  "crates/graphql/graphql_calendar",
+  "crates/graphql/graphql_channel",
+  "crates/graphql/graphql_common",
+  "crates/graphql/graphql_crm",
+  "crates/graphql/graphql_databases",
+  "crates/graphql/graphql_email",
+  "crates/graphql/graphql_entity_mutation",
+  "crates/graphql/graphql_favorite",
+  "crates/graphql/graphql_initiative",
+  "crates/graphql/graphql_notification",
+  "crates/graphql/graphql_notification_inbox",
+  "crates/graphql/graphql_permission",
+  "crates/graphql/graphql_properties",
+  "crates/graphql/graphql_registered_work",
+  "crates/graphql/graphql_scheduled_action",
+  "crates/graphql/graphql_soup",
+  "crates/graphql/graphql_soup_filter_input",
+  "crates/graphql/graphql_work_feed",
   "crates/gtm_invite",
   "crates/harness_id",
   "crates/harness_token",
@@ -588,7 +588,7 @@ codex_fold = { path = "crates/folds/codex_fold" }
 cognition = { path = "crates/cognition" }
 collab_surface = { path = "crates/collab_surface" }
 comms_db_client = { path = "crates/comms_db_client" }
-complete_graph = { path = "crates/complete_graph" }
+complete_graph = { path = "crates/graphql/complete_graph" }
 connect_client = { path = "crates/connect_client" }
 connection = { path = "crates/connection", default-features = false }
 connection_gateway = { path = "services/connection_gateway" }
@@ -645,25 +645,25 @@ github_pull_requests = { path = "crates/github_pull_requests", default-features 
 gmail_client = { path = "crates/gmail_client" }
 google_token = { path = "crates/google_token" }
 granola_sync = { path = "crates/granola_sync" }
-graphql_activity = { path = "crates/graphql_activity" }
-graphql_calendar = { path = "crates/graphql_calendar" }
-graphql_channel = { path = "crates/graphql_channel" }
-graphql_common = { path = "crates/graphql_common" }
-graphql_crm = { path = "crates/graphql_crm" }
-graphql_databases = { path = "crates/graphql_databases" }
-graphql_email = { path = "crates/graphql_email" }
-graphql_entity_mutation = { path = "crates/graphql_entity_mutation" }
-graphql_favorite = { path = "crates/graphql_favorite" }
-graphql_initiative = { path = "crates/graphql_initiative" }
-graphql_notification = { path = "crates/graphql_notification" }
-graphql_notification_inbox = { path = "crates/graphql_notification_inbox" }
-graphql_permission = { path = "crates/graphql_permission" }
-graphql_properties = { path = "crates/graphql_properties" }
-graphql_registered_work = { path = "crates/graphql_registered_work" }
-graphql_scheduled_action = { path = "crates/graphql_scheduled_action" }
-graphql_soup = { path = "crates/graphql_soup" }
-graphql_soup_filter_input = { path = "crates/graphql_soup_filter_input" }
-graphql_work_feed = { path = "crates/graphql_work_feed" }
+graphql_activity = { path = "crates/graphql/graphql_activity" }
+graphql_calendar = { path = "crates/graphql/graphql_calendar" }
+graphql_channel = { path = "crates/graphql/graphql_channel" }
+graphql_common = { path = "crates/graphql/graphql_common" }
+graphql_crm = { path = "crates/graphql/graphql_crm" }
+graphql_databases = { path = "crates/graphql/graphql_databases" }
+graphql_email = { path = "crates/graphql/graphql_email" }
+graphql_entity_mutation = { path = "crates/graphql/graphql_entity_mutation" }
+graphql_favorite = { path = "crates/graphql/graphql_favorite" }
+graphql_initiative = { path = "crates/graphql/graphql_initiative" }
+graphql_notification = { path = "crates/graphql/graphql_notification" }
+graphql_notification_inbox = { path = "crates/graphql/graphql_notification_inbox" }
+graphql_permission = { path = "crates/graphql/graphql_permission" }
+graphql_properties = { path = "crates/graphql/graphql_properties" }
+graphql_registered_work = { path = "crates/graphql/graphql_registered_work" }
+graphql_scheduled_action = { path = "crates/graphql/graphql_scheduled_action" }
+graphql_soup = { path = "crates/graphql/graphql_soup" }
+graphql_soup_filter_input = { path = "crates/graphql/graphql_soup_filter_input" }
+graphql_work_feed = { path = "crates/graphql/graphql_work_feed" }
 gtm_invite = { path = "crates/gtm_invite" }
 harness_id = { path = "crates/harness_id" }
 harness_token = { path = "crates/harness_token" }

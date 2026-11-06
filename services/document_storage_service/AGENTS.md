@@ -19,7 +19,7 @@ threads, pins, recents, notifications, folders, activity.
 - `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy.
 - `src/api/graphql_soup.rs`: the `/soup/graphql` (+ `/soup/graphql/ws`
   subscriptions) GraphQL API — the frontend's main read path for Home/Recent/
-  search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
+  search ("Soup" items); see `crates/graphql/graphql_soup` for resolvers/loaders.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
@@ -70,7 +70,7 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Recipes
 
-- Add a Soup GraphQL field: resolver/loader in `crates/graphql_soup` →
+- Add a Soup GraphQL field: resolver/loader in `crates/graphql/graphql_soup` →
   `src/api/graphql_soup.rs` if wiring changes.
 - Add a REST route: `src/api/<area>.rs` → `src/api.rs` (router) →
   `src/api/swagger.rs`; register query-only schemas explicitly in its components list.
@@ -106,7 +106,7 @@ threads, pins, recents, notifications, folders, activity.
   exclusions take effect without replica lag; ordinary inbox lists keep the replica.
 - Ordinary Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
-  default one — see `crates/graphql_soup`.
+  default one — see `crates/graphql/graphql_soup`.
 - Dev's readonly pool keeps 2–20 connections per task, independently of the
   primary pool's 25–100. Once all tasks use this cap, three dev tasks allow 60
   sessions, or 120 while a rolling deployment overlaps all three. Old tasks

@@ -1,0 +1,21 @@
+[package]
+name = "graphql_scheduled_action"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-graphql = { workspace = true }
+chrono = { workspace = true }
+macro_user_id = { workspace = true }
+rootcause = { workspace = true }
+routine_program = { workspace = true }
+scheduled_action = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+macro_uuid = { workspace = true }
+model_owner = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

@@ -26,7 +26,7 @@ sender/generic-address checks.
 
 - Depends on: `ammonia`, `scraper` (no Macro crates).
 - Used by: `crates/email`, `crates/email_db_client`, `crates/email_api_client`,
-  `crates/graphql_email`, `crates/google_token`, `crates/models_email`,
+  `crates/graphql/graphql_email`, `crates/google_token`, `crates/models_email`,
   `services/calendar_service`, `services/email_service`.
 
 ## Recipes

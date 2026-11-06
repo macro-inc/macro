@@ -179,11 +179,11 @@ Do not add task-subtype branching to `graphql_soup`, `complete_graph::SoupEdges`
 
 Likely files:
 
-- `crates/graphql_properties/src/mutations.rs`
-- `crates/graphql_properties/src/loaders.rs`
-- `crates/graphql_common/src/property_filter.rs` (only if types must be split/exported here)
-- `crates/complete_graph/src/edges.rs`
-- `crates/complete_graph/src/schema.rs`
+- `crates/graphql/graphql_properties/src/mutations.rs`
+- `crates/graphql/graphql_properties/src/loaders.rs`
+- `crates/graphql/graphql_common/src/property_filter.rs` (only if types must be split/exported here)
+- `crates/graphql/complete_graph/src/edges.rs`
+- `crates/graphql/complete_graph/src/schema.rs`
 - `services/document_storage_service/src/api/graphql_soup.rs`
 - `static_assets/schema.graphql` (generated, never edited manually)
 
