@@ -564,6 +564,8 @@ fn mock_get_or_create_repo_storing(
         .times(1)
         .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_set_participant_client()
+        .times(1)
+        .withf(|_, _, client| client == "person")
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
     repo.expect_add_participant()
         .times(1)
