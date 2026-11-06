@@ -154,6 +154,7 @@ export function CallRecordingBody(props: {
       () => props.transcriptTarget,
       (target) => {
         if (!target) return;
+        setContentTab('transcript');
         goToTranscriptSegment(target.transcriptId);
       }
     )
@@ -226,7 +227,7 @@ export function CallRecordingBody(props: {
             </SidePanel.HeaderActions>
             <div
               data-channel-scroll
-              class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
+              class="h-full min-h-0 overflow-y-auto overscroll-contain scrollbar-hidden"
               ref={setScrollRef}
             >
               <div class="mx-auto max-w-[800px] min-w-0 px-6 @[760px]/call-column:px-10 pt-4 pb-24 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
