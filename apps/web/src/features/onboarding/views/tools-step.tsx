@@ -5,7 +5,7 @@ import GmailIcon from '@icon/gmail-color.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createEffect, createSignal, For, Show } from 'solid-js';
-import { BrainLoader } from '../components/brain-loader';
+import { BrainLoader, LoaderCountdown } from '../components/brain-loader';
 import '../components/brain-loader.css';
 import { ContinueButton } from '../components/controls';
 import {
@@ -45,7 +45,7 @@ export function ToolsStep(props: {
   const context = useOnboardingContext();
   const catalog = context.createToolCatalog();
   const connected = context.createConnectedTools({ poll: true });
-  const view = createToolSuggestions(context, props.timing);
+  const { view, secondsLeft } = createToolSuggestions(context, props.timing);
   const suggestions = () => {
     const current = view();
     return current.t === 'ready' ? current.suggestions : undefined;
@@ -336,10 +336,15 @@ export function ToolsStep(props: {
         </p>
       </Show>
       <div class="sticky bottom-0 z-10 -mt-5 bg-surface pb-[var(--safe-bottom,0px)]">
-        <ContinueButton
-          disabled={busy() !== undefined}
-          onClick={props.onContinue}
-        />
+        <Show
+          when={view().t !== 'loading'}
+          fallback={<LoaderCountdown seconds={secondsLeft()} />}
+        >
+          <ContinueButton
+            disabled={busy() !== undefined}
+            onClick={props.onContinue}
+          />
+        </Show>
       </div>
     </div>
   );

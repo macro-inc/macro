@@ -6,7 +6,7 @@ import IconLinear from '@icon/linear-color.svg';
 import IconGithub from '@icon/mcp-github.svg';
 import IconNotion from '@icon/mcp-notion.svg';
 import IconSlack from '@icon/slack-color.svg';
-import { For, type JSX } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import './brain-loader.css';
 import { MacroMarkIcon } from './macro-mark-icon';
 
@@ -109,6 +109,30 @@ export function BrainLoader(props: { accent: string }) {
           Building your brain…
         </span>
       </p>
+    </div>
+  );
+}
+
+/**
+ * Holds Continue's place while the loader runs: the seconds left before the
+ * step shows the plain catalog instead.
+ */
+export function LoaderCountdown(props: { seconds: number }) {
+  return (
+    <div class="mt-6 flex shrink-0 justify-center pb-3">
+      <div
+        aria-hidden="true"
+        class="flex min-h-14 min-w-44 items-center justify-center gap-2 rounded-full border border-edge px-7 py-3.5 text-base font-medium text-ink-muted"
+      >
+        <span>Loading</span>
+        <Show keyed when={props.seconds}>
+          {(seconds) => (
+            <span class="brain-countdown-digit inline-block w-3 text-center tabular-nums text-ink">
+              {seconds}
+            </span>
+          )}
+        </Show>
+      </div>
     </div>
   );
 }

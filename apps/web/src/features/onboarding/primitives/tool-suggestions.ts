@@ -4,6 +4,7 @@ import {
   createSignal,
   on,
   onCleanup,
+  untrack,
 } from 'solid-js';
 import type { OnboardingContext } from '../context/onboarding-context';
 import {
@@ -27,28 +28,44 @@ export type ToolSuggestionsTiming = {
 };
 
 export const TOOL_SUGGESTIONS_TIMING: ToolSuggestionsTiming = {
-  minMs: 1200,
-  maxMs: 2500,
+  minMs: 800,
+  maxMs: 3000,
 };
 
 /**
- * The tools to suggest, ranked by the viewer's inbox. Once it leaves
+ * The tools to suggest, ranked by the viewer's inbox. An answer already in
+ * hand shows at once; otherwise the loader runs until it lands. Once it leaves
  * `loading` the view never changes, so a late answer can't swap the screen
  * under the person. No inbox counts as an answer: the defaults are suggested.
  */
 export function createToolSuggestions(
   context: Pick<OnboardingContext, 'createSenderDomainCounts' | 'track'>,
   timing: ToolSuggestionsTiming = TOOL_SUGGESTIONS_TIMING
-): () => ToolSuggestionsView {
+): {
+  view: () => ToolSuggestionsView;
+  /** Whole seconds left before the step falls back, for the countdown. */
+  secondsLeft: () => number;
+} {
   const counts = context.createSenderDomainCounts(ONBOARDING_SENDER_DOMAINS);
   const started = performance.now();
-  const [minElapsed, setMinElapsed] = createSignal(timing.minMs <= 0);
+  const answeredAtStart = untrack(counts).t !== 'loading';
+  const [minElapsed, setMinElapsed] = createSignal(
+    answeredAtStart || timing.minMs <= 0
+  );
   const [timedOut, setTimedOut] = createSignal(false);
+  const [secondsLeft, setSecondsLeft] = createSignal(
+    Math.ceil(timing.maxMs / 1000)
+  );
   const minTimer = setTimeout(() => setMinElapsed(true), timing.minMs);
   const maxTimer = setTimeout(() => setTimedOut(true), timing.maxMs);
+  const tick = setInterval(
+    () => setSecondsLeft((left) => Math.max(1, left - 1)),
+    1000
+  );
   onCleanup(() => {
     clearTimeout(minTimer);
     clearTimeout(maxTimer);
+    clearInterval(tick);
   });
 
   const decide = (): ToolSuggestionsView => {
@@ -75,5 +92,5 @@ export function createToolSuggestions(
       }
     )
   );
-  return view;
+  return { view, secondsLeft };
 }

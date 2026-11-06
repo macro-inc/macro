@@ -24,11 +24,13 @@ do not see it.
 
 ## Tools step — `/app/onboarding?step=tools`
 
-While the inbox is read, **Connect your tools.** shows a short loader (the
-workspace mark in the chosen accent, with tool icons wiring into it) for at
-least 1.2 s. An answer by 2.5 s shows the suggestions; otherwise, or if the
-read fails, the step falls back to the plain searchable catalog and stays
-there (`onboarding_v4_tool_suggestions` records which). The suggestions list
+If the inbox read has already finished, **Connect your tools.** shows its
+suggestions at once. Otherwise it shows a short loader (the workspace mark in
+the chosen accent, with tool icons wiring into it) and, in Continue's place, a
+**Loading 3 · 2 · 1** countdown. An answer within 3 s shows the suggestions
+(after at least 0.8 s, so the loader never flashes); otherwise, or if the read
+fails, the step falls back to the plain searchable catalog and stays there
+(`onboarding_v4_tool_suggestions` records which). The suggestions list
 **Add another inbox** first (its **Add** menu
 chooses Google, or Outlook when the account may connect one), then four
 suggested tools, each with its `native`/`mcp` badge and what connecting it does in Macro. The
