@@ -149,7 +149,7 @@ pub struct JoinCallRequest {
     pub name: Option<String>,
 }
 
-/// A live call visible to an account that can join it.
+/// Whether a live call is associated with a channel.
 #[derive(Debug, Clone, Copy, serde::Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]

@@ -1069,7 +1069,7 @@ impl<
         })
     }
 
-    #[tracing::instrument(name = "call.start", err, skip(self, user_id, request), fields(call.id, call.client, outcome))]
+    #[tracing::instrument(name = "call.start", err, skip(self, user_id, request), fields(call.id, principal.kind, call.client, outcome))]
     async fn start_call(
         &self,
         channel_id: &Uuid,
@@ -1077,15 +1077,35 @@ impl<
         request: JoinCallRequest,
         credential_is_program: bool,
     ) -> Result<CallTokenResponse, CallError> {
+        tracing::Span::current().record(
+            "call.client",
+            if credential_is_program {
+                "api_key"
+            } else {
+                "person"
+            },
+        );
+        tracing::Span::current().record(
+            "principal.kind",
+            if credential_is_program {
+                "program"
+            } else {
+                "user"
+            },
+        );
         if let Some(call) = self
             .repo
             .get_call_by_channel_id(channel_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?
         {
-            return self
+            let result = self
                 .join_call(&call.id, user_id, request, credential_is_program)
                 .await;
+            tracing::Span::current().record("call.id", call.id.to_string());
+            tracing::Span::current()
+                .record("outcome", if result.is_ok() { "joined" } else { "failed" });
+            return result;
         }
         if matches!(request.on_other_call, OnOtherCall::Fail)
             && self
@@ -1151,7 +1171,7 @@ impl<
         Ok(response)
     }
 
-    #[tracing::instrument(name = "call.join", err, skip(self, user_id, request), fields(call.id = %call_id, call.client, outcome))]
+    #[tracing::instrument(name = "call.join", err, skip(self, user_id, request), fields(call.id = %call_id, principal.kind, call.client, outcome))]
     async fn join_call(
         &self,
         call_id: &Uuid,
@@ -1159,6 +1179,22 @@ impl<
         request: JoinCallRequest,
         credential_is_program: bool,
     ) -> Result<CallTokenResponse, CallError> {
+        tracing::Span::current().record(
+            "call.client",
+            if credential_is_program {
+                "api_key"
+            } else {
+                "person"
+            },
+        );
+        tracing::Span::current().record(
+            "principal.kind",
+            if credential_is_program {
+                "program"
+            } else {
+                "user"
+            },
+        );
         let call = self
             .repo
             .get_call_by_id(call_id)
