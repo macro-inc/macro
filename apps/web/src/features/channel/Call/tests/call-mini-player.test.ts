@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   constrainCallPlayerPosition,
+  getCallPlayerSnapTarget,
   nearestCallPlayerCorner,
   resizeCallPlayer,
   selectCallPreview,
@@ -154,5 +155,26 @@ describe('call mini player', () => {
         y: 542,
       }
     );
+  });
+  it('leaves free drops alone and engages only a nearby corner magnet', () => {
+    expect(
+      getCallPlayerSnapTarget(500, 300, 336, 240, 1440, 900)
+    ).toBeUndefined();
+    expect(
+      getCallPlayerSnapTarget(20, 300, 336, 240, 1440, 900)
+    ).toBeUndefined();
+    expect(getCallPlayerSnapTarget(84, 20, 336, 240, 1440, 900)?.corner).toBe(
+      'top-left'
+    );
+    expect(
+      getCallPlayerSnapTarget(85, 20, 336, 240, 1440, 900)
+    ).toBeUndefined();
+    expect(getCallPlayerSnapTarget(1070, 630, 336, 240, 1440, 900)).toEqual({
+      x: 1084,
+      y: 640,
+      width: 336,
+      height: 240,
+      corner: 'bottom-right',
+    });
   });
 });

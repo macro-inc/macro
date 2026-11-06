@@ -73,7 +73,10 @@ More and creates the link only after explicit selection. More also offers
 **Show floating player**. This is the standard grouped dropdown, anchored below
 the More button and aligned to its right edge. Away from the channel's Call tab, the desktop player
 starts bottom-right, follows the speaker and gives screen sharing priority.
-Drag its header to snap to a corner; Collapse tucks it back into the rail.
+Drag its header freely within the window. Within 64px of a corner, a target
+outline previews the snap; release there to ease into that corner, or elsewhere
+to keep the dropped position. Reduced motion snaps without animation. Collapse
+tucks it back into the rail.
 Resize from any edge or corner; video/screens remain 16:9 and audio retains its
 minimum height. Width and audio height persist as local preferences; the player
 reclamps to the viewport when media or window size changes.

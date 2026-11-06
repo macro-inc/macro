@@ -49,6 +49,35 @@ export function constrainCallPlayerPosition(
   };
 }
 
+/** Corner magnets engage only within 64px of the resting position. */
+export function getCallPlayerSnapTarget(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  viewportWidth: number,
+  viewportHeight: number
+) {
+  const corner = nearestCallPlayerCorner(
+    x,
+    y,
+    width,
+    height,
+    viewportWidth,
+    viewportHeight
+  );
+  const target = constrainCallPlayerPosition(
+    corner.endsWith('left') ? 20 : viewportWidth - width - 20,
+    corner.startsWith('top') ? 20 : viewportHeight - height - 20,
+    width,
+    height,
+    viewportWidth,
+    viewportHeight
+  );
+  if (Math.hypot(x - target.x, y - target.y) > 64) return undefined;
+  return { ...target, width, height, corner };
+}
+
 export type CallPlayerResizeEdge =
   | 'top'
   | 'bottom'

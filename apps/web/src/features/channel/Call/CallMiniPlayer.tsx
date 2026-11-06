@@ -23,7 +23,7 @@ import {
   type CallPlayerCorner,
   type CallPlayerResizeEdge,
   constrainCallPlayerPosition,
-  nearestCallPlayerCorner,
+  getCallPlayerSnapTarget,
   resizeCallPlayer,
   selectCallPreview,
 } from './call-mini-player';
@@ -38,6 +38,9 @@ export function CallMiniPlayer(props: {
   const record = useLiveCallRecordQuery(() => call.activeCallId() ?? '');
   const [corner, setCorner] = createSignal<CallPlayerCorner>('bottom-right');
   const [position, setPosition] = createSignal<{ x: number; y: number }>();
+  const [snapTarget, setSnapTarget] =
+    createSignal<ReturnType<typeof getCallPlayerSnapTarget>>();
+  const [snapping, setSnapping] = createSignal(false);
   const [storedWidth, setWidth] = usePreference(
     'macro:pref:call:mini-player-width',
     { default: 336 }
@@ -56,7 +59,20 @@ export function CallMiniPlayer(props: {
   });
   const onViewportResize = () => {
     setViewport({ width: window.innerWidth, height: window.innerHeight });
-    setPosition(undefined);
+    setSnapping(false);
+    const box = root.getBoundingClientRect();
+    setPosition((point) =>
+      point
+        ? constrainCallPlayerPosition(
+            point.x,
+            point.y,
+            box.width,
+            box.height,
+            window.innerWidth,
+            window.innerHeight
+          )
+        : point
+    );
   };
   window.addEventListener('resize', onViewportResize);
   onCleanup(() => window.removeEventListener('resize', onViewportResize));
@@ -162,20 +178,25 @@ export function CallMiniPlayer(props: {
       [corner().startsWith('top') ? 'top' : 'bottom']: '20px',
     };
   };
-  const finishDrag = () => {
+  const finishDrag = (cancelled = false) => {
     if (!drag) return;
     const box = root.getBoundingClientRect();
-    setCorner(
-      nearestCallPlayerCorner(
-        box.x,
-        box.y,
-        box.width,
-        box.height,
-        window.innerWidth,
-        window.innerHeight
-      )
-    );
-    setPosition(undefined);
+    const target = cancelled
+      ? undefined
+      : getCallPlayerSnapTarget(
+          box.x,
+          box.y,
+          box.width,
+          box.height,
+          window.innerWidth,
+          window.innerHeight
+        );
+    if (target) {
+      setCorner(target.corner);
+      setSnapping(true);
+      setPosition({ x: target.x, y: target.y });
+    }
+    setSnapTarget(undefined);
     drag = undefined;
   };
   const finishResize = (event: PointerEvent, cancelled = false) => {
@@ -192,11 +213,33 @@ export function CallMiniPlayer(props: {
   };
   return (
     <Portal>
+      <Show when={snapTarget()}>
+        {(target) => (
+          <div
+            aria-hidden="true"
+            data-call-snap-target
+            class="pointer-events-none fixed z-modal rounded-2xl border-2 border-success bg-success/10"
+            style={{
+              left: `${target().x}px`,
+              top: `${target().y}px`,
+              width: `${target().width}px`,
+              height: `${target().height}px`,
+            }}
+          />
+        )}
+      </Show>
       <div
         ref={root}
         role="region"
         aria-label={title()}
-        class="menu-surface fixed z-modal max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl"
+        class={cn(
+          'menu-surface fixed z-modal max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl',
+          snapping() &&
+            'transition-[left,top] duration-200 ease-out motion-reduce:transition-none'
+        )}
+        onTransitionEnd={(event) => {
+          if (event.target === root) setSnapping(false);
+        }}
         style={{ ...placement(), width: `${width()}px` }}
       >
         <div
@@ -208,7 +251,10 @@ export function CallMiniPlayer(props: {
                 event.target.closest('button'))
             )
               return;
+            setSnapping(false);
+            setSnapTarget(undefined);
             const box = root.getBoundingClientRect();
+            setPosition({ x: box.x, y: box.y });
             drag = {
               x: event.clientX,
               y: event.clientY,
@@ -220,10 +266,19 @@ export function CallMiniPlayer(props: {
           onPointerMove={(event) => {
             if (!drag) return;
             const box = root.getBoundingClientRect();
-            setPosition(
-              constrainCallPlayerPosition(
-                drag.left + event.clientX - drag.x,
-                drag.top + event.clientY - drag.y,
+            const point = constrainCallPlayerPosition(
+              drag.left + event.clientX - drag.x,
+              drag.top + event.clientY - drag.y,
+              box.width,
+              box.height,
+              window.innerWidth,
+              window.innerHeight
+            );
+            setPosition(point);
+            setSnapTarget(
+              getCallPlayerSnapTarget(
+                point.x,
+                point.y,
                 box.width,
                 box.height,
                 window.innerWidth,
@@ -231,8 +286,9 @@ export function CallMiniPlayer(props: {
               )
             );
           }}
-          onPointerUp={finishDrag}
-          onPointerCancel={finishDrag}
+          onPointerUp={() => finishDrag()}
+          onPointerCancel={() => finishDrag(true)}
+          onLostPointerCapture={() => finishDrag(true)}
         >
           <span class="min-w-0 flex-1 truncate text-sm font-semibold">
             {title()}
@@ -375,6 +431,7 @@ export function CallMiniPlayer(props: {
                 if (event.button !== 0) return;
                 event.preventDefault();
                 event.stopPropagation();
+                setSnapping(false);
                 const box = root.getBoundingClientRect();
                 resize = {
                   pointer: event.pointerId,
