@@ -106,6 +106,12 @@ that resting mark when speech stops.
 Speaking participants have the same success-colored ring in tiles and the
 filmstrip, the People roster, header/sidebar avatar groups, and the floating
 player. Avatar groups without a matching joined room have no speaking ring.
+Browser calls sample existing microphone tracks for quieter speech, with a
+250ms release hold between syllables; muting clears the indicator immediately.
+This visual-only detector changes no microphone gain, noise suppression or
+transmitted audio. It retries after returning to the tab or starting a microphone.
+Unavailable analysis, including temporarily unsubscribed tracks, falls back to
+LiveKit speaking state. Background noise can also activate this audio indicator.
 
 ### Calls whose discussion is a channel thread
 

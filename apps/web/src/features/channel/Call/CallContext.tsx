@@ -1828,14 +1828,13 @@ function createCallState() {
     remoteParticipants: () => store.remoteParticipants,
     trackVersion: () => store.trackVersion,
     isLocalSpeaking: () => {
-      // Intentionally read store.speakerVersion to make this reactive so room()?.localParticipant.isSpeaking updates on speakerVersion changes.
       store.speakerVersion;
-      return room()?.localParticipant.isSpeaking ?? false;
+      const identity = room()?.localParticipant.identity;
+      return identity !== undefined && livekitJs?.isSpeaking(identity) === true;
     },
     isParticipantSpeaking: (participant: RemoteParticipant) => {
-      // Intentionally read store.speakerVersion to make this reactive so participant.isSpeaking updates on speakerVersion changes.
       store.speakerVersion;
-      return participant.isSpeaking;
+      return livekitJs?.isSpeaking(participant.identity) === true;
     },
     isAudioMuted: currentIsAudioMuted,
     isVideoMuted: currentIsVideoMuted,
