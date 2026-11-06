@@ -6,9 +6,14 @@ use crate::workflows::{steps, vars};
 #[cfg(test)]
 mod test;
 
+/// Validates `@macro-inc/sdk-calls`; shared with its release workflows.
+pub const CALLS_VALIDATION: &str =
+    "bun run check && bun test && bun run build && bun run check:pack";
+
 /// Files whose change makes `PR CI` call this workflow, and that runs it on `main`.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("packages/sdk/**"),
+    xtask_paths::repo_glob!("packages/sdk-calls/**"),
     xtask_paths::repo_glob!(".github/workflows/sdk-check.yml"),
 ];
 
@@ -32,7 +37,7 @@ pub fn sdk_check() -> Workflow {
         .add_job("check-package", check_package())
 }
 
-/// Typecheck, test, and coverage-check the package as committed. Needs nothing
+/// Typecheck, test, and coverage-check the packages as committed. Needs nothing
 /// but Bun, so it stays a cheap gate that can run on every SDK change.
 fn check_package() -> Job {
     Job::default()
@@ -44,6 +49,29 @@ fn check_package() -> Job {
         .add_step(typecheck())
         .add_step(run_tests())
         .add_step(check_coverage())
+        .add_step(build_sdk())
+        .add_step(install_calls_dependencies())
+        .add_step(check_calls())
+}
+
+/// `@macro-inc/sdk-calls` compiles against the SDK's built declarations.
+fn build_sdk() -> Step<Run> {
+    Step::new("Build SDK")
+        .run("bun run build")
+        .working_directory(xtask_paths::repo_dir!("packages/sdk"))
+}
+
+fn install_calls_dependencies() -> Step<Run> {
+    Step::new("Install sdk-calls dependencies")
+        .run("bun install --frozen-lockfile")
+        .working_directory(xtask_paths::repo_dir!("packages/sdk-calls"))
+}
+
+/// The same suite the release validates, including what the tarball would hold.
+fn check_calls() -> Step<Run> {
+    Step::new("Check sdk-calls")
+        .run(CALLS_VALIDATION)
+        .working_directory(xtask_paths::repo_dir!("packages/sdk-calls"))
 }
 
 fn install_dependencies() -> Step<Run> {

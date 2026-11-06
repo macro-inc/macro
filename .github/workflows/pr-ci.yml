@@ -523,6 +523,7 @@ jobs:
             - '.github/workflows/check_tauri_lockfiles.yml'
           sdk:
             - 'packages/sdk/**'
+            - 'packages/sdk-calls/**'
             - '.github/workflows/sdk-check.yml'
           macrod_update:
             - 'crates/coding_agent_worker/**'

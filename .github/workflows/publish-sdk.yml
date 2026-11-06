@@ -5,9 +5,10 @@ name: Publish SDK
   push:
     tags:
     - sdk-v*
+    - sdk-calls-v*
 jobs:
   publish:
-    name: Publish @macro-inc/sdk
+    name: Publish ${{ github.ref_name }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -32,8 +33,17 @@ jobs:
       run: npm install --global 'npm@^11.5.1'
     - name: Verify release tag
       run: |
-        version="${GITHUB_REF_NAME#sdk-v}"
-        package_version="$(node -p "require('./packages/sdk/package.json').version")"
+        case "$GITHUB_REF_NAME" in
+          sdk-calls-v*)
+            version="${GITHUB_REF_NAME#sdk-calls-v}"
+            directory=packages/sdk-calls
+            ;;
+          *)
+            version="${GITHUB_REF_NAME#sdk-v}"
+            directory=packages/sdk
+            ;;
+        esac
+        package_version="$(node -p "require('./$directory/package.json').version")"
 
         if [ "$version" != "$package_version" ]; then
           echo "tag version $version does not match package version $package_version"
@@ -50,9 +60,22 @@ jobs:
     - name: Validate SDK
       run: bun run check && bun test && bun run coverage && bun run build
       working-directory: packages/sdk
+    - name: Install sdk-calls dependencies
+      if: startsWith(github.ref_name, 'sdk-calls-v')
+      run: bun install --frozen-lockfile
+      working-directory: packages/sdk-calls
+    - name: Validate sdk-calls
+      if: startsWith(github.ref_name, 'sdk-calls-v')
+      run: bun run check && bun test && bun run build && bun run check:pack
+      working-directory: packages/sdk-calls
     - name: Publish package
+      if: '!startsWith(github.ref_name, ''sdk-calls-v'')'
       run: npm publish --access public
       working-directory: packages/sdk
+    - name: Publish sdk-calls
+      if: startsWith(github.ref_name, 'sdk-calls-v')
+      run: npm publish --access public
+      working-directory: packages/sdk-calls
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false

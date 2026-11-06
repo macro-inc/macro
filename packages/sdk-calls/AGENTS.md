@@ -24,10 +24,19 @@ screen-share publishing for Node and browsers.
 
 ## Checks
 
-- `bun test` and `bun run check` from this directory; `just check` covers format and lint.
+- Build the SDK first, then from this directory: `bun install --frozen-lockfile`,
+  `bun run check`, `bun test`, `bun run build`, `bun run check:pack`. `SDK Check`
+  runs them. `just check` covers format and lint.
 
 ## Gotchas
 
+- Versions in lockstep with `@macro-inc/sdk`: never edit the version or peer range
+  by hand; run `just bump` in `packages/sdk`. See `../sdk/RELEASING.md`.
+- Types come from the SDK's build through `tsconfig.json` `paths`, so build the SDK
+  first. The `file:../sdk` dev dependency only satisfies the peer at install, since
+  the required version may not be on npm yet.
+- Relative imports in `src/` need their `.js` extension: `tsc` keeps specifiers as
+  written, and Node's ESM loader won't resolve one without it.
 - Never log, attach to spans, or serialize the room token.
 - rtc-node has no room-wide publish defaults or publish hook, so the local
   participant's `publishTrack` is wrapped to set `dtx` false for audio.
