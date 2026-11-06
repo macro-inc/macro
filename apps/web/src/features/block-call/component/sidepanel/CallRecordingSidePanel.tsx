@@ -1,7 +1,7 @@
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { isMobile } from '@core/mobile/isMobile';
 import { Tabs } from '@ui';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, type JSX, onMount, Show } from 'solid-js';
 
 export function CallRecordingSidePanel(props: {
   transcript: JSX.Element;
@@ -9,6 +9,14 @@ export function CallRecordingSidePanel(props: {
 }) {
   const panel = useSidePanel();
   const [tab, setTab] = createSignal<'transcript' | 'details'>('transcript');
+  onMount(() =>
+    panel?.setOpenSectionIds([
+      'sharing',
+      'properties',
+      'activity',
+      'references',
+    ])
+  );
   return (
     <div class="flex h-full min-h-0 flex-col">
       <Show when={!isMobile()}>

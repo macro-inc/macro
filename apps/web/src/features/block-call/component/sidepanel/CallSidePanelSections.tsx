@@ -11,6 +11,8 @@ import { References } from '@core/component/References';
 import { useUserId } from '@core/context/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { OwnerLabel } from '@entity/owner/owner-display';
+import HashIcon from '@icon/system/regular/hash.svg';
 import {
   isCallSharedWithTeam,
   useSetCallRecordTeamShareMutation,
@@ -18,7 +20,7 @@ import {
 } from '@queries/call/call';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import type { CallRecord } from '@service-call/client';
-import { cn, InlineCheckbox } from '@ui';
+import { ToggleSwitch } from '@ui';
 import { Show, Suspense } from 'solid-js';
 import { formatCallDuration } from '../../utils';
 
@@ -46,7 +48,7 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
         )}
       />
       <Show when={props.record.channelId != null}>
-        <SidePanel.Section id="sharing" title="Sharing" order={20}>
+        <SidePanel.Section id="sharing" title="Sharing" order={10} defaultOpen>
           <SharingSectionContent record={props.record} />
         </SidePanel.Section>
       </Show>
@@ -68,7 +70,10 @@ function DetailsSectionContent(props: { record: CallRecord }) {
   const durationMs = () => record().durationMs ?? undefined;
 
   return (
-    <EntityMetadata ownerId={record().createdBy}>
+    <EntityMetadata>
+      <EntityMetadataRow label="Owner">
+        <OwnerLabel ownerId={record().createdBy} suppressClick />
+      </EntityMetadataRow>
       <Show when={startedAt()}>
         {(value) => (
           <EntityMetadataRow label="Started">
@@ -91,12 +96,33 @@ function DetailsSectionContent(props: { record: CallRecord }) {
         )}
       </Show>
       <EntityMetadataRow label="Status">
-        {record().isActive ? 'In progress' : 'Ended'}
+        <span class="inline-flex items-center gap-2">
+          <Show when={record().status === 'ATTENDED'}>
+            <span class="size-1.5 rounded-full bg-success" />
+          </Show>
+          {record().isActive ? 'In progress' : statusLabel(record().status)}
+        </span>
       </EntityMetadataRow>
+      <Show when={record().channelName}>
+        {(channel) => (
+          <EntityMetadataRow label="Channel">
+            <span class="inline-flex items-center gap-1">
+              <HashIcon class="size-3.5" />
+              {channel()}
+            </span>
+          </EntityMetadataRow>
+        )}
+      </Show>
     </EntityMetadata>
   );
 }
 
+function statusLabel(status: CallRecord['status']) {
+  if (status === 'ATTENDED') return 'Attended';
+  if (status === 'MISSED') return 'Missed';
+  if (status === 'UNATTENDED') return 'Unattended';
+  return 'Ended';
+}
 function PropertiesSectionContent(props: {
   record: CallRecord;
   renderSection: SidePanelSectionLayout;
@@ -171,26 +197,18 @@ function SharingSectionContent(props: { record: CallRecord }) {
   };
 
   return (
-    <div class="flex flex-col gap-2 text-xs">
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={isShared()}
-        aria-readonly={!canEdit()}
+    <div class="flex flex-col gap-2 rounded-xl bg-hover p-3 text-xs">
+      <ToggleSwitch
+        label="Share with team"
+        class="w-full flex-row-reverse justify-between"
+        size="xs"
+        checked={isShared()}
         disabled={isDisabled()}
-        onClick={() => fireAndForget(handleChange(!isShared()), 'call-sharing')}
-        class={cn(
-          'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none w-fit',
-          'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
-          'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
-          isShared() && 'text-ink',
-          isDisabled() && 'pointer-events-none',
-          isPending() && 'opacity-50'
-        )}
-      >
-        <InlineCheckbox checked={isShared()} />
-        <span class="whitespace-nowrap">Share with team</span>
-      </button>
+        readOnly={!canEdit()}
+        onChange={(checked) =>
+          fireAndForget(handleChange(checked), 'call-sharing')
+        }
+      />
       <p class="text-ink-muted leading-5">{description()}</p>
     </div>
   );
