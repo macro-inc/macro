@@ -279,9 +279,20 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // macro.web.search() and macro.web.fetch().
                 | "WebSearch"
                 | "WebFetch"
+                // macro.bots and Bot. IssueBotCredential stays: its chat card
+                // mints the secret without the model ever reading it.
+                | "ListBots"
+                | "CreateBot"
+                | "ConfigureBot"
+                | "DeleteBot"
+                | "GetBotWebhooks"
+                | "ManageBotChannelAccess"
                 // macro.agents.list() and macro.agentSessions.createManaged.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"
+                // macro.connectedApps.discover and .addServer.
+                | "DiscoverConnectors"
+                | "ConnectMcpServer"
         )
 }
 

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET LOCAL parallel_setup_cost = 10000",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "cd1dde0000615f78a4eb075ef98aec58d9a2e13d9f0bff9a20159512c8aee618"
+}

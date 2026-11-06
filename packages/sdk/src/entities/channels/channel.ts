@@ -11,6 +11,7 @@ import { type RichMessage, toBody } from '../../mentions';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentConversation } from '../agent-sessions/conversation';
+import { Bot } from '../bots/bot';
 import type { Document } from '../documents/document';
 import { PropertiedEntity } from '../entity';
 import type { StaticImage } from '../images/image';
@@ -336,6 +337,15 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
         path: { channel_id: this.id },
       }),
     );
+  }
+
+  /** Bots that can post to the channel. */
+  async bots(): Promise<Bot[]> {
+    return unwrap(
+      await this.client.storage.listChannelBots({
+        path: { channel_id: this.id },
+      }),
+    ).map((record) => Bot.from(this.client, record));
   }
 
   /** Add users to the channel. */

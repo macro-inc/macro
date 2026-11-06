@@ -218,6 +218,26 @@ fn code_mode_hides_tools_the_sdk_covers() {
 }
 
 #[test]
+fn code_mode_manages_bots_through_the_sdk_but_keeps_the_credential_card() {
+    let tools = tools_for_agent_code_mode();
+    for name in [
+        "ListBots",
+        "CreateBot",
+        "ConfigureBot",
+        "DeleteBot",
+        "GetBotWebhooks",
+        "ManageBotChannelAccess",
+    ] {
+        assert!(!tools.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+    }
+    assert!(tools.toolset.tools.contains_key("IssueBotCredential"));
+}
+
+#[test]
 fn project_workflows_are_available_in_every_host_alongside_folder_and_property_tools() {
     let names = [
         "ListInitiatives",
@@ -729,6 +749,8 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "NameSearch",
         "ListEntities",
         "ContentSearch",
+        "DiscoverConnectors",
+        "ConnectMcpServer",
     ] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
@@ -751,7 +773,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "Subagent",
         "SearchTools",
         "LoadTools",
-        "DiscoverConnectors",
         "BashCodeExecution",
         "TextEditorCodeExecution",
     ] {

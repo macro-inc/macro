@@ -10,6 +10,444 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/account-managers": {
+      "get": {
+        "tags": ["account-managers"],
+        "summary": "List the managers of the caller's account.",
+        "operationId": "list_account_managers",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagersList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["account-managers"],
+        "summary": "Ask another account for manager access, in your DM with them.",
+        "operationId": "request_account_manager",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestAccountManagerBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagerGrant"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account-managers/{id}": {
+      "get": {
+        "tags": ["account-managers"],
+        "summary": "Read a grant the caller is part of.",
+        "operationId": "get_account_manager_grant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Grant id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagerGrant"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["account-managers"],
+        "summary": "End a grant. Either side may withdraw it.",
+        "operationId": "revoke_account_manager_grant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Grant id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagerGrant"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account-managers/{id}/response": {
+      "post": {
+        "tags": ["account-managers"],
+        "summary": "Approve or decline a request the caller didn't make.",
+        "operationId": "respond_to_account_manager_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Grant id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondToAccountManagerRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagerGrant"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account-managers/{id}/token": {
+      "post": {
+        "tags": ["account-managers"],
+        "summary": "Issue the credential to the manager. Works once. A POST, so link previews\nand crawlers can't use it up.",
+        "operationId": "claim_account_manager_token",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Grant id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimedAccountManagerToken"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agents": {
       "get": {
         "tags": ["agents"],
@@ -433,6 +871,105 @@
         }
       }
     },
+    "/bots": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots`: the bots the caller can manage.",
+        "operationId": "list_bots",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Bot"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /bots`.",
+        "operationId": "create_bot",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/bots/me": {
       "get": {
         "tags": ["bots"],
@@ -561,6 +1098,195 @@
         }
       }
     },
+    "/bots/{bot_id}": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/{bot_id}`.",
+        "operationId": "get_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["bots"],
+        "summary": "Handler for `DELETE /bots/{bot_id}`.",
+        "operationId": "delete_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["bots"],
+        "summary": "Handler for `PATCH /bots/{bot_id}`.",
+        "operationId": "patch_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/bots/{bot_id}/channels": {
       "get": {
         "tags": ["bots"],
@@ -643,6 +1369,210 @@
             "name": "channel_id",
             "in": "path",
             "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bots/{bot_id}/tokens": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/{bot_id}/tokens`.",
+        "operationId": "list_bot_tokens",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BotToken"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /bots/{bot_id}/tokens`.",
+        "operationId": "create_bot_token",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBotTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateBotTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bots/{bot_id}/tokens/{token_id}": {
+      "delete": {
+        "tags": ["bots"],
+        "summary": "Handler for `DELETE /bots/{bot_id}/tokens/{token_id}`.",
+        "operationId": "revoke_bot_token",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Token ID",
             "required": true,
             "schema": {
               "type": "string",
@@ -4865,6 +5795,132 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiChannelAttachmentsPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/bots": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /channels/{channel_id}/bots`.",
+        "operationId": "list_channel_bots",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Bot"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /channels/{channel_id}/bots`.",
+        "operationId": "add_channel_bot",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddChannelBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -21116,6 +22172,97 @@
         ],
         "description": "Metadata together with the caller's effective grant."
       },
+      "AccountManagerDecision": {
+        "type": "string",
+        "description": "A response to a request.",
+        "enum": ["approve", "decline"]
+      },
+      "AccountManagerGrant": {
+        "type": "object",
+        "description": "A request for manager access and what became of it.",
+        "required": [
+          "id",
+          "managedUserId",
+          "managerUserId",
+          "requestedBy",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "claimedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the manager claimed the credential."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the request was made."
+          },
+          "expiresAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the pending request or unclaimed approval stops being usable."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Grant id."
+          },
+          "lastUsedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the credential was last used, to the minute."
+          },
+          "managedUserId": {
+            "type": "string",
+            "description": "The account being managed."
+          },
+          "managerUserId": {
+            "type": "string",
+            "description": "The agent account doing the managing."
+          },
+          "requestedBy": {
+            "$ref": "#/components/schemas/AccountManagerRole",
+            "description": "The side that asked."
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccountManagerGrantStatus",
+            "description": "Lifecycle status."
+          }
+        }
+      },
+      "AccountManagerGrantStatus": {
+        "type": "string",
+        "description": "Where a grant is in its lifecycle.",
+        "enum": [
+          "pending",
+          "approved",
+          "declined",
+          "active",
+          "revoked",
+          "expired"
+        ]
+      },
+      "AccountManagerRole": {
+        "type": "string",
+        "description": "One side of a grant.",
+        "enum": ["managed", "manager"]
+      },
+      "AccountManagersList": {
+        "type": "object",
+        "description": "The managers of the caller's account.",
+        "required": ["grants"],
+        "properties": {
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountManagerGrant"
+            },
+            "description": "Approved and active grants on the caller's account."
+          }
+        }
+      },
       "ActiveCallSummary": {
         "type": "object",
         "description": "A currently active call, as returned by the batch active-calls listing.",
@@ -21204,6 +22351,17 @@
         "type": "string",
         "description": "The kind of activity a user performs in a channel.",
         "enum": ["view", "interact"]
+      },
+      "AddChannelBotRequest": {
+        "type": "object",
+        "description": "Request to add a bot to a channel.",
+        "required": ["bot_id"],
+        "properties": {
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Bot id."
+          }
+        }
       },
       "AddFavoriteRequest": {
         "type": "object",
@@ -24001,6 +25159,96 @@
           }
         }
       },
+      "CallDiscussion": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A thread in the call's channel, rooted at the message with the call's id.",
+            "required": ["channel_id", "root_id", "kind"],
+            "properties": {
+              "channel_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The channel holding the thread."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["channel_thread"]
+              },
+              "root_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The thread's root message."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The call's own thread on the call parent.",
+            "required": ["call_id", "kind"],
+            "properties": {
+              "call_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The call owning the thread."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["call_chat"]
+              }
+            }
+          }
+        ],
+        "description": "Where a call's discussion lives, decided once when the call is created.\n`channel_id` cannot decide this: past channel calls keep their own thread."
+      },
+      "CallEntryStatus": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The call has not ended.",
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["live"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The call ended.",
+            "required": ["ended_at", "duration_ms", "state"],
+            "properties": {
+              "duration_ms": {
+                "type": "integer",
+                "format": "int64",
+                "description": "How long it lasted."
+              },
+              "ended_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it ended."
+              },
+              "state": {
+                "type": "string",
+                "enum": ["ended"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The call's record was deleted; its discussion stays in the channel.",
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["record_deleted"]
+              }
+            }
+          }
+        ],
+        "description": "A channel call's life, as its timeline row shows it."
+      },
       "CallFilters": {
         "type": "object",
         "description": "Filters for call records.",
@@ -24053,6 +25301,7 @@
         "description": "Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.",
         "required": [
           "callId",
+          "discussion",
           "createdBy",
           "startedAt",
           "shareWithTeam",
@@ -24083,6 +25332,10 @@
           "customName": {
             "type": ["string", "null"],
             "description": "User-supplied or AI-generated display name for the call. Only set on\narchived `call_records`; active calls always return `None`."
+          },
+          "discussion": {
+            "$ref": "#/components/schemas/CallDiscussion",
+            "description": "Where this call's discussion lives."
           },
           "durationMs": {
             "type": ["integer", "null"],
@@ -25770,6 +27023,21 @@
           }
         }
       },
+      "ClaimedAccountManagerToken": {
+        "type": "object",
+        "description": "The credential, returned only by the claim that issued it.",
+        "required": ["grant", "token"],
+        "properties": {
+          "grant": {
+            "$ref": "#/components/schemas/AccountManagerGrant",
+            "description": "The grant, now active."
+          },
+          "token": {
+            "type": "string",
+            "description": "The secret. Shown only once."
+          }
+        }
+      },
       "ClaimedPairing": {
         "type": "object",
         "description": "The credential released to the daemon when a pairing is claimed.",
@@ -27029,6 +28297,36 @@
           }
         }
       },
+      "CreateBotTokenRequest": {
+        "type": "object",
+        "description": "Request to create a bot token.",
+        "properties": {
+          "expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Optional expiration timestamp."
+          },
+          "label": {
+            "type": ["string", "null"],
+            "description": "Token label."
+          }
+        }
+      },
+      "CreateBotTokenResponse": {
+        "type": "object",
+        "description": "Response containing a newly minted token.",
+        "required": ["token", "bearer_token"],
+        "properties": {
+          "bearer_token": {
+            "type": "string",
+            "description": "Raw bearer token."
+          },
+          "token": {
+            "$ref": "#/components/schemas/BotToken",
+            "description": "Token metadata."
+          }
+        }
+      },
       "CreateBulkDocumentResponse": {
         "type": "object",
         "required": ["error", "data"],
@@ -27655,16 +28953,23 @@
       },
       "CreatePipeline": {
         "type": "object",
-        "description": "Request to create an empty pipeline with the standard CRM columns.",
-        "required": ["name", "recordType"],
+        "description": "Request to create an empty pipeline: the standard CRM columns for a tracked\nrecord, or one Name column, like a new database, for a generic pipeline.",
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
             "description": "Pipeline name."
           },
           "recordType": {
-            "$ref": "#/components/schemas/PipelineRecordType",
-            "description": "Company or contact entries."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Company or contact entries; omitted, a generic pipeline of free-form rows."
+              }
+            ]
           },
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",
@@ -29923,6 +31228,11 @@
           "actor": {
             "type": "string",
             "description": "User or bot that performed the edit."
+          },
+          "agent_correlation_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Invocation from the editor's signed document grant."
           },
           "on_behalf_of": {
             "oneOf": [
@@ -36856,6 +38166,10 @@
               }
             ]
           },
+          "kind": {
+            "$ref": "#/components/schemas/MessageKind",
+            "description": "What this message is."
+          },
           "mentions": {
             "type": "array",
             "items": {
@@ -37114,6 +38428,21 @@
           },
           {
             "type": "object",
+            "description": "A channel call's thread root was created. It stands for the call, so it\nreaches viewers and moves the channel up without any of what a post\ncauses: no notifications, agents, routines, webhooks or search documents.",
+            "required": ["message", "type"],
+            "properties": {
+              "message": {
+                "$ref": "#/components/schemas/Message",
+                "description": "Persisted root."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["call_root_posted"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Thread resolution, placement, or deletion changed.",
             "required": ["state", "type"],
             "properties": {
@@ -37265,6 +38594,11 @@
             "description": "Referenced entity type."
           }
         }
+      },
+      "MessageKind": {
+        "type": "string",
+        "description": "What a persisted message is. Set by the server, never by a client.",
+        "enum": ["message", "call_root"]
       },
       "MessageListItem": {
         "allOf": [
@@ -37704,6 +39038,25 @@
               "type": {
                 "type": "string",
                 "enum": ["activity"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A channel call and its thread. The root message's id is the call id.",
+            "required": ["message", "status", "type"],
+            "properties": {
+              "message": {
+                "$ref": "#/components/schemas/MessageListItem",
+                "description": "The call's root message, its thread state and its reply preview."
+              },
+              "status": {
+                "$ref": "#/components/schemas/CallEntryStatus",
+                "description": "Where the call is in its life."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["call"]
               }
             }
           }
@@ -39124,11 +40477,18 @@
           "primaryColumnId": {
             "type": "string",
             "format": "uuid",
-            "description": "Protected primary column."
+            "description": "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
           },
           "recordType": {
-            "$ref": "#/components/schemas/PipelineRecordType",
-            "description": "Kind of the primary reference."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Kind of the primary reference; `None` for a generic pipeline, whose\nprimary column is plain text."
+              }
+            ]
           },
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",
@@ -40345,6 +41705,21 @@
           }
         }
       },
+      "RequestAccountManagerBody": {
+        "type": "object",
+        "description": "Request body for asking for a grant.",
+        "required": ["counterpartyId", "callerRole"],
+        "properties": {
+          "callerRole": {
+            "$ref": "#/components/schemas/AccountManagerRole",
+            "description": "The side the caller takes."
+          },
+          "counterpartyId": {
+            "type": "string",
+            "description": "The other account (`macro|...`)."
+          }
+        }
+      },
       "RequestStatus": {
         "type": "string",
         "description": "Durable outcome; reading a notification never changes it.",
@@ -40489,6 +41864,17 @@
             "type": "integer",
             "format": "int32",
             "description": "Request revision being reviewed."
+          }
+        }
+      },
+      "RespondToAccountManagerRequestBody": {
+        "type": "object",
+        "description": "Request body for responding to a request.",
+        "required": ["decision"],
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/AccountManagerDecision",
+            "description": "The response."
           }
         }
       },

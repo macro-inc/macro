@@ -1065,27 +1065,9 @@ export type ToolFieldType =
   | 'relation'
   | 'formula';
 /**
- * Who executes the routine. Agent IDs refer to personas, never conversation IDs.
+ * When a routine runs. Combine any schedules with any activity triggers.
  */
-export type RoutineTarget =
-  | {
-      /**
-       * Runtime model ID.
-       */
-      model: string;
-      type: 'model';
-    }
-  | {
-      /**
-       * Persona/bot UUID (`bot.botId`) from ListAgents. Use your own persona ID to schedule yourself.
-       */
-      agentId: string;
-      type: 'agent';
-    };
-/**
- * A recurring or one-off schedule.
- */
-export type RoutineSchedule =
+export type RoutineTrigger =
   | {
       /**
        * RFC3339 timestamp including UTC offset.
@@ -1103,7 +1085,43 @@ export type RoutineSchedule =
        */
       timezone: string;
       type: 'cron';
+    }
+  | {
+      /**
+       * Any of these events starts a run.
+       */
+      events: RoutineEvent[];
+      /**
+       * Limit to these items: channel ids for channel events, task or
+       * document ids for task and document events. Omit to match every
+       * item; `*_created`, `channel.mentioned` and `email.message_received`
+       * usually omit it.
+       */
+      ids?: string[] | null;
+      /**
+       * Optional yes/no question the triggering content must answer with
+       * yes, e.g. "Is this email from a customer?". Runs where the answer
+       * is no are skipped before any step runs.
+       */
+      condition?: string | null;
+      type: 'event';
     };
+/**
+ * Activity that can trigger a routine.
+ */
+export type RoutineEvent =
+  | 'email.message_received'
+  | 'task.created'
+  | 'task.status_changed'
+  | 'task.priority_changed'
+  | 'task.property_changed'
+  | 'document.created'
+  | 'document.deleted'
+  | 'channel.created'
+  | 'channel.message_posted'
+  | 'channel.mentioned'
+  | 'call.started'
+  | 'call.ended';
 /**
  * A tag color from the fixed palette.
  */
@@ -5121,7 +5139,7 @@ export interface ToolEventAttendee {
   isOptional: boolean;
 }
 /**
- * Add companies or contacts to a CRM pipeline as new deals (entries), optionally setting their stage, owner, revenue or other fields. A company pipeline takes companies and a contact pipeline takes contacts (see ListPipelines' `tracks`). A record already in the pipeline is not added again unless allowDuplicates is true (for a second, separate deal); its existing entry is returned in alreadyPresent instead. Returns the new entries with their entryIds and fields as saved.
+ * Add companies or contacts to a CRM pipeline as new deals (entries), optionally setting their stage, owner, revenue or other fields. A company pipeline takes companies and a contact pipeline takes contacts (see ListPipelines' `tracks`); a generic pipeline, with no `tracks`, takes rows that name only their fields. A record already in the pipeline is not added again unless allowDuplicates is true (for a second, separate deal); its existing entry is returned in alreadyPresent instead. Returns the new entries with their entryIds and fields as saved.
  */
 export interface AddToPipeline {
   /**
@@ -5129,7 +5147,7 @@ export interface AddToPipeline {
    */
   pipelineId: string;
   /**
-   * The companies or contacts to add, each with its starting fields.
+   * The companies or contacts to add, each with its starting fields, or a generic pipeline's new rows.
    */
   entries: ToolNewEntry[];
   /**
@@ -5138,11 +5156,11 @@ export interface AddToPipeline {
   allowDuplicates?: boolean | null;
 }
 /**
- * One company or contact to add.
+ * One company or contact to add, or one row of a generic pipeline.
  */
 export interface ToolNewEntry {
   /**
-   * The CRM company or contact id to add (company ids come from ListCompanies). Give this or email.
+   * The CRM company or contact id to add (company ids come from ListCompanies). Give this or email; leave both out in a generic pipeline, which tracks no records.
    */
   recordId?: string | null;
   /**
@@ -5150,7 +5168,7 @@ export interface ToolNewEntry {
    */
   email?: string | null;
   /**
-   * Fields to fill in on the new entry, e.g. [{"field": "Stage", "value": "Lead"}, {"field": "Owner", "value": "me"}].
+   * Fields to fill in on the new entry, e.g. [{"field": "Stage", "value": "Lead"}, {"field": "Owner", "value": "me"}]. In a generic pipeline, e.g. [{"field": "Name", "value": "Launch site"}].
    */
   set?: ToolFieldValue[];
 }
@@ -5200,7 +5218,10 @@ export interface ToolEntry {
    * Pass as `entryId`.
    */
   entryId: string;
-  record: ToolRecord;
+  /**
+   * The company or contact it tracks; missing in a generic pipeline.
+   */
+  record?: ToolRecord | null;
   /**
    * Its filled-in fields by name: text, a number, true/false, a date, or a
    * list when a field holds several values. People are macro| user ids.
@@ -8247,14 +8268,17 @@ export interface ProjectChannelShare {
   access: string;
 }
 /**
- * Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks either a company or a contact. Every pipeline starts with the tracked record, Stage, Owner and Revenue fields; Stage starts with the team's default stages unless `stages` gives others. Only when the user asked for a new pipeline: check ListPipelines first so you do not create a duplicate. Returns the pipeline with its id and fields.
+ * Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks a company or a contact, and the pipeline starts with the tracked record, Stage, Owner and Revenue fields; Stage starts with the team's default stages unless `stages` gives others. Leave out `tracks` for a generic pipeline: a free-form table of entries that needs no company or contact, starting with only a Name field, plus a Stage field when `stages` is given. Only when the user asked for a new pipeline: check ListPipelines first so you do not create a duplicate. Returns the pipeline with its id and fields.
  */
 export interface CreatePipeline {
   /**
    * The pipeline's name, e.g. "Q4 Renewals".
    */
   name: string;
-  tracks: ToolRecordType;
+  /**
+   * "company" for deals with organizations, "contact" for deals with individual people (candidates, investors, partners). Leave out for a generic pipeline whose entries need no company or contact.
+   */
+  tracks?: ToolRecordType | null;
   /**
    * Let the user's team see and edit it. Defaults to false: only the user can see it.
    */
@@ -8264,7 +8288,7 @@ export interface CreatePipeline {
    */
   stages?: string[];
   /**
-   * Fields to add after Company/Contact, Stage, Owner and Revenue.
+   * Fields to add after Company/Contact, Stage, Owner and Revenue, or after a generic pipeline's Name.
    */
   fields?: ToolNewField[];
 }
@@ -8304,14 +8328,19 @@ export interface ToolPipeline {
    * Its name.
    */
   name: string;
-  tracks: ToolRecordType;
+  /**
+   * What each entry tracks: `company` or `contact`. Missing for a generic
+   * pipeline, whose entries are free-form rows that track no CRM record.
+   */
+  tracks?: ToolRecordType | null;
   access: ToolPipelineAccess;
   /**
    * Whether the owner's team may edit it; otherwise it is private.
    */
   sharedWithTeam: boolean;
   /**
-   * Its fields in column order; the first names the tracked record.
+   * Its fields in column order; the first names the tracked record, or in a
+   * generic pipeline the entry itself.
    */
   fields: ToolField[];
   /**
@@ -8374,7 +8403,42 @@ export interface CreateProjectResponse {
   projectName: string;
 }
 /**
- * Schedule recurring or one-off work for a model or agent. To schedule yourself, use your persona/bot ID as the agent target; to delegate, select an accessible agent from ListAgents using its bot.botId: a built-in agent, or one the user owns or can use, including one on a self-hosted runtime. That runtime need not be online to save the routine; a run it cannot serve fails and shows in ReadRoutine history. Routines run as the authenticated user after this session ends, using the selected agent’s tools and configuration. Use Once with a future RFC3339 timestamp for a single run; use Cron for repetition. Returns the saved routine ID and next firing. In Macro app replies, mention the created routine as `<m-document-mention>{"documentId":"ID","documentName":"NAME","blockName":"routine"}</m-document-mention>`, replacing ID with the returned ID and NAME with the saved routine name. In external MCP replies, follow the MCP item-linking instructions. Do not use reminders for work that should execute. Do not automatically create a new routine on every run of an existing routine.
+ * Create a routine: work that runs as the authenticated user on a schedule or when activity happens in Macro, after this session ends. Returns the saved routine's id and next firing. In Macro app replies, mention the created routine as `<m-document-mention>{"documentId":"ID","documentName":"NAME","blockName":"routine"}</m-document-mention>`, replacing ID with the returned ID and NAME with the saved routine name. In external MCP replies, follow the MCP item-linking instructions. Do not use reminders for work that should execute, and do not create a new routine on every run of an existing one.
+ *
+ * A routine is triggers plus steps. Pass `steps` as a JSON array encoded in a string.
+ *
+ * Triggers: `once` (future RFC3339 time), `cron` (six-field expression and IANA time zone), or `event` (activity such as `email.message_received`, `task.created` or `channel.message_posted`, optionally limited to item `ids` and gated by a yes/no `condition`). Only people's actions trigger routines.
+ *
+ * Steps run in order and a failed step stops the run:
+ * - `code`: TypeScript against Macro's SDK, for anything that acts or decides: labeling or archiving email, setting properties, creating tasks, posting messages, or judging items with `macro.ai.decide`. See Code steps at the end.
+ * - `agent` ("Ask AI"): hand off to a model (`model`) or an agent from ListAgents (`agent.bot_id`, optional `model` override): a built-in agent, or one the user owns or can use, including one on a self-hosted runtime, which need not be online to save the routine (a run it cannot serve fails and shows in ReadRoutine history). Give it `instructions`, for open-ended work such as drafting, research or summarizing many items. It sees the triggering event and what earlier steps returned. A routine has at most one agent step. To schedule yourself, use your own persona id as `agent.bot_id`. Apps the agent needs beyond its own go in `requiredApps`.
+ *
+ * Prefer code: it is exact and cheap, and it can read many items, loop and decide. Use an agent step only for open-ended work, and put it last.
+ *
+ * Example, label invoices as they arrive. Triggers: `[{"type":"event","events":["email.message_received"]}]`. Its `steps` string holds:
+ * [{"type":"code","title":"Label invoices","summary":"Asks AI whether the new email is an invoice and adds the inbox's Finance label if so.","source":"export async function main({ macro, trigger }: StepContext) {\n  if (trigger.kind !== 'event') return { labeled: false };\n  const { probabilities } = await macro.ai.decide({\n    input: { subject: trigger.item.email?.subject },\n    questions: { invoice: 'Is this email an invoice or a payment request?' },\n  });\n  if ((probabilities.invoice ?? 0) < 0.5) return { labeled: false };\n  const thread = macro.email.byId(trigger.item.entity_id);\n  const inbox = (await thread.link()).id;\n  for (const label of await macro.email.labels()) {\n    if ((await label.linkId()) === inbox && (await label.name()) === 'Finance') {\n      await thread.addLabel(label);\n      return { labeled: true };\n    }\n  }\n  return { labeled: false, missing: 'Finance' };\n}\n"}]
+ *
+ * Code steps: a `code` step runs TypeScript against Macro's SDK, the same SDK code mode uses. Use code for everything a routine does or decides: labeling or archiving email, setting properties, creating tasks, posting messages, reading many items, loops, and judgments with `macro.ai.decide`. Usually one code step does all of it. It takes:
+ * - `title`: what it does, in a few words. Saving names the step's output after it: "Find open invoices" becomes `find_open_invoices`. An `id` you give is kept.
+ * - `summary`: one sentence on how, for the routine's owner.
+ * - `knobs`: the values its owner may want to change without new code, which the code reads as `knobs.<name>`: label, channel or people's names, priorities, thresholds, time windows, and the yes/no questions it asks AI. Make a knob for every such constant instead of writing it into the code, never for logic; at most 12, and the code must read every one. Each is `{ "type", "name", "label", "value" }`:
+ *   - `name` is camelCase (`dueWithinDays`); `label` says what it is, in up to 60 characters ("Label for money email").
+ *   - `type` is `text`, `number` (optional `min` and `max`), `boolean`, `choice` (with `options`: 2 to 12 strings, `value` one of them), or `question`: a yes/no question for `macro.ai.decide`, its `value` the question and its `label` the condition as a short clause that reads inside a sentence ("it's about money").
+ *   - The owner can change any value later, so don't rely on today's.
+ * - `sentence`: what the step does, as one plain sentence for its owner (up to 300 characters), with `{name}` where a knob's value shows and `{?name}` where a question knob's clause shows: "Label it {moneyLabel} when {?aboutMoney}, and {marketingLabel} when {?aboutMarketing}." Every `{…}` names one of the step's knobs; question knobs use `{?…}`. It must say what the code does, no more.
+ * - `source`: a module exporting `async function main({ macro, run, routine, trigger, steps, knobs }: StepContext)`. Take only what you use.
+ *   - `run.at` is when the run counts as happening (ISO 8601) and `run.timezone` the zone to read it in. Use them for "today", "this week" or a cutoff; never `new Date()` or `Date.now()`, so a dry run that replays an earlier trigger gives the same answer.
+ *   - `run.lastSucceededAt` (null on the first run) and `run.previous` (`{ at, outcome }`) say when the routine last ran. Work on what is new since then instead of everything each time.
+ *   - `trigger` says what started the run: `{ kind: 'schedule', schedule, timezone }`, `{ kind: 'event', event, item }` with the item as JSON (`item.entity_id`, `item.email?.subject`, …), or `{ kind: 'manual', by }`. Check `trigger.kind` before reading `item`.
+ *   - `run.dryRun` is true when writes change nothing; `routine` is `{ id, name }`.
+ *   - `steps.<id>` is the output of a code step before this one, typed from that step's code. Changing what a step returns can break the steps that read it; every code step is checked with the others.
+ *   - `knobs.<name>` is a knob's value, typed from the knob: a `choice` is the union of its options.
+ * - What `main` returns is the step's output: JSON (dates become strings) of at most 64 KB. Return only what later steps need, such as ids and counts, not whole items; a larger output fails the step. An Ask AI step after it sees it too.
+ * - Call SDK methods as their declarations show, with `await`. Don't import anything.
+ * - Judge with `macro.ai.decide({ input, questions })`: `questions` maps keys to yes/no questions, and `probabilities[key]` in the answer is from 0 to 1 (treat 0.5 and above as yes). Ask every question about one item in one call. Pass question knobs as the questions: `questions: { aboutMoney: knobs.aboutMoney }`. Build questions in code only when they come from data, such as one per label the owner has. To pick one of several options (a label, a priority, a person), ask one question per option and take the most likely one that reaches 0.5.
+ * - Resolve names to ids in code, from the SDK (labels, properties, people, channels), rather than hard-coding ids.
+ * - The code is type-checked against the SDK; the checker's errors come back, and the step isn't saved until they are fixed. It runs as the owner, within 30 seconds.
+ *
  */
 export interface CreateRoutine {
   configuration: RoutineConfiguration;
@@ -8388,17 +8452,21 @@ export interface RoutineConfiguration {
    */
   name: string;
   /**
-   * Instructions passed to the model or agent on every run.
+   * When it runs: one or more schedules and activity triggers.
    */
-  instructions: string;
-  target: RoutineTarget;
-  schedule: RoutineSchedule;
+  triggers: RoutineTrigger[];
   /**
-   * Apps every run needs, on top of the target's own. The user must already
-   * have each one connected (offer a connect link via DiscoverConnectors if
-   * not). Updates replace the list: restate it to keep the apps.
+   * What it does each run, in order: a JSON array of steps, encoded as a
+   * string (see the tool description for the step format).
    */
-  requiredApps?: RoutineApp[];
+  steps: string;
+  /**
+   * Apps its agent step needs, on top of the agent's own. The user must
+   * already have each one connected (offer a connect link via
+   * DiscoverConnectors if not). On update, omit it to keep the routine's
+   * current apps; a list replaces them, and an empty list removes them.
+   */
+  requiredApps?: RoutineApp[] | null;
 }
 /**
  * A Pipedream app a routine requires.
@@ -8430,17 +8498,15 @@ export interface RoutineInfo {
    */
   enabled: boolean;
   /**
-   * Cron expression or event trigger, as stored by the scheduler.
+   * The saved configuration in the shape CreateRoutine and UpdateRoutine
+   * take. To change it, send it back with only the intended change.
    */
-  trigger: {
-    [k: string]: unknown;
-  };
+  configuration?: RoutineConfiguration | null;
   /**
-   * Execution target and instructions.
+   * Why `configuration` is absent: part of this routine can only be
+   * edited on its page in Macro, so UpdateRoutine refuses to replace it.
    */
-  task: {
-    [k: string]: unknown;
-  };
+  notEditableHere?: string | null;
   /**
    * Next scheduled firing, absent after a one-off completes.
    */
@@ -10020,7 +10086,7 @@ export interface ExportPipelineCsvResponse {
   summary: string;
 }
 /**
- * Find deals (entries) in a CRM pipeline: which companies or contacts are in which stage, who owns them, their revenue and other fields. Filter by field values (e.g. Stage is Demo or Trial, Owner is me), by company or contact name/domain/email with `search`, or by record id; sort by any field (Stage sorts in pipeline order). Returns each entry's entryId, the record it tracks (id and name) and its filled-in fields, plus, over every match, the count per stage (and per option of each single-select field) and the total of each number field such as Revenue: use these for questions like "how many deals are in Negotiation" or "what is the pipeline worth". To find where a company or contact is across all pipelines ("what stage is Acme in?"), leave out pipelineId and pass its name as `search` (or its recordIds). Get pipeline ids and field names from ListPipelines.
+ * Find deals (entries) in a CRM pipeline: which companies or contacts are in which stage, who owns them, their revenue and other fields. Filter by field values (e.g. Stage is Demo or Trial, Owner is me), by company or contact name/domain/email with `search` (in a generic pipeline, by any text field), or by record id; sort by any field (Stage sorts in pipeline order). Returns each entry's entryId, the record it tracks (id and name) and its filled-in fields, plus, over every match, the count per stage (and per option of each single-select field) and the total of each number field such as Revenue: use these for questions like "how many deals are in Negotiation" or "what is the pipeline worth". To find where a company or contact is across all pipelines ("what stage is Acme in?"), leave out pipelineId and pass its name as `search` (or its recordIds). Get pipeline ids and field names from ListPipelines.
  */
 export interface FindPipelineEntries {
   /**
@@ -12499,7 +12565,7 @@ export interface NotificationItem {
   senderId?: string | null;
 }
 /**
- * List the user's CRM pipelines (deal pipelines, sales pipelines, hiring or partner pipelines) with their stages and fields. A pipeline holds entries (deals); each entry tracks one CRM company or contact and has its own fields, such as Stage, Owner and Revenue. Each pipeline lists its id, whether it tracks companies or contacts, the user's access, and its fields in order with their types; a select field lists its options, so Stage lists the pipeline's stages from first to last. Call this first whenever the user talks about deals, a pipeline, a stage, or moving a company or contact along, then use FindPipelineEntries, AddToPipeline and UpdatePipelineEntries with the returned pipelineId and field names. When the user names no pipeline and there is exactly one, use it; when several could match, ask which one.
+ * List the user's CRM pipelines (deal pipelines, sales pipelines, hiring or partner pipelines) with their stages and fields. A pipeline holds entries (deals); each entry tracks one CRM company or contact and has its own fields, such as Stage, Owner and Revenue. A generic pipeline has no `tracks`: its entries are free-form rows of fields, with no company or contact. Each pipeline lists its id, whether it tracks companies or contacts, the user's access, and its fields in order with their types; a select field lists its options, so Stage lists the pipeline's stages from first to last. Call this first whenever the user talks about deals, a pipeline, a stage, or moving a company or contact along, then use FindPipelineEntries, AddToPipeline and UpdatePipelineEntries with the returned pipelineId and field names. When the user names no pipeline and there is exactly one, use it; when several could match, ask which one.
  */
 export type ListPipelines = {};
 /**
@@ -14812,7 +14878,7 @@ export interface ProjectItem {
   updatedAt?: string | null;
 }
 /**
- * Read a routine owned by the authenticated user, including its saved configuration and recent run history. Reading a run transcript still requires its own access.
+ * Read a routine owned by the authenticated user: its saved configuration in the shape CreateRoutine and UpdateRoutine take (name, triggers, steps, requiredApps), and its recent run history. When part of a routine can only be edited on its page in Macro (GitHub or payload filters), `notEditableHere` says why instead. Reading a run transcript still requires its own access.
  */
 export interface ReadRoutine {
   /**
@@ -16106,7 +16172,10 @@ export interface ToolUpdatedEntry {
    * The entry.
    */
   entryId: string;
-  record: ToolRecord;
+  /**
+   * The company or contact it tracks; missing in a generic pipeline.
+   */
+  record?: ToolRecord | null;
   /**
    * The fields set.
    */
@@ -16134,7 +16203,7 @@ export interface ToolFieldChange {
   };
 }
 /**
- * Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first before replacing configuration. Select an agent to delegate the routine or a model to run as Macro. Does not change ownership. A running routine can be paused but cannot be reconfigured until it finishes.
+ * Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first, then send its `configuration` back with only your change (name, triggers and steps, as CreateRoutine describes them): it replaces the saved one. Omit requiredApps to keep the routine's apps. Routines ReadRoutine marks `notEditableHere` can only be paused or resumed here. Does not change ownership or the description. A running routine can be paused but cannot be reconfigured until it finishes.
  */
 export interface UpdateRoutine {
   /**
@@ -16196,9 +16265,9 @@ export interface UpdateSharingResponse {
 /**
  * Add or remove a single label from every message in a Gmail thread. In Gmail, nearly all inbox operations are just label add/remove operations, so this tool is the primitive for archiving, marking read/unread, starring, trashing, marking important/spam, and applying or removing custom labels.
  *
- * Workflow: call ListLabels first to discover the UUID `id` for the label name you need, then call this tool with that `label_id` plus the thread's `thread_id` and `add=true` (apply) or `add=false` (remove). Each call modifies one label — to do multiple changes on the same thread (e.g. archive AND mark read), call this tool once per label.
+ * Name the label with exactly one of `label` or `label_id`. `label` is a system label (INBOX, UNREAD, STARRED, IMPORTANT, TRASH, SPAM) or a custom label's display name, matched in the thread's own inbox, so it works across inboxes without a lookup. `label_id` is a UUID from ListLabels. Pass `add=true` to apply or `add=false` to remove. Each call modifies one label — to do multiple changes on the same thread (e.g. archive AND mark read), call this tool once per label.
  *
- * Common operations (look up each system label's id via ListLabels first):
+ * Common operations:
  * - Archive: remove `INBOX` (add=false)
  * - Move back to inbox: add `INBOX` (add=true)
  * - Mark as read: remove `UNREAD` (add=false)
@@ -16209,7 +16278,9 @@ export interface UpdateSharingResponse {
  * - Report spam: add `SPAM` (add=true) / Not spam: remove (add=false)
  * - Apply custom user label: add the label with that display name (add=true) / Remove: (add=false)
  *
- * `thread_id` is the email thread UUID (the same id returned by ListEntities, search results, or GetThread). `label_id` is the UUID returned by ListLabels — NOT the label name.
+ * In an Outlook inbox the same system label names set the matching mailbox state (archive, read, flag, trash, junk); IMPORTANT has no Outlook equivalent, and other names are Outlook categories.
+ *
+ * `thread_id` is the email thread UUID (the same id returned by ListEntities, search results, or GetThread). `label_id` is the UUID returned by ListLabels — NOT the label name; pass a name in `label` instead.
  */
 export interface UpdateThreadLabels {
   /**
@@ -16217,9 +16288,13 @@ export interface UpdateThreadLabels {
    */
   thread_id: string;
   /**
-   * The UUID of the label to add or remove. Obtain this by calling ListLabels and looking up the label by name — do not pass the label name here.
+   * The UUID of the label to add or remove, from ListLabels. Omit when passing `label`.
    */
-  label_id: string;
+  label_id?: string | null;
+  /**
+   * The label's name instead of its id: a system label (INBOX, UNREAD, STARRED, IMPORTANT, TRASH, SPAM) or a custom label's display name, matched in the thread's inbox. Omit when passing `label_id`.
+   */
+  label?: string | null;
   /**
    * Whether to add (true) or remove (false) the label from every message in the thread.
    */
@@ -16471,7 +16546,9 @@ export interface CodeGuide {
  *
  * Prefer ExecuteCode for supported Macro work, including a single precise call. Entity indexes in context list each method with its signature. Before writing a program, read the symbols it needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context; do not guess option names. Use DescribeCodeTools for the index of an entity not in context or for workflow guides, requesting entities together (e.g. documents, email, ai, core).
  *
- * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view). It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. When to present a view, and its format, are in the PresentView schema at the end of this description. Edit markdown documents and tasks with the SDK document edit(instructions) method. Direct human-interactive tools, subagents and unsupported SDK operations remain available. Never sleep, call setTimeout or poll inside ExecuteCode to wait for something. To check back later, create a routine with a once trigger due shortly, macro.routines.create({trigger: {type: "once", at}, ...}), whose prompt says what to check and where to report, then finish; it runs within about a second of at.
+ * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view). It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. When to present a view, and its format, are in the PresentView schema at the end of this description. Direct human-interactive tools, subagents and unsupported SDK operations remain available. Never sleep, call setTimeout or poll inside ExecuteCode to wait for something. To check back later, create a routine with a once trigger due shortly, macro.routines.create({trigger: {type: "once", at}, ...}), whose prompt says what to check and where to report, then finish; it runs within about a second of at.
+ *
+ * Change the text of existing markdown documents and task bodies in place with the SDK document edit(instructions) method; pass {fast: true} for small edits, because a full edit can take tens of seconds of the execution deadline.
  *
  * Do the whole job in as few executions as possible, ideally one: every execution costs a model turn. Put control flow in the program instead of checking in one execution and acting in the next, e.g. if macro.tasks.findSimilar finds no likely duplicate, create the task and return it, else return the matches without creating. Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary JavaScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, URLs, explicit failures and coverage limits, enough to answer without a follow-up execution; for each item you create or point the user to, return its webUrl() as the URL rather than building one; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
  *

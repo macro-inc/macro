@@ -63,3 +63,43 @@ test('a sent message keeps the line spacing of the draft that wrote it', async (
     expect(Math.abs(gap - draftGaps[index])).toBeLessThanOrEqual(1);
   }
 });
+
+test('the one-line composer centers its buttons on the text line', async ({
+  page,
+}) => {
+  await page.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.hostname === 'localhost') {
+      await route.continue();
+    } else {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ responses: [] }),
+      });
+    }
+  });
+  await page.routeWebSocket('**/*', (socket) => socket.close());
+  await page.goto('/src/features/channel/Input/browser-test/spacing.html');
+
+  const editor = page.locator('[data-markdown-editable]');
+  await expect(editor).toBeVisible({ timeout: 30_000 });
+  await editor.click();
+  await page.keyboard.type('One line');
+
+  const offsets = await page.evaluate(() => {
+    const layout = document.querySelector('[data-input-layout]');
+    const text = document.querySelector('[data-markdown-editable]');
+    if (!layout || !text) throw new Error('Composer missing');
+    const center = (element: Element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.top + rect.height / 2;
+    };
+    const textCenter = center(text);
+    return [...layout.querySelectorAll('button')].map((button) =>
+      Math.abs(center(button) - textCenter)
+    );
+  });
+  expect(offsets.length).toBeGreaterThan(0);
+  for (const offset of offsets) expect(offset).toBeLessThan(0.25);
+});

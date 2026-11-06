@@ -57,6 +57,13 @@ use crate::{
         },
     },
 };
+use account_manager::domain::models::{
+    AccountManagerDecision, AccountManagerGrant, AccountManagerGrantStatus, AccountManagerRole,
+};
+use account_manager::inbound::axum_router::{
+    AccountManagersList, ClaimedAccountManagerToken, RequestAccountManagerBody,
+    RespondToAccountManagerRequestBody,
+};
 use channel_labels::domain::models::{
     ChannelLabel, ChannelLabelRule, ChannelLabelScopeSelection, ChannelLabelsList,
     SmartTagChannelMatch, SmartTagPreview,
@@ -364,10 +371,20 @@ use utoipa::OpenApi;
         bots::inbound::axum_router::create_agent_handler,
         bots::inbound::axum_router::list_agents_handler,
         bots::inbound::axum_router::update_agent_handler,
+        bots::inbound::axum_router::list_bots_handler,
+        bots::inbound::axum_router::create_bot_handler,
         bots::inbound::axum_router::get_self_bot_handler,
+        bots::inbound::axum_router::get_bot_handler,
+        bots::inbound::axum_router::patch_bot_handler,
+        bots::inbound::axum_router::delete_bot_handler,
+        bots::inbound::axum_router::list_tokens_handler,
+        bots::inbound::axum_router::create_token_handler,
+        bots::inbound::axum_router::revoke_token_handler,
         bots::inbound::axum_router::get_bot_owner_profiles_handler,
         bots::inbound::axum_router::list_bot_channels_handler,
         bots::inbound::axum_router::remove_bot_channel_handler,
+        bots::inbound::axum_router::list_channel_bots_handler,
+        bots::inbound::axum_router::add_channel_bot_handler,
         bots::inbound::channel_webhook_router::create_channel_scoped_bot_handler,
         bots::inbound::channel_webhook_router::post_channel_webhook_handler,
 
@@ -450,6 +467,12 @@ use utoipa::OpenApi;
         channel_labels::inbound::axum_router::set_channel_label_handler,
 
         // user api keys
+        account_manager::inbound::axum_router::request_account_manager_handler,
+        account_manager::inbound::axum_router::list_account_managers_handler,
+        account_manager::inbound::axum_router::get_account_manager_grant_handler,
+        account_manager::inbound::axum_router::respond_to_account_manager_request_handler,
+        account_manager::inbound::axum_router::claim_account_manager_token_handler,
+        account_manager::inbound::axum_router::revoke_account_manager_grant_handler,
         user_api_key::inbound::axum_router::create_user_api_key_handler,
         user_api_key::inbound::axum_router::list_user_api_keys_handler,
         user_api_key::inbound::axum_router::delete_user_api_key_handler,
@@ -735,6 +758,14 @@ use utoipa::OpenApi;
             GitRefDto,
             Favorite,
             FavoritesList,
+            AccountManagerDecision,
+            AccountManagerGrant,
+            AccountManagerGrantStatus,
+            AccountManagerRole,
+            AccountManagersList,
+            ClaimedAccountManagerToken,
+            RequestAccountManagerBody,
+            RespondToAccountManagerRequestBody,
             CreatedUserApiKey,
             CreateUserApiKeyRequest,
             UserApiKeyInfo,
@@ -895,6 +926,9 @@ use utoipa::OpenApi;
             messages::domain::ports::MessagePage,
             messages::domain::ports::MessageTimelinePage,
             messages::domain::ports::MessageTimelineEntry,
+            messages::domain::ports::CallEntryStatus,
+            messages::domain::models::MessageKind,
+            call::domain::models::CallDiscussion,
             messages::domain::ports::MessagePatch,
             messages::domain::ports::AttachmentChange,
             messages::domain::ports::MessageEvent,
@@ -973,6 +1007,9 @@ use utoipa::OpenApi;
             bots::domain::models::ChannelWebhookResponse,
             bots::domain::models::CreateBotRequest,
             bots::domain::models::PatchBotRequest,
+            bots::domain::models::CreateBotTokenRequest,
+            bots::domain::models::CreateBotTokenResponse,
+            bots::domain::models::AddChannelBotRequest,
             bots::domain::models::CreateChannelScopedBotRequest,
             bots::domain::models::CreateChannelScopedBotResponse,
 

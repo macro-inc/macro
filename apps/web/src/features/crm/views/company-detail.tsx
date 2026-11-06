@@ -19,7 +19,6 @@ import { CompanyPropertiesSection } from './company-properties-section';
 import { CompanySharingSection } from './company-sharing-section';
 import {
   RecordCallsSection,
-  RecordDatabasesSection,
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
@@ -126,9 +125,6 @@ function CompanyContent(props: CompanyProps) {
                   {(current) => <context.RecordTasks scope={current()} />}
                 </Show>
               </Suspense>
-            </Match>
-            <Match when={section() === 'databases'}>
-              <RecordDatabasesSection scope={scope()} />
             </Match>
             <Match when={section() === 'calls'}>
               <RecordCallsSection scope={scope()} />

@@ -39,7 +39,6 @@ const row = (id: string): NotificationInboxRow => ({
   content: {
     entity: {} as never,
     notifications: [],
-    entityAt: () => ({}) as never,
   },
 });
 

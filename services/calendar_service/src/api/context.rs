@@ -50,6 +50,8 @@ pub type CalendarMutationSvc = CalendarMutationServiceImpl<
 /// Shared HTTP application state for the calendar service.
 #[derive(Clone)]
 pub struct ApiContext {
+    /// Signed invocation validation and propagation.
+    pub correlation: agent_correlation::inbound::CorrelationState,
     /// Resolved service configuration.
     pub config: Arc<Config>,
     /// Authorization state for authenticated mutation routes.
