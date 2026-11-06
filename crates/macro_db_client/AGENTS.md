@@ -12,7 +12,7 @@ queries used across Rust services.
   (`user.rs`, `document.rs`, `organization.rs`, `team/`, `item_access/`, ...).
 - `migrations/`: MacroDB's SQLx-generated migrations, 500+
   files; the only place MacroDB schema changes are made.
-- `tests/`: cross-table integration tests (e.g. `add_forms.rs`).
+- `tests/it/`: cross-table integration tests (e.g. `add_forms.rs`).
 
 ## Scope
 

@@ -4,6 +4,9 @@ name = "sync_service_hex"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [features]
 default = []
 inbound = ["dep:axum", "dep:macro_authorization", "dep:utoipa"]

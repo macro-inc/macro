@@ -11,10 +11,12 @@ path = "src/main.rs"
 [[bin]]
 name = "static_file_service_openapi"
 path = "src/openapi.rs"
+test = false
 
 [[bin]]
 name = "static_file_service_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
 [features]
 dynamodb_client_test = []

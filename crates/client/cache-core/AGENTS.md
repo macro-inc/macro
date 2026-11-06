@@ -29,7 +29,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
   used to select which cached records satisfy a query.
 - `src/search.rs`: disposable Quick Access projection (version 4); email matches subjects and all embedded senders, never snippets or bodies; task projects (`GraphqlSoupInitiative`) index their display name with recency from `metadata`; whitespace and commas separate query tokens, as in the server's channel name search, and each token matches independently, so any order works.
 - `src/queue.rs`: the optimistic mutation queue.
-- `tests/`: the primary spec for engine behavior — one file per concern
+- `tests/it/`: the primary spec for engine behavior — one file per concern
   (optimistic updates, calendar range, search, subscriptions, fuzz).
 
 ## Scope
@@ -49,7 +49,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 ## Recipes
 
 - Add a new mutation's optimistic resolver: `src/engine.rs` (resolver registration)
-  → a new `tests/<name>_optimistic.rs` first (see the existing `*_optimistic.rs` tests).
+  → a new `tests/it/<name>_optimistic.rs` first (see the existing `*_optimistic.rs` tests).
 - Change what a query can select: `src/predicate.rs` → `src/record_selection.rs`
   → `src/query_inspection.rs`.
 

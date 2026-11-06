@@ -4,6 +4,11 @@ name = "agent_runtime_protocol"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "export_types"
+path = "src/bin/export_types.rs"
+test = false
+
 [features]
 default = ["transport"]
 # Connections and the physical wire adapters. Off for wasm: they need tokio,

@@ -4,6 +4,9 @@ name = "connection"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [features]
 default = ["outbound", "ports"]
 outbound = ["dep:connection_gateway_client", "dep:model-entity", "ports"]

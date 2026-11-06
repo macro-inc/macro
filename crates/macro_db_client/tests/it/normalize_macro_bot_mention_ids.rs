@@ -8,7 +8,7 @@ const EMPTY_PUBLIC_SCHEMA: &str = "DROP SCHEMA public CASCADE; CREATE SCHEMA pub
 const NORMALIZED_MACRO_BOT_ID: &str = "bot|00000000-0000-0000-0000-00000000a1a1";
 const OTHER_UUID: &str = "11111111-1111-1111-1111-111111111111";
 const MIGRATION: &str =
-    include_str!("../migrations/20260702200905_normalize_macro_bot_mention_ids.sql");
+    include_str!("../../migrations/20260702200905_normalize_macro_bot_mention_ids.sql");
 
 #[sqlx::test(migrations = false)]
 async fn migration_normalizes_macro_bot_user_ids_in_message_content(

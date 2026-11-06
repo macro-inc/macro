@@ -4,6 +4,9 @@ name = "database_env_vars"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dependencies]
 tracing = { workspace = true }
 macro_env_var = { path = "../macro_env_var" }

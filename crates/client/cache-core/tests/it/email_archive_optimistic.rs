@@ -8,7 +8,7 @@ use pollster::block_on;
 use serde_json::{Map, Value, json};
 
 const MUTATION: &str = include_str!(
-    "../../../../apps/web/src/lib/service-clients/service-storage/graphql/email-archive-state.graphql"
+    "../../../../../apps/web/src/lib/service-clients/service-storage/graphql/email-archive-state.graphql"
 );
 const QUERY: &str = r#"query Mail($input: SoupInput!) {
   user { id soup(input: $input) { items {

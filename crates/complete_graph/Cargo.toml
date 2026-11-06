@@ -4,6 +4,11 @@ name = "complete_graph"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "graphql_schema"
+path = "src/bin/graphql_schema.rs"
+test = false
+
 [dependencies]
 serde_json = { workspace = true }
 chrono = { workspace = true }

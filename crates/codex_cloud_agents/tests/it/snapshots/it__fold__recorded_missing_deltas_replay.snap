@@ -1,5 +1,5 @@
 ---
-source: crates/codex_cloud_agents/tests/fold.rs
+source: crates/codex_cloud_agents/tests/it/fold.rs
 expression: messages
 ---
 [

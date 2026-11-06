@@ -4,6 +4,11 @@ name = "user_link_cleanup_handler"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "user_link_cleanup_handler"
+path = "src/main.rs"
+test = false
+
 [dependencies]
 anyhow = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }

@@ -4,6 +4,11 @@ name = "macro_event_topics"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "dump_topics"
+path = "src/bin/dump_topics.rs"
+test = false
+
 [dependencies]
 sealed = "0.6.0"
 serde_json = { workspace = true }

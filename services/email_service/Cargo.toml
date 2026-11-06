@@ -8,18 +8,22 @@ version = "0.1.0"
 [[bin]]
 name = "email_service"
 path = "src/main.rs"
+test = false
 
 [[bin]]
 name = "backfill_contacts"
 path = "src/bin/backfill_contacts/backfill_contacts.rs"
+test = false
 
 [[bin]]
 name = "backfill_calendar_flags"
 path = "src/bin/backfill_calendar_flags/backfill_calendar_flags.rs"
+test = false
 
 [[bin]]
 name = "backfill_signal_flags"
 path = "src/bin/backfill_signal_flags/backfill_signal_flags.rs"
+test = false
 
 [[bin]]
 name = "backfill_outlook_snippets"
@@ -28,14 +32,17 @@ path = "src/bin/backfill_outlook_snippets/backfill_outlook_snippets.rs"
 [[bin]]
 name = "backfill_gmail_attachments"
 path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
+test = false
 
 [[bin]]
 name = "backfill_sfs_attachments"
 path = "src/bin/backfill_sfs_attachments/backfill_sfs_attachments.rs"
+test = false
 
 [[bin]]
 name = "pubsub_workers"
 path = "src/bin/pubsub_workers/pubsub_workers.rs"
+test = false
 
 [[bin]]
 name = "find_used_sfs_ids"
@@ -48,18 +55,22 @@ path = "src/bin/find_unused_sfs_ids/find_unused_sfs_ids.rs"
 [[bin]]
 name = "cleanup_unused_sfs"
 path = "src/bin/cleanup_unused_sfs/cleanup_unused_sfs.rs"
+test = false
 
 [[bin]]
 name = "reverse_sfs_mappings"
 path = "src/bin/reverse_sfs_mappings/reverse_sfs_mappings.rs"
+test = false
 
 [[bin]]
 name = "email_service_openapi"
 path = "src/openapi.rs"
+test = false
 
 [[bin]]
 name = "email_service_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
 
 # Built only by the `build-service-bins` CI job, which needs the real binaries;

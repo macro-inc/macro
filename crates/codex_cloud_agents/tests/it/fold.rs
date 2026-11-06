@@ -435,7 +435,7 @@ async fn recorded_missing_deltas_replay_restores_both_answers_once() {
     client.initialize(&mut log).await;
     let session = client.session(&mut log).await;
     let recording: Vec<JournalEntry> =
-        serde_json::from_str(include_str!("fixtures/missing_live_deltas.json")).unwrap();
+        serde_json::from_str(include_str!("../fixtures/missing_live_deltas.json")).unwrap();
     journal
         .entries
         .lock()

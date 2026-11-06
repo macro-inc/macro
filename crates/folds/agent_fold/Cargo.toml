@@ -29,6 +29,7 @@ openapi = ["dep:utoipa"]
 [[bin]]
 name = "fold_jsonl"
 required-features = ["cli"]
+test = false
 
 # Needs a filesystem to write to, which the library does not.
 # Not `export_types`, which agent_runtime_protocol also has: CI builds this one
@@ -37,6 +38,7 @@ required-features = ["cli"]
 name = "agent_fold_types"
 path = "src/bin/export_types.rs"
 required-features = ["cli"]
+test = false
 
 [dependencies]
 agent-client-protocol = { workspace = true }

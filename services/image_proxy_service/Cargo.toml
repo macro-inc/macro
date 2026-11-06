@@ -12,10 +12,12 @@ path = "src/main.rs"
 [[bin]]
 name = "image_proxy_service_openapi"
 path = "src/openapi.rs"
+test = false
 
 [[bin]]
 name = "image_proxy_service_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
 [dependencies]
 anyhow = { workspace = true }

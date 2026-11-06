@@ -4,6 +4,14 @@ name = "worker_trigger"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
+[[bin]]
+name = "worker_trigger"
+path = "src/main.rs"
+test = false
+
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-ecs = { workspace = true }

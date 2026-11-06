@@ -4,6 +4,9 @@ name = "saved_views"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dependencies]
 chrono = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }

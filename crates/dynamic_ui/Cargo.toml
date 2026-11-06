@@ -12,6 +12,7 @@ cli = ["dep:specta-typescript", "dep:specta-serde"]
 [[bin]]
 name = "export_view_types"
 required-features = ["cli"]
+test = false
 
 [dependencies]
 lazy-regex = { workspace = true }

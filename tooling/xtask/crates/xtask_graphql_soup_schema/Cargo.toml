@@ -8,6 +8,7 @@ version = "0.1.0"
 [[bin]]
 name = "xtask_graphql_soup_schema"
 path = "src/main.rs"
+test = false
 
 [dependencies]
 anyhow = { workspace = true }

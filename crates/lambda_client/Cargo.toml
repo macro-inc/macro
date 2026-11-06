@@ -4,6 +4,9 @@ name = "lambda_client"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-lambda = { workspace = true }

@@ -204,7 +204,7 @@ sources changed).
 ## Testing
 
 - `cargo test -p pptx_engine` runs the unit tests and the corpus regression
-  test (`tests/corpus.rs`), which renders every deck in `tests/corpus` and
+  test (`tests/it/corpus.rs`), which renders every deck in `tests/corpus` and
   compares fingerprints with `tests/corpus/baseline.json`.
 - The `pptx_corpus` CLI (`--features cli`) renders decks, scores them against
   LibreOffice reference renders (SSIM, mismatch, HTML report), maintains the

@@ -273,11 +273,11 @@ Files:
 
 - `crates/client/cache-core/src/predicate.rs`;
 - `crates/client/cache-core/src/engine.rs`;
-- `crates/client/cache-core/tests/predicate.rs`;
-- `crates/client/cache-core/tests/optimistic.rs` where queue transitions affect cursor validity;
+- `crates/client/cache-core/tests/it/predicate.rs`;
+- `crates/client/cache-core/tests/it/optimistic.rs` where queue transitions affect cursor validity;
 - `crates/client/cache-turso/src/storage.rs`;
 - `crates/client/cache-turso/src/storage/test.rs`;
-- `crates/client/cache-turso/tests/predicate.rs`.
+- `crates/client/cache-turso/tests/it/predicate.rs`.
 
 ### Phase 3: Compile and transport local cursors
 

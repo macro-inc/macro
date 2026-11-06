@@ -4,6 +4,11 @@ name = "local_e2e_test_support"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "generate_local_e2e_token"
+path = "src/bin/generate_local_e2e_token.rs"
+test = false
+
 [dependencies]
 anyhow = { workspace = true }
 dotenvy = { workspace = true }

@@ -4,6 +4,9 @@ name = "ensure_exists"
 publish = false
 version = "0.1.0"
 
+[lib]
+test = false
+
 [features]
 dynamodb = ["dep:aws-sdk-dynamodb", "dep:tokio"]
 

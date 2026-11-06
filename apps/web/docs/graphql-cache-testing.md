@@ -9,8 +9,8 @@ flashes, stale subscribers, and notifications to unrelated fields.
 
 | Boundary | Generated operations | Invariants |
 | --- | --- | --- |
-| [Rust engine](../../../crates/client/cache-core/tests/model_fuzz.rs) | Optimistic property assignments; single and array mutation results; overlapping and coalesced edits; claims; success with canonical server values; rejection; retry; stale replies; remote writes; reorder; restart; directive changes; subscriber teardown and delayed polling | Every queried and subscriber-visible result matches committed data plus pending edits in order. Rejection removes only the rejected edit. Success links the canonical assignment without an intermediate gap. Stale claims cannot change state. Queue order survives restart. Every delta addresses an existing, changed field. |
-| [Turso filesystem](../../../crates/client/cache-turso/tests/model_fuzz.rs) | The same independent oracle, using a real database and reopening its file | Eviction, queue ordering, optimistic rebase, and restart agree with the model through the production storage adapter. |
+| [Rust engine](../../../crates/client/cache-core/tests/it/model_fuzz.rs) | Optimistic property assignments; single and array mutation results; overlapping and coalesced edits; claims; success with canonical server values; rejection; retry; stale replies; remote writes; reorder; restart; directive changes; subscriber teardown and delayed polling | Every queried and subscriber-visible result matches committed data plus pending edits in order. Rejection removes only the rejected edit. Success links the canonical assignment without an intermediate gap. Stale claims cannot change state. Queue order survives restart. Every delta addresses an existing, changed field. |
+| [Turso filesystem](../../../crates/client/cache-turso/tests/it/model_fuzz.rs) | The same independent oracle, using a real database and reopening its file | Eviction, queue ordering, optimistic rebase, and restart agree with the model through the production storage adapter. |
 | [Transaction failures](../../../crates/client/cache-turso/src/storage/test/optimistic_atomicity.rs) | Inject errors at every exposed write checkpoint for enqueue/coalescing, commit, rollback, network refresh, clear, and account switch; retry after reopening | A definite failure changes neither durable state nor visible revision, optimistic values, or subscribers. A later retry succeeds. Account switches replace data and identity together. |
 | [Solid live queries](../src/lib/graphql-cache/exchange/live-query.fuzz.test.ts) | Field patches; full snapshots; list insertion, removal, and reorder; delayed subscribers; disposal | All subscribers converge. Every synchronous reactive observation is coherent. Retained rows preserve object identity. Single-field edits notify only changed fields. Previously published snapshots stay immutable. Disposed observers stop running. |
 | [Async query reader](../src/lib/graphql-cache/exchange/document-query-reader.test.ts) | Random reply ordering, hits and misses, older failures, teardown, invalidated generations | Older responses cannot publish over an accepted newer revision, including after a newer miss. Invalidated reads cannot resurrect a view. |
@@ -25,7 +25,7 @@ flashes, stale subscribers, and notifications to unrelated fields.
 | [Mail render transitions](../src/lib/queries/soup/graphql/browser-test/mail-flicker.browser.e2e.ts) | Real `createSoupLiveQuery` and normalized exchange over worker/WASM/OPFS; local evaluation and HTTP released separately; repeated Drafts → Inbox → Noise visits and reload | A `MutationObserver` records every row-ID change from cached baseline through local evaluation and network settlement. Repaired visits retain exactly the server IDs throughout, not merely at the end. The unrepaired first visit is a positive control. Each run attaches `rendered-row-transitions.json`. Only app singleton composition is replaced; the fixture uses a small Solid row renderer rather than the full Mail shell. |
 | [Refresh ordering](../src/lib/queries/trailing-refetch.test.ts) | Concurrent invalidations, failed earlier reads, owner disposal | A change during a pending read gets a trailing read; disposed owners stop requesting work. |
 
-The shared [Rust oracle](../../../crates/client/cache-core/tests/support/optimistic_model.rs)
+The shared [Rust oracle](../../../crates/client/cache-core/tests/it/support/optimistic_model.rs)
 uses ordinary document lists and pending edits. It does not use
 cache normalization, dependency indexes, link recipes, or cache reads to construct
 its expected results. It exercises aliases, named fragments, unions, omitted
@@ -68,8 +68,8 @@ up to 16 concurrent replies. Default seeds vary between runs. For a larger,
 reproducible run, use these commands in their respective directories:
 
 ```sh
-nix develop --command env -u SQLX_OFFLINE PROPTEST_CASES=2048 PROPTEST_RNG_SEED=20261004 cargo test -p cache-core --test model_fuzz
-nix develop --command env -u SQLX_OFFLINE PROPTEST_CASES=256 PROPTEST_RNG_SEED=20261004 cargo test -p cache-turso --test model_fuzz
+nix develop --command env -u SQLX_OFFLINE PROPTEST_CASES=2048 PROPTEST_RNG_SEED=20261004 cargo test -p cache-core --test it -- model_fuzz::
+nix develop --command env -u SQLX_OFFLINE PROPTEST_CASES=256 PROPTEST_RNG_SEED=20261004 cargo test -p cache-turso --test it -- model_fuzz::
 nix develop --command env CACHE_FUZZ_RUNS=2000 CACHE_FUZZ_SEED=20261004 bunx vitest run src/lib/graphql-cache/exchange/live-query.fuzz.test.ts src/lib/graphql-cache/exchange/live-query.test.ts src/lib/graphql-cache/exchange/document-query-reader.test.ts
 ```
 

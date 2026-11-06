@@ -8,18 +8,22 @@ version = "0.1.0"
 [[bin]]
 name = "authentication_service"
 path = "src/main.rs"
+test = false
 
 [[bin]]
 name = "generate_keys"
 path = "src/bin/generate_keys.rs"
+test = false
 
 [[bin]]
 name = "authentication_service_openapi"
 path = "src/openapi.rs"
+test = false
 
 [[bin]]
 name = "authentication_service_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
 
 # Built only by the `build-service-bins` CI job, which needs the real binaries;

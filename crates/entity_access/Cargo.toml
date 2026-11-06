@@ -8,6 +8,7 @@ version = "0.1.0"
 name = "explain_access"
 path = "src/bin/explain_access.rs"
 required-features = ["explain_binary"]
+test = false
 
 [features]
 axum = [

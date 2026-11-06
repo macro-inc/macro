@@ -765,7 +765,7 @@ async fn migration_rollback_preserves_records_and_grants(pool: PgPool) {
         .unwrap();
     // Execute the actual rollback DDL in this disposable test database.
     sqlx::raw_sql(include_str!(
-        "../../macro_db_client/migrations/20261007172434_crm_pipeline_entities.down.sql"
+        "../../../macro_db_client/migrations/20261007172434_crm_pipeline_entities.down.sql"
     ))
     .execute(&pool)
     .await
