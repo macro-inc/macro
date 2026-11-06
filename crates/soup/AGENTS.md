@@ -140,4 +140,4 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Skill: `database-core`, `cloud-storage-hexagonal-architecture` · Rules:
   `.agents/rules/rust/db.md`, `.agents/rules/rust/architecture.md`
 
-Keep private message roots out of shared channel-thread candidates; private channel history is read through `messages`.
+Keep private message roots out of shared channel-thread candidates and out of the parent-thread grant that opens agent sessions; private channel history is read through `messages`.
