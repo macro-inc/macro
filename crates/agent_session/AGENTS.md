@@ -140,6 +140,10 @@ through `set_name` clears it, so a name a person chose is never replaced.
   server-to-runtime method is stored without params until it is added to
   `STORED_WHOLE_METHODS` in that module; only add methods whose params hold no
   credential.
+- The session actor scrubs current MCP HTTP/SSE header values from inbound log
+  frames before telemetry, handshake retention, and storage. Keep the machine's
+  server list current when replacing MCP servers; outbound frames still need
+  their configured headers.
 - What opened a session is an `agent_session_source` row, referenced by
   `agent_session.source_id` and written in the transaction that writes the session
   (`outbound/postgres/source.rs`). It holds references only, as

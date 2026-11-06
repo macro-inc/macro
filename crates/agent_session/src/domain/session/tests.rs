@@ -1,12 +1,11 @@
-//! Table-driven tests for the pure machine: inputs in, effects out. No
-//! tokio, no mocks, no waiting - `Token` is a plain integer.
+//! Machine behavior and the actor's log boundary.
 
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, InitializeResponse, McpServer, McpServerHttp, NewSessionResponse,
-    PermissionOption, PermissionOptionKind, RequestId, RequestPermissionOutcome,
-    RequestPermissionRequest, RequestPermissionResponse, Response, ResumeSessionResponse,
-    SelectedPermissionOutcome, SessionCapabilities, SessionResumeCapabilities, ToolCallUpdate,
-    ToolCallUpdateFields,
+    AgentCapabilities, HttpHeader, InitializeResponse, McpServer, McpServerHttp,
+    NewSessionResponse, PermissionOption, PermissionOptionKind, RequestId,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
+    ResumeSessionResponse, SelectedPermissionOutcome, SessionCapabilities,
+    SessionResumeCapabilities, ToolCallUpdate, ToolCallUpdateFields,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::action::{
@@ -2010,6 +2009,115 @@ fn connected_app(name: &str) -> McpServer {
         name,
         format!("https://egress.example.com/mcp/{name}"),
     ))
+}
+
+#[test]
+fn replacing_mcp_servers_changes_which_header_value_is_scrubbed() {
+    use super::credentials::redact_inbound_credentials;
+
+    let mut machine = machine();
+    let first = "placeholder-first-credential-123456";
+    let second = "placeholder-second-credential-123456";
+    let server = |value| {
+        McpServer::Http(
+            McpServerHttp::new("example", "https://example.invalid/mcp")
+                .headers(vec![HttpHeader::new("Authorization", value)]),
+        )
+    };
+    machine.handle(Input::ReplaceMcpServers(vec![server(first)]));
+    machine.handle(Input::ReplaceMcpServers(vec![server(second)]));
+
+    let frame = ToServerMessage::Acp(AcpMessage(
+        RawJsonRpcMessage::notification(
+            "session/update".to_owned(),
+            serde_json::json!({"output": format!("{first} {second}")}),
+        )
+        .unwrap(),
+    ));
+    let stored = redact_inbound_credentials(frame, machine.mcp_servers());
+    let serialized = serde_json::to_string(&stored).unwrap();
+    assert!(serialized.contains(first));
+    assert!(!serialized.contains(second));
+    assert!(serialized.contains("[REDACTED]"));
+}
+
+#[tokio::test]
+async fn actor_stores_scrubbed_inbound_frame() {
+    use std::sync::Arc;
+
+    use crate::domain::ports::{
+        AgentSessionLogRepo, NoOpRealtime, NoOpToolCatalog, NoOpTurnObserver,
+    };
+    use crate::domain::service::LiveSessionLogWriter;
+    use crate::testing::{InMemoryAgentSessionRepo, test_agent_session};
+    use agent_runtime_protocol::domain::ports::{Transport, TransportError, TransportSender};
+    use tokio::sync::{mpsc, watch};
+
+    struct TestTransport {
+        outbound: mpsc::Sender<ToRuntimeMessage>,
+        inbound: mpsc::Receiver<ToServerMessage>,
+    }
+    #[derive(Clone)]
+    struct TestSender(mpsc::Sender<ToRuntimeMessage>);
+    impl Transport<ToRuntimeMessage, ToServerMessage> for TestTransport {
+        type Sender = TestSender;
+        type Receiver = mpsc::Receiver<ToServerMessage>;
+
+        fn split(self) -> (Self::Sender, Self::Receiver) {
+            (TestSender(self.outbound), self.inbound)
+        }
+    }
+    impl TransportSender<ToRuntimeMessage> for TestSender {
+        async fn send(&self, message: ToRuntimeMessage) -> Result<(), TransportError> {
+            self.0
+                .send(message)
+                .await
+                .map_err(|_| TransportError::Client("receiver closed".into()))
+        }
+    }
+
+    let repo = InMemoryAgentSessionRepo::new();
+    let id = AgentSessionId::TEST_A;
+    repo.insert_session(test_agent_session(id));
+    let (_inbound_tx, inbound) = mpsc::channel(1);
+    let (outbound, _outbound_rx) = mpsc::channel(1);
+    let (_commands_tx, commands) = mpsc::channel(1);
+    let (handshake, _) = watch::channel(super::HandshakeStatus::Pending);
+    let credential = "placeholder-session-credential-123456";
+    let server = McpServer::Http(
+        McpServerHttp::new("example", "https://example.invalid/mcp")
+            .headers(vec![HttpHeader::new("Authorization", credential)]),
+    );
+    let mut actor = super::actors::SessionActor::new(
+        id,
+        None,
+        "/workspace".to_owned(),
+        vec![server],
+        PermissionPolicy::AutoAccept,
+        TestTransport { outbound, inbound },
+        LiveSessionLogWriter::new(repo.clone(), NoOpRealtime),
+        commands,
+        handshake,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoOpToolCatalog),
+    );
+    let inbound = ToServerMessage::Acp(AcpMessage(
+        RawJsonRpcMessage::request(
+            "session/update".to_owned(),
+            serde_json::json!({"output": format!("result: {credential}")}),
+            RequestId::Str("placeholder-request".to_owned()),
+        )
+        .unwrap(),
+    ));
+    actor.dispatch(Input::Inbound(inbound)).await;
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, id)
+        .await
+        .unwrap();
+    assert_eq!(stored.len(), 1);
+    let serialized = serde_json::to_string(&stored[0].entry.content).unwrap();
+    assert!(!serialized.contains(credential));
+    assert!(serialized.contains("result: [REDACTED]"));
 }
 
 #[test]

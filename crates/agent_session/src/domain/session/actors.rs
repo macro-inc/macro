@@ -35,6 +35,7 @@ use crate::domain::ports::{
 };
 use agent_fold::domain::model::TurnSignal;
 
+use super::credentials::redact_inbound_credentials;
 use super::telemetry::GenAiProjector;
 use super::{
     CloseReason, Effect, HandshakeStatus, Input, PermissionPolicy, RuntimeStatus, SessionMachine,
@@ -439,6 +440,11 @@ where
                     }
                 }
                 Effect::Log { message, boundary } => {
+                    let Some(message) =
+                        redact_inbound_credentials(message, self.machine.mcp_servers())
+                    else {
+                        continue;
+                    };
                     self.telemetry.on_inbound(&message);
                     if let Some(ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(
                         request,
