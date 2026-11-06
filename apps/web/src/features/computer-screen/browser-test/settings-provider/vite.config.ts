@@ -20,6 +20,7 @@ export default defineConfig({
     tsconfigPaths({ projects: [`${webDirectory}/tsconfig.json`] }),
     tailwind(),
   ],
+  optimizeDeps: { esbuildOptions: { target: 'esnext' } },
   resolve: {
     dedupe: ['solid-js'],
     alias: [

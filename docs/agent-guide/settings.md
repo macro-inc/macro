@@ -982,6 +982,9 @@ keep their desktop split beside the conversation.
 The header names the computer and shows a small **Watching** or **In control**
 pill; the back icon closes the screen. The pane starts in **Watching** mode. Read and Resident access stay watch-only;
 User and owner access offer **Take control** on desktop. Phones remain watch-only.
+Taking control focuses the remote screen so typing, including complete URLs,
+goes to the computer. Tab from the toolbar can return to the screen; clicking
+outside it restores app shortcuts. Watching does not claim keyboard focus.
 The server enforces the same input permissions. Ordinary readers can request
 edit access when the server offers it; agent-computer readers see no control
 request. A disconnected screen shows a centered computer icon, one message and

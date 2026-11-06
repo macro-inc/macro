@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
 import { EmptyStatePanel } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
@@ -13,6 +14,7 @@ export function ScreenPane(props: {
   requestControl?: JSX.Element;
 }) {
   const screen = useScreen();
+  const [attachInputScope] = useHotkeyDOMScope('computer-screen', true);
   const [target, setTarget] = createSignal<HTMLDivElement>();
   const connection = createScreenConnection(screen.host, target, props.connect);
   usePending(
@@ -52,7 +54,10 @@ export function ScreenPane(props: {
         </div>
       </Show>
       <div
-        ref={setTarget}
+        ref={(element) => {
+          attachInputScope(element);
+          setTarget(element);
+        }}
         class="min-h-0 min-w-0 flex-1 overflow-hidden"
         classList={{ hidden: connection.status() === 'error' }}
       />

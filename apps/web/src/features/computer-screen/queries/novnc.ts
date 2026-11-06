@@ -9,9 +9,20 @@ export const connectScreen: ConnectScreen = async (
   const { default: RFB } = await import('@novnc/novnc');
   const rfb = new RFB(target, url);
   rfb.viewOnly = !control;
+  rfb.focusOnClick = control;
   rfb.scaleViewport = true;
   rfb.resizeSession = false;
-  rfb.addEventListener('connect', events.connected);
+  rfb.addEventListener('connect', () => {
+    if (control) {
+      const canvas = target.querySelector('canvas');
+      if (canvas) {
+        canvas.tabIndex = 0;
+        canvas.setAttribute('data-keyboard-input', '');
+      }
+      rfb.focus({ preventScroll: true });
+    }
+    events.connected();
+  });
   rfb.addEventListener('disconnect', events.disconnected);
   rfb.addEventListener('securityfailure', events.disconnected);
   return { disconnect: () => rfb.disconnect() };

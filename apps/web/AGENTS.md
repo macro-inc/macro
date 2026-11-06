@@ -1095,7 +1095,10 @@ the backend's `session_harness` lookup; require `capabilities.screen`. Keep
 the connection keyed by stable session/harness IDs so list polling preserves
 control and the stream. Keep noVNC lazy-loaded, refresh socket auth like the sync
 router, default to view-only,
-and reconnect when control changes. Touch devices remain watch-only.
+and reconnect when control changes. Focus the controlling noVNC canvas, mark it
+`data-keyboard-input`, and attach a detached hotkey scope so app navigation cannot
+consume guest keystrokes; watch-only screens must not claim keyboard focus.
+Touch devices remain watch-only.
 Settings tabs compose `SettingsComputerScreen` with `ScreenSplit takeover` so
 the screen replaces the main Settings content at every width; use the real
 harness name, shared mode Badge and icon back control, with `EmptyStatePanel`
