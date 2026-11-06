@@ -171,15 +171,16 @@ mod tests {
     }
 
     #[test]
-    fn session_tool_use_prompt_describes_a_review_in_the_turn_not_a_pending_composer() {
-        // An agent session finishes user tools in the turn: the model never
-        // sees "PendingUserExecution" there, and telling it about a composer
-        // to confirm in later would have it say so to the user.
+    fn session_tool_use_prompt_presents_drafts_without_holding_the_turn() {
+        // An agent session never calls the deferring user tools: drafts go on
+        // a saved review card the turn does not wait on, and the account
+        // holder's "yes" in chat submits it.
         let session = SESSION_TOOL_USE_PROMPT.to_string();
         assert!(!session.contains("PendingUserExecution"));
-        assert!(session.contains("review card"));
-        assert!(session.contains("MUST use the `SendEmail` tool"));
-        assert!(session.contains("do not ask for confirmation in prose"));
+        assert!(!session.contains("MUST use the `SendEmail` tool"));
+        assert!(session.contains("present the editable draft with `PresentReview`"));
+        assert!(session.contains("Do not wait for the user to act on it"));
+        assert!(session.contains("submit it with\n  `DecideReview`"));
     }
 
     #[test]
@@ -214,9 +215,7 @@ mod tests {
         assert!(session.contains("quoted verbatim"));
         assert!(session.contains("`userConfirmation`"));
         assert!(session.contains("`AskUser`"));
-        assert!(session.contains(
-            "`SendConfirmedEmail` and `CreateConfirmedCalendarEvent` are never right here"
-        ));
+        assert!(session.contains("never call either from the agent session view"));
 
         // The thread rule is to restate what the tool would have done, whole,
         // so the user can approve it without opening the session - and it

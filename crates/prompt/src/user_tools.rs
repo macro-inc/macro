@@ -50,8 +50,8 @@ or CreateConfirmedCalendarEvent, which are for surfaces without a composer.";
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
 
 static SESSION_INSTRUCTIONS: &str = r##"- Before presenting an email or calendar draft, look at where the newest prompt came from. The
-  context block names a conversation parent when that prompt was posted in a channel or
-  document thread instead of typed in the agent session view. It is decided per prompt, not per
+  context block names a conversation parent when that prompt was posted in a
+  channel or document thread instead of typed in the agent session view. It is decided per prompt, not per
   session: the same session can be driven from both places, so check the prompt you are
   answering now.
 
