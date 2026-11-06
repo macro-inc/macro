@@ -77,7 +77,8 @@ impl PublishDir {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("macro-publish-{}-{nonce}", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("macro-publish-{}-{nonce}", std::process::id()));
         std::fs::create_dir(&path).unwrap();
         Self(path)
     }
@@ -139,5 +140,8 @@ fn changed_binary_can_replace_a_running_executable() {
     child.wait().unwrap();
     result.unwrap();
     assert!(still_running);
-    assert_eq!(std::fs::read(&dest).unwrap(), std::fs::read(&built).unwrap());
+    assert_eq!(
+        std::fs::read(&dest).unwrap(),
+        std::fs::read(&built).unwrap()
+    );
 }
