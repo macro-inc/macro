@@ -2,7 +2,6 @@
   pkgs,
   crane,
   fenix,
-  packages,
 }:
 let
   toolchain = fenix.packages.${pkgs.stdenv.hostPlatform.system}.fromToolchainFile {
@@ -20,8 +19,14 @@ craneLib.mkCargoDerivation {
     src = ../..;
     filter =
       path: type:
-      craneLib.filterCargoSources path type
-      || builtins.match ".*\\.(toml|ts|json|sql|bop|lock)$" path != null;
+      let
+        rel = pkgs.lib.removePrefix (toString ../.. + "/") (toString path);
+      in
+      !(pkgs.lib.hasPrefix "tooling/xtask/crates/xtask_local/src/local/kubernetes" rel)
+      && (
+        craneLib.filterCargoSources path type
+        || builtins.match ".*\\.(toml|ts|json|sql|bop|lock)$" path != null
+      );
   };
   cargoVendorDir = craneLib.vendorCargoDeps {
     src = ../..;
@@ -35,6 +40,7 @@ craneLib.mkCargoDerivation {
     pkgs.clang
     pkgs.bun
     pkgs.nodejs
+    pkgs.nukeReferences
   ];
   WASM_BINDGEN_BIN = "${pkgs.wasm-bindgen-cli_0_2_126}/bin/wasm-bindgen";
   WASM_BINDGEN_TEST_RUNNER_BIN = "${pkgs.wasm-bindgen-cli_0_2_126}/bin/wasm-bindgen-test-runner";
@@ -42,9 +48,6 @@ craneLib.mkCargoDerivation {
   WASM_OPT_BIN = "${pkgs.binaryen}/bin/wasm-opt";
   buildPhaseCargoCommand = ''
     export HOME=$TMPDIR XDG_CACHE_HOME=$TMPDIR/cache
-    cp -r ${packages.macro-js-node-modules}/node_modules .
-    chmod -R u+w node_modules
-    export PATH=$PWD/node_modules/.bin:$PATH
     cd services/sync-service
     worker-build --profile sync-service-release
   '';
@@ -52,6 +55,9 @@ craneLib.mkCargoDerivation {
     mkdir -p $out
     cp -r build database $out/
     sed 's/document_storage_service/document-storage-service/g' wrangler.docker.toml > $out/wrangler.toml
+    # WASM panic locations retain compiler/vendor paths, never runtime inputs.
+    find $out -type f -exec nuke-refs {} +
   '';
+  allowedReferences = [ ];
   doCheck = false;
 }

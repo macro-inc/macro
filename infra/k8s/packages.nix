@@ -89,7 +89,6 @@ rec {
         pkgs
         crane
         fenix
-        packages
         ;
     }
   );
@@ -146,7 +145,7 @@ rec {
 
   postgres = pkgs.postgresql_18.withPackages (p: [ p.pgvector ]);
   sqlx = pkgs.sqlx-cli;
-  migrations = ../../crates/macro_db_client/migrations;
+  migrations = "${../../crates/macro_db_client/migrations}";
   # The build has no live credentials: it initializes over a private Unix socket.
   # Runtime credentials enter only after the copied seed has started in its PVC.
   postgresSeed =
@@ -176,32 +175,45 @@ rec {
 
   # Reuse the existing frontend's Rust/Wasm derivations and dependency package,
   # changing only browser-local configuration and the Vite runtime.
-  frontend = (
-    packages.tauri-frontend.overrideAttrs (old: {
-      pname = "macro-kubernetes-frontend";
-      nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.nodejs ];
-      VITE_POSTHOG_API_KEY = "";
-      VITE_LOCAL_SERVERS = "ALL";
-      VITE_LOCAL_BACKEND_ORIGIN = "same-origin";
-      VITE_LOCAL_ONLY = "true";
-      VITE_AI_EDITING_WORKER_URL = "/ai-editing";
-      NODE_OPTIONS = "--max-old-space-size=16384";
-      # A commit id in the image would make committed manifests change again
-      # immediately after committing them. The content-addressed tag is the revision.
-      buildPhase = lib.concatStringsSep "\n" (
-        map (
-          line:
-          if lib.hasInfix "> dist/semver.txt" line then
-            "printf '${old.version}+local-kubernetes\\n' > dist/semver.txt"
-          else
-            builtins.replaceStrings
-              [ "MODE=production" "bun ../../node_modules/vite/bin/vite.js" ]
-              [ "MODE=development" "node ../../node_modules/vite/bin/vite.js" ]
-              line
-        ) (lib.splitString "\n" old.buildPhase)
-      );
-    })
-  );
+  frontend =
+    let
+      built = packages.tauri-frontend.overrideAttrs (old: {
+        pname = "macro-kubernetes-frontend";
+        nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.nodejs ];
+        VITE_POSTHOG_API_KEY = "";
+        VITE_LOCAL_SERVERS = "ALL";
+        VITE_LOCAL_BACKEND_ORIGIN = "same-origin";
+        VITE_LOCAL_ONLY = "true";
+        VITE_AI_EDITING_WORKER_URL = "/ai-editing";
+        NODE_OPTIONS = "--max-old-space-size=16384";
+        # A commit id in the image would make committed manifests change again
+        # immediately after committing them. The content-addressed tag is the revision.
+        buildPhase = lib.concatStringsSep "\n" (
+          map (
+            line:
+            if lib.hasInfix "> dist/semver.txt" line then
+              "printf '${old.version}+local-kubernetes\\n' > dist/semver.txt"
+            else
+              builtins.replaceStrings
+                [ "MODE=production" "bun ../../node_modules/vite/bin/vite.js" ]
+                [ "MODE=development" "node ../../node_modules/vite/bin/vite.js" ]
+                line
+          ) (lib.splitString "\n" old.buildPhase)
+        );
+      });
+    in
+    pkgs.runCommand "macro-kubernetes-frontend"
+      {
+        nativeBuildInputs = [ pkgs.nukeReferences ];
+        allowedReferences = [ ];
+      }
+      ''
+        cp -r ${built} $out
+        chmod -R u+w $out
+        # Static assets contain no executable Nix paths. WASM diagnostics must not
+        # retain the compiler and vendored Rust sources in the served image.
+        find $out -type f -exec nuke-refs {} +
+      '';
   # FusionAuth's start.sh deletes the xmldsig `disallowAlg` lines from the
   # JDK's java.security at every boot (SAML with SHA-1 signatures). The store
   # is read-only, so make that edit once, on a JDK of its own.

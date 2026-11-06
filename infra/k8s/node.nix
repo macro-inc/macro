@@ -22,9 +22,7 @@ let
   bundle =
     name: entry: extra:
     pkgs.runCommand name { nativeBuildInputs = [ pkgs.bun ]; } ''
-      cp -r ${workspace} source
-      chmod -R u+w source
-      cd source
+      cd ${workspace}
       mkdir -p $out
       bun build ${entry} --target=bun --outfile=$out/server.js ${extra}
       mkdir -p $out/node_modules
