@@ -1471,16 +1471,52 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     );
     let admission = macro_agent_tool_context.admission.clone();
+    let editing_worker = Arc::new(
+        documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+            AiEditingWorkerUrl::new()?.to_string(),
+        ),
+    );
+    let document_ai_usage =
+        ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement);
     // Document AI edits over HTTP share the channel agent's admission.
     let document_ai_editing = Arc::new(documents_hex::domain::ai_editing::AiEditingService::new(
-        Arc::new(
-            documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
-                AiEditingWorkerUrl::new()?.to_string(),
-            ),
-        ),
+        editing_worker.clone(),
         admission.clone(),
-        ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
+        document_ai_usage.clone(),
     ));
+    // The spreadsheet tools' engine, for SDK spreadsheet reads and edits.
+    let document_spreadsheet =
+        Arc::new(documents_hex::domain::spreadsheet::SpreadsheetService::new(
+            document_service.clone(),
+            editing_worker.clone(),
+            config.document_permission_jwt.as_ref().to_string(),
+        ));
+    let document_spreadsheet_ai_edit = Arc::new(
+        documents_hex::domain::spreadsheet::SpreadsheetAiEditService::new(
+            document_service.clone(),
+            editing_worker.clone(),
+            config.document_permission_jwt.as_ref().to_string(),
+            admission.clone(),
+            document_ai_usage,
+        ),
+    );
+    // The file-document routes read and write what the matching AI tools do.
+    let document_files = Arc::new(
+        documents_hex::outbound::s3_document_files::S3DocumentFiles::new(
+            db.clone(),
+            macro_aws_config::s3_client().await,
+            config.document_storage_bucket.to_string(),
+        ),
+    );
+    let word_documents = Arc::new(
+        documents_hex::domain::word_document::WordDocumentService::new(
+            document_service.clone(),
+            editing_worker,
+            sync_service_client.clone(),
+            document_files.clone(),
+            config.document_permission_jwt.as_ref().to_string(),
+        ),
+    );
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new_with_admission(
         message_service.clone(),
         conversation_access.clone(),
@@ -2456,6 +2492,23 @@ async fn run_server() -> anyhow::Result<()> {
             lexical_client: lexical_client.clone(),
             creator: document_creator,
             ai_editing: document_ai_editing,
+            spreadsheet: document_spreadsheet,
+            spreadsheet_ai_edit: document_spreadsheet_ai_edit,
+            presentations: Arc::new(
+                documents_hex::domain::presentation::PresentationService::new(
+                    document_files.clone(),
+                ),
+            ),
+            word_documents,
+            designs: Arc::new(documents_hex::domain::design::DesignService::new(
+                document_files.clone(),
+            )),
+            photoshop_documents: Arc::new(documents_hex::domain::photoshop::PhotoshopService::new(
+                document_files.clone(),
+            )),
+            illustrator_documents: Arc::new(
+                documents_hex::domain::illustrator::IllustratorService::new(document_files),
+            ),
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
             non_user_owners,
         },

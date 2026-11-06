@@ -53,8 +53,14 @@ use super::{
     create_document::create_document_internal_handler, documents_router,
 };
 
+#[cfg(feature = "ai_tools")]
+mod design_files;
+#[cfg(feature = "ai_tools")]
+mod presentation;
 mod sync_content;
 mod upload_file;
+#[cfg(feature = "ai_tools")]
+mod word_document;
 use crate::{
     domain::{
         content::DocumentContent,
@@ -150,6 +156,8 @@ struct FakeDocumentService {
     copy_calls: Mutex<Vec<CreationPrincipal>>,
     created_documents: Mutex<Vec<CreatedDocumentCall>>,
     upload_url: Mutex<Option<String>>,
+    /// The file type documents report; PDF when unset.
+    file_type: Mutex<Option<FileType>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -245,7 +253,14 @@ impl DocumentService for FakeDocumentService {
                 .unwrap_or_else(|| {
                     Owner::from_principal_str(JWT_USER_ID).expect("test user id should be valid")
                 }),
-            file_type: Some("pdf".to_string()),
+            file_type: Some(
+                self.file_type
+                    .lock()
+                    .unwrap()
+                    .unwrap_or(FileType::Pdf)
+                    .as_str()
+                    .to_string(),
+            ),
             sub_type: None,
             branched_from_id: None,
             branched_from_version_id: None,
@@ -259,7 +274,7 @@ impl DocumentService for FakeDocumentService {
         &self,
         _user_id: &str,
     ) -> Result<Option<String>, DocumentError> {
-        unimplemented!()
+        Ok(None)
     }
 
     async fn get_document_by_team_slug(
@@ -615,7 +630,7 @@ impl DocumentCreationService for FakeDocumentService {
         _document_id: &str,
         _content: DocumentContent,
     ) -> Result<(), DocumentError> {
-        panic!("unexpected set_document_content call")
+        Ok(())
     }
 
     async fn cleanup_created_document(&self, _document_id: &str) {
@@ -694,6 +709,7 @@ struct DocumentAccessCall {
 struct FakeEntityAccessService {
     team_info: Arc<Mutex<Option<UserTeamInfo>>>,
     deny_document_access: Arc<Mutex<bool>>,
+    denied_entity_type: Arc<Mutex<Option<EntityType>>>,
     document_access_calls: Arc<Mutex<Vec<DocumentAccessCall>>>,
 }
 
@@ -702,6 +718,7 @@ impl Default for FakeEntityAccessService {
         Self {
             team_info: Arc::new(Mutex::new(None)),
             deny_document_access: Arc::new(Mutex::new(false)),
+            denied_entity_type: Arc::new(Mutex::new(None)),
             document_access_calls: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -717,6 +734,11 @@ impl FakeEntityAccessService {
             .deny_document_access
             .lock()
             .expect("document access result lock poisoned") = true;
+    }
+
+    /// Deny access to every entity of one type, granting the rest.
+    fn deny_access_to(&self, entity_type: EntityType) {
+        *self.denied_entity_type.lock().unwrap() = Some(entity_type);
     }
 
     fn document_access_calls(&self) -> Vec<DocumentAccessCall> {
@@ -749,6 +771,7 @@ impl EntityAccessService for FakeEntityAccessService {
             .deny_document_access
             .lock()
             .expect("document access result lock poisoned")
+            || *self.denied_entity_type.lock().unwrap() == Some(entity_type)
         {
             return Err(AccessError::Unauthorized);
         }
@@ -1029,6 +1052,29 @@ fn test_router_with(
     FakeEntityAccessService,
     FakeAuthorizationService,
 ) {
+    let (state, document_service, access_service, authorization_service) =
+        test_state(non_user_owners);
+    (
+        router_for(state),
+        document_service,
+        access_service,
+        authorization_service,
+    )
+}
+
+type TestState =
+    DocumentRouterState<FakeDocumentService, FakeEntityAccessService, FakeAuthorizationService>;
+
+/// Router state whose file stores and upstream services are unreachable;
+/// file-document tests replace them.
+fn test_state(
+    non_user_owners: NonUserOwners,
+) -> (
+    TestState,
+    Arc<FakeDocumentService>,
+    FakeEntityAccessService,
+    FakeAuthorizationService,
+) {
     let pool = PgPoolOptions::new()
         .connect_lazy("postgres://postgres:postgres@localhost/documents-router-test")
         .expect("test database URL should be valid");
@@ -1077,10 +1123,72 @@ fn test_router_with(
             Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
             Arc::new(ai_usage::NoOpUsageRecorder),
         )),
+        #[cfg(feature = "ai_tools")]
+        spreadsheet: Arc::new(crate::domain::spreadsheet::SpreadsheetService::new(
+            document_service.clone(),
+            Arc::new(
+                crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                    "http://localhost/unused-editing-worker".to_string(),
+                ),
+            ),
+            "unused-jwt-secret".to_string(),
+        )),
+        #[cfg(feature = "ai_tools")]
+        spreadsheet_ai_edit: Arc::new(crate::domain::spreadsheet::SpreadsheetAiEditService::new(
+            document_service.clone(),
+            Arc::new(
+                crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                    "http://localhost/unused-editing-worker".to_string(),
+                ),
+            ),
+            "unused-jwt-secret".to_string(),
+            Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
+            Arc::new(ai_usage::NoOpUsageRecorder),
+        )),
+        #[cfg(feature = "ai_tools")]
+        presentations: Arc::new(crate::domain::presentation::PresentationService::new(
+            Arc::new(crate::domain::presentation::NoPresentationFiles),
+        )),
+        #[cfg(feature = "ai_tools")]
+        word_documents: Arc::new(crate::domain::word_document::WordDocumentService::new(
+            document_service.clone(),
+            Arc::new(
+                crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                    "http://localhost/unused-editing-worker".to_string(),
+                ),
+            ),
+            Arc::new(SyncServiceClient::new(
+                "unused-internal-key".to_string(),
+                "http://localhost/sync".to_string(),
+            )),
+            Arc::new(crate::domain::word_document::NoWordDocumentFiles),
+            "unused-jwt-secret".to_string(),
+        )),
+        #[cfg(feature = "ai_tools")]
+        designs: Arc::new(crate::domain::design::DesignService::new(Arc::new(
+            crate::domain::design::NoDesignFiles,
+        ))),
+        #[cfg(feature = "ai_tools")]
+        photoshop_documents: Arc::new(crate::domain::photoshop::PhotoshopService::new(Arc::new(
+            crate::domain::photoshop::NoPhotoshopFiles,
+        ))),
+        #[cfg(feature = "ai_tools")]
+        illustrator_documents: Arc::new(crate::domain::illustrator::IllustratorService::new(
+            Arc::new(crate::domain::illustrator::NoIllustratorFiles),
+        )),
         document_permission_jwt_secret: "unused-jwt-secret".to_string(),
         non_user_owners,
     };
-    let router = documents_router::<
+    (
+        state,
+        document_service,
+        access_service,
+        authorization_service,
+    )
+}
+
+fn router_for(state: TestState) -> Router {
+    documents_router::<
         FakeDocumentService,
         FakeEntityAccessService,
         FakeAuthorizationService,
@@ -1116,14 +1224,7 @@ fn test_router_with(
             >,
         ),
     )
-    .with_state(state);
-
-    (
-        router,
-        document_service,
-        access_service,
-        authorization_service,
-    )
+    .with_state(state)
 }
 
 fn create_request() -> Builder {

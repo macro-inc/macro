@@ -70,20 +70,31 @@ fn a_poll_tallies_current_votes_per_option_and_marks_the_viewers() {
     let ana = StoredVote {
         message_id: message,
         selected: vec!["aa".to_owned()],
-        voter: person("Ana", Some("macro|ana@example.com")),
+        voter: StoredPerson {
+            person_id: Uuid::from_u128(10),
+            user_id: Some("macro|ana@example.com".to_owned()),
+            name: Some("Ana".to_owned()),
+        },
     };
+    // Ben voted before any message of his carried his name.
     let ben = StoredVote {
         message_id: message,
         selected: vec!["aa".to_owned()],
-        voter: person("Ben", None),
+        voter: StoredPerson {
+            person_id: Uuid::from_u128(11),
+            user_id: None,
+            name: None,
+        },
     };
+    let mut people = People::default();
+    people.learn_person(Uuid::from_u128(11), "Ben".to_owned());
 
     let view = rich_view(
         poll,
         &person("Ana", None),
         &[&ana, &ben],
         "macro|ana@example.com",
-        &People::default(),
+        &people,
     );
 
     assert_eq!(
@@ -222,5 +233,34 @@ fn a_stored_group_created_line_holding_creation_metadata_names_no_subject() {
             value: None,
             call: None,
         }))
+    );
+}
+
+#[test]
+fn a_stored_person_shows_their_name_else_what_the_provider_calls_them() {
+    let named = StoredPerson {
+        person_id: Uuid::from_u128(1),
+        user_id: None,
+        name: Some("Ana".to_owned()),
+    };
+    let numbered = StoredPerson {
+        person_id: Uuid::from_u128(2),
+        user_id: None,
+        name: None,
+    };
+    let blank = StoredPerson {
+        person_id: Uuid::from_u128(3),
+        user_id: Some("macro|carol@example.com".to_owned()),
+        name: Some("  ".to_owned()),
+    };
+    let mut people = People::default();
+    people.learn_person(Uuid::from_u128(1), "Ana's number".to_owned());
+    people.learn_person(Uuid::from_u128(2), "Ben's number".to_owned());
+
+    assert_eq!(people.stored(&named), person("Ana", None));
+    assert_eq!(people.stored(&numbered), person("Ben's number", None));
+    assert_eq!(
+        people.stored(&blank),
+        person(UNKNOWN_PERSON, Some("macro|carol@example.com"))
     );
 }
