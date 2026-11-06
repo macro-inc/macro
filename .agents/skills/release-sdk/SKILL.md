@@ -6,10 +6,9 @@ description: Bump and release @macro-inc/sdk from this repository. Use when aske
 # Release the SDK
 
 Read [the SDK release guide](../../../packages/sdk/RELEASING.md) and the root
-`AGENTS.md`. Releasing is merging a version bump: `Release SDK` publishes
-`@macro-inc/sdk` and `@macro-inc/sdk-calls`, which share a version, on any push to
-`main` that raises it. There is no release tag to push by hand and no separate
-publish step to trigger.
+`AGENTS.md`. Releasing is merging a version bump: `Release SDK` publishes on any
+push to `main` that raises the version in `packages/sdk/package.json`. There is
+no release tag to push by hand and no separate publish step to trigger.
 
 ## Scope
 
@@ -29,10 +28,10 @@ publish step to trigger.
 2. Run `just bump` in `packages/sdk` (it takes `patch`, `minor`, `major`, or an
    explicit version), then the guide's validation and package inspection. Commit
    the bump alongside the SDK change. Do not hide failed checks.
-3. After the merge, watch the `Release SDK` run for that commit, then verify both
-   packages' npm version and dist-tag. A merged bump, a green job, or a pushed tag alone is
+3. After the merge, watch the `Release SDK` run for that commit, then verify the
+   npm version and dist-tag. A merged bump, a green job, or a pushed tag alone is
    not proof of publication.
-4. Use the guide's recovery path — the `sdk-v*` or `sdk-calls-v*` tag trigger on `Publish SDK` —
+4. Use the guide's recovery path — the `sdk-v*` tag trigger on `Publish SDK` —
    only when a merged release commit failed transiently and the version is still
    unpublished. Never move an existing tag or re-publish a published version.
 
