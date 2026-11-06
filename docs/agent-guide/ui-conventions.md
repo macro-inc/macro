@@ -144,9 +144,6 @@ Shift+Enter selects only that option without closing. Searchable filters retain
 input focus and use Enter/Shift+Enter on the highlighted search result.
 A searchable group's `createOption` turns typed text no option lists into a
 leading `Add “…”` row, so a typed address joins the selection like an option.
-A group's `submenu` draws its own submenu in its place, such as a
-`FilterTextSubmenu` text field, which applies typing after a pause, on Enter,
-and as the submenu closes.
 **Only** sits at the right on hover or keyboard highlight and remains visible on
 touch devices. Touch rows and checkbox hit areas use the shared touch sizing.
 Existing mobile filter drawers retain their toggle-and-stay-open behavior.

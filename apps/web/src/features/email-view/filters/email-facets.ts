@@ -191,22 +191,20 @@ export const EMAIL_FILTER_GROUPS: EmailFilterGroup[] = [
       { id: 'all', label: 'All' },
     ],
   },
-  // Ticked items must all hold, except attachment kinds: any one of those.
+  // Ticked items must all hold; a view's Starred joins them where it applies.
   {
     id: 'has',
     label: 'Has',
-    options: toGroupOptions([
-      ...EMAIL_CALENDAR_OPTIONS,
-      ...EMAIL_ATTACHMENT_OPTIONS,
-    ]),
+    options: toGroupOptions(EMAIL_CALENDAR_OPTIONS),
+  },
+  {
+    id: 'attachments',
+    label: 'Attachments',
+    options: toGroupOptions(EMAIL_ATTACHMENT_OPTIONS),
   },
 ];
 
-/** The facets the "Has" group spans, with the option ids each one owns. */
-export const EMAIL_HAS_FACETS = [
-  { id: 'calendar', optionIds: EMAIL_CALENDAR_OPTIONS.map(({ id }) => id) },
-  {
-    id: 'attachments',
-    optionIds: EMAIL_ATTACHMENT_OPTIONS.map(({ id }) => id),
-  },
-] as const;
+/** The calendar facet's options, which the "Has" group writes. */
+export const EMAIL_CALENDAR_OPTION_IDS = EMAIL_CALENDAR_OPTIONS.map(
+  ({ id }) => id
+);

@@ -19,7 +19,7 @@ import {
   EmailSavedViewActions,
   EmailSavedViewCreateBanner,
 } from '../views/email-saved-views';
-import { EmailParticipantsField, EmailSubjectField } from './EmailFilterFields';
+import { EmailParticipantsField } from './EmailFilterFields';
 import { EmailInboxDrawerSection } from './EmailInboxSelector';
 
 const INBOX_SECTION_ID = 'inbox';
@@ -172,23 +172,6 @@ export function EmailFilterDrawer() {
                               setConditions({ participantFields })
                             }
                             suggestions={suggestions}
-                          />
-                        </div>
-                      </MobileFilterDrawer.Section>
-                    )}
-                  </Match>
-                  <Match when={group.id === 'subject' && state.conditions}>
-                    {(conditions) => (
-                      <MobileFilterDrawer.Section
-                        value={group.id}
-                        label={group.label}
-                        activeCount={sectionCount(group.id)}
-                      >
-                        <div class="px-1 pb-2">
-                          <EmailSubjectField
-                            subject={conditions().subject}
-                            onChange={(subject) => setConditions({ subject })}
-                            delay={400}
                           />
                         </div>
                       </MobileFilterDrawer.Section>

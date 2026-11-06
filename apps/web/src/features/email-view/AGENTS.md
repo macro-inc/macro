@@ -18,8 +18,8 @@ the Soup-backed thread list, and saved email views (flag
 - `filters/use-email-filters.tsx`: the Filters model shared by the desktop menu
   and the mobile drawer; each group is a field read from and written into the
   list's filters, active once it differs from what Clear returns to.
-- `components/EmailFilterFields.tsx`: the People and Subject editors the
-  builder and the mobile drawer share.
+- `components/EmailFilterFields.tsx`: the builder's People and Subject
+  editors; the mobile drawer shares People.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
 - `views/email-saved-views.tsx`: sidebar section, mobile picker, menus, the

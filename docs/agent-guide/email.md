@@ -264,27 +264,26 @@ Clear/Reset filters and the mobile Clear all action use destructive text styling
 Both layouts show a small accent dot beside categories with active refinements;
 default All selections are not marked.
 Email Read status and Done are single choices that close the menu; Has
-(Starred, Calendar invite, PDFs, Images, Documents) takes several and stays
-open while you tick them. Ticked Has items all apply, except attachment kinds,
-which match any one. Tags supports
-search, pins selected tags first on opening, and is omitted when no tags exist.
-**f** opens the filter menu.
+(Starred, Calendar invite) and Attachments (PDFs, Images, Documents) take
+several and stay open while you tick them. Ticked Has items all apply;
+attachment kinds match any one. Tags supports search, pins selected tags first
+on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
 On Signal, Noise, All, Archived, Favorites and Calendar, Filters holds every
-condition a saved view can: People and companies (search, or type an address,
-domain, `@domain` or website and pick `Add “…”`), Match from (once someone is
-chosen; the last field stays on), Subject contains (a text field applied after a
-pause or on Enter), Tags, Importance, Read status, Done, Latest activity, Inboxes
-(with two or more linked; several can be chosen, in step with the account
-picker) and Has. Each tab's own restrictions show as
+condition a saved view can except Subject contains, which only the Save view
+dialog sets: People and companies (search, or type an address, domain,
+`@domain` or website and pick `Add “…”`), Match from (once someone is chosen;
+the last field stays on), Tags, Importance, Read status, Done, Latest activity,
+Inboxes (with two or more linked; several can be chosen, in step with the
+account picker), Has and Attachments. Each tab's own restrictions show as
 selected (Signal: Importance Signal and Done Not done; Favorites: Has Starred;
 Archived: Done; Calendar: Has Calendar invite) and can be changed; they don't
 count toward the filter badge or dots, and Clear returns to them and every
 inbox. While they stand, the list uses the tab's own query; once one changes,
 or a People, Subject or Latest activity condition is set, it lists mail as an
 open saved view would. The other tabs keep the facets, Tags and Inboxes. The
-mobile filter drawer shows the same sections, with the builder's People and
-Subject fields. Check on Signal: Filters shows Not done selected with no badge;
+mobile filter drawer shows the same sections, with the builder's People
+field. Check on Signal: Filters shows Not done selected with no badge;
 choosing Done → All widens the list, shows **Save view** and **Revert**, and
 Revert or Clear restores it.
 

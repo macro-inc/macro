@@ -8,7 +8,6 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { FilterTextSubmenu } from '../../features/next-soup/soup-view/filters-bar/filter-menu';
 import { SearchableMultiSelect } from '../../features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { Dropdown } from '../ui/components/Dropdown';
 import type { AiFilterOutcome } from './AiFilterInput';
@@ -1021,40 +1020,4 @@ it('offers typed text no option lists and adds it to the selection', async () =>
   fireEvent.input(input, { target: { value: 'bo@example.com' } });
   fireEvent.keyDown(input, { key: 'Enter' });
   expect(selected()).toEqual(['alice', 'ada@example.com', 'bo@example.com']);
-});
-
-it('draws a group’s own submenu, committing its text on Enter', async () => {
-  const [subject, setSubject] = createSignal('');
-  render(() => (
-    <ListFilterDropdown
-      label="Filter email"
-      open
-      groups={[
-        {
-          id: 'subject',
-          label: 'Assignee',
-          options: [],
-          submenu: () => (
-            <FilterTextSubmenu
-              label="Assignee"
-              value={subject()}
-              placeholder="Words or phrases"
-              onChange={setSubject}
-            />
-          ),
-        },
-      ]}
-      isSelected={() => false}
-      onSelectionChange={() => {}}
-    />
-  ));
-  await openSubmenu();
-  const input = await screen.findByPlaceholderText('Words or phrases');
-  await waitFor(() => expect(document.activeElement).toBe(input));
-
-  fireEvent.input(input, { target: { value: 'invoice, receipt' } });
-  expect(subject()).toBe('');
-  fireEvent.keyDown(input, { key: 'Enter' });
-
-  expect(subject()).toBe('invoice, receipt');
 });

@@ -12,15 +12,7 @@ import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import GroupIcon from '@icon/system/regular/stack.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button, ButtonGroup, type ButtonSize, cn, Dropdown } from '@ui';
-import {
-  batch,
-  createSignal,
-  For,
-  type JSX,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { batch, createSignal, For, type JSX, Show } from 'solid-js';
 import { AiFilterInput, type AiFilterInputProps } from './AiFilterInput';
 
 export type ListControlOption<TId extends string> = {
@@ -218,11 +210,6 @@ export type ListFilterGroup<
   searchPlaceholder?: string;
   /** In a searchable group, offers typed text no option lists as one. */
   createOption?: (query: string) => ListControlOption<TOptionId> | undefined;
-  /**
-   * Draws the group's own submenu in place of its options, such as a
-   * `FilterTextSubmenu`; the group keeps its place among the others.
-   */
-  submenu?: () => JSX.Element;
   contentClass?: string;
 };
 
@@ -413,9 +400,9 @@ export function ListFilterDropdown<
            */}
           <Key each={props.groups} by="id">
             {(group) => (
-              <Switch>
-                <Match when={group().submenu}>{(submenu) => submenu()()}</Match>
-                <Match when={!group().searchPlaceholder}>
+              <Show
+                when={group().searchPlaceholder}
+                fallback={
                   <FilterSubmenu
                     label={group().label}
                     selectionMode={group().selectionMode}
@@ -434,23 +421,22 @@ export function ListFilterDropdown<
                     closeOnSelect
                     contentClass={group().contentClass}
                   />
-                </Match>
-                <Match when={group().searchPlaceholder}>
-                  <SearchableFilterSubmenu
-                    onSelectionComplete={() => setOpen(false)}
-                    label={group().label}
-                    active={isGroupActive(group())}
-                    options={() => group().options}
-                    activeIds={() => selectedOptionIds(group())}
-                    // The submenu returns this group's option and typed ids.
-                    onChange={(ids) =>
-                      setSelectedOptionIds(group(), ids as TOptionId[])
-                    }
-                    placeholder={group().searchPlaceholder}
-                    createOption={group().createOption}
-                  />
-                </Match>
-              </Switch>
+                }
+              >
+                <SearchableFilterSubmenu
+                  onSelectionComplete={() => setOpen(false)}
+                  label={group().label}
+                  active={isGroupActive(group())}
+                  options={() => group().options}
+                  activeIds={() => selectedOptionIds(group())}
+                  // The submenu returns this group's option and typed ids.
+                  onChange={(ids) =>
+                    setSelectedOptionIds(group(), ids as TOptionId[])
+                  }
+                  placeholder={group().searchPlaceholder}
+                  createOption={group().createOption}
+                />
+              </Show>
             )}
           </Key>
         </Dropdown.Group>

@@ -2,7 +2,6 @@ import type {
   ListControlOption,
   ListFilterGroup,
 } from '@app/components/view-shell';
-import { FilterTextSubmenu } from '@app/features/next-soup/soup-view/filters-bar/filter-menu';
 import { t } from '@app/lib/i18n';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { EntityIcon } from '@core/component/EntityIcon';
@@ -14,7 +13,6 @@ import {
   describeParticipant,
   PARTICIPANT_FIELDS,
   parseParticipant,
-  parseSubject,
   participantFieldLabel,
   participantOption,
   participantsOf,
@@ -28,9 +26,9 @@ import {
   type EmailViewConditions,
 } from '../types';
 import {
+  EMAIL_CALENDAR_OPTION_IDS,
   EMAIL_FILTER_GROUPS,
   EMAIL_FOCUS_FILTER_GROUP,
-  EMAIL_HAS_FACETS,
 } from './email-facets';
 
 type EmailFilterGroup = ListFilterGroup<EmailFilterGroupId, string>;
@@ -132,12 +130,6 @@ const emailFilterField = (groupId: EmailFilterGroupId): EmailFilterField =>
         }
       )
     )
-    .with('subject', () =>
-      conditionField(
-        (conditions) => conditions.subject,
-        (ids) => ({ subject: ids })
-      )
-    )
     .with('importance', () =>
       conditionField(
         (conditions) => (conditions.importance ? [conditions.importance] : []),
@@ -168,10 +160,10 @@ const emailFilterField = (groupId: EmailFilterGroupId): EmailFilterField =>
             (ids) => ({ starred: ids.includes(STARRED) })
           ),
         },
-        ...EMAIL_HAS_FACETS.map(({ id, optionIds }) => ({
-          optionIds,
-          field: facetField(id),
-        })),
+        {
+          optionIds: EMAIL_CALENDAR_OPTION_IDS,
+          field: facetField('calendar'),
+        },
       ])
     )
     .with(
@@ -181,7 +173,9 @@ const emailFilterField = (groupId: EmailFilterGroupId): EmailFilterField =>
         write: (_, ids) => ({ inboxIds: ids.length > 0 ? ids : undefined }),
       })
     )
-    .with('read', 'done', 'focus', 'tags', (id) => facetField(id))
+    .with('read', 'done', 'attachments', 'focus', 'tags', (id) =>
+      facetField(id)
+    )
     .exhaustive();
 
 const sameValues = (left: readonly string[], right: readonly string[]) =>
@@ -358,21 +352,6 @@ export function useEmailFilters() {
           },
         ]
       : []),
-    {
-      id: 'subject',
-      label: t('emailViews.subjectContains'),
-      options: [],
-      submenu: () => (
-        <FilterTextSubmenu
-          label={t('emailViews.subjectContains')}
-          value={state.conditions?.subject.join(', ') ?? ''}
-          placeholder={t('emailViews.subjectPlaceholder')}
-          onChange={(text) =>
-            model.setGroupSelection('subject', parseSubject(text))
-          }
-        />
-      ),
-    },
     ...tags(),
     {
       id: 'importance',
@@ -417,6 +396,7 @@ export function useEmailFilters() {
         ...group.options,
       ],
     })),
+    ...facetGroup('attachments'),
   ];
 
   const model = createEmailFilterModel({

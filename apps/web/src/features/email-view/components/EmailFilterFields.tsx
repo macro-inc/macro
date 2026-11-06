@@ -2,7 +2,6 @@ import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { parseDomain } from '@core/util/domain';
 import GlobeIcon from '@icon/system/regular/globe.svg';
-import { debounce } from '@solid-primitives/scheduled';
 import {
   Button,
   ChipCombobox,
@@ -17,7 +16,6 @@ import {
   createSignal,
   createUniqueId,
   For,
-  onCleanup,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { EmailParticipantSuggestion } from '../queries/use-email-participant-suggestions';
@@ -209,33 +207,19 @@ export function EmailParticipantsField(props: {
 /**
  * Subject phrases typed as one comma-separated line. What was typed stays
  * while it still describes the subject, so a trailing comma survives; an
- * outside change, such as Clear, replaces it. `delay` holds each change until
- * typing pauses, for a list that refetches on every change.
+ * outside change replaces it.
  */
 export function EmailSubjectField(props: {
   subject: readonly string[];
   onChange: (subject: string[]) => void;
-  delay?: number;
 }) {
   const [draft, setDraft] = createSignal<string>();
-  const [pending, setPending] = createSignal(false);
   const text = () => {
     const typed = draft();
-    return typed !== undefined &&
-      (pending() || sameList(parseSubject(typed), props.subject))
+    return typed !== undefined && sameList(parseSubject(typed), props.subject)
       ? typed
       : props.subject.join(', ');
   };
-  const commit = (value: string) => {
-    setPending(false);
-    props.onChange(parseSubject(value));
-  };
-  const commitSoon = debounce(commit, props.delay ?? 0);
-  onCleanup(() => {
-    if (!pending()) return;
-    commitSoon.clear();
-    commit(draft() ?? '');
-  });
 
   return (
     <Input
@@ -247,12 +231,7 @@ export function EmailSubjectField(props: {
       onInput={(event) => {
         const value = event.currentTarget.value;
         setDraft(value);
-        if (!props.delay) {
-          commit(value);
-          return;
-        }
-        setPending(true);
-        commitSoon(value);
+        props.onChange(parseSubject(value));
       }}
     />
   );

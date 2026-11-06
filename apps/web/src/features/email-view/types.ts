@@ -6,13 +6,13 @@ export type { EmailFocusSort, EmailTab };
 export type EmailFilterGroupId =
   | 'people'
   | 'matchFrom'
-  | 'subject'
   | 'importance'
   | 'read'
   | 'done'
   | 'received'
   | 'inboxes'
   | 'has'
+  | 'attachments'
   | 'focus'
   | 'tags';
 
