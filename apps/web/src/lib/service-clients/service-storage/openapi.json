@@ -12906,6 +12906,102 @@
         }
       }
     },
+    "/documents/{document_id}/comments/text": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Start a comment thread anchored to a quoted passage of a markdown or Word\ndocument, with the caller's comment access. On markdown the passage is\nmarked in the live document first, and nothing is posted when the quote is\nambiguous or missing.",
+        "operationId": "comment_on_document_text",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentOnTextRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentOnTextResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown or Word document, or an invalid quote or occurrence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document comment access denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "422": {
+            "description": "The quote appears more than once or not at all; nothing was posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentOnTextRefused"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The comment could not be posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The comment could not be anchored; nothing was posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/copy": {
       "post": {
         "tags": ["document"],
@@ -28271,6 +28367,70 @@
           "identity": {
             "$ref": "#/components/schemas/SessionIdentity",
             "description": "The session."
+          }
+        }
+      },
+      "CommentOnTextRefused": {
+        "type": "object",
+        "description": "The quote could not be anchored; nothing was posted.",
+        "required": ["error", "reason"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/CommentOnTextRefusedCode",
+            "description": "Always `quote_not_placed`."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Lists each appearance to choose from with `occurrence`, or says the\ntext was not found."
+          }
+        }
+      },
+      "CommentOnTextRefusedCode": {
+        "type": "string",
+        "description": "Error code of a quote the document cannot anchor to.",
+        "enum": ["quote_not_placed"]
+      },
+      "CommentOnTextRequest": {
+        "type": "object",
+        "description": "A comment on a quoted passage.",
+        "required": ["content", "quote"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Comment body in macro markdown."
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleMention"
+            },
+            "description": "The people and items the body mentions, notified as in any comment."
+          },
+          "occurrence": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Which appearance of the passage, counting from 1 in document order.\nOnly needed when it appears more than once.",
+            "minimum": 1
+          },
+          "quote": {
+            "type": "string",
+            "description": "The passage to comment on, quoted exactly as the document reads: plain\ntext without markdown syntax, within one paragraph, heading, list item\nor table cell.",
+            "minLength": 1
+          }
+        }
+      },
+      "CommentOnTextResponse": {
+        "type": "object",
+        "description": "The thread the comment started.",
+        "required": ["comment", "markedText"],
+        "properties": {
+          "comment": {
+            "$ref": "#/components/schemas/Message",
+            "description": "The posted comment, the root of its thread."
+          },
+          "markedText": {
+            "type": "string",
+            "description": "The text the comment is anchored to, as the document reads."
           }
         }
       },

@@ -210,6 +210,7 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "MoveToTrash"
                 | "ReadDiscussion"
                 | "Comment"
+                // Document.commentOnText().
                 | "CommentOnText"
                 | "DeleteComment"
                 | "EditComment"
@@ -229,6 +230,7 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // macro.email.sendConfirmed runs the tool itself.
                 | "SendConfirmedEmail"
                 | "CreateChannel"
+                // Channel.send() and Thread.reply(), with images and documents.
                 | "SendChannelMessage"
                 | "EditChannelMessage"
                 | "DeleteChannelMessage"

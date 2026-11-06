@@ -51,7 +51,12 @@ enforced by the ordinary backend APIs.
 - `src/entities/images/`: `macro.images.generate()` (cognition
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
-  { images })` and `thread.reply` as `static/image` attachments.
+  { images })` and `thread.reply` as `static/image` attachments, and
+  `Document` handles as `document` attachments (`{ documents }`).
+- `src/entities/documents/text-comment.ts`: `Document.commentOnText()` anchors a
+  thread to quoted text (`POST /documents/{id}/comments/text`, the
+  `CommentOnText` tool's domain function); a 422 becomes
+  `CommentQuoteNotPlacedError` carrying the reason.
 - `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /

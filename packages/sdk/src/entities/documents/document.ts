@@ -43,6 +43,11 @@ import {
 } from './ai-edit';
 import { DocumentAnchor } from './anchor';
 import { Comment } from './comment';
+import {
+  commentOnText,
+  type TextComment,
+  type TextCommentOptions,
+} from './text-comment';
 import { DocumentVersion } from './version';
 
 type DocumentDetail = GetDocumentResponses[200]['data']['documentMetadata'];
@@ -560,6 +565,43 @@ export class Document
       }),
     );
     return Comment.from(this.client, this.id, created);
+  }
+
+  /**
+   * Start an inline comment anchored to a quoted passage of a markdown or Word document; use `comment` for the document as a whole.
+   *
+   * Quote the passage exactly as `content()` reads it, as plain text without
+   * markdown syntax, within one paragraph, heading, list item or table cell.
+   * When it appears more than once this throws
+   * {@link CommentQuoteNotPlacedError} listing each appearance; pass the one
+   * you mean as `occurrence`, counting from 1. Nothing is posted until the
+   * quote is placed. Needs comment access. Reply in the thread with
+   * `comment.reply()`.
+   *
+   * Comments stay in Macro and are not written into a Word file.
+   *
+   * @param body - Plain text, or a rich body composed with {@link msg}.
+   * @returns The comment and the text it is anchored to.
+   *
+   * @example
+   * try {
+   *   const { comment } = await doc.commentOnText('Is this date still right?', {
+   *     quote: 'ships on Friday',
+   *   });
+   * } catch (error) {
+   *   if (!(error instanceof CommentQuoteNotPlacedError)) throw error;
+   *   // error.reason lists each appearance: choose one with `occurrence`.
+   *   await doc.commentOnText('Is this date still right?', {
+   *     quote: 'ships on Friday',
+   *     occurrence: 2,
+   *   });
+   * }
+   */
+  async commentOnText(
+    body: string | RichMessage,
+    options: TextCommentOptions,
+  ): Promise<TextComment> {
+    return commentOnText(this.client, this, body, options);
   }
 
   /** The document's short id (used in compact links and branch names). */

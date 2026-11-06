@@ -5,6 +5,7 @@
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /slug/{slug}` - get document by team slug
 //! - `POST /{document_id}/ai-edit` — edit a markdown document by instructions
+//! - `POST /{document_id}/comments/text` — start a comment thread on a quoted passage
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
 //! - `GET /{document_id}/branch_name` — get short ID + task-aware git branch name (when the document is a task)
 //! - `GET /{document_id}/github_prs` — get GitHub pull requests associated with a task document
@@ -24,6 +25,8 @@ mod tests;
 
 #[cfg(feature = "ai_tools")]
 pub mod ai_edit;
+#[cfg(feature = "ai_tools")]
+pub mod comment_on_text;
 pub mod content_uploaded;
 pub mod copy_document;
 #[cfg(feature = "document_create")]
@@ -201,6 +204,12 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     /// EditDocument's AI-editing use case, with the host's admission and metering.
     #[cfg(feature = "ai_tools")]
     pub ai_editing: Arc<crate::domain::ai_editing::AiEditingService<DefaultEditingWorker>>,
+    /// The editing worker that places comment marks in markdown documents.
+    #[cfg(feature = "ai_tools")]
+    pub editing_worker: Arc<DefaultEditingWorker>,
+    /// The shared message service comment threads are posted through.
+    #[cfg(feature = "ai_tools")]
+    pub messages: Arc<dyn messages::domain::api::MessageServiceApi>,
     /// JWT secret for signing document permission tokens.
     pub document_permission_jwt_secret: String,
     /// Whether a team bot with no acting user may own what it creates.
@@ -221,6 +230,10 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             creator: self.creator.clone(),
             #[cfg(feature = "ai_tools")]
             ai_editing: self.ai_editing.clone(),
+            #[cfg(feature = "ai_tools")]
+            editing_worker: self.editing_worker.clone(),
+            #[cfg(feature = "ai_tools")]
+            messages: self.messages.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             non_user_owners: self.non_user_owners,
         }
@@ -323,10 +336,15 @@ where
         );
 
     #[cfg(feature = "ai_tools")]
-    let document_id_routes = document_id_routes.route(
-        "/{document_id}/ai-edit",
-        axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
-    );
+    let document_id_routes = document_id_routes
+        .route(
+            "/{document_id}/ai-edit",
+            axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/comments/text",
+            axum::routing::post(comment_on_text::comment_on_text_handler::<T, Svc, Auth>),
+        );
 
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(
         state.clone(),
