@@ -12686,6 +12686,7 @@ dependencies = [
 name = "macro_middleware"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "axum",
  "axum-extra",
