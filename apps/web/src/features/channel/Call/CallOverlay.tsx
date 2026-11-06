@@ -18,7 +18,7 @@ import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import CornersInIcon from '@icon/system/regular/corners-in.svg';
 import CornersOutIcon from '@icon/system/regular/corners-out.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
-import { Button, cn } from '@ui';
+import { Badge, Button, cn } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import {
   createEffect,
@@ -43,6 +43,7 @@ import {
 } from './chat/components/CallChatPanel';
 import { createControlsVisibility } from './create-controls-visibility';
 import type { CallPanelState } from './discussion/CallDiscussionContent';
+import { isProgramParticipant } from './is-program-participant';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 import { ParticipantAvatarBackground } from './ParticipantAvatarBackground';
@@ -56,16 +57,22 @@ function VideoTag(props: {
   children: JSXElement;
   class?: string;
   variant?: 'default' | 'truncated';
+  isProgram?: boolean;
 }) {
   return (
     <div
       class={cn(
-        'absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface/70 text-ink text-xs',
-        props.variant === 'truncated' ? 'truncate max-w-[80%]' : '',
+        'absolute bottom-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-1 rounded bg-surface/70 px-1.5 py-0.5 text-ink text-xs',
+        props.variant === 'truncated' && 'max-w-[80%]',
         props.class
       )}
     >
-      {props.children}
+      <span class="min-w-0 truncate">{props.children}</span>
+      <Show when={props.isProgram}>
+        <Badge variant="secondary" size="xs">
+          {t('calls.agent')}
+        </Badge>
+      </Show>
     </div>
   );
 }
@@ -187,6 +194,7 @@ function LocalParticipantTile(props: {
   track: Track | undefined;
   userId: string | undefined;
   fallbackName: string | undefined;
+  isProgram: boolean;
   avatarSize?: 'sm' | 'md';
   class?: string;
   isFocused?: boolean;
@@ -216,7 +224,10 @@ function LocalParticipantTile(props: {
 
       <MutedMicrophoneBadge muted={props.isAudioMuted} label="You are muted" />
 
-      <Show when={props.isConnecting} fallback={<VideoTag>You</VideoTag>}>
+      <Show
+        when={props.isConnecting}
+        fallback={<VideoTag isProgram={props.isProgram}>You</VideoTag>}
+      >
         <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface/70 text-ink-muted text-xs">
           Connecting...
         </div>
@@ -281,7 +292,12 @@ function ParticipantTile(props: {
         label={`${displayName()} is muted`}
       />
 
-      <VideoTag variant="truncated">{displayName()}</VideoTag>
+      <VideoTag
+        variant="truncated"
+        isProgram={isProgramParticipant(props.participant.attributes)}
+      >
+        {displayName()}
+      </VideoTag>
     </ParticipantTileWrapper>
   );
 }
@@ -302,7 +318,12 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
     <div class="relative size-full flex items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted">
       <TrackView track={screenTrack()} fit="contain" />
 
-      <VideoTag variant="truncated">{displayName()}'s screen</VideoTag>
+      <VideoTag
+        variant="truncated"
+        isProgram={isProgramParticipant(props.participant.attributes)}
+      >
+        {displayName()}'s screen
+      </VideoTag>
     </div>
   );
 }
@@ -615,7 +636,13 @@ export function CallOverlay(props: {
                       <div class="relative size-full">
                         <TrackView track={localScreenTrack()} fit="contain" />
 
-                        <VideoTag>Your screen</VideoTag>
+                        <VideoTag
+                          isProgram={isProgramParticipant(
+                            callCtx.room()?.localParticipant.attributes
+                          )}
+                        >
+                          Your screen
+                        </VideoTag>
                       </div>
                     </Show>
                     <For each={remoteScreenShares()}>
@@ -648,6 +675,9 @@ export function CallOverlay(props: {
                         callCtx.room()?.localParticipant.name ||
                         currentUserName()
                       }
+                      isProgram={isProgramParticipant(
+                        callCtx.room()?.localParticipant.attributes
+                      )}
                       isFocused={focusedParticipant() === 'local'}
                     />
                   }
@@ -712,6 +742,9 @@ export function CallOverlay(props: {
                         callCtx.room()?.localParticipant.name ||
                         currentUserName()
                       }
+                      isProgram={isProgramParticipant(
+                        callCtx.room()?.localParticipant.attributes
+                      )}
                       avatarSize="sm"
                       isFocused={focusedParticipant() === 'local'}
                       onToggleFocus={() => toggleParticipantFocus('local')}

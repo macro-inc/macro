@@ -25,6 +25,7 @@ export default {
   localParticipant: '{{name}} (You)',
   you: 'You',
   guest: 'Guest',
+  agent: 'Agent',
   speaking: 'Speaking',
   microphoneOff: 'Microphone off',
   microphoneOn: 'Microphone on',

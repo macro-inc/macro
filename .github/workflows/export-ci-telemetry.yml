@@ -18,6 +18,7 @@ name: Export CI telemetry
     - Build macOS DMG
     - CI Gate Reminder
     - CI Gate for Forks
+    - CI Gate Label Check
     - CLA
     - Cancel Stuck Cloud Storage Deploys
     - Cleanup Preview

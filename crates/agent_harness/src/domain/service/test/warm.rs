@@ -13,6 +13,7 @@ impl agent_session::domain::warm::WarmSessionLifecycle for WarmLifecycleStub {
         _bot: BotId,
         _model: &'a str,
         _instructions: Option<&'a str>,
+        _origin: &'a trigger_context::TriggerOrigin,
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<Output = agent_session::domain::error::Result<WarmClaim>>
@@ -133,6 +134,7 @@ async fn warming_initializes_without_a_prompt_or_visible_created_event() {
     assert!(signals.lifecycle.published().is_empty());
     let claimed = service
         .open_managed_session(OpenManagedSession {
+            origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             owner: model_owner::Owner::User(sender()),
             prompt: None,
@@ -188,6 +190,7 @@ async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
     let action_id = AgentActionId::mint();
     service
         .open_managed_session(OpenManagedSession {
+            origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             owner: model_owner::Owner::User(sender()),
             prompt: Some(FirstPrompt {
@@ -280,6 +283,7 @@ async fn a_missed_warm_claim_records_why_on_the_open_span() {
     );
     let session = service
         .open_managed_session(OpenManagedSession {
+            origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(AgentSessionId::new()),
             owner: model_owner::Owner::User(sender()),
             prompt: None,
@@ -333,6 +337,7 @@ async fn an_open_without_a_client_id_records_that_no_warm_id_was_sent() {
     );
     let session = service
         .open_managed_session(OpenManagedSession {
+            origin: trigger_context::TriggerOrigin::Unknown,
             id: None,
             owner: model_owner::Owner::User(sender()),
             prompt: None,
@@ -415,6 +420,7 @@ async fn a_routine_run_opens_its_own_session_instead_of_claiming_a_warm_one() {
     );
     let session = service
         .open_managed_session(OpenManagedSession {
+            origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(AgentSessionId::new()),
             owner: model_owner::Owner::User(sender()),
             prompt: None,
