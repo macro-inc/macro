@@ -29,6 +29,7 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "Deploy CLA Worker",
     "Deploy FusionAuth Instance",
     "Deploy Lexical Service",
+    "Deploy Observability",
     "Deploy Production Release",
     "Deploy Service (Generic)",
     "Deploy Sync Service",

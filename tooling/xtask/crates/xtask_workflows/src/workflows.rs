@@ -36,6 +36,7 @@ mod deploy_ai_editing_worker;
 mod deploy_all_services;
 mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
+mod deploy_observability;
 mod deploy_on_push;
 mod deploy_sdk_docs;
 mod deploy_sync_service;
@@ -120,6 +121,16 @@ fn job_mut<'a>(root: &'a mut serde_yaml::Value, id: &str) -> Result<&'a mut serd
 
 /// Every workflow we generate. Add new workflows here.
 const WORKFLOWS: &[WorkflowFile] = &[
+    WorkflowFile {
+        slug: "deploy_observability",
+        file_name: "deploy-observability.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_observability::deploy_observability,
+                deploy_observability::patch,
+            )
+        },
+    },
     WorkflowFile {
         slug: "export_ci_telemetry",
         file_name: "export-ci-telemetry.yml",
