@@ -66,7 +66,7 @@ DMs, and the shared message store other domains discuss things on.
   REST deletion and permanent entity deletion call this policy.
 
 - Human DM messages to nonusers use immediate email, including mentions and replies; empty DM creation, bot messages, and silent/mentions-only policies do not trigger this path. Keep registered recipients on their normal notification routes.
-- Channel access requests are separate from `crates/access_requests`: access is
+- Channel access requests are separate from `crates/entities/access_requests`: access is
   membership, and every participant reviews. Each attempt is its own row so a
   timeline entry keeps its outcome. Approval adds the member in the request's
   transaction, then dispatches `ParticipantsAdded`; the announcement reaches the

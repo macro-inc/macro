@@ -1,0 +1,33 @@
+[package]
+name = "access_requests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+axum = { workspace = true }
+chrono = { workspace = true }
+entity_access = { workspace = true, default-features = true }
+entity_access_db_utils = { workspace = true }
+macro_authorization = { workspace = true, default-features = true, features = ["axum"] }
+macro_user_id = { workspace = true }
+model_entity = { workspace = true }
+model_owner = { workspace = true }
+models_permissions = { workspace = true }
+opentelemetry = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

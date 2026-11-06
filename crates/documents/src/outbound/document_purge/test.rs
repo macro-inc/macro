@@ -84,7 +84,7 @@ fn fixture(pool: &PgPool) -> Fixture {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../entity_access/fixtures",
+        path = "../../../../entities/entity_access/fixtures",
         scripts("typed_owner_team")
     )
 )]

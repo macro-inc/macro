@@ -1,0 +1,79 @@
+[package]
+edition = "2024"
+name = "entity_access"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "explain_access"
+path = "src/bin/explain_access.rs"
+required-features = ["explain_binary"]
+
+[features]
+axum = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model",
+  "dep:model_error_response",
+]
+default = ["axum", "inbound", "outbound", "ports"]
+explain_binary = [
+  "dep:clap",
+  "dep:database_env_vars",
+  "dep:macro_entrypoint",
+  "outbound",
+  "ports",
+]
+inbound = ["axum", "ports"]
+outbound = ["dep:cached", "ports"]
+ports = ["dep:tokio"]
+schema = ["dep:utoipa"]
+
+[dependencies]
+# Core
+anyhow = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+# Domain models (always included)
+bot_id = { workspace = true }
+rootcause = { workspace = true }
+macro_user_id = { workspace = true }
+model_entity = { workspace = true }
+models_entity_access_management = { workspace = true, default-features = true }
+models_permissions = { workspace = true }
+
+clap = { workspace = true, optional = true }
+database_env_vars = { workspace = true, optional = true }
+macro_entrypoint = { workspace = true, optional = true }
+
+# Async runtime (for ports)
+tokio = { workspace = true, optional = true }
+
+# Axum dependencies (for inbound)
+axum = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+model = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
+model_owner = { workspace = true }
+
+# OpenAPI schema (optional)
+utoipa = { workspace = true, optional = true }
+
+# Database
+cached = { workspace = true, optional = true }
+sqlx = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+harness_id = { workspace = true }
+macro_db_migrator = { workspace = true }
+model_user = { workspace = true }
+rootcause = { workspace = true }
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

@@ -8,7 +8,7 @@ accepted, and copied into Macro entities. Host-agnostic — chat tools,
 Settings → Slack discovery, and the Slack archive import drive the same
 primitives, distinguished only by the `initiator` recorded on each row.
 
-Not to be confused with `crates/foreign_entity`: foreign entities stay live in
+Not to be confused with `crates/entities/foreign_entity`: foreign entities stay live in
 the external system; an `ImportEntity` here is a ledger row for an item being
 copied in, moving `staged` → `importing` → `imported` (or `discarded`). Rows
 carry their source `kind`, an optional `parent_id` (the row they were imported
@@ -83,7 +83,7 @@ from this import's other databases into it are not linked.
 - Owns: the import ledger, Slack discovery, admission logic, and the AI-chat
   and HTTP entry points into it.
 - Not here: live references to external items that never get copied in →
-  `crates/foreign_entity`.
+  `crates/entities/foreign_entity`.
 
 ## Boundaries
 
