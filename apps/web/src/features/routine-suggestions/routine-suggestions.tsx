@@ -118,12 +118,17 @@ function rows(
   });
 }
 
+/**
+ * The rows, with the production actions; built only while shown, since the
+ * drafter's workspace context loads several lists.
+ */
 function SuggestionList(props: {
   suggestions: readonly RoutineSuggestion[];
-  actions: SuggestionActions;
+  onLeave?: () => void;
   showSurface?: boolean;
 }) {
   const catalog = useRoutineCatalog();
+  const actions = useProductionActions(() => props.onLeave?.());
   return (
     <ul class="flex flex-col">
       <For each={rows(props.suggestions, catalog())}>
@@ -138,15 +143,15 @@ function SuggestionList(props: {
                 ? SURFACE_COPY[row.suggestion.surface].label
                 : undefined
             }
-            pending={props.actions.pending() === row.suggestion.id}
-            busy={props.actions.pending() !== undefined}
+            pending={actions.pending() === row.suggestion.id}
+            busy={actions.pending() !== undefined}
             onReview={() =>
               fireAndForget(
-                props.actions.review(row.suggestion),
+                actions.review(row.suggestion),
                 'routine-suggestions.review'
               )
             }
-            onDismiss={() => props.actions.dismiss(row.suggestion)}
+            onDismiss={() => actions.dismiss(row.suggestion)}
           />
         )}
       </For>
@@ -164,6 +169,14 @@ export function SidebarRoutineSuggestions(props: {
   class?: string;
 }) {
   const enabled = useRoutineSuggestionsEnabled();
+  return (
+    <Show when={enabled()}>
+      <SidebarCard surface={props.surface} class={props.class} />
+    </Show>
+  );
+}
+
+function SidebarCard(props: { surface: RoutineSurface; class?: string }) {
   const source = useRoutineSuggestions();
   const forSurface = createMemo(() =>
     source
@@ -173,14 +186,12 @@ export function SidebarRoutineSuggestions(props: {
   const visibility = createPromotionVisibility(
     () => `routine-suggestions:${props.surface}`,
     () => {
-      if (!enabled()) return false;
       const current = forSurface();
       return current === undefined ? undefined : current.length > 0;
     }
   );
   const layout = useSplitLayout();
   const [open, setOpen] = createSignal(false);
-  const actions = useProductionActions(() => setOpen(false));
   const catalog = useRoutineCatalog();
   const teaser = () => {
     const [first] = rows(forSurface() ?? [], catalog());
@@ -219,7 +230,10 @@ export function SidebarRoutineSuggestions(props: {
           openAgentsPage(layout, 'routines');
         }}
       >
-        <SuggestionList suggestions={forSurface() ?? []} actions={actions} />
+        <SuggestionList
+          suggestions={forSurface() ?? []}
+          onLeave={() => setOpen(false)}
+        />
       </RoutineSuggestionsDialog>
     </Show>
   );
@@ -233,8 +247,16 @@ export function RoutineSuggestionsSection(props: {
   /** Shown instead when there are no suggestions, e.g. the templates. */
   fallback: JSX.Element;
 }) {
+  const enabled = useRoutineSuggestionsEnabled();
+  return (
+    <Show when={enabled()} fallback={props.fallback}>
+      <SuggestedForYou fallback={props.fallback} />
+    </Show>
+  );
+}
+
+function SuggestedForYou(props: { fallback: JSX.Element }) {
   const source = useRoutineSuggestions();
-  const actions = useProductionActions(() => {});
   const [surface, setSurface] = createSignal<RoutineSurface | 'all'>('all');
   const present = createMemo(() =>
     ROUTINE_SURFACES.filter((each) =>
@@ -281,7 +303,6 @@ export function RoutineSuggestionsSection(props: {
         </div>
         <SuggestionList
           suggestions={visible()}
-          actions={actions}
           showSurface={surface() === 'all'}
         />
       </section>
