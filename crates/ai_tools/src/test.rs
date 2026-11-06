@@ -214,6 +214,32 @@ fn code_mode_manages_bots_through_the_sdk_but_keeps_the_credential_card() {
 }
 
 #[test]
+fn code_mode_reads_and_edits_office_and_design_files_through_the_sdk() {
+    let tools = tools_for_agent_code_mode();
+    for name in [
+        "ReadPresentation",
+        "EditPresentation",
+        "ReadWordDocument",
+        "EditWordDocument",
+        "ReadDesign",
+        "ReadPhotoshopDocument",
+        "ReadIllustratorDocument",
+    ] {
+        assert!(!tools.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+    }
+    assert!(
+        tools_for(AiHost::AgentSession)
+            .toolset
+            .tools
+            .contains_key("EditPresentation")
+    );
+}
+
+#[test]
 fn project_workflows_are_available_in_every_host_alongside_folder_and_property_tools() {
     let names = [
         "ListInitiatives",
@@ -767,7 +793,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "RenderCanvas",
         "ApplyCanvasEdits",
         "EditCanvas",
-        "EditPresentation",
         "Subagent",
         "SearchTools",
         "LoadTools",

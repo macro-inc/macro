@@ -44,6 +44,13 @@ word docs, Illustrator/Photoshop files).
   `edit_refused` is the worker's clarification, 502 `edit_failed` may have
   partly applied, and a client disconnect drops the worker call (never spawn
   it).
+- `axum_router/presentation.rs`, `word_document.rs`, `design_files.rs`: the
+  presentation, Word, design, Photoshop and Illustrator tools over HTTP
+  (`/{id}/presentation`, `/word`, `/design`, `/photoshop`, `/illustrator`),
+  calling the same domain services with the same receipts. Word routes need
+  an acting user; a bot caller's id rides in the worker token as the actor.
+  Caller-fixable failures (`PresentationError`, `WordDocumentRejected`, the
+  readers' errors) are 400s.
 - `axum_router/upload_file.rs`: `POST /upload` takes a file's raw bytes (25 MiB)
   and runs UploadFile's `DocumentCreator::upload_file`, minting the project
   receipt from the caller like the tool. It exists for clients that cannot PUT

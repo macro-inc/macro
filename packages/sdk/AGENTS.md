@@ -16,6 +16,11 @@ enforced by the ordinary backend APIs.
   `Document.bytes()` downloads through the CloudFront export host (`document-content`
   in the harness's `sdk_hosts`). Never return a presigned S3 URL as the only path.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
+- `Document.readPresentation`/`editPresentation`/`copyPresentation`,
+  `readWord`/`editWord`, and `readDesign`/`readPhotoshop`/`readIllustrator`
+  run the matching direct tools' services through storage routes; the edit
+  operation unions are generated from `pptx_engine::EditOp` and
+  `WordDocumentOperation` (`office-files.ts` aliases them).
 - `src/entities/workspace/namespace.ts`: filtered activity pages and iteration,
   agent sessions included.
 - `src/entities/search/namespace.ts`: `macro.search`, one unified search across

@@ -24,6 +24,10 @@ function toBlob(content: FileContent): Blob {
  *
  * Change the text of an existing Markdown document or task body in place, with `document.edit(instructions)` in code or the `EditDocument` tool where code isn't available. Never recreate the document or upload its Markdown to change its text. PDF, Word and other uploaded files can't be edited this way.
  *
+ * ## Uploaded Office and design files
+ *
+ * Edit an uploaded Word file with `readWord()` then `editWord(operations)`, and a PowerPoint deck with `readPresentation()` then `editPresentation(operations)` (or `copyPresentation()` for a new deck): both address paragraphs, slides and shapes by the ids the read reports. Read Figma, Photoshop and Illustrator files with `readDesign()`, `readPhotoshop()` and `readIllustrator()`; they can't be edited. Never rebuild these files from `bytes()`.
+ *
  * ## Linking Macro items inside document content
  *
  * `CreateDocument` content (the `fileContent` argument) is rendered with the same Markdown parser used for chat responses, channel messages, and email bodies inside the Macro app — but only for Markdown (`.md`) documents. Non-Markdown documents (e.g. PDF, CSV, PNG, XLSX, DOCX, created by passing a non-`md` `file_extension`) are stored as raw file bytes and must never contain Markdown syntax or mention tags.

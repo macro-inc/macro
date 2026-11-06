@@ -3,7 +3,7 @@ use super::*;
 const PROJECT_ID: Uuid = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_0123);
 
 /// Object storage that accepts PUTs and keeps each body it receives.
-async fn object_storage() -> (String, Arc<Mutex<Vec<Vec<u8>>>>) {
+pub(super) async fn object_storage() -> (String, Arc<Mutex<Vec<Vec<u8>>>>) {
     let received = Arc::new(Mutex::new(Vec::new()));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/object", listener.local_addr().unwrap());
