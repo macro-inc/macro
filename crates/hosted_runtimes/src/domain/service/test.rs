@@ -12,6 +12,7 @@ use crate::domain::lifecycle::{Billing as BillingState, ComputerState, PaymentOu
 use crate::domain::models::{BillingInterval, SubscriptionItem};
 
 mod comped;
+mod purchase;
 mod rollout;
 mod sold_resources;
 

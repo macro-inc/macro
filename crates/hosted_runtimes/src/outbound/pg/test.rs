@@ -4,6 +4,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
 
+mod purchase;
+
 const TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00aa);
 
 fn now() -> DateTime<Utc> {
