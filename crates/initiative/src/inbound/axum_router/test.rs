@@ -326,7 +326,7 @@ impl InitiativeService for FakeInitiativeService {
         &self,
         user_id: &MacroUserIdStr<'_>,
         request: CreateInitiativeRequest,
-        _attribution: activity::Attribution,
+        _attribution: ::activity::Attribution,
     ) -> Result<InitiativeDetail, InitiativeError> {
         self.create(user_id, request).await
     }
@@ -726,7 +726,7 @@ async fn task_membership_routes_are_gone() {
 #[derive(Clone)]
 struct FakeActivityReads;
 
-impl activity::domain::ports::EntityActivityReads for FakeActivityReads {
+impl ::activity::domain::ports::EntityActivityReads for FakeActivityReads {
     type Err = std::io::Error;
 
     async fn entity_feed(
@@ -735,23 +735,24 @@ impl activity::domain::ports::EntityActivityReads for FakeActivityReads {
         _entity_id: &str,
         cursor: Option<(DateTime<Utc>, Uuid)>,
         _limit: std::num::NonZeroU32,
-    ) -> Result<activity::ActivityFeedPage, Self::Err> {
+    ) -> Result<::activity::ActivityFeedPage, Self::Err> {
         assert_eq!(entity_type, EntityType::Initiative);
         assert_eq!(cursor, None);
-        let record = |id: u128, occurred_at: &str| activity::domain::models::ActivityRecord {
+        let record = |id: u128, occurred_at: &str| ::activity::domain::models::ActivityRecord {
+            agent_correlation_id: None,
             id: Uuid::from_u128(id),
-            actor: activity::domain::models::Actor::new_from_user(user()),
+            actor: ::activity::domain::models::Actor::new_from_user(user()),
             subject_id: USER_ID.to_string(),
             entity_type: EntityType::Initiative,
             entity_id: existing_id().to_string(),
-            action: activity::domain::models::RecordedAction::Known(
-                activity::domain::models::Action::Edited,
+            action: ::activity::domain::models::RecordedAction::Known(
+                ::activity::domain::models::Action::Edited,
             ),
             occurred_at: DateTime::parse_from_rfc3339(occurred_at)
                 .expect("valid timestamp")
                 .with_timezone(&Utc),
         };
-        Ok(activity::ActivityFeedPage {
+        Ok(::activity::ActivityFeedPage {
             records: vec![
                 record(3, "2026-09-15T11:00:00Z"),
                 record(2, "2026-09-14T11:00:00Z"),
