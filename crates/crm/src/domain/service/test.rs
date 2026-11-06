@@ -458,7 +458,7 @@ async fn members_can_add_team_blocks_but_only_admins_can_remove_them() {
     };
     assert!(matches!(
         svc.change_email_privacy(&member, remove.clone()).await,
-        Err(CrmError::AdminRoleRequired)
+        Err(CrmError::SettingsAdminRequired)
     ));
     assert_eq!(
         svc.companies_repository

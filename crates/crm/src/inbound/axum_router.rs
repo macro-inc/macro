@@ -242,9 +242,7 @@ impl IntoResponse for CrmError {
             CrmError::SettingsAdminRequired => (
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
-                    message:
-                        "changing crm permission or stage settings requires admin/owner team role"
-                            .into(),
+                    message: "changing CRM admin settings requires admin/owner team role".into(),
                 }),
             ),
             CrmError::StageEditRoleRequired(role) => (

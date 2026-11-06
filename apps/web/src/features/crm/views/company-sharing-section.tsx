@@ -10,7 +10,7 @@ export function CompanySharingSection(props: { company?: CrmCompanyEntity }) {
     <Show when={props.company}>
       <div class="flex flex-col gap-2 text-xs">
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           class="w-fit"
           onClick={() => setPrivacyOpen(true)}

@@ -390,9 +390,9 @@ pub enum CrmError {
     #[error("Querying hidden CRM companies requires admin/owner team role")]
     AdminRoleRequired,
     /// The request changes governance fields of the team CRM settings
-    /// (permission thresholds, closed stages) but the caller's team role
+    /// (permission thresholds, closed stages, or team email exclusions), but the caller's team role
     /// is below admin/owner.
-    #[error("changing crm permission or stage settings requires admin/owner team role")]
+    #[error("changing CRM admin settings requires admin/owner team role")]
     SettingsAdminRequired,
     /// Caller's team role is below the team's `edit_stages_role`.
     #[error("editing deal stages requires the {} team role", .0.as_db_str())]

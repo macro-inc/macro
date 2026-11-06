@@ -88,12 +88,30 @@ test('disconnected mailbox cannot opt in while exclusions remain editable', asyn
 test('banner opens review using the device input mode', async ({
   page,
 }, testInfo) => {
+  const phone = testInfo.project.name === 'phone';
+  if (phone) await page.setViewportSize({ width: 320, height: 740 });
   await page.goto('/');
   const review = page.getByRole('button', {
     name: 'Review and opt in',
     exact: true,
   });
-  if (testInfo.project.name === 'phone') await review.tap();
+  await expect(review).toBeInViewport();
+  if (phone) {
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-touch-device',
+      'true'
+    );
+    expect((await review.boundingBox())?.height).toBeGreaterThanOrEqual(36);
+  }
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth <=
+        document.documentElement.clientWidth
+    )
+  ).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('privacy-banner.png') });
+  if (phone) await review.tap();
   else await review.click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();

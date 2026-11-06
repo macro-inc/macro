@@ -1,4 +1,5 @@
 import '../../../../index.css';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -7,6 +8,8 @@ import {
   CrmEmailPrivacyDialog,
 } from '../../views/email-privacy';
 import { lastChange } from './preview-adapters';
+
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
 function Fixture() {
   const [open, setOpen] = createSignal(false);

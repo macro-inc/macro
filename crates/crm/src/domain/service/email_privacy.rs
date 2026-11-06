@@ -55,7 +55,7 @@ impl<CR: CompaniesRepository, R: CompanyMetadataResolver> EmailPrivacyService
                 scope: EmailBlockScope::Team,
                 ..
             } if !access.has_admin_role() => {
-                return Err(CrmError::AdminRoleRequired);
+                return Err(CrmError::SettingsAdminRequired);
             }
             EmailPrivacyChange::AddDomain { domain, .. }
             | EmailPrivacyChange::RemoveDomain { domain, .. } => {

@@ -94,7 +94,7 @@ function DomainBlocklist(props: {
           />
           <Button
             type="submit"
-            variant="outline"
+            variant="secondary"
             size="sm"
             disabled={busy() || !domain().trim()}
           >
@@ -153,7 +153,7 @@ export function CrmEmailPrivacySettings(props: { onOptIn?: () => void }) {
       <DomainBlocklist source={source} scope="personal" />
       <div class="flex justify-end">
         <Button
-          variant={settings()?.enabled ? 'outline' : 'primary'}
+          variant={settings()?.enabled ? 'secondary' : 'primary'}
           disabled={
             (!settings()?.enabled && !settings()?.mailboxLinkId) ||
             source.update.isPending
@@ -182,11 +182,11 @@ export function CrmEmailOptInBanner() {
   return (
     <>
       <Show when={source.query.isSuccess && !source.query.data?.enabled}>
-        <div class="h-5 shrink-0 flex items-center justify-center gap-2 bg-accent/10 text-xs text-ink">
+        <div class="min-h-5 shrink-0 flex flex-wrap items-center justify-center gap-x-2 bg-accent/10 px-3 py-0.5 text-xs text-ink">
           <span>{t('crm.privacyBanner')}</span>
-          <button type="button" class="underline" onClick={() => setOpen(true)}>
+          <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
             {t('crm.privacyReview')}
-          </button>
+          </Button>
         </div>
       </Show>
       <CrmEmailPrivacyDialog open={open()} onOpenChange={setOpen} />
