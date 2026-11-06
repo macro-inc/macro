@@ -7,7 +7,6 @@ import { t } from '@app/lib/i18n';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { Resize } from '@core/component/Resize';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
-import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -46,7 +45,6 @@ import type { CallPanelState } from './discussion/CallDiscussionContent';
 import { isProgramParticipant } from './is-program-participant';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
-import { ParticipantAvatarBackground } from './ParticipantAvatarBackground';
 import { TrackView } from './TrackView';
 import { useActiveCallTeamShare } from './use-toggle-share-with-team';
 
@@ -58,6 +56,8 @@ function VideoTag(props: {
   class?: string;
   variant?: 'default' | 'truncated';
   isProgram?: boolean;
+  muted?: boolean;
+  mutedLabel?: string;
 }) {
   return (
     <div
@@ -67,6 +67,11 @@ function VideoTag(props: {
         props.class
       )}
     >
+      <MutedMicrophoneBadge
+        muted={props.muted ?? false}
+        label={props.mutedLabel ?? ''}
+        inline
+      />
       <span class="min-w-0 truncate">{props.children}</span>
       <Show when={props.isProgram}>
         <Badge variant="secondary" size="xs">
@@ -100,6 +105,7 @@ function ParticipantTileWrapper(props: {
       )}
     >
       <div
+        data-call-tile=""
         class={cn(
           'relative isolate flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted',
           props.isConnecting && 'animate-pulse'
@@ -109,7 +115,7 @@ function ParticipantTileWrapper(props: {
         <Show when={props.isSpeaking}>
           <div
             aria-hidden="true"
-            class="pointer-events-none absolute inset-0 z-20 rounded-[inherit] border-2 border-accent"
+            class="pointer-events-none absolute inset-0 z-20 rounded-[inherit] border-2 border-success"
           />
         </Show>
         <Show when={props.onToggleFocus}>
@@ -154,33 +160,15 @@ function ParticipantAvatar(props: {
 
   return (
     <div class="relative flex items-center justify-center size-full p-4">
-      <Show when={props.userId?.trim()} keyed>
-        {(userId) => <ParticipantAvatarBackground userId={userId} />}
-      </Show>
       <div class={cn('relative', avatarClass())}>
-        <Show
-          when={props.userId?.trim()}
-          keyed
-          fallback={
-            <div
-              class={cn(
-                'flex size-full items-center justify-center rounded-full bg-ink-extra-muted text-surface font-semibold',
-                props.avatarSize === 'sm' ? 'text-xl' : 'text-4xl'
-              )}
-            >
-              {fallbackInitial()}
-            </div>
-          }
-        >
-          {(userId) => (
-            <UserIcon
-              id={userId}
-              size="fill"
-              suppressClick
-              showTooltip={false}
-            />
+        <div
+          class={cn(
+            'flex size-full items-center justify-center rounded-full bg-ink-extra-muted text-surface font-semibold',
+            props.avatarSize === 'sm' ? 'text-xl' : 'text-4xl'
           )}
-        </Show>
+        >
+          {fallbackInitial()}
+        </div>
       </div>
     </div>
   );
@@ -222,11 +210,17 @@ function LocalParticipantTile(props: {
         <TrackView track={props.track} mirror />
       </Show>
 
-      <MutedMicrophoneBadge muted={props.isAudioMuted} label="You are muted" />
-
       <Show
         when={props.isConnecting}
-        fallback={<VideoTag isProgram={props.isProgram}>You</VideoTag>}
+        fallback={
+          <VideoTag
+            isProgram={props.isProgram}
+            muted={props.isAudioMuted}
+            mutedLabel="You are muted"
+          >
+            You
+          </VideoTag>
+        }
       >
         <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface/70 text-ink-muted text-xs">
           Connecting...
@@ -287,14 +281,11 @@ function ParticipantTile(props: {
         <TrackView track={cameraTrack()} />
       </Show>
 
-      <MutedMicrophoneBadge
-        muted={isAudioMuted()}
-        label={`${displayName()} is muted`}
-      />
-
       <VideoTag
         variant="truncated"
         isProgram={isProgramParticipant(props.participant.attributes)}
+        muted={isAudioMuted()}
+        mutedLabel={`${displayName()} is muted`}
       >
         {displayName()}
       </VideoTag>
@@ -609,7 +600,7 @@ export function CallOverlay(props: {
           )}
         >
           <Resize.Panel id="call-stage" minSize={widePanel() ? 320 : 0}>
-            <div class="flex h-full min-h-0 min-w-0 flex-col @container/call-stage">
+            <div class="relative flex h-full min-h-0 min-w-0 flex-col @container/call-stage">
               {/* Screen share area */}
               <Show when={hasAnyScreenShare()}>
                 <div
@@ -657,7 +648,7 @@ export function CallOverlay(props: {
               {/* Participants area; stays mounted while the screen share is maximized. */}
               <div
                 hidden={showScreenShare() && screenShareMaximized()}
-                class={`${showScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative pt-2 mobile:pt-0`}
+                class={`${showScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} ${focusedParticipant() === 'local' ? 'relative' : ''} pt-2 mobile:pt-0`}
               >
                 <Show
                   when={participants().length > 0}
@@ -726,7 +717,7 @@ export function CallOverlay(props: {
                       'absolute z-10',
                       focusedParticipant() === 'local'
                         ? 'inset-0'
-                        : 'bottom-4 right-4 w-40 aspect-video shadow-lg sm:w-48'
+                        : `right-4 w-48 aspect-video shadow-lg ${panelOpen() && widePanel() ? 'bottom-24' : 'bottom-4'}`
                     )}
                   >
                     <LocalParticipantTile

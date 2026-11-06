@@ -290,7 +290,10 @@ focusing yourself moves the remote participant grid into that window instead.
 Tap a tile in the small window to switch focus, or use the solid **Back to grid**
 button on the focused tile to restore the grid. If that participant leaves, the grid
 returns automatically. Focus changes keep the existing video tracks mounted.
-A talking participant has an accent-colored border above their video or avatar.
+A talking participant has a success-colored border above their video or avatar.
+Camera-off tiles are flat and show a neutral initial, never a profile-color gradient.
+On desktop the self view sits at the bottom-right beside the controls, or above
+them while chat is docked. Muted icons sit beside the participant name.
 
 While someone shares their screen, **Maximize screen share** at the share's
 top-right hides the participant strip so the share fills the call area, and

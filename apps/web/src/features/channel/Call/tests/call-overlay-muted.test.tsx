@@ -406,9 +406,9 @@ describe('CallOverlay muted microphone badges', () => {
     });
 
     expect(
-      fullTileBadge.parentElement?.querySelector(
-        '[data-testid="track-local-camera"]'
-      )
+      fullTileBadge
+        .closest('[data-call-tile]')
+        ?.querySelector('[data-testid="track-local-camera"]')
     ).not.toBeNull();
     expect(fullTileBadge.closest('.bottom-4')).toBeNull();
 
@@ -445,7 +445,9 @@ describe('CallOverlay muted microphone badges', () => {
       name: 'Alex Morgan is muted',
     });
     expect(
-      badge.parentElement?.querySelector('[data-testid="track-alex-camera"]')
+      badge
+        .closest('[data-call-tile]')
+        ?.querySelector('[data-testid="track-alex-camera"]')
     ).not.toBeNull();
 
     microphone.isMuted = false;
@@ -472,10 +474,10 @@ describe('CallOverlay muted microphone badges', () => {
     const badge = screen.getByRole('status', {
       name: 'Alex Morgan is muted',
     });
-    const tile = badge.parentElement;
+    const tile = badge.closest('[data-call-tile]');
 
     expect(tile?.classList).toContain('relative');
-    expect(tile?.querySelector('[data-testid="user-avatar"]')).not.toBeNull();
+    expect(tile?.querySelector('[data-testid="user-avatar"]')).toBeNull();
     expect(tile?.textContent).toContain('A');
     expect(tile?.querySelector('[data-testid="track-alex-camera"]')).toBeNull();
 
