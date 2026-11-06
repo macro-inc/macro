@@ -37,10 +37,10 @@ pub struct CodeUpgrade {
     /// Why the routine needs its owner.
     pub reason: Option<String>,
     /// The task before.
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub previous_task: Value,
     /// The saved rewrite, or the rewrite that failed its checks.
-    #[schema(value_type = Option<Object>)]
+    #[schema(value_type = Option<routine_program::RoutineTask>)]
     pub task: Option<Value>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
