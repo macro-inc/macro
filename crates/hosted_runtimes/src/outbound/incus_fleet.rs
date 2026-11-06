@@ -30,9 +30,6 @@ const CREATED_AT_KEY: &str = "user.macro.created_at";
 /// Instance config key carrying the computer id.
 pub const COMPUTER_ID_KEY: &str = "user.macro.computer_id";
 
-/// How long a clean shutdown may take before [`Fleet::stop`] kills the VM.
-const SHUTDOWN_GRACE: Duration = Duration::from_secs(60);
-
 const BYTES_PER_GIB: u64 = 1024 * 1024 * 1024;
 
 /// The Incus host and what computers are created from.
@@ -49,32 +46,8 @@ pub struct IncusFleetConfig {
     pub host_name: String,
     pub reserve_gb: u32,
     pub oversell_factor: u32,
-}
-
-impl IncusFleetConfig {
-    /// The local `macro-box` image, profile and `default` pool every host
-    /// is preseeded with (see `nix/hosts`).
-    pub fn macro_box(
-        endpoint: IncusEndpoint,
-        host_name: String,
-        control_plane_id: ControlPlaneId,
-        reserve_gb: u32,
-        oversell_factor: u32,
-    ) -> Self {
-        Self {
-            control_plane_id,
-            endpoint,
-            image: ImageSource {
-                reference: ImageReference::Alias("macro-box".to_owned()),
-                remote: None,
-            },
-            profile: "macro-box".to_owned(),
-            storage_pool: "default".to_owned(),
-            host_name,
-            reserve_gb,
-            oversell_factor,
-        }
-    }
+    /// Deadline for clean shutdown before forcibly stopping the VM.
+    pub shutdown_grace: Duration,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -98,13 +71,22 @@ pub enum IncusFleetError {
 #[derive(Debug, Clone)]
 pub struct IncusFleet {
     client: IncusClient,
-    config: IncusFleetConfig,
+    config: Box<IncusFleetConfig>,
 }
 
 impl IncusFleet {
     pub fn new(config: IncusFleetConfig) -> Result<Self, IncusFleetError> {
+        if config.shutdown_grace.is_zero() {
+            return Err(IncusError::MalformedResponse(
+                "Incus shutdown grace must be positive".to_owned(),
+            )
+            .into());
+        }
         let client = IncusClient::new(config.endpoint.clone())?;
-        Ok(Self { client, config })
+        Ok(Self {
+            client,
+            config: Box::new(config),
+        })
     }
 
     /// The instance, `None` when it does not exist.
@@ -197,7 +179,7 @@ impl Fleet for IncusFleet {
         Ok(())
     }
 
-    /// A clean shutdown, killed after [`SHUTDOWN_GRACE`].
+    /// A clean shutdown, killed after the configured grace period.
     #[tracing::instrument(name = "incus_fleet.stop", skip(self), err)]
     async fn stop(&self, computer_id: Uuid) -> Result<(), IncusFleetError> {
         let result: Result<(), IncusFleetError> = async {
@@ -207,7 +189,11 @@ impl Fleet for IncusFleet {
                 Some(InstanceStatus::Frozen) => self.client.unfreeze(&name).await?,
                 _ => {}
             }
-            match tokio::time::timeout(SHUTDOWN_GRACE, self.client.stop(&name, false, false)).await
+            match tokio::time::timeout(
+                self.config.shutdown_grace,
+                self.client.stop(&name, false, false),
+            )
+            .await
             {
                 Ok(result) => result?,
                 Err(_) => {

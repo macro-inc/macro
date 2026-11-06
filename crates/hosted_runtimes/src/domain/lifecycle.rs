@@ -746,10 +746,10 @@ fn crash(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId, now:
     }
 
     next.phase = Phase::Restarting { host };
-    let doublings = u32::try_from(crashes - 1).unwrap_or(u32::MAX).min(8);
+    let doublings = crashes.saturating_sub(1).min(8);
     effects.push(Effect::ScheduleTimer {
         kind: TimerKind::RestartDue,
-        at: now + RESTART_BACKOFF * 2_i32.pow(doublings),
+        at: now + RESTART_BACKOFF * (1_i32 << doublings),
     });
 }
 

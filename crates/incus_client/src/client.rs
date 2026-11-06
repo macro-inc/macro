@@ -7,19 +7,7 @@ use crate::model::{
     CreateInstance, HostResources, ImageAliasInfo, ImageInfo, ImageReference, IncusEndpoint,
     InstanceInfo, InstanceKind, InstanceStatus, InstanceUsage, ServerAuth, ServerInfo,
 };
-use crate::{IncusError, tls};
-
-/// Seconds one `/wait` call blocks on the server before reporting progress.
-const OPERATION_WAIT_SECONDS: i64 = 60;
-
-/// `/wait` calls before giving up: 15 minutes, enough for a first image
-/// download.
-const OPERATION_WAITS: u32 = 15;
-
-/// Request timeout; longer than one `/wait` call.
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(90);
-
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+use crate::{IncusError, IncusTimeouts, tls};
 
 /// The recursion level list endpoints are generated for.
 const RECURSION_FULL_OBJECTS: i64 = 1;
@@ -32,6 +20,7 @@ const OPERATION_CANCELLED: i64 = 401;
 #[derive(Debug, Clone)]
 pub struct IncusClient {
     api: generated::Client,
+    timeouts: IncusTimeouts,
 }
 
 /// A state change requested through `PUT /1.0/instances/{name}/state`.
@@ -49,6 +38,16 @@ impl IncusClient {
     /// Builds an mTLS client that presents `client_cert_pem` and trusts only
     /// `server_cert_pem`. Makes no request.
     pub fn new(endpoint: IncusEndpoint) -> Result<Self, IncusError> {
+        if endpoint.timeouts.connect.is_zero()
+            || endpoint.timeouts.request <= endpoint.timeouts.connect
+            || endpoint.timeouts.operation_wait_secs == 0
+            || endpoint.timeouts.operation_waits == 0
+            || endpoint.timeouts.state_change_secs == 0
+            || endpoint.timeouts.request
+                <= Duration::from_secs(u64::from(endpoint.timeouts.operation_wait_secs))
+        {
+            return Err(IncusError::MalformedResponse("Incus timeouts must be positive; request timeout must exceed connect and operation wait timeouts".to_owned()));
+        }
         let tls = tls::client_config(
             &endpoint.client_cert_pem,
             &endpoint.client_key_pem,
@@ -57,17 +56,26 @@ impl IncusClient {
 
         let http = reqwest::Client::builder()
             .tls_backend_preconfigured(tls)
-            .connect_timeout(CONNECT_TIMEOUT)
-            .timeout(REQUEST_TIMEOUT)
+            .connect_timeout(endpoint.timeouts.connect)
+            .timeout(endpoint.timeouts.request)
             .build()
             .map_err(|error| IncusError::InvalidCredentials(format!("HTTP client: {error}")))?;
 
-        Ok(Self::with_http_client(&endpoint.url, http))
+        Ok(Self::with_http_client(
+            &endpoint.url,
+            http,
+            endpoint.timeouts,
+        ))
     }
 
-    pub(crate) fn with_http_client(url: &str, http: reqwest::Client) -> Self {
+    pub(crate) fn with_http_client(
+        url: &str,
+        http: reqwest::Client,
+        timeouts: IncusTimeouts,
+    ) -> Self {
         Self {
             api: generated::Client::new_with_client(url, http),
+            timeouts,
         }
     }
 
@@ -408,14 +416,17 @@ impl IncusClient {
             .ok_or_else(|| missing("operation id"))?;
 
         let mut operation = started.metadata;
-        for _ in 0..OPERATION_WAITS {
+        for _ in 0..self.timeouts.operation_waits {
             if let Some(finished) = finished_operation(&operation_id, &operation)? {
                 return Ok(finished);
             }
 
             operation = self
                 .api
-                .operation_wait_get(&operation_id, Some(OPERATION_WAIT_SECONDS))
+                .operation_wait_get(
+                    &operation_id,
+                    Some(i64::from(self.timeouts.operation_wait_secs)),
+                )
                 .await?
                 .into_inner()
                 .metadata
@@ -439,7 +450,7 @@ impl IncusClient {
             action: Some(action.as_ref().to_owned()),
             stateful: Some(stateful),
             force: Some(force),
-            timeout: None,
+            timeout: Some(i64::from(self.timeouts.state_change_secs)),
         };
 
         let started = self

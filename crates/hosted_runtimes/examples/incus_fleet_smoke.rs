@@ -7,7 +7,12 @@
 //!   --control-plane-id smoke \
 //!   --client-cert ~/.config/macro-computers/dev-client.crt \
 //!   --client-key ~/.config/macro-computers/dev-client.key \
-//!   --server-cert runtime-dev-1-server.crt
+//!   --server-cert server.crt \
+//!   --image macro-box --profile macro-box --storage-pool default \
+//!   --reserve-gb 4 --oversell-factor 3 \
+//!   --request-timeout-secs 90 --connect-timeout-secs 10 \
+//!   --operation-wait-secs 60 --operation-waits 15 \
+//!   --state-change-timeout-secs 60 --shutdown-grace-secs 60
 //! ```
 //!
 //! Without `--image-server` the image is the host's local `--image` alias.
@@ -24,7 +29,9 @@ use hosted_runtimes::domain::models::{Computer, ControlPlaneId};
 use hosted_runtimes::domain::ports::Fleet;
 use hosted_runtimes::domain::size::ComputerSize;
 use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig, instance_name};
-use incus_client::{ImageProtocol, ImageReference, ImageRemote, ImageSource, IncusEndpoint};
+use incus_client::{
+    ImageProtocol, ImageReference, ImageRemote, ImageSource, IncusEndpoint, IncusTimeouts,
+};
 use uuid::Uuid;
 
 #[derive(Parser)]
@@ -39,14 +46,32 @@ struct Args {
     client_key: PathBuf,
     #[arg(long)]
     server_cert: PathBuf,
-    #[arg(long, default_value = "macro-box")]
+    #[arg(long)]
     image: String,
     /// A simplestreams server to fetch `--image` from, e.g.
     /// `https://images.linuxcontainers.org` with `--image ubuntu/24.04`.
     #[arg(long)]
     image_server: Option<String>,
-    #[arg(long, default_value = "macro-box")]
+    #[arg(long)]
     profile: String,
+    #[arg(long)]
+    storage_pool: String,
+    #[arg(long)]
+    reserve_gb: u32,
+    #[arg(long)]
+    oversell_factor: u32,
+    #[arg(long)]
+    request_timeout_secs: u64,
+    #[arg(long)]
+    connect_timeout_secs: u64,
+    #[arg(long)]
+    operation_wait_secs: u32,
+    #[arg(long)]
+    operation_waits: u32,
+    #[arg(long)]
+    state_change_timeout_secs: u32,
+    #[arg(long)]
+    shutdown_grace_secs: u64,
 }
 
 #[tokio::main]
@@ -54,6 +79,13 @@ async fn main() -> Result<(), rootcause::Report> {
     let args = Args::parse();
     let endpoint = IncusEndpoint {
         url: args.url,
+        timeouts: IncusTimeouts {
+            request: std::time::Duration::from_secs(args.request_timeout_secs),
+            connect: std::time::Duration::from_secs(args.connect_timeout_secs),
+            operation_wait_secs: args.operation_wait_secs,
+            operation_waits: args.operation_waits,
+            state_change_secs: args.state_change_timeout_secs,
+        },
         client_cert_pem: std::fs::read_to_string(&args.client_cert)?,
         client_key_pem: std::fs::read_to_string(&args.client_key)?,
         server_cert_pem: std::fs::read_to_string(&args.server_cert)?,
@@ -67,13 +99,13 @@ async fn main() -> Result<(), rootcause::Report> {
             }),
         },
         profile: args.profile,
-        ..IncusFleetConfig::macro_box(
-            endpoint,
-            "smoke".to_owned(),
-            ControlPlaneId::parse(args.control_plane_id)?,
-            4,
-            3,
-        )
+        endpoint,
+        host_name: "smoke".to_owned(),
+        control_plane_id: ControlPlaneId::parse(args.control_plane_id)?,
+        reserve_gb: args.reserve_gb,
+        oversell_factor: args.oversell_factor,
+        storage_pool: args.storage_pool,
+        shutdown_grace: std::time::Duration::from_secs(args.shutdown_grace_secs),
     };
     let fleet = IncusFleet::new(config)?;
 

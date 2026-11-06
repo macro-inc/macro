@@ -185,3 +185,9 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 - Rules: `.agents/rules/config-and-service-urls.md`,
   `.agents/rules/rust/security.md` · Skill: `new-service`
+
+Computer billing requires all six
+`STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values to be
+nonblank whenever `COMPUTERS_FLEET` is set. Validate this at startup and in the
+Doppler config check; unset fleets require no computer price config. Prices
+have no fallback. See [required computer config](../../docs/development/running-locally.md#macro-computers).

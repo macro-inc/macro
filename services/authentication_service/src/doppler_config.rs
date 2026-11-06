@@ -15,6 +15,7 @@ async fn main() -> anyhow::Result<()> {
     let dev_config = dev.load::<Config>().await?;
     dev_config.signup_policy_for_environment(Environment::Develop)?;
     dev_config.validate_account_link_state_secret()?;
+    dev_config.validate_computer_config()?;
 
     let prd = doppler_config::DopplerConfig::builder()
         .token_from_env("DOPPLER_TOKEN")
@@ -26,6 +27,7 @@ async fn main() -> anyhow::Result<()> {
     let prd_config = prd.load::<Config>().await?;
     prd_config.signup_policy_for_environment(Environment::Production)?;
     prd_config.validate_account_link_state_secret()?;
+    prd_config.validate_computer_config()?;
 
     Ok(())
 }

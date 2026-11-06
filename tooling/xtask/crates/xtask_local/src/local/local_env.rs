@@ -765,6 +765,30 @@ impl BootStubEnv {
         env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
         env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
         env.insert(
+            "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID".into(),
+            "price_local_computer_standard_monthly".into(),
+        );
+        env.insert(
+            "STRIPE_COMPUTER_LARGE_MONTHLY_PRICE_ID".into(),
+            "price_local_computer_large_monthly".into(),
+        );
+        env.insert(
+            "STRIPE_COMPUTER_XL_MONTHLY_PRICE_ID".into(),
+            "price_local_computer_xl_monthly".into(),
+        );
+        env.insert(
+            "STRIPE_COMPUTER_STANDARD_YEARLY_PRICE_ID".into(),
+            "price_local_computer_standard_yearly".into(),
+        );
+        env.insert(
+            "STRIPE_COMPUTER_LARGE_YEARLY_PRICE_ID".into(),
+            "price_local_computer_large_yearly".into(),
+        );
+        env.insert(
+            "STRIPE_COMPUTER_XL_YEARLY_PRICE_ID".into(),
+            "price_local_computer_xl_yearly".into(),
+        );
+        env.insert(
             "STRIPE_WEBHOOK_SECRET_KEY".into(),
             "local-stripe-webhook-secret".into(),
         );
