@@ -109,6 +109,8 @@ deploy repo, which Argo CD syncs.
   fixing the image (forge runners).
 - RustFS reports a blocked private webhook target as `dns_failure`, while uploads
   still succeed. Add a new target's origin to `RUSTFS_OUTBOUND_ALLOW_ORIGINS`.
+- The web E2E page must be served from the instance's host: the app calls the backend on
+  its page's hostname, and the ingress routes nothing else.
 - KEDA owns a queue worker's replica count (`scaleOnQueue` in `components.nix`), so it
   renders no `replicas`. A queue a scaled worker reads must be in `xtask_local`'s
   `resources.rs`: at zero replicas, nothing else creates it.

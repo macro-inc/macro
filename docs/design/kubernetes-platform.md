@@ -382,6 +382,13 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
   `helm install` with only `cargo x platform secrets` output reaches every pod ready,
   and the app, sign-in mail, and key management work. The E2E suite has not run against
   a release.
+- **Two instances:** `demo` and `demo-2` ran side by side with separate credentials, and
+  neither could reach the other's services or see its mail. Removing one left the other
+  running untouched.
+- **Web E2E, not passing:** the Playwright suite signs in and loads real data from an
+  instance, with 8 of 48 passing, 38 failing, and 2 skipped. No workflow runs this suite,
+  and whether the failures come from the platform or from tests that have drifted is
+  unknown until the same commit runs on compose.
 - **Queue scaling:** KEDA takes a queue worker from zero to its maximum as messages
   arrive and back to zero after they drain, on the local cluster.
 - **Generated credentials:** a new instance bootstraps from nothing with its own, reaches
