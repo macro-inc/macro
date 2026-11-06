@@ -398,7 +398,7 @@ def up(args):
         path.chmod(0o600)
         backing = [o for o in objects if o['kind'] != 'Deployment' or o['metadata']['name'] in INFRA]
         apply(backing)
-        wait_deployments(namespace)
+        wait_deployments(namespace, INFRA)
         with forwards(namespace, config):
             xtask('kubernetes-init', *flags)
         apply(objects)
