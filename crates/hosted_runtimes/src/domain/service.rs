@@ -205,6 +205,9 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         err
     )]
     pub async fn purchase(&self, request: PurchaseRequest) -> Result<ComputerId, ComputerError> {
+        if !self.billing.sales_available() {
+            return Err(BillingError::NotAvailable.into());
+        }
         if matches!(request.billing, PurchaseBilling::Comped { .. })
             && !request.extra_items.is_empty()
         {
@@ -416,7 +419,8 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
                         .await
                     {
                         Err(ComputerError::Billing(
-                            BillingError::PaymentFailed
+                            BillingError::NotAvailable
+                            | BillingError::PaymentFailed
                             | BillingError::NoSubscription
                             | BillingError::IntervalNotSold(_),
                         )) => Ok(()),

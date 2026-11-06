@@ -435,8 +435,11 @@ Incus additionally requires `COMPUTERS_INCUS_URL`,
 
 Authentication also reads `COMPUTERS_FLEET`. When enabled, all six
 `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values must be
-nonblank. Missing prices fail startup; no size or interval receives a fallback
-price. Local Doppler supplies test-mode prices. `--no-doppler` supplies explicit
+nonblank. Without a fleet, omit the entire price group to disable computer
+sales; partial groups fail startup and Doppler validation. Disabled sales
+answer 503 on offers, quotes and purchases before contacting Stripe. No size
+or interval receives a fallback price. Local Doppler supplies test-mode prices.
+`--no-doppler` supplies explicit
 placeholder price IDs for startup only; replace them with real test prices
 before buying a computer.
 

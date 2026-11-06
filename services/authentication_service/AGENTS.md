@@ -43,6 +43,7 @@ key issuance, and account merge/link flows.
 
 ## Computer billing identifiers
 
+- Treat the six `STRIPE_COMPUTER_*_PRICE_ID` values as an optional all-or-none group: none means computers are not sold here; any partial group fails startup and Doppler validation even without `COMPUTERS_FLEET`. An enabled fleet requires all six. Validate configured price syntax in both startup and the Doppler binary.
 - Store computer interval prices as `Option<stripe_price_id::StripePriceId>` and reject malformed configured IDs during configuration loading, including when the fleet is disabled. `Config::computer_prices` returns a validation result.
 
 ## Checks
@@ -60,6 +61,7 @@ key issuance, and account merge/link flows.
   subscription's interval). Prices are `ComputerPrices`
   (`src/domain/computer_billing.rs`), not seat plans. Replay durable item-change
   receipts before resolving current prices or subscription terms.
+- With no computer prices, quote and purchase return 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
 - Every team subscription webhook re-reads the subscription and reports each
   size's billed count to `ComputerBillingObserver` (`ComputerService`), which
   cancels computers whose items were removed outside Macro. Its failures are
@@ -189,9 +191,3 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 - Rules: `.agents/rules/config-and-service-urls.md`,
   `.agents/rules/rust/security.md` · Skill: `new-service`
-
-Computer billing requires all six
-`STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values to be
-nonblank whenever `COMPUTERS_FLEET` is set. Validate this at startup and in the
-Doppler config check; unset fleets require no computer price config. Prices
-have no fallback. See [required computer config](../../docs/development/running-locally.md#macro-computers).

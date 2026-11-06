@@ -775,6 +775,10 @@ the team subscription. They sit in `Runtimes`, behind the
 page shows nothing about them. Every team member sees the **Macro computers**
 list; only team admins and owners see the buying card and the row controls.
 
+If the environment has no computer prices configured, offers, quotes, and
+purchases answer 503 with `computers are not available in this environment`.
+Partial price configuration prevents the authentication service from starting.
+
 To buy one as a team admin:
 
 1. Open `/app/settings/runtimes` (mobile: Settings sheet → Runtimes).

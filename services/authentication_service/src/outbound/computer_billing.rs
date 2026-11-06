@@ -52,6 +52,9 @@ impl<Teams: TeamSubscriptionItems> TeamComputerBilling<Teams> {
         team_id: Uuid,
         size: ComputerSize,
     ) -> Result<(StripePriceId, BillingInterval), BillingError> {
+        if self.prices.is_empty() {
+            return Err(BillingError::NotAvailable);
+        }
         let interval = self.interval(team_id).await?;
         let price_id = self
             .prices
@@ -62,6 +65,10 @@ impl<Teams: TeamSubscriptionItems> TeamComputerBilling<Teams> {
 }
 
 impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
+    fn sales_available(&self) -> bool {
+        !self.prices.is_empty()
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn quote(&self, team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
         let (price_id, interval) = self.computer_price(team_id, size).await?;

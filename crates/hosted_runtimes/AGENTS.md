@@ -33,6 +33,11 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 
 ## Explicit configuration
 
+Report environment sale availability through `Billing::sales_available` and
+reject unavailable purchases in the domain before reserving capacity. Map
+`BillingError::NotAvailable` to 503 on public and internal computer routes;
+keep missing subscription and unsupported billing intervals distinct.
+
 Require image, host reserve and oversell factor for either enabled fleet;
 require Docker memory for Docker, and explicit profile, storage pool,
 request/connect/operation/state-change limits and shutdown grace for Incus.

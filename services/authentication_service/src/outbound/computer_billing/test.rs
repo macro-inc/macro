@@ -247,3 +247,31 @@ async fn a_successful_purchase_replays_before_subscription_or_price_lookup() {
         .unwrap();
     assert_eq!(teams.changes.lock().unwrap().len(), 1);
 }
+
+#[tokio::test]
+async fn no_prices_rejects_sales_before_contacting_the_subscription_provider() {
+    let mut teams = FakeTeams::new(BillingCadence::Month);
+    teams.subscribed = false;
+    let mut unavailable = prices();
+    for interval in [
+        &mut unavailable.standard,
+        &mut unavailable.large,
+        &mut unavailable.xl,
+    ] {
+        interval.monthly = None;
+        interval.yearly = None;
+    }
+    let billing = TeamComputerBilling::new(teams, unavailable);
+    for size in ComputerSize::ALL {
+        assert!(matches!(
+            billing.quote(Uuid::nil(), size).await,
+            Err(BillingError::NotAvailable)
+        ));
+        assert!(matches!(
+            billing
+                .add_computer(Uuid::nil(), size, &[], "not-sold")
+                .await,
+            Err(BillingError::NotAvailable)
+        ));
+    }
+}

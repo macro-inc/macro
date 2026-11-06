@@ -186,6 +186,8 @@ pub trait ComputerRepo: Send + Sync + 'static {
 /// Errors from billing a team.
 #[derive(Debug, thiserror::Error)]
 pub enum BillingError {
+    #[error("computers are not available in this environment")]
+    NotAvailable,
     #[error("the team has no active subscription")]
     NoSubscription,
     #[error("computers are not sold on {0:?} billing")]
@@ -198,6 +200,9 @@ pub enum BillingError {
 
 /// The team subscription, where computers are billed as items.
 pub trait Billing: Send + Sync + 'static {
+    /// Whether this environment sells computers, before reserving capacity.
+    fn sales_available(&self) -> bool;
+
     /// The price of one computer of `size` at the team's billing interval.
     fn quote(
         &self,

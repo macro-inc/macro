@@ -15,6 +15,7 @@ mod comped;
 /// Records subscription updates; fails them when `decline` is set.
 #[derive(Default)]
 struct FakeBilling {
+    not_sold: bool,
     no_subscription: bool,
     yearly: bool,
     decline: bool,
@@ -26,6 +27,10 @@ struct FakeBilling {
 }
 
 impl Billing for FakeBilling {
+    fn sales_available(&self) -> bool {
+        !self.not_sold
+    }
+
     async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
         self.calls.lock().unwrap().push("quote");
         if self.no_subscription {
@@ -795,4 +800,33 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
     assert_eq!(*service.billing.calls.lock().unwrap(), vec!["add_computer"]);
     assert!(service.billing.charged.lock().unwrap().is_empty());
     assert!(service.billing.removals.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn disabled_sales_reject_purchase_before_reserving_capacity() {
+    let service = ComputerService::new(
+        FakeRepo::default(),
+        FakeBilling {
+            not_sold: true,
+            ..FakeBilling::default()
+        },
+        FixedClock,
+    );
+    let result = service
+        .purchase(PurchaseRequest {
+            billing: PurchaseBilling::Stripe,
+            team_id: TEAM,
+            created_by: "test-admin".to_owned(),
+            size: ComputerSize::Standard,
+            name: None,
+            persona: None,
+            extra_items: vec![],
+        })
+        .await;
+    assert!(matches!(
+        result,
+        Err(ComputerError::Billing(BillingError::NotAvailable))
+    ));
+    assert!(service.repo.list_for_team(TEAM).await.unwrap().is_empty());
+    assert!(service.billing.calls.lock().unwrap().is_empty());
 }
