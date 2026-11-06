@@ -16,6 +16,7 @@ export type Config = {
   hosts: Hosts;
   workspace: string;
   healthPort: number;
+  executable: string;
   anthropicBaseUrl: string;
   anthropicAuthToken: string;
 };
@@ -48,6 +49,7 @@ export function loadConfig(env: (name: string) => string | undefined): Config {
   const gateway = required('MACRO_GATEWAY');
   const workspace = required('BRAIN_WORKSPACE');
   const port = required('BRAIN_HEALTH_PORT');
+  const executable = required('BRAIN_EXECUTABLE');
   const anthropicBaseUrl = required('ANTHROPIC_BASE_URL');
   const anthropicAuthToken = required('ANTHROPIC_AUTH_TOKEN');
   if (missing.length > 0) {
@@ -70,6 +72,7 @@ export function loadConfig(env: (name: string) => string | undefined): Config {
     hosts: gatewayHosts(gateway),
     workspace,
     healthPort,
+    executable,
     anthropicBaseUrl,
     anthropicAuthToken,
   };

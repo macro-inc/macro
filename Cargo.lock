@@ -554,6 +554,7 @@ dependencies = [
  "rootcause",
  "secretsmanager_client",
  "serde",
+ "serde_json",
  "sqlx",
  "teams",
  "tokio",

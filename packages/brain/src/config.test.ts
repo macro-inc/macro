@@ -8,6 +8,7 @@ test('loadConfig reads every value and derives the gateway hosts', () => {
     MACRO_GATEWAY: 'https://dev-gateway.macro.com/',
     BRAIN_WORKSPACE: '/home/ada/workspace',
     BRAIN_HEALTH_PORT: '7801',
+    BRAIN_EXECUTABLE: '/opt/macro/brain',
     ANTHROPIC_BASE_URL: 'https://gateway.example/anthropic',
     ANTHROPIC_AUTH_TOKEN: 'token',
   };
@@ -32,7 +33,7 @@ test('loadConfig names every missing variable at once', () => {
     (error: unknown) =>
       error instanceof ConfigError &&
       error.message.includes(
-        'missing environment: MACRO_GATEWAY, BRAIN_WORKSPACE, ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN'
+        'missing environment: MACRO_GATEWAY, BRAIN_WORKSPACE, BRAIN_EXECUTABLE, ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN'
       )
   );
 });

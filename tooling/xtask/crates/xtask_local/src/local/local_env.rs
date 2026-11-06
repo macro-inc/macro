@@ -714,6 +714,8 @@ impl BootStubEnv {
         // agent-git-service's bare repositories, on the compose volume mounted
         // at the same path as the ECS EFS mount.
         env.insert("REPO_STORAGE_ROOT".into(), "/data/agent-git".into());
+        env.insert("MAX_REPO_SIZE_BYTES".into(), "524288000".into());
+        env.insert("PUSHES_PER_MINUTE".into(), "30".into());
         // email_service / connection_gateway open their own Postgres pool.
         env.insert(
             "MACRO_DB_URL".into(),

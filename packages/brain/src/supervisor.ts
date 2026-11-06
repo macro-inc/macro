@@ -403,6 +403,11 @@ export async function workspaceSupervisor(
   workspace: string,
   start: (snapshot: string, workspace: string) => Promise<Running> = launch
 ): Promise<Supervisor> {
+  const interval = process.env['BRAIN_HEALTH_MINUTES']?.trim();
+  if (!interval) throw new Error('BRAIN_HEALTH_MINUTES is required');
+  const minutes = Number(interval);
+  if (!Number.isFinite(minutes) || minutes <= 0)
+    throw new Error('BRAIN_HEALTH_MINUTES must be positive');
   const git = gitCli(workspace);
   const cache = join(workspace, 'cache', 'wiring');
   await nodeFs.mkdir(cache, { recursive: true });
@@ -414,9 +419,6 @@ export async function workspaceSupervisor(
     if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT'))
       throw error;
   }
-  const minutes = Number(process.env['BRAIN_HEALTH_MINUTES'] ?? '5');
-  if (!Number.isFinite(minutes) || minutes <= 0)
-    throw new Error('BRAIN_HEALTH_MINUTES must be positive');
   const supervisor = new Supervisor(
     {
       head: async () => {
@@ -530,10 +532,10 @@ export async function workspaceSupervisor(
   return supervisor;
 }
 export async function supervise(): Promise<void> {
+  const workspace = process.env['BRAIN_WORKSPACE']?.trim();
+  if (!workspace) throw new Error('BRAIN_WORKSPACE is required');
   await initTelemetry((name) => process.env[name]);
-  const supervisor = await workspaceSupervisor(
-    resolve(process.env['BRAIN_WORKSPACE'] ?? '')
-  );
+  const supervisor = await workspaceSupervisor(resolve(workspace));
   const stop = new AbortController();
   for (const signal of ['SIGINT', 'SIGTERM'] as const)
     process.on(signal, () => stop.abort());

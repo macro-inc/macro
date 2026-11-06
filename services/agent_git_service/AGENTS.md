@@ -12,8 +12,12 @@ Composition root for `crates/agent_git`: hosts each agent's workspace repo
   `agent_git::client::AgentGitClient`), the brain on a Macro computer
   (clone/push with its repo token), and team admins (clone).
 - Config (`src/config.rs`, Doppler `agent-git-service`): `DATABASE_URL`,
-  `INTERNAL_API_KEY`, `REPO_STORAGE_ROOT`, `MAX_REPO_SIZE_BYTES` (default
-  500 MiB), `PUSHES_PER_MINUTE` (default 30), `ENVIRONMENT`.
+  `INTERNAL_API_KEY`, `REPO_STORAGE_ROOT`, `MAX_REPO_SIZE_BYTES`,
+  `PUSHES_PER_MINUTE`, `ENVIRONMENT`. Every value is required; there are no
+  deployment defaults. Local boot fixtures explicitly use 500 MiB and 30
+  pushes per minute. Populate service Doppler `dev`/`prd` and
+  `local/lcl_personal` before rollout; ECS environment entries do not override
+  `APP_SECRETS_JSON`.
 
 ## Checks
 

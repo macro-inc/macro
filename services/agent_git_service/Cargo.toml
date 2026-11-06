@@ -38,3 +38,6 @@ tokio = { workspace = true, features = ["signal"] }
 tower-http = { workspace = true, features = ["trace"] }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+serde_json = { workspace = true }

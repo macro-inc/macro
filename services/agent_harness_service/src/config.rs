@@ -222,11 +222,10 @@ pub struct Config {
     /// sandboxes advertise no models and managed sessions cannot prompt.
     #[macro_config_default(String::new())]
     pub anthropic_api_key: String,
-    /// Existing LiveKit Cloud project credentials, used only by the server-side inference proxy.
-    #[macro_config_default(String::new())]
+    /// Explicit LiveKit Cloud credentials for the server-side inference proxy.
     pub livekit_api_key: String,
+    /// Required alongside the key; an explicitly empty pair disables speech.
     /// Never forwarded to a computer; signs inference-only project tokens at the gateway.
-    #[macro_config_default(String::new())]
     pub livekit_api_secret: String,
     /// Run sandboxes on the local Docker daemon instead of Daytona.
     ///
@@ -440,3 +439,6 @@ macro_env_var::maybe_env_vars! {
     /// Optional public MCP OAuth configuration.
     pub struct McpAllowedRedirectHosts;
 }
+
+#[cfg(test)]
+mod test;

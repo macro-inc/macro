@@ -70,6 +70,7 @@ pkgs.buildNpmPackage {
     makeWrapper ${pkgs.nodejs_24}/bin/node $out/bin/brain \
       --set BRAIN_LIBRARY_ROOT $out/lib/brain \
       --set BRAIN_EXECUTABLE $out/bin/brain \
+      --set BRAIN_HEALTH_MINUTES 5 \
       --add-flags "$library/src/main.ts"
     runHook postInstall
   '';

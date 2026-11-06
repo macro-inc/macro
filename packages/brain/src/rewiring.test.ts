@@ -5,7 +5,7 @@ import * as nodePath from 'node:path';
 import { test } from 'node:test';
 import { closeHttp, httpPort, serveHttp } from './http.ts';
 import { runCommand } from './subprocess.ts';
-import { workspaceSupervisor } from './supervisor.ts';
+import { supervise, workspaceSupervisor } from './supervisor.ts';
 import { gitCli, Workspace } from './workspace.ts';
 
 test('a broken main composition is restored in real git and remembered for the next turn', async () => {
@@ -14,6 +14,8 @@ test('a broken main composition is restored in real git and remembered for the n
   );
   const git = gitCli(root);
   const started: string[] = [];
+  const previousHealthMinutes = process.env['BRAIN_HEALTH_MINUTES'];
+  process.env['BRAIN_HEALTH_MINUTES'] = '5';
   try {
     const copy = await runCommand('cp', {
       args: [
@@ -91,6 +93,9 @@ test('a broken main composition is restored in real git and remembered for the n
     );
     await supervisor.stop();
   } finally {
+    if (previousHealthMinutes === undefined)
+      delete process.env['BRAIN_HEALTH_MINUTES'];
+    else process.env['BRAIN_HEALTH_MINUTES'] = previousHealthMinutes;
     await nodeFs.rm(root, { recursive: true });
   }
 });
@@ -171,6 +176,8 @@ test('real Node reload drains an in-flight turn while its control server stays a
   await closeHttp(portReservation);
   const env = {
     BRAIN_WORKSPACE: root,
+    BRAIN_HEALTH_MINUTES: '5',
+    BRAIN_EXECUTABLE: '/opt/macro/brain',
     BRAIN_HEALTH_PORT: String(healthPort),
     MACRO_GATEWAY: `http://127.0.0.1:${httpPort(server)}`,
     MACRO_API_KEY: 'fake',
@@ -289,5 +296,27 @@ export default compose;
       else process.env[name] = value;
     }
     await nodeFs.rm(root, { recursive: true });
+  }
+});
+
+test('supervisor rejects absent workspace and health interval settings', async () => {
+  const workspace = process.env['BRAIN_WORKSPACE'];
+  const minutes = process.env['BRAIN_HEALTH_MINUTES'];
+  try {
+    delete process.env['BRAIN_WORKSPACE'];
+    await assert.rejects(supervise(), /BRAIN_WORKSPACE/);
+    for (const value of [undefined, '', '0', 'NaN']) {
+      if (value === undefined) delete process.env['BRAIN_HEALTH_MINUTES'];
+      else process.env['BRAIN_HEALTH_MINUTES'] = value;
+      await assert.rejects(
+        workspaceSupervisor('/unused-brain-config-check'),
+        /BRAIN_HEALTH_MINUTES/
+      );
+    }
+  } finally {
+    if (workspace === undefined) delete process.env['BRAIN_WORKSPACE'];
+    else process.env['BRAIN_WORKSPACE'] = workspace;
+    if (minutes === undefined) delete process.env['BRAIN_HEALTH_MINUTES'];
+    else process.env['BRAIN_HEALTH_MINUTES'] = minutes;
   }
 });

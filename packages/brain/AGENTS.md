@@ -36,6 +36,8 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
 
 - Bundle the fixed in-repo SDK with `npm run vendor:sdk` for development; image
   builds do this once. Workspace code runs directly with Node type stripping.
+- Require explicit workspace, executable and positive health interval settings;
+  the Nix runner supplies its own executable path and interval.
 - Keep `package.json` and template `brain.lock` versions identical; package every
   imported runtime and test dependency offline. No runtime library downloads.
 - Drain turns before stopping the control server; reload only committed wiring

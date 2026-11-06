@@ -12,12 +12,15 @@ Reference implementation: `macro-inc/tod`.
 # The image ships the brain CLI, Node and vendored npm dependencies.
 MACRO_API_KEY=mak_... MACRO_GATEWAY=https://dev-gateway.macro.com \
 BRAIN_WORKSPACE=/home/ada/workspace BRAIN_HEALTH_PORT=7801 \
+BRAIN_HEALTH_MINUTES=5 BRAIN_EXECUTABLE=/opt/macro/brain \
 ANTHROPIC_BASE_URL=... ANTHROPIC_AUTH_TOKEN=... \
   brain run
 brain health                     # what macrod polls, as JSON; exit 1 unless ok
 ```
 
-Every variable is required; a missing one fails startup with its name. Claude
+Every variable is required; a missing one fails startup with its name. The
+packaged CLI explicitly supplies its executable path and health interval; direct
+Node invocations must supply both. Claude
 access comes only from `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` (Macro's
 gateway); turns run with `CLAUDE_CONFIG_DIR=<workspace>/cache/claude`, so a
 personal `~/.claude` login is never read. `claude` must be on `PATH`, and the
@@ -106,7 +109,7 @@ The workspace owns composition in `brain.ts` and `brain/*.ts`; imports resolve
 only to the exact installed version in `brain.lock`. Run `brain check` in a work
 branch before merging to main: typecheck, own tests, fake-event boot. The runner
 rechecks a committed main snapshot, connects replacement intake before draining, activates and requires
-continuous healthy probation (`BRAIN_HEALTH_MINUTES`, default five) before saving
+continuous healthy probation (`BRAIN_HEALTH_MINUTES`, explicitly five in the image) before saving
 `cache/wiring/last-good`. Failure restores wiring and records memory plus a
 `cache/rewiring-notice` added to subsequent turn instructions. Remove that notice
 after reading it. Ordinary memory/prompt commits do not reload wiring.

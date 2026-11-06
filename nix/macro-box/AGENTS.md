@@ -46,6 +46,8 @@ and a Docker image (the dev-only DockerFleet).
 - `macrod.service` runs `macrod service` as `macro` (Claude Code refuses
   permission bypass as root), workspace `/home/macro/work`.
 - Its `--ignore-stdin-eof` keeps systemd's closed stdin from stopping the daemon.
+- The Nix brain wrapper explicitly sets `BRAIN_EXECUTABLE` to its installed
+  path and `BRAIN_HEALTH_MINUTES=5`; the runner has no implicit fallback.
 - `/opt/macro/brain` links to the thin Nix-built brain runner. `brain@.service`
   runs as `%i` with `/etc/macro/personas/%i.env`, always restarts, and uses
   `NoNewPrivileges`, `ProtectSystem=strict`, `ReadWritePaths=/home/%i /tmp`

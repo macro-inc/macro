@@ -112,7 +112,7 @@ export async function runtimeDeps(
       baseEnv,
     }),
     git: gitCli(config.workspace, env),
-    exe: env('BRAIN_EXECUTABLE') ?? 'brain',
+    exe: config.executable,
     baseEnv,
     log: (line) =>
       console.error(JSON.stringify({ at: new Date().toISOString(), ...line })),
