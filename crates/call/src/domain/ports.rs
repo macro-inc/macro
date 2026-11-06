@@ -2,6 +2,7 @@
 //!
 //! These traits define the contracts that adapters must implement.
 
+use futures::stream::BoxStream;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::future::Future;
@@ -602,8 +603,24 @@ pub trait CallStartLimiter: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<(), CallError>> + Send + 'a>>;
 }
 
-/// Storage port for generating signed recording GET URLs and deleting objects.
+/// A recording returned as a sequence of byte chunks.
+pub struct RecordingDownload {
+    /// MIME type of the stored recording.
+    pub content_type: String,
+    /// Size of the stored recording in bytes.
+    pub content_length: u64,
+    /// Bytes streamed from storage, without loading the full recording.
+    pub chunks: BoxStream<'static, anyhow::Result<Vec<u8>>>,
+}
+
+/// Storage port for reading, signing and deleting recording objects.
 pub trait RecordingStorage: Send + Sync + 'static {
+    /// Open a recording for streaming. Returns `None` if the object is absent.
+    fn open_recording(
+        &self,
+        recording_key: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<RecordingDownload>>> + Send;
+
     /// Generate a storage- or distribution-signed GET URL for a recording key.
     ///
     /// The key is in `UUID/TIMESTAMP.ext` format. Implementations must
@@ -644,6 +661,16 @@ pub trait RecordingStorage: Send + Sync + 'static {
 }
 
 impl<T: RecordingStorage> RecordingStorage for Option<T> {
+    async fn open_recording(
+        &self,
+        recording_key: &str,
+    ) -> anyhow::Result<Option<RecordingDownload>> {
+        match self {
+            Some(inner) => inner.open_recording(recording_key).await,
+            None => anyhow::bail!("recording storage not configured"),
+        }
+    }
+
     async fn presign_recording_url(&self, recording_key: &str) -> anyhow::Result<String> {
         match self {
             Some(inner) => inner.presign_recording_url(recording_key).await,
@@ -1099,6 +1126,12 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<CallRecord, CallError>> + Send;
+
+    /// Stream a recording after checking the same access as the call record.
+    fn get_call_recording(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<RecordingDownload, CallError>> + Send;
 
     /// Delete a [`CallRecord`] the caller has channel-member access to.
     ///

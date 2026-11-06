@@ -26,7 +26,6 @@ outbound = [
   "channels/outbound",
   "dep:entity_access_db_utils",
   "dep:feature_flags",
-  "dep:futures",
   "dep:livekit-api",
   "dep:livekit-protocol",
   "dep:macro_aws_config",
@@ -36,7 +35,7 @@ outbound = [
   "dep:urlencoding",
   "ports",
 ]
-ports = ["dep:entity_access", "dep:tokio", "dep:async-trait", "dep:messages"]
+ports = ["dep:entity_access", "dep:tokio", "dep:async-trait", "dep:messages", "dep:futures"]
 
 [dependencies]
 activity = { path = "../activity", default-features = false }

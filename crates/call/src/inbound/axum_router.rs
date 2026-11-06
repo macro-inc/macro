@@ -22,7 +22,7 @@ use std::time::Duration;
 use axum::{
     Json, Router,
     extract::{FromRef, FromRequestParts, State},
-    http::{HeaderMap, StatusCode, request::Parts},
+    http::{HeaderMap, StatusCode, header, request::Parts},
     response::IntoResponse,
     routing::{get, patch, post},
 };
@@ -224,6 +224,10 @@ where
         .route(
             "/record/{call_id}/decline",
             post(decline_call_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/record/{call_id}/recording",
+            get(get_call_recording_handler::<S, Svc, Auth>),
         )
         .route(
             "/record/{call_id}",
@@ -718,6 +722,52 @@ pub async fn get_call_record_handler<
         .get_call_record(access.entity_access_receipt)
         .await?;
     Ok(Json(record))
+}
+
+/// OpenAPI representation of streamed recording bytes.
+#[derive(utoipa::ToSchema)]
+#[schema(value_type = String, format = Binary)]
+pub struct RecordingBytes(
+    /// Raw video bytes.
+    pub Vec<u8>,
+);
+
+/// Stream the recording bytes for a call record the caller may view.
+#[utoipa::path(
+    get,
+    operation_id = "get_call_recording",
+    path = "/call/record/{call_id}/recording",
+    params(("call_id" = Uuid, Path, description = "Call ID")),
+    responses(
+        (status = 200, content_type = "video/mp4", body = RecordingBytes),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_call_recording_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: CallAccessLevelExtractor<ViewAccessLevel, Svc, Auth>,
+) -> Result<axum::response::Response, CallError> {
+    let recording = state
+        .service
+        .get_call_recording(access.entity_access_receipt)
+        .await?;
+    let content_length = recording.content_length.to_string();
+
+    Ok((
+        [
+            (header::CONTENT_TYPE, recording.content_type),
+            (header::CONTENT_LENGTH, content_length),
+        ],
+        axum::body::Body::from_stream(recording.chunks),
+    )
+        .into_response())
 }
 
 /// Handler for `DELETE /call/record/{call_id}`.

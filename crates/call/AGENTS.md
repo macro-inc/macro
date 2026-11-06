@@ -26,6 +26,7 @@ in-call chat.
   archival checks; the latter uses the last human departure and a 60-second grace.
 - `src/outbound/ai_call_summarizer.rs`, `src/outbound/s3_recording_storage.rs`:
   call recording/summarization.
+- Recording downloads use the call record's view-access receipt and stream S3 chunks through `RecordingStorage`.
 
 ## Scope
 

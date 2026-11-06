@@ -33,6 +33,7 @@ mod meeting_invites;
 mod meeting_participants;
 mod meeting_startup;
 mod orphan_rooms;
+mod recording;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
@@ -427,6 +428,13 @@ impl NotificationIngress for StubNotificationIngress {
 struct StubRecordingStorage;
 
 impl crate::domain::ports::RecordingStorage for StubRecordingStorage {
+    async fn open_recording(
+        &self,
+        _recording_key: &str,
+    ) -> anyhow::Result<Option<crate::domain::ports::RecordingDownload>> {
+        unreachable!("recording download is not exercised by get_or_create_call tests")
+    }
+
     async fn presign_recording_url(&self, _recording_key: &str) -> anyhow::Result<String> {
         unreachable!("recording reads are not exercised by get_or_create_call tests")
     }
