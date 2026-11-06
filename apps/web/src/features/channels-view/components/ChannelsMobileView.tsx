@@ -10,6 +10,7 @@ import {
 } from '@app/features/next-soup/soup-view/views/inbox/inbox-card-layouts';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { SoupEntityContextMenu } from '@app/features/soup';
+import { TutorialPill } from '@app/features/video-tutorials';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -253,7 +254,13 @@ export function ChannelsMobileView(props: {
           >
             <Show
               when={props.searchQuery.trim()}
-              fallback={<ChannelsEmptyState scope="recents" />}
+              fallback={
+                // Phones have no conversation pane, so its tutorial pill
+                // sits in the empty conversation list instead.
+                <ChannelsEmptyState scope="recents">
+                  <TutorialPill tutorial="chat" />
+                </ChannelsEmptyState>
+              }
             >
               {(query) => (
                 <EmptyStatePanel
