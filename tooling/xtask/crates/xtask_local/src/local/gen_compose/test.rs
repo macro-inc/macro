@@ -1,6 +1,35 @@
 use super::*;
 
 #[test]
+fn passwords_vault_is_local_loopback_only_with_redacted_declarative_audit() {
+    for name in [None, Some("passwords-isolation")] {
+        let instance = Instance::derive(name, None).unwrap();
+        let mut services = IndexMap::new();
+        add_local_infra(&mut services, &instance, false);
+        let compose = dct::Compose {
+            services: dct::Services(services),
+            ..Default::default()
+        };
+        let value = serde_yaml::to_value(compose).unwrap();
+        let vault = &value["services"]["openbao"];
+        assert_eq!(
+            vault["ports"][0],
+            format!("127.0.0.1:{}:8200", instance.port(Port::OpenBao))
+        );
+        assert_eq!(vault["networks"]["services"]["aliases"][0], "openbao");
+        assert!(vault["volumes"][0].as_str().unwrap().ends_with(":ro,z"));
+        assert!(
+            vault["command"]
+                .as_sequence()
+                .unwrap()
+                .contains(&Value::String(
+                    "-config=/openbao/config/macro-local.hcl".into()
+                ))
+        );
+    }
+}
+
+#[test]
 fn generated_services_have_bounded_console_logs_in_every_mode() {
     for mode in [Mode::Local, Mode::Dev] {
         for name in [None, Some("logging-test")] {

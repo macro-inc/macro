@@ -1,5 +1,25 @@
 use super::*;
 
+#[test]
+fn service_builds_preserve_an_explicit_compiler_wrapper_including_disable() {
+    let target = Target {
+        triple: "x86_64-unknown-linux-gnu",
+        docker_platform: "linux/amd64",
+    };
+    for (wrapper, expected) in [
+        (None, "sccache"),
+        (Some(OsStr::new("")), ""),
+        (Some(OsStr::new("custom-wrapper")), "custom-wrapper"),
+    ] {
+        let command = base_command(Path::new("/ws"), Path::new("/cache"), "4", target, wrapper);
+        let value = command
+            .get_envs()
+            .find(|(key, _)| *key == "RUSTC_WRAPPER")
+            .and_then(|(_, value)| value);
+        assert_eq!(value, Some(OsStr::new(expected)));
+    }
+}
+
 /// The whole point of the unified invocation: every service that *can* build
 /// together does. A service silently gaining `no_default_features` costs a
 /// package-scoped build and, without its own target dir, a full minute of

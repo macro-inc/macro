@@ -250,6 +250,11 @@ persona accounts it created. It is safe to run against a stack that you tested i
 
 ## Integration Secrets
 
+Passwords uses a local OpenBao development container with team-scoped namespaces.
+Provision each team after startup using the [local vault bootstrap](../../infra/local/openbao/README.md).
+OpenBao development storage is ephemeral across container restarts; use synthetic
+credentials and rerun provisioning after a restart.
+
 A `--no-doppler` stack supplies deterministic stubs for required configuration. External integrations still need real values, and the agent harness additionally needs the Google Gmail identity provider created from real Google OAuth configuration:
 
 | Integration | Keys | Stub behavior |
@@ -451,6 +456,10 @@ The seeded persona login links embed the frontend port. If you switch ports, run
 `just status_local`, with the same two flags, prints the live endpoints.
 
 ## What the Stack Rebuilds
+
+Local service builds honor `RUSTC_WRAPPER`, including an empty value to disable
+compiler caching. If it is unset, they use `sccache`. For example, a stuck local
+cache daemon can be bypassed with `RUSTC_WRAPPER= CARGO_BUILD_JOBS=4 just stack update`.
 
 The Rust services are built on the host with `cargo zigbuild`. The binaries are mounted into a shared runtime image. Docker does not compile these services during a normal `run_local`.
 

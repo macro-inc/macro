@@ -5,6 +5,7 @@
 //! `AWS_LC_SYS_CMAKE_BUILDER=1` (aws-lc-sys's cc-builder rejects the zig C
 //! compiler), `SQLX_OFFLINE`, and writable zig cache dirs.
 
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -37,6 +38,7 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
 
     let ws = workspace_root();
     let zig_cache = ws.join("target/zig-cache");
+    let compiler_wrapper = std::env::var_os("RUSTC_WRAPPER");
     let jobs = std::env::var("CARGO_BUILD_JOBS")
         .ok()
         .filter(|j| !j.is_empty() && j != "0")
@@ -47,7 +49,7 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
                 .to_string()
         });
 
-    let mut cmd = base_command(&ws, &zig_cache, &jobs, target);
+    let mut cmd = base_command(&ws, &zig_cache, &jobs, target, compiler_wrapper.as_deref());
     cmd.args(unified_args());
     stage.run(
         &format!("Building service binaries ({})", target.triple),
@@ -61,7 +63,7 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
     // incrementally fresh. Costs one cold build per dir, once.
     for svc in isolated_services() {
         let target_dir = isolated_target_dir(&ws, svc);
-        let mut cmd = base_command(&ws, &zig_cache, &jobs, target);
+        let mut cmd = base_command(&ws, &zig_cache, &jobs, target, compiler_wrapper.as_deref());
         cmd.args(isolated_args(svc, &target_dir));
         stage.run(
             &format!("Building {} (no default features)", svc.cargo_bin),
@@ -142,7 +144,13 @@ fn isolated_args(svc: &RustService, target_dir: &Path) -> Vec<String> {
 
 /// A `cargo zigbuild` command with the shared env (mirrors flake.nix
 /// `lambdaCommonArgs`).
-fn base_command(ws: &Path, zig_cache: &Path, jobs: &str, target: Target) -> Command {
+fn base_command(
+    ws: &Path,
+    zig_cache: &Path,
+    jobs: &str,
+    target: Target,
+    compiler_wrapper: Option<&OsStr>,
+) -> Command {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(ws)
         .arg("zigbuild")
@@ -161,7 +169,10 @@ fn base_command(ws: &Path, zig_cache: &Path, jobs: &str, target: Target) -> Comm
         .env("OPENSSL_NO_VENDOR", "0")
         .env("ZIG_GLOBAL_CACHE_DIR", zig_cache)
         .env("ZIG_LOCAL_CACHE_DIR", zig_cache)
-        .env("RUSTC_WRAPPER", "sccache")
+        .env(
+            "RUSTC_WRAPPER",
+            compiler_wrapper.unwrap_or_else(|| OsStr::new("sccache")),
+        )
         .env("XDG_CACHE_HOME", zig_cache);
     // No CFLAGS here. The dev shell already exports target-scoped
     // `CFLAGS_<triple>`/`CXXFLAGS_<triple>` pointing at curl.dev for exactly
