@@ -133,6 +133,7 @@ type ParticipantPublications = Record<string, MockTrackPublication | undefined>;
 type CallStateControls = {
   setChannelId: Setter<string | null>;
   setAudioMuted: Setter<boolean>;
+  setScreenSharing: Setter<boolean>;
   setParticipants: Setter<Map<string, RemoteParticipant>>;
   setTrackVersion: Setter<number>;
 };
@@ -161,6 +162,7 @@ function setUpCallState(
   initialParticipants: RemoteParticipant[] = []
 ): CallStateControls {
   const [audioMuted, setAudioMuted] = createSignal(false);
+  const [screenSharing, setScreenSharing] = createSignal(false);
   const [channelId, setChannelId] = createSignal<string | null>('channel-1');
   const [participants, setParticipants] = createSignal(
     new Map(
@@ -181,7 +183,8 @@ function setUpCallState(
     isConnecting: () => false,
     isLocalSpeaking: () => false,
     isParticipantSpeaking: () => false,
-    isScreenSharing: () => false,
+    isScreenSharing: screenSharing,
+    toggleScreenShare: vi.fn(),
     isSharedWithTeam: () => false,
     isVideoMuted: () => false,
     remoteParticipants: participants,
@@ -194,7 +197,13 @@ function setUpCallState(
     trackVersion,
   } as unknown as CallState;
 
-  return { setChannelId, setAudioMuted, setParticipants, setTrackVersion };
+  return {
+    setChannelId,
+    setAudioMuted,
+    setScreenSharing,
+    setParticipants,
+    setTrackVersion,
+  };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -461,6 +470,18 @@ describe('CallOverlay muted microphone badges', () => {
     expect(
       screen.getByRole('status', { name: 'Alex Morgan is muted' })
     ).toBeTruthy();
+  });
+
+  it('offers the existing stop action instead of replaying the local shared display', () => {
+    const controls = setUpCallState();
+    controls.setScreenSharing(true);
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    expect(screen.getByText("You're sharing your screen")).toBeTruthy();
+    expect(screen.queryByText('Your screen')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' }));
+    expect(
+      (mocks.callContext as CallState).toggleScreenShare
+    ).toHaveBeenCalledOnce();
   });
 
   it('treats a missing remote microphone as muted over avatar content', () => {

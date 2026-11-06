@@ -52,6 +52,10 @@ export default {
   screenAccessNeeded:
     'Macro needs Screen Recording access. Turn on Macro in System Settings › Privacy & Security › Screen & System Audio Recording, then reopen Macro.',
   share: 'Share',
+  presenterSharing: '{{name}} is sharing',
+  youAreSharing: "You're sharing your screen",
+  everyoneCanSee: 'Everyone in the call can see it',
+  stopSharing: 'Stop sharing',
   shareFailed: "Couldn't share your screen. Try again.",
   maximizeScreenShare: 'Maximize screen share',
   restoreScreenShare: 'Show participants',

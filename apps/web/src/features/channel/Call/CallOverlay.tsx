@@ -7,6 +7,7 @@ import { t } from '@app/lib/i18n';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { Resize } from '@core/component/Resize';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
+import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -16,6 +17,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import CornersInIcon from '@icon/system/regular/corners-in.svg';
 import CornersOutIcon from '@icon/system/regular/corners-out.svg';
+import Screencast from '@icon/system/regular/screencast.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { Badge, Button, cn } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
@@ -58,6 +60,7 @@ function VideoTag(props: {
   isProgram?: boolean;
   muted?: boolean;
   mutedLabel?: string;
+  sharing?: boolean;
 }) {
   return (
     <div
@@ -67,6 +70,9 @@ function VideoTag(props: {
         props.class
       )}
     >
+      <Show when={props.sharing}>
+        <Screencast class="size-3 shrink-0" />
+      </Show>
       <MutedMicrophoneBadge
         muted={props.muted ?? false}
         label={props.mutedLabel ?? ''}
@@ -286,6 +292,13 @@ function ParticipantTile(props: {
         isProgram={isProgramParticipant(props.participant.attributes)}
         muted={isAudioMuted()}
         mutedLabel={`${displayName()} is muted`}
+        sharing={(() => {
+          callCtx.trackVersion();
+          const publication = props.participant.getTrackPublication(
+            LK_TRACK_SOURCE.ScreenShare
+          );
+          return publication?.isMuted === false;
+        })()}
       >
         {displayName()}
       </VideoTag>
@@ -313,7 +326,17 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
         variant="truncated"
         isProgram={isProgramParticipant(props.participant.attributes)}
       >
-        {displayName()}'s screen
+        <span class="flex items-center gap-1.5">
+          <Show when={macroId()}>
+            {(id) => (
+              <span class="size-5 shrink-0">
+                <UserIcon id={id()} size="fill" suppressClick />
+              </span>
+            )}
+          </Show>
+          <Screencast class="size-3.5" />
+          {t('calls.presenterSharing', { name: displayName() })}
+        </span>
       </VideoTag>
     </div>
   );
@@ -507,14 +530,6 @@ export function CallOverlay(props: {
       ?.track;
   };
 
-  const localScreenTrack = () => {
-    callCtx.trackVersion();
-    const r = callCtx.room();
-    if (!r || !callCtx.isScreenSharing()) return undefined;
-    return r.localParticipant.getTrackPublication(LK_TRACK_SOURCE.ScreenShare)
-      ?.track;
-  };
-
   const remoteScreenShares = () => {
     callCtx.trackVersion();
     return participants().filter((p) => {
@@ -625,16 +640,25 @@ export function CallOverlay(props: {
                       </Show>
                     </Button>
                     <Show when={callCtx.isScreenSharing()}>
-                      <div class="relative size-full">
-                        <TrackView track={localScreenTrack()} fit="contain" />
-
-                        <VideoTag
-                          isProgram={isProgramParticipant(
-                            callCtx.room()?.localParticipant.attributes
-                          )}
+                      <div class="flex size-full flex-col items-center justify-center gap-3 p-4">
+                        <Screencast class="size-10 text-accent" />
+                        <p class="font-semibold">{t('calls.youAreSharing')}</p>
+                        <p class="text-sm text-ink-muted">
+                          {t('calls.everyoneCanSee')}
+                        </p>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() =>
+                            fireAndForget(
+                              callCtx.toggleScreenShare(),
+                              'channel-call'
+                            )
+                          }
                         >
-                          Your screen
-                        </VideoTag>
+                          <Screencast class="size-4" />
+                          {t('calls.stopSharing')}
+                        </Button>
                       </div>
                     </Show>
                     <For each={remoteScreenShares()}>
