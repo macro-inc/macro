@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT\n            LOWER(email_address) AS \"email!\"\n        FROM\n            email_contacts\n        WHERE\n            link_id = $1\n        ORDER BY\n            1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "08e7175628f5252818f5e30174baa41a272cb34d12c9f50d9a7c3cc7913dfa4b"
+}

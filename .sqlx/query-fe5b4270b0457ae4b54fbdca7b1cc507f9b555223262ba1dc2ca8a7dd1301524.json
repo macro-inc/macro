@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_attachment_blobs(attachment_id,object_key,sha256,size_bytes)\n            SELECT a.id,u.s3_key,u.sha,u.size::bigint FROM email_attachments a JOIN email_attachments_drafts u\n                ON u.draft_id=a.message_id AND trim(both '<>' from a.content_id)=COALESCE(trim(both '<>' from u.content_id),u.id::text||'@attachments.macro.com')\n            WHERE a.message_id=$1 AND NOT u.upload_pending\n            ON CONFLICT(attachment_id) DO UPDATE SET object_key=EXCLUDED.object_key,sha256=EXCLUDED.sha256,size_bytes=EXCLUDED.size_bytes",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fe5b4270b0457ae4b54fbdca7b1cc507f9b555223262ba1dc2ca8a7dd1301524"
+}

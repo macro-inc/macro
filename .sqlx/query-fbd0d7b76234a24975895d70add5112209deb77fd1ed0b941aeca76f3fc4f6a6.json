@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO microsoft_oauth_grant_versions\n                (fusionauth_user_id,email_address,grant_id,tenant_id,subject_id,mailbox_id,scopes,\n                 refresh_token_ciphertext,encrypted_data_key,nonce,encryption_version,kms_key_id,generation)\n            SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,\n                COALESCE((SELECT max(g.generation) FROM microsoft_oauth_grant_versions g\n                    WHERE g.fusionauth_user_id=$1 AND g.email_address=$2),0)+1\n            WHERE NOT EXISTS(SELECT 1 FROM microsoft_oauth_grant_versions g\n                WHERE g.fusionauth_user_id=$1 AND g.email_address=$2 AND g.mailbox_id IS NOT NULL\n                    AND (g.mailbox_id IS DISTINCT FROM $6 OR g.tenant_id IS DISTINCT FROM $4 OR g.subject_id IS DISTINCT FROM $5))\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "TextArray",
+        "Bytea",
+        "Bytea",
+        "Bytea",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fbd0d7b76234a24975895d70add5112209deb77fd1ed0b941aeca76f3fc4f6a6"
+}

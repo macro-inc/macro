@@ -39,6 +39,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         Ok(test_user_context(TEST_USER_ID))
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -68,23 +77,6 @@ impl ReferralService for MockReferralService {
     }
 
     async fn track_referral<'a>(
-        &self,
-        _referred_user_id: &macro_user_id::user_id::MacroUserId<
-            macro_user_id::lowercased::Lowercase<'a>,
-        >,
-        _referral_code: &ReferralCode,
-    ) -> Result<(), ReferralError> {
-        Ok(())
-    }
-
-    async fn get_referred_by(
-        &self,
-        _referred_user_id: &uuid::Uuid,
-    ) -> Result<Option<ReferralCode>, ReferralError> {
-        Ok(None)
-    }
-
-    async fn process_referral<'a>(
         &self,
         _referred_user_id: &macro_user_id::user_id::MacroUserId<
             macro_user_id::lowercased::Lowercase<'a>,

@@ -1,9 +1,10 @@
 import { useUnfurl } from '@core/signal/unfurl';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
-import LinkIcon from '@phosphor/link.svg';
-import DeleteIcon from '@phosphor/x.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import DeleteIcon from '@icon/system/regular/x.svg';
 import { proxyResource } from '@service-unfurl/client';
-import { type Component, createSignal, For, Show } from 'solid-js';
+import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useProperty } from '../../core/context';
 import { PropertyEmpty } from '../../extractors/PropertyEmpty';
@@ -20,7 +21,7 @@ const ADD_BUTTON_CLASS =
 // Inline URL collection editor for LINK properties. Supports multi-select
 // (chip list with add button) and single (one slot). Unfurl preview pulls
 // favicon + title; remove on hover.
-export function InlineLinkEditor() {
+export function InlineLinkEditor(props: { emptyValue?: JSX.Element }) {
   const ctx = useProperty();
 
   const [isAdding, setIsAdding] = createSignal(false);
@@ -29,6 +30,7 @@ export function InlineLinkEditor() {
   const [hoveredLink, setHoveredLink] = createSignal<string | null>(null);
   const [isSaving, setIsSaving] = createSignal(false);
   const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
+  let addButton: HTMLButtonElement | undefined;
 
   const property = () => ctx.property();
   const isReadOnly = () => property().isMetadata || !ctx.canEdit();
@@ -64,6 +66,7 @@ export function InlineLinkEditor() {
   };
 
   const handleAddLink = async () => {
+    if (isSaving()) return;
     const raw = inputValue().trim();
     if (!raw) {
       cancelAdding();
@@ -87,7 +90,6 @@ export function InlineLinkEditor() {
         : [normalized];
       await ctx.onSave?.(property(), { valueType: 'LINK', values: next });
       cancelAdding();
-      ctx.onRefresh?.();
     } catch {
       // mutation onError owns toast
     } finally {
@@ -104,7 +106,6 @@ export function InlineLinkEditor() {
         valueType: 'LINK',
         values: next.length > 0 ? next : null,
       });
-      ctx.onRefresh?.();
     } catch {
       // mutation onError owns toast
     } finally {
@@ -112,13 +113,31 @@ export function InlineLinkEditor() {
     }
   };
 
+  // Enter and Escape remove the focused input, which drops focus to the page.
+  // A single link has no add button left, so focus goes to its chip.
+  const returnFocus = () => {
+    if (document.activeElement !== document.body) return;
+    if (addButton?.isConnected) addButton.focus();
+    else ctx.closeEditor();
+  };
+
+  const addFromKeyboard = async () => {
+    await handleAddLink();
+    if (!isAdding()) returnFocus();
+  };
+
   const handleKeyDown = (e: KeyboardEvent) => {
+    // An IME owns Enter and Escape while it composes; WebKit reports its
+    // confirming keydown as 229 after composition ends.
+    if (e.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleAddLink();
+      fireAndForget(addFromKeyboard(), 'property-editor');
     } else if (e.key === 'Escape') {
+      if (isSaving()) return;
       e.preventDefault();
       cancelAdding();
+      returnFocus();
     } else if (error()) {
       setError(null);
     }
@@ -147,7 +166,7 @@ export function InlineLinkEditor() {
         fallback={
           <Show when={!hasValue(property())}>
             <div class="text-ink-muted px-2 py-0.5 bg-transparent inline-block shrink-0 rounded-sm">
-              <PropertyEmpty label="Empty" />
+              {props.emptyValue ?? <PropertyEmpty label="Empty" />}
             </div>
           </Show>
         }
@@ -157,12 +176,18 @@ export function InlineLinkEditor() {
           fallback={
             <Show when={property().isMultiSelect || links().length === 0}>
               <button
+                ref={addButton}
                 type="button"
                 class={ADD_BUTTON_CLASS}
                 onClick={startAdding}
                 disabled={isSaving()}
               >
-                +
+                <Show
+                  when={links().length === 0 && props.emptyValue}
+                  fallback="+"
+                >
+                  {props.emptyValue}
+                </Show>
               </button>
             </Show>
           }
@@ -175,11 +200,12 @@ export function InlineLinkEditor() {
             onKeyDown={handleKeyDown}
             onBlur={() => {
               setTimeout(() => {
-                if (isAdding()) handleAddLink();
+                if (isAdding())
+                  fireAndForget(handleAddLink(), 'property-editor');
               }, 100);
             }}
             placeholder="Enter URL..."
-            disabled={isSaving()}
+            readOnly={isSaving()}
             class="text-left px-2 py-0.5 bg-transparent focus:outline-none text-ink inline-block shrink-0 rounded-sm"
           />
           <Show when={error()}>

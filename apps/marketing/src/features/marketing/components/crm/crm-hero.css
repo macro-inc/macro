@@ -1,0 +1,49 @@
+/* Match the app's sidebar tokens and database toolbar. Scope to /crm's hero. */
+.crm-hero-nav-section { min-width: 0; flex-shrink: 0; }
+.crm-hero-section-trigger {
+  display: flex;
+  width: 100%;
+  height: var(--sidebar-row-height);
+  align-items: center;
+  gap: 4px;
+  padding: 4px var(--sidebar-item-inset);
+  border-radius: 8px;
+  color: var(--color-ink-muted);
+  text-align: left;
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.crm-hero-section-trigger:focus-visible { outline: 2px solid var(--color-accent); }
+.crm-hero-section-trigger svg { opacity: 0; }
+.crm-hero-nav-section:hover .crm-hero-section-trigger svg,
+.crm-hero-section-trigger:focus-visible svg,
+.crm-hero-section-trigger[aria-expanded=false] svg { opacity: 1; }
+.crm-hero-section-trigger[aria-expanded=false] svg { transform: rotate(-90deg); }
+.crm-hero-nav-section > nav { padding-top: 4px; }
+.homepage-crm-scene[data-hero=true] .homepage-crm-toolbar {
+  gap: 8px;
+  padding: 6px 16px;
+}
+.homepage-crm-scene[data-hero=true] .homepage-crm-toolbar > [aria-label=Views] {
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+.homepage-crm-scene[data-hero=true] .crm-hero-search {
+  flex: 0 1 220px;
+  min-width: 100px;
+  max-width: 40%;
+}
+.homepage-crm-scene[data-hero=true] .homepage-pipeline-board {
+  padding-inline: 16px;
+}
+@media (max-width: 650px) {
+  .homepage-crm-scene[data-hero=true] .homepage-crm-sidebar { width: 256px; }
+  .homepage-crm-scene[data-hero=true] .homepage-crm-toolbar {
+    padding-inline: 10px;
+    flex-wrap: wrap;
+  }
+  .homepage-crm-scene[data-hero=true] .homepage-crm-toolbar > [aria-label=Views] { flex-basis: 100%; }
+  .homepage-crm-scene[data-hero=true] .crm-hero-search { flex: 1; max-width: none; }
+}

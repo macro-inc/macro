@@ -1,5 +1,20 @@
 use super::*;
 
+#[test]
+fn termination_evidence_survives_multiple_frontend_reads() {
+    let mut state = WebContentDiagnostics::default();
+    assert_eq!(state.terminations, 0);
+    assert_eq!(state.last_termination_ms, None);
+    state.record_termination(123);
+    let first = serde_json::to_value(&state).unwrap();
+    assert_eq!(first["terminations"], 1);
+    assert_eq!(first["lastTerminationMs"], 123);
+    assert_eq!(serde_json::to_value(&state).unwrap(), first);
+    state.record_termination(456);
+    assert_eq!(state.terminations, 2);
+    assert_eq!(state.last_termination_ms, Some(456));
+}
+
 fn sample() -> MemorySample {
     MemorySample {
         sequence: 0,

@@ -60,13 +60,16 @@ pub(super) fn parent() -> MessageParent {
 }
 pub(crate) fn message(id: u128, thread: Option<Uuid>, body: &str) -> Message {
     Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: Uuid::from_u128(id),
         parent: parent(),
         thread_id: thread,
         sender_id: channel_sender::ChannelSender::new_from_user(user()),
         bot_profile: None,
         mentions: vec![],
+        guest_name: None,
         imported_author: None,
+        triggered_via: None,
         triggered_by: None,
         content: body.into(),
         created_at: chrono::Utc::now(),

@@ -3,8 +3,8 @@ import CheckIcon from '@phosphor/check.svg';
 import { Layer } from '@ui/components/Layer';
 import { For, onCleanup, onMount } from 'solid-js';
 
-/** Where the flow persists its current step, so full-page OAuth round-trips
- * (adding a Gmail inbox, Stripe checkout aborts) resume where they left. */
+/** Where the app persists its current step (localStorage), so a later visit
+ * and full-page OAuth round-trips resume where they left. */
 export { ONBOARDING_FLOW_STEP_STORAGE_KEY as FLOW_STEP_STORAGE_KEY } from '../core/onboardingHandoff';
 
 /** Where the flow persists its `?next` deep link — the inbox-link OAuth

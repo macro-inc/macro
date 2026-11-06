@@ -1,6 +1,14 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getPlatform, isTauri } from '@core/util/platform';
-import { type Attributes, Telemetry } from '@macro-inc/observability';
+import {
+  type Attribute,
+  type Attributes,
+  type ResourceAttributes,
+  Telemetry,
+} from '@macro-inc/observability';
 import { invoke } from '@tauri-apps/api/core';
+import type { BundleReloadDiagnostics } from './generated/bundle-reloads';
+import type { EventSnapshot } from './generated/native-diagnostics';
 
 export type ProcessMemory = {
   pid: number;
@@ -28,6 +36,17 @@ export type DesktopSnapshot = {
   };
   samples: MemorySample[];
   droppedSamples: number;
+  /** Absent on binaries shipped before WebContent termination reporting. */
+  webContent?: {
+    terminations: number;
+    lastTerminationMs: number | null;
+  };
+  bundleReloads?:
+    | (Pick<BundleReloadDiagnostics, 'dispatches' | 'lastSource'> &
+        Partial<BundleReloadDiagnostics>)
+    | null;
+  /** Absent on older native binaries; also gates the diagnostic write command. */
+  recentEvents?: EventSnapshot;
 };
 
 type SampleSink = {
@@ -77,19 +96,40 @@ export function memoryAttributes(sample: MemorySample): Attributes {
   return attributes;
 }
 
+const desktopResourceReaders: Record<
+  string,
+  (snapshot: DesktopSnapshot) => Attribute | undefined
+> = {
+  'service.instance.id': (snapshot) => snapshot.identity.instanceId,
+  native_instance_id: (snapshot) => snapshot.identity.instanceId,
+  'macro.recording.id': (snapshot) =>
+    snapshot.identity.recordingId ?? undefined,
+  'macro.recording.enabled': (snapshot) =>
+    snapshot.identity.recordingId !== null,
+  'macro.native.version': (snapshot) => snapshot.identity.nativeVersion,
+  'macro.native.pid': (snapshot) => snapshot.identity.hostPid,
+};
+
 export function desktopResourceAttributes(
   snapshot: DesktopSnapshot
-): Attributes {
+): Attributes;
+export function desktopResourceAttributes(
+  snapshot: Promise<DesktopSnapshot | undefined>
+): ResourceAttributes;
+export function desktopResourceAttributes(
+  snapshot: DesktopSnapshot | Promise<DesktopSnapshot | undefined>
+): ResourceAttributes {
   return {
     'app.runtime': 'tauri',
     'app.platform': getPlatform(),
-    'service.instance.id': snapshot.identity.instanceId,
-    'macro.recording.id': snapshot.identity.recordingId ?? undefined,
-    'macro.recording.enabled': snapshot.identity.recordingId !== null,
-    'macro.native.version': snapshot.identity.nativeVersion,
-    'os.type':
-      snapshot.identity.os === 'macos' ? 'darwin' : snapshot.identity.os,
-    'macro.native.pid': snapshot.identity.hostPid,
+    ...Object.fromEntries(
+      Object.entries(desktopResourceReaders).map(([key, read]) => [
+        key,
+        snapshot instanceof Promise
+          ? snapshot.then((value) => (value ? read(value) : undefined))
+          : read(snapshot),
+      ])
+    ),
   };
 }
 
@@ -152,7 +192,11 @@ export function createMemoryRecording(
       });
     } finally {
       pending = false;
-      if (!disposed) timer = setTimeout(() => void poll(), 1000);
+      if (!disposed)
+        timer = setTimeout(
+          () => fireAndForget(poll(), 'desktop-memory-recording'),
+          1000
+        );
     }
   }
 

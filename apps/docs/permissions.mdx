@@ -1,46 +1,66 @@
 ---
 title: "Permissions"
 icon: "lock"
-description: "Channel-based sharing: access comes from channel membership instead of per-file dialogs."
+description: "Who can open a Block: Share, channel mentions, and the team defaults for tasks and calls."
 ---
 
-In Macro, who has access to what is controlled by what we call "channel-based" sharing. **When you mention something it is shared with all members of the channel.** If somebody is added to the channel, they gain access to everything shared in it; if they are removed, they lose that access.
+Who can open a Block comes from **Share**, from mentioning it in a channel, and from a few team defaults.
 
-<Frame>
-  <img
-    src="/images/channel-sharing-diagram.svg"
-    alt="Diagram of channel-based sharing: a doc mentioned in a channel is shared with every member, people who join gain access, and people who leave lose it"
-  />
-</Frame>
+<div className="share-preview" role="img" aria-label="Share dialog for Launch plan, set to only people with access">
+  <div className="share-head"><span>Share:</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13.5 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-10L13.5 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M13.5 3v3.5a2 2 0 0 0 2 2H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg><span>Launch plan</span></div>
+  <div className="share-to">
+    <span className="share-field">To: Email or group</span>
+    <span className="share-level">Can view<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6.75 9.5 5.25 5 5.25-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+  </div>
+  <div className="share-note">Optional message</div>
+  <div className="share-actions"><span>Cancel</span><span className="share-send">Share</span></div>
+  <div className="share-section">
+    <div className="share-section-title">People with access to this document</div>
+    <div className="share-person"><span className="share-who"><span className="share-avatar is-avery">A</span>Avery<span className="share-me">Me</span></span><span className="share-role">Owner</span></div>
+    <div className="share-person"><span className="share-who"><span className="share-hash">#</span>design</span><span className="share-role">Can view</span></div>
+  </div>
+  <div className="share-section">
+    <div className="share-link-head"><span>Only people with access</span><span className="share-status">Just me</span></div>
+    <div className="share-scopes"><span className="is-on">Only people with access</span><span>Anyone with the link</span><span>Team members with the link</span></div>
+    <p>The link only works for people who already have access.</p>
+    <div className="share-team"><span><strong>Team access</strong><span>Share this document directly with the owner's team.</span></span><span className="share-level">No team access<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6.75 9.5 5.25 5 5.25-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span></div>
+  </div>
+</div>
 
-This channel-based sharing prevents footguns that occur with Notion and Slack, or Notion and Docs, etc. where people don't have access to things and need to request access. In Macro, it works like magic.
+## Share
 
-The exception to channel-based sharing is Teams, where there are special rules for the auto-sharing of Tasks, Emails and Calls. Auto-sharing ensures everybody on the team can, for example, see what tasks other engineers are working on without each task having to be explicitly shared in a channel.
+Open **Share** on a Block. In **To: Email or group**, add a person, an email, or a channel. Pick **Can view**, **Can comment**, or **Can edit**, then press **Share**. The owner stays **Owner**. Change or remove someone later under **People with access**.
 
-### General Rules
+The link has three settings:
 
-Users need to have a file shared with them in order to receive an inbox notification. @mentioning in the body of a markdown file (documents, tasks) will not result in an inbox notification.
+- **Only people with access.** The link does nothing for anyone else.
+- **Anyone with the link.** Anyone with the URL can open it, including people without a Macro account. **Access level** sets view, comment, or edit.
+- **Team members with the link.** Members of the owner's team can open the link. Everyone else still has to be added.
 
-@mentioning in a thread container will result in an inbox notification (comments, messages).
+**Team access** shares the Block with the owner's whole team at **Can view**, **Can comment**, or **Can edit**. **No team access** leaves the team out. Calls only offer **Can view**.
 
-### Documents
+The status chip shows **Just me**, **Shared**, **Team**, or **Public**. **Public** means **Anyone with the link** is on. Check **Share** before you turn that on for anything sensitive. See [Security](/security).
 
-Notifications only appear after a doc is explicitly shared with a person. @mentioning someone in the doc **body** does _not_ notify them but @mentioning in a **comment** does (lands in their inbox notifications).
+## Channels
 
-Public sharing works for users without Macro. Share by using an email address or enable the **Public Link** in the Share menu. Anyone with a public link can read the doc, so check the Share menu on anything sensitive — see [Security](/security).
+Mention a document, task, or file in a channel and send the message. That shares it with the people in the channel. Someone who joins later sees the full history and everything that was mentioned. Someone who leaves loses that access.
 
-### Tasks
+A **Team — anyone on your team** channel is discoverable by the team. **Automatically add teammates** adds current and future teammates. A **Private — only specific people** channel is visible only to the people you add.
 
-Tasks are by default added to the team memory. Anyone who is a member of your team will be able to see all tasks assigned to themselves and others.
+## Mentions and notifications
 
-Assigning someone a task will result in them getting an inbox notification while @mentioning them in the body will not. However, @mentioning a person in the comments of a task will result in a notification.
+A mention in a comment or a channel message notifies that person. A mention in the body of a document or task does not, and it does not give them access.
 
-### Channels
+A comment mention does not share the document. If it is already set to **Anyone with the link** or **Team members with the link**, the person mentioned gets that access. Otherwise they get the notification and still cannot open the document until you share it.
 
-Anyone can be added to a channel by email with or without a Macro account. Non-Macro users get an email about the channel notification. Using @here notifies the whole channel, @user notifies one person, and @Macro invokes an agent inside the channel.
+Assigning someone a task notifies them. Mentioning them in the task body does not. Mentioning them in a comment does.
 
-Add or remove people from a channel at any time by editing the participants tab.
+## Tasks, emails, and calls
 
-### Calls
+**Tasks** are shared with your team when you create them. The switch is labeled **Share with** and your team name, and it starts on. Turn it off and the task stays with you and the people you share it with. From **Share**, **Team access** set to **No team access** does the same thing later.
 
-Every call a teammate has lands in the Calls tab whether you attended or not. **Default is to share a call's recording and transcript to team memory.** Toggle the button in the bottom-left of an active call to opt out. The call will still go to your personal memory but not the team's. Transcripts and AI summaries are auto-generated and live at the bottom of the call.
+**Emails** stay with the people on the thread until you share them. **Email Sync** on a company is the exception: those threads show up for the team in the [CRM](/product/crm).
+
+**Calls** started from a channel are shared with your team by default. After the call, teammates can open the recording, transcript, and summary from **Calls** and search, whether they were on the call or not. During the call, uncheck **Share with team** to keep it off the team. After the call, only the person who started it can change that, from **Sharing** in the call's side panel.
+
+Standalone calls, started from a meeting link, are not shared with the team. Only the people on the call can open them.

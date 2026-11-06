@@ -6,7 +6,9 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use connection::domain::models::{ConnectionError, InvalidationEvent};
 use connection::domain::ports::ConnectionService;
-use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, EntityType};
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessReceipt, EntityType, ViewAccessLevel,
+};
 use entity_access::domain::ports::NoOpEntityAccessService;
 use entity_mutation::{DeleteEntityPermanently, UpdateEntitySharePolicy};
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
@@ -22,16 +24,21 @@ use notification::domain::service::NotificationIngress;
 use serde_json::json;
 use uuid::Uuid;
 
+mod access;
 mod active_meetings;
+mod channel_startup;
+mod guest_chat;
 mod meeting_invites;
 mod meeting_participants;
 mod meeting_startup;
+mod orphan_rooms;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
     CallRecord, CallRecordTranscriptSegment, CallWebhookEvent, DeletedCallRecordStorageKeys,
-    EditCallRecordRequest, EgressS3Config, RingStatus, VerifiedRingToken, VoipPushPayloadRequest,
+    EditCallRecordRequest, EgressS3Config, RingStatus, RtcRoom, VerifiedRingToken,
+    VoipPushPayloadRequest,
 };
 use crate::domain::ports::{
     CallRtcClient, CallService, CallSummarizer, MockCallRepository, MockCallRtcClient,
@@ -115,6 +122,10 @@ impl CallRtcClient for MockRtcClient {
 
     async fn delete_room(&self, _room_name: &str) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    async fn list_rooms(&self) -> anyhow::Result<Vec<RtcRoom>> {
+        Ok(Vec::new())
     }
 
     async fn generate_token<'a>(
@@ -437,10 +448,15 @@ fn started_event_call(created_by: &str) -> Call {
     }
 }
 
-fn mock_get_or_create_repo(
+fn mock_get_or_create_repo(scenario: GetOrCreateScenario, call: Call) -> MockCallRepository {
+    mock_get_or_create_repo_storing(scenario, call, Arc::default())
+}
+
+/// The same scenarios, recording whether the call was stored with a channel thread.
+fn mock_get_or_create_repo_storing(
     scenario: GetOrCreateScenario,
     call: Call,
-    recording_enabled: bool,
+    channel_thread_stored: Arc<Mutex<Option<bool>>>,
 ) -> MockCallRepository {
     let mut repo = MockCallRepository::new();
 
@@ -451,7 +467,8 @@ fn mock_get_or_create_repo(
                 .returning(|_| Box::pin(async { Ok(None) }));
 
             repo.expect_create_call().times(1).return_once(
-                move |call_id, channel_id, room_name, _| {
+                move |call_id, channel_id, room_name, _, channel_thread| {
+                    *channel_thread_stored.lock().unwrap() = Some(channel_thread);
                     assert_eq!(room_name, call_id.to_string());
                     assert_ne!(room_name, channel_id.to_string());
                     Box::pin(async move { Ok(Some(call)) })
@@ -470,19 +487,13 @@ fn mock_get_or_create_repo(
                 .return_once(move |_| Box::pin(async move { Ok(Some(call)) }));
             repo.expect_create_call()
                 .times(1)
-                .returning(|_, _, _, _| Box::pin(async { Ok(None) }));
+                .returning(|_, _, _, _, _| Box::pin(async { Ok(None) }));
         }
         GetOrCreateScenario::ExistingCall => {
             repo.expect_get_call_by_channel_id()
                 .times(1)
                 .return_once(move |_| Box::pin(async move { Ok(Some(call)) }));
         }
-    }
-
-    if recording_enabled {
-        repo.expect_set_egress_id()
-            .times(1)
-            .returning(|_, _| Box::pin(async { Ok(()) }));
     }
 
     repo.expect_find_active_call_for_user()
@@ -502,7 +513,7 @@ fn mock_get_or_create_repo(
     repo
 }
 
-type BaseGetOrCreateCallService<Cn> = CallServiceImpl<
+type BaseGetOrCreateCallService<Cn, B = macro_event_broker::NoopMacroEventBroker> = CallServiceImpl<
     MockCallRepository,
     MockRtcClient,
     Cn,
@@ -510,6 +521,9 @@ type BaseGetOrCreateCallService<Cn> = CallServiceImpl<
     StubNotificationIngress,
     StubRecordingStorage,
     NoopCallSummarizer,
+    (),
+    NoOpVoiceRepository,
+    B,
 >;
 
 fn build_get_or_create_service<B: MacroEventBroker + Clone, Cn: ConnectionService>(
@@ -517,7 +531,7 @@ fn build_get_or_create_service<B: MacroEventBroker + Clone, Cn: ConnectionServic
     connection_service: Cn,
     event_broker: B,
     recording_enabled: bool,
-) -> impl CallService {
+) -> BaseGetOrCreateCallService<Cn, B> {
     let service: BaseGetOrCreateCallService<Cn> = CallServiceImpl::new(
         repo,
         MockRtcClient::new(),
@@ -548,13 +562,117 @@ async fn get_or_create_call(
     recording_enabled: bool,
 ) -> Result<crate::domain::models::CallTokenResponse, CallError> {
     let call = started_event_call(created_by);
-    let repo = mock_get_or_create_repo(scenario, call, recording_enabled);
+    let repo = mock_get_or_create_repo(scenario, call);
     let service =
         build_get_or_create_service(repo, StubConnectionService, broker, recording_enabled);
+
+    let mut completed = None;
+    if matches!(scenario, GetOrCreateScenario::CreatorWins) && recording_enabled {
+        let (sent, received) = tokio::sync::oneshot::channel();
+        let mut background_repo = MockCallRepository::new();
+        background_repo
+            .expect_attach_meeting_recording()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(true) }));
+        background_repo
+            .expect_get_call_by_id()
+            .times(1)
+            .return_once(move |_| {
+                Box::pin(async move {
+                    sent.send(()).unwrap();
+                    Ok(Some(started_event_call(STARTED_EVENT_CREATOR)))
+                })
+            });
+        configure_repository_clone(&service.repo, background_repo);
+        completed = Some(received);
+    }
+    let result = service
+        .get_or_create_call(&STARTED_EVENT_CHANNEL_ID, user("requester@example.com"))
+        .await;
+    if let Some(completed) = completed {
+        tokio::time::timeout(Duration::from_secs(2), completed)
+            .await
+            .unwrap()
+            .unwrap();
+    }
+    result
+}
+
+/// Answers the flag with `enabled`, and records and answers root requests.
+struct FakeChannelThreads {
+    enabled: bool,
+    root_fails: bool,
+    roots: Arc<Mutex<Vec<Uuid>>>,
+}
+
+#[async_trait::async_trait]
+impl crate::domain::ports::ChannelThreads for FakeChannelThreads {
+    async fn enabled_for(&self, _: MacroUserIdStr<'_>) -> bool {
+        self.enabled
+    }
+
+    async fn ensure_root(&self, call_id: Uuid) -> Result<(), rootcause::Report> {
+        self.roots.lock().unwrap().push(call_id);
+        if self.root_fails {
+            return Err(rootcause::report!("message service unavailable"));
+        }
+        Ok(())
+    }
+}
+
+/// Start a call as the race winner and report what the repository was asked to store.
+async fn start_flagged_call(enabled: bool, root_fails: bool) -> (Vec<Uuid>, bool) {
+    let stored = Arc::new(Mutex::new(None));
+    let repo = mock_get_or_create_repo_storing(
+        GetOrCreateScenario::CreatorWins,
+        started_event_call(STARTED_EVENT_CREATOR),
+        stored.clone(),
+    );
+    let roots = Arc::new(Mutex::new(Vec::new()));
+    let service = build_get_or_create_service(
+        repo,
+        StubConnectionService,
+        RecordingEventBroker::default(),
+        false,
+    )
+    .with_channel_threads(Arc::new(FakeChannelThreads {
+        enabled,
+        root_fails,
+        roots: roots.clone(),
+    }));
 
     service
         .get_or_create_call(&STARTED_EVENT_CHANNEL_ID, user("requester@example.com"))
         .await
+        .unwrap();
+
+    let stored = stored.lock().unwrap().unwrap();
+    let roots = roots.lock().unwrap().clone();
+    (roots, stored)
+}
+
+#[tokio::test]
+async fn a_flagged_caller_gets_a_channel_thread_with_its_root() {
+    let (roots, stored) = start_flagged_call(true, false).await;
+
+    assert!(stored);
+    assert_eq!(roots, [STARTED_EVENT_CALL_ID]);
+}
+
+#[tokio::test]
+async fn an_unflagged_caller_keeps_the_calls_own_chat() {
+    let (roots, stored) = start_flagged_call(false, false).await;
+
+    assert!(!stored);
+    assert!(roots.is_empty());
+}
+
+#[tokio::test]
+async fn a_failed_root_never_stops_the_call() {
+    let (roots, stored) = start_flagged_call(true, true).await;
+
+    assert!(stored);
+    assert_eq!(roots, [STARTED_EVENT_CALL_ID]);
 }
 
 #[tokio::test]
@@ -674,7 +792,7 @@ async fn malformed_stored_creator_skips_only_started_event() {
 #[tokio::test]
 async fn get_or_create_call_sends_call_answered_to_joining_user() {
     let call = started_event_call(STARTED_EVENT_CREATOR);
-    let repo = mock_get_or_create_repo(GetOrCreateScenario::ExistingCall, call, false);
+    let repo = mock_get_or_create_repo(GetOrCreateScenario::ExistingCall, call);
     let connection_service = RecordingConnectionService::default();
     let service = build_get_or_create_service(
         repo,
@@ -932,6 +1050,7 @@ const ARCHIVED_EVENT_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_7
 const ARCHIVED_EVENT_CHANNEL_ID: Uuid = Uuid::from_u128(0x4f6f8b0a_6f9f_4a3f_9c3a_2b1e5d4c7a91);
 const ARCHIVED_EVENT_ROOM_NAME: &str = "archived-event-room";
 const ARCHIVED_EVENT_CREATOR: &str = "macro|archiver@example.com";
+const ARCHIVED_EVENT_JOINER: &str = "macro|joiner@example.com";
 const ARCHIVED_EVENT_PARTICIPANT: &str = "participant@example.com";
 const RECORDING_READY_EGRESS_ID: &str = "recording-ready-egress";
 const RECORDING_READY_FILE_URL: &str =
@@ -963,10 +1082,11 @@ fn active_call_for_archived_event(created_by: &str, egress_id: Option<&str>) -> 
 
 fn archived_call_for_event(
     created_by: &str,
-    participant_count: usize,
+    participants: &[&str],
     has_recording: bool,
 ) -> ArchivedCall {
     ArchivedCall {
+        channel_thread: false,
         call_id: ARCHIVED_EVENT_CALL_ID,
         channel_id: Some(ARCHIVED_EVENT_CHANNEL_ID),
         created_by: created_by.to_string(),
@@ -974,7 +1094,7 @@ fn archived_call_for_event(
         ended_at: archived_event_ended_at(),
         duration_ms: 183_000,
         has_recording,
-        participant_count,
+        participants: participants.iter().map(ToString::to_string).collect(),
     }
 }
 
@@ -1041,7 +1161,7 @@ fn build_webhook_service(
     repo: MockCallRepository,
     rtc_client: MockCallRtcClient,
     event_broker: RecordingEventBroker,
-) -> impl CallService {
+) -> impl CallService + messages::domain::service::guest_chat::GuestCallAuthorizer {
     build_webhook_service_with_connection(repo, rtc_client, StubConnectionService, event_broker)
 }
 
@@ -1050,7 +1170,7 @@ fn build_webhook_service_with_connection<Cn: ConnectionService>(
     rtc_client: MockCallRtcClient,
     connection_service: Cn,
     event_broker: RecordingEventBroker,
-) -> impl CallService {
+) -> impl CallService + messages::domain::service::guest_chat::GuestCallAuthorizer {
     let service: BaseWebhookCallService<Cn> = CallServiceImpl::new(
         repo,
         rtc_client,
@@ -1067,6 +1187,7 @@ fn assert_archived_event(
     event_broker: &RecordingEventBroker,
     archive_reason: &str,
     participant_count: usize,
+    participants: &[&str],
     has_recording: bool,
 ) {
     let events = event_broker.events();
@@ -1099,8 +1220,10 @@ fn assert_archived_event(
                 "ended_at": "2026-07-27T18:04:05Z",
                 "duration_ms": 183_000,
                 "participant_count": participant_count,
+                "participants": participants,
                 "has_recording": has_recording,
                 "archive_reason": archive_reason,
+                "channel_thread": false,
             },
         })
     );
@@ -1109,7 +1232,11 @@ fn assert_archived_event(
 #[tokio::test]
 async fn participant_left_publishes_last_participant_archived_event() {
     let active_call = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
-    let archived_call = archived_call_for_event(ARCHIVED_EVENT_CREATOR, 4, false);
+    let archived_call = archived_call_for_event(
+        ARCHIVED_EVENT_CREATOR,
+        &[ARCHIVED_EVENT_CREATOR, ARCHIVED_EVENT_JOINER],
+        false,
+    );
     let mut repo = MockCallRepository::new();
     repo.expect_get_call_by_room_name()
         .times(1)
@@ -1156,7 +1283,13 @@ async fn participant_left_publishes_last_participant_archived_event() {
         .await
         .expect("participant-left webhook succeeds");
 
-    assert_archived_event(&event_broker, "last_participant_left", 4, false);
+    assert_archived_event(
+        &event_broker,
+        "last_participant_left",
+        2,
+        &[ARCHIVED_EVENT_CREATOR, ARCHIVED_EVENT_JOINER],
+        false,
+    );
 }
 
 #[tokio::test]
@@ -1165,7 +1298,15 @@ async fn room_finished_publishes_room_finished_archived_event() {
         "macro|stale-active-creator@example.com",
         Some("archived-event-egress"),
     );
-    let archived_call = archived_call_for_event(ARCHIVED_EVENT_CREATOR, 3, true);
+    let archived_call = archived_call_for_event(
+        ARCHIVED_EVENT_CREATOR,
+        &[
+            ARCHIVED_EVENT_CREATOR,
+            ARCHIVED_EVENT_JOINER,
+            "malformed-participant",
+        ],
+        true,
+    );
     let mut repo = MockCallRepository::new();
     repo.expect_get_call_by_room_name()
         .times(1)
@@ -1189,7 +1330,14 @@ async fn room_finished_publishes_room_finished_archived_event() {
         .await
         .expect("room-finished webhook succeeds");
 
-    assert_archived_event(&event_broker, "room_finished", 3, true);
+    // A malformed stored participant still counts, but is left off the list.
+    assert_archived_event(
+        &event_broker,
+        "room_finished",
+        3,
+        &[ARCHIVED_EVENT_CREATOR, ARCHIVED_EVENT_JOINER],
+        true,
+    );
 }
 
 #[tokio::test]
@@ -1219,7 +1367,8 @@ async fn failed_archive_does_not_publish_archived_event() {
 #[tokio::test]
 async fn malformed_archived_creator_skips_event_without_undoing_archival() {
     let active_call = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
-    let archived_call = archived_call_for_event("malformed-user-id", 1, false);
+    let archived_call =
+        archived_call_for_event("malformed-user-id", &[ARCHIVED_EVENT_CREATOR], false);
     let mut repo = MockCallRepository::new();
     repo.expect_get_call_by_room_name()
         .times(1)
@@ -1507,9 +1656,12 @@ const MUTATED_EVENT_ACTOR: &str = "macro|editor@example.com";
 
 fn call_record_for_mutation() -> CallRecord {
     CallRecord {
+        discussion: crate::domain::models::CallDiscussion::CallChat {
+            call_id: Uuid::nil(),
+        },
         call_id: MUTATED_EVENT_CALL_ID,
         channel_id: Some(MUTATED_EVENT_CHANNEL_ID),
-        room_name: "mutation-event-room".to_string(),
+        room_name: Some("mutation-event-room".to_string()),
         created_by: "macro|creator@example.com".to_string(),
         started_at: archived_event_started_at(),
         ended_at: Some(archived_event_ended_at()),
@@ -1532,6 +1684,7 @@ fn call_record_for_mutation() -> CallRecord {
         participants: Vec::new(),
         guests: Vec::new(),
         transcript: Vec::new(),
+        source: None,
     }
 }
 
@@ -2650,9 +2803,12 @@ enum NamePersistence {
 
 fn summarized_call_record(custom_name: Option<&str>) -> CallRecord {
     CallRecord {
+        discussion: crate::domain::models::CallDiscussion::CallChat {
+            call_id: Uuid::nil(),
+        },
         call_id: SUMMARIZED_EVENT_CALL_ID,
         channel_id: Some(SUMMARIZED_EVENT_CHANNEL_ID),
-        room_name: SUMMARIZED_EVENT_CHANNEL_ID.to_string(),
+        room_name: Some(SUMMARIZED_EVENT_CHANNEL_ID.to_string()),
         created_by: "macro|creator@example.com".to_string(),
         started_at: started_event_timestamp(),
         ended_at: Some(started_event_timestamp()),
@@ -2684,6 +2840,7 @@ fn summarized_call_record(custom_name: Option<&str>) -> CallRecord {
             ended_at: Some(started_event_timestamp()),
             sequence_num: 1,
         }],
+        source: None,
     }
 }
 
@@ -4046,7 +4203,8 @@ async fn mixed_call_archives_only_after_both_users_and_guests_leave() {
     let mut active = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
     active.channel_id = None;
     let second_leg = active.clone();
-    let mut archived = archived_call_for_event(ARCHIVED_EVENT_CREATOR, 1, true);
+    let mut archived =
+        archived_call_for_event(ARCHIVED_EVENT_CREATOR, &[ARCHIVED_EVENT_CREATOR], true);
     archived.channel_id = None;
     let guest_id = GuestId::generate();
 
@@ -4147,7 +4305,8 @@ async fn last_guest_leaving_archives_call_and_stops_recording() {
     let token = meeting.share_token.clone();
     let mut active = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, Some("recording"));
     active.channel_id = None;
-    let mut archived = archived_call_for_event(ARCHIVED_EVENT_CREATOR, 1, true);
+    let mut archived =
+        archived_call_for_event(ARCHIVED_EVENT_CREATOR, &[ARCHIVED_EVENT_CREATOR], true);
     archived.channel_id = None;
     let guest_id = GuestId::generate();
     let identity = guest_id.to_string();
@@ -4314,4 +4473,81 @@ async fn call_record_query_service_reads_the_people_on_a_call() {
             .unwrap(),
         people
     );
+}
+
+fn reader_receipt() -> EntityAccessReceipt<ViewAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user("reader@example.com"),
+        &MUTATED_EVENT_CALL_ID.to_string(),
+        EntityType::Call,
+    )
+}
+
+#[tokio::test]
+async fn call_record_reader_names_the_channel_as_the_reader_sees_it() {
+    use crate::domain::ports::CallRecordReader;
+
+    let record = call_record_for_mutation();
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_call_id()
+        .times(1)
+        .return_once(move |call_id| {
+            assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
+            Box::pin(async move { Ok(Some(record)) })
+        });
+    repo.expect_resolve_channel_name()
+        .times(1)
+        .returning(|channel_id, user_id| {
+            assert_eq!(*channel_id, MUTATED_EVENT_CHANNEL_ID);
+            assert_eq!(user_id.as_ref(), "macro|reader@example.com");
+            Box::pin(async { Ok(Some("eng".to_string())) })
+        });
+
+    let record = super::CallRecordQueryServiceImpl::new(repo)
+        .get_call_record(reader_receipt())
+        .await
+        .unwrap();
+    assert_eq!(record.call_id, MUTATED_EVENT_CALL_ID);
+    assert_eq!(record.channel_name.as_deref(), Some("eng"));
+}
+
+#[tokio::test]
+async fn call_record_reader_reports_a_deleted_record_as_not_found() {
+    use crate::domain::ports::CallRecordReader;
+
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_call_id()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(None) }));
+
+    assert!(matches!(
+        super::CallRecordQueryServiceImpl::new(repo)
+            .get_call_record(reader_receipt())
+            .await,
+        Err(CallError::NotFound(_))
+    ));
+}
+
+#[test]
+fn native_call_fallback_persists_only_users_with_unhandled_platforms() {
+    use notification::domain::models::{MobilePushRecipients, NativeCallPushResult};
+    let fully_handled = user("fully@example.com");
+    let ios_fallback = user("ios-fallback@example.com");
+    let android_fallback = user("android-fallback@example.com");
+    let result = NativeCallPushResult {
+        delivered: MobilePushRecipients {
+            ios: HashSet::from([fully_handled.clone(), android_fallback.clone()]),
+            android: HashSet::from([fully_handled.clone(), ios_fallback.clone()]),
+        },
+        fully_delivered: HashSet::from([fully_handled.clone()]),
+    };
+    let fallback = exclude_voip_recipients(
+        HashSet::from([
+            fully_handled,
+            ios_fallback.clone(),
+            android_fallback.clone(),
+        ]),
+        &result.fully_delivered,
+    );
+    assert_eq!(fallback, HashSet::from([ios_fallback, android_fallback]));
 }

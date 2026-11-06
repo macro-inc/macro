@@ -38,7 +38,10 @@ function detail(layout: FormLayout): FormDetail {
       status: 'open',
       closesAt: null,
       tallyVisible: false,
+      responsesVisible: false,
+      anonymous: false,
       confirmationMessage: '',
+      branding: { logoFileId: null, coverFileId: null, accentColor: null },
       submittedColumnId: 'column-submitted',
       respondentColumnId: 'column-respondent',
     },
@@ -81,6 +84,7 @@ const startingLayout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       bookingTarget: null,
       questions: [
         {
@@ -119,6 +123,7 @@ const startingLayout: FormLayout = {
         ],
       },
       gateMessage: 'Employees only.',
+      showWhen: null,
       bookingTarget: null,
       questions: [],
     },
@@ -129,6 +134,7 @@ const startingLayout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       bookingTarget: null,
       questions: [],
     },
@@ -456,12 +462,91 @@ describe('createBuilder', () => {
       builder.removeQuestion('q-team');
       expect(builder.selectedId()).toBe('q-name');
       expect(builder.layout()?.sections[1].gateRules?.conditions).toEqual([]);
-      expect(notices).toEqual(['✓ Removed 1 screener rule that checked it.']);
+      expect(notices).toEqual(['✓ Removed 1 rule that checked it.']);
       expect(calls).toEqual([]);
       expect(builder.hiddenColumns().map((column) => column.name)).toEqual([
         'Team',
         'Notes',
       ]);
+      dispose();
+    });
+  });
+
+  it('shows a section only on a condition, writes it to every editor, and takes it off again', async () => {
+    const { writes } = fakeWrites();
+    await createRoot(async (dispose) => {
+      const { builder, shared } = setup({ writes });
+      const contractorsOnly = {
+        conjunction: 'and' as const,
+        conditions: [
+          {
+            kind: 'condition' as const,
+            column: TEAM_COLUMN,
+            test: {
+              kind: 'options' as const,
+              operator: 'isAnyOf' as const,
+              options: [CONTRACTOR],
+            },
+          },
+        ],
+      };
+      expect(
+        builder.updateSection('details', { showWhen: contractorsOnly })
+      ).toBe(true);
+      expect(builder.layout()?.sections[2].showWhen).toEqual(contractorsOnly);
+      expect(shared.theirs().sections[2].showWhen).toEqual(contractorsOnly);
+      builder.updateSection('details', { showWhen: null });
+      expect(builder.layout()?.sections[2].showWhen).toBeNull();
+      expect(shared.theirs().sections[2].showWhen).toBeNull();
+      dispose();
+    });
+  });
+
+  it('refuses a condition on a question not asked before the section', async () => {
+    const { writes } = fakeWrites();
+    await createRoot(async (dispose) => {
+      const { builder, notices } = setup({ writes });
+      expect(
+        builder.updateSection('about', {
+          showWhen: {
+            conjunction: 'and',
+            conditions: [
+              {
+                kind: 'condition',
+                column: TEAM_COLUMN,
+                test: { kind: 'presence', operator: 'isNotEmpty' },
+              },
+            ],
+          },
+        })
+      ).toBe(false);
+      expect(builder.layout()?.sections[0].showWhen).toBeNull();
+      expect(notices).toEqual([
+        '✗ “About you” is shown depending on “Team”, so that question has to come before it.',
+      ]);
+      dispose();
+    });
+  });
+
+  it('removes a question with the gate rule and the condition that checked it, showing the section to everyone', async () => {
+    const { writes } = fakeWrites();
+    await createRoot(async (dispose) => {
+      const { builder, notices } = setup({ writes });
+      builder.updateSection('details', {
+        showWhen: {
+          conjunction: 'and',
+          conditions: [
+            {
+              kind: 'condition',
+              column: TEAM_COLUMN,
+              test: { kind: 'presence', operator: 'isNotEmpty' },
+            },
+          ],
+        },
+      });
+      builder.removeQuestion('q-team');
+      expect(builder.layout()?.sections[2].showWhen).toBeNull();
+      expect(notices).toEqual(['✓ Removed 2 rules that checked it.']);
       dispose();
     });
   });
@@ -801,6 +886,7 @@ describe('the booking step', () => {
         kind: 'booking',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: INTRO_CALL,
         questions: [],
       });
@@ -820,28 +906,28 @@ describe('the booking step', () => {
     });
   });
 
-  it('puts new sections and screeners before the booking step and keeps it last when reordering', async () => {
+  it('puts new sections and gates before the booking step and keeps it last when reordering', async () => {
     const { writes } = fakeWrites();
     await createRoot(async (dispose) => {
       const { builder, notices } = setup({ writes });
       const { sectionId } = builder.addBooking(INTRO_CALL) ?? {};
       builder.focusSection('details');
       const travel = builder.addSection('questions');
-      const screener = builder.addSection('gate');
+      const gate = builder.addSection('gate');
       expect(builder.layout()?.sections.map((section) => section.id)).toEqual([
         'about',
         'gate',
         'details',
         travel,
-        screener,
+        gate,
         sectionId,
       ]);
       expect(builder.sectionMoveRefusal('details', 5)).toBe(
-        'The booking step comes last, after every question and screener. Move “Book a time” to the end.'
+        'The booking step comes last, after every question and gate. Move “Book a time” to the end.'
       );
       expect(builder.moveSection(sectionId ?? '', 0)).toBe(false);
       expect(notices).toEqual([
-        '✗ The booking step comes last, after every question and screener. Move “Book a time” to the end.',
+        '✗ The booking step comes last, after every question and gate. Move “Book a time” to the end.',
       ]);
       dispose();
     });

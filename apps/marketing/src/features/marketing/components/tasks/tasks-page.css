@@ -171,6 +171,7 @@
 }
 .tasks-founder-card-article > span:last-child { color: #aaa; white-space: nowrap; }
 .tasks-founder-card:hover .tasks-founder-card-article > span:last-child { color: #fff; }
+
 @media (max-width: 699px) {
   .tasks-founder-card-body { padding: 24px; }
   .tasks-page .tasks-founder-card h2 { font-size: 25px; margin-bottom: 18px; }

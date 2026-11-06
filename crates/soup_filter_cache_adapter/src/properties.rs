@@ -200,6 +200,12 @@ pub async fn augment_authoritative<S: cache_core::predicate::PredicateIndexStora
     {
         return Err(error("Soup backfill contains an incomplete property projection").into());
     }
+    if reuse_stored_identity && operation == Some("Soup") {
+        result.extend(
+            crate::mail::reconciliation::first_page_updates(storage, variables, data, &result)
+                .await?,
+        );
+    }
     Ok(result)
 }
 

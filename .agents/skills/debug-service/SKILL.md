@@ -1,6 +1,6 @@
 ---
 name: debug-service
-description: Debug local Rust services in this repository by starting the crate's binary with debug logging, tailing service logs, and using those logs to answer runtime questions. Use when Codex needs to investigate service startup, runtime behavior, errors, or logs for a Rust binary in a crate.
+description: Debug local Rust services in this repository by starting the crate's binary with debug logging, tailing service logs, and using those logs to answer runtime questions. Use when investigating service startup, runtime behavior, errors, or logs for a Rust binary in a crate.
 ---
 
 # Debug Service

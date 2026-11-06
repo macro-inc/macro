@@ -23,10 +23,32 @@ fn archived(
             ended_at,
             duration_ms,
             participant_count: 2,
+            participants: vec![
+                "macro|rahul@example.com".to_string().try_into().unwrap(),
+                "macro|teo@example.com".to_string().try_into().unwrap(),
+            ],
             has_recording: false,
             archive_reason: crate::domain::events::CallArchiveReason::LastParticipantLeft,
+            channel_thread: false,
         }),
     )
+}
+
+#[test]
+fn a_channel_thread_calls_ending_stays_out_of_the_channels_timeline() {
+    let mut event = archived(Some(Uuid::from_u128(9)), Some(480_000), Utc::now());
+    let CallTopicEvent::RecordArchived(metadata) = &mut event.event else {
+        panic!("expected an archived call");
+    };
+    metadata.channel_thread = true;
+
+    let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+        panic!("expected the ending to be recorded");
+    };
+
+    assert_eq!(activities.len(), 1);
+    assert_eq!(activities[0].entity_type, EntityType::Call);
+    assert_eq!(activities[0].entity_id, Uuid::from_u128(5).to_string());
 }
 
 #[test]

@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
   changed: vi.fn(),
   invalidate: vi.fn(),
   soup: vi.fn(),
+  track: vi.fn(),
 }));
+vi.mock('@app/lib/analytics', () => ({ analytics: { track: mocks.track } }));
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: { rename: mocks.rename, delete: mocks.delete },
 }));
@@ -32,6 +34,11 @@ it('renames through the owning API and refreshes shared consumers', async () => 
   });
   expect(mocks.soup).toHaveBeenCalledOnce();
   expect(mocks.invalidate).toHaveBeenCalledTimes(2);
+  expect(mocks.track).toHaveBeenCalledExactlyOnceWith('update_entity', {
+    entityType: 'agent',
+    entityId: 'session',
+    property: 'name',
+  });
 });
 it('does not publish a failed rename', async () => {
   mocks.rename.mockResolvedValue(err(new Error('forbidden')));
@@ -40,10 +47,15 @@ it('does not publish a failed rename', async () => {
   ).rejects.toBeDefined();
   expect(mocks.changed).not.toHaveBeenCalled();
   expect(mocks.soup).not.toHaveBeenCalled();
+  expect(mocks.track).not.toHaveBeenCalled();
 });
 it('deletes through the owning API, not a document deletion', async () => {
   mocks.delete.mockResolvedValue(ok(undefined));
   await deleteAgentSession('session');
   expect(mocks.delete).toHaveBeenCalledWith('session');
   expect(mocks.soup).toHaveBeenCalledOnce();
+  expect(mocks.track).toHaveBeenCalledExactlyOnceWith('delete_entity', {
+    entityType: 'agent',
+    entityId: 'session',
+  });
 });

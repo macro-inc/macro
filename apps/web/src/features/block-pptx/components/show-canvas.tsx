@@ -7,6 +7,7 @@
  */
 
 import type { DeckOutline, TextLayoutInfo } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createEffect,
   createMemo,
@@ -185,7 +186,10 @@ export function ShowCanvas(props: {
       while (morphs.size >= 3) {
         const [oldest, scene] = morphs.entries().next().value!;
         morphs.delete(oldest);
-        void scene.then((s) => s && closeMorph(s));
+        fireAndForget(
+          scene.then((s) => s && closeMorph(s)),
+          'pptx-slideshow'
+        );
       }
     }
     morphs.set(key, hit);
@@ -203,7 +207,10 @@ export function ShowCanvas(props: {
   onCleanup(() => {
     morphRun?.cancel();
     for (const scene of morphs.values())
-      void scene.then((s) => s && closeMorph(s));
+      fireAndForget(
+        scene.then((s) => s && closeMorph(s)),
+        'pptx-slideshow'
+      );
     for (const m of mounted) stop(m);
     for (const p of cache.values())
       void p
@@ -436,7 +443,10 @@ export function ShowCanvas(props: {
       if (props.preload !== undefined) {
         void prepare(props.preload, pixelWidth(), layered()).catch(() => {});
         if (props.preload !== value.i && morphInto(props.preload))
-          void prepareMorphFor(value.i, props.preload, pixelWidth());
+          fireAndForget(
+            prepareMorphFor(value.i, props.preload, pixelWidth()),
+            'pptx-slideshow'
+          );
       }
       props.onShown?.(value.i);
     })

@@ -1,5 +1,6 @@
 import { handleFileFolderDrop } from '@core/util/upload';
 import type { EditorType } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import type { SerializedEditorState } from 'lexical';
 import { createSignal } from 'solid-js';
 import { createLexicalWrapper } from '../context/LexicalWrapperContext';
@@ -145,7 +146,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
 
   // Restore focus (registered early, before other plugins)
   if (config.restoreFocus) {
-    plugins.use(restoreFocusPlugin());
+    plugins.use(restoreFocusPlugin(config.restoreFocus));
   }
 
   // Text paste handling
@@ -294,6 +295,8 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
               undefined,
               fileDropConfig.constrainedMediaDimensions
             )
+          ).catch((error) =>
+            Telemetry.error(error, { surface: 'markdown-file-paste' })
           );
         },
       })

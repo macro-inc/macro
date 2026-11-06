@@ -1,4 +1,6 @@
 import { useEmail } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { useInboxEmail } from '@queries/email/inbox-email';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import {
   blockSenderWithToast,
@@ -22,26 +24,41 @@ export function createThreadActionAdapter(
     toHeaderLinkId
   );
   const read = createThreadReadAdapter(threadId, threadSource, toHeaderLinkId);
-  const currentUserEmail = useEmail();
+  const viewerEmail = useInboxEmail(() => threadSource()?.link_id);
+  const loginEmail = useEmail();
 
+  // Mail sent from the Macro login is the viewer's own too, even in an inbox
+  // linked under another address. Until the inbox address loads, no sender
+  // is known.
   const getSenderEmail = (): string | undefined => {
     const thread = threadSource();
-    return thread ? selectThreadSender(thread, currentUserEmail()) : undefined;
+    return thread
+      ? selectThreadSender(thread, viewerEmail(), loginEmail())
+      : undefined;
   };
 
   const blockSender = () => {
     const senderEmail = getSenderEmail();
     if (!senderEmail) return false;
-    blockSenderWithToast(senderEmail, toHeaderLinkId(threadSource()?.link_id));
+    fireAndForget(
+      blockSenderWithToast(
+        senderEmail,
+        toHeaderLinkId(threadSource()?.link_id)
+      ),
+      'email-thread'
+    );
     return true;
   };
 
   const markSenderSignal = () => {
     const senderEmail = getSenderEmail();
     if (!senderEmail) return false;
-    markSenderSignalWithToast(
-      senderEmail,
-      toHeaderLinkId(threadSource()?.link_id)
+    fireAndForget(
+      markSenderSignalWithToast(
+        senderEmail,
+        toHeaderLinkId(threadSource()?.link_id)
+      ),
+      'email-thread'
     );
     return true;
   };
@@ -49,9 +66,12 @@ export function createThreadActionAdapter(
   const markSenderNoise = () => {
     const senderEmail = getSenderEmail();
     if (!senderEmail) return false;
-    markSenderNoiseWithToast(
-      senderEmail,
-      toHeaderLinkId(threadSource()?.link_id)
+    fireAndForget(
+      markSenderNoiseWithToast(
+        senderEmail,
+        toHeaderLinkId(threadSource()?.link_id)
+      ),
+      'email-thread'
     );
     return true;
   };
@@ -59,6 +79,7 @@ export function createThreadActionAdapter(
   return {
     ...completion,
     ...read,
+    canActOnSender: () => getSenderEmail() !== undefined,
     blockSender,
     markSenderSignal,
     markSenderNoise,

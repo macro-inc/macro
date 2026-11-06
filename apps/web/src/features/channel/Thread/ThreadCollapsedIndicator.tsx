@@ -1,6 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { formatRelativeDate } from '@core/util/time';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { cn } from '@ui';
 import { For, type JSX, Show, splitProps } from 'solid-js';
 import { getThreadReplyCountLabel } from './utils/thread-reply-indicator-helpers';
@@ -12,6 +12,8 @@ type ThreadCollapsedIndicatorProps =
     latestReplyAt?: string;
     hasNewMessages?: boolean;
     hasUnreadNotifications?: boolean;
+    /** No replies are previewed above this indicator. */
+    withoutPreview?: boolean;
   };
 
 const MAX_VISIBLE_PARTICIPANTS = 4;
@@ -24,6 +26,7 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
     'latestReplyAt',
     'hasNewMessages',
     'hasUnreadNotifications',
+    'withoutPreview',
   ]);
   const visibleParticipants = () =>
     local.participants.slice(0, MAX_VISIBLE_PARTICIPANTS);
@@ -76,7 +79,10 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
         />
       </Show>
       <span class="text-accent font-medium whitespace-nowrap">
-        {getThreadReplyCountLabel(local.collapsedRepliesCount)}
+        {getThreadReplyCountLabel(
+          local.collapsedRepliesCount,
+          !local.withoutPreview
+        )}
       </span>
       <Show when={local.hasUnreadNotifications}>
         <span class="sr-only">Unread</span>

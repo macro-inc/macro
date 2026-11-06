@@ -1,7 +1,4 @@
-use crate::{
-    AuthedClient, Result,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{AuthedClient, Result, error::FusionAuthClientError};
 
 /// Unlinks a user from an identity provider
 /// https://fusionauth.io/docs/apis/identity-providers/links#unlink-a-user
@@ -18,26 +15,22 @@ pub(crate) async fn unlink(
         .delete(format!(
             "{base_url}/api/identity-provider/link?identityProviderId={idp_id}&identityProviderUserId={idp_user_id}&userId={user_id}",
         ))
+        .timeout(super::LINK_REQUEST_TIMEOUT)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     let status = res.status();
-    let body = res.text().await.map_err(|e| {
-        FusionAuthClientError::Generic(GenericErrorResponse {
-            message: e.to_string(),
-        })
-    })?;
-
     match status {
         reqwest::StatusCode::OK => Ok(()),
         reqwest::StatusCode::NOT_FOUND => Err(FusionAuthClientError::NoIdentityProviderFound), // no idp to unlink
-        _ => Err(FusionAuthClientError::Generic(GenericErrorResponse {
-            message: body,
-        })),
+        _ => {
+            let headers = res.headers().clone();
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
+            if status == reqwest::StatusCode::BAD_REQUEST && super::link::is_missing_user(&body) {
+                return Err(FusionAuthClientError::UserDoesNotExist);
+            }
+            Err(FusionAuthClientError::unexpected(status, &headers, body))
+        }
     }
 }

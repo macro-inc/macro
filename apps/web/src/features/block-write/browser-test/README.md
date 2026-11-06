@@ -35,6 +35,9 @@ to wasm, `crates/docx_engine`) in a worker; build it first.
 - `agent.browser.e2e.ts` runs the AI tools' `runDocxAgentRequest` as its own
   sync peer, exactly as the editing worker does, and checks that reads see
   the live document and that edits reach an open editor and survive a reopen.
+- `upload.browser.e2e.ts` uses local mode and the production export retry policy
+  to hold an early open at a processing response, then renders the extracted
+  DOCX without reopening. It does not need the sync Worker build.
 
 ```sh
 (\cd services/sync-service && just worker-build)   # once, builds build/worker/shim.mjs

@@ -19,6 +19,7 @@ async fn notifications_resolve_the_stored_type_and_preserve_attribution() {
             .publish_sync_content_updated(
                 "doc-1",
                 vec![crate::domain::events::DocumentSyncEditor {
+                    agent_correlation_id: None,
                     actor: activity::Actor::try_from(actor.to_owned()).unwrap(),
                     on_behalf_of: Some(
                         macro_user_id::user_id::MacroUserIdStr::try_from(user.to_owned()).unwrap(),
@@ -82,6 +83,7 @@ async fn a_batch_of_editors_still_publishes_only_one_search_event() {
     let editors = ["macro|alice@example.com", "macro|bob@example.com"]
         .into_iter()
         .map(|actor| crate::domain::events::DocumentSyncEditor {
+            agent_correlation_id: None,
             actor: activity::Actor::try_from(actor.to_owned()).unwrap(),
             on_behalf_of: None,
         })
@@ -100,4 +102,44 @@ async fn a_batch_of_editors_still_publishes_only_one_search_event() {
             .len(),
         2
     );
+}
+
+#[cfg(feature = "document_create")]
+#[tokio::test]
+async fn native_canvas_initialization_compensates_an_ambiguous_room_or_failed_ready_update() {
+    for initialized in [false, true] {
+        let mut repo = make_mock_repo();
+        let mut sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+        sync.expect_initialize_canvas()
+            .withf(|id| id == "fresh-canvas")
+            .times(1)
+            .returning(move |_| {
+                Box::pin(std::future::ready(if initialized {
+                    Ok(())
+                } else {
+                    Err(anyhow!("connection lost after initialize"))
+                }))
+            });
+        if initialized {
+            repo.expect_set_document_content()
+                .withf(|id, content| {
+                    id == "fresh-canvas"
+                        && content == &DocumentContent::ready(DocumentContentLocation::SyncService)
+                })
+                .times(1)
+                .returning(|_, _| {
+                    Box::pin(std::future::ready(Err(anyhow!("ready metadata failed"))))
+                });
+        }
+        sync.expect_delete_document()
+            .withf(|id| id == "fresh-canvas")
+            .times(1)
+            .returning(|_| Box::pin(std::future::ready(Ok(()))));
+        let service = spreadsheet_test_service(repo, sync);
+        assert!(
+            DocumentCreationService::initialize_canvas(&service, "fresh-canvas")
+                .await
+                .is_err()
+        );
+    }
 }

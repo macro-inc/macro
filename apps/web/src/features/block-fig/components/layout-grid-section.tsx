@@ -7,9 +7,9 @@ import { InspectorSelect } from './inspector-select';
  */
 
 import type { LayoutGridInfo } from '@core/fig-engine/handoff-types';
-import Eye from '@phosphor/eye.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import Minus from '@phosphor/minus.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import Minus from '@icon/system/regular/minus.svg';
 import { createSignal, For, Index, Show } from 'solid-js';
 import { ColorPicker } from './color-picker';
 import { NumberField, ParsedField } from './design-fields';

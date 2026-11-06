@@ -5,9 +5,9 @@
  * Presentational: previews and updates come from the caller.
  */
 
-import ArrowRight from '@phosphor/arrow-right.svg';
-import BookOpen from '@phosphor/book-open.svg';
-import XIcon from '@phosphor/x.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import BookOpen from '@icon/system/regular/book-open.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { type LibraryUpdate, updateSummary } from '../core/libraries';
@@ -21,7 +21,7 @@ export function LibraryUpdatesNotice(props: {
   return (
     <Show when={!dismissed()}>
       <div
-        class="absolute bottom-14 left-3 z-30 flex w-64 flex-col gap-1.5 rounded-xl border border-edge-muted bg-menu p-3 text-xs shadow-xl"
+        class="menu-surface absolute bottom-14 left-3 z-30 flex w-64 flex-col gap-1.5 p-3 text-xs"
         data-testid="fig-library-updates"
         onPointerDown={(e) => e.stopPropagation()}
       >
@@ -39,7 +39,7 @@ export function LibraryUpdatesNotice(props: {
         </div>
         <p class="text-ink-muted">{updateSummary(props.updates)}</p>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           class="self-start"
           data-testid="fig-library-updates-review"
@@ -83,13 +83,14 @@ export function LibraryUpdatesDialog(props: {
                 Library updates
               </Dialog.Title>
               <Dialog.CloseButton
+                aria-label="Close"
+                tooltip="Close"
                 as={Button}
                 variant="ghost"
                 size="icon-sm"
-                label="Close"
                 tabIndex={-1}
               >
-                <XIcon />
+                <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Dialog.CloseButton>
             </div>
             <For each={libraries()}>
@@ -152,7 +153,7 @@ export function LibraryUpdatesDialog(props: {
             <Show when={props.canEdit}>
               <div class="flex justify-end">
                 <Button
-                  variant="cta"
+                  variant="primary"
                   size="sm"
                   data-testid="fig-library-update-all"
                   disabled={props.updating || props.updates.length === 0}

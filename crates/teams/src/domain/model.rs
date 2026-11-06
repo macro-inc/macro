@@ -6,10 +6,18 @@ use chrono::{DateTime, Utc};
 use macro_user_id::{
     cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
 };
+use model_user::Language;
 use models_permissions::share_permission::LinkShare;
 use roles_and_permissions::domain::model::{ProductTier, RoleId, UserRolesAndPermissionsError};
 
 use crate::domain::owned_entity_cleanup::OwnedEntityCleanupError;
+
+mod invite_link;
+
+pub use invite_link::{
+    JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, ManageTeamInviteLinkError,
+    TeamInviteLinkTeam, TeamInviteLinkToken,
+};
 
 /// Team plans
 #[derive(
@@ -353,6 +361,8 @@ pub struct TeamInviteDetails {
     pub created_at: DateTime<Utc>,
     /// When the invite was last sent
     pub last_sent_at: DateTime<Utc>,
+    /// Whether the invite creates an agent account
+    pub is_agent: bool,
 }
 
 /// Deserializes an optional field while preserving explicit `null` values.
@@ -378,6 +388,10 @@ pub struct PatchTeamRequest {
     /// leave unchanged or pass `null` to default to link sharing off.
     #[serde(default, deserialize_with = "double_option")]
     pub default_link_share: Option<Option<LinkShare>>,
+    /// The interface language for the team's members. Omit to leave
+    /// unchanged or pass `null` to let each member's browser decide.
+    #[serde(default, deserialize_with = "double_option")]
+    pub language: Option<Option<Language>>,
 }
 
 /// Request to update the team plan
@@ -460,6 +474,9 @@ pub struct Team {
     /// shared via link without an explicit choice. `None` means link sharing
     /// is off by default. Defaults to [`LinkShare::Team`].
     pub(crate) default_link_share: Option<LinkShare>,
+    /// The interface language for the team's members, unless a member picks
+    /// their own. `None` lets each member's browser decide.
+    pub(crate) language: Option<Language>,
 }
 
 impl Team {
@@ -483,6 +500,7 @@ impl Team {
             enterprise,
             allow_non_admin_invites: true,
             default_link_share: Some(LinkShare::Team),
+            language: None,
         }
     }
 }
@@ -533,6 +551,12 @@ impl Team {
     pub fn default_link_share(&self) -> Option<LinkShare> {
         self.default_link_share
     }
+
+    /// The interface language for the team's members, or `None` when each
+    /// member's browser decides.
+    pub fn language(&self) -> Option<Language> {
+        self.language
+    }
 }
 
 /// Request to create a new team
@@ -561,6 +585,8 @@ pub struct TeamInvite<'a> {
     pub team_invite_id: uuid::Uuid,
     /// The email of the user
     pub email: Email<Lowercase<'a>>,
+    /// Whether the invite creates an agent account
+    pub is_agent: bool,
 }
 
 impl TeamInvite<'static> {
@@ -570,8 +596,35 @@ impl TeamInvite<'static> {
             team_id: self.team_id,
             team_invite_id: self.team_invite_id,
             email: self.email.to_owned(),
+            is_agent: self.is_agent,
         }
     }
+}
+
+/// An unanswered team invite whose reminder email is due, claimed by the
+/// reminder sweep. Claiming already counted the reminder as sent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DueInviteReminder {
+    /// The team invite id
+    pub team_invite_id: uuid::Uuid,
+    /// The team id
+    pub team_id: uuid::Uuid,
+    /// The team name
+    pub team_name: String,
+    /// The invited email
+    pub email: String,
+    /// The user who sent the invitation
+    pub invited_by: String,
+    /// Which reminder this is, starting at 1
+    pub reminder_number: u8,
+    /// Whether the team is an enterprise team
+    pub enterprise: bool,
+    /// Whether the team is in good standing
+    pub paying: bool,
+    /// Whether the team has a subscription
+    pub has_subscription: bool,
+    /// Whether the invite creates an agent account
+    pub is_agent: bool,
 }
 
 /// Snapshot of a team invite before it is accepted.
@@ -591,6 +644,8 @@ pub struct TeamInviteSnapshot<'a> {
     pub created_at: DateTime<Utc>,
     /// When the invite was last sent
     pub last_sent_at: DateTime<Utc>,
+    /// Whether the invite creates an agent account
+    pub is_agent: bool,
 }
 
 /// Result of accepting a team invite, including the data needed to roll it back.
@@ -648,8 +703,8 @@ pub enum CreateTeamError {
 /// Errors for inviting users to team
 #[derive(Debug, thiserror::Error)]
 pub enum InviteUsersToTeamError {
-    /// Too many emails were provided
-    #[error("Too many emails were provided")]
+    /// The team has hit its daily limit on new invites
+    #[error("the team has sent too many invites today")]
     TooManyEmails,
     /// The team only allows admins to invite and the caller is not an admin
     #[error("only team admins may invite users to this team")]
@@ -711,10 +766,7 @@ pub struct CreateSubscriptionArgs {
 /// Errors for customer repository
 #[derive(Debug, thiserror::Error)]
 pub enum CustomerError {
-    #[error("No stripe customer id")]
-    /// The customer does not have a stripe customer id
-    NoStripeCustomerId,
-    /// The subscription is not active
+    /// The subscription is neither active nor trialing
     #[error("Subscription is not active")]
     SubscriptionNotActive,
     /// Invalid promotion code
@@ -836,9 +888,10 @@ pub enum ToggleAutoJoinDomainError {
     TeamError(#[from] TeamError),
 }
 
-/// Errors for automatically joining a team by email domain
+/// Errors for adding a user to a team without an email invite: by matching
+/// the team's auto-join domain, or through the team's invite link.
 #[derive(Debug, thiserror::Error)]
-pub enum TryJoinTeamByDomainError {
+pub enum JoinTeamDirectlyError {
     /// Underlying team error
     #[error("Underlying team error {0}")]
     TeamError(#[from] TeamError),

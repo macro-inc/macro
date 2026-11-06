@@ -8,8 +8,8 @@ use uuid::Uuid;
 
 use super::*;
 
-const MEMBER: &str = "macro|rep@ours.com";
-const TEAMMATE: &str = "macro|teammate@acme.com";
+const MEMBER: &str = "macro|rep@ours.example.com";
+const TEAMMATE: &str = "macro|teammate@acme.example.com";
 
 async fn seed_team(pool: &PgPool, crm_enabled: bool) -> Uuid {
     let team_id = Uuid::now_v7();
@@ -143,18 +143,18 @@ async fn linked_ids(
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn links_companies_by_domain_and_contacts_by_address(pool: PgPool) {
     let team_id = seed_team(&pool, true).await;
-    let acme = insert_company(&pool, team_id, "acme.com", false).await;
+    let acme = insert_company(&pool, team_id, "acme.example.com", false).await;
     let globex = insert_company(&pool, team_id, "globex.com", false).await;
     let hidden = insert_company(&pool, team_id, "hidden.com", true).await;
-    let ada = insert_contact(&pool, acme, "ada@acme.com").await;
-    insert_contact(&pool, acme, "absent@acme.com").await;
+    let ada = insert_contact(&pool, acme, "ada@acme.example.com").await;
+    insert_contact(&pool, acme, "absent@acme.example.com").await;
     let call_record_id = Uuid::now_v7();
 
     linker(&pool)
         .link_call_record(
             call_record_id,
             &people(
-                &[MEMBER, TEAMMATE, "macro|Ada@Acme.com"],
+                &[MEMBER, TEAMMATE, "macro|Ada@Acme.example.com"],
                 &[
                     "new@globex.com",
                     "x@hidden.com",
@@ -182,12 +182,15 @@ async fn links_companies_by_domain_and_contacts_by_address(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn links_records_without_email_contribution_consent(pool: PgPool) {
     let team_id = seed_team(&pool, false).await;
-    let acme = insert_company(&pool, team_id, "acme.com", false).await;
-    let ada = insert_contact(&pool, acme, "ada@acme.com").await;
+    let acme = insert_company(&pool, team_id, "acme.example.com", false).await;
+    let ada = insert_contact(&pool, acme, "ada@acme.example.com").await;
     let call_record_id = Uuid::now_v7();
 
     linker(&pool)
-        .link_call_record(call_record_id, &people(&[MEMBER], &["ada@acme.com"]))
+        .link_call_record(
+            call_record_id,
+            &people(&[MEMBER], &["ada@acme.example.com"]),
+        )
         .await
         .unwrap();
 
@@ -204,7 +207,7 @@ async fn links_records_without_email_contribution_consent(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn never_matches_the_teams_own_members(pool: PgPool) {
     let team_id = seed_team(&pool, true).await;
-    insert_company(&pool, team_id, "acme.com", false).await;
+    insert_company(&pool, team_id, "acme.example.com", false).await;
     let call_record_id = Uuid::now_v7();
 
     linker(&pool)
@@ -222,7 +225,7 @@ async fn never_matches_the_teams_own_members(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn keeps_associations_a_user_already_edited(pool: PgPool) {
     let team_id = seed_team(&pool, true).await;
-    insert_company(&pool, team_id, "acme.com", false).await;
+    insert_company(&pool, team_id, "acme.example.com", false).await;
     let call_record_id = Uuid::now_v7();
     let chosen = Uuid::now_v7();
     sqlx::query(
@@ -241,7 +244,10 @@ async fn keeps_associations_a_user_already_edited(pool: PgPool) {
     .unwrap();
 
     linker(&pool)
-        .link_call_record(call_record_id, &people(&[MEMBER], &["ada@acme.com"]))
+        .link_call_record(
+            call_record_id,
+            &people(&[MEMBER], &["ada@acme.example.com"]),
+        )
         .await
         .unwrap();
 
@@ -254,15 +260,15 @@ async fn keeps_associations_a_user_already_edited(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn matches_accounts_and_contacts_regardless_of_case(pool: PgPool) {
     let team_id = seed_team(&pool, true).await;
-    let acme = insert_company(&pool, team_id, "acme.com", false).await;
-    let grace = insert_contact(&pool, acme, "Grace@Acme.com").await;
+    let acme = insert_company(&pool, team_id, "acme.example.com", false).await;
+    let grace = insert_contact(&pool, acme, "Grace@Acme.example.com").await;
     let call_record_id = Uuid::now_v7();
 
     // The member's id differs only by case from `team_user`.
     linker(&pool)
         .link_call_record(
             call_record_id,
-            &people(&["macro|Rep@Ours.com"], &["grace@acme.com"]),
+            &people(&["macro|Rep@Ours.example.com"], &["grace@acme.example.com"]),
         )
         .await
         .unwrap();

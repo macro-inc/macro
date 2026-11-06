@@ -10,6 +10,7 @@ use crate::domain::models::{
 };
 use chrono::{DateTime, Utc};
 use cowlike::CowLike;
+use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use rate_limit::RateLimitExceeded;
@@ -47,12 +48,38 @@ pub struct APNSTargets<T> {
 }
 
 /// Email notification payload.
+///
+/// The optional fields are queued as JSON, so each carries `#[serde(default)]` for messages
+/// queued before it existed.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EmailContent {
     /// The email subject line.
     pub subject: String,
-    /// The email body content.
+    /// The HTML email body. Unsubscribe placeholders are signed in this part only.
     pub body: String,
+    /// A plain-text alternative to `body`.
+    #[serde(default)]
+    pub text: Option<String>,
+    /// The person the email is sent on behalf of. The sender shows it as the From display
+    /// name, marked as sent via Macro, while the address stays Macro's.
+    #[serde(default)]
+    pub from_name: Option<String>,
+    /// The address replies go to instead of Macro's no-reply sender.
+    #[serde(default)]
+    pub reply_to: Option<EmailStr<'static>>,
+}
+
+impl EmailContent {
+    /// An HTML-only email from Macro itself.
+    pub fn new(subject: String, body: String) -> Self {
+        Self {
+            subject,
+            body,
+            text: None,
+            from_name: None,
+            reply_to: None,
+        }
+    }
 }
 
 /// Email notification payload.
@@ -70,6 +97,9 @@ pub struct EmailNotification<'a> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct EmailCreateBundle {
+    /// A connected address verified by the producing domain, for a single recipient.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    destination: Option<MacroUserIdStr<'static>>,
     /// The email content (subject and body).
     content: EmailContent,
 
@@ -86,20 +116,27 @@ impl EmailCreateBundle {
         let rate_limit_key = notif.rate_limit_key();
         let content = notif.format_email();
         EmailCreateBundle {
+            destination: None,
             content,
             rate_limit_config,
             rate_limit_key,
         }
     }
 
+    pub(crate) fn with_destination(mut self, destination: MacroUserIdStr<'static>) -> Self {
+        self.destination = Some(destination);
+        self
+    }
+
     pub(crate) fn with_recipient<'a>(self, to: MacroUserIdStr<'a>) -> EmailNotification<'a> {
         let EmailCreateBundle {
+            destination,
             content,
             rate_limit_config,
             rate_limit_key,
         } = self;
         EmailNotification {
-            to,
+            to: destination.unwrap_or(to),
             content,
             rate_limit_config,
             rate_limit_key,

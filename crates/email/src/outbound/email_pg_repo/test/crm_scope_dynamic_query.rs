@@ -17,7 +17,7 @@
 //!
 //! Fixture: `email/fixtures/email_dynamic_query_crm_scope.sql`. Two team
 //! members (Alice, Bob) and one non-member (Carol). Each link has its own
-//! `email_contacts` row for `outsider@acme.com` and its own TRASH label
+//! `email_contacts` row for `outsider@acme.example.com` and its own TRASH label
 //! UUID — both of which the new ANY-based resolution must cover.
 
 use super::*;
@@ -58,7 +58,7 @@ async fn run_and_collect_ids(
         limit,
         &view,
         query,
-        "macro|alice@team.com",
+        "macro|alice@team.example.com",
         team_id,
     )
     .await?;
@@ -78,7 +78,7 @@ async fn run_and_collect_ids(
     )
 )]
 async fn crm_scope_off_returns_only_callers_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    // Broad partial filter that matches both "outsider@acme.com" and
+    // Broad partial filter that matches both "outsider@acme.example.com" and
     // "other@elsewhere.com" (their email_address strings contain "com").
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
         "com".to_string(),
@@ -174,7 +174,7 @@ async fn crm_scope_returns_all_team_member_threads(pool: Pool<Postgres>) -> anyh
 async fn crm_scope_with_domain_filter(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Domain(
-        "acme.com".to_string(),
+        "acme.example.com".to_string(),
     ))));
 
     let ids = run_and_collect_ids(&pool, filter, Some(team_id)).await?;
@@ -215,7 +215,7 @@ async fn crm_scope_with_complete_sender_resolves_across_links(
 ) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(complete(
-        "outsider@acme.com",
+        "outsider@acme.example.com",
     ))));
 
     let ids = run_and_collect_ids(&pool, filter, Some(team_id)).await?;
@@ -224,15 +224,15 @@ async fn crm_scope_with_complete_sender_resolves_across_links(
     // references the alice_link contact_id. Both must match via ANY($ids).
     assert!(
         ids.contains(TA1_ALICE_INBOX_ACME),
-        "alice's outsider@acme.com thread must match (alice_link contact_id)"
+        "alice's outsider@acme.example.com thread must match (alice_link contact_id)"
     );
     assert!(
         ids.contains(TB1_BOB_INBOX_ACME),
-        "bob's outsider@acme.com thread must match (bob_link contact_id)"
+        "bob's outsider@acme.example.com thread must match (bob_link contact_id)"
     );
     assert!(
         !ids.contains(TA3_ALICE_INBOX_OTHER),
-        "other@elsewhere.com is not outsider@acme.com"
+        "a different sender must not match the requested contact"
     );
     assert!(!ids.contains(TA2_ALICE_TRASH_ACME), "alice TRASH excluded");
     assert!(!ids.contains(TB2_BOB_TRASH_ACME), "bob TRASH excluded");
@@ -262,7 +262,7 @@ async fn crm_scope_excludes_trash_in_every_team_link(pool: Pool<Postgres>) -> an
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
     // Match all acme threads across team links.
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Domain(
-        "acme.com".to_string(),
+        "acme.example.com".to_string(),
     ))));
 
     let ids = run_and_collect_ids(&pool, filter, Some(team_id)).await?;
@@ -341,7 +341,7 @@ async fn crm_scope_uses_team_mailboxes_not_caller_link(pool: Pool<Postgres>) -> 
     let carol_link = Uuid::parse_str("a0000003-0000-0000-0000-000000000003")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Domain(
-        "acme.com".to_string(),
+        "acme.example.com".to_string(),
     ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
 
@@ -351,7 +351,7 @@ async fn crm_scope_uses_team_mailboxes_not_caller_link(pool: Pool<Postgres>) -> 
         100,
         &view,
         query,
-        "macro|carol@team.com",
+        "macro|carol@team.example.com",
         Some(team_id),
     )
     .await?;
@@ -565,7 +565,7 @@ async fn crm_scope_or_of_known_and_unknown_complete_senders(
 ) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
     let filter = Arc::new(Expr::or(
-        Expr::Literal(EmailLiteral::Sender(complete("outsider@acme.com"))),
+        Expr::Literal(EmailLiteral::Sender(complete("outsider@acme.example.com"))),
         Expr::Literal(EmailLiteral::Sender(complete("nobody@nowhere.com"))),
     ));
 
@@ -603,7 +603,9 @@ async fn crm_scope_composed_and_sender_domain_and_recipient_domain(
 ) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
     let filter = Arc::new(Expr::and(
-        Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string()))),
+        Expr::Literal(EmailLiteral::Sender(Email::Domain(
+            "acme.example.com".to_string(),
+        ))),
         Expr::Literal(EmailLiteral::Recipient(Email::Domain(
             "elsewhere.com".to_string(),
         ))),
@@ -654,7 +656,7 @@ async fn crm_scope_pagination_across_team_links(pool: Pool<Postgres>) -> anyhow:
         limit,
         &view,
         query_p1,
-        "macro|alice@team.com",
+        "macro|alice@team.example.com",
         Some(team_id),
     )
     .await?;
@@ -691,7 +693,7 @@ async fn crm_scope_pagination_across_team_links(pool: Pool<Postgres>) -> anyhow:
         limit,
         &view,
         query_p2,
-        "macro|alice@team.com",
+        "macro|alice@team.example.com",
         Some(team_id),
     )
     .await?;
@@ -741,7 +743,7 @@ async fn crm_scope_collapses_to_empty_when_consent_withdrawn(
     .await?;
 
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Domain(
-        "acme.com".to_string(),
+        "acme.example.com".to_string(),
     ))));
     let ids = run_and_collect_ids(&pool, filter, Some(team_id)).await?;
     assert!(
@@ -764,16 +766,16 @@ async fn crm_scope_honors_contributor_blocks_while_ordinary_inbox_is_unchanged(
 ) -> anyhow::Result<()> {
     let team = Uuid::parse_str(TEAM_ALPHA_ID)?;
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Domain(
-        "acme.com".into(),
+        "acme.example.com".into(),
     ))));
-    sqlx::query!("INSERT INTO crm_personal_email_blocklist (team_id, user_id, domain) VALUES ($1, 'macro|alice@team.com', 'acme.com')", team).execute(&pool).await?;
+    sqlx::query!("INSERT INTO crm_personal_email_blocklist (team_id, user_id, domain) VALUES ($1, 'macro|alice@team.example.com', 'acme.example.com')", team).execute(&pool).await?;
     let shared = run_and_collect_ids(&pool, filter.clone(), Some(team)).await?;
     assert!(!shared.contains(TA1_ALICE_INBOX_ACME));
     assert!(shared.contains(TB1_BOB_INBOX_ACME));
     let inbox = run_and_collect_ids(&pool, filter.clone(), None).await?;
     assert!(inbox.contains(TA1_ALICE_INBOX_ACME));
     sqlx::query!(
-        "INSERT INTO crm_team_email_blocklist (team_id, domain) VALUES ($1, 'acme.com')",
+        "INSERT INTO crm_blocked_domains (team_id, domain) VALUES ($1, 'acme.example.com')",
         team
     )
     .execute(&pool)
@@ -799,16 +801,16 @@ async fn crm_scope_excludes_a_mixed_thread_with_an_untracked_blocked_bcc(
     let team = Uuid::parse_str(TEAM_ALPHA_ID)?;
     let bob = Uuid::parse_str(TB1_BOB_INBOX_ACME)?;
     let contact = Uuid::now_v7();
-    sqlx::query!("INSERT INTO email_contacts (id, link_id, email_address) SELECT $1, link_id, 'secret@sub.private.com' FROM email_threads WHERE id = $2", contact, bob).execute(&pool).await?;
+    sqlx::query!("INSERT INTO email_contacts (id, link_id, email_address) SELECT $1, link_id, 'secret@sub.private.example.com' FROM email_threads WHERE id = $2", contact, bob).execute(&pool).await?;
     sqlx::query!("INSERT INTO email_message_recipients (message_id, contact_id, recipient_type) SELECT id, $1, 'BCC' FROM email_messages WHERE thread_id = $2", contact, bob).execute(&pool).await?;
     sqlx::query!(
-        "INSERT INTO crm_team_email_blocklist (team_id, domain) VALUES ($1, 'private.com')",
+        "INSERT INTO crm_blocked_domains (team_id, domain) VALUES ($1, 'private.example.com')",
         team
     )
     .execute(&pool)
     .await?;
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Domain(
-        "acme.com".into(),
+        "acme.example.com".into(),
     ))));
     let shared = run_and_collect_ids(&pool, filter, Some(team)).await?;
     assert!(shared.contains(TA1_ALICE_INBOX_ACME));
@@ -836,7 +838,7 @@ const TE1_ERIN_CONV_X: &str = "55550002-0000-0000-0000-000000000001";
 const TE2_ERIN_CONV_Y: &str = "55550002-0000-0000-0000-000000000002";
 const TE3_ERIN_CONV_W: &str = "55550002-0000-0000-0000-000000000003";
 
-/// Run a team-scoped acme.com query for one caller and return the result
+/// Run a team-scoped acme.example.com query for one caller and return the result
 /// thread ids in order.
 async fn run_dedupe_query(
     pool: &Pool<Postgres>,
@@ -847,7 +849,7 @@ async fn run_dedupe_query(
     let link_id = Uuid::parse_str(caller_link)?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Domain(
-        "acme.com".to_string(),
+        "acme.example.com".to_string(),
     ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
 
@@ -951,7 +953,7 @@ async fn crm_scope_dedupe_stable_across_cursor_pages(pool: Pool<Postgres>) -> an
     let limit = 1;
     let make_filter = || {
         Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Domain(
-            "acme.com".to_string(),
+            "acme.example.com".to_string(),
         ))))
     };
 
@@ -1060,7 +1062,9 @@ async fn crm_scope_dedupe_collapses_externally_shared_copy(
     let link_id = Uuid::parse_str(DAVE_LINK_ID)?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
     let filter = Arc::new(Expr::and(
-        Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string()))),
+        Expr::Literal(EmailLiteral::Sender(Email::Domain(
+            "acme.example.com".to_string(),
+        ))),
         Expr::Literal(EmailLiteral::Shared(
             item_filters::SharedEmailFilter::Include,
         )),
@@ -1205,7 +1209,7 @@ async fn crm_scope_complete_sender_skips_non_primary_link(
 ) -> anyhow::Result<()> {
     let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
     let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(complete(
-        "outsider@acme.com",
+        "outsider@acme.example.com",
     ))));
 
     let ids = run_and_collect_ids(&pool, filter, Some(team_id)).await?;
@@ -1281,7 +1285,7 @@ async fn me_path_still_spans_non_primary_links(pool: Pool<Postgres>) -> anyhow::
         100,
         &view,
         query,
-        "macro|alice@team.com",
+        "macro|alice@team.example.com",
         None,
     )
     .await?;
@@ -1295,5 +1299,42 @@ async fn me_path_still_spans_non_primary_links(pool: Pool<Postgres>) -> anyhow::
     assert!(!ids.contains(TA2_ALICE_TRASH_ACME), "TRASH excluded");
     assert_eq!(ids.len(), 4, "expected 4 threads, got: {:?}", ids);
 
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query_crm_scope")
+    )
+)]
+async fn company_less_contact_email_list_rechecks_consent_and_personal_exclusions(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team = Uuid::parse_str(TEAM_ALPHA_ID)?;
+    let contact = Uuid::now_v7();
+    sqlx::query!("INSERT INTO crm_contacts (id, team_id, email, first_interaction, last_interaction) VALUES ($1, $2, 'outsider@acme.example.com', now(), now())", contact, team).execute(&pool).await?;
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(complete(
+        "outsider@acme.example.com",
+    ))));
+    let allowed = run_and_collect_ids(&pool, filter.clone(), Some(team)).await?;
+    assert!(allowed.contains(TA1_ALICE_INBOX_ACME));
+    assert!(allowed.contains(TB1_BOB_INBOX_ACME));
+    sqlx::query!("INSERT INTO crm_personal_email_blocklist (team_id, user_id, domain) VALUES ($1, 'macro|alice@team.example.com', 'acme.example.com')", team).execute(&pool).await?;
+    let excluded = run_and_collect_ids(&pool, filter.clone(), Some(team)).await?;
+    assert!(!excluded.contains(TA1_ALICE_INBOX_ACME));
+    assert!(excluded.contains(TB1_BOB_INBOX_ACME));
+    sqlx::query!(
+        "UPDATE crm_email_consent SET enabled = FALSE WHERE team_id = $1",
+        team
+    )
+    .execute(&pool)
+    .await?;
+    assert!(
+        run_and_collect_ids(&pool, filter, Some(team))
+            .await?
+            .is_empty()
+    );
     Ok(())
 }

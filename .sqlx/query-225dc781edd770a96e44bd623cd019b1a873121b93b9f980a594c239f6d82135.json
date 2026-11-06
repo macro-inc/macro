@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT ON (message_id) message_id AS \"message_id!\", state FROM whatsapp_send\n            WHERE chat_id = $1 AND user_id = $2 AND message_id = ANY($3)\n            ORDER BY message_id, created_at DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "state",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "225dc781edd770a96e44bd623cd019b1a873121b93b9f980a594c239f6d82135"
+}

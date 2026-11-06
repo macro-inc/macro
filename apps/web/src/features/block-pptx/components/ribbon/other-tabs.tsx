@@ -3,26 +3,27 @@
  */
 
 import type { TransitionKind } from '@core/pptx-engine/types';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import ArrowsOut from '@phosphor/arrows-out.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import GearSix from '@phosphor/gear-six.svg';
-import GridFour from '@phosphor/grid-four.svg';
-import Layout from '@phosphor/layout.svg';
-import MagnifyingGlassMinus from '@phosphor/magnifying-glass-minus.svg';
-import MagnifyingGlassPlus from '@phosphor/magnifying-glass-plus.svg';
-import Notepad from '@phosphor/notepad.svg';
-import PaintBucket from '@phosphor/paint-bucket.svg';
-import PenNib from '@phosphor/pen-nib.svg';
-import Play from '@phosphor/play.svg';
-import Presentation from '@phosphor/presentation.svg';
-import ProjectorScreen from '@phosphor/projector-screen.svg';
-import Rectangle from '@phosphor/rectangle.svg';
-import Ruler from '@phosphor/ruler.svg';
-import ShapesIcon from '@phosphor/shapes.svg';
-import SquaresFour from '@phosphor/squares-four.svg';
-import Stack from '@phosphor/stack.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import ArrowsOut from '@icon/system/regular/arrows-out.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import GearSix from '@icon/system/regular/gear-six.svg';
+import GridFour from '@icon/system/regular/grid-four.svg';
+import Layout from '@icon/system/regular/layout.svg';
+import MagnifyingGlassMinus from '@icon/system/regular/magnifying-glass-minus.svg';
+import MagnifyingGlassPlus from '@icon/system/regular/magnifying-glass-plus.svg';
+import Notepad from '@icon/system/regular/notepad.svg';
+import PaintBucket from '@icon/system/regular/paint-bucket.svg';
+import PenNib from '@icon/system/regular/pen-nib.svg';
+import Play from '@icon/system/regular/play.svg';
+import Presentation from '@icon/system/regular/presentation.svg';
+import ProjectorScreen from '@icon/system/regular/projector-screen.svg';
+import Rectangle from '@icon/system/regular/rectangle.svg';
+import Ruler from '@icon/system/regular/ruler.svg';
+import ShapesIcon from '@icon/system/regular/shapes.svg';
+import SquaresFour from '@icon/system/regular/squares-four.svg';
+import Stack from '@icon/system/regular/stack.svg';
 import { For, Show } from 'solid-js';
 import { boxOf } from '../../core/geometry';
 import { swatchCss } from '../../core/palette';
@@ -77,7 +78,7 @@ export function DesignTab() {
           )}
         </RibbonPopover>
         <RibbonTextButton
-          label="Format background"
+          aria-label="Format background"
           disabled={ro()}
           onClick={() => env.openFormatPane('background')}
         >
@@ -114,9 +115,12 @@ export function DesignTab() {
                     data-testid={`pptx-theme-colors-${colorSet.name}`}
                     onClick={() => {
                       close();
-                      void env.commands.setThemeColors(
-                        colorSet.colors,
-                        colorSet.name
+                      fireAndForget(
+                        env.commands.setThemeColors(
+                          colorSet.colors,
+                          colorSet.name
+                        ),
+                        'pptx-editor'
                       );
                     }}
                   >
@@ -170,10 +174,13 @@ export function DesignTab() {
                     data-testid={`pptx-theme-fonts-${pair.name}`}
                     onClick={() => {
                       close();
-                      void env.commands.setThemeFonts(
-                        pair.major,
-                        pair.minor,
-                        pair.name
+                      fireAndForget(
+                        env.commands.setThemeFonts(
+                          pair.major,
+                          pair.minor,
+                          pair.name
+                        ),
+                        'pptx-editor'
                       );
                     }}
                   >
@@ -230,7 +237,7 @@ export function SlideShowTab() {
     <>
       <RibbonGroup label="Start slide show">
         <RibbonTextButton
-          label="From beginning"
+          aria-label="From beginning"
           tooltip="From beginning (F5)"
           data-testid="pptx-present-start"
           onClick={() => env.present(false)}
@@ -239,7 +246,7 @@ export function SlideShowTab() {
           From beginning
         </RibbonTextButton>
         <RibbonTextButton
-          label="From current slide"
+          aria-label="From current slide"
           tooltip="From current slide (⇧F5)"
           onClick={() => env.present(true)}
         >
@@ -247,7 +254,7 @@ export function SlideShowTab() {
           From current slide
         </RibbonTextButton>
         <RibbonTextButton
-          label="Presenter view"
+          aria-label="Presenter view"
           tooltip="Presenter view: notes, next slide, and timer here; the show in a separate window (⌥F5)"
           data-testid="pptx-present-presenter"
           onClick={() => env.present(true, true)}
@@ -258,11 +265,11 @@ export function SlideShowTab() {
       </RibbonGroup>
       <RibbonGroup label="Set up">
         <RibbonTextButton
-          label="Hide slide"
+          aria-label="Hide slide"
           disabled={env.readonly()}
           onClick={() => {
             const s = env.slide();
-            if (s) void env.commands.toggleHidden(s);
+            if (s) fireAndForget(env.commands.toggleHidden(s), 'pptx-editor');
           }}
         >
           <EyeSlash />
@@ -284,18 +291,18 @@ export function ViewTab() {
     <>
       <RibbonGroup label="Presentation views">
         <RibbonTextButton
-          label="Normal"
+          aria-label="Normal"
           aria-pressed={!env.sorter()}
-          variant={env.sorter() ? 'ghost' : 'accent'}
+          variant={env.sorter() ? 'ghost' : 'primary'}
           onClick={() => env.setSorter(false)}
         >
           <Rectangle />
           Normal
         </RibbonTextButton>
         <RibbonTextButton
-          label="Slide Sorter"
+          aria-label="Slide Sorter"
           aria-pressed={env.sorter()}
-          variant={env.sorter() ? 'accent' : 'ghost'}
+          variant={env.sorter() ? 'primary' : 'ghost'}
           data-testid="pptx-tab-view-sorter"
           onClick={() => env.setSorter(true)}
         >
@@ -307,7 +314,7 @@ export function ViewTab() {
         {(open) => (
           <RibbonGroup label="Master views">
             <RibbonTextButton
-              label="Slide Master"
+              aria-label="Slide Master"
               tooltip="Slide Master: edit the slide masters and layouts"
               data-testid="pptx-view-slide-master"
               onClick={() => open()()}
@@ -320,7 +327,7 @@ export function ViewTab() {
       </Show>
       <RibbonGroup label="Zoom">
         <RibbonButton
-          label="Zoom out"
+          aria-label="Zoom out"
           tooltip="Zoom out (⌘−)"
           onClick={() =>
             env.setZoom(Math.max(0.1, (percent() ?? 100) / 100 / 1.25))
@@ -339,7 +346,7 @@ export function ViewTab() {
           onCommit={(v) => env.setZoom(v / 100)}
         />
         <RibbonButton
-          label="Zoom in"
+          aria-label="Zoom in"
           tooltip="Zoom in (⌘+)"
           onClick={() =>
             env.setZoom(Math.min(4, ((percent() ?? 100) / 100) * 1.25))
@@ -348,8 +355,8 @@ export function ViewTab() {
           <MagnifyingGlassPlus />
         </RibbonButton>
         <RibbonTextButton
-          label="Fit to window"
-          variant={env.zoom() === 'fit' ? 'accent' : 'ghost'}
+          aria-label="Fit to window"
+          variant={env.zoom() === 'fit' ? 'primary' : 'ghost'}
           onClick={() => env.setZoom('fit')}
         >
           <ArrowsOut />
@@ -358,9 +365,9 @@ export function ViewTab() {
       </RibbonGroup>
       <RibbonGroup label="Show">
         <RibbonTextButton
-          label="Ruler"
+          aria-label="Ruler"
           aria-pressed={view().ruler}
-          variant={view().ruler ? 'accent' : 'ghost'}
+          variant={view().ruler ? 'primary' : 'ghost'}
           data-testid="pptx-view-ruler"
           onClick={() => env.view.set({ ruler: !view().ruler })}
         >
@@ -368,9 +375,9 @@ export function ViewTab() {
           Ruler
         </RibbonTextButton>
         <RibbonTextButton
-          label="Gridlines"
+          aria-label="Gridlines"
           aria-pressed={view().gridlines}
-          variant={view().gridlines ? 'accent' : 'ghost'}
+          variant={view().gridlines ? 'primary' : 'ghost'}
           data-testid="pptx-view-gridlines"
           onClick={() => env.view.set({ gridlines: !view().gridlines })}
         >
@@ -378,10 +385,10 @@ export function ViewTab() {
           Gridlines
         </RibbonTextButton>
         <RibbonTextButton
-          label="Guides"
+          aria-label="Guides"
           tooltip="Guides (⌥F9)"
           aria-pressed={view().drawingGuides}
-          variant={view().drawingGuides ? 'accent' : 'ghost'}
+          variant={view().drawingGuides ? 'primary' : 'ghost'}
           data-testid="pptx-view-guides"
           onClick={() => env.view.set({ drawingGuides: !view().drawingGuides })}
         >
@@ -462,9 +469,9 @@ export function ViewTab() {
           )}
         </RibbonPopover>
         <RibbonTextButton
-          label="Notes"
+          aria-label="Notes"
           aria-pressed={env.notesVisible()}
-          variant={env.notesVisible() ? 'accent' : 'ghost'}
+          variant={env.notesVisible() ? 'primary' : 'ghost'}
           onClick={env.toggleNotes}
         >
           <Notepad />
@@ -504,7 +511,7 @@ export function ShapeFormatTab() {
               load={env.presetPaths}
               onPick={(preset) => {
                 close();
-                void c.insertShape(preset);
+                fireAndForget(c.insertShape(preset), 'pptx-editor');
               }}
             />
           )}
@@ -538,7 +545,7 @@ export function ShapeFormatTab() {
         </RibbonPopover>
         <ShapeEffectsMenu label="Shape effects" testId="pptx-shape-effects" />
         <RibbonTextButton
-          label="Format pane"
+          aria-label="Format pane"
           disabled={ro()}
           onClick={() => env.openFormatPane('shape')}
         >
@@ -550,7 +557,7 @@ export function ShapeFormatTab() {
       </RibbonGroup>
       <RibbonGroup label="Arrange">
         <RibbonButton
-          label="Bring forward"
+          aria-label="Bring forward"
           tooltip="Bring forward (⌘])"
           disabled={ro()}
           onClick={() => c.arrange('forward')}
@@ -558,7 +565,7 @@ export function ShapeFormatTab() {
           <ArrowUp />
         </RibbonButton>
         <RibbonButton
-          label="Send backward"
+          aria-label="Send backward"
           tooltip="Send backward (⌘[)"
           disabled={ro()}
           onClick={() => c.arrange('backward')}
@@ -643,7 +650,7 @@ function ShapeStyles() {
                       onClick={() => {
                         close();
                         const v = value(slot);
-                        void c.styleShapes(kind, v);
+                        fireAndForget(c.styleShapes(kind, v), 'pptx-editor');
                       }}
                     >
                       Abc
@@ -841,7 +848,12 @@ export function TransitionsTab() {
                 disabled={ro()}
                 class="flex h-8 w-12 flex-col items-center justify-center rounded-md text-[9px] leading-tight hover:bg-ink/5 disabled:opacity-50"
                 classList={{ 'bg-accent-bg text-accent': kind() === t.kind }}
-                onClick={() => void c.setTransition({ kind: t.kind })}
+                onClick={() =>
+                  fireAndForget(
+                    c.setTransition({ kind: t.kind }),
+                    'pptx-editor'
+                  )
+                }
               >
                 <TransitionIcon kind={t.kind} />
                 {t.label}
@@ -866,7 +878,10 @@ export function TransitionsTab() {
                         active={current()?.direction === direction}
                         onClick={() => {
                           close();
-                          void c.setTransition({ kind: kind(), direction });
+                          fireAndForget(
+                            c.setTransition({ kind: kind(), direction }),
+                            'pptx-editor'
+                          );
                         }}
                       />
                     )}
@@ -890,10 +905,13 @@ export function TransitionsTab() {
           disabled={ro() || kind() === 'none'}
           testId="pptx-transition-duration"
           onCommit={(s) =>
-            void c.setTransition({
-              kind: kind(),
-              durationMs: Math.round(s * 1000),
-            })
+            fireAndForget(
+              c.setTransition({
+                kind: kind(),
+                durationMs: Math.round(s * 1000),
+              }),
+              'pptx-editor'
+            )
           }
         />
         <label class="flex items-center gap-1 px-1 text-xs">
@@ -903,10 +921,13 @@ export function TransitionsTab() {
             disabled={ro()}
             checked={current()?.advanceOnClick ?? true}
             onChange={(e) =>
-              void c.setTransition({
-                kind: kind(),
-                advanceOnClick: e.currentTarget.checked,
-              })
+              fireAndForget(
+                c.setTransition({
+                  kind: kind(),
+                  advanceOnClick: e.currentTarget.checked,
+                }),
+                'pptx-editor'
+              )
             }
           />
           On click
@@ -918,10 +939,13 @@ export function TransitionsTab() {
             disabled={ro()}
             checked={current()?.advanceAfterMs !== undefined}
             onChange={(e) =>
-              void c.setTransition({
-                kind: kind(),
-                advanceAfterMs: e.currentTarget.checked ? 5000 : 0,
-              })
+              fireAndForget(
+                c.setTransition({
+                  kind: kind(),
+                  advanceAfterMs: e.currentTarget.checked ? 5000 : 0,
+                }),
+                'pptx-editor'
+              )
             }
           />
           After
@@ -939,18 +963,24 @@ export function TransitionsTab() {
           precision={2}
           disabled={ro() || current()?.advanceAfterMs === undefined}
           onCommit={(s) =>
-            void c.setTransition({
-              kind: kind(),
-              advanceAfterMs: Math.round(s * 1000),
-            })
+            fireAndForget(
+              c.setTransition({
+                kind: kind(),
+                advanceAfterMs: Math.round(s * 1000),
+              }),
+              'pptx-editor'
+            )
           }
         />
         <RibbonTextButton
-          label="Apply to all"
+          aria-label="Apply to all"
           disabled={ro()}
           data-testid="pptx-transition-all"
           onClick={() =>
-            void c.setTransition({ kind: kind(), applyToAll: true })
+            fireAndForget(
+              c.setTransition({ kind: kind(), applyToAll: true }),
+              'pptx-editor'
+            )
           }
         >
           Apply to all

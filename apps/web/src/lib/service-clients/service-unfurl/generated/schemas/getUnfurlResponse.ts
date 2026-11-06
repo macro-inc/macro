@@ -5,8 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GetUnfurlResponseDescription } from './getUnfurlResponseDescription';
+import type { GetUnfurlResponseEmbedUrl } from './getUnfurlResponseEmbedUrl';
 import type { GetUnfurlResponseFaviconUrl } from './getUnfurlResponseFaviconUrl';
 import type { GetUnfurlResponseImageUrl } from './getUnfurlResponseImageUrl';
+import type { UnfurlEmbedType } from './unfurlEmbedType';
 
 /**
  * Unfurl response for a single URL: the URL itself plus any metadata that
@@ -16,6 +18,10 @@ favicon).
 export interface GetUnfurlResponse {
   /** The page description (from `og:description`), if any. */
   description?: GetUnfurlResponseDescription;
+  /** The type of embeddable content, if the URL supports iframe embedding. */
+  embed_type?: UnfurlEmbedType;
+  /** The iframe-embeddable URL for services like Loom or Supercut. */
+  embed_url?: GetUnfurlResponseEmbedUrl;
   /** The page's favicon URL, if any. */
   favicon_url?: GetUnfurlResponseFaviconUrl;
   /** The page's preview image URL (from `og:image`), if any. */

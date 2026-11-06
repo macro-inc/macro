@@ -21,11 +21,11 @@ use crate::domain::{model::TeamError, team_repo::TeamService};
 use super::TeamRouterState;
 
 /// Extractor that ensures the authenticated user is a premium user
-/// (has an active stripe subscription).
+/// (has an active or trialing Stripe subscription).
 pub struct PremiumUserExtractor<Auth> {
     /// The authenticated premium user's id.
     pub macro_user_id: MacroUserIdStr<'static>,
-    /// The authenticated premium user's active Stripe subscription id.
+    /// The authenticated premium user's active or trialing Stripe subscription id.
     pub subscription_id: stripe::SubscriptionId,
     _authorization: PhantomData<fn() -> Auth>,
 }
@@ -36,7 +36,7 @@ pub enum PremiumUserRejection {
     /// The request could not be authorized.
     #[error("authorization failed")]
     Authorization(MacroAuthorizationRejection),
-    /// The user does not have an active subscription.
+    /// The user has no active or trialing subscription.
     #[error("active subscription required")]
     NotPremium,
     /// The premium check could not be performed.

@@ -5,7 +5,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { createComponent, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CalendarSource } from '../../calendar/types';
+import {
+  type CalendarSource,
+  DEFAULT_GUEST_POLICY,
+  NO_VIEWER_CAPABILITIES,
+} from '../../calendar/types';
 import { useUpcomingCalendarEventsSource } from './upcoming-calendar-events';
 
 vi.mock('@service-storage/client', () => ({
@@ -25,7 +29,12 @@ vi.mock('@queries/client', () => ({
 }));
 
 const today = new Date(2026, 8, 23, 12);
-const source: CalendarSource = { id: 'primary', name: 'Work', color: 'blue' };
+const source: CalendarSource = {
+  id: 'primary',
+  name: 'Work',
+  color: 'blue',
+  emailAddress: 'calendar@macro.com',
+};
 const sources = new Map([[source.id, source]]);
 const list = vi.mocked(storageServiceClient.listCalendarOccurrences);
 const disposers: (() => void)[] = [];
@@ -55,6 +64,9 @@ function occurrence(
       recurrenceLines: [],
       sequence: 0,
       isReadOnly: false,
+      guestPolicy: DEFAULT_GUEST_POLICY,
+      isSnapshot: false,
+      viewerCan: NO_VIEWER_CAPABILITIES,
       attendees: [],
       createdAt: today.toISOString(),
       updatedAt: today.toISOString(),
@@ -173,6 +185,9 @@ describe('upcoming calendar events source', () => {
       [1, 2, 3, 4, 5].map((day) => `event-${day}`)
     );
     expect(result.events()[0].color).toBe(source.color);
+    expect(result.events()[0].url).toBe(
+      'https://meet.google.com/room?authuser=calendar%40macro.com'
+    );
     expect(list).toHaveBeenCalledTimes(1);
     expect(result.loading()).toBe(false);
     expect(result.findEvent(result.events()[0].id)).toEqual(
@@ -180,6 +195,7 @@ describe('upcoming calendar events source', () => {
         title: 'event-1',
         attendees: [],
         isReadOnly: false,
+        conferenceUrl: 'https://meet.google.com/room',
       })
     );
   });

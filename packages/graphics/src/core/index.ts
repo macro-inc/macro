@@ -1,5 +1,7 @@
 export * from './affine';
 export { resolveAppearance } from './appearance';
+export * from './artifact-commands';
+export * from './artifact-order';
 export type { GraphicsBackend } from './backend';
 export {
   fitImageCamera,
@@ -32,6 +34,7 @@ export { type LayerOperation, reorderNodes } from './layering';
 export { fullyConnected, layoutBounds, layoutRoots } from './layout';
 export type {
   Appearance,
+  ArtifactItem,
   Bounds,
   Camera,
   EllipseItem,
@@ -48,6 +51,7 @@ export type {
   ShapeKind,
   SurfaceItem,
 } from './model';
+export type { ObjectSnapStats, SnapGuide } from './object-snapping';
 export {
   isSortKey,
   type LayerPosition,
@@ -72,6 +76,7 @@ export {
   selectionContainsPoint,
   selectionFrame,
 } from './selection-frame';
+export * from './shapes/artifact';
 export {
   type ConnectorAnchor,
   type ConnectorBinding,
@@ -92,6 +97,7 @@ export * from './shapes/embedded';
 export {
   canLabel,
   type LabelShape,
+  labelTextGeometry,
   measureShapeLabel,
   type ShapeLabel,
   shapeLabelLayout,
@@ -110,8 +116,10 @@ export {
   shapeDefinition,
   shapeDefinitions,
   shapeKinds,
+  shapePayload,
 } from './shapes/registry';
 export {
+  type TextFitMode,
   type TextFont,
   type TextGeometry,
   type TextMeasurer,
@@ -121,4 +129,10 @@ export { snapPoint, snapTranslation, snapValue } from './snapping';
 export { regenerateScaledShapes, stretchShapes } from './stretch';
 export { selectedShapeIds } from './style-selection';
 export * from './text-commands';
+export {
+  fitTextLayout,
+  type TextFitEffect,
+  type TextFitRequest,
+  type TextFitResult,
+} from './text-fit';
 export { textTargetAt } from './text-target';

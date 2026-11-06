@@ -7,7 +7,7 @@ import { FusionAuthService } from './fusionauth-service';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'fusion-auth',
 };
 

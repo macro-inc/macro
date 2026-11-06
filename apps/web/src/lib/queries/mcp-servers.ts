@@ -1,4 +1,5 @@
 import { throwOnErr } from '@core/util/result';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
@@ -23,6 +24,10 @@ function fetchMcpServers() {
   );
 }
 
+export function mcpServersQueryOptions() {
+  return { queryKey: KEYS.list, queryFn: fetchMcpServers };
+}
+
 export function useMcpServersQuery(options?: {
   /**
    * Poll for connection changes. OAuth finishes in another tab, and if this
@@ -39,10 +44,12 @@ export function useMcpServersQuery(options?: {
    * flash a fake "nothing connected" success state on first load.
    */
   neverSuspend?: boolean;
+  /** Defer fetching until the surface needs the list. */
+  enabled?: () => boolean;
 }) {
   return useQuery(() => ({
-    queryKey: KEYS.list,
-    queryFn: fetchMcpServers,
+    ...mcpServersQueryOptions(),
+    enabled: options?.enabled?.() ?? true,
     refetchOnMount: 'always' as const,
     refetchOnWindowFocus: 'always' as const,
     refetchInterval: options?.refetchInterval,
@@ -117,9 +124,15 @@ export function useDeleteMcpServerMutation() {
 
 export function useStartMcpAuthMutation() {
   return useMutation(() => ({
-    mutationFn: async (request: StartAuthRequest) =>
+    mutationFn: async ({
+      parentSpan,
+      ...request
+    }: StartAuthRequest & { parentSpan?: TraceContext }) =>
       throwOnErr(
-        async () => await cognitionApiServiceClient.startMcpAuth(request)
+        async () =>
+          await (parentSpan ?? Telemetry.captureContext()).run(() =>
+            cognitionApiServiceClient.startMcpAuth(request)
+          )
       ),
   }));
 }

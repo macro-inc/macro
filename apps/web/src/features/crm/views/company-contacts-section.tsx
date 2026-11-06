@@ -1,85 +1,207 @@
-import type { CrmCompanyEntity } from '@entity';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  type CrmCompanyEntity,
+  type CrmContactEntity,
+  ListEntity,
+  ListEntityMetadataQueryProvider,
+  ListLayoutProvider,
+} from '@entity';
+import { Avatar } from '@ui';
+import {
+  createMemo,
+  createRenderEffect,
+  createSignal,
+  For,
+  on,
+  Show,
+} from 'solid-js';
+import {
+  CrmListEmpty,
+  CrmListSearchEmpty,
+  CrmListSkeleton,
+} from '../components/list-state';
+import { ArchivedRecordBadge } from '../components/record-archived-status';
+import { RecordSection } from '../components/record-section';
+import { RecordVisibilityFilter } from '../components/record-visibility-filter';
 import { useCrmContext } from '../context/crm-context';
-import type { CrmContact as CompanyContact } from '../core/contact';
+import type { CrmContact } from '../core/contact';
+import { useIsTeamAdmin } from './use-crm';
+
+function ContactRow(props: {
+  contact: CrmContact;
+  onOpen: (event: MouseEvent) => void;
+  ownerId: string;
+  archived: boolean;
+}) {
+  const email = props.contact.email;
+  const photo = email ? useCrmContext().createContactPhoto?.(email) : undefined;
+  const name = () => props.contact.name || props.contact.email || '';
+  const entity = (): CrmContactEntity => ({
+    ...props.contact,
+    type: 'crm_contact',
+    hidden: props.archived,
+    name: name(),
+    ownerId: props.ownerId,
+    sortTs: props.contact.lastInteraction,
+  });
+  return (
+    <ListEntity
+      entity={entity()}
+      timestamp={props.contact.lastInteraction}
+      role="button"
+      tabIndex={0}
+      onClick={props.onOpen}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.currentTarget.click();
+      }}
+      icon={
+        <Avatar size="sm" aria-hidden="true">
+          <Show when={photo?.()}>
+            {(url) => <Avatar.Image src={url()} alt="" />}
+          </Show>
+          <Avatar.Fallback>{name().slice(0, 1).toUpperCase()}</Avatar.Fallback>
+        </Avatar>
+      }
+      titleTrailing={
+        <>
+          <Show when={props.archived}>
+            <ArchivedRecordBadge />
+          </Show>
+          <Show when={props.contact.name && props.contact.email}>
+            <span class="min-w-0 truncate font-normal text-ink-extra-muted">
+              {props.contact.email}
+            </span>
+          </Show>
+        </>
+      }
+    />
+  );
+}
 
 export function CompanyContactsSection(props: {
   company?: CrmCompanyEntity;
-  contacts?: CompanyContact[];
-  onOpenContact?: (contact: CompanyContact) => void;
+  contacts?: CrmContact[];
+  onOpenContact?: (contact: CrmContact) => void;
 }) {
-  const contacts = () => props.contacts ?? [];
-  const { openWithSplit } = useCrmContext().createNavigation();
-
+  const context = useCrmContext();
+  const { openWithSplit } = context.createNavigation();
+  const isAdmin = useIsTeamAdmin();
+  const [archivedCompany, setArchivedCompany] = createSignal<string>();
+  const archived = () =>
+    isAdmin() && !!props.company && archivedCompany() === props.company?.id;
+  createRenderEffect(
+    on(
+      [
+        context.userId,
+        isAdmin,
+        () => props.company?.teamId,
+        () => props.company?.id,
+      ],
+      () => setArchivedCompany(undefined),
+      { defer: true }
+    )
+  );
   const [search, setSearch] = createSignal('');
+  const [listRef, setListRef] = createSignal<HTMLElement>();
   const filtered = createMemo(() => {
     const query = search().trim().toLowerCase();
-    if (!query) return contacts();
-    return contacts().filter(
+    return (props.contacts ?? []).filter(
       (contact) =>
-        contact.name?.toLowerCase().includes(query) ||
-        contact.email.toLowerCase().includes(query)
+        (contact.hidden || !!props.company?.hidden) === archived() &&
+        (!query ||
+          contact.name?.toLowerCase().includes(query) ||
+          contact.email?.toLowerCase().includes(query))
     );
   });
+  const createContact = () => {
+    if (props.company && !props.company.hidden)
+      context.openCreateContact({ companyId: props.company.id });
+  };
 
   return (
-    <Show
-      when={props.company}
-      fallback={<div class="text-sm text-ink-muted">Loading…</div>}
+    <RecordSection
+      title="Team"
+      actions={
+        <RecordVisibilityFilter
+          archived={archived()}
+          onChange={(value) =>
+            setArchivedCompany(value ? props.company?.id : undefined)
+          }
+          disabled={!isAdmin()}
+        />
+      }
+      search={search()}
+      onSearchChange={setSearch}
+      searchPlaceholder="Search contacts…"
+      onSearchEscape={() => setSearch('')}
+      createAction={{
+        label: 'Add contact',
+        onClick: createContact,
+        disabled: !props.company || props.company.hidden,
+      }}
+      toolbarCreate
     >
       <Show
-        when={contacts().length > 0}
-        fallback={<div class="text-sm text-ink-muted">No contacts yet.</div>}
+        when={props.company}
+        fallback={<CrmListSkeleton label="Loading contacts" />}
       >
-        <div class="flex flex-col gap-2">
-          <input
-            type="text"
-            value={search()}
-            onInput={(event) => setSearch(event.currentTarget.value)}
-            placeholder="Search contacts…"
-            class="w-full rounded-md border border-edge bg-surface px-2 py-1 text-sm text-ink placeholder:text-ink-placeholder focus:outline-none"
-          />
-          <Show
-            when={filtered().length > 0}
-            fallback={
-              <div class="text-sm text-ink-muted">No matching contacts.</div>
-            }
-          >
-            <div class="flex flex-col gap-1">
-              <For each={filtered()}>
-                {(contact) => (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      if (props.onOpenContact && !event.shiftKey) {
-                        props.onOpenContact(contact);
-                        return;
-                      }
-                      openWithSplit(
-                        {
-                          type: 'contact',
-                          id: contact.id,
-                        },
-                        { activate: true, preferNewSplit: event.shiftKey }
-                      );
-                    }}
-                    class="flex min-w-0 flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-ink-muted/[0.06]"
-                  >
-                    <span class="truncate text-sm">
-                      {contact.name ?? contact.email}
-                    </span>
-                    <Show when={contact.name}>
-                      <span class="truncate text-xs text-ink-muted">
-                        {contact.email}
-                      </span>
-                    </Show>
-                  </button>
-                )}
-              </For>
-            </div>
-          </Show>
-        </div>
+        <Show
+          when={filtered().length}
+          fallback={
+            <Show
+              when={search().trim()}
+              fallback={
+                <CrmListEmpty
+                  title={archived() ? 'No archived people' : 'No contacts yet'}
+                  description={
+                    archived() || props.company?.hidden
+                      ? undefined
+                      : 'Add a contact to this company to see them here.'
+                  }
+                  action={
+                    props.company && !props.company.hidden && !archived()
+                      ? { label: 'Add contact', onClick: createContact }
+                      : undefined
+                  }
+                />
+              }
+            >
+              <CrmListSearchEmpty
+                title="No matching contacts."
+                onClearSearch={() => setSearch('')}
+              />
+            </Show>
+          }
+        >
+          <ListEntityMetadataQueryProvider>
+            <ListLayoutProvider ref={listRef}>
+              <div ref={setListRef} class="flex flex-col">
+                <For each={filtered()}>
+                  {(contact) => (
+                    <ContactRow
+                      contact={contact}
+                      archived={archived()}
+                      ownerId={props.company?.ownerId ?? ''}
+                      onOpen={(event) => {
+                        if (props.onOpenContact && !event.shiftKey) {
+                          props.onOpenContact(contact);
+                          return;
+                        }
+                        openWithSplit(
+                          { type: 'contact', id: contact.id },
+                          { activate: true, preferNewSplit: event.shiftKey }
+                        );
+                      }}
+                    />
+                  )}
+                </For>
+              </div>
+            </ListLayoutProvider>
+          </ListEntityMetadataQueryProvider>
+        </Show>
       </Show>
-    </Show>
+    </RecordSection>
   );
 }

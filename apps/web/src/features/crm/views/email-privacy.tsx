@@ -1,3 +1,5 @@
+import { t } from '@app/lib/i18n';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import {
@@ -38,20 +40,25 @@ function DomainBlocklist(props: {
   };
   return (
     <SettingsSection
-      title={props.scope === 'team' ? 'Team blacklist' : 'My blacklist'}
+      title={
+        props.scope === 'team'
+          ? t('crm.privacyTeamTitle')
+          : t('crm.privacyPersonalTitle')
+      }
     >
       <p class="text-sm text-ink-muted">
         {props.scope === 'team'
-          ? 'These domains are excluded from everyone’s CRM email contributions. Any member can add a domain; only admins can remove one.'
-          : 'These domains are excluded from your contributions. Teammates can still contribute their copies of the same conversation.'}{' '}
-        Subdomains are included. A blocked participant excludes the entire email
-        thread. Existing companies stay visible.
+          ? t('crm.privacyTeamDescription')
+          : t('crm.privacyPersonalDescription')}{' '}
+        {t('crm.privacyDomainDescription')}
       </p>
       <SettingsCard>
         <For
           each={domains()}
           fallback={
-            <p class="px-6 py-3 text-sm text-ink-muted">No domains blocked.</p>
+            <p class="px-6 py-3 text-sm text-ink-muted">
+              {t('crm.privacyNoDomains')}
+            </p>
           }
         >
           {(item) => (
@@ -68,7 +75,7 @@ function DomainBlocklist(props: {
                   })
                 }
               >
-                Remove
+                {t('crm.privacyRemove')}
               </Button>
             </SettingsRow>
           )}
@@ -77,11 +84,11 @@ function DomainBlocklist(props: {
           <input
             aria-label={
               props.scope === 'team'
-                ? 'Domain to block for the team'
-                : 'Domain to block for my emails'
+                ? t('crm.privacyTeamDomainLabel')
+                : t('crm.privacyPersonalDomainLabel')
             }
             class="settings-input min-w-0 flex-1"
-            placeholder="example.com"
+            placeholder={t('crm.privacyDomainPlaceholder')}
             value={domain()}
             onInput={(e) => setDomain(e.currentTarget.value)}
           />
@@ -91,7 +98,7 @@ function DomainBlocklist(props: {
             size="sm"
             disabled={busy() || !domain().trim()}
           >
-            Add domain
+            {t('crm.privacyAddDomain')}
           </Button>
         </form>
       </SettingsCard>
@@ -109,59 +116,60 @@ export function CrmEmailPrivacySettings(props: { onOptIn?: () => void }) {
       fallback={
         <p class="text-sm text-ink-muted" role="status">
           {source.query.isError
-            ? 'Email settings could not be loaded.'
-            : 'Loading email settings…'}
+            ? t('crm.privacyLoadFailed')
+            : t('crm.privacyLoading')}
           <Show when={source.query.isError}>
-            <Button variant="ghost" onClick={() => void source.query.refetch()}>
-              Retry
+            <Button
+              variant="ghost"
+              onClick={() => fireAndForget(source.query.refetch(), 'crm')}
+            >
+              {t('crm.privacyRetry')}
             </Button>
           </Show>
         </p>
       }
     >
-      <SettingsSection title="Your email contribution">
-        <p class="text-sm text-ink-muted">
-          Everyone on your team can use CRM and manage companies without sharing
-          their email.
-        </p>
+      <SettingsSection title={t('crm.privacyContributionTitle')}>
+        <p class="text-sm text-ink-muted">{t('crm.privacyAvailability')}</p>
         <SettingsCard>
           <SettingsRow
-            label={settings()?.mailboxEmail ?? 'Connect your email first'}
+            label={settings()?.mailboxEmail ?? t('crm.privacyConnect')}
             description={
               settings()?.enabled
-                ? 'Your eligible emails are shared with your team.'
-                : 'Your emails are not contributing to CRM.'
+                ? t('crm.privacyShared')
+                : t('crm.privacyNotShared')
             }
           >
             <span class="text-sm text-ink-muted">
-              {settings()?.enabled ? 'Sharing on' : 'Sharing off'}
+              {settings()?.enabled ? t('crm.privacyOn') : t('crm.privacyOff')}
             </span>
           </SettingsRow>
         </SettingsCard>
         <p class="text-sm text-ink-muted">
-          Opting in shares the full content of all available past and future
-          emails from this mailbox with your team, except blocked threads.
-          Review both blacklists below first. Blocking a domain also hides
-          previously shared matching threads. Stopping sharing withdraws your
-          email contributions; companies and contacts remain.
+          {t('crm.privacyConsentDescription')}
         </p>
       </SettingsSection>
       <DomainBlocklist source={source} scope="team" />
       <DomainBlocklist source={source} scope="personal" />
       <div class="flex justify-end">
         <Button
-          variant={settings()?.enabled ? 'outline' : 'cta'}
-          disabled={!settings()?.mailboxEmail || source.update.isPending}
+          variant={settings()?.enabled ? 'outline' : 'primary'}
+          disabled={
+            (!settings()?.enabled && !settings()?.mailboxLinkId) ||
+            source.update.isPending
+          }
           onClick={() =>
             source.update.mutate(
-              { action: 'set_consent', enabled: !settings()?.enabled },
+              {
+                action: 'set_consent',
+                enabled: !settings()?.enabled,
+                link_id: settings()?.mailboxLinkId,
+              },
               { onSuccess: (data) => data.enabled && props.onOptIn?.() }
             )
           }
         >
-          {settings()?.enabled
-            ? 'Stop sharing my emails'
-            : 'Share my emails with CRM'}
+          {settings()?.enabled ? t('crm.privacyStop') : t('crm.privacyShare')}
         </Button>
       </div>
     </Show>
@@ -175,9 +183,9 @@ export function CrmEmailOptInBanner() {
     <>
       <Show when={source.query.isSuccess && !source.query.data?.enabled}>
         <div class="h-5 shrink-0 flex items-center justify-center gap-2 bg-accent/10 text-xs text-ink">
-          <span>Your emails aren’t contributing to CRM.</span>
+          <span>{t('crm.privacyBanner')}</span>
           <button type="button" class="underline" onClick={() => setOpen(true)}>
-            Review and opt in
+            {t('crm.privacyReview')}
           </button>
         </div>
       </Show>
@@ -190,19 +198,32 @@ export function CrmEmailPrivacyDialog(props: {
   open: boolean;
   onOpenChange(open: boolean): void;
 }) {
+  let title: HTMLElement | undefined;
   return (
     <Dialog
       open={props.open}
       onOpenChange={props.onOpenChange}
+      onOpenAutoFocus={(event) => {
+        // Start with the mailbox and consent terms, rather than scrolling a
+        // phone drawer to its first editable exclusion field.
+        event.preventDefault();
+        title?.focus({ preventScroll: true });
+      }}
       class="w-[min(640px,95vw)] max-h-[85vh]"
     >
       <Panel depth={2} class="max-h-[85vh] text-ink rounded-xl">
         <Panel.Header class="px-4 py-3 flex items-center justify-between gap-4">
-          <Dialog.Title class="text-base font-medium">
-            Contribute your emails to CRM
+          <Dialog.Title
+            ref={(element) => {
+              title = element;
+            }}
+            tabIndex={-1}
+            class="text-base font-medium"
+          >
+            {t('crm.privacyDialogTitle')}
           </Dialog.Title>
           <Dialog.CloseButton as={Button} variant="ghost" size="sm">
-            Close
+            {t('crm.privacyClose')}
           </Dialog.CloseButton>
         </Panel.Header>
         <Panel.Body scroll class="p-4 flex flex-col gap-4">

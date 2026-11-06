@@ -132,11 +132,11 @@ createConnectionWebsocketEffect((data) => {
     return;
   }
 
-  void queryClient.invalidateQueries({
+  queryClient.invalidateQueries({
     queryKey: scheduledActionKeys.detail({ scheduleId: payload.action_id })
       .queryKey,
   });
-  void queryClient.invalidateQueries({
+  queryClient.invalidateQueries({
     queryKey: scheduledActionKeys.list.queryKey,
   });
   // stopped: drop the synthetic pending row immediately so the UI stops
@@ -146,7 +146,7 @@ createConnectionWebsocketEffect((data) => {
   if (payload.resource) {
     removePendingHistoryRow(payload.resource, payload.action_id);
   }
-  void queryClient.invalidateQueries({
+  queryClient.invalidateQueries({
     queryKey: scheduledActionKeys.history({
       scheduleId: payload.action_id,
     }).queryKey,

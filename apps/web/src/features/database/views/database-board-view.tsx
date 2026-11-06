@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import type { ViewLayout } from '@service-storage/generated/schemas/viewLayout';
@@ -31,13 +32,12 @@ import {
   type CardMove,
   cardMove,
   cardsOf,
-  laneCards,
-  placeCard,
   withMovedCards,
   withPositions,
 } from '../core/board-moves';
 import type { DatabaseEntityType } from '../core/column-inference';
 import {
+  type DatabaseCellValue,
   type DatabaseViewColumn,
   isBoardGroupColumn,
   isOptionColumn,
@@ -64,7 +64,10 @@ type BoardLayout = Extract<ViewLayout, { kind: 'board' }>;
 
 /** Where a board's card places come from, and how a move is written. */
 export type BoardPositions = {
+  /** Stable view identity; switching it retires pending visual moves and sort prompts. */
+  viewId?: string;
   state: Accessor<BoardPositionsState>;
+  /** Reading this capability binds it to the current view for a pending move. */
   setPositions?: (
     change: (positions: CardPosition[]) => CardPosition[]
   ) => void;
@@ -84,6 +87,7 @@ type DatabaseBoardViewProps = {
   createComplete: (intentId: string) => boolean;
   onOpen: (rowId: string) => void;
   onCreate: (creation: RecordCreation) => Promise<boolean>;
+  onCompose?: (values: Record<string, DatabaseCellValue>) => void;
   /** Adds an option to the group column; absent for viewers. */
   onAddGroup?: (
     columnId: string,
@@ -135,6 +139,7 @@ export function DatabaseBoardView(props: DatabaseBoardViewProps) {
             <Show when={props.onViewChange}>
               {(changeView) => (
                 <Button
+                  variant="ghost"
                   size="sm"
                   class="mt-3"
                   onClick={() =>
@@ -149,11 +154,15 @@ export function DatabaseBoardView(props: DatabaseBoardViewProps) {
         }
       >
         {(shown) => (
-          <GroupedBoard
-            {...props}
-            layout={shown().layout}
-            groupColumn={shown().group}
-          />
+          <Show when={props.positions.viewId ?? 'local'} keyed>
+            {(_viewId) => (
+              <GroupedBoard
+                {...props}
+                layout={shown().layout}
+                groupColumn={shown().group}
+              />
+            )}
+          </Show>
         )}
       </Show>
     </>
@@ -230,33 +239,23 @@ function GroupedBoard(
   function write(move: CardMove) {
     const persist = props.positions.move;
     if (!persist) return;
-    const ready = state();
-    const shown = board();
-    // A move the shown lane has no place for writes no early places; the server's answer settles them.
-    const placed =
-      ready.kind === 'ready' && shown
-        ? placeCard(
-            laneCards(shown, ready.positions, move.lane, move.row),
-            move,
-            ready.engine.keyBetween
-          )
-        : undefined;
-    if (placed?.isOk())
-      props.positions.setPositions?.((current) =>
-        withPositions(current, placed.value)
-      );
+    // Capture the setter for the view where this move started.
+    const setPositions = props.positions.setPositions;
+    // Pending moves supply visual optimism; saved positions change only on success.
+    // A refusal then reveals the original order without overwriting a later move.
     setMoves((current) => [...current, { move }]);
-    void persist(move)
-      .map(({ positions, tableVersion }) => {
-        props.positions.setPositions?.((current) =>
-          withPositions(current, positions)
-        );
-        taken(move, tableVersion);
-      })
-      .mapErr((failure) => {
-        forget(move);
-        toast.failure(databaseOpMessage(failure, 'this card'));
-      });
+    fireAndForget(
+      persist(move)
+        .map(({ positions, tableVersion }) => {
+          setPositions?.((current) => withPositions(current, positions));
+          taken(move, tableVersion);
+        })
+        .mapErr((failure) => {
+          forget(move);
+          toast.failure(databaseOpMessage(failure, 'this card'));
+        }),
+      'database'
+    );
   }
   function drop(row: string, lane: LaneKey, next?: string) {
     const shown = board();
@@ -291,15 +290,18 @@ function GroupedBoard(
     );
     if (move) write(move);
   }
+  const laneValues = (lane: LaneKey) => {
+    const value = laneValue(props.groupColumn, lane);
+    return value === undefined ? {} : { [props.groupColumn.id]: value };
+  };
   function create(
     lane: LaneKey,
     title: string,
     intentId: string,
     options?: { open: true }
   ) {
-    const value = laneValue(props.groupColumn, lane);
     return props.onCreate({
-      values: value === undefined ? {} : { [props.groupColumn.id]: value },
+      values: laneValues(lane),
       title,
       titleColumn: props.layout.title,
       intentId,
@@ -356,6 +358,11 @@ function GroupedBoard(
                   : undefined
               }
               onCreate={create}
+              onCompose={
+                props.onCompose
+                  ? (lane) => props.onCompose?.(laneValues(lane))
+                  : undefined
+              }
               onAddGroup={addGroup()}
               controlsRef={props.controlsRef}
             />
@@ -365,7 +372,9 @@ function GroupedBoard(
           <DatabaseLoadFailure
             title="This board could not be laid out"
             message="Refresh the table, then try again."
-            onRetry={() => void props.source.refresh()}
+            onRetry={() => {
+              props.source.refresh();
+            }}
           />
         </Match>
       </Switch>

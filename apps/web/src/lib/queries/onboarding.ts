@@ -5,6 +5,8 @@
  * import gather runs, and connector OAuth completions reconcile instantly
  * via a server hook. All import state lives in `@queries/import`.
  */
+
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import {
@@ -53,6 +55,6 @@ export function useCompleteOnboardingMutation() {
   return useMutation(() => ({
     mutationFn: async (args: { skipped: boolean }) =>
       throwOnErr(() => onboardingClient.complete(args)),
-    onSuccess: () => void invalidateOnboarding(),
+    onSuccess: () => fireAndForget(invalidateOnboarding(), 'onboarding'),
   }));
 }

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidate AS(SELECT w.link_id FROM email_mailbox_watch_work w JOIN email_links l ON l.id=w.link_id\n            WHERE l.is_sync_active AND l.provider='OUTLOOK' AND w.next_run_at<=now() AND (w.lease_until IS NULL OR w.lease_until<now())\n            ORDER BY w.next_run_at LIMIT 1 FOR UPDATE OF w SKIP LOCKED)\n            UPDATE email_mailbox_watch_work w SET lease_id=$1,lease_until=now()+interval '3 minutes'\n            FROM candidate c,email_links l WHERE w.link_id=c.link_id AND l.id=w.link_id\n            RETURNING w.link_id,w.revision,l.sync_generation,l.grant_generation",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "245fe2aa5f0ec4187b50e95544005ea1a14018d7ec2850342a19ca61d212e8b0"
+}

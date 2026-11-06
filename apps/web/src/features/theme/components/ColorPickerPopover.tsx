@@ -392,7 +392,7 @@ export function ColorPickerPopover(props: {
             <Popover.Arrow class="fill-surface" />
             <div
               class={cn(
-                'flex max-h-[min(calc(100vh-2rem),var(--kb-popper-content-available-height))] w-[34rem] max-w-[calc(100vw-2rem)] flex-col overflow-y-auto gap-4 rounded-xl border border-edge glass bg-menu-glass p-4',
+                'flex max-h-[min(calc(100vh-2rem),var(--kb-popper-content-available-height))] w-[34rem] max-w-[calc(100vw-2rem)] flex-col overflow-y-auto gap-4 menu-surface p-4',
                 props.class
               )}
               role="dialog"

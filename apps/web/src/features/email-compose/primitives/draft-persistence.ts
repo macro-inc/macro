@@ -1,9 +1,9 @@
+import { Telemetry } from '@macro-inc/observability';
 import { v7 as uuidv7 } from 'uuid';
 import {
   type DeleteEmailDraft,
   DraftPersistRejected,
   type DraftSaveResult,
-  type EmailComposeFeedback,
   type EmailDraftStorage,
 } from '../context/compose-capabilities';
 import type { EmailDraft } from '../core/email-draft';
@@ -11,26 +11,47 @@ import type { LocalDraft } from '../core/local-draft';
 import type { DraftSession } from './draft-session';
 import type { DraftFormAttachment } from './email-form-state';
 
+export type DraftPersistence = ReturnType<typeof createDraftPersistence>;
+
 /** Sent from another device: the server outcome supersedes the local draft. */
 export const isAlreadySentRejection = (error: unknown) =>
   error instanceof DraftPersistRejected && error.code === 'DRAFT_ALREADY_SENT';
 
+/** Why a composer moved its text to a new draft instead of the one it edited. */
+export type KeptAsNewDraftReason =
+  | 'save-rejected'
+  | 'scheduled-elsewhere'
+  | 'sent-elsewhere'
+  | 'changed-elsewhere';
+
+/**
+ * A new draft beside a delivered one reads as a duplicate of the sent email,
+ * so every such move is recorded. Identity and counts only, never content.
+ */
+export function recordKeptAsNewDraft(
+  reason: KeptAsNewDraftReason,
+  draft: { draftId: string | undefined; unacknowledgedEdits: number }
+): void {
+  Telemetry.warn('email_draft.kept_as_new', {
+    'email_draft.reason': reason,
+    'email_draft.draft_id': draft.draftId,
+    'email_draft.unacknowledged_edits': draft.unacknowledgedEdits,
+  });
+}
+
 /**
  * A discard's delete. An already-sent verdict is not a failure: the reset
  * the caller performs next is exactly what that verdict asks for, so it is
- * announced and swallowed. Every other rejection propagates.
+ * swallowed. Every other rejection propagates.
  */
 export async function deleteDraftForDiscard(
   drafts: Pick<EmailDraftStorage, 'deleteDraft'>,
-  input: DeleteEmailDraft,
-  notices: Pick<EmailComposeFeedback, 'feedback'>,
-  alreadySentMessage: string
+  input: DeleteEmailDraft
 ): Promise<void> {
   try {
     await drafts.deleteDraft(input);
   } catch (error) {
     if (!isAlreadySentRejection(error)) throw error;
-    notices.feedback.alert(alreadySentMessage);
   }
 }
 
@@ -50,6 +71,7 @@ export async function deleteDraftForDiscard(
  */
 export function createDraftPersistence(options: {
   session: DraftSession;
+  draftGeneration?: () => number;
   drafts: Pick<
     EmailDraftStorage,
     'saveDraft' | 'deleteDraft' | 'saveLocalDraft' | 'retryDraft' | 'readDraft'
@@ -68,10 +90,17 @@ export function createDraftPersistence(options: {
   const { session } = options;
   let localRevision = options.localDraft?.revision;
   let localGeneration = options.localDraft?.generation;
+  // The caller's edit counter as of the newest local write, so a server
+  // acknowledgement of that working-copy revision can name the edits it covers.
+  let lastLocalEdit:
+    | { edit: number; generation: string; revision: number }
+    | undefined;
+  let removal: Promise<void> = Promise.resolve();
   const mint = (draft: EmailDraft) => {
     if (session.draftId()) return;
     localRevision = undefined;
     localGeneration = undefined;
+    lastLocalEdit = undefined;
     session.dispatch({
       type: 'minted',
       draftId: uuidv7(),
@@ -91,12 +120,44 @@ export function createDraftPersistence(options: {
   };
 
   return {
+    localVersion(): Pick<LocalDraft, 'generation' | 'revision'> | undefined {
+      return localGeneration !== undefined && localRevision !== undefined
+        ? { generation: localGeneration, revision: localRevision }
+        : undefined;
+    },
+    restored(local: Pick<LocalDraft, 'revision' | 'generation'> | undefined) {
+      localRevision = local?.revision;
+      localGeneration = local?.generation;
+      lastLocalEdit = undefined;
+    },
+    /**
+     * The newest edit a server acknowledgement of the working copy covers, or
+     * undefined when the acknowledged revision predates the newest local write.
+     * A save that rode the offline queue commits after its call returned, so
+     * this is how the caller learns those edits reached the server.
+     */
+    acknowledgedEdit(
+      local: Pick<LocalDraft, 'generation' | 'acknowledgedRevision'>
+    ): number | undefined {
+      if (
+        !lastLocalEdit ||
+        local.generation !== lastLocalEdit.generation ||
+        local.acknowledgedRevision < lastLocalEdit.revision
+      )
+        return undefined;
+      return lastLocalEdit.edit;
+    },
     async saveLocally(input: {
       draft: EmailDraft | null;
       inboxId?: string;
       attachments: readonly DraftFormAttachment[];
+      /** The caller's edit counter for this snapshot. */
+      edit: number;
     }) {
       if (!options.drafts.saveLocalDraft) return;
+      // The copy being deleted refuses edits. Address the draft the delete
+      // leaves: a fresh one, or the same one when the delete failed.
+      await removal;
       // Preserve an emptied working copy too; a failed delete must not restore
       // the earlier body on reload. An untouched composer has no identity.
       if (!input.draft && !session.draftId()) return;
@@ -128,6 +189,11 @@ export function createDraftPersistence(options: {
       if (!session.isStale(epoch)) {
         localRevision = local.revision;
         localGeneration = local.generation;
+        lastLocalEdit = {
+          edit: input.edit,
+          generation: local.generation,
+          revision: local.revision,
+        };
       }
     },
     async retry() {
@@ -150,22 +216,31 @@ export function createDraftPersistence(options: {
     },
     /** The draft has no content left: delete its row and drop its identity. */
     async remove(input: { inboxId?: string; completingThread?: boolean }) {
-      const draftId = session.draftId();
-      const epoch = session.epoch();
-      if (draftId) {
-        try {
-          await options.drafts.deleteDraft({
-            draftId,
-            threadId: session.threadId(),
-            ...input,
-          });
-        } catch (error) {
-          recordRejection(error, epoch);
-          throw error;
+      let removed!: () => void;
+      removal = new Promise<void>((resolve) => {
+        removed = resolve;
+      });
+      try {
+        const draftId = session.draftId();
+        const epoch = session.epoch();
+        if (draftId) {
+          try {
+            await options.drafts.deleteDraft({
+              draftId,
+              draftGeneration: options.draftGeneration?.() ?? 0,
+              threadId: session.threadId(),
+              ...input,
+            });
+          } catch (error) {
+            recordRejection(error, epoch);
+            throw error;
+          }
         }
+        if (session.isStale(epoch)) return;
+        session.dispatch({ type: 'emptied' });
+      } finally {
+        removed();
       }
-      if (session.isStale(epoch)) return;
-      session.dispatch({ type: 'emptied' });
     },
 
     /**

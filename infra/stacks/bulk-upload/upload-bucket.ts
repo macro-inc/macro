@@ -45,6 +45,14 @@ export class BulkUploadBucket extends pulumi.ComponentResource {
             filter: { prefix: 'slack-import/' },
             expiration: { days: 14 },
           },
+          // Outlives the 14-day DLQ, so a redriven extraction still finds its zip
+          {
+            id: 'extract-cleanup',
+            status: 'Enabled',
+            filter: { prefix: 'extract/' },
+            expiration: { days: 21 },
+            abortIncompleteMultipartUpload: { daysAfterInitiation: 1 },
+          },
         ],
         // The helper owns CORS: PUT and allowedHeaders ['*'] already permit
         // If-None-Match and x-amz-checksum-sha256 without a second CORS resource.

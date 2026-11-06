@@ -1,8 +1,9 @@
 /**
  * `/poll` (RFC 03 §3): a poll is a form with one required choice question.
  * Create the form (and its database), add the Select column with the options
- * under ids minted here, place it as the only question, and set whether
- * respondents see the results.
+ * under ids minted here, place it as the only question, and show its results
+ * to respondents. An anonymous poll is anonymous from creation, so its table
+ * never gets a Respondent column.
  */
 import { createDatabaseColumn } from '@block-database/queries/columns';
 import { createForm, putFormLayout, updateForm } from '@queries/storage/forms';
@@ -18,7 +19,8 @@ export type PollDraft = {
   question: string;
   options: string[];
   multi: boolean;
-  showResults: boolean;
+  shareResponses: boolean;
+  anonymous: boolean;
 };
 
 /** What a half-made poll leaves behind, for the caller to put in the trash. */
@@ -38,11 +40,21 @@ export function publishPoll(
   if (!question) return errAsync({ message: 'Ask a question.' });
   if (labels.length < 2)
     return errAsync({ message: 'Give at least two options.' });
-  return createForm({ name: question, source: { kind: 'new' } }, 'poll')
+  return createForm(
+    {
+      name: question,
+      source: {
+        kind: 'new',
+        isHiddenInDrive: true,
+        anonymous: draft.anonymous,
+      },
+    },
+    'poll'
+  )
     .mapErr(writeFailureOf)
     .andThen((detail) => {
       const { databaseId, tableId, id: formId } = detail.form;
-      // A step refused after the form exists leaves nothing behind in Drive.
+      // A step refused after the form exists leaves nothing behind.
       const abandon = (failure: FormWriteFailure) =>
         new ResultAsync<never, FormWriteFailure>(
           discard({ formId, databaseId }).match(
@@ -50,7 +62,7 @@ export function publishPoll(
             () =>
               err({
                 ...failure,
-                message: `${failure.message} The unfinished poll is still in Drive.`,
+                message: `${failure.message} The unfinished poll could not be removed.`,
               })
           )
         );
@@ -94,9 +106,10 @@ export function publishPoll(
             })
         )
         .andThen(() =>
-          updateForm(formId, { tallyVisible: draft.showResults }).mapErr(
-            writeFailureOf
-          )
+          updateForm(formId, {
+            tallyVisible: true,
+            responsesVisible: draft.shareResponses,
+          }).mapErr(writeFailureOf)
         )
         .orElse(abandon)
         .map(() => ({

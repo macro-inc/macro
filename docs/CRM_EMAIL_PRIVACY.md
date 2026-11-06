@@ -10,7 +10,7 @@ hides or deletes a company or contact.
 
 - Each person explicitly opts their primary mailbox into sharing the full content
   of all available past and future emails. Consent names the exact email-link ID.
-  Secondary/new connections do not inherit consent. Leaving a team deletes consent.
+  Secondary/new connections do not inherit consent. Mailbox lifecycle changes revoke the grant even if the connection keeps the same ID; ordinary token refresh does not. Leaving a team deletes consent.
 - Team domains exclude every contributor. Any member may add one; existing team
   admin/owner roles may remove one. There is no separate CRM-admin role in the
   current membership model.
@@ -37,13 +37,19 @@ the two lists; it commits backfill requests in an outbox with the mutation.
 direct thread access. It verifies the mailbox, current membership, explicit consent,
 and whole-thread participant exclusions. `crm_email_domain_blocked` also honors
 legacy company `email_sync = false` exclusions. Writers and privacy changes use
-shared/exclusive transaction advisory locks in a consistent order.
+shared/exclusive transaction advisory locks keyed by `crm-email:{team}`. Population
+takes the shared privacy lock before the per-domain lock, parent-team `KEY SHARE`,
+then mailbox `SHARE` and membership `KEY SHARE` before entity writes. Privacy changes take the exclusive lock first. Consent admission
+retains the parent team, exact primary mailbox `FOR SHARE` and membership `FOR KEY SHARE` before writing consent; lifecycle
+writers already own the mailbox row and revoke consent without taking a privacy
+lock. This preserves mailbox-before-consent ordering and prevents an opt-in racing
+a disconnect from reviving sharing.
 
 Historical fan-out resolves the consented primary mailbox first. Each queued contact
 job is admitted before metadata enrichment and rechecked inside its write transaction.
 Interaction ranges are recomputed from eligible stored messages, rather than trusting
 the old job's timestamps or direction. Only eligible sent history creates companies;
-received-only history can update an existing company. Email bodies remain in the
+received-only history can update an existing company. Personal-provider contacts use the same consent and interaction checks, preserve the team’s personal-email filter, and are created without a company only from eligible sent history. Email bodies remain in the
 email store; CRM grants access to eligible existing threads.
 
 The email-service outbox worker publishes retryable historical jobs, then deletes
@@ -51,7 +57,10 @@ the outbox row in its transaction. Publication may duplicate after a crash; cons
 are idempotent and revalidate current consent and exclusions. After opt-out, pending
 outbox requests are discarded by the publisher and already-published jobs no-op.
 Withdrawing consent does not wait for an outbox row locked by a publisher's network
-request. Other publishers skip locked requests and retry after a failed publication.
+request. Other publishers skip locked requests and retry after a failed publication. Optional
+W3C trace context is persisted with each request, adopted by the publisher, and
+carried through queue delivery, retries, and contact fan-out without logging
+mailbox identities or message payloads.
 
 ## Rollout
 
@@ -59,18 +68,22 @@ The migration starts with no individual consents and turns off the retired
 `team_crm_settings.crm_enabled` switch to fail closed for older workers/readers.
 An insert/update trigger keeps that switch off if an older service tries to
 re-enable it during the rollout. The down migration removes this guard.
-It preserves all company/contact rows. Upgrade all email readers, writers, and API
-instances before exposing the new opt-in UI; do not leave old team-settings endpoints
-active during the cutover. The existing CRM product rollout feature flag is unchanged.
+It preserves all company/contact rows. Before applying the migration, stop routing
+requests to old purge-capable team-settings endpoints: their disable handler can
+delete records even when the legacy switch is already false. Upgrade all email
+readers, writers, and API instances before exposing the new opt-in UI. The existing
+CRM product rollout feature flag is unchanged.
 
 Current team responses report CRM available. The old team-enable endpoint no-ops
 without enrolling mailboxes; team-disable requests are rejected, preventing its
 former purge behavior. Rollback removes the new privacy state and leaves the old
 team switch off, requiring an explicit decision before old sharing is re-enabled.
 
-## Verification
+## Historical verification
 
-Verified on October 14, 2026 against current `main`:
+The following checks describe the October 14, 2026 implementation and its then-current
+base. They do not establish validation of the later main integration or mailbox
+lifecycle changes. Current-source checks are recorded with the PR review evidence.
 
 - 639 Rust unit/integration tests passed: CRM library 247 plus 19 integration
   tests, teams 266, direct thread authorization 48, CRM email queries 28,
@@ -85,7 +98,7 @@ Verified on October 14, 2026 against current `main`:
 - Frontend CRM and contact tooltip suites: 112 passed, including cache invalidation,
   failed withdrawal, disconnected mailboxes, and responses arriving after an
   identity change. Whole-app TypeScript checking and `just check` passed.
-- Workspace SQLx preparation with all features and test queries passed. Static
+- Historical workspace SQLx preparation passed. Current preparation excludes test-query metadata, per the database development guide. Static
   queries use checked macros; dynamic email filters bind values. Ingestion uses
   existing mailbox/address, recipient, sender, and thread indexes, and aggregates
   by thread before evaluating whole-thread privacy.

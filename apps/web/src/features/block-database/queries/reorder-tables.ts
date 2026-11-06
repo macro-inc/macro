@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
 import {
   applyDatabaseOps,
@@ -81,7 +82,7 @@ export function reorderDatabaseTables(params: {
           : current
       );
       // setQueryData during rollback marks the cache fresh; reconcile after it.
-      void invalidateDatabase(params.databaseId);
+      fireAndForget(invalidateDatabase(params.databaseId), 'database-cache');
       return result.map(() => undefined);
     }
     return result.map(() => undefined);

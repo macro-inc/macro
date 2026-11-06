@@ -4,8 +4,12 @@ import type {
   GoalSeekResult,
 } from '@macro-inc/spreadsheet/goal-seek';
 import type { SheetPivotLayout } from '@macro-inc/spreadsheet/pivot-layout';
+import type { WorkbookTable } from '@macro-inc/spreadsheet/structured-references';
 import type { WorkbookSheetMetadata } from '@macro-inc/spreadsheet/workbook-metadata';
-import type { AxisChange } from '@macro-inc/spreadsheet/workbook-structure';
+import type {
+  AxisChange,
+  RangeMove,
+} from '@macro-inc/spreadsheet/workbook-structure';
 import type {
   CalculatedCell,
   CalculationContext,
@@ -33,6 +37,8 @@ export type CalculationSheetPatch = {
   >;
   /** Where its pivot tables show their values, for GETPIVOTDATA. */
   pivots?: SheetPivotLayout[];
+  /** Its tables and their column names, for structured references. */
+  tables?: WorkbookTable[];
   /** Every input, replacing the worker's copy of the sheet. */
   cells?: CalculationCells;
   /** Changed inputs; null removes a cell. */
@@ -45,6 +51,12 @@ export type CalculationRequest =
       type: 'change-axis';
       sheets: SpreadsheetWorkbookSheet[];
       change: AxisChange;
+    }
+  | {
+      id: number;
+      type: 'move-range';
+      sheets: SpreadsheetWorkbookSheet[];
+      move: RangeMove;
     }
   | { id: number; type: 'calculate'; cells: SpreadsheetCells; rowCount: number }
   | { id: number; type: 'calculate-workbook'; sheets: CalculationSheet[] }
@@ -72,6 +84,7 @@ export type CalculationRequest =
 
 export type CalculationResponse =
   | { id: number; type: 'change-axis'; sheets: SpreadsheetWorkbookSheet[] }
+  | { id: number; type: 'move-range'; sheets: SpreadsheetWorkbookSheet[] }
   | { id: number; type: 'started' }
   | { id: number; type: 'calculate'; values: SpreadsheetCalculation }
   | { id: number; type: 'calculate-workbook'; values: WorkbookCalculation }
@@ -90,6 +103,7 @@ export type CalculationResponse =
 
 export type CalculationOperation =
   | Omit<Extract<CalculationRequest, { type: 'change-axis' }>, 'id'>
+  | Omit<Extract<CalculationRequest, { type: 'move-range' }>, 'id'>
   | Omit<Extract<CalculationRequest, { type: 'calculate' }>, 'id'>
   | Omit<Extract<CalculationRequest, { type: 'calculate-workbook' }>, 'id'>
   | Omit<Extract<CalculationRequest, { type: 'update-workbook' }>, 'id'>

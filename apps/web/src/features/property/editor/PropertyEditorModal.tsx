@@ -1,26 +1,22 @@
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import type { IUser } from '@core/user';
-import { idToDisplayName, idToEmail } from '@core/user/util';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import {
   type ListNavActions,
   useListKeyBindings,
 } from '@core/util/useListKeyBindings';
 import { type EntityData, InlineEntity, isTaskEntity } from '@entity';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PropertiesIcon from '@phosphor/sliders-horizontal.svg';
-import TagIcon from '@phosphor/tag-simple.svg';
-import { type CombinedEntity, getEntityName, getEntityType } from '@property';
+import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import PropertiesIcon from '@icon/system/regular/sliders-horizontal.svg';
+import TagIcon from '@icon/system/regular/tag-simple.svg';
 import { CreatePropertyModal } from '@property/component/modal/CreatePropertyModal';
 import { PropertyValueIcon } from '@property/component/propertyValue';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import { usePropertySelection } from '@property/hooks';
-import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import { canTagEntity, useDocTags } from '@property/tags';
 import { TagDot } from '@property/tags/TagDot';
 import {
@@ -49,6 +45,7 @@ import type { EntityReference } from '@service-properties/generated/schemas/enti
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
+import type { PropertyDefinitionWithOptions } from '@service-properties/generated/schemas/propertyDefinitionWithOptions';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { mergeRefs } from '@solid-primitives/refs';
@@ -76,19 +73,19 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { EntityPropertyEditor } from './entity-property-editor';
 import { useAllProperties } from './hooks/useAllProperties';
-import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
 import {
   closePropertyEditor,
   hasPropertyEditorPropertyAddedHandler,
   notifyPropertyEditorPropertyAdded,
   type PropertyEditorEntity,
+  type PropertyEditorState,
   propertyEditorOpen,
   propertyEditorState,
   setPropertyEditorMode,
   setPropertyEditorTarget,
-  togglePropertyEditor,
 } from './state/propertyEditor';
 
 type TagOptionItem = {
@@ -190,13 +187,6 @@ function selectedOptionIds(
   return new Set(property.value ?? []);
 }
 
-function selectedEntityRefs(
-  property: Property | PropertyDefinitionDomain
-): EntityReference[] {
-  if (!('value' in property) || property.valueType !== 'ENTITY') return [];
-  return property.value ?? [];
-}
-
 function propertyEditorEntityType(entity: PropertyEditorEntity): EntityType {
   if ('entityType' in entity) return entity.entityType;
   if (isTaskEntity(entity)) return 'TASK';
@@ -208,22 +198,8 @@ function propertyEditorEntityName(entity: PropertyEditorEntity): string {
 }
 
 export function PropertyEditorModal() {
-  const [dialogRef, setDialogRef] = createSignal<HTMLElement | undefined>();
-  const [attach, hotkeyScope] = useHotkeyDOMScope('property-editor');
-  const [searchValue, setSearchValue] = createSignal('');
-  const [selectedIndex, setSelectedIndex] = createSignal(0);
-  const [inputType, setInputType] = createSignal<'text' | 'number'>('text');
-  const [createPropertyInitialName, setCreatePropertyInitialName] =
-    createSignal<string | null>(null);
-
-  const defaultPlaceholder = 'Choose a property...';
-  const [placeholder, setPlaceholder] = createSignal('');
-
   const saveProperties = useSavePropertyForMultiEntitites();
-  const handlePropertySave = (
-    value: PropertyApiValues,
-    event?: KeyboardEvent | MouseEvent
-  ) => {
+  const handlePropertySave = (value: PropertyApiValues) => {
     const { selectedEntities, targetProperty } = propertyEditorState;
     if (!selectedEntities.length || !targetProperty) return;
 
@@ -235,10 +211,75 @@ export function PropertyEditorModal() {
         : count + ' entities'
     }`;
 
-    saveProperties(selectedEntities, targetProperty, value).then((success) => {
-      if (success) toast.success(message);
-    });
-    if (!event?.shiftKey) closePropertyEditor();
+    fireAndForget(
+      saveProperties(selectedEntities, targetProperty, value).then(
+        (success) => {
+          if (success) toast.success(message);
+        }
+      ),
+      'property-editor'
+    );
+  };
+
+  return (
+    <PropertyEditorDialog
+      isOpen={propertyEditorOpen()}
+      state={propertyEditorState}
+      onModeChange={setPropertyEditorMode}
+      onTargetChange={setPropertyEditorTarget}
+      onClose={closePropertyEditor}
+      onSave={(_property, value) => handlePropertySave(value)}
+      onPropertyAdded={
+        propertyEditorOpen() &&
+        propertyEditorState.selectedEntities.length === 1 &&
+        hasPropertyEditorPropertyAddedHandler()
+          ? notifyPropertyEditorPropertyAdded
+          : undefined
+      }
+    />
+  );
+}
+
+/** Shared property selection, creation and value editing for entities and drafts. */
+export function PropertyEditorDialog(props: {
+  isOpen: boolean;
+  state: PropertyEditorState;
+  onModeChange: (mode: PropertyEditorState['mode']) => void;
+  onTargetChange: (property: Property | PropertyDefinitionDomain) => void;
+  onClose: () => void;
+  onSave: (
+    property: Property | PropertyDefinitionDomain,
+    value: PropertyApiValues,
+    event?: KeyboardEvent | MouseEvent
+  ) => void;
+  onPropertyAdded?: (ids?: string[]) => void | Promise<void>;
+  onPropertyCreated?: (
+    property: PropertyDefinitionWithOptions
+  ) => void | Promise<void>;
+  availableProperties?: PropertyDefinitionDomain[];
+  properties?: Property[];
+  name?: string;
+}) {
+  const [dialogRef, setDialogRef] = createSignal<HTMLElement | undefined>();
+  const [attach, hotkeyScope] = useHotkeyDOMScope('property-editor');
+  const [searchValue, setSearchValue] = createSignal('');
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [inputType, setInputType] = createSignal<'text' | 'number'>('text');
+  const [createPropertyInitialName, setCreatePropertyInitialName] =
+    createSignal<string | null>(null);
+  const defaultPlaceholder = 'Choose a property...';
+  const [placeholder, setPlaceholder] = createSignal('');
+  let editorRevision = 0;
+  onCleanup(() => editorRevision++);
+
+  const handlePropertySave = (
+    value: PropertyApiValues,
+    event?: KeyboardEvent | MouseEvent
+  ) => {
+    const property = props.state.targetProperty;
+    if (!property) return;
+    props.onSave(property, value, event);
+    if (!event?.shiftKey) props.onClose();
   };
 
   const openCreateProperty = (initialName: string) => {
@@ -252,47 +293,47 @@ export function PropertyEditorModal() {
     setCreatePropertyInitialName(null);
     if (!propertyDefinition) return;
 
+    const revision = editorRevision;
     const createdDefinitionId = propertyDefinition.id;
-    const shouldNotifySelectedEntity = Boolean(
-      hasPropertyEditorPropertyAddedHandler() &&
-        propertyEditorState.selectedEntities.length === 1
-    );
+    const shouldNotifySelectedEntity =
+      !props.onPropertyCreated && Boolean(props.onPropertyAdded);
 
     if (shouldNotifySelectedEntity) {
       try {
-        await notifyPropertyEditorPropertyAdded([createdDefinitionId]);
+        await props.onPropertyAdded?.([createdDefinitionId]);
       } catch (error) {
         console.error('Failed to add created property to entity', error);
       }
     }
 
+    let created: PropertyDefinitionWithOptions = {
+      definition: propertyDefinition,
+      property_options: [],
+    };
     try {
       const propertyWithOptions =
         await fetchPropertyDefinitionWithOptions(createdDefinitionId);
-
       if (propertyWithOptions && 'definition' in propertyWithOptions) {
-        setPropertyEditorMode('direct');
-        setPropertyEditorTarget(
-          toPropertyDefinitionDomain(
-            propertyWithOptions.definition,
-            propertyWithOptions.property_options
-          )
-        );
-        return;
+        created = propertyWithOptions;
       }
     } catch (error) {
       console.error('Failed to fetch created property options', error);
     }
 
-    setPropertyEditorMode('direct');
-    setPropertyEditorTarget(toPropertyDefinitionDomain(propertyDefinition));
+    if (!props.isOpen || revision !== editorRevision) return;
+    await props.onPropertyCreated?.(created);
+    if (!props.isOpen || revision !== editorRevision) return;
+    props.onTargetChange(
+      toPropertyDefinitionDomain(created.definition, created.property_options)
+    );
+    props.onModeChange('direct');
   };
 
   const { dispose: disposeHotkey } = registerHotkey({
     hotkey: ['escape'],
     description: 'Close property editor',
     keyDownHandler: () => {
-      closePropertyEditor();
+      props.onClose();
       return true;
     },
     scopeId: hotkeyScope,
@@ -300,7 +341,8 @@ export function PropertyEditorModal() {
   onCleanup(disposeHotkey);
 
   createEffect(
-    on([() => propertyEditorState.mode, propertyEditorOpen], () => {
+    on([() => props.state.mode, () => props.isOpen], () => {
+      editorRevision++;
       setSelectedIndex(0);
       setSearchValue('');
       setPlaceholder('');
@@ -312,8 +354,10 @@ export function PropertyEditorModal() {
 
   return (
     <Dialog
-      open={propertyEditorOpen()}
-      onOpenChange={togglePropertyEditor}
+      open={props.isOpen}
+      onOpenChange={(open) => {
+        if (!open) props.onClose();
+      }}
       contentRef={mergeRefs(attach, setDialogRef)}
     >
       <CommandMenuShell depth={2} class="rounded-xl max-h-108 text-sm">
@@ -331,13 +375,18 @@ export function PropertyEditorModal() {
           />
         </CommandMenuShell.Header>
         <CommandMenuShell.Toolbar class="p-3 py-2 border-b-0">
-          <EditingEntityPreview
-            entities={propertyEditorState.selectedEntities}
-          />
+          <Show
+            when={props.name}
+            fallback={
+              <EditingEntityPreview entities={props.state.selectedEntities} />
+            }
+          >
+            <span class="truncate text-ink-muted">{props.name}</span>
+          </Show>
         </CommandMenuShell.Toolbar>
         <CommandMenuShell.Body>
           <Switch>
-            <Match when={propertyEditorState.mode === 'selector'}>
+            <Match when={props.state.mode === 'selector'}>
               <div class="overflow-scroll scrollbar-hidden">
                 <PropertyList
                   searchTerm={searchValue()}
@@ -345,22 +394,30 @@ export function PropertyEditorModal() {
                   setFocusedIndex={setSelectedIndex}
                   setKeybindings={keybindings}
                   onCreateProperty={openCreateProperty}
+                  properties={props.availableProperties}
+                  existingPropertyIds={props.properties?.map(
+                    (p) => p.propertyDefinitionId
+                  )}
+                  onTagSelected={
+                    !props.onPropertyAdded &&
+                    props.state.selectedEntities.length > 0 &&
+                    props.state.selectedEntities.every(canTagEntity)
+                      ? () => props.onModeChange('tag')
+                      : undefined
+                  }
                   onPropertySelected={async (property) => {
-                    if (
-                      hasPropertyEditorPropertyAddedHandler() &&
-                      propertyEditorState.selectedEntities.length === 1
-                    ) {
-                      await notifyPropertyEditorPropertyAdded([
-                        propertyIdentity(property),
-                      ]);
-                    }
+                    const revision = editorRevision;
+                    await props.onPropertyAdded?.([propertyIdentity(property)]);
+                    if (!props.isOpen || revision !== editorRevision) return;
+                    props.onTargetChange(property);
+                    props.onModeChange('direct');
                   }}
                 />
               </div>
             </Match>
-            <Match when={propertyEditorState.mode === 'direct'}>
+            <Match when={props.state.mode === 'direct'}>
               <PropertyValueEditor
-                property={propertyEditorState.targetProperty}
+                property={props.state.targetProperty}
                 searchValue={searchValue}
                 setSearchValue={setSearchValue}
                 selectedIndex={selectedIndex}
@@ -369,12 +426,13 @@ export function PropertyEditorModal() {
                 setPlaceholder={setPlaceholder}
                 setInputType={setInputType}
                 onSave={handlePropertySave}
-                selectedEntities={propertyEditorState.selectedEntities}
+                selectedEntities={props.state.selectedEntities}
+                properties={props.properties}
               />
             </Match>
-            <Match when={propertyEditorState.mode === 'tag'}>
+            <Match when={props.state.mode === 'tag'}>
               <TagAssignmentEditor
-                entities={propertyEditorState.selectedEntities}
+                entities={props.state.selectedEntities}
                 searchValue={searchValue}
                 selectedIndex={selectedIndex}
                 setSelectedIndex={setSelectedIndex}
@@ -439,26 +497,28 @@ function PropertyList(props: {
   setFocusedIndex: Setter<number>;
   setKeybindings: (navAction: ListNavActions) => void;
   onCreateProperty: (initialName: string) => void;
-  onPropertySelected?: (
+  onPropertySelected: (
     property: Property | PropertyDefinitionDomain
   ) => void | Promise<void>;
+  onTagSelected?: () => void;
+  properties?: PropertyDefinitionDomain[];
+  existingPropertyIds?: string[];
 }) {
-  const properties = useAllProperties();
+  const allProperties = useAllProperties(() => !props.properties);
+  const properties = () => props.properties ?? allProperties();
 
   const { filteredProperties } = usePropertySelection(
-    () => [],
+    () => props.existingPropertyIds ?? [],
     properties,
-    () => props.searchTerm
+    () => props.searchTerm,
+    () => props.properties !== undefined
   );
 
   const showTagAssignmentOption = createMemo(() => {
-    if (hasPropertyEditorPropertyAddedHandler()) return false;
+    if (!props.onTagSelected) return false;
 
     const query = props.searchTerm.toLowerCase().trim();
-    return (
-      propertyEditorState.selectedEntities.every(canTagEntity) &&
-      (!query || 'tags'.includes(query) || 'label'.includes(query))
-    );
+    return !query || 'tags'.includes(query) || 'label'.includes(query);
   });
   const createPropertyName = () => props.searchTerm.trim();
   const exactPropertyMatchExists = () => {
@@ -504,12 +564,6 @@ function PropertyList(props: {
     props.setFocusedIndex(0);
   });
 
-  const setProperty = async (property: Property | PropertyDefinitionDomain) => {
-    await props.onPropertySelected?.(property);
-    setPropertyEditorMode('direct');
-    setPropertyEditorTarget(property);
-  };
-
   const selectRow = async (row: PropertyListRow) => {
     if (row.type === 'create') {
       props.onCreateProperty(row.name);
@@ -517,11 +571,11 @@ function PropertyList(props: {
     }
 
     if (row.type === 'tags') {
-      setPropertyEditorMode('tag');
+      props.onTagSelected?.();
       return;
     }
 
-    await setProperty(row.property);
+    await props.onPropertySelected(row.property);
   };
 
   const listController = createCommandListController({
@@ -1103,7 +1157,7 @@ function TagAssignmentEditor(props: {
     event?: KeyboardEvent | MouseEvent
   ) => {
     if (row.type === 'clear') {
-      void clearAllTags(event);
+      fireAndForget(clearAllTags(event), 'property-editor');
       return;
     }
 
@@ -1112,7 +1166,7 @@ function TagAssignmentEditor(props: {
       return;
     }
 
-    void toggleTag(row.item, event);
+    fireAndForget(toggleTag(row.item, event), 'property-editor');
   };
 
   const listController = createCommandListController({
@@ -1264,6 +1318,7 @@ function PropertyValueEditor(props: {
     event?: KeyboardEvent | MouseEvent
   ) => void;
   selectedEntities: PropertyEditorEntity[];
+  properties?: Property[];
 }) {
   const propertyType = () => props.property?.valueType;
   const singleEntity = () =>
@@ -1283,8 +1338,9 @@ function PropertyValueEditor(props: {
     if (!property) return undefined;
     if ('value' in property) return property;
 
+    const properties = props.properties ?? entityPropertiesQuery.data ?? [];
     return (
-      entityPropertiesQuery.data?.find(
+      properties.find(
         (entityProperty) => entityProperty.propertyDefinitionId === property.id
       ) ?? property
     );
@@ -1316,7 +1372,9 @@ function PropertyValueEditor(props: {
           onSubmit={handleSubmit}
           setKeybindings={props.setKeybindings}
           setPlaceholder={props.setPlaceholder}
-          selectedEntityCount={props.selectedEntities.length}
+          selectedEntityCount={
+            props.properties ? 1 : props.selectedEntities.length
+          }
           onSave={props.onSave}
         />
       </Match>
@@ -1324,13 +1382,14 @@ function PropertyValueEditor(props: {
         <EntityPropertyEditor
           property={resolvedProperty()}
           searchValue={props.searchValue}
-          setSearchValue={props.setSearchValue}
           selectedIndex={props.selectedIndex}
           setSelectedIndex={props.setSelectedIndex}
           onSubmit={handleSubmit}
           setKeybindings={props.setKeybindings}
           setPlaceholder={props.setPlaceholder}
-          selectedEntityCount={props.selectedEntities.length}
+          selectedEntityCount={
+            props.properties ? 1 : props.selectedEntities.length
+          }
           onSave={props.onSave}
         />
       </Match>
@@ -1638,328 +1697,6 @@ function SelectPropertyEditor(props: {
         )}
       </CommandMenuList>
     </Show>
-  );
-}
-
-function EntityPropertyEditor(props: {
-  property?: Property | PropertyDefinitionDomain;
-  searchValue: Accessor<string>;
-  setSearchValue: Setter<string>;
-  selectedIndex: Accessor<number>;
-  setSelectedIndex: Setter<number>;
-  onSubmit: (value: EntityReference) => void;
-  onSave: (
-    apiValues: PropertyApiValues,
-    event?: KeyboardEvent | MouseEvent
-  ) => void;
-  setKeybindings: (binding: ListNavActions) => void;
-  setPlaceholder: Setter<string>;
-  selectedEntityCount: number;
-}) {
-  // Company owners are always teammates, so the owner picker offers the
-  // team roster instead of the default quick-access people pool (same as
-  // the row-cell owner editor in EntityEditor).
-  const isCompanyOwner = () => {
-    const property = props.property;
-    if (!property) return false;
-    const definitionId =
-      'propertyDefinitionId' in property
-        ? property.propertyDefinitionId
-        : property.id;
-    return definitionId === SYSTEM_PROPERTY_IDS.COMPANY_OWNER;
-  };
-  const teamQuery = useCurrentTeamQuery();
-  const teamMembers = (): IUser[] =>
-    (teamQuery.data?.members ?? []).map((member) => ({
-      id: member.user_id,
-      email: idToEmail(member.user_id),
-      name: idToDisplayName(member.user_id),
-    }));
-
-  const { entities } = useEntitiesForProperty(
-    () => props.property,
-    props.searchValue,
-    { users: () => (isCompanyOwner() ? teamMembers() : undefined) }
-  );
-  const [localSelectedRefs, setLocalSelectedRefs] = createSignal(
-    props.property ? selectedEntityRefs(props.property) : []
-  );
-  const [orderedSelectedIds, setOrderedSelectedIds] = createSignal(
-    new Set(
-      props.property
-        ? selectedEntityRefs(props.property).map((ref) => ref.entity_id)
-        : []
-    )
-  );
-  let syncedPropertyId = props.property ? propertyIdentity(props.property) : '';
-  let syncedSelectionKey = props.property
-    ? selectedEntityRefs(props.property)
-        .map((ref) => ref.entity_id)
-        .sort()
-        .join('\0')
-    : '';
-  const [openOrderFrozen, setOpenOrderFrozen] = createSignal(false);
-
-  createEffect(() => {
-    const propertyId = props.property ? propertyIdentity(props.property) : '';
-    const refs = props.property ? selectedEntityRefs(props.property) : [];
-    const nextSelectionKey = refs
-      .map((ref) => ref.entity_id)
-      .sort()
-      .join('\0');
-
-    if (propertyId !== syncedPropertyId) {
-      syncedPropertyId = propertyId;
-      syncedSelectionKey = nextSelectionKey;
-      setOpenOrderFrozen(false);
-      setLocalSelectedRefs(refs);
-      setOrderedSelectedIds(new Set(refs.map((ref) => ref.entity_id)));
-      return;
-    }
-
-    if (openOrderFrozen() || nextSelectionKey === syncedSelectionKey) return;
-
-    syncedSelectionKey = nextSelectionKey;
-    setLocalSelectedRefs(refs);
-    setOrderedSelectedIds(new Set(refs.map((ref) => ref.entity_id)));
-  });
-
-  createEffect(() => {
-    const entityTypeLabel =
-      props.property?.specificEntityType?.toLowerCase() || 'entity';
-    props.setPlaceholder(`Search for ${entityTypeLabel}...`);
-  });
-
-  createEffect(() => {
-    props.searchValue();
-    props.setSelectedIndex(0);
-  });
-
-  const selectEntity = (entity: CombinedEntity) => {
-    const entityRef: EntityReference = {
-      entity_id: entity.id,
-      entity_type: getEntityType(entity),
-    };
-    props.onSubmit(entityRef);
-  };
-
-  const canGroupMultiValues = () =>
-    Boolean(
-      props.property?.isMultiSelect &&
-        props.selectedEntityCount === 1 &&
-        props.property &&
-        'value' in props.property
-    );
-
-  const localSelectedIds = createMemo(
-    () => new Set(localSelectedRefs().map((ref) => ref.entity_id))
-  );
-
-  const orderedEntities = createMemo(() => {
-    if (!canGroupMultiValues()) return entities();
-
-    const selectedAtOpen = orderedSelectedIds();
-    const selected = entities().filter((entity) =>
-      selectedAtOpen.has(entity.id)
-    );
-    const remaining = entities().filter(
-      (entity) => !selectedAtOpen.has(entity.id)
-    );
-
-    return [...selected, ...remaining];
-  });
-
-  const selectedGroupSize = createMemo(() =>
-    canGroupMultiValues()
-      ? orderedEntities().filter((entity) =>
-          orderedSelectedIds().has(entity.id)
-        ).length
-      : 0
-  );
-
-  const searchQuery = () => props.searchValue().trim();
-  const showClearAllRow = () =>
-    canGroupMultiValues() && orderedSelectedIds().size > 0;
-  const showClearAllAtTop = () => showClearAllRow() && !searchQuery();
-  const showClearAllAtBottom = () => showClearAllRow() && !!searchQuery();
-
-  type EntityPropertyRow =
-    | { type: 'clear'; separatorBefore: boolean }
-    | {
-        type: 'entity';
-        entity: CombinedEntity;
-        separatorBefore: boolean;
-      };
-
-  const rows = createMemo(() => {
-    const nextRows: EntityPropertyRow[] = [];
-
-    if (showClearAllAtTop()) {
-      nextRows.push({ type: 'clear', separatorBefore: false });
-    }
-
-    for (const [index, entity] of orderedEntities().entries()) {
-      nextRows.push({
-        type: 'entity',
-        entity,
-        separatorBefore:
-          canGroupMultiValues() && index === selectedGroupSize() && index > 0,
-      });
-    }
-
-    if (showClearAllAtBottom()) {
-      nextRows.push({
-        type: 'clear',
-        separatorBefore: orderedEntities().length > 0,
-      });
-    }
-
-    return nextRows;
-  });
-
-  const toggleEntity = (
-    entity: CombinedEntity,
-    event?: KeyboardEvent | MouseEvent
-  ) => {
-    if (!canGroupMultiValues()) {
-      selectEntity(entity);
-      return;
-    }
-
-    const selectedIds = localSelectedIds();
-    setOpenOrderFrozen(true);
-    const nextRefs = selectedIds.has(entity.id)
-      ? localSelectedRefs().filter((ref) => ref.entity_id !== entity.id)
-      : [
-          ...localSelectedRefs(),
-          {
-            entity_id: entity.id,
-            entity_type: getEntityType(entity),
-          },
-        ];
-
-    setLocalSelectedRefs(nextRefs);
-    props.onSave(
-      {
-        valueType: 'ENTITY',
-        refs: nextRefs.length > 0 ? nextRefs : null,
-      },
-      event
-    );
-  };
-
-  const clearAllEntities = (event?: KeyboardEvent | MouseEvent) => {
-    if (!showClearAllRow()) return;
-
-    setOpenOrderFrozen(true);
-    setLocalSelectedRefs([]);
-    props.onSave({ valueType: 'ENTITY', refs: null }, event);
-  };
-
-  const selectRow = (
-    row: EntityPropertyRow,
-    event?: KeyboardEvent | MouseEvent
-  ) => {
-    if (row.type === 'clear') {
-      clearAllEntities(event);
-      return;
-    }
-
-    toggleEntity(row.entity, event);
-  };
-
-  const listController = createCommandListController({
-    items: rows,
-    selectedIndex: props.selectedIndex,
-    setSelectedIndex: props.setSelectedIndex,
-  });
-
-  props.setKeybindings({
-    select: (event) => {
-      const row = rows()[props.selectedIndex()];
-      if (row) selectRow(row, event);
-    },
-    next: () => {
-      listController.selectNext();
-    },
-    previous: () => {
-      listController.selectPrevious();
-    },
-  });
-
-  return (
-    <Show
-      when={rows().length > 0}
-      fallback={
-        <CommandMenuEmptyState>
-          {props.searchValue().trim()
-            ? 'No matching entities found'
-            : 'No entities available'}
-        </CommandMenuEmptyState>
-      }
-    >
-      <CommandMenuList
-        items={rows()}
-        selectedIndex={props.selectedIndex()}
-        scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
-        itemId={(_, index) => `entity-option-${index}`}
-        beforeItem={(row) =>
-          row.separatorBefore ? (
-            <div class="mx-2 my-1 h-px bg-edge-muted/50" />
-          ) : null
-        }
-        onSelect={(row, _, event) => selectRow(row, event)}
-        onItemMouseMove={(index) =>
-          listController.setSelectedIndexFromPointer(index)
-        }
-      >
-        {(row) => (
-          <Switch>
-            <Match when={row.type === 'clear'}>
-              <CircleDashedEmpty class="size-4 text-ink-muted opacity-50" />
-              <span class="min-w-0 flex-1 truncate text-ink-muted">
-                Clear all{' '}
-                {props.property?.displayName.toLowerCase() ?? 'entities'}
-              </span>
-            </Match>
-            <Match when={row.type === 'entity' && row.entity}>
-              {(entity) => (
-                <EntityRowContent
-                  entity={entity()}
-                  multiselect={canGroupMultiValues()}
-                  selected={localSelectedIds().has(entity().id)}
-                />
-              )}
-            </Match>
-          </Switch>
-        )}
-      </CommandMenuList>
-    </Show>
-  );
-}
-
-function EntityRowContent(props: {
-  entity: CombinedEntity;
-  multiselect?: boolean;
-  selected?: boolean;
-}) {
-  const { icon } = usePropertyEntityDisplay(
-    () => props.entity.id,
-    () => getEntityType(props.entity)
-  );
-
-  return (
-    <>
-      <Show when={props.multiselect}>
-        <OptionCheckBox checked={Boolean(props.selected)} multiselect />
-      </Show>
-      <span class="size-4 flex items-center justify-center shrink-0">
-        {icon()}
-      </span>
-      <div class="flex-1 text-left">
-        <p class="text-sm font-medium">{getEntityName(props.entity)}</p>
-      </div>
-    </>
   );
 }
 

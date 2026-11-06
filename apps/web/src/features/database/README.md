@@ -2,8 +2,8 @@
 
 `DatabaseProvider` owns one editor controller. A host supplies `DatabaseApi` with a
 stable cache key, schema reads, paginated row reads, and atomic operation batches.
-`DatabaseRecords` supplies the standard column controls, grid, board and record
-panel. The host supplies presentation slots and navigation when needed.
+`DatabaseRecords` supplies the standard column controls, grid, board, timeline and
+record panel. The host supplies presentation slots and navigation when needed.
 
 ```tsx
 const [view, setView] = createSignal<DatabaseViewState>({
@@ -53,10 +53,35 @@ to the host's API/service; UI capabilities only determine which controls appear.
 
 ## Host capabilities
 
+`onComposeRecord` lets a host collect required fields for board and timeline
+creation. It receives the selected lane/group and date-range values before any
+row is written; hosts without a composer retain direct row creation.
+
+`onOpenRecord` takes over opening a record someone clicks (a row's open button,
+a board card, a timeline bar, a saved-record notice), in place of the record
+panel, and returns whether it opened it; when it could not, the panel opens. A
+document's database card opens the full database at that row, and keeps the panel
+where there are no splits (call chat). Records the view opens itself, such as one
+just created, keep the panel.
+
 `editRows` and `editColumns` enable their respective controls. Optional record-view
 props supply persisted board positions, conversion previews, relationships,
 presence, and stored-view changes. Omit an unsupported action. A board can render
 without a position writer; it cannot offer card moves that pretend to persist.
+Pending card moves use the board overlay; update saved positions only after a
+successful response so refusals preserve the prior order and other pending moves.
+Hosts load saved positions for the selected view before enabling moves and keep
+the position cache scoped to that view. Hosts that switch boards supply a stable
+`BoardPositions.viewId` so pending visual moves and sort prompts retire when the
+selected board changes. Reading `move` and `setPositions` must bind those
+capabilities to the originating view; a pending response must not update the
+newly selected view's cache. Cards reuse `GridCell` with wrapping
+enabled, labels above each value, and an explicit empty-value dash. Keep the
+drag grip outside `CardActions`, whose descendants opt out of dragging.
+`onComposeRecord` replaces a board lane's inline card with the host's own form,
+seeded with the lane's values; the form creates its row with the actions'
+`createRow`. A `GridCell` rendered inside a modal dialog takes `popupMount` so
+its menus stay inside the dialog, which blocks the page around it.
 View preferences in the example are local; hosts that save views pass their own
 view state and authorized persistence callback. Shared filter, sort, toolbar and
 view components are in `components/`.

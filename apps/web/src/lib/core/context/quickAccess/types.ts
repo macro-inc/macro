@@ -13,6 +13,7 @@ import type {
   FormEntity,
   InitiativeEntity,
   ProjectEntity,
+  RoutineEntity,
   SkillEntity,
   SnippetEntity,
   TaskEntity,
@@ -41,7 +42,8 @@ export type Bucket =
   | 'agent_session'
   | 'initiative'
   | 'database'
-  | 'form';
+  | 'form'
+  | 'routine';
 
 export type EntityBucket = Exclude<Bucket, 'person'>;
 
@@ -62,6 +64,7 @@ const ALL_BUCKETS: Bucket[] = [
   'agent_session',
   'database',
   'form',
+  'routine',
   'initiative',
 ];
 
@@ -154,6 +157,7 @@ export type BucketItemMap = {
   agent_session: EntityItem<AgentSessionEntity>;
   database: EntityItem<DatabaseEntity>;
   form: EntityItem<FormEntity>;
+  routine: EntityItem<RoutineEntity>;
   initiative: EntityItem<InitiativeEntity>;
   person: UserItem;
 };
@@ -174,6 +178,7 @@ export type QuickAccessList<T extends QuickAccessItem = QuickAccessItem> = {
   hasMore: Accessor<boolean>;
   isLoading: Accessor<boolean>;
   isLoadingMore: Accessor<boolean>;
+  error: Accessor<unknown>;
   loadMore: () => Promise<void>;
 };
 

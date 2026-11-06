@@ -1,4 +1,6 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { match } from 'ts-pattern';
+import type { NewPanePlacement } from '../panes/panes';
 import type { OpenTarget, Placement } from '../panes/types';
 import { canonicalRoute, type SplitRoutesManifest } from '../routes/manifest';
 import type {
@@ -63,7 +65,7 @@ export function createPaneList(options: {
   navigation: PaneNavigation;
 }) {
   const { routes, panes, url, runner, claims, navigation } = options;
-  let opening = 0;
+  let opening: { pane: PaneId; source?: PaneId }[] = [];
 
   /** The entry an open's relative target resolves against. */
   const openBase = (target: OpenTarget): Entry | undefined => {
@@ -88,7 +90,7 @@ export function createPaneList(options: {
       intent: target.intent,
       holder,
       allowDuplicate: navigateOptions.allowDuplicate,
-      opening,
+      opening: opening.length,
     });
 
     return { placement, holder };
@@ -122,10 +124,10 @@ export function createPaneList(options: {
    */
   function openNew(
     location: SplitLocation,
-    placement: { insertAt: number; besides?: PaneId },
+    placement: NewPanePlacement & { besides?: PaneId; source?: PaneId },
     navigateOptions: SplitNavigateOptions
   ): MaybePromise<NavigationResult> {
-    const { insertAt, besides } = placement;
+    const { besides, source } = placement;
     const pane = panes.createPaneId();
     const entry = createEntry(routes, location, undefined, navigateOptions);
     const decided = panes.ids();
@@ -138,7 +140,7 @@ export function createPaneList(options: {
 
     const apply = ([landed]: readonly Entry[]) =>
       claims.applyUnlessHeld(check, landed!, () => {
-        panes.insert(pane, landed!, insertAt, decided);
+        panes.insert(pane, landed!, placement, decided);
         url.write('push');
 
         return committed(pane);
@@ -150,11 +152,11 @@ export function createPaneList(options: {
       apply,
     };
 
-    opening += 1;
+    opening.push({ pane, source });
     const result = runner.start(pane, opened);
 
     return mapMaybe(result, (outcome) => {
-      opening -= 1;
+      opening = opening.filter((item) => item.pane !== pane);
 
       return outcome;
     });
@@ -234,14 +236,32 @@ export function createPaneList(options: {
           return openIn(placement.pane, location, navigateOptions);
         }
 
-        const { insertAt } = placement;
+        // A split whose pane has closed by the time it lands opens at the end.
+        const newPane: NewPanePlacement =
+          'split' in placement
+            ? {
+                insertAt: panes.ids().length,
+                split: { pane: placement.split, side: placement.side },
+              }
+            : { insertAt: placement.insertAt };
 
         return openNew(
           location,
-          { insertAt, besides: holder },
+          {
+            ...newPane,
+            besides: holder,
+            source: 'pane' in target ? undefined : target.source,
+          },
           navigateOptions
         );
       });
+    },
+
+    /** Cancel new panes that have not committed yet, without touching open panes. */
+    cancelOpeningFrom(source: PaneId): void {
+      const cancelled = opening.filter((item) => item.source === source);
+      opening = opening.filter((item) => item.source !== source);
+      for (const { pane } of cancelled) runner.abort(pane);
     },
 
     /** Close a pane the way the policy decides; removal waits for leave guards. */
@@ -265,18 +285,21 @@ export function createPaneList(options: {
     },
 
     move(pane: PaneId, to: number): void {
-      void runner.act(undefined, () => {
-        runner.commitNow({
-          cause: 'navigate',
-          targets: [],
-          apply: () => {
-            const moved = panes.move(pane, to);
-            if (moved) url.write('push');
+      fireAndForget(
+        runner.act(undefined, () => {
+          runner.commitNow({
+            cause: 'navigate',
+            targets: [],
+            apply: () => {
+              const moved = panes.move(pane, to);
+              if (moved) url.write('push');
 
-            return committed(pane);
-          },
-        });
-      });
+              return committed(pane);
+            },
+          });
+        }),
+        'split-router'
+      );
     },
   };
 }

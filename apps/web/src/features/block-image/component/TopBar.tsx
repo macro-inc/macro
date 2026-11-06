@@ -25,9 +25,10 @@ import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import Download from '@phosphor/download.svg';
+import Download from '@icon/system/regular/download.svg';
 import { createCallback } from '@solid-primitives/rootless';
 
 export function TopBar() {
@@ -49,7 +50,7 @@ export function TopBar() {
   const downloadDocument = createCallback(async () => {
     const file = imageFile();
     if (!file) return;
-    downloadFile(file, downloadName());
+    fireAndForget(downloadFile(file, downloadName()), 'image-top-bar');
   });
 
   const ops: FileOperation[] = [
@@ -77,8 +78,12 @@ export function TopBar() {
       label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent(chatEntity()),
-      buttonComponent: () => (
-        <ChatWithAgentButton entity={chatEntity()} label="Ask Macro" />
+      buttonComponent: (control) => (
+        <ChatWithAgentButton
+          grouped={control.grouped}
+          entity={chatEntity()}
+          label="Ask Macro"
+        />
       ),
     },
     {

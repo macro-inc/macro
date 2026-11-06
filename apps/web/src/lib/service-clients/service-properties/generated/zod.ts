@@ -46,6 +46,7 @@ export const listPropertiesResponseItem = zod
           .enum([
             'BOOLEAN',
             'DATE',
+            'DATE_RANGE',
             'NUMBER',
             'STRING',
             'SELECT_NUMBER',
@@ -137,6 +138,7 @@ export const listPropertiesResponseItem = zod
               .enum([
                 'BOOLEAN',
                 'DATE',
+                'DATE_RANGE',
                 'NUMBER',
                 'STRING',
                 'SELECT_NUMBER',
@@ -282,6 +284,11 @@ export const createPropertyDefinitionBody = zod
           .describe('Date and time values.'),
         zod
           .object({
+            type: zod.enum(['date_range']),
+          })
+          .describe('A span from a start date-time to an end one.'),
+        zod
+          .object({
             type: zod.enum(['number']),
           })
           .describe('Numeric values.'),
@@ -381,6 +388,7 @@ export const getPropertyDefinitionResponse = zod
       .enum([
         'BOOLEAN',
         'DATE',
+        'DATE_RANGE',
         'NUMBER',
         'STRING',
         'SELECT_NUMBER',
@@ -681,6 +689,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
                   .enum([
                     'BOOLEAN',
                     'DATE',
+                    'DATE_RANGE',
                     'NUMBER',
                     'STRING',
                     'SELECT_NUMBER',
@@ -890,6 +899,21 @@ export const getBulkEntityPropertiesResponse = zod.record(
                       ),
                     zod
                       .object({
+                        type: zod.enum(['DateRange']),
+                        value: zod
+                          .object({
+                            end: zod.iso.datetime({}),
+                            start: zod.iso.datetime({}),
+                          })
+                          .describe(
+                            'A span of time from `start` to `end`, both included. The end is never\nbefore the start: a range that would end earlier does not deserialize.'
+                          ),
+                      })
+                      .describe(
+                        'Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}'
+                      ),
+                    zod
+                      .object({
                         type: zod.enum(['SelectOption']),
                         value: zod
                           .array(zod.uuid())
@@ -1013,6 +1037,7 @@ export const getEntityPropertiesResponse = zod
                 .enum([
                   'BOOLEAN',
                   'DATE',
+                  'DATE_RANGE',
                   'NUMBER',
                   'STRING',
                   'SELECT_NUMBER',
@@ -1222,6 +1247,21 @@ export const getEntityPropertiesResponse = zod
                     ),
                   zod
                     .object({
+                      type: zod.enum(['DateRange']),
+                      value: zod
+                        .object({
+                          end: zod.iso.datetime({}),
+                          start: zod.iso.datetime({}),
+                        })
+                        .describe(
+                          'A span of time from `start` to `end`, both included. The end is never\nbefore the start: a range that would end earlier does not deserialize.'
+                        ),
+                    })
+                    .describe(
+                      'Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}'
+                    ),
+                  zod
+                    .object({
                       type: zod.enum(['SelectOption']),
                       value: zod
                         .array(zod.uuid())
@@ -1424,6 +1464,19 @@ export const setEntityPropertyBody = zod
                 value: zod.iso.datetime({}),
               })
               .describe('Date and time value'),
+            zod
+              .object({
+                type: zod.enum(['date_range']),
+                value: zod
+                  .object({
+                    end: zod.iso.datetime({}),
+                    start: zod.iso.datetime({}),
+                  })
+                  .describe(
+                    'A span of time from `start` to `end`, both included. The end is never\nbefore the start: a range that would end earlier does not deserialize.'
+                  ),
+              })
+              .describe('Date range value'),
             zod
               .object({
                 type: zod.enum(['number']),
@@ -1771,6 +1824,7 @@ export const listTagsResponseItem = zod
                 .enum([
                   'BOOLEAN',
                   'DATE',
+                  'DATE_RANGE',
                   'NUMBER',
                   'STRING',
                   'SELECT_NUMBER',
@@ -1925,6 +1979,7 @@ export const ensureTagSetResponse = zod
                 .enum([
                   'BOOLEAN',
                   'DATE',
+                  'DATE_RANGE',
                   'NUMBER',
                   'STRING',
                   'SELECT_NUMBER',

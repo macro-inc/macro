@@ -1,4 +1,5 @@
 import type { CaptureOptions, PostHogConfig } from 'posthog-js';
+import { pickMobileCaptureAttribution } from './utilMobileCaptureIdentity';
 
 type Properties = Record<string, unknown>;
 
@@ -24,7 +25,7 @@ type PendingEvent =
       properties: Properties;
       timestamp: Date;
     }
-  | { type: 'identify'; email: string };
+  | { type: 'identify'; email: string; setOnce?: Properties };
 
 const pageProperties = (): Properties => ({
   $current_url: window.location.href,
@@ -111,7 +112,17 @@ export const createDeferredPosthog = (
       // A rejected individual event must not strand later captures/identity.
       try {
         if (next.type === 'identify') {
-          client.identify(next.email, { email: next.email }, initialProperties);
+          // Landing params survive client-side navigation that drops the query
+          // string. `$set_once` from the caller wins when both have a key.
+          client.identify(
+            next.email,
+            { email: next.email },
+            {
+              ...initialProperties,
+              ...pickMobileCaptureAttribution(campaign),
+              ...next.setOnce,
+            }
+          );
         } else {
           client.capture(next.event, next.properties, {
             timestamp: next.timestamp,
@@ -179,8 +190,10 @@ export const createDeferredPosthog = (
 
   return {
     capture,
-    identify: (email: string) => {
-      pending.push({ type: 'identify', email });
+    identify: (email: string, setOnce?: Properties) => {
+      const distinctId = email.trim().toLowerCase();
+      if (!distinctId) return;
+      pending.push({ type: 'identify', email: distinctId, setOnce });
       if (client) drain();
       else start();
     },

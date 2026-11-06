@@ -4,7 +4,15 @@ export type PreparedMedia = {
   type: 'image' | 'video';
   geometry: MediaGeometry;
 };
+export type LocalMediaPreview = {
+  media: PreparedMedia;
+  dispose: () => void;
+};
 export type CanvasAssetSource = {
-  upload(file: File): Promise<PreparedMedia>;
+  // The receiver owns the preview URL until it calls dispose, including on failure.
+  upload(
+    file: File,
+    onPreview?: (preview: LocalMediaPreview) => void
+  ): Promise<PreparedMedia>;
   media(asset: CanvasAsset): Promise<PreparedMedia>;
 };

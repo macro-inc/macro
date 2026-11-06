@@ -32,15 +32,15 @@ function findScrollableParent(el: HTMLElement | null): HTMLElement | null {
 /**
  * Fires `fetchNextPage` whenever the sentinel scrolls into (or close to)
  * view, gated by `hasNextPage` + `isFetchingNextPage`. The observer is
- * torn down and re-created whenever the sentinel ref or `hasNextPage`
- * changes — when there are no more pages, no observer runs.
+ * torn down during a fetch and re-created when it completes. Re-observing
+ * triggers the next page if the sentinel remains visible after the append.
  */
 export function useInfiniteScrollSentinel(
   opts: UseInfiniteScrollSentinelOptions
 ) {
   createEffect(() => {
     const node = opts.sentinel();
-    if (!node || !opts.hasNextPage()) return;
+    if (!node || !opts.hasNextPage() || opts.isFetchingNextPage()) return;
 
     const observer = new IntersectionObserver(
       (entries) => {

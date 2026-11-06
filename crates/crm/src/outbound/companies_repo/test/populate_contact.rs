@@ -135,7 +135,7 @@ async fn service_populate_contact_refreshes_existing_company_and_contact_updated
     sqlx::query(r#"INSERT INTO crm_domains (company_id, team_id, domain) VALUES ($1, $2, $3)"#)
         .bind(company_id)
         .bind(team_id)
-        .bind("acme.com")
+        .bind("acme.example.com")
         .execute(&pool)
         .await?;
 
@@ -146,7 +146,7 @@ async fn service_populate_contact_refreshes_existing_company_and_contact_updated
     )
     .bind(contact_id)
     .bind(company_id)
-    .bind("alice@acme.com")
+    .bind("alice@acme.example.com")
     .bind(old_updated_at)
     .execute(&pool)
     .await?;
@@ -168,7 +168,7 @@ async fn service_populate_contact_refreshes_existing_company_and_contact_updated
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         Some("Alice"),
         chrono::Utc::now(),
         chrono::Utc::now(),
@@ -208,7 +208,7 @@ async fn service_populate_contact_writes_when_domain_differs(pool: PgPool) -> an
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         chrono::Utc::now(),
         chrono::Utc::now(),
@@ -217,7 +217,7 @@ async fn service_populate_contact_writes_when_domain_differs(pool: PgPool) -> an
     .await?;
 
     assert_eq!(
-        count_companies_for_domain(&pool, team_id, "acme.com").await?,
+        count_companies_for_domain(&pool, team_id, "acme.example.com").await?,
         1
     );
     Ok(())
@@ -232,7 +232,7 @@ async fn precheck_is_available_when_legacy_settings_missing(pool: PgPool) -> any
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
-        .crm_scope_precheck(&team, &["acme.com".to_string()], &[])
+        .crm_scope_precheck(&team, &["acme.example.com".to_string()], &[])
         .await?;
     assert!(result.crm_enabled);
     assert_eq!(result.domains.len(), 1);
@@ -246,13 +246,13 @@ async fn precheck_resolves_domain_with_company_state(pool: PgPool) -> anyhow::Re
     let owner = "macro|user@macro.com";
     seed_team(&pool, team, owner).await?;
     enable_crm_for_team(&pool, team).await?;
-    insert_company(&pool, team, true, &["acme.com"]).await?;
+    insert_company(&pool, team, true, &["acme.example.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
         .crm_scope_precheck(
             &team,
-            &["acme.com".to_string(), "missing.com".to_string()],
+            &["acme.example.com".to_string(), "missing.com".to_string()],
             &[],
         )
         .await?;
@@ -262,7 +262,7 @@ async fn precheck_resolves_domain_with_company_state(pool: PgPool) -> anyhow::Re
     let acme = result
         .domains
         .iter()
-        .find(|d| d.domain == "acme.com")
+        .find(|d| d.domain == "acme.example.com")
         .unwrap();
     assert!(acme.exists);
     assert!(!acme.company_hidden);
@@ -308,23 +308,26 @@ async fn precheck_address_resolves_contact_within_team(pool: PgPool) -> anyhow::
     let owner = "macro|user@macro.com";
     seed_team(&pool, team, owner).await?;
     enable_crm_for_team(&pool, team).await?;
-    let company = insert_company(&pool, team, true, &["acme.com"]).await?;
+    let company = insert_company(&pool, team, true, &["acme.example.com"]).await?;
     let link = insert_email_link(&pool, owner, "owner@macro.test").await?;
-    insert_contact_with_source(&pool, company, "alice@acme.com", link).await?;
+    insert_contact_with_source(&pool, company, "alice@acme.example.com", link).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
         .crm_scope_precheck(
             &team,
             &[],
-            &["alice@acme.com".to_string(), "bob@acme.com".to_string()],
+            &[
+                "alice@acme.example.com".to_string(),
+                "bob@acme.example.com".to_string(),
+            ],
         )
         .await?;
 
     let alice = result
         .addresses
         .iter()
-        .find(|a| a.address == "alice@acme.com")
+        .find(|a| a.address == "alice@acme.example.com")
         .unwrap();
     assert!(alice.exists);
     assert!(!alice.contact_hidden);
@@ -334,7 +337,7 @@ async fn precheck_address_resolves_contact_within_team(pool: PgPool) -> anyhow::
     let bob = result
         .addresses
         .iter()
-        .find(|a| a.address == "bob@acme.com")
+        .find(|a| a.address == "bob@acme.example.com")
         .unwrap();
     assert!(!bob.exists);
     Ok(())
@@ -349,15 +352,15 @@ async fn precheck_address_does_not_leak_other_team_contacts(pool: PgPool) -> any
     seed_team(&pool, team_a, owner_a).await?;
     seed_team(&pool, team_b, owner_b).await?;
     enable_crm_for_team(&pool, team_b).await?;
-    let company_a = insert_company(&pool, team_a, true, &["acme.com"]).await?;
+    let company_a = insert_company(&pool, team_a, true, &["acme.example.com"]).await?;
     let link_a = insert_email_link(&pool, owner_a, "a@macro.test").await?;
-    insert_contact_with_source(&pool, company_a, "alice@acme.com", link_a).await?;
+    insert_contact_with_source(&pool, company_a, "alice@acme.example.com", link_a).await?;
 
     // team_b asks about an address that only exists under team_a — must
     // report as non-existent, not leak team_a's contact state.
     let repo = CompaniesRepositoryImpl::new(pool);
     let result = repo
-        .crm_scope_precheck(&team_b, &[], &["alice@acme.com".to_string()])
+        .crm_scope_precheck(&team_b, &[], &["alice@acme.example.com".to_string()])
         .await?;
     assert!(!result.addresses[0].exists);
     Ok(())
@@ -386,7 +389,7 @@ async fn populate_contact_is_sent_false_skips_when_no_company(pool: PgPool) -> a
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         now,
         now,
@@ -395,7 +398,7 @@ async fn populate_contact_is_sent_false_skips_when_no_company(pool: PgPool) -> a
     .await?;
 
     assert_eq!(
-        count_companies_for_domain(&pool, team_id, "acme.com").await?,
+        count_companies_for_domain(&pool, team_id, "acme.example.com").await?,
         0,
         "received-direction populate must not create a crm_companies row"
     );
@@ -430,7 +433,7 @@ async fn populate_contact_insert_seeds_first_and_last_from_payload(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         first,
         last,
@@ -438,7 +441,7 @@ async fn populate_contact_insert_seeds_first_and_last_from_payload(
     )
     .await?;
 
-    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.example.com")
         .await?
         .expect("company should be inserted");
     let (company_first, company_last) = fetch_company_interactions(&pool, company_id)
@@ -447,7 +450,7 @@ async fn populate_contact_insert_seeds_first_and_last_from_payload(
     assert_eq!(company_first, first);
     assert_eq!(company_last, last);
 
-    let contact_id = fetch_contact_id(&pool, company_id, "alice@acme.com")
+    let contact_id = fetch_contact_id(&pool, company_id, "alice@acme.example.com")
         .await?
         .expect("contact should be inserted");
     let (contact_first, contact_last) = fetch_contact_interactions(&pool, contact_id)
@@ -489,7 +492,7 @@ async fn populate_contact_is_sent_true_merges_first_least_and_last_greatest(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         initial,
         initial,
@@ -497,10 +500,10 @@ async fn populate_contact_is_sent_true_merges_first_least_and_last_greatest(
     )
     .await?;
 
-    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.example.com")
         .await?
         .expect("company");
-    let contact_id = fetch_contact_id(&pool, company_id, "alice@acme.com")
+    let contact_id = fetch_contact_id(&pool, company_id, "alice@acme.example.com")
         .await?
         .expect("contact");
 
@@ -511,7 +514,7 @@ async fn populate_contact_is_sent_true_merges_first_least_and_last_greatest(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         older,
         older,
@@ -538,7 +541,7 @@ async fn populate_contact_is_sent_true_merges_first_least_and_last_greatest(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         newer,
         newer,
@@ -585,7 +588,7 @@ async fn populate_contact_is_sent_false_leaves_first_interaction_unchanged(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         baseline,
         baseline,
@@ -593,10 +596,10 @@ async fn populate_contact_is_sent_false_leaves_first_interaction_unchanged(
     )
     .await?;
 
-    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.example.com")
         .await?
         .expect("company");
-    let contact_id = fetch_contact_id(&pool, company_id, "alice@acme.com")
+    let contact_id = fetch_contact_id(&pool, company_id, "alice@acme.example.com")
         .await?
         .expect("contact");
 
@@ -608,7 +611,7 @@ async fn populate_contact_is_sent_false_leaves_first_interaction_unchanged(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         older,
         older,
@@ -638,7 +641,7 @@ async fn populate_contact_is_sent_false_leaves_first_interaction_unchanged(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         newer,
         newer,
@@ -680,14 +683,14 @@ async fn populate_contact_is_sent_false_inserts_contact_at_existing_company(
         NoOpCompanyMetadataResolver,
     );
 
-    // Sent populate establishes the company via alice@acme.com.
+    // Sent populate establishes the company via alice@acme.example.com.
     deliver(
         &pool,
         &service,
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         baseline,
         baseline,
@@ -695,7 +698,7 @@ async fn populate_contact_is_sent_false_inserts_contact_at_existing_company(
     )
     .await?;
 
-    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.example.com")
         .await?
         .expect("company");
     assert_eq!(count_contacts(&pool, company_id).await?, 1);
@@ -708,7 +711,7 @@ async fn populate_contact_is_sent_false_inserts_contact_at_existing_company(
         &team_id,
         &link_id,
         "user@macro.com",
-        "bob@acme.com",
+        "bob@acme.example.com",
         Some("Bob"),
         received_at,
         received_at,
@@ -721,7 +724,7 @@ async fn populate_contact_is_sent_false_inserts_contact_at_existing_company(
         2,
         "received-direction populate must insert a contact under the known company"
     );
-    let bob_id = fetch_contact_id(&pool, company_id, "bob@acme.com")
+    let bob_id = fetch_contact_id(&pool, company_id, "bob@acme.example.com")
         .await?
         .expect("bob contact");
     let (bob_first, bob_last) = fetch_contact_interactions(&pool, bob_id)
@@ -762,7 +765,7 @@ async fn populate_contact_without_consent_noops_both_directions(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         now,
         now,
@@ -775,7 +778,7 @@ async fn populate_contact_without_consent_noops_both_directions(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         now,
         now,
@@ -784,7 +787,7 @@ async fn populate_contact_without_consent_noops_both_directions(
     .await?;
 
     assert_eq!(
-        count_companies_for_domain(&pool, team_id, "acme.com").await?,
+        count_companies_for_domain(&pool, team_id, "acme.example.com").await?,
         0,
         "missing personal consent must short-circuit both directions"
     );
@@ -804,7 +807,7 @@ async fn populate_contact_respects_legacy_company_block(pool: PgPool) -> anyhow:
     // (no sub-microsecond precision — Postgres `TIMESTAMPTZ` only
     // stores micros and `chrono::Utc::now()`'s nanos would get
     // silently truncated and break the `assert_eq` below).
-    let company_id = insert_company(&pool, team_id, false, &["acme.com"]).await?;
+    let company_id = insert_company(&pool, team_id, false, &["acme.example.com"]).await?;
     let baseline: chrono::DateTime<chrono::Utc> = "2024-01-01T00:00:00Z".parse()?;
     sqlx::query(
         r#"UPDATE crm_companies
@@ -828,7 +831,7 @@ async fn populate_contact_respects_legacy_company_block(pool: PgPool) -> anyhow:
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         later,
         later,
@@ -878,7 +881,7 @@ async fn populate_contact_seed_style_range_merges_into_existing(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         baseline,
         baseline,
@@ -886,10 +889,10 @@ async fn populate_contact_seed_style_range_merges_into_existing(
     )
     .await?;
 
-    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.example.com")
         .await?
         .expect("company");
-    let contact_id = fetch_contact_id(&pool, company_id, "alice@acme.com")
+    let contact_id = fetch_contact_id(&pool, company_id, "alice@acme.example.com")
         .await?
         .expect("contact");
 
@@ -904,7 +907,7 @@ async fn populate_contact_seed_style_range_merges_into_existing(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         seed_first,
         seed_last,
@@ -952,14 +955,14 @@ async fn email_sync_disable_then_re_enable_requires_eligible_backfill(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         t1,
         t1,
         true,
     )
     .await?;
-    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.example.com")
         .await?
         .expect("company");
     assert_eq!(count_contacts(&pool, company_id).await?, 1);
@@ -977,7 +980,7 @@ async fn email_sync_disable_then_re_enable_requires_eligible_backfill(
         &team_id,
         &link_id,
         "user@macro.com",
-        "bob@acme.com",
+        "bob@acme.example.com",
         None,
         t2,
         t2,
@@ -1005,7 +1008,7 @@ async fn email_sync_disable_then_re_enable_requires_eligible_backfill(
             &team_id,
             &link_id,
             "user@macro.com",
-            "bob@acme.com",
+            "bob@acme.example.com",
             None,
             t2,
             t2,
@@ -1032,7 +1035,7 @@ async fn populate_contact_into_hidden_company_inserts_hidden_contact(
     enable_crm_for_team(&pool, team_id).await?;
     let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
     consent_to_mailbox(&pool, team_id, link_id).await?;
-    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.example.com"]).await?;
     sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
         .bind(company_id)
         .execute(&pool)
@@ -1049,7 +1052,7 @@ async fn populate_contact_into_hidden_company_inserts_hidden_contact(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         now,
         now,
@@ -1057,7 +1060,7 @@ async fn populate_contact_into_hidden_company_inserts_hidden_contact(
     )
     .await?;
 
-    let alice = fetch_contact_id(&pool, company_id, "alice@acme.com")
+    let alice = fetch_contact_id(&pool, company_id, "alice@acme.example.com")
         .await?
         .expect("alice should have been inserted");
     assert_eq!(fetch_contact_hidden(&pool, alice).await?, Some(true));
@@ -1092,17 +1095,17 @@ async fn populate_contact_upsert_does_not_overwrite_individual_hide(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         first_at,
         first_at,
         true,
     )
     .await?;
-    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.example.com")
         .await?
         .expect("company");
-    let alice = fetch_contact_id(&pool, company_id, "alice@acme.com")
+    let alice = fetch_contact_id(&pool, company_id, "alice@acme.example.com")
         .await?
         .expect("alice");
 
@@ -1118,7 +1121,7 @@ async fn populate_contact_upsert_does_not_overwrite_individual_hide(
         &team_id,
         &link_id,
         "user@macro.com",
-        "alice@acme.com",
+        "alice@acme.example.com",
         None,
         later,
         later,

@@ -1,103 +1,55 @@
 ---
-title: "CRM"
-icon: "building"
+title: "Customers"
+icon: "buildings"
 description: "Contact and company records built automatically from your team's email."
 ---
 
-<Frame>
-  ![The CRM board view, with one column per stage](/images/crm_better.png)
-</Frame>
+Customers stays off until a team admin turns on **Team CRM** in **Settings → CRM**. **Backfill existing emails** builds records from mail the team already has. **Start from now** uses only mail that arrives after you turn it on. If you are not an admin, Customers says a team owner or admin has to enable it. Turning **Team CRM** off permanently deletes the team's companies, contacts, and their history.
+
+Watch a 1:26 walkthrough of Macro CRM.
+
+<video src="https://macro.com/video/tutorials/crm.mp4" poster="https://macro.com/video/tutorials/crm-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
+
+## How email fills the CRM
+
+CRM reads the account marked **Primary** in **Settings → Email**. A second account you connect does not. Mail you send from the primary account to someone outside that account's domain creates a contact, and everyone at that domain shares one company. Mail you only receive does not create a company. Once the company exists, later mail moves **Last Interaction**, including replies and other people at that domain. Generic tool and vendor domains are left out.
+
+On a team, every member's **Primary** account feeds the same Customers. Two people emailing someone at one company produce one company and one contact. The name saved first stays. **Sync Emails** controls whether teammates can open those threads. The company remains either way.
+
+## Companies and people
+
+**Companies** lists every visible company, grouped by stage. **Owner**, **Revenue**, and **Last Interaction** are the columns. **Display options** can also show **Stage**. A new company stays at **No stage** until someone places it. The stages start as **Lead**, **Demo**, **Customer**, and **Churned**.
+
+An admin changes them in **Settings → CRM**. **Customize** renames a stage, drags it into a new order, or **Add** one. Delete a stage and companies in it move to **No stage**. **Reset to defaults** restores the four above. New pipelines start from these stages. A pipeline you already created keeps its own.
+
+Open a company to set **Stage**, **Owner**, and **Revenue**. **Add property** adds a field of your own. **Views** saves the current filters and grouping. Choose **Personal** or **Team**, then **Save**. Admins can **Show hidden companies** from **Display options**.
+
+**People** lists contacts, with the person, their company, and when you last contacted them.
+
+**New** creates a **Company**, a **Contact**, or a **Pipeline**. **Import** and **Export** move companies in and out of the team. On a pipeline, those actions are **Import CSV** and **Export CSV**.
+
+## Pipelines
+
+A pipeline is a [database](/product/databases) that lives in Customers. It tracks companies or contacts through stages you name, and **Board** is a view of that table: one column per stage, and a card you drag to move. Pipelines do not appear in Drive.
+
+A sales pipeline moves companies from a first conversation to a demo to a customer. A hiring pipeline moves contacts through interview stages. A renewal pipeline tracks customers coming up for another term. A partnerships pipeline tracks organizations you are evaluating. The same company or contact can sit in more than one pipeline.
+
+**Pipelines** in the sidebar lists the ones you can open. **New pipeline** sets the name, whether it tracks **Companies** or **Contacts**, and **Share with my team**. **Create pipeline** adds it. **Add deal** adds a company. **Add contact** adds a person. **Table** is the other layout. Cells, columns, and views work the same way as in a database.
+
+## Privacy
+
+A company is on the team's lists when **Visible in CRM** is checked. An admin unchecks it to hide the company, and its contacts, from lists and search. Admins can show hidden companies again.
+
+**Sync Emails** starts on. Everyone on the team can then read the team's email with that company. Turn it off and those threads stay with the people on them. Only an admin can change **Visible in CRM** or **Sync Emails**. Hiding a company also turns **Sync Emails** off.
+
+@mentioning a company or contact does not share it. See [Mentions](/concepts/mentions#what-happens-when-you-mention).
+
+A pipeline starts private. Check **Share with my team** to share it when you create it. Later, the owner uses **Share** and sets **Team access** to **Can edit**, or to **No team access** to keep it private.
+
+## Discussions
+
+Every company and contact has a discussion for notes that should stay on the record. @mention a teammate and they get a notification.
 
 <Note>
-  Only a user's **primary** email is used to enrich the CRM. Secondary and tertiary emails are not part of the CRM.
-</Note>
-
-Macro's CRM builds itself on your team's emails so contact and company records are created and kept up to date automatically as you work. You don't have to run an importer or type in fields.
-
-<Note>
-  You can also work with our CRM through Macro's MCP server. To connect it, go to **Settings → MCP server**.
-</Note>
-
-### Tied into your email client
-
-Macro CRM is deeply integrated with the Macro Mail client. It works with your existing email to enrich company properties with contacts and previous communications.
-
-<Frame>
-  ![Macro CRM records alongside the Mail client](/images/crm_emails.png)
-</Frame>
-
-With Macro there is instant bidirectional syncing, full access to properties, and access to the record itself by clicking in.
-
-### Discussions
-
-Every company and contact record has its own discussion thread. The CRM discussion should be used as a record of notes for that company so your team doesn't lose information in a separate chat. @mention a teammate and they'll receive a notification just like in a channel, and it all lands in the same inbox as the rest of your work. The discussion is ingested by [team-level memory](/product/unified-memory) and can be queried with the [Macro agent](/product/agents).
-
-### @mentionable anywhere
-
-@mention things everywhere — docs, tasks, etc. When a company is @mentioned in a Macro chat all its information is automatically shared to anyone in that channel, including past emails, discussion posts, and contacts.
-
-<Frame>
-  ![Team chat and @mentions on a CRM record](/images/crm_chat.png)
-</Frame>
-
-### Board and list views
-
-The board is the default view when you open **Customers**: every company appears as a card in the column for its current stage, and you drag a card to a new column to move it through your pipeline. Each column header is a stage:
-
-<div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '1.625rem', margin: '1rem 0' }}>
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#9ca3af" size={10} /> <strong>Lead</strong></div>
-
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#4ade80" size={10} /> <strong>Qualified</strong></div>
-
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#a78bfa" size={10} /> <strong>Demo</strong></div>
-
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#fbbf24" size={10} /> <strong>Trial</strong></div>
-
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#fb923c" size={10} /> <strong>Negotiation</strong></div>
-
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#34d399" size={10} /> <strong>Customer</strong></div>
-
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#f87171" size={10} /> <strong>Churned</strong></div>
-
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="regular" color="#9ca3af" size={10} /> <span><strong>No stage</strong>, for companies that haven't been placed in your pipeline yet</span></div>
-</div>
-
-While records create themselves, stages are all manual: Macro doesn't yet know where a company lies in your pipeline and relies on you to distinguish your leads from your customers by setting each record's stage. New records start in **No stage** until someone on your team places them.
-
-Prefer a table? Switch to the **List** view from the toggle in the topbar:
-
-<Frame>
-  ![The CRM list view, a table grouped by stage](/images/crm_list_view.png)
-</Frame>
-
-The list trades cards for rows: every company is a row, and each column is a parameter you can set inline. The parameters you can edit are:
-
-<div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '1.625rem', margin: '1rem 0' }}>
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle-dot" iconType="regular" color="#9ca3af" size={10} /> <span><strong>Stage</strong> — where the company sits in your pipeline (Lead through Churned, or No stage)</span></div>
-
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle-dot" iconType="regular" color="#9ca3af" size={10} /> <span><strong>Owner</strong> — the teammate responsible for the account</span></div>
-
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle-dot" iconType="regular" color="#9ca3af" size={10} /> <span><strong>Revenue</strong> — the value you attach to the account</span></div>
-
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle-dot" iconType="regular" color="#9ca3af" size={10} /> <span><strong>Last Interaction</strong> — the most recent synced email</span></div>
-</div>
-
-Use the **Group** and **Filter** controls in the toolbar to reshape the table, or sort by column **Last Interaction** to surface the accounts you've talked to most recently.
-
-<Note>
-  Have CRM in Macro but can't see your leads? It needs to be enabled for your team — turn it on in your team settings, or contact your team admin to enable it.
-</Note>
-
-### Records build themselves
-
-When someone on your team emails an external contact, Macro creates a contact record for them and groups contacts into companies by email domain (everyone `@acme.com` rolls up to one Acme record). Each contact tracks its first and last interaction, so you can see the full history of a relationship at a glance. Generic tool and vendor domains are filtered out.
-
-### Team sharing
-
-CRM is best used as a team feature, and it's where Macro's email auto-sharing lives. When **Email Sync** is on for a company, your team's email threads with that company become visible to teammates in the CRM, so nobody has to forward a thread just to share context. Turning it off for a company keeps the record but makes its threads private to their participants.
-
-Team admins can also **hide** a company or contact entirely, which removes it (and its threads) from the team's view. Members see visible records; admins and owners can edit records, toggle Email Sync, and manage hidden ones.
-
-<Note>
-  Sharing of CRM records is determined by your team, not by mentions: @mentioning a company or contact in a channel does not share it, unlike documents. See [Mentions](/concepts/mentions#what-happens-when-you-mention).
+  You can also work with the CRM through Macro's MCP server. Connect it in **Settings → MCP server**.
 </Note>

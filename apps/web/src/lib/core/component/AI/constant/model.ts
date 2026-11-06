@@ -1,6 +1,7 @@
 import OpenAiIcon from '@core/component/AI/assets/openai.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import GoogleIcon from '@phosphor-fill/google-logo-fill.svg';
+import { FreeTierModel } from '@service-cognition/generated/schemas/freeTierModel';
 
 /**
  * Frontend-owned set of model ids. These are the `provider/model` ids the
@@ -59,10 +60,18 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
 export const DEFAULT_MODEL: TModel = Model.sonnet55;
 
 /**
- * Default model for free users. Free users aren't entitled to the premium
- * models (which the backend rejects with a 403), so they start on Gemini Flash.
+ * Models a free user may select, generated from the backend's free tier
+ * (`chat::domain::models::FREE_MODEL`). Every other model is paid-only: the
+ * backend rejects it with a 403, and the selector shows it locked, where
+ * selecting one opens the paywall.
  */
-export const FREE_DEFAULT_MODEL: TModel = Model.gemini38Flash;
+export const FREE_MODELS: readonly TModel[] = Object.values(FreeTierModel);
+
+/**
+ * Default model for free users, and the model for AI that runs for every plan
+ * without a model choice (e.g. Home suggestions).
+ */
+export const FREE_DEFAULT_MODEL: TModel = FREE_MODELS[0];
 
 /** Models a paid user may select. */
 export const PAID_MODELS: readonly TModel[] = Object.values(Model);
@@ -71,15 +80,7 @@ export const PAID_MODELS: readonly TModel[] = Object.values(Model);
  * Model for database AI: question answering, the database assistant, and chats
  * opened from a database. Available on both free and paid plans.
  */
-export const DATABASE_MODEL: TModel = Model.gemini38Flash;
-
-/**
- * Models a free user may select. Free users only get Gemini Flash
- * (`FREE_DEFAULT_MODEL`); every other model is paid-only and shows locked in
- * the selector, where selecting one opens the paywall instead of being sent
- * and rejected by the backend.
- */
-export const FREE_MODELS: readonly TModel[] = [FREE_DEFAULT_MODEL];
+export const DATABASE_MODEL: TModel = FREE_DEFAULT_MODEL;
 
 /** The default model for a user given their paid entitlement. */
 export function defaultModelForPlan(hasPaidAccess: boolean): TModel {

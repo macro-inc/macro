@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_conversation_sessions SET is_current = FALSE WHERE channel_id = $1 AND bot_id = $2 AND is_current",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "34d7836f5b9cb636666859a06c6f88d813af64a3674c6ea8ebd5fa5150a19cf7"
+}

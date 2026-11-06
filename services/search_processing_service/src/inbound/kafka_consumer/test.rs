@@ -161,13 +161,15 @@ fn started_event() -> CallTopicEvent {
 
 fn archived_event() -> CallTopicEvent {
     CallTopicEvent::RecordArchived(CallRecordArchivedMetadata {
+        channel_thread: false,
         call_id: CALL_ID,
         channel_id: Some(CHANNEL_ID),
         created_by: user_id(),
         started_at: Utc::now(),
         ended_at: Utc::now(),
         duration_ms: Some(1_000),
-        participant_count: 2,
+        participant_count: 1,
+        participants: vec![user_id()],
         has_recording: true,
         archive_reason: CallArchiveReason::LastParticipantLeft,
     })
@@ -800,6 +802,7 @@ fn message_event_cases() -> Vec<(MessageTopicEvent, MessageEventDescription)> {
         ),
         (
             MessageTopicEvent::Patched(MessagePatchedMetadata {
+                completed_reply: None,
                 parent: channel.clone(),
                 message_id: MESSAGE_ID,
                 thread_id: None,
@@ -1261,6 +1264,7 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
                 actor_user_id: actor_user_id.clone(),
                 actor: None,
                 on_behalf_of: None,
+                source: None,
                 value: None,
                 previous_value: None,
                 updated_at: Utc::now(),
@@ -1616,7 +1620,10 @@ fn email_envelope_decodes_round_trip() {
 
 #[test]
 fn agent_session_lifecycle_decodes_and_routes_by_session() {
-    use ::agent_session::domain::{events::*, model::AgentSessionId};
+    use ::agent_session::domain::{
+        events::*,
+        model::{AgentSessionId, SessionSource},
+    };
     use macro_event_topics::MacroAgentSessionLifecycleTopic;
 
     let id = AgentSessionId::new_from_uuid(Uuid::from_u128(10));
@@ -1628,6 +1635,7 @@ fn agent_session_lifecycle_decodes_and_routes_by_session() {
         owner_id: user_id(),
         origin: None,
         audience: vec![],
+        source: SessionSource::User,
     };
     for event in [
         AgentSessionLifecycleEvent::Renamed(SessionRenamedMetadata {

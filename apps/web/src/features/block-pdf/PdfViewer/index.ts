@@ -1,4 +1,5 @@
 import type { WithRequired } from '@core/util/withRequired';
+import { Telemetry } from '@macro-inc/observability';
 import { debounce } from '@solid-primitives/scheduled';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { PDFPageView } from 'pdfjs-dist/web/pdf_viewer';
@@ -45,7 +46,9 @@ export class PDFViewer extends InternalPDFViewer {
   }
 
   async destroy() {
-    super.destroy();
+    super
+      .destroy()
+      .catch((error) => Telemetry.error(error, { surface: 'pdf-viewer' }));
   }
 
   load(pdfDocument: PDFDocumentProxy) {
@@ -363,6 +366,8 @@ export class PDFViewer extends InternalPDFViewer {
   }
 
   goToDestination(dest: TDestArray) {
-    this._linkService.goToDestination(dest);
+    this._linkService
+      .goToDestination(dest)
+      .catch((error) => Telemetry.error(error, { surface: 'pdf-viewer' }));
   }
 }

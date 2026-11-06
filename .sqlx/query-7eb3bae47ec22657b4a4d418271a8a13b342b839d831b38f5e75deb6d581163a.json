@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM comms_channel_participants\n                WHERE channel_id = $1\n                  AND user_id = $2\n                  AND left_at IS NULL\n                  -- Its owner or any member of its team holds a persona's\n                  -- tokens, not just the person a direct conversation is\n                  -- with, so the persona posts into one only as their agent.\n                  AND NOT EXISTS (\n                      SELECT 1\n                      FROM comms_channel_agents ca\n                      WHERE ca.channel_id = $1\n                        AND ca.kind = 'direct'\n                  )\n            ) AS \"may_post!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "may_post!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7eb3bae47ec22657b4a4d418271a8a13b342b839d831b38f5e75deb6d581163a"
+}

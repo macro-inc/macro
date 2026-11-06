@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import {
   useApproveHarnessPairingMutation,
   useHarnessPairingQuery,
@@ -41,14 +42,11 @@ export function RuntimePairingPage(props: {
     props.initialCode || undefined
   );
   const [allowPermissionBypass, setAllowPermissionBypass] = createSignal(false);
-  const [permissionBypassEdited, setPermissionBypassEdited] =
-    createSignal(false);
   const [approved, setApproved] = createSignal(false);
   const [approveError, setApproveError] = createSignal<string>();
   const [name, setName] = createSignal('');
   const [nameEdited, setNameEdited] = createSignal(false);
   const [share, setShare] = createSignal<HarnessShare>('Private');
-  const [shareEdited, setShareEdited] = createSignal(false);
 
   const pairingQuery = useHarnessPairingQuery(committedCode);
   const approveMutation = useApproveHarnessPairingMutation();
@@ -63,20 +61,6 @@ export function RuntimePairingPage(props: {
     const pairing = pairingData();
     if (!pairing) return;
     if (!nameEdited()) setName(pairing.requested_name);
-    if (!permissionBypassEdited()) {
-      setAllowPermissionBypass(
-        pairing.requested_allow_permission_bypass === true
-      );
-    }
-    // The daemon's config may ask for a scope; preselect it, but the person
-    // approving keeps the final say.
-    if (
-      !shareEdited() &&
-      pairing.requested_scope === 'team' &&
-      canShareWithTeam()
-    ) {
-      setShare('Team');
-    }
   });
 
   const lookupError = () =>
@@ -98,9 +82,7 @@ export function RuntimePairingPage(props: {
     setNameEdited(false);
     setName('');
     setShare('Private');
-    setShareEdited(false);
     setAllowPermissionBypass(false);
-    setPermissionBypassEdited(false);
   };
 
   const canApprove = () =>
@@ -116,9 +98,7 @@ export function RuntimePairingPage(props: {
     try {
       await approveMutation.mutateAsync({
         code: pairing.code,
-        allowPermissionBypass:
-          pairing.requested_allow_permission_bypass !== false &&
-          allowPermissionBypass(),
+        allowPermissionBypass: allowPermissionBypass(),
         name: name().trim(),
         teamId: share() === 'Team' ? currentTeamId() : undefined,
       });
@@ -141,7 +121,7 @@ export function RuntimePairingPage(props: {
           disabled={approveMutation.isPending}
           onClick={props.onClose}
         >
-          <ArrowLeftIcon />
+          <ArrowLeftIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Back
         </Button>
       }
@@ -162,7 +142,7 @@ export function RuntimePairingPage(props: {
                   <div>
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={tryAnotherCode}
                     >
@@ -223,10 +203,7 @@ export function RuntimePairingPage(props: {
                       checked={share() === 'Private'}
                       title="Private"
                       description="Only you can run agents on this runtime."
-                      onChange={() => {
-                        setShareEdited(true);
-                        setShare('Private');
-                      }}
+                      onChange={() => setShare('Private')}
                     />
                     <ChoiceRow
                       name="harness-share"
@@ -239,23 +216,14 @@ export function RuntimePairingPage(props: {
                           : 'Create or join a team before sharing runtimes.'
                       }
                       disabled={!canShareWithTeam()}
-                      onChange={() => {
-                        setShareEdited(true);
-                        setShare('Team');
-                      }}
+                      onChange={() => setShare('Team')}
                     />
                   </fieldset>
                   <div class="flex flex-col gap-2">
                     <Checkbox
                       class="flex items-center gap-3 text-sm"
                       checked={allowPermissionBypass()}
-                      disabled={
-                        pairing().requested_allow_permission_bypass === false
-                      }
-                      onChange={(allowed) => {
-                        setPermissionBypassEdited(true);
-                        setAllowPermissionBypass(allowed);
-                      }}
+                      onChange={setAllowPermissionBypass}
                     >
                       <Checkbox.Control />
                       <Checkbox.Label>
@@ -263,9 +231,8 @@ export function RuntimePairingPage(props: {
                       </Checkbox.Label>
                     </Checkbox>
                     <p class="text-xs text-ink-muted">
-                      {pairing().requested_allow_permission_bypass === false
-                        ? 'This daemon requires permission prompts. Change its setting and pair again to allow bypass.'
-                        : 'When off, every agent on this runtime must ask for permission.'}
+                      When off, every agent on this runtime must ask for
+                      permission. You can change this later in Runtimes.
                     </p>
                     <Show when={allowPermissionBypass()}>
                       <p class="text-xs text-negative" role="alert">
@@ -325,7 +292,7 @@ export function RuntimePairingPage(props: {
               <Match when={approved()}>
                 <Button
                   type="button"
-                  variant="cta"
+                  variant="primary"
                   size="sm"
                   onClick={props.onClose}
                 >
@@ -354,10 +321,10 @@ export function RuntimePairingPage(props: {
                 </Button>
                 <Button
                   type="button"
-                  variant="cta"
+                  variant="primary"
                   size="sm"
                   disabled={!canApprove()}
-                  onClick={() => void approve()}
+                  onClick={() => fireAndForget(approve(), 'runtime-pairing')}
                 >
                   {approveMutation.isPending ? 'Approving…' : 'Approve'}
                 </Button>
@@ -383,7 +350,7 @@ export function RuntimePairingPage(props: {
                 </Button>
                 <Button
                   type="button"
-                  variant="cta"
+                  variant="primary"
                   size="sm"
                   disabled={codeInput().trim().length === 0}
                   onClick={lookUp}

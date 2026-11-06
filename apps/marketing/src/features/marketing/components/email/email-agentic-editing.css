@@ -1,27 +1,33 @@
-#agentic-editing .homepage-feature-heading { max-width: 920px; margin-inline: auto; padding-inline: 24px; text-align: left; }
-#agentic-editing .homepage-feature-title { justify-content: flex-start; }
-#agentic-editing .homepage-section-break { display: block; }
-#agentic-editing .homepage-section-break > span { display: none; }
-#agentic-editing .homepage-section-break p { max-width: 490px; margin-inline: 0; white-space: pre-line; text-wrap: wrap; }
-
-.email-editing-stage { position: relative; isolation: isolate; padding: 24px; }
-.email-editing-stage::before {
-  content: ''; position: absolute; inset: 0 -24px; z-index: -1; pointer-events: none;
-  background: radial-gradient(ellipse at 50% 50%, #a0aabc08, transparent 70%);
+/* The same user bubble and editable draft used by Macro's agent conversation. */
+.email-editing-stage .mail-app { height: 700px; min-height: 0; }
+.email-draft-title { border-bottom: 1px solid var(--color-edge-muted); }
+.email-draft-title > svg { width: 16px; height: 16px; flex-shrink: 0; }
+.email-draft-title > :last-child { margin-left: 0; }
+.email-agent-scroll { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.email-agent-content { width: min(760px, 100%); margin: auto; padding: 28px 24px; }
+.email-agent-request { display: flex; justify-content: flex-end; margin-bottom: 28px; font-size: 14px; line-height: 1.6; }
+.email-agent-request > * { max-width: 90%; }
+.email-agent-context { margin: 0 0 24px; color: var(--color-ink-muted); font-size: 14px; line-height: 1.7; animation: mail-share-enter 180ms ease-out; }
+.email-agent-draft { animation: mail-share-enter 180ms ease-out; }
+.email-agent-draft .homepage-email-demo { --homepage-email-height: 430px; }
+.email-agent-draft .homepage-email-body { white-space: normal; }
+.email-agent-draft .homepage-email-body p + p { margin-top: 16px; }
+.email-agent-input { flex: none; width: min(760px, 100%); align-self: center; padding: 0 24px 20px; }
+.email-agent-input .mail-channel-input { font-size: 14px; }
+@media (max-width:699px) {
+ .email-editing-stage .mail-app { height: 700px; }
+ .email-agent-content { padding: 20px 12px; }
+ .email-agent-input { padding: 0 12px 12px; }
+ .email-agent-request > * { max-width: 100%; }
+ .email-agent-draft .homepage-email-demo { --homepage-email-height: 500px; }
+ .email-agent-draft .homepage-email-label { flex-basis: 46px; }
 }
-.email-editing-stage::after {
-  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background-image: radial-gradient(#d0d6e133 .6px, transparent .9px);
-  background-size: 8px 8px;
-  mask-image: radial-gradient(ellipse at 50% 40%, #000, transparent 70%);
-  opacity: .16;
-}
-.email-editing-stage .homepage-conversation { width: 100%; }
-.email-editing-stage .homepage-email-body p + p { margin-top: 16px; }
+@media (prefers-reduced-motion:reduce) { .email-agent-context, .email-agent-draft { animation: none; } }
 
-@media (max-width: 699px) {
-  #agentic-editing .homepage-feature-heading { padding-inline: 0; }
-  #agentic-editing .homepage-section-break p { max-width: 100%; white-space: normal; text-wrap: pretty; }
-  .email-editing-stage { padding: 12px 0 0; }
-  .email-editing-stage::before { inset: 0; }
+.email-agent-splits { display:flex; min-width:0; min-height:0; height:100%; }
+.email-agent-main { display:flex; flex-direction:column; flex:1; min-width:0; min-height:0; }
+.email-agent-source { display:flex; flex-direction:column; flex:0 1 46%; min-width:0; min-height:0; border-right:1px solid var(--color-edge-muted); container:sample-main / inline-size; }
+@media (max-width:899px) {
+ .email-agent-splits[data-source-open=true] .email-agent-main { display:none; }
+ .email-agent-source { flex:1; border:0; }
 }

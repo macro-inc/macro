@@ -132,8 +132,16 @@ export type FormSubmissionOutcome =
     }
   | { outcome: 'stopped'; section: FormSection; message: string };
 
-/** The caller's receipt and current answers, read without access to other responses. */
-export type MyFormResponse = {
+/**
+ * The caller's receipt and current answers, read without access to other
+ * responses. On an anonymous form the caller only learns that they
+ * responded: nothing links them to their response.
+ */
+export type MyFormResponse = SavedFormResponse | { kind: 'anonymous' };
+
+/** The caller's saved response to a form that isn't anonymous. */
+export type SavedFormResponse = {
+  kind: 'saved';
   booking?: FormBookingStep;
   response: FormResponse;
   status: ResponseStatus;
@@ -330,6 +338,7 @@ export class Form extends MacroEntity<FormDetail> {
                       'text',
                       'number',
                       'date',
+                      'dateRange',
                       'checkbox',
                     ),
                   },
@@ -416,7 +425,15 @@ export class Form extends MacroEntity<FormDetail> {
         }))
         .with(
           {
-            type: P.union('text', 'number', 'boolean', 'date', 'link', 'clear'),
+            type: P.union(
+              'text',
+              'number',
+              'boolean',
+              'date',
+              'date_range',
+              'link',
+              'clear',
+            ),
           },
           (answer) => answer,
         )
@@ -493,6 +510,7 @@ export class Form extends MacroEntity<FormDetail> {
     const mine = unwrap(
       await this.client.storage.getMyFormResponse({ path: { id: this.id } }),
     );
+    if (mine.kind === 'anonymous') return { kind: 'anonymous' };
     const table = await this.table();
     const answers = await Promise.all(
       mine.answers.map(async (answer): Promise<FormAnswer> => {
@@ -535,13 +553,18 @@ export class Form extends MacroEntity<FormDetail> {
                 'number',
                 'boolean',
                 'date',
+                'date_range',
                 'link',
                 'clear',
               ),
             },
             (cell) => cell,
           )
-          .exhaustive();
+          .exhaustive(() => {
+            throw new MacroError(
+              `answer to question ${question.id} has a type this SDK doesn't know`,
+            );
+          });
         return { question, value };
       }),
     );
@@ -550,6 +573,7 @@ export class Form extends MacroEntity<FormDetail> {
       : undefined;
     const booking = this.unlockedBooking(mine.booking);
     return {
+      kind: 'saved',
       ...(booking ? { booking } : {}),
       response: FormResponse.byId(this, mine.response.id, {
         status: mine.response.status,
@@ -594,16 +618,25 @@ export class Form extends MacroEntity<FormDetail> {
       return {
         question,
         responses: entry.responses,
-        buckets: entry.buckets.map((bucket) => ({
-          count: bucket.count,
-          value: match(bucket.value)
-            .with({ kind: 'option' }, (value) => ({
-              kind: 'option' as const,
-              option: FormOption.byId(question, value.option),
-            }))
-            .with({ kind: 'checkbox' }, (value) => value)
-            .exhaustive(),
-        })),
+        buckets: entry.buckets.flatMap((bucket): FormQuestionTally['buckets'] =>
+          match(bucket.value)
+            .with({ kind: 'option' }, (value) => [
+              {
+                count: bucket.count,
+                value: {
+                  kind: 'option' as const,
+                  option: FormOption.byId(question, value.option),
+                },
+              },
+            ])
+            .with({ kind: 'checkbox' }, (value) => [
+              { count: bucket.count, value },
+            ])
+            .exhaustive((unknown) => {
+              console.warn('macro sdk: unknown form tally bucket', unknown);
+              return [];
+            }),
+        ),
       };
     });
   }
@@ -630,6 +663,11 @@ export class Form extends MacroEntity<FormDetail> {
   /** Open the form's builder in Macro. */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/form/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** The respondent page, which public forms also expose without signing in. */

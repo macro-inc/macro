@@ -1,0 +1,102 @@
+---
+description: "Queries, caching, and where data is fetched."
+paths:
+  - "apps/web/**"
+  - "packages/**"
+globs: "apps/web/**,packages/**"
+alwaysApply: false
+---
+
+# Frontend data fetching
+
+Queries, caching, and where data is fetched.
+
+- **FE-01** Never call a service client outside the `queries` package — UI code
+  calling an endpoint directly is usually re-fetching data an existing query
+  already caches. Enforced by ast-grep `ts-no-service-client-outside-queries` +
+  `tsx-no-service-client-outside-queries`, warning.
+- **FE-02** Every query module has a `keys.ts` structured like the existing
+  ones.
+- **FE-03** Conditional fetching uses a debounced signal passed to TanStack
+  Query's `enabled`, not a custom resource.
+- **FE-04** Pre-populating data means exposing a cache-seeding method on the
+  query, not an ad hoc manual cache.
+- **FE-05** Data-dependent UI that must not suspend uses `queryReadyGate`.
+- **FE-06** Extend `QUERY_FILTERS_BASE` instead of re-deriving filter exclusions
+  per query, and prefer explicit include lists — exclude lists silently break
+  when a new entity type is added.
+- **FE-07** Don't hardcode backend-owned config in the frontend (e.g. system bot
+  config) — fetch it dynamically or generate types from the backend source of
+  truth.
+- **FE-57** Never hardcode a `provider/model` id. Pick AI models from
+  `@core/component/AI/constant` by plan: `FREE_DEFAULT_MODEL` for AI every plan
+  runs, `defaultModelForPlan`/`modelsForPlan` for user choices. `FREE_MODELS`
+  is generated from the backend's `FreeTierModel` schema, and the backend 403s
+  anything outside the user's plan. Enforced by ast-grep
+  `ts-no-hardcoded-model-id` + `tsx-no-hardcoded-model-id`, error.
+- **FE-29** Every new query call site (`useQuery`/`useInfiniteQuery` or a hook
+  from `src/lib/queries/**`) needs a deliberate `Suspense` boundary: reading
+  `query.data` suspends to the *nearest ancestor* boundary. When reviewing, walk
+  up the component tree from the call site and determine which boundary would
+  catch it. If none exists below the app root, or the nearest one is far outside
+  the component's own UI scope (e.g. the route-level boundary in
+  `apps/web/src/routes/Root.tsx`, whose fallback blanks unrelated UI), flag it
+  and ask which boundary is intended.
+
+## Query callback lifetimes
+
+Query options can remain cached after their UI unmounts, including for disabled
+queries: for `gcTime`, and indefinitely on a query other views still observe,
+which keeps its last observer's options. Callbacks created inside hooks can
+retain component accessors, Solid owners, and detached DOM through shared closure
+environments—even when a callback only references a locally resolved ID. This
+does not mean every closure captures every local variable.
+
+- **FE-69** Create cached callbacks in module-scope query factories accepting
+  resolved IDs, flags, and plain data. Resolve reactive inputs inside the
+  `useQuery` / `useInfiniteQuery` options accessor, e.g. `useQuery(() =>
+  itemQueryOptions(id()))`, so inputs still update reactively. Enforced by
+  ast-grep `ts-/tsx-no-inline-query-callbacks`, CI error, for functions written
+  in a query hook's options, and in `queryOptions` or client `fetchQuery`-family
+  options inside a `use*`, `create*`, or component function or an object
+  method. Names ending in `Options` count as factories. The rule does not see
+  references to hook-local functions or wrapper-hook arguments (below).
+- Keep pure selectors and polling policies at module scope, or inside those
+  factories. Check **all** retained callbacks: `queryFn`, `select`,
+  `refetchInterval`, pagination, placeholder callbacks, and functions in `meta`.
+- Do not pass component accessors, props getters, or query proxies into the
+  factory. For reactive selection, pass plain snapshots of the needed values
+  (such as channel names or a resolved document ID). Naming a function or
+  copying an ID inside the hook does not isolate its closure from the hook.
+- Use `keepPreviousData` from `@tanstack/solid-query` instead of an inline
+  `placeholderData: (p) => p`.
+- The same rule applies to callers of wrapper hooks such as
+  `useSoupAstItemsQuery` and `createGroupedSoupQueries`: `meta.itemFilter` /
+  `meta.insertFilter` passed from a component or view context are cached too, so
+  build them with a module-scope factory over plain snapshots (see
+  [drive-data-source](../../../apps/web/src/features/drive-view/queries/drive-data-source.ts)).
+- Query hooks in `src/lib/urql-solid` are exempt: their observers are created
+  per mount and destroyed on cleanup, so nothing outlives the component.
+
+Examples: [session query factory](../../../apps/web/src/lib/queries/agent-session/session.ts) and
+[search query factories](../../../apps/web/src/lib/queries/soup/search.ts).
+- **FE-48** Keep cached data on screen through refetch errors: gate on
+  `isPending`, never `isSuccess` / `isError`. Every query view handles pending,
+  error, empty, and nothing-selected separately.
+- **FE-49** Refetches and optimistic updates never wipe local state (drafts,
+  anchors, selections), and a refetch started before a mutation can't overwrite
+  its result. Optimistic rollback state lives in `onMutate`; temporary ids are
+  never openable. Solid Query returns new objects on every refetch, so a query
+  that polls or refetches under open lists and pickers sets `reconcile: 'id'`;
+  otherwise rows remount and drop focus.
+- **FE-50** Scope invalidation to what changed, but update every reader of it.
+  Query keys hold exactly the fetch inputs.
+- **FE-58** With the GraphQL normalized cache, a mutation never refetches the
+  lists the cache maintains: its optimistic write and returned records update
+  them, and they re-evaluate locally. A refetch reads a replica that can lag the
+  write and puts stale state back. Read again only lists the cache cannot keep
+  current (`unmaintainedOnly`), everything without the cache, or as a failure
+  fallback; a write the server answers only in part writes the confirmed rest
+  into the cache itself.
+- **FE-51** State moved into the URL round-trips every field. Removed or renamed
+  routes and route ids get redirects, and saved split layouts keep working.

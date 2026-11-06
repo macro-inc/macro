@@ -1,0 +1,65 @@
+.crm-followup-demo { scroll-margin-top:88px; }
+.crm-followup-splits { display:flex; height:100%; min-height:0; }
+.crm-followup-source { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column;  }
+.crm-followup-back { flex:none; padding:6px 10px; border-bottom:1px solid var(--color-edge-muted); }
+.crm-followup-source-body { container:sample-main / inline-size; display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; overflow:hidden; }
+.crm-followup-source-body .sample-company-record { height:100%; }
+.crm-followup-source-body .sample-company-scroll { min-height:0; }
+.crm-followup-source-body button.sample-record-task { width:100%; text-align:left; font:inherit; color:inherit; background:transparent; }
+.crm-followup-source-body .sample-company-row { grid-template-columns:8px minmax(0,1fr) 100px; }
+.crm-followup-source-body .sample-company-row > :nth-child(n+4) { display:none; }
+.crm-followup-demo[data-source-open=true] .crm-followup-agent { display:none; }
+.crm-followup-agent { display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; }
+.crm-followup-agent .agent-turn { max-width:780px; }
+.crm-followup-agent .agent-answer { font-size:14px; }
+.crm-followup-result .homepage-email-demo { --homepage-email-height:420px; margin-block:20px; }
+.crm-followup-result .homepage-email-body { white-space:normal; }
+.crm-followup-file { display:inline; padding:0; border:0; background:none; color:inherit; font:inherit; }
+.crm-followup-pr { padding:24px; }
+.crm-followup-pr-link { margin:12px 0; font-size:14px; }
+.crm-followup-source .call-record-column { padding:24px 16px; }
+.crm-followup-source .sample-chat-log { padding:20px 14px; }
+.crm-followup-source .sample-company-description { max-width:100%; }
+@media(max-width:899px) {
+ .crm-followup-source { flex:1; border:0; }
+ .crm-followup-agent .agent-turn { padding-inline:12px; }
+ .crm-followup-result .homepage-email-demo { --homepage-email-height:480px; }
+}
+
+/* Keep the compact email preview on two aligned lines inside the source pane. */
+.crm-followup-source-body [aria-label="Company emails"] .sample-record-row {
+  align-items: start;
+  padding-block: 10px;
+}
+.crm-followup-source-body [aria-label="Company emails"] .sample-record-row-indicator {
+  height: 20px;
+}
+.crm-followup-source-body [aria-label="Company emails"] .sample-record-row-content {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 3px 8px;
+}
+.crm-followup-source-body [aria-label="Company emails"] .sample-record-row-content > svg {
+  align-self: center;
+}
+.crm-followup-source-body [aria-label="Company emails"] .sample-record-row-title {
+  max-width: none;
+  line-height: 20px;
+}
+.crm-followup-source-body [aria-label="Company emails"] .sample-record-row-detail {
+  grid-column: 2;
+  padding-left: 0;
+  gap: 8px;
+  line-height: 18px;
+}
+.crm-followup-source-body [aria-label="Company emails"] .sample-record-row-detail > .text-ink {
+  flex-shrink: 0;
+  max-width: 60%;
+}
+.crm-followup-source-body [aria-label="Company emails"] .sample-record-row-snippet {
+  display: block;
+  min-width: 0;
+}
+.crm-followup-source-body [aria-label="Company emails"] .sample-record-row-time {
+  line-height: 20px;
+}

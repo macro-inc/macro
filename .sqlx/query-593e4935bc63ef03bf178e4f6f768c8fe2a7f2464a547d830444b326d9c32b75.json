@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT payload AS \"payload!: Json<RequestEvent>\" FROM entity_access_request_event WHERE request_id = $1 AND (payload->'request'->>'revision')::int = $2 LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "payload!: Json<RequestEvent>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "593e4935bc63ef03bf178e4f6f768c8fe2a7f2464a547d830444b326d9c32b75"
+}

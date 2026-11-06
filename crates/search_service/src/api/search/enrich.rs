@@ -7,9 +7,14 @@ use opensearch_client::search::model::SearchHit;
 use crate::api::{
     context::SearchHandlerState,
     search::{
-        calendar_event::enrich_calendar_events, call_record::enrich_call_records,
-        channel::enrich_channel_messages, chat::enrich_chats, document::enrich_documents,
-        email::enrich_emails, project::enrich_projects, simple::SearchError,
+        calendar_event::enrich_calendar_events,
+        call_record::enrich_call_records,
+        channel::{enrich_channel_messages, enrich_channel_names, split_channel_hits},
+        chat::enrich_chats,
+        document::enrich_documents,
+        email::enrich_emails,
+        project::enrich_projects,
+        simple::SearchError,
     },
 };
 
@@ -45,10 +50,17 @@ pub async fn enrich_search_response(
                 .collect())
         }
         SearchEntityType::Channels => {
-            let response = enrich_channel_messages(ctx, user_id, results).await?;
-            Ok(response
+            // Message hits from OpenSearch carry goto content; name hits from
+            // the Postgres channel name search have none and become channels.
+            let (message_hits, name_hits) = split_channel_hits(results);
+            let (messages, channels) = tokio::try_join!(
+                enrich_channel_messages(ctx, user_id, message_hits),
+                enrich_channel_names(ctx, user_id, name_hits),
+            )?;
+            Ok(messages
                 .into_iter()
                 .map(UnifiedSearchResponseItem::ChannelMessage)
+                .chain(channels.into_iter().map(UnifiedSearchResponseItem::Channel))
                 .collect())
         }
         SearchEntityType::Chats => {

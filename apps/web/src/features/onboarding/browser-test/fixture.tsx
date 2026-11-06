@@ -126,12 +126,14 @@ function Fixture() {
             onGoogle={signUpWithGoogle}
             onBackFromEmail={() => {}}
             onSignIn={() => land({ t: 'sign-in' })}
+            onAgentSignup={() => {}}
             showingEmail={false}
           />
         </Match>
         <Match when={true}>
           <OnboardingFlowView
             next={params.next}
+            step={params.step}
             checkoutReturn={parseCheckoutReturn(params)}
             onNavigate={(target) => land({ t: 'app', target })}
             onRedirect={(url) => location.assign(url)}

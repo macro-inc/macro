@@ -16,6 +16,7 @@ import type {
   StyleInfo,
 } from '@core/fig-engine/design-types';
 import type { ComponentInfo } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, createSignal, on } from 'solid-js';
 import type { DesignOp, PropertyInput, StyleKind } from '../core/design-system';
 import type { FigEditor } from './create-fig-editor';
@@ -49,7 +50,10 @@ export function createDesignSystem(options: {
   };
   createEffect(
     on([viewer.selected, viewer.editsSettled], ([selected]) => {
-      void loadInfo(selected.length === 1 ? selected[0].id : undefined);
+      fireAndForget(
+        loadInfo(selected.length === 1 ? selected[0].id : undefined),
+        'fig-design-system'
+      );
     })
   );
 
@@ -71,7 +75,11 @@ export function createDesignSystem(options: {
       // A file that fails to answer keeps the last lists.
     }
   };
-  createEffect(on(viewer.editsSettled, () => void loadLists()));
+  createEffect(
+    on(viewer.editsSettled, () =>
+      fireAndForget(loadLists(), 'fig-design-system')
+    )
+  );
 
   const run = (...ops: DesignOp[]) => editor.apply(ops);
   const selectedId = () => viewer.selected()[0]?.id;

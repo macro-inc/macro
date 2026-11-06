@@ -6,7 +6,7 @@ import { DeleteItemPoller } from './lambda';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'deleted-item-poller',
 };
 

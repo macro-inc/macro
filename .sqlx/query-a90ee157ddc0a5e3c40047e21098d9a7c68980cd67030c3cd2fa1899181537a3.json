@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_mailbox_command_targets (command_id,message_id,provider_id,pending)\n            VALUES ($1,$2,$3,$4)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a90ee157ddc0a5e3c40047e21098d9a7c68980cd67030c3cd2fa1899181537a3"
+}

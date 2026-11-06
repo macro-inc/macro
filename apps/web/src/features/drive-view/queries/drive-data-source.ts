@@ -28,7 +28,7 @@ import { type Accessor, createMemo } from 'solid-js';
 import type { DriveListSource, DriveSelection } from '../context/drive-source';
 import { DRIVE_FACETS } from '../filters/drive-facets';
 import { selectDriveDatabases } from './drive-databases';
-import { selectDriveForms } from './drive-forms';
+import { hiddenFormDatabases, selectDriveForms } from './drive-forms';
 import { buildDriveQuery } from './drive-query';
 import {
   driveEntityMatchesLocation,
@@ -75,29 +75,32 @@ export function createDriveDataSource(options: {
 
   const searchContext = useOptionalSearchContext();
   const databasesQuery = useDatabasesQuery();
-  const includesDatabases = () => {
-    const current = selection();
-    return (
-      options.databasesEnabled() &&
-      current.location.kind === 'tab' &&
-      current.location.tab !== 'recent' &&
-      current.scope !== 'attachments'
-    );
+  // Databases and forms come from their own lists, in file tabs and in the
+  // folder they are filed in.
+  const listsDatabasesAndForms = () => {
+    const { location, scope } = selection();
+    if (scope === 'attachments') return false;
+    return location.kind === 'tab'
+      ? location.tab !== 'recent'
+      : Boolean(location.id);
   };
-  const databaseEntities = () =>
-    includesDatabases() && !databasesQuery.isPending
-      ? selectDriveDatabases(databasesQuery.data ?? [], selection(), userId())
-      : [];
+  const includesDatabases = () =>
+    options.databasesEnabled() && listsDatabasesAndForms();
   const formsQuery = useFormsQuery();
-  const includesForms = () => {
-    const current = selection();
-    return (
-      options.formsEnabled() &&
-      current.location.kind === 'tab' &&
-      current.location.tab !== 'recent' &&
-      current.scope !== 'attachments'
-    );
-  };
+  const includesForms = () =>
+    options.formsEnabled() && listsDatabasesAndForms();
+  // Wait for the forms list, which names the databases made for polls.
+  const databaseEntities = () =>
+    includesDatabases() &&
+    !databasesQuery.isPending &&
+    !(includesForms() && formsQuery.isPending)
+      ? selectDriveDatabases(
+          databasesQuery.data ?? [],
+          selection(),
+          userId(),
+          hiddenFormDatabases(formsQuery.data ?? [])
+        )
+      : [];
   const formEntities = () =>
     includesForms() && formsQuery.isSuccess
       ? selectDriveForms(formsQuery.data, selection(), userId())
@@ -172,6 +175,7 @@ export function createDriveDataSource(options: {
   });
 
   const search = createSearchState({
+    surface: () => 'drive',
     text: () => selection().search,
 
     enabled: facetsReady,

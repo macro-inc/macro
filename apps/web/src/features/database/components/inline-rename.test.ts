@@ -11,6 +11,44 @@ afterEach(() => {
 });
 
 describe('createInlineRename', () => {
+  it('hands off focus before saving finishes and reports a refusal without taking focus back', async () => {
+    let refuse!: (reason: string) => void;
+    const restoreFocus = vi.fn();
+    const onSubmit = vi.fn();
+    const rename = createRoot((disposeRoot) => {
+      dispose = disposeRoot;
+      return createInlineRename({
+        name: (target: { name: string }) => target.name,
+        rename: () =>
+          ResultAsync.fromPromise(
+            new Promise<void>((_resolve, reject) => {
+              refuse = reject;
+            }),
+            (failure) => String(failure)
+          ),
+        failureMessage: (failure) => failure,
+        emptyName: { message: 'Enter a name.', onBlur: 'cancel' },
+        input: () => undefined,
+        restoreFocus,
+      });
+    });
+    rename.begin({ name: 'Unnamed' });
+    rename.setDraft('');
+    await rename.save(true, onSubmit);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(rename.target()).toEqual({ name: 'Unnamed' });
+    rename.setDraft('Tasks');
+    const saving = rename.save(true, onSubmit);
+    expect(onSubmit).toHaveBeenCalledOnce();
+    expect(rename.target()).toBeUndefined();
+    expect(rename.pending()).toBe(true);
+    refuse('Connection lost');
+    await saving;
+    expect(rename.error()).toBe('Connection lost');
+    expect(rename.pending()).toBe(false);
+    expect(restoreFocus).not.toHaveBeenCalled();
+  });
+
   it('begins with the current name as a selected, focused draft', async () => {
     const input = document.createElement('input');
     document.body.append(input);

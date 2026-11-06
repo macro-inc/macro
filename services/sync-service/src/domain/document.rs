@@ -65,6 +65,8 @@ pub struct PreparedUpdate {
 /// Signed-token attribution stored alongside the existing operation log.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 pub struct DocumentAttribution {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_correlation_id: Option<uuid::Uuid>,
     pub actor: String,
     pub on_behalf_of: Option<String>,
 }
@@ -75,9 +77,12 @@ impl DocumentAttribution {
     pub fn from_session_claims(
         actor: Option<String>,
         user_id: Option<String>,
+        agent_correlation_id: Option<uuid::Uuid>,
     ) -> Result<Option<Self>, DocumentError> {
         match (actor, user_id) {
-            (Some(actor), user_id) => Self::from_signed_claims(actor, user_id).map(Some),
+            (Some(actor), user_id) => {
+                Self::from_signed_claims(actor, user_id, agent_correlation_id).map(Some)
+            }
             (None, Some(user_id)) => {
                 // Human identities retain the user-claim bound; long valid
                 // email addresses can exceed the explicit agent-actor bound.
@@ -85,6 +90,7 @@ impl DocumentAttribution {
                     return Err(DocumentError::Invalid("Invalid signed attribution."));
                 }
                 Ok(Some(Self {
+                    agent_correlation_id,
                     actor: user_id,
                     on_behalf_of: None,
                 }))
@@ -96,11 +102,13 @@ impl DocumentAttribution {
     pub fn from_signed_claims(
         actor: String,
         on_behalf_of: Option<String>,
+        agent_correlation_id: Option<uuid::Uuid>,
     ) -> Result<Self, DocumentError> {
         if actor.len() > 256 || on_behalf_of.as_ref().is_some_and(|user| user.len() > 1024) {
             return Err(DocumentError::Invalid("Invalid signed attribution."));
         }
         Ok(Self {
+            agent_correlation_id,
             actor,
             on_behalf_of,
         })
@@ -172,6 +180,22 @@ fn export_state(doc: &LoroDoc, mode: ExportMode<'_>) -> Result<(Vec<u8>, Vec<u8>
         return Err(DocumentError::TooLarge);
     }
     Ok((snapshot, revision))
+}
+
+/// Peers that authored operations carried by an update or snapshot, so they
+/// can be mapped to the writer. Read from the blob, not the import result, so a
+/// retried write that changes nothing still registers its peers.
+pub fn writing_peers(blob: &[u8]) -> Result<Vec<u64>, DocumentError> {
+    let meta = LoroDoc::decode_import_blob_meta(blob, false)
+        .map_err(|_| DocumentError::Invalid("Invalid Loro update."))?;
+    let mut peers: Vec<u64> = meta
+        .partial_end_vv
+        .iter()
+        .filter(|(peer, end)| **end > meta.partial_start_vv.get(peer).copied().unwrap_or(0))
+        .map(|(peer, _)| *peer)
+        .collect();
+    peers.sort_unstable();
+    Ok(peers)
 }
 
 /// Synchronous preflight. The caller must apply the returned delta before its

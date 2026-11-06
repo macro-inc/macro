@@ -1,5 +1,6 @@
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, JSX } from 'solid-js';
+import type { EmailCalendarEvents } from '../context/compose-capabilities';
 import type { ComposeBodyActions } from '../context/editor-capabilities';
 import type {
   EmailFormRecipients,
@@ -18,7 +19,7 @@ export interface ComposeContextValue extends ComposeState {
   bodyActions: ComposeBodyActions;
   isMobile: Accessor<boolean>;
   scheduleEnabled: boolean;
-  attachmentFailure(message: string, options?: { subtext?: string }): void;
+  calendarEvents?: EmailCalendarEvents;
   onUpgrade?: () => void;
   viewerLoading?: Accessor<boolean>;
 }
@@ -38,7 +39,8 @@ export interface ComposeState {
   ) => void;
   setSubject: (value: string) => void;
   onContentChange: (content: string) => void;
-  onAddAttachments: (attachments: DraftFormAttachment[]) => void;
+  /** Files the user picked or dropped; the controller decides what attaches. */
+  onAddAttachments: (files: File[]) => void;
   onRemoveAttachment: (attachment: DraftFormAttachment) => void;
 
   // Editor
@@ -56,11 +58,14 @@ export interface ComposeState {
     operation: Accessor<'idle' | 'committing' | 'updating' | 'cancelling'>;
     onSelect(date: Date | null): boolean;
     onCancel(): Promise<boolean>;
+    onCheckStatus?(): Promise<void>;
     pickerDisabled: Accessor<boolean>;
   };
 
   // Status
   disabled: Accessor<boolean>;
+  /** Discard can outlast editing; defaults to `disabled`. */
+  deleteDisabled?: Accessor<boolean>;
   primaryActionDisabled: Accessor<boolean>;
   isSending: Accessor<boolean>;
   isSavingDraft?: Accessor<boolean>;
@@ -84,6 +89,7 @@ export interface ComposeState {
   // From-inbox selection: the inboxes the user can send from, the active one,
   // and a setter to change it.
   fromInboxes?: Accessor<FromInboxOption[]>;
+  inboxesLoading?: Accessor<boolean>;
   selectedInboxId?: Accessor<string | undefined>;
   onSelectInbox?: (inboxId: string, senderEmail?: string) => void;
   hasPaidAccess: Accessor<boolean>;

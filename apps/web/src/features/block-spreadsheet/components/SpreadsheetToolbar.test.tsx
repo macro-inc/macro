@@ -5,16 +5,16 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { createSignal, type ParentProps } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SpreadsheetToolbarProps } from '../core/toolbar-types';
-import { SpreadsheetFileMenu } from './SpreadsheetActionMenus';
+import {
+  SpreadsheetFileMenu,
+  SpreadsheetImportButton,
+} from './SpreadsheetActionMenus';
 import { SpreadsheetToolbar } from './SpreadsheetToolbar';
 
 // App hotkey registries are outside this presentational menu fixture.
-vi.mock('@ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
 
 let animationStyle: HTMLStyleElement;
 beforeEach(() => {
@@ -53,6 +53,10 @@ function toolbar(
         onZoom={onZoom}
         {...overrides}
       />
+      <SpreadsheetImportButton
+        disabled={overrides.readonly ?? false}
+        onCommand={onCommand}
+      />
       <SpreadsheetFileMenu
         readonly={overrides.readonly ?? false}
         canExport={overrides.canExport ?? true}
@@ -80,6 +84,18 @@ describe('spreadsheet toolbar', () => {
     ]);
     fireEvent.click(view.getByRole('button', { name: 'Undo' }));
     expect(view.onCommand).toHaveBeenCalledWith('undo');
+  });
+
+  it('indents the selection and returns focus to the sheet', () => {
+    const onRestoreFocus = vi.fn();
+    const view = toolbar({ onRestoreFocus });
+    fireEvent.click(view.getByRole('button', { name: 'Increase indent' }));
+    fireEvent.click(view.getByRole('button', { name: 'Decrease indent' }));
+    expect(view.onCommand.mock.calls).toEqual([
+      ['indent-increase'],
+      ['indent-decrease'],
+    ]);
+    expect(onRestoreFocus).toHaveBeenCalledTimes(2);
   });
 
   it('cancels a font size draft and restores keyboard focus without applying it', () => {
@@ -141,7 +157,7 @@ describe('spreadsheet toolbar', () => {
 
   it('opens menus with the keyboard and invokes the selected command', async () => {
     const view = toolbar();
-    const file = view.getByRole('button', { name: 'Import and export' });
+    const file = view.getByRole('button', { name: 'Download' });
     fireEvent.keyDown(file, { key: 'ArrowDown' });
     const download = await screen.findByRole('menuitem', {
       name: 'Download as CSV',
@@ -150,18 +166,24 @@ describe('spreadsheet toolbar', () => {
     expect(view.onCommand).toHaveBeenCalledWith('export-csv');
   });
 
-  it.each([
-    ['Import…', 'import'],
-    ['Download as Excel (.xlsx)', 'export-xlsx'],
-  ])('invokes the %s workbook command', async (label, command) => {
+  it('invokes the import command from the standalone button', () => {
     const view = toolbar();
-    fireEvent.keyDown(view.getByRole('button', { name: 'Import and export' }), {
+    fireEvent.click(view.getByRole('button', { name: 'Import' }));
+    expect(view.onCommand).toHaveBeenCalledWith('import');
+  });
+
+  it('invokes the Download as Excel (.xlsx) workbook command', async () => {
+    const view = toolbar();
+    fireEvent.keyDown(view.getByRole('button', { name: 'Download' }), {
       key: 'ArrowDown',
     });
-    fireEvent.keyDown(await screen.findByRole('menuitem', { name: label }), {
-      key: 'Enter',
-    });
-    expect(view.onCommand).toHaveBeenCalledWith(command);
+    fireEvent.keyDown(
+      await screen.findByRole('menuitem', {
+        name: 'Download as Excel (.xlsx)',
+      }),
+      { key: 'Enter' }
+    );
+    expect(view.onCommand).toHaveBeenCalledWith('export-xlsx');
   });
 
   it('exposes checked view settings directly with the keyboard', async () => {
@@ -177,22 +199,36 @@ describe('spreadsheet toolbar', () => {
     expect(view.onCommand).toHaveBeenCalledWith('toggle-gridlines');
   });
 
+  it('keeps view-only display settings available but not the saved gridlines', async () => {
+    const view = toolbar({ readonly: true });
+    fireEvent.keyDown(view.getByRole('button', { name: 'View options' }), {
+      key: 'ArrowDown',
+    });
+    const gridlines = await screen.findByRole('menuitemcheckbox', {
+      name: 'Gridlines',
+    });
+    expect(gridlines.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.keyDown(gridlines, { key: 'Enter' });
+    fireEvent.keyDown(
+      screen.getByRole('menuitemcheckbox', { name: 'Formula bar' }),
+      { key: 'Enter' }
+    );
+    expect(view.onCommand.mock.calls).toEqual([['toggle-formula-bar']]);
+  });
+
   it('closes a top menu with Escape and restores editor focus without executing a command', async () => {
     const editor = document.createElement('textarea');
     document.body.append(editor);
     try {
       const view = toolbar({ onRestoreFocus: () => editor.focus() });
-      fireEvent.keyDown(
-        view.getByRole('button', { name: 'Import and export' }),
-        {
-          key: 'ArrowDown',
-        }
-      );
-      const importItem = await screen.findByRole('menuitem', {
-        name: 'Import…',
+      fireEvent.keyDown(view.getByRole('button', { name: 'Download' }), {
+        key: 'ArrowDown',
       });
-      await waitFor(() => expect(document.activeElement).toBe(importItem));
-      fireEvent.keyDown(importItem, { key: 'Escape' });
+      const excelItem = await screen.findByRole('menuitem', {
+        name: 'Download as Excel (.xlsx)',
+      });
+      await waitFor(() => expect(document.activeElement).toBe(excelItem));
+      fireEvent.keyDown(excelItem, { key: 'Escape' });
       await waitFor(() => expect(document.activeElement).toBe(editor));
       expect(view.onCommand).not.toHaveBeenCalled();
     } finally {
@@ -223,6 +259,30 @@ describe('spreadsheet toolbar', () => {
   });
 
   it.each([
+    ['Sep 2026', { style: { format: 'date', numberFormat: 'mmm yyyy' } }],
+    [
+      'Thursday, September 17, 2026',
+      { style: { format: 'date', numberFormat: 'dddd, mmmm d, yyyy' } },
+    ],
+    ['Custom date and time…', { command: 'custom-date-format' }],
+  ])('offers %s under Number format → Date formats', async (item, expected) => {
+    const view = toolbar();
+    fireEvent.keyDown(view.getByRole('button', { name: 'Number format' }), {
+      key: 'ArrowDown',
+    });
+    fireEvent.keyDown(
+      await screen.findByRole('menuitem', { name: 'Date formats' }),
+      { key: 'ArrowRight' }
+    );
+    fireEvent.keyDown(await screen.findByRole('menuitem', { name: item }), {
+      key: 'Enter',
+    });
+    if ('style' in expected)
+      expect(view.onStyle).toHaveBeenCalledWith(expected.style);
+    else expect(view.onCommand).toHaveBeenCalledWith(expected.command);
+  });
+
+  it.each([
     {
       role: 'button',
       trigger: 'Functions',
@@ -231,7 +291,7 @@ describe('spreadsheet toolbar', () => {
     },
     {
       role: 'button',
-      trigger: 'Import and export',
+      trigger: 'Download',
       item: 'Download as CSV',
       command: 'export-csv',
     },
@@ -268,10 +328,13 @@ describe('spreadsheet toolbar', () => {
       'Italic',
       'Fill color',
       'Number format',
+      'Increase indent',
+      'Decrease indent',
       'Functions',
       'Undo',
       'Paste special',
       'Format and data',
+      'Import',
     ]) {
       expect(view.getByRole('button', { name }).hasAttribute('disabled')).toBe(
         true
@@ -281,7 +344,7 @@ describe('spreadsheet toolbar', () => {
       'Zoom',
       'View options',
       'Find and replace',
-      'Import and export',
+      'Download',
     ]) {
       expect(view.getByRole('button', { name }).hasAttribute('disabled')).toBe(
         false
@@ -291,14 +354,13 @@ describe('spreadsheet toolbar', () => {
 
   it('disables imports for viewers and both download formats when exports are unavailable', async () => {
     const view = toolbar({ readonly: true, canExport: false });
-    fireEvent.keyDown(view.getByRole('button', { name: 'Import and export' }), {
+    expect(
+      view.getByRole('button', { name: 'Import' }).hasAttribute('disabled')
+    ).toBe(true);
+    fireEvent.keyDown(view.getByRole('button', { name: 'Download' }), {
       key: 'ArrowDown',
     });
-    for (const name of [
-      'Import…',
-      'Download as Excel (.xlsx)',
-      'Download as CSV',
-    ]) {
+    for (const name of ['Download as Excel (.xlsx)', 'Download as CSV']) {
       const item = await screen.findByRole('menuitem', { name });
       expect(item.getAttribute('aria-disabled')).toBe('true');
       fireEvent.keyDown(item, { key: 'Enter' });

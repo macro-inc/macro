@@ -169,3 +169,72 @@ async fn legacy_email_settings_do_not_hide_associated_records(pool: PgPool) {
         }
     }
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures("fixtures/contact_listing.sql")
+)]
+async fn activity_preserves_duplicates_without_consent_and_excludes_hidden(pool: PgPool) {
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    sqlx::query!(
+        "INSERT INTO crm_domains (company_id, team_id, domain) VALUES ($1, $2, 'EXAMPLE.com')",
+        id(101),
+        id(11)
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let scope = repo
+        .resolve_activity(CrmContactListScope::Viewer(VIEWER))
+        .await
+        .unwrap();
+    assert_eq!(scope.company_ids, vec![id(101), id(102), id(103)]);
+    assert_eq!(
+        scope.contact_ids,
+        [1001, 1002, 1004, 1005, 1009, 1010, 1011].map(id)
+    );
+    assert_eq!(scope.domains, vec!["example.com"]);
+    assert!(scope.addresses.contains(&"pat@example.com".to_string()));
+    assert!(
+        !scope
+            .addresses
+            .contains(&"hidden-admin@example.com".to_string())
+    );
+    assert!(
+        !scope
+            .addresses
+            .contains(&"hidden-parent@example.com".to_string())
+    );
+    assert!(
+        scope
+            .addresses
+            .contains(&"disabled@example.com".to_string())
+    );
+
+    let team = repo
+        .resolve_activity(CrmContactListScope::Team {
+            team_id: id(12),
+            include_hidden: true,
+        })
+        .await
+        .unwrap();
+    assert_eq!(team.company_ids, vec![id(102)]);
+    assert_eq!(team.contact_ids, [1002, 1005].map(id));
+    assert!(
+        repo.resolve_activity(CrmContactListScope::Viewer("macro|stranger@test.com"))
+            .await
+            .unwrap()
+            .company_ids
+            .is_empty()
+    );
+    assert_eq!(
+        repo.resolve_activity(CrmContactListScope::Team {
+            team_id: id(13),
+            include_hidden: true,
+        })
+        .await
+        .unwrap()
+        .company_ids,
+        vec![id(103)]
+    );
+}

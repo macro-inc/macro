@@ -296,6 +296,12 @@ async fn fetch_inbox_details_joins_settings_backfill_and_photo(
     let (link_id, _, _) =
         insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
     insert_settings(&pool, link_id, true, Some("<p>sig</p>")).await;
+    sqlx::query!(
+        "UPDATE email_settings SET read_receipts_enabled = FALSE WHERE link_id = $1",
+        link_id
+    )
+    .execute(&pool)
+    .await?;
 
     // Older Complete job then a newer Failed one — the latest wins.
     insert_backfill_job(
@@ -331,6 +337,7 @@ async fn fetch_inbox_details_joins_settings_backfill_and_photo(
     assert_eq!(inbox.link.id, link_id);
     assert!(inbox.settings.signature_on_replies_forwards);
     assert_eq!(inbox.settings.signature.as_deref(), Some("<p>sig</p>"));
+    assert!(!inbox.settings.read_receipts_enabled);
     assert_eq!(
         inbox.latest_backfill_status,
         Some(BackfillJobStatus::Failed)
@@ -369,7 +376,7 @@ async fn fetch_inbox_details_reads_google_scopes_from_side_table(
 
     let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
     assert_eq!(details.len(), 1);
-    assert_eq!(details[0].google_granted_scopes, granted_scopes);
+    assert_eq!(details[0].provider_granted_scopes, granted_scopes);
     assert!(!details[0].calendar_disabled);
 
     sqlx::query!(
@@ -394,7 +401,7 @@ async fn fetch_inbox_details_reads_google_scopes_from_side_table(
 
     let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
     assert_eq!(details.len(), 1);
-    assert!(details[0].google_granted_scopes.is_empty());
+    assert!(details[0].provider_granted_scopes.is_empty());
     assert!(!details[0].calendar_disabled);
 
     Ok(())
@@ -623,6 +630,7 @@ async fn fetch_inbox_details_defaults_settings_when_row_missing(
     assert_eq!(inbox.link.id, link_id);
     assert!(!inbox.settings.signature_on_replies_forwards);
     assert!(inbox.settings.signature.is_none());
+    assert!(inbox.settings.read_receipts_enabled);
 
     Ok(())
 }
@@ -745,7 +753,7 @@ async fn fetch_inbox_details_reports_calendar_data_from_the_account_row(
     let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
     assert!(details[0].has_calendar_data);
     assert!(
-        details[0].google_granted_scopes.is_empty(),
+        details[0].provider_granted_scopes.is_empty(),
         "the flag is about stored data, not about what the grant carries"
     );
 

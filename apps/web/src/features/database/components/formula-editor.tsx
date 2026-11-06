@@ -1,5 +1,6 @@
 import type { Formula } from '@core/database-sql/generated/types';
-import FunctionIcon from '@phosphor/function.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import FunctionIcon from '@icon/system/regular/function.svg';
 import { Button } from '@ui/components/Button';
 import { inputClasses } from '@ui/components/Input';
 import {
@@ -179,7 +180,7 @@ export function FormulaEditor(props: {
     if (event.isComposing) return;
     if (event.key === 'Enter') {
       event.preventDefault();
-      void save();
+      fireAndForget(save(), 'database');
     } else if (event.key === 'Escape') {
       event.preventDefault();
       props.onCancel();
@@ -309,7 +310,7 @@ export function FormulaEditor(props: {
           >
             {(column) => (
               <Button
-                variant="outline"
+                variant="secondary"
                 size="xs"
                 disabled={!tools()}
                 onClick={() => {
@@ -346,10 +347,10 @@ export function FormulaEditor(props: {
           Cancel
         </Button>
         <Button
-          variant="cta"
+          variant="primary"
           size="sm"
           disabled={!canSave()}
-          onClick={() => void save()}
+          onClick={() => fireAndForget(save(), 'database')}
         >
           {pending() ? 'Saving…' : 'Save'}
         </Button>

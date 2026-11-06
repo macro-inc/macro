@@ -1,13 +1,19 @@
 import '@app/index.css';
 import type { OpResult } from '@core/database-sql/generated/types';
+import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { errAsync, okAsync } from 'neverthrow';
+import { err, errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
+import { DatabaseTitle } from '../../database/components/database-title';
 import { DatabaseProvider } from '../../database/context/database';
 import type { DatabaseApi, DatabaseTableSchema } from '../../database/core/api';
 import type { DatabaseRow } from '../../database/core/table';
-import type { DatabaseViewState } from '../../database/core/view-state';
+import type {
+  CardMoved,
+  DatabaseViewState,
+} from '../../database/core/view-state';
+import type { DatabaseOpFailure } from '../../database/core/write-failure';
 import { DatabaseRecords } from '../../database/views/database-records';
 
 const tableId = '00000000-0000-0000-0000-000000000001';
@@ -16,8 +22,28 @@ const statusId = '00000000-0000-0000-0000-000000000003';
 const optionId = '00000000-0000-0000-0000-000000000004';
 
 function ApiFixture() {
+  const boardHost = new URLSearchParams(location.search).get('boardHost');
+  const [positions, setPositions] = createSignal<CardPosition[]>([
+    {
+      row: '00000000-0000-0000-0000-000000000010',
+      lane: { kind: 'option', id: optionId },
+      position: '8180',
+    },
+    {
+      row: '00000000-0000-0000-0000-000000000011',
+      lane: { kind: 'option', id: optionId },
+      position: '80',
+    },
+  ]);
+  const [refuseMove, setRefuseMove] = createSignal<() => void>();
+  const [name, setName] = createSignal('Untitled database');
+  let editTitle: (() => void) | undefined;
   const [editable, setEditable] = createSignal(true);
   const [writes, setWrites] = createSignal(0);
+  let releaseColumnWrites!: () => void;
+  const columnWriteGate = new Promise<void>((resolve) => {
+    releaseColumnWrites = resolve;
+  });
   const [view, setView] = createSignal<DatabaseViewState>({
     query: { filter: null },
     layout: { kind: 'table', columns: [] },
@@ -42,7 +68,18 @@ function ApiFixture() {
         dataType: 'SELECT_STRING',
         isMultiSelect: false,
         writable: true,
-        options: [{ id: optionId, label: 'Open', color: null }],
+        options: [
+          { id: optionId, label: 'Open', color: null },
+          ...(boardHost
+            ? [
+                {
+                  id: '00000000-0000-0000-0000-000000000005',
+                  label: 'Negotiation',
+                  color: null,
+                },
+              ]
+            : []),
+        ],
       },
     ],
   };
@@ -65,95 +102,111 @@ function ApiFixture() {
         tableVersion: table.version,
       });
     },
-    applyOps: ({ ops }) => {
-      const results: OpResult[] = [];
-      const version = table.version + 1;
-      for (const op of ops) {
-        if (
-          op.kind === 'column' &&
-          op.change.kind === 'create' &&
-          op.change.definition.source === 'new'
-        ) {
-          table = {
-            ...table,
-            version,
-            columns: [
-              ...table.columns,
-              {
-                id: op.column,
-                name: op.change.definition.name,
-                dataType: 'STRING',
-                writable: true,
-                isMultiSelect: false,
-                options: [],
+    applyOps: ({ ops }) =>
+      ResultAsync.fromSafePromise(
+        ops.some((op) => op.kind === 'column' && op.change.kind === 'create')
+          ? new URLSearchParams(location.search).has('holdColumnWrites')
+            ? columnWriteGate
+            : new Promise<void>((resolve) =>
+                setTimeout(
+                  resolve,
+                  Number(
+                    new URLSearchParams(location.search).get('columnDelay') ?? 0
+                  )
+                )
+              )
+          : Promise.resolve()
+      ).andThen(() => {
+        const results: OpResult[] = [];
+        const version = table.version + 1;
+        for (const op of ops) {
+          if (
+            op.kind === 'column' &&
+            op.change.kind === 'create' &&
+            op.change.definition.source === 'new'
+          ) {
+            table = {
+              ...table,
+              version,
+              columns: [
+                ...table.columns,
+                {
+                  id: op.column,
+                  name: op.change.definition.name,
+                  dataType: 'STRING',
+                  writable: true,
+                  isMultiSelect: false,
+                  options: [],
+                },
+              ],
+            };
+            results.push({
+              kind: 'column',
+              table: tableId,
+              column: op.column,
+              tableVersion: version,
+              change: { kind: 'created' },
+            });
+          } else if (op.kind === 'column' && op.change.kind === 'rename') {
+            const name = op.change.name;
+            table = {
+              ...table,
+              version,
+              columns: table.columns.map((column) =>
+                column.id === op.column ? { ...column, name } : column
+              ),
+            };
+            results.push({
+              kind: 'column',
+              table: tableId,
+              column: op.column,
+              tableVersion: version,
+              change: { kind: 'renamed' },
+            });
+          } else if (
+            op.kind === 'rows' &&
+            op.change.kind === 'update' &&
+            op.change.changes.kind === 'per_row'
+          ) {
+            for (const change of op.change.changes.rows)
+              rows = rows.map((row) =>
+                row.rowId === change.row
+                  ? {
+                      ...row,
+                      cells: {
+                        ...row.cells,
+                        ...Object.fromEntries(
+                          change.cells.map((cell) => [
+                            cell.column,
+                            cell.value.type === 'text'
+                              ? cell.value.value
+                              : null,
+                          ])
+                        ),
+                      },
+                    }
+                  : row
+              );
+            table = { ...table, version };
+            results.push({
+              kind: 'rows',
+              table: tableId,
+              tableVersion: version,
+              change: {
+                kind: 'updated',
+                affected: op.change.changes.rows.length,
               },
-            ],
-          };
-          results.push({
-            kind: 'column',
-            table: tableId,
-            column: op.column,
-            tableVersion: version,
-            change: { kind: 'created' },
-          });
-        } else if (op.kind === 'column' && op.change.kind === 'rename') {
-          const name = op.change.name;
-          table = {
-            ...table,
-            version,
-            columns: table.columns.map((column) =>
-              column.id === op.column ? { ...column, name } : column
-            ),
-          };
-          results.push({
-            kind: 'column',
-            table: tableId,
-            column: op.column,
-            tableVersion: version,
-            change: { kind: 'renamed' },
-          });
-        } else if (
-          op.kind === 'rows' &&
-          op.change.kind === 'update' &&
-          op.change.changes.kind === 'per_row'
-        ) {
-          for (const change of op.change.changes.rows)
-            rows = rows.map((row) =>
-              row.rowId === change.row
-                ? {
-                    ...row,
-                    cells: {
-                      ...row.cells,
-                      ...Object.fromEntries(
-                        change.cells.map((cell) => [
-                          cell.column,
-                          cell.value.type === 'text' ? cell.value.value : null,
-                        ])
-                      ),
-                    },
-                  }
-                : row
-            );
-          table = { ...table, version };
-          results.push({
-            kind: 'rows',
-            table: tableId,
-            tableVersion: version,
-            change: {
-              kind: 'updated',
-              affected: op.change.changes.rows.length,
-            },
-          });
-        } else
-          return errAsync({
-            code: 'INVALID_OP',
-            refusal: null,
-            message: 'Unsupported fixture operation',
-          });
-      }
-      setWrites((count) => count + 1);
-      return okAsync({ results });
-    },
+            });
+          } else
+            return errAsync({
+              code: 'INVALID_OP' as const,
+              refusal: null,
+              message: 'Unsupported fixture operation',
+            });
+        }
+        setWrites((count) => count + 1);
+        return okAsync({ results });
+      }),
   };
   return (
     <QueryClientProvider
@@ -162,7 +215,16 @@ function ApiFixture() {
       }
     >
       <main class="flex h-screen flex-col bg-panel text-ink">
-        <div class="flex gap-4 p-4">
+        <div class="flex flex-wrap gap-4 p-4">
+          <DatabaseTitle
+            name={name()}
+            canEdit={editable()}
+            onRename={setName}
+            onEditReady={(edit) => {
+              editTitle = edit;
+            }}
+          />
+          <button onClick={() => editTitle?.()}>Rename database</button>
           <button onClick={() => setEditable((value) => !value)}>
             Toggle editing
           </button>
@@ -184,6 +246,23 @@ function ApiFixture() {
             Show board
           </button>
           <output aria-label="API writes">{writes()}</output>
+          {boardHost && (
+            <>
+              <output aria-label="Saved positions" class="sr-only">
+                {JSON.stringify(positions())}
+              </output>
+              <button disabled={!refuseMove()} onClick={() => refuseMove()?.()}>
+                Refuse move
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={releaseColumnWrites}
+          >
+            Release column saves
+          </button>
         </div>
         <DatabaseProvider
           api={api}
@@ -194,6 +273,34 @@ function ApiFixture() {
           <DatabaseRecords
             view={view()}
             stored={false}
+            boardPositions={
+              boardHost
+                ? {
+                    state: () => ({ kind: 'ready', positions: positions() }),
+                    setPositions:
+                      boardHost === 'setter' ? setPositions : undefined,
+                    move: () =>
+                      new ResultAsync<CardMoved, DatabaseOpFailure>(
+                        new Promise((resolve) => {
+                          setRefuseMove(
+                            () => () =>
+                              resolve(
+                                err({
+                                  kind: 'ops',
+                                  error: {
+                                    code: 'INVALID_OP',
+                                    refusal: null,
+                                    message:
+                                      'Fill in Amount before entering Negotiation.',
+                                  },
+                                })
+                              )
+                          );
+                        })
+                      ),
+                  }
+                : undefined
+            }
             onViewChange={(change) =>
               setView((view) => ({ ...view, ...change }))
             }

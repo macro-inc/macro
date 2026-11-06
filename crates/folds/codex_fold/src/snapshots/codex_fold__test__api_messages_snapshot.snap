@@ -17,7 +17,8 @@ expression: messages
       }
     ],
     "stop": null,
-    "pending": false
+    "pending": false,
+    "postedAt": null
   },
   {
     "turn": 0,
@@ -97,7 +98,8 @@ expression: messages
     "stop": {
       "kind": "end_turn"
     },
-    "pending": false
+    "pending": false,
+    "postedAt": null
   },
   {
     "turn": 1,
@@ -113,7 +115,8 @@ expression: messages
       }
     ],
     "stop": null,
-    "pending": false
+    "pending": false,
+    "postedAt": null
   },
   {
     "turn": 1,
@@ -130,6 +133,7 @@ expression: messages
     "stop": {
       "kind": "cancelled"
     },
-    "pending": false
+    "pending": false,
+    "postedAt": null
   }
 ]

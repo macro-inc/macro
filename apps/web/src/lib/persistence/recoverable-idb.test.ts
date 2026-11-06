@@ -102,6 +102,110 @@ describe('recoverable native IndexedDB connections', () => {
     await expect(db.transaction('items', 'readonly')).resolves.toBeDefined();
   });
 
+  it('replays a transaction the platform aborts mid-write on a fresh connection', async () => {
+    const lost = vi.fn();
+    const db = new RecoverableIDB(
+      crypto.randomUUID(),
+      1,
+      (db) => db.createObjectStore('items'),
+      undefined,
+      lost
+    );
+    databases.push(db);
+    const original = await db.open();
+    let runs = 0;
+    const value = await db.run<number>('items', 'readwrite', (tx, finish) => {
+      const store = tx.objectStore('items');
+      const read = store.get('count');
+      read.onsuccess = () => {
+        const next = (read.result ?? 0) + 1;
+        store.put(next, 'count');
+        finish(next);
+        // WebKit stops the transaction after its requests were issued.
+        if (runs++ === 0) tx.abort();
+      };
+    });
+    expect(value).toBe(1);
+    expect(runs).toBe(2);
+    expect(lost).toHaveBeenCalledOnce();
+    expect(await db.open()).not.toBe(original);
+  });
+
+  it('bounds replays and rejects with the interruption', async () => {
+    const db = database();
+    const body = vi.fn((tx: IDBTransaction) => {
+      tx.objectStore('items').put('value', 'key');
+      tx.abort();
+    });
+    await expect(db.run('items', 'readwrite', body)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    expect(body).toHaveBeenCalledTimes(3);
+    await expect(
+      db.run<string>('items', 'readonly', (tx, finish) => {
+        const read = tx.objectStore('items').get('key');
+        read.onsuccess = () => finish(read.result);
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it('does not replay request failures that are not interruptions', async () => {
+    const db = database();
+    await db.run('items', 'readwrite', (tx) => {
+      tx.objectStore('items').add('first', 'key');
+    });
+    const native = await db.open();
+    const body = vi.fn((tx: IDBTransaction) => {
+      tx.objectStore('items').add('second', 'key');
+    });
+    await expect(db.run('items', 'readwrite', body)).rejects.toMatchObject({
+      name: 'ConstraintError',
+    });
+    expect(body).toHaveBeenCalledOnce();
+    expect(await db.open()).toBe(native);
+  });
+
+  it('does not replay a body that throws', async () => {
+    const db = database();
+    const error = new Error('Invalid input');
+    const body = vi.fn((tx: IDBTransaction) => {
+      tx.objectStore('items').put('partial', 'key');
+      throw error;
+    });
+    await expect(db.run('items', 'readwrite', body)).rejects.toBe(error);
+    expect(body).toHaveBeenCalledOnce();
+    await expect(
+      db.run<string>('items', 'readonly', (tx, finish) => {
+        const read = tx.objectStore('items').get('key');
+        read.onsuccess = () => finish(read.result);
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it('does not replay a body whose request callback throws', async () => {
+    const lost = vi.fn();
+    const db = new RecoverableIDB(
+      crypto.randomUUID(),
+      1,
+      (db) => db.createObjectStore('items'),
+      undefined,
+      lost
+    );
+    databases.push(db);
+    const native = await db.open();
+    const callback = vi.fn(() => {
+      throw new Error('Invalid stored value');
+    });
+    await expect(
+      db.run('items', 'readwrite', (tx) => {
+        tx.objectStore('items').get('key').onsuccess = callback;
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(callback).toHaveBeenCalledOnce();
+    expect(lost).not.toHaveBeenCalled();
+    expect(await db.open()).toBe(native);
+  });
+
   it('closes an in-flight open and never revives a disposed owner', async () => {
     const db = database();
     const pending = db.transaction('items', 'readonly');

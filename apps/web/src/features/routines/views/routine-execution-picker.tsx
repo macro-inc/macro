@@ -1,4 +1,4 @@
-import { badgeTriggerClasses } from '@ui';
+import { buttonClasses } from '@ui';
 import {
   type Accessor,
   ErrorBoundary,
@@ -123,10 +123,11 @@ export function RoutineExecutionPickerView(props: Props): JSX.Element {
       class="min-w-0 max-w-full"
     >
       <AgentPicker
-        triggerClass={badgeTriggerClasses({
-          variant: 'outline',
+        showModelLabel
+        triggerClass={buttonClasses({
+          variant: 'secondary',
           size: 'sm',
-          class: 'max-w-full text-ink-muted',
+          class: 'max-w-full',
         })}
         agents={props.roster}
         selected={selected()}

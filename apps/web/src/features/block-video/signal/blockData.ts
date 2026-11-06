@@ -27,6 +27,7 @@ export const useGetFileUrl = () => {
 };
 
 type GetBlobOptions = {
+  signal?: AbortSignal;
   onProgress?: (progress: FetchProgress) => void;
 };
 
@@ -38,8 +39,10 @@ export const useGetFileBlob = () => {
     options?: GetBlobOptions
   ) => {
     const result = options?.onProgress
-      ? await fetchPresignedBlobWithProgress(url, options.onProgress)
-      : await fetchPresigned(url, 'blob');
+      ? await fetchPresignedBlobWithProgress(url, options.onProgress, {
+          signal: options.signal,
+        })
+      : await fetchPresigned(url, 'blob', { signal: options?.signal });
     if (result.isErr()) {
       throw new Error('unable to fetch from presigned url');
     }
@@ -54,6 +57,7 @@ export const useGetFileBlob = () => {
 
   const getBlob = async (options?: GetBlobOptions) => {
     const url = await getPresignedUrl();
+    options?.signal?.throwIfAborted();
     const blob = await fetchFromPresignedUrl(url, options);
     return blob;
   };

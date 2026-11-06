@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT attachment_id AS \"attachment_id!\" FROM email_draft_provider_attachment_ids($1, $2) ORDER BY attachment_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attachment_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "15ff7c90c0ecc294eee1a3e689f54f324e1373a2112c18008ad85476f51d7720"
+}

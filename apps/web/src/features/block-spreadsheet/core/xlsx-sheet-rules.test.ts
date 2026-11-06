@@ -197,3 +197,97 @@ describe('Excel notes, data validation and conditional formatting', () => {
     ]);
   });
 });
+
+describe('Dropdown choice colors in Excel workbooks', () => {
+  it('exports them as conditional formatting and reads them back as colors', async () => {
+    const imported = await decodeXlsx(await bytes(source()));
+    const metadata = imported.sheets[0].metadata!;
+    metadata.validations![0].colors = [
+      { item: 'Done', color: '#bbf7d0' },
+      { item: 'Blocked', color: '#fecaca' },
+    ];
+    const exported = await encodeXlsx(imported);
+    expect((await decodeXlsx(exported.bytes)).sheets[0].metadata).toEqual(
+      metadata
+    );
+    const reader = new ExcelJS.Workbook();
+    await reader.xlsx.load(exported.bytes.slice().buffer);
+    const rules = (
+      reader.getWorksheet('Tasks') as unknown as {
+        conditionalFormattings: {
+          ref: string;
+          rules: {
+            type: string;
+            operator?: string;
+            formulae?: string[];
+            style?: { fill?: { bgColor?: { argb?: string } } };
+          }[];
+        }[];
+      }
+    ).conditionalFormattings;
+    // After the sheet's own rules, so those keep priority in Excel.
+    expect(
+      rules
+        .slice(4)
+        .map(({ ref, rules: [rule] }) => [
+          ref,
+          rule.type,
+          rule.operator,
+          rule.formulae,
+          rule.style?.fill?.bgColor?.argb,
+        ])
+    ).toEqual([
+      ['A2', 'cellIs', 'equal', ['"Done"'], 'FFBBF7D0'],
+      ['A2', 'cellIs', 'equal', ['"Blocked"'], 'FFFECACA'],
+    ]);
+  });
+
+  it('keeps other equality rules as conditional formatting', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Tasks');
+    sheet.getCell('A2').dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      formulae: ['"Open,Done"'],
+    };
+    const fill = (argb: string) => ({
+      fill: {
+        type: 'pattern' as const,
+        pattern: 'solid' as const,
+        bgColor: { argb },
+      },
+    });
+    const equal = (ref: string, text: string, style: object) =>
+      sheet.addConditionalFormatting({
+        ref,
+        rules: [
+          {
+            type: 'cellIs',
+            operator: 'equal',
+            formulae: [`"${text}"`],
+            priority: 1,
+            style,
+          },
+        ],
+      });
+    equal('A2', 'Open', fill('FFC9DAF8'));
+    equal('A2', 'Done', { ...fill('FFD9EAD3'), font: { bold: true } });
+    equal('A2', 'Later', fill('FFFFF2CC'));
+    equal('A2:A3', 'Done', fill('FFF4CCCC'));
+    const metadata = (await decodeXlsx(await bytes(workbook))).sheets[0]
+      .metadata!;
+    expect(metadata.validations?.[0].colors).toEqual([
+      { item: 'Open', color: '#c9daf8' },
+    ]);
+    expect(
+      metadata.conditionalFormats?.map((rule) => [
+        rule.range,
+        rule.formulas?.[0],
+      ])
+    ).toEqual([
+      ['A2', '"Done"'],
+      ['A2', '"Later"'],
+      ['A2:A3', '"Done"'],
+    ]);
+  });
+});

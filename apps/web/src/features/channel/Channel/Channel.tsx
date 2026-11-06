@@ -1,4 +1,14 @@
+import {
+  AgentConversationContextBoundary,
+  AgentConversationMessageStatus,
+} from '@app/features/agent-conversations/agent-conversation-message';
+import { AgentConversationsProvider } from '@app/features/agent-conversations/agent-conversations-provider';
+import { AgentDmComposer } from '@app/features/agent-dms/agent-dm-composer';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
+import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
+import { t } from '@app/lib/i18n';
+import { beginInteraction, usePending } from '@app/observability/flow';
+import { startUiOperation } from '@app/observability/ui-operation';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { useStartChannelCall } from '@channel/Call/use-start-channel-call';
 import { DebugSuspense } from '@channel/DebugSuspense';
@@ -32,6 +42,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
+  useChannel,
   useChannelActivity,
   useChannelName,
   useChannelType,
@@ -39,6 +50,7 @@ import {
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { DateValue } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   extractUserMentions,
   trimEdgeUserMentions,
@@ -47,11 +59,9 @@ import {
   buildMentionMarkdownString,
   markdownToPlainText,
 } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import { MessageNotificationIndexContext } from '@notifications/components/MarkMessageNotifications';
-import {
-  invalidateChannelsActivity,
-  useUpdateChannelsActivityMutation,
-} from '@queries/channel/activity';
+import { recordChannelViewWhenIdle } from '@queries/channel/activity';
 import { queryClient } from '@queries/client';
 import { queryReadyGate } from '@queries/gate';
 import {
@@ -75,8 +85,8 @@ import {
 import { timelineEntryKey } from '@queries/messages/timeline-entries';
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { ChannelTypeEnum } from '@service-storage/client';
-import { useBeforeLeave } from '@solidjs/router';
 import { tourTarget } from '@ui/components/Tour';
+import { cn } from '@ui/utils/classname';
 import {
   createEffect,
   createMemo,
@@ -85,9 +95,15 @@ import {
   on,
   onCleanup,
   onMount,
+  type ParentProps,
   Show,
   Switch,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { CallRootLine } from '../Call/discussion/CallRootLine';
+import { OutsideMessagesPopup } from '../Call/discussion/OutsideMessagesPopup';
+import { outsideMessages } from '../Call/discussion/outside-messages';
+import { ChannelAccessDenied } from '../ChannelAccessDenied';
 import {
   createInputAttachmentTracker,
   type InputHandle,
@@ -95,7 +111,10 @@ import {
 } from '../Input';
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
-import { decodeSystemActivity } from '../queries/system-activity';
+import {
+  decodeSystemActivityRow,
+  mergesSystemActivity,
+} from '../queries/system-activity';
 import { SystemActivity } from '../SystemActivity';
 import { ChannelThread } from '../Thread';
 import { ThreadRow } from '../Thread/ThreadRow';
@@ -105,6 +124,7 @@ import { CHANNEL_TOUR } from '../tour';
 import { isUnifiedInputMode } from '../unified-input-mode';
 import { ActiveCallMessage } from './ActiveCallMessage';
 import { ChannelDropZone } from './ChannelDropZone';
+import { ChannelLoading } from './ChannelLoading';
 import { createChannelDragState } from './create-channel-drag-state';
 import { createChannelFindBar } from './create-channel-find-bar';
 import { createChannelHotkeys } from './create-channel-hotkeys';
@@ -119,6 +139,7 @@ import {
   createTargetMessageController,
   type TargetMessageController,
 } from './create-target-message-controller';
+import { DirectMessageEmptyState } from './DirectMessageEmptyState';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import {
@@ -150,6 +171,13 @@ export type ChannelProps = {
   onHandleReady?: (handle: ChannelHandle) => void;
   /** Whether to auto-focus the channel input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
+  /** Shows the channel inside a call, opened on that call's thread. */
+  callPanel?: {
+    /** The root of the call's thread. */
+    rootId: string;
+    onViewChannel: () => void;
+    onOutsideCountChange?: (count: number) => void;
+  };
 };
 
 export type MessageTimelineStateSnapshot = {
@@ -161,11 +189,20 @@ export type MessageTimelineStateSnapshot = {
 
 export type ChannelHandle = {
   goToMessage: TargetMessageController['goToMessage'];
-  goToLatest: () => void;
+  goToLatest: (behavior?: ScrollBehavior) => void;
   getMessagesStateSnapshot: () => MessageTimelineStateSnapshot | undefined;
 };
 
+/** A composer that stays where it is, for a surface with no floating chrome. */
+function InPlaceRegion(props: ParentProps) {
+  return <>{props.children}</>;
+}
+
 export function Channel(props: ChannelProps) {
+  // Read once: a channel doesn't change between being a panel and not.
+  const callPanel = props.callPanel;
+  // The panel has one composer however wide it is, always bound to a thread.
+  const usesUnifiedInput = () => !!callPanel || isUnifiedInputMode();
   const userId = useUserId();
   const splitPanel = useSplitPanel();
   const channelCall = useStartChannelCall(() => props.channelId);
@@ -223,6 +260,7 @@ export function Channel(props: ChannelProps) {
     () => ({ type: 'channel', id: (() => props.channelId)() }),
     targetMessageController.loadAroundMessageId
   );
+  usePending('channel.messages', () => messagesQuery.isLoading);
   const isTargetMessageMissing = () =>
     targetMessageController.loadAroundMessageId() !== undefined &&
     isMissingMessageError(messagesQuery.error);
@@ -255,10 +293,12 @@ export function Channel(props: ChannelProps) {
   );
 
   // The index reads immediately, before EntityLoadGate's boundary exists.
-  const messageIndex = createMessageIndex(() =>
-    queryReadyGate(messagesQuery)
-      ? (messagesQuery.data as MessageTimelineData)
-      : undefined
+  const messageIndex = createMessageIndex(
+    () =>
+      queryReadyGate(messagesQuery)
+        ? (messagesQuery.data as MessageTimelineData)
+        : undefined,
+    mergesSystemActivity
   );
 
   const messageById = () => messageIndex.byId;
@@ -281,33 +321,85 @@ export function Channel(props: ChannelProps) {
 
   const activity = useChannelActivity(props.channelId);
 
-  const updateActivityMutation = useUpdateChannelsActivityMutation({
-    onSuccess: () => {
-      invalidateChannelsActivity();
-    },
+  // One view on entry, after the first page and away from the open's own
+  // requests, and one on leaving. The channel remounts per id, so cleanup
+  // covers every way out of it.
+  let entryViewRecorded = false;
+  createEffect(
+    on(
+      () => queryReadyGate(messagesQuery),
+      (loaded) => {
+        // The panel hides what's new in the channel, so it hasn't been seen.
+        if (callPanel || !loaded || entryViewRecorded) return;
+        entryViewRecorded = true;
+        recordChannelViewWhenIdle(props.channelId);
+      }
+    )
+  );
+  onCleanup(() => {
+    if (!callPanel) recordChannelViewWhenIdle(props.channelId);
   });
 
-  const markAsViewed = () => {
-    updateActivityMutation.mutate({
-      channelId: props.channelId,
-      activityType: 'view',
+  // Rows newer than the call are the channel's, not the call's.
+  const rowKeys = createMemo(() => {
+    if (!callPanel) return messageIndex.entryKeys;
+    const root = messageIndex.entryKeys.indexOf(callPanel.rootId);
+    return root < 0 ? [] : messageIndex.entryKeys.slice(0, root + 1);
+  });
+
+  // A long-running call's row can be further back than the newest page.
+  createEffect(
+    on(
+      () =>
+        !!callPanel &&
+        !messageById().has(callPanel.rootId) &&
+        messagesQuery.hasNextPage &&
+        !messagesQuery.isFetchingNextPage,
+      (shouldLoadOlder) => {
+        if (shouldLoadOlder) {
+          fireAndForget(messagesQuery.fetchNextPage(), 'channel-call');
+        }
+      }
+    )
+  );
+
+  const [outsideSince, setOutsideSince] = createSignal(
+    new Date().toISOString()
+  );
+  const outside = createMemo(() =>
+    callPanel
+      ? outsideMessages(messageIndex.entries, {
+          since: outsideSince(),
+          currentUserId: userId(),
+        })
+      : []
+  );
+  createEffect(
+    on(
+      () => outside().length,
+      (count) => callPanel?.onOutsideCountChange?.(count)
+    )
+  );
+  const viewChannelFromPanel = () => {
+    if (!callPanel) return;
+
+    beginInteraction('call.panel.view_channel', {
+      attributes: {
+        'channel.id': props.channelId,
+        'call.id': callPanel.rootId,
+        'call.panel.outside_count': outside().length,
+      },
+      closeOnJoin: true,
     });
+    setOutsideSince(new Date().toISOString());
+    callPanel.onViewChannel();
   };
 
-  onMount(() => {
-    markAsViewed();
-  });
-
-  onCleanup(() => {
-    markAsViewed();
-  });
-
-  useBeforeLeave(() => {
-    markAsViewed();
-  });
+  const [liveCallRowVisible, setLiveCallRowVisible] = createSignal(false);
 
   const unifiedInput = createUnifiedInputManager({
     initialReplyTarget: props.initialMessagesStateSnapshot?.replyTarget,
+    defaultThreadId: callPanel?.rootId,
     // Clear any highlight left by tapping the reply flag's navigate action.
     onReplyThreadReleased: (threadId) => releaseSelectionAndTarget(threadId),
   });
@@ -315,6 +407,9 @@ export function Channel(props: ChannelProps) {
   const threadManager = createThreadManager(
     props.initialMessagesStateSnapshot?.threads
   );
+  if (callPanel) {
+    threadManager.getOrCreateThreadState(callPanel.rootId).setIsExpanded(true);
+  }
 
   const prepareTargetReply = (threadId: string) => {
     // Expand before the virtualized row mounts so navigation never presents a
@@ -322,7 +417,7 @@ export function Channel(props: ChannelProps) {
     threadManager.getOrCreateThreadState(threadId).setIsExpanded(true);
     // Reply data and the load-around message window can load in parallel. The
     // mounted query reuses this request and remains the owner of render state.
-    void queryClient.prefetchQuery(
+    queryClient.prefetchQuery(
       threadRepliesQueryOptions(
         { type: 'channel', id: props.channelId },
         threadId
@@ -342,7 +437,7 @@ export function Channel(props: ChannelProps) {
     onEditEnded: (message) => {
       // Clear any highlight left by tapping the edit flag's navigate action
       // (which selects and nav-targets the edited message's thread).
-      if (isUnifiedInputMode()) {
+      if (usesUnifiedInput()) {
         releaseSelectionAndTarget(message.thread_id ?? message.id);
       }
     },
@@ -362,7 +457,7 @@ export function Channel(props: ChannelProps) {
       !messagesQuery.hasNextPage,
       // Only an inline composer extends the rail before a reply exists.
       (message) =>
-        !isUnifiedInputMode() &&
+        !usesUnifiedInput() &&
         threadManager.getOrCreateThreadState(message.id).isReplying()
     )
   );
@@ -378,6 +473,7 @@ export function Channel(props: ChannelProps) {
   });
 
   const channelName = useChannelName(props.channelId);
+  const channel = useChannel(props.channelId);
   const channelType = useChannelType(props.channelId);
   const { popoverSplit } = useSplitLayout();
 
@@ -386,6 +482,7 @@ export function Channel(props: ChannelProps) {
   const inputPlaceholderName = () => {
     const name = channelName();
     if (!name) return undefined;
+    if (channel()?.agent_dm) return name;
     if (channelType() !== ChannelTypeEnum.DirectMessage) return `#${name}`;
     const parts = name.split(' ');
     return parts.length === 2 && !parts[0]?.endsWith(',') ? parts[0] : name;
@@ -393,6 +490,7 @@ export function Channel(props: ChannelProps) {
 
   const inputPlaceholder = () => {
     const name = inputPlaceholderName();
+    if (channel()?.agent_dm) return `Message ${name ?? 'agent'}`;
     return name ? `Type @ to share with ${name}` : 'Type @ to share';
   };
 
@@ -414,7 +512,7 @@ export function Channel(props: ChannelProps) {
   const openReplyInput = (message: MessageData) => {
     const threadId = message.thread_id ?? message.id;
     const state = threadManager.getOrCreateThreadState(threadId);
-    if (isUnifiedInputMode()) {
+    if (usesUnifiedInput()) {
       unifiedInput.bindReply(message);
       state.setIsExpanded(true);
     } else {
@@ -445,7 +543,7 @@ export function Channel(props: ChannelProps) {
     };
 
     state.setReplyInputState(nextSnapshot);
-    if (isUnifiedInputMode()) {
+    if (usesUnifiedInput()) {
       unifiedInput.bindReply(message);
       state.setIsExpanded(true);
     } else {
@@ -490,6 +588,11 @@ export function Channel(props: ChannelProps) {
         type: 'component',
         id: 'task-compose',
         params: {
+          composerContext: taskSourceComposerContext({
+            entity_type: 'CHANNEL',
+            entity_id: props.channelId,
+            specific_message_id: ctx.message.id,
+          }),
           initialTitle: title,
           initialContent: buildChannelMessageMention(ctx.message),
           initialAssigneeIds:
@@ -498,7 +601,9 @@ export function Channel(props: ChannelProps) {
       });
     },
     onChat: (ctx) => {
-      openChatWithInput(`${buildChannelMessageMention(ctx.message)}\n\n`);
+      openChatWithInput(`${buildChannelMessageMention(ctx.message)}\n\n`).catch(
+        (error) => Telemetry.error(error, { surface: 'channel' })
+      );
     },
   });
 
@@ -565,7 +670,9 @@ export function Channel(props: ChannelProps) {
 
   // A latest request waits for both the query and the rendered list. Keeping
   // its identity prevents a late response from overriding newer navigation.
-  let pendingLatest: { phase: 'loading' | 'waiting-for-layout' } | undefined;
+  let pendingLatest:
+    | { phase: 'loading' | 'waiting-for-layout'; behavior?: ScrollBehavior }
+    | undefined;
   const cancelLatestNavigation = () => {
     pendingLatest = undefined;
   };
@@ -584,13 +691,16 @@ export function Channel(props: ChannelProps) {
     if (
       latestEntry !== undefined &&
       messageIndex.entryKeys.at(-1) === timelineEntryKey(latestEntry) &&
-      threadListNavigation()?.scrollToLatest()
+      threadListNavigation()?.scrollToLatest(pendingLatest.behavior)
     )
       cancelLatestNavigation();
   };
 
-  const goToLatest: ChannelHandle['goToLatest'] = async () => {
-    const request: NonNullable<typeof pendingLatest> = { phase: 'loading' };
+  const goToLatest: ChannelHandle['goToLatest'] = async (behavior) => {
+    const request: NonNullable<typeof pendingLatest> = {
+      phase: 'loading',
+      behavior,
+    };
     pendingLatest = request;
     try {
       const needsLatestPage =
@@ -658,29 +768,61 @@ export function Channel(props: ChannelProps) {
     },
   });
 
+  let sendSurfaceDisposed = false;
+  onCleanup(() => {
+    sendSurfaceDisposed = true;
+  });
+
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
+    const channelId = props.channelId;
     const senderId = userId();
     if (!senderId) return;
     const payload = buildPostMessageSendPayload({
       snapshot,
     });
 
-    sendMessageMutation.mutate(
-      {
-        parent: { type: 'channel', id: props.channelId },
-        senderId,
-        optimisticId: newMessageId(),
-        ...payload,
-      },
-      {
-        onError: () => {
+    const optimisticId = newMessageId();
+    // Send to the optimistic message's paint; channel.send follows delivery.
+    const sendUi = startUiOperation('message.send', {
+      attributes: { 'channel.id': channelId, 'message.id': optimisticId },
+    });
+    fireAndForget(
+      Telemetry.span('channel.send', async (span) => {
+        span.setAttr('message.id', optimisticId);
+        span.setAttr('channel.id', channelId);
+        try {
+          await sendMessageMutation.mutateAsync({
+            parentSpan: span,
+            parent: { type: 'channel', id: channelId },
+            senderId,
+            optimisticId,
+            onOptimisticInsert: sendUi.afterPaint,
+            ...payload,
+          });
+          span.setAttr('composer.outcome', 'succeeded');
+        } catch {
+          sendUi.finish('error');
+          span.error('Channel send failed');
           const handle = channelInputHandle();
-          if (!handle) return;
+          if (
+            !handle ||
+            sendSurfaceDisposed ||
+            props.channelId !== channelId ||
+            userId() !== senderId
+          ) {
+            span.setAttr('composer.outcome', 'unmounted');
+            return;
+          }
           const current = channelInputSnapshot();
-          if (current && hasSendableInputContent(current)) return;
+          if (current && hasSendableInputContent(current)) {
+            span.setAttr('composer.outcome', 'preserved_newer_draft');
+            return;
+          }
           handle.restoreSnapshot(snapshot);
-        },
-      }
+          span.setAttr('composer.outcome', 'restored');
+        }
+      }),
+      'channel-input'
     );
   };
 
@@ -704,376 +846,540 @@ export function Channel(props: ChannelProps) {
   });
 
   return (
-    <EntityLoadGate
-      result={messagesLoadResult}
-      loadErrorTitle="Unable to load this channel"
-      onRetry={() => void messagesQuery.refetch()}
+    <AgentConversationsProvider
+      channelId={props.channelId}
+      // Only an agent DM has a conversing agent so far.
+      hasAgents={!!channel()?.agent_dm}
     >
-      <DebugSuspense name="Channel.root">
-        <deleteConfirmation.ConfirmationDialog />
-        <StaticMarkdownContext host="channel">
-          <SearchHighlightTermsProvider
-            value={findBar.getSearchTermsForMessage}
-          >
-            <MaybeMessageActionDrawerManager>
-              <ChannelDropZone dragState={dragState}>
-                <div
-                  class="ph-no-capture relative flex-1 min-h-0 outline-none flex flex-col"
-                  ref={(element) => {
-                    attachMessageListRef(element);
-                    messagesTarget(element);
-                  }}
-                  tabIndex={-1}
-                  data-channel-message-list
-                >
-                  <Show when={findBar.isOpen()}>
-                    <FindBar
-                      class="absolute top-2 right-3 z-10 w-80 max-w-[calc(100%-1.5rem)] touch:top-[calc(var(--mobile-content-inset-top,0)+0.5rem)]"
-                      controller={findBar}
-                      direction="desc"
-                    />
-                  </Show>
-                  <Show when={messageIndex.entryKeys.length > 0}>
-                    <div
-                      class="relative flex-1 min-h-0"
-                      ref={setThreadListContainerEl}
-                    >
-                      <MessageNotificationIndexContext.Provider
-                        value={unread.unreadByMessage}
-                      >
-                        <SwipableRowProvider
-                          container={threadListContainerEl}
-                          triggerBehavior="spring-back"
+      <EntityLoadGate
+        result={messagesLoadResult}
+        loadingFallback={<ChannelLoading />}
+        loadErrorTitle="Unable to load this channel"
+        onRetry={() => fireAndForget(messagesQuery.refetch(), 'channel')}
+        unauthorized={
+          <ChannelAccessDenied
+            channelId={props.channelId}
+            onRefreshChannel={() =>
+              fireAndForget(messagesQuery.refetch(), 'channel')
+            }
+          />
+        }
+      >
+        <DebugSuspense name="Channel.root" fallback={<ChannelLoading />}>
+          <deleteConfirmation.ConfirmationDialog />
+          <StaticMarkdownContext host="channel">
+            <SearchHighlightTermsProvider
+              value={findBar.getSearchTermsForMessage}
+            >
+              <MaybeMessageActionDrawerManager>
+                <ChannelDropZone dragState={dragState}>
+                  <div
+                    class="ph-no-capture relative flex-1 min-h-0 outline-none flex flex-col"
+                    ref={(element) => {
+                      attachMessageListRef(element);
+                      messagesTarget(element);
+                    }}
+                    tabIndex={-1}
+                    data-channel-message-list
+                  >
+                    <Show when={findBar.isOpen()}>
+                      <FindBar
+                        class="absolute top-2 right-3 z-10 w-80 max-w-[calc(100%-1.5rem)] touch:top-[calc(var(--mobile-content-inset-top,0)+0.5rem)]"
+                        controller={findBar}
+                        direction="desc"
+                      />
+                    </Show>
+                    <Show
+                      when={rowKeys().length > 0}
+                      fallback={
+                        <Show
+                          when={
+                            messagesQuery.isSuccess &&
+                            channelType() === ChannelTypeEnum.DirectMessage &&
+                            !channel()?.agent_dm
+                          }
                         >
-                          <ThreadList
-                            keys={() => messageIndex.entryKeys}
-                            targetId={
-                              targetMessageController.hasPendingElementScroll()
-                                ? targetMessageController.activeTargetMessageId()
-                                : undefined
-                            }
-                            insets={threadListScrollInsets()}
-                            followOnAppend={!messagesQuery.hasPreviousPage}
-                            onScrollNearTop={threadPaginator.shiftPaginate}
-                            onScrollNearBottom={threadPaginator.prependPaginate}
-                            onReady={onThreadListReady}
-                            onScroll={onThreadListScroll}
-                            onUserNavigation={cancelLatestNavigation}
-                            initialPosition={
-                              targetMessageController.activeTargetMessageId()
-                                ? {
-                                    type: 'element',
-                                    id: targetMessageController.activeTargetMessageId()!,
-                                  }
-                                : props.initialMessagesStateSnapshot?.scroll
-                                  ? {
-                                      type: 'restore',
-                                      snapshot:
-                                        props.initialMessagesStateSnapshot
-                                          .scroll,
-                                    }
-                                  : { type: 'latest' }
-                            }
+                          <DirectMessageEmptyState />
+                        </Show>
+                      }
+                    >
+                      <div
+                        class={cn(
+                          'relative flex-1 min-h-0',
+                          callPanel && '[container-type:size]'
+                        )}
+                        ref={setThreadListContainerEl}
+                      >
+                        <MessageNotificationIndexContext.Provider
+                          value={unread.unreadByMessage}
+                        >
+                          <SwipableRowProvider
+                            container={threadListContainerEl}
+                            triggerBehavior="spring-back"
                           >
-                            {(item) => {
-                              const isNewestRow = () =>
-                                item.id === messageIndex.entryKeys.at(-1);
-                              const activity = () =>
-                                messageIndex.activityByKey.get(item.id);
-                              const message = () => messageById().get(item.id);
+                            <ThreadList
+                              keys={rowKeys}
+                              targetId={
+                                targetMessageController.hasPendingElementScroll()
+                                  ? targetMessageController.activeTargetMessageId()
+                                  : undefined
+                              }
+                              insets={threadListScrollInsets()}
+                              followOnAppend={!messagesQuery.hasPreviousPage}
+                              onScrollNearTop={threadPaginator.shiftPaginate}
+                              onScrollNearBottom={
+                                threadPaginator.prependPaginate
+                              }
+                              onReady={onThreadListReady}
+                              onScroll={onThreadListScroll}
+                              onUserNavigation={cancelLatestNavigation}
+                              initialPosition={
+                                targetMessageController.activeTargetMessageId()
+                                  ? {
+                                      type: 'element',
+                                      id: targetMessageController.activeTargetMessageId()!,
+                                    }
+                                  : props.initialMessagesStateSnapshot?.scroll
+                                    ? {
+                                        type: 'restore',
+                                        snapshot:
+                                          props.initialMessagesStateSnapshot
+                                            .scroll,
+                                      }
+                                    : { type: 'latest' }
+                              }
+                            >
+                              {(item) => {
+                                const isNewestRow = () =>
+                                  item.id === rowKeys().at(-1);
+                                const callStatus = () =>
+                                  messageIndex.callStatusByKey.get(item.id);
+                                const isCallRow = () => !!callStatus();
+                                const isPanelRoot = () =>
+                                  item.id === callPanel?.rootId;
+                                const activity = () =>
+                                  messageIndex.activityByKey.get(item.id);
+                                const message = () =>
+                                  messageById().get(item.id);
 
-                              return (
-                                <Switch>
-                                  <Match when={activity()}>
-                                    {(activity) => (
-                                      <ThreadRow
-                                        channelId={props.channelId}
-                                        message={{
-                                          created_at: activity().occurred_at,
-                                        }}
-                                        listMeta={listMetaByKey()[item.id]}
-                                      >
-                                        <SystemActivity
-                                          event={decodeSystemActivity(
-                                            activity()
-                                          )}
-                                        />
-                                        <Show when={isNewestRow()}>
-                                          <ThreadTypingIndicator
-                                            parent={{
-                                              type: 'channel',
-                                              id: props.channelId,
-                                            }}
-                                            threadId={null}
-                                          />
-                                        </Show>
-                                      </ThreadRow>
-                                    )}
-                                  </Match>
-                                  <Match when={message()}>
-                                    {(m) => {
-                                      const state =
-                                        threadManager.getOrCreateThreadState(
-                                          item.id
-                                        );
-                                      return (
-                                        <ChannelThread
-                                          data={m}
-                                          parent={() => ({
-                                            type: 'channel',
-                                            id: (() => props.channelId)(),
-                                          })}
-                                          isNewestThread={isNewestRow()}
-                                          getMessageActions={getMessageActions}
-                                          isFindBarOpen={findBar.isOpen}
-                                          targetNavigation={{
-                                            targetThreadId:
-                                              targetMessageController.activeTargetMessageId,
-                                            targetMessageId: () =>
-                                              !targetMessageController.pendingTargetReplyId()
-                                                ? targetMessageController.pendingScrollTargetId()
-                                                : undefined,
-                                            targetReplyId: () =>
-                                              targetMessageController.pendingScrollTargetId()
-                                                ? undefined
-                                                : targetMessageController.pendingTargetReplyId(),
-                                            activeTargetReplyId:
-                                              targetMessageController.activeTargetMessageReplyId,
-                                            positionTarget: (
-                                              _,
-                                              targetElement
-                                            ) =>
-                                              threadListNavigation()?.scrollToElement(
-                                                targetElement
-                                              ) ?? false,
-                                            onTargetMessageScrolled:
-                                              targetMessageController.completePendingScroll,
-                                            onTargetReplyScrolled: (
-                                              replyId
-                                            ) => {
-                                              targetMessageController.completePendingReplyScroll(
-                                                item.id,
-                                                replyId
-                                              );
-                                            },
-                                            onClearTarget:
-                                              releaseSelectionAndTarget,
+                                return (
+                                  <Switch>
+                                    <Match when={activity()}>
+                                      {(activity) => (
+                                        <ThreadRow
+                                          channelId={props.channelId}
+                                          message={{
+                                            created_at: activity().occurred_at,
                                           }}
-                                          inputMode={
-                                            isUnifiedInputMode()
-                                              ? 'unified'
-                                              : 'inline'
-                                          }
-                                          unifiedReplyTarget={unifiedInput.replyTarget()}
-                                          onMessageMount={unread.onMessageMount}
-                                          onDisclosureMount={
-                                            unread.onDisclosureMount
-                                          }
-                                          unreadMessageIds={unread
-                                            .unreadByThread()
-                                            .get(item.id)}
-                                          isExpanded={state.isExpanded}
-                                          setIsExpanded={state.setIsExpanded}
-                                          isReplying={state.isReplying}
-                                          setIsReplying={state.setIsReplying}
-                                          replyInputState={
-                                            state.replyInputState
-                                          }
-                                          setReplyInputState={
-                                            state.setReplyInputState
-                                          }
-                                          setReplyInputEl={
-                                            state.setReplyInputEl
-                                          }
-                                          replyInputHandle={
-                                            state.replyInputHandle
-                                          }
-                                          setReplyInputHandle={
-                                            state.setReplyInputHandle
-                                          }
-                                          replyInputFocusRequest={
-                                            state.replyInputFocusRequest
-                                          }
                                           listMeta={listMetaByKey()[item.id]}
-                                          messageEditor={messageEditor}
-                                          threadActions={{
-                                            onDismissNewMessages:
-                                              activityTracker.dismissNewMessages,
-                                          }}
-                                          isNewMessage={
-                                            activityTracker.isNewMessage
-                                          }
-                                          selectedMessageId={
-                                            selection.selectedId
-                                          }
-                                          onSelectMessage={selectMessage}
-                                          onClearSelection={clearSelection}
-                                          messageListScopeId={
-                                            messageListScopeId
-                                          }
-                                        />
-                                      );
-                                    }}
-                                  </Match>
-                                </Switch>
-                              );
-                            }}
-                          </ThreadList>
-                        </SwipableRowProvider>
+                                        >
+                                          <SystemActivity
+                                            channelId={props.channelId}
+                                            event={decodeSystemActivityRow(
+                                              messageIndex.activityGroupByKey.get(
+                                                item.id
+                                              ) ?? [activity()]
+                                            )}
+                                          />
+                                          <Show when={isNewestRow()}>
+                                            <ThreadTypingIndicator
+                                              parent={{
+                                                type: 'channel',
+                                                id: props.channelId,
+                                              }}
+                                              threadId={null}
+                                            />
+                                          </Show>
+                                        </ThreadRow>
+                                      )}
+                                    </Match>
+                                    <Match when={message()}>
+                                      {(m) => {
+                                        const state =
+                                          threadManager.getOrCreateThreadState(
+                                            item.id
+                                          );
+                                        return (
+                                          <div
+                                            class={
+                                              isPanelRoot()
+                                                ? 'relative min-h-[100cqh]'
+                                                : 'contents'
+                                            }
+                                          >
+                                            <ChannelThread
+                                              rootSlot={
+                                                isCallRow()
+                                                  ? () => (
+                                                      <Show when={callStatus()}>
+                                                        {(status) => (
+                                                          <CallRootLine
+                                                            channelId={
+                                                              props.channelId
+                                                            }
+                                                            message={m()}
+                                                            status={status()}
+                                                            inCallPanel={isPanelRoot()}
+                                                            onVisibilityChange={
+                                                              setLiveCallRowVisible
+                                                            }
+                                                          />
+                                                        )}
+                                                      </Show>
+                                                    )
+                                                  : undefined
+                                              }
+                                              hideCollapsedPreview={isCallRow()}
+                                              beforeMessage={
+                                                <AgentConversationContextBoundary
+                                                  messageId={item.id}
+                                                />
+                                              }
+                                              afterMessage={
+                                                <AgentConversationMessageStatus
+                                                  messageId={item.id}
+                                                />
+                                              }
+                                              hideTriggeredBy={
+                                                !!channel()?.agent_dm
+                                              }
+                                              data={m}
+                                              parent={() => ({
+                                                type: 'channel',
+                                                id: (() => props.channelId)(),
+                                              })}
+                                              isNewestThread={isNewestRow()}
+                                              getMessageActions={
+                                                getMessageActions
+                                              }
+                                              isFindBarOpen={findBar.isOpen}
+                                              targetNavigation={{
+                                                targetThreadId:
+                                                  targetMessageController.activeTargetMessageId,
+                                                targetMessageId: () =>
+                                                  !targetMessageController.pendingTargetReplyId()
+                                                    ? targetMessageController.pendingScrollTargetId()
+                                                    : undefined,
+                                                targetReplyId: () =>
+                                                  targetMessageController.pendingScrollTargetId()
+                                                    ? undefined
+                                                    : targetMessageController.pendingTargetReplyId(),
+                                                activeTargetReplyId:
+                                                  targetMessageController.activeTargetMessageReplyId,
+                                                positionTarget: (
+                                                  _,
+                                                  targetElement
+                                                ) =>
+                                                  threadListNavigation()?.scrollToElement(
+                                                    targetElement
+                                                  ) ?? false,
+                                                onTargetMessageScrolled:
+                                                  targetMessageController.completePendingScroll,
+                                                onTargetReplyScrolled: (
+                                                  replyId
+                                                ) => {
+                                                  targetMessageController.completePendingReplyScroll(
+                                                    item.id,
+                                                    replyId
+                                                  );
+                                                },
+                                                onClearTarget:
+                                                  releaseSelectionAndTarget,
+                                              }}
+                                              inputMode={
+                                                usesUnifiedInput()
+                                                  ? 'unified'
+                                                  : 'inline'
+                                              }
+                                              unifiedReplyTarget={unifiedInput.replyTarget()}
+                                              onMessageMount={
+                                                unread.onMessageMount
+                                              }
+                                              onDisclosureMount={
+                                                unread.onDisclosureMount
+                                              }
+                                              unreadMessageIds={unread
+                                                .unreadByThread()
+                                                .get(item.id)}
+                                              isExpanded={state.isExpanded}
+                                              setIsExpanded={
+                                                state.setIsExpanded
+                                              }
+                                              isReplying={state.isReplying}
+                                              setIsReplying={
+                                                state.setIsReplying
+                                              }
+                                              replyInputState={
+                                                state.replyInputState
+                                              }
+                                              setReplyInputState={
+                                                state.setReplyInputState
+                                              }
+                                              setReplyInputEl={
+                                                state.setReplyInputEl
+                                              }
+                                              replyInputHandle={
+                                                state.replyInputHandle
+                                              }
+                                              setReplyInputHandle={
+                                                state.setReplyInputHandle
+                                              }
+                                              replyInputFocusRequest={
+                                                state.replyInputFocusRequest
+                                              }
+                                              listMeta={
+                                                listMetaByKey()[item.id]
+                                              }
+                                              messageEditor={messageEditor}
+                                              threadActions={{
+                                                onDismissNewMessages:
+                                                  activityTracker.dismissNewMessages,
+                                              }}
+                                              isNewMessage={
+                                                activityTracker.isNewMessage
+                                              }
+                                              selectedMessageId={
+                                                selection.selectedId
+                                              }
+                                              onSelectMessage={selectMessage}
+                                              onClearSelection={clearSelection}
+                                              messageListScopeId={
+                                                messageListScopeId
+                                              }
+                                            />
+                                            <Show
+                                              when={
+                                                isPanelRoot() &&
+                                                m().thread.reply_count === 0
+                                              }
+                                            >
+                                              <p class="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-ink-muted">
+                                                {t('calls.callThreadEmpty', {
+                                                  channel:
+                                                    channel()?.name ??
+                                                    t('calls.thisChannel'),
+                                                })}
+                                              </p>
+                                            </Show>
+                                          </div>
+                                        );
+                                      }}
+                                    </Match>
+                                  </Switch>
+                                );
+                              }}
+                            </ThreadList>
+                          </SwipableRowProvider>
 
-                        <Show when={!findBar.isOpen()}>
-                          <Show when={unread.chip()}>
-                            {(chip) => (
-                              <UnreadNotificationsOverlay
-                                direction={chip().direction}
-                                count={chip().count}
-                                onClick={() => goToUnread(chip().thread)}
-                                bottomInset={threadListScrollInsets().end}
+                          <Show when={callPanel}>
+                            <Show
+                              when={
+                                threadListScrollState() &&
+                                !threadListScrollState()?.isNearBottom
+                              }
+                            >
+                              <button
+                                type="button"
+                                class="absolute top-2 left-1/2 z-10 -translate-x-1/2 rounded-full border border-edge-muted bg-surface px-3 py-1.5 text-xs shadow-lg not-touch:hover:overlay-hover not-touch:active:overlay-active"
+                                onClick={() => goToLatest()}
+                              >
+                                {t('calls.backToCallThread')}
+                              </button>
+                            </Show>
+                            <Show when={outside().length > 0}>
+                              <OutsideMessagesPopup
+                                messages={outside()}
+                                onView={viewChannelFromPanel}
+                              />
+                            </Show>
+                          </Show>
+                          <Show when={!callPanel && !findBar.isOpen()}>
+                            <Show when={unread.chip()}>
+                              {(chip) => (
+                                <UnreadNotificationsOverlay
+                                  direction={chip().direction}
+                                  count={chip().count}
+                                  onClick={() => goToUnread(chip().thread)}
+                                  bottomInset={threadListScrollInsets().end}
+                                />
+                              )}
+                            </Show>
+                            <Show when={unread.chip()?.direction !== 'above'}>
+                              <ScrollToBottomOverlay
+                                scrollState={threadListScrollState}
+                                onScrollToBottom={goToLatest}
+                              />
+                            </Show>
+                          </Show>
+                        </MessageNotificationIndexContext.Provider>
+                      </div>
+                    </Show>
+                    <Show when={!callPanel}>
+                      <DebugSuspense name="Channel.active-call">
+                        <ActiveCallMessage
+                          channelId={props.channelId}
+                          hidden={liveCallRowVisible()}
+                          messageCount={(callId) =>
+                            messageIndex.callStatusByKey.has(callId)
+                              ? messageById().get(callId)?.thread.reply_count
+                              : undefined
+                          }
+                          onOpenRow={(callId) => goToMessage(callId)}
+                        />
+                      </DebugSuspense>
+                    </Show>
+                  </div>
+                  <DebugSuspense name="Channel.input">
+                    <Dynamic
+                      component={
+                        callPanel ? InPlaceRegion : FloatRegionOrInline
+                      }
+                      region="accessory"
+                    >
+                      <ChannelInputContainer
+                        ref={(el) => {
+                          attachInputRef(el);
+                          composerTarget(el);
+                        }}
+                      >
+                        <Switch>
+                          <Match
+                            when={
+                              usesUnifiedInput() &&
+                              messageEditor.state()?.messageId
+                            }
+                            keyed
+                          >
+                            {(_messageId) => (
+                              <UnifiedEditInput
+                                channelId={props.channelId}
+                                messageEditor={messageEditor}
+                                onNavigateToMessage={(message) =>
+                                  goToMessage(
+                                    message.thread_id ?? message.id,
+                                    message.thread_id ? message.id : undefined
+                                  )
+                                }
                               />
                             )}
-                          </Show>
-                          <Show when={unread.chip()?.direction !== 'above'}>
-                            <ScrollToBottomOverlay
-                              scrollState={threadListScrollState}
-                              onScrollToBottom={goToLatest}
-                              class="touch:top-[calc(var(--mobile-content-inset-top,0)+1rem)]"
-                            />
-                          </Show>
-                        </Show>
-                      </MessageNotificationIndexContext.Provider>
-                    </div>
-                  </Show>
-                  <DebugSuspense name="Channel.active-call">
-                    <ActiveCallMessage channelId={props.channelId} />
+                          </Match>
+                          <Match
+                            when={
+                              usesUnifiedInput() &&
+                              unifiedInput.replyTarget()?.threadId
+                            }
+                            keyed
+                          >
+                            {(threadId) => (
+                              <UnifiedReplyInput
+                                channelId={props.channelId}
+                                threadId={threadId}
+                                state={threadManager.getOrCreateThreadState(
+                                  threadId
+                                )}
+                                getTargetMessage={() => {
+                                  const target = unifiedInput.replyTarget();
+                                  if (target?.message) return target.message;
+                                  // A restored referenced reply has no resolvable
+                                  // message (messageById only indexes thread
+                                  // roots) — don't misattribute it to the root.
+                                  if (target?.replyId) return undefined;
+                                  return messageById().get(threadId);
+                                }}
+                                threadHasReplies={() =>
+                                  (messageById().get(threadId)?.thread
+                                    .reply_count ?? 0) > 0
+                                }
+                                pinnedLabel={
+                                  threadId === callPanel?.rootId
+                                    ? () => t('calls.replyingInCallThread')
+                                    : undefined
+                                }
+                                onNavigateToTarget={() =>
+                                  goToMessage(
+                                    threadId,
+                                    unifiedInput.replyTarget()?.replyId
+                                  )
+                                }
+                                onExit={unifiedInput.closeReply}
+                              />
+                            )}
+                          </Match>
+                          <Match when={true}>
+                            {/* An agent DM gates only a new message on its
+                                agent: editing and thread replies stay open. */}
+                            <AgentDmComposer
+                              channelId={props.channelId}
+                              botId={channel()?.agent_dm?.bot_id}
+                            >
+                              <ChannelInput
+                                autofocus={props.autofocus}
+                                collapsible
+                                input={{
+                                  mode: 'channel',
+                                  id: `channel-input-${props.channelId}`,
+                                  placeholder: inputPlaceholder(),
+                                }}
+                                participants={participants.users}
+                                bots={channelBotMentionUsers}
+                                attachmentTracker={attachmentTracker}
+                                persistenceKey={makeInputValuePersistenceKey({
+                                  channelId: props.channelId,
+                                })}
+                                onReady={(handle) => {
+                                  dragState.setAttachFilesToChannel(
+                                    handle.attachFiles
+                                  );
+                                  dragState.setEntityMentionInputHandlers(
+                                    handle
+                                  );
+                                  setChannelInputHandle(handle);
+                                }}
+                                onChange={(snapshot) => {
+                                  setChannelInputSnapshot(snapshot);
+                                }}
+                                onSend={onSend}
+                                onStartCall={
+                                  ENABLE_CALLS && !channelCall.isInThisChannel()
+                                    ? () =>
+                                        fireAndForget(
+                                          channelCall.start(),
+                                          'channel-call'
+                                        )
+                                    : undefined
+                                }
+                                callInProgress={channelCall.isCallInProgress()}
+                                onStartTyping={() =>
+                                  typingMutation.mutate({
+                                    parent: {
+                                      type: 'channel',
+                                      id: props.channelId,
+                                    },
+                                    action: 'start',
+                                  })
+                                }
+                                onStopTyping={() =>
+                                  typingMutation.mutate({
+                                    parent: {
+                                      type: 'channel',
+                                      id: props.channelId,
+                                    },
+                                    action: 'stop',
+                                  })
+                                }
+                              />
+                            </AgentDmComposer>
+                          </Match>
+                        </Switch>
+                      </ChannelInputContainer>
+                    </Dynamic>
                   </DebugSuspense>
-                </div>
-                <DebugSuspense name="Channel.input">
-                  <FloatRegionOrInline region="accessory">
-                    <ChannelInputContainer
-                      ref={(el) => {
-                        attachInputRef(el);
-                        composerTarget(el);
-                      }}
-                    >
-                      <Switch>
-                        <Match
-                          when={
-                            isUnifiedInputMode() &&
-                            messageEditor.state()?.messageId
-                          }
-                          keyed
-                        >
-                          {(_messageId) => (
-                            <UnifiedEditInput
-                              channelId={props.channelId}
-                              messageEditor={messageEditor}
-                              onNavigateToMessage={(message) =>
-                                goToMessage(
-                                  message.thread_id ?? message.id,
-                                  message.thread_id ? message.id : undefined
-                                )
-                              }
-                            />
-                          )}
-                        </Match>
-                        <Match
-                          when={
-                            isUnifiedInputMode() &&
-                            unifiedInput.replyTarget()?.threadId
-                          }
-                          keyed
-                        >
-                          {(threadId) => (
-                            <UnifiedReplyInput
-                              channelId={props.channelId}
-                              threadId={threadId}
-                              state={threadManager.getOrCreateThreadState(
-                                threadId
-                              )}
-                              getTargetMessage={() => {
-                                const target = unifiedInput.replyTarget();
-                                if (target?.message) return target.message;
-                                // A restored referenced reply has no resolvable
-                                // message (messageById only indexes thread
-                                // roots) — don't misattribute it to the root.
-                                if (target?.replyId) return undefined;
-                                return messageById().get(threadId);
-                              }}
-                              threadHasReplies={() =>
-                                (messageById().get(threadId)?.thread
-                                  .reply_count ?? 0) > 0
-                              }
-                              onNavigateToTarget={() =>
-                                goToMessage(
-                                  threadId,
-                                  unifiedInput.replyTarget()?.replyId
-                                )
-                              }
-                              onExit={unifiedInput.closeReply}
-                            />
-                          )}
-                        </Match>
-                        <Match when={true}>
-                          <ChannelInput
-                            autofocus={props.autofocus}
-                            collapsible
-                            input={{
-                              mode: 'channel',
-                              id: `channel-input-${props.channelId}`,
-                              placeholder: inputPlaceholder(),
-                            }}
-                            participants={participants.users}
-                            bots={channelBotMentionUsers}
-                            attachmentTracker={attachmentTracker}
-                            persistenceKey={makeInputValuePersistenceKey({
-                              channelId: props.channelId,
-                            })}
-                            onReady={(handle) => {
-                              dragState.setAttachFilesToChannel(
-                                handle.attachFiles
-                              );
-                              dragState.setEntityMentionInputHandlers(handle);
-                              setChannelInputHandle(handle);
-                            }}
-                            onChange={(snapshot) =>
-                              void setChannelInputSnapshot(snapshot)
-                            }
-                            onSend={onSend}
-                            onStartCall={
-                              ENABLE_CALLS && !channelCall.isInThisChannel()
-                                ? () => void channelCall.start()
-                                : undefined
-                            }
-                            callInProgress={channelCall.isCallInProgress()}
-                            onStartTyping={() =>
-                              typingMutation.mutate({
-                                parent: {
-                                  type: 'channel',
-                                  id: props.channelId,
-                                },
-                                action: 'start',
-                              })
-                            }
-                            onStopTyping={() =>
-                              typingMutation.mutate({
-                                parent: {
-                                  type: 'channel',
-                                  id: props.channelId,
-                                },
-                                action: 'stop',
-                              })
-                            }
-                          />
-                        </Match>
-                      </Switch>
-                    </ChannelInputContainer>
-                  </FloatRegionOrInline>
-                </DebugSuspense>
-              </ChannelDropZone>
-            </MaybeMessageActionDrawerManager>
-          </SearchHighlightTermsProvider>
-        </StaticMarkdownContext>
-      </DebugSuspense>
-    </EntityLoadGate>
+                </ChannelDropZone>
+              </MaybeMessageActionDrawerManager>
+            </SearchHighlightTermsProvider>
+          </StaticMarkdownContext>
+        </DebugSuspense>
+      </EntityLoadGate>
+    </AgentConversationsProvider>
   );
 }

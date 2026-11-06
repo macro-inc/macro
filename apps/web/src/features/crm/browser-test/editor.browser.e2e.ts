@@ -1,12 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test.afterEach(async ({ page }) => {
-  await page.unrouteAll({ behavior: 'ignoreErrors' });
-});
-
-test('the pipeline API powers the shared editor and respects column protections and grants', async ({
-  page,
-}) => {
+test.beforeEach(async ({ page }) => {
   await page.routeWebSocket('**', (socket) => socket.close());
   await page.route('https://**', (route) => route.abort());
   await page.route(/^http:\/\/localhost:\d+\//, async (route) => {
@@ -29,7 +23,16 @@ test('the pipeline API powers the shared editor and respects column protections 
   await expect(page.getByRole('grid', { name: 'Renewals' })).toBeVisible({
     timeout: 30000,
   });
-  await expect(page.getByText('Acme', { exact: true })).toBeVisible();
+});
+
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
+test('the pipeline API powers the shared editor and respects column protections and grants', async ({
+  page,
+}) => {
+  await expect(page.getByText('Acme', { exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Sort', exact: true }).click();
   await page.getByRole('button', { name: 'Add sort', exact: true }).click();
   await page.getByRole('button', { name: 'Close sort' }).click();
@@ -56,4 +59,52 @@ test('the pipeline API powers the shared editor and respects column protections 
   await expect(
     page.getByRole('button', { name: 'Add column', exact: true })
   ).toHaveCount(0);
+});
+
+test('a cell in a row taller than its value takes clicks across its full height', async ({
+  page,
+}) => {
+  // Wrapped multi-select pills grow a row the same way.
+  await page.addStyleTag({ content: '[role="row"] { min-height: 8rem; }' });
+  const cell = page
+    .getByRole('gridcell')
+    .filter({ has: page.getByRole('button', { name: /^Notes: Follow up\./ }) });
+  const box = await cell.boundingBox();
+  if (!box) throw new Error('Notes cell is not laid out');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height - 8);
+  await expect(page.getByRole('textbox', { name: 'Edit Notes' })).toBeVisible();
+});
+
+test('a wrapping cell opens and closes in place over opaque rows', async ({
+  page,
+}) => {
+  const rows = page.locator('[data-grid-row-id]');
+  const heights = () =>
+    rows.evaluateAll((elements) =>
+      elements.map((row) => row.getBoundingClientRect().height)
+    );
+  const closed = await heights();
+  await page.getByRole('button', { name: /^Notes: Oct 21 emailed/ }).dblclick();
+  const editor = page.getByRole('textbox', { name: 'Edit Notes' });
+  await editor.press('End');
+  await editor.pressSequentially(' and a follow-up call');
+  await expect
+    .poll(async () => (await heights())[0])
+    .toBeGreaterThan(closed[0]);
+  const layout = await rows.evaluateAll((elements) =>
+    elements.map((row) => {
+      const box = row.getBoundingClientRect();
+      // The row lines beneath the rows are drawn at a fixed pitch; only
+      // an opaque row hides them once it grows past it.
+      const canvas = document.createElement('canvas').getContext('2d')!;
+      canvas.fillStyle = getComputedStyle(row).backgroundColor;
+      canvas.fillRect(0, 0, 1, 1);
+      const alpha = canvas.getImageData(0, 0, 1, 1).data[3];
+      return { top: box.top, bottom: box.bottom, alpha };
+    })
+  );
+  expect(layout[1].top).toBeCloseTo(layout[0].bottom, 0);
+  expect(layout.map(({ alpha }) => alpha)).toEqual(layout.map(() => 255));
+  await page.keyboard.press('Escape');
+  await expect.poll(heights).toEqual(closed);
 });

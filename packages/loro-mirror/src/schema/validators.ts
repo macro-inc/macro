@@ -1,4 +1,5 @@
 import { isObject } from '../core/utils';
+import { isJsonValue } from './json';
 /**
  * Validators for schema definitions
  */
@@ -10,8 +11,10 @@ import type {
   LoroMapSchema,
   LoroMovableListSchema,
   LoroTextSchemaType,
+  LoroTreeSchema,
   RootSchemaType,
   SchemaType,
+  TreeNode,
 } from './types';
 
 /**
@@ -62,6 +65,22 @@ export function isLoroTextSchema(
   return (schema as BaseSchemaType).type === 'loro-text';
 }
 
+export function isLoroTreeSchema(
+  schema: SchemaType
+): schema is LoroTreeSchema<LoroMapSchema<Record<string, SchemaType>>> {
+  return schema.type === 'loro-tree';
+}
+
+/** Validate and narrow values read from an untyped CRDT container. */
+export function assertSchemaValue<S extends SchemaType>(
+  schema: S,
+  value: unknown
+): asserts value is InferType<S> {
+  const result = validateSchema(schema, value);
+  if (!result.valid)
+    throw new Error(`Invalid shared value: ${result.errors?.join(', ')}`);
+}
+
 /**
  * Check if a schema is for a Loro container
  */
@@ -73,7 +92,8 @@ export function isContainerSchema(
     (schema.type === 'loro-map' ||
       schema.type === 'loro-list' ||
       schema.type === 'loro-text' ||
-      schema.type === 'loro-movable-list')
+      schema.type === 'loro-movable-list' ||
+      schema.type === 'loro-tree')
   );
 }
 
@@ -87,13 +107,16 @@ export function validateSchema<S extends SchemaType>(
   const errors: string[] = [];
 
   // Check if value is required
-  if (schema.options.required && (value === undefined || value === null)) {
+  if (
+    schema.options.required &&
+    (value === undefined || (value === null && schema.type !== 'value'))
+  ) {
     errors.push('Value is required');
     return { valid: false, errors };
   }
 
-  // If value is undefined or null and not required, it's valid
-  if (value === undefined || value === null) {
+  // Atomic values validate explicit null through their guard; undefined is absence.
+  if (value === undefined || (value === null && schema.type !== 'value')) {
     return { valid: true };
   }
 
@@ -117,6 +140,16 @@ export function validateSchema<S extends SchemaType>(
       }
       break;
 
+    case 'value':
+      if (
+        schema.type === 'value' &&
+        (!schema.accepts(value) || !isJsonValue(value))
+      )
+        errors.push('Invalid atomic value');
+      break;
+    case 'loro-tree':
+      if (isLoroTreeSchema(schema)) errors.push(...validateTree(schema, value));
+      break;
     case 'ignore':
       // Ignored fields are always valid
       break;
@@ -133,8 +166,8 @@ export function validateSchema<S extends SchemaType>(
       } else if (isLoroMapSchema(schema)) {
         // Validate each property in the map
         for (const key in schema.definition) {
-          if (Object.prototype.hasOwnProperty.call(schema.definition, key)) {
-            const propSchema = schema.definition[key];
+          if (Object.hasOwn(schema.definition, key)) {
+            const propSchema = schema.definition[key]!;
             const propValue = (value as Record<string, unknown>)[key];
 
             const result = validateSchema(propSchema, propValue);
@@ -153,7 +186,7 @@ export function validateSchema<S extends SchemaType>(
     case 'loro-list':
       if (!Array.isArray(value)) {
         errors.push('Value must be an array');
-      } else if (isLoroListSchema(schema)) {
+      } else if (isListLikeSchema(schema)) {
         // Validate each item in the list
         value.forEach((item, index) => {
           const result = validateSchema(schema.itemSchema, item);
@@ -177,8 +210,8 @@ export function validateSchema<S extends SchemaType>(
         } else {
           // Validate each property in the schema
           for (const key in schema.definition) {
-            if (Object.prototype.hasOwnProperty.call(schema.definition, key)) {
-              const propSchema = schema.definition[key];
+            if (Object.hasOwn(schema.definition, key)) {
+              const propSchema = schema.definition[key]!;
               const propValue = (value as Record<string, unknown>)[key];
 
               const result = validateSchema(propSchema, propValue);
@@ -192,7 +225,10 @@ export function validateSchema<S extends SchemaType>(
             }
           }
           for (const key in value) {
-            if (!Object.prototype.hasOwnProperty.call(schema.definition, key)) {
+            if (
+              !schema.options.allowUnknown &&
+              !Object.hasOwn(schema.definition, key)
+            ) {
               errors.push(`Unknown property: ${key}`);
             }
           }
@@ -273,8 +309,8 @@ export function getDefaultValue<S extends SchemaType>(
       if (isLoroMapSchema(schema)) {
         const result: Record<string, unknown> = {};
         for (const key in schema.definition) {
-          if (Object.prototype.hasOwnProperty.call(schema.definition, key)) {
-            const value = getDefaultValue(schema.definition[key]);
+          if (Object.hasOwn(schema.definition, key)) {
+            const value = getDefaultValue(schema.definition[key]!);
             if (value !== undefined) {
               result[key] = value;
             }
@@ -285,6 +321,8 @@ export function getDefaultValue<S extends SchemaType>(
       return {} as InferType<S>;
     }
 
+    case 'loro-tree':
+    case 'loro-movable-list':
     case 'loro-list':
       return [] as InferType<S>;
 
@@ -292,8 +330,8 @@ export function getDefaultValue<S extends SchemaType>(
       if (isRootSchemaType(schema)) {
         const result: Record<string, unknown> = {};
         for (const key in schema.definition) {
-          if (Object.prototype.hasOwnProperty.call(schema.definition, key)) {
-            const value = getDefaultValue(schema.definition[key]);
+          if (Object.hasOwn(schema.definition, key)) {
+            const value = getDefaultValue(schema.definition[key]!);
             if (value !== undefined) {
               result[key] = value;
             }
@@ -330,4 +368,64 @@ export function createValueFromSchema<S extends SchemaType>(
 
   // For complex types, pass through as is
   return value as InferType<S>;
+}
+
+export function validateTree<
+  T extends LoroMapSchema<Record<string, SchemaType>>,
+>(schema: LoroTreeSchema<T>, value: unknown): string[] {
+  const ids = new Set<string>();
+  const seen = new Set<object>();
+  const errors: string[] = [];
+  function visit(nodes: unknown) {
+    if (!Array.isArray(nodes)) {
+      errors.push('Tree children must be an array');
+      return;
+    }
+    if (seen.has(nodes)) {
+      errors.push('Tree contains a cycle or shared children');
+      return;
+    }
+    seen.add(nodes);
+    for (const node of nodes) {
+      if (
+        !node ||
+        typeof node !== 'object' ||
+        Array.isArray(node) ||
+        !('data' in node) ||
+        !('children' in node)
+      ) {
+        errors.push('Tree nodes need data and children');
+        continue;
+      }
+      if (seen.has(node)) {
+        errors.push('Tree contains a cycle or duplicate node');
+        continue;
+      }
+      seen.add(node);
+      const data = node.data;
+      const result = validateSchema(schema.nodeSchema, data);
+      if (!data || !result.valid || !isJsonValue(data))
+        errors.push(...(result.errors ?? ['Invalid tree node data']));
+      else {
+        assertSchemaValue(schema.nodeSchema, data);
+        const id = schema.idSelector(data);
+        if (typeof id !== 'string' || !id || ids.has(id))
+          errors.push('Tree IDs must be nonempty and unique');
+        ids.add(id);
+      }
+      visit(node.children);
+    }
+    // Shared empty arrays are ordinary structural sharing, not a cycle.
+    seen.delete(nodes);
+  }
+  visit(value);
+  return errors;
+}
+
+export function assertTree<T extends LoroMapSchema<Record<string, SchemaType>>>(
+  schema: LoroTreeSchema<T>,
+  value: unknown
+): asserts value is TreeNode<InferType<T>>[] {
+  const errors = validateTree(schema, value);
+  if (errors.length) throw new Error(`Invalid tree: ${errors.join(', ')}`);
 }

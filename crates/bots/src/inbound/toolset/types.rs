@@ -55,7 +55,7 @@ pub struct BotSummary {
     pub description: Option<String>,
     /// Optional profile-picture URL.
     pub avatar_url: Option<String>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session.
+    /// Whether this bot runs as an AI agent: mentions and DMs start an agent session.
     pub has_agent: bool,
 }
 
@@ -139,7 +139,7 @@ pub struct AgentSummary {
     pub bot: BotSummary,
     /// Instructions the agent works under, whole. New sessions snapshot them.
     pub instructions: String,
-    /// Harness slug: `in-memory`, `cursor`, `claude-cloud`, or `macrod`.
+    /// Harness slug: `in-memory`, `cursor`, or `macrod`.
     pub harness: String,
     /// Registered harness the agent runs on when `harness` is `macrod`.
     pub harness_id: Option<Uuid>,

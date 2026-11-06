@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmailPrivacySettingsMailboxEmail } from './emailPrivacySettingsMailboxEmail';
+import type { EmailPrivacySettingsMailboxLinkId } from './emailPrivacySettingsMailboxLinkId';
 
 /**
  * Current consent and exclusions, readable by any team member.
@@ -16,6 +17,8 @@ export interface EmailPrivacySettings {
   enabled: boolean;
   /** The primary mailbox that would contribute; absent before email connection. */
   mailbox_email?: EmailPrivacySettingsMailboxEmail;
+  /** Exact current primary connection; clients bind opt-in to this identifier. */
+  mailbox_link_id?: EmailPrivacySettingsMailboxLinkId;
   /** Domains excluded only for the caller's contributions. */
   personal_domains: string[];
   /** Domains excluded across the team, including legacy company exclusions. */

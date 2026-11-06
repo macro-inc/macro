@@ -1,3 +1,5 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import {
   hasSoupEntity,
@@ -61,6 +63,17 @@ function shouldTrackInUserHistory(
   );
 }
 
+async function fetchOpenedSoupEntity(
+  itemId: string,
+  itemType: ItemType & SoupEntityTag
+) {
+  try {
+    await refetchSoupEntity(itemId, itemType);
+  } catch (error) {
+    Telemetry.error(error, { surface: 'track-block-opened', itemType });
+  }
+}
+
 /**
  * Tracks opening of a block and updates history accordingly.
  * We have this in a separate file to prevent cyclic dependencies.
@@ -79,7 +92,10 @@ export function track({
   optimisticUpdateSoupItemViewedAt(itemId);
   const inSoup = hasSoupEntity(itemId);
   if (!inSoup && isSoupEntityTag(itemType)) {
-    refetchSoupEntity(itemId, itemType);
+    fireAndForget(
+      fetchOpenedSoupEntity(itemId, itemType),
+      'track-block-opened'
+    );
   }
 
   if (!shouldTrackInUserHistory(itemType)) return;

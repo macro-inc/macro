@@ -36,15 +36,16 @@ use tower::ServiceExt;
 
 use crate::domain::{
     model::{
-        CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-        PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
-        RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
+        CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError,
+        JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, JoinTeamDirectlyError,
+        JoinTeamError, ManageTeamInviteLinkError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
+        RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
         RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
-        TeamInvite, TeamInviteDetails, TeamMember, TeamWithMembers, ToggleAutoJoinDomainError,
-        TryJoinTeamByDomainError,
+        TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken, TeamMember,
+        TeamWithMembers, ToggleAutoJoinDomainError,
     },
     owned_entity_cleanup::OwnedEntityCleanupError,
-    team_repo::TeamService,
+    team_repo::{TeamInviteLinkService, TeamService},
 };
 
 use super::{
@@ -78,6 +79,41 @@ async fn assert_customer_error_is_obfuscated(error: impl IntoResponse) {
     assert_eq!(body_text, r#"{"message":"internal server error"}"#);
     assert_eq!(body_json, json!({ "message": "internal server error" }));
     assert!(!body_text.contains(CUSTOMER_ERROR_SENTINEL));
+}
+
+#[tokio::test]
+async fn invite_link_errors_map_to_their_statuses() {
+    for (error, status) in [
+        (
+            ManageTeamInviteLinkError::NonAdminInvitesDisabled.into_response(),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            ManageTeamInviteLinkError::ResetRequiresAdmin.into_response(),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            JoinTeamByInviteLinkError::LinkNotFound.into_response(),
+            StatusCode::NOT_FOUND,
+        ),
+        (
+            JoinTeamByInviteLinkError::AlreadyInAnotherTeam.into_response(),
+            StatusCode::CONFLICT,
+        ),
+        (
+            JoinTeamByInviteLinkError::JoinError(JoinTeamDirectlyError::JoinTeamError(
+                JoinTeamError::CustomerError(customer_error()),
+            ))
+            .into_response(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ),
+    ] {
+        assert_eq!(error.status(), status);
+    }
+    assert_customer_error_is_obfuscated(JoinTeamByInviteLinkError::JoinError(
+        JoinTeamDirectlyError::JoinTeamError(JoinTeamError::CustomerError(customer_error())),
+    ))
+    .await;
 }
 
 #[tokio::test]
@@ -235,13 +271,27 @@ struct TeamReceiptCall {
     role: TeamRole,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct InviteCall {
+    team_id: String,
+    emails: Vec<String>,
+}
+
 #[derive(Clone, Default)]
 struct FakeTeamService {
     user_calls: Arc<Mutex<Vec<String>>>,
     team_receipt_calls: Arc<Mutex<Vec<TeamReceiptCall>>>,
+    invite_calls: Arc<Mutex<Vec<InviteCall>>>,
 }
 
 impl FakeTeamService {
+    fn invite_calls(&self) -> Vec<InviteCall> {
+        self.invite_calls
+            .lock()
+            .expect("invite calls lock poisoned")
+            .clone()
+    }
+
     fn user_calls(&self) -> Vec<String> {
         self.user_calls
             .lock()
@@ -263,6 +313,7 @@ impl TeamService for FakeTeamService {
         _user_id: &MacroUserIdStr<'_>,
         _team_name: &str,
         _subscription_id: Option<&stripe::SubscriptionId>,
+        _allow_domain_join: bool,
     ) -> Result<Team, CreateTeamError> {
         panic!("unexpected create_team call")
     }
@@ -276,10 +327,22 @@ impl TeamService for FakeTeamService {
 
     async fn invite_users_to_team(
         &self,
-        _entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
-        _invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+        entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+        invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+        _is_agent: bool,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
-        panic!("unexpected invite_users_to_team call")
+        self.invite_calls
+            .lock()
+            .expect("invite calls lock poisoned")
+            .push(InviteCall {
+                team_id: entity_access_receipt.entity().entity_id.clone(),
+                emails: invites
+                    .iter()
+                    .map(|email| email.as_ref().to_owned())
+                    .collect(),
+            });
+        // No new invites: the handler answers 304.
+        Ok(Vec::new())
     }
 
     async fn remove_user_from_team(
@@ -457,8 +520,46 @@ impl TeamService for FakeTeamService {
     async fn try_join_team_by_domain(
         &self,
         _user_id: &MacroUserIdStr<'_>,
-    ) -> Result<Option<TeamMember<'static>>, TryJoinTeamByDomainError> {
+    ) -> Result<Option<TeamMember<'static>>, JoinTeamDirectlyError> {
         panic!("unexpected try_join_team_by_domain call")
+    }
+}
+
+impl TeamInviteLinkService for FakeTeamService {
+    async fn get_team_invite_link(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<Option<TeamInviteLinkToken>, ManageTeamInviteLinkError> {
+        panic!("unexpected get_team_invite_link call")
+    }
+
+    async fn create_team_invite_link(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<TeamInviteLinkToken, ManageTeamInviteLinkError> {
+        panic!("unexpected create_team_invite_link call")
+    }
+
+    async fn delete_team_invite_link(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<(), TeamError> {
+        panic!("unexpected delete_team_invite_link call")
+    }
+
+    async fn get_team_by_invite_link(
+        &self,
+        _token: &TeamInviteLinkToken,
+    ) -> Result<TeamInviteLinkTeam, JoinTeamByInviteLinkError> {
+        panic!("unexpected get_team_by_invite_link call")
+    }
+
+    async fn join_team_by_invite_link(
+        &self,
+        _token: &TeamInviteLinkToken,
+        _user_id: &MacroUserIdStr<'_>,
+    ) -> Result<JoinTeamByInviteLinkOutcome, JoinTeamByInviteLinkError> {
+        panic!("unexpected join_team_by_invite_link call")
     }
 }
 
@@ -591,6 +692,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             return Ok(user_context(USER_ID));
         }
         Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+    }
+
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
     }
 
     async fn authorize_internal(
@@ -733,4 +843,129 @@ async fn premium_user_authorization_rejection_preserves_response() {
 
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(body, r#"{"message":"authorization denied"}"#);
+}
+
+const OTHER_TEAM_ID: uuid::Uuid = uuid::Uuid::from_u128(43);
+const NOT_CURRENT_TEAM_BODY: &str =
+    r#"{"message":"the requested team is not the caller's current team"}"#;
+
+fn invite_request(body: Value) -> Request<Body> {
+    Request::post("/invite")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .expect("request should be valid")
+}
+
+fn team_invites_request(query: &str) -> Request<Body> {
+    Request::get(format!("/invites{query}"))
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .body(Body::empty())
+        .expect("request should be valid")
+}
+
+#[tokio::test]
+async fn invite_to_team_refuses_a_team_other_than_the_callers() {
+    let service = FakeTeamService::default();
+    let response = router(
+        service.clone(),
+        FakeEntityAccessService::with_membership(USER_ID, TeamRole::Member),
+    )
+    .oneshot(invite_request(json!({
+        "invites": [{ "email": "new@example.com" }],
+        "team_id": OTHER_TEAM_ID.to_string(),
+    })))
+    .await
+    .expect("router should respond");
+    let (status, body, _) = response_parts(response).await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body, NOT_CURRENT_TEAM_BODY);
+    assert!(service.invite_calls().is_empty());
+}
+
+#[tokio::test]
+async fn invite_to_team_sends_to_the_named_current_team() {
+    let service = FakeTeamService::default();
+    let response = router(
+        service.clone(),
+        FakeEntityAccessService::with_membership(USER_ID, TeamRole::Member),
+    )
+    .oneshot(invite_request(json!({
+        "invites": [{ "email": "New@Example.com" }],
+        "team_id": TEAM_ID.to_string(),
+    })))
+    .await
+    .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
+    assert_eq!(
+        service.invite_calls(),
+        vec![InviteCall {
+            team_id: TEAM_ID.to_string(),
+            emails: vec!["new@example.com".to_string()],
+        }]
+    );
+}
+
+#[tokio::test]
+async fn invite_to_team_without_a_team_id_uses_the_current_team() {
+    let service = FakeTeamService::default();
+    let response = router(
+        service.clone(),
+        FakeEntityAccessService::with_membership(USER_ID, TeamRole::Member),
+    )
+    .oneshot(invite_request(json!({
+        "invites": [{ "email": "new@example.com" }],
+    })))
+    .await
+    .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
+    assert_eq!(
+        service.invite_calls(),
+        vec![InviteCall {
+            team_id: TEAM_ID.to_string(),
+            emails: vec!["new@example.com".to_string()],
+        }]
+    );
+}
+
+#[tokio::test]
+async fn get_team_invites_refuses_a_team_other_than_the_callers() {
+    let service = FakeTeamService::default();
+    let response = router(
+        service.clone(),
+        FakeEntityAccessService::with_membership(USER_ID, TeamRole::Admin),
+    )
+    .oneshot(team_invites_request(&format!("?team_id={OTHER_TEAM_ID}")))
+    .await
+    .expect("router should respond");
+    let (status, body, _) = response_parts(response).await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body, NOT_CURRENT_TEAM_BODY);
+    assert!(service.team_receipt_calls().is_empty());
+}
+
+#[tokio::test]
+async fn get_team_invites_reads_the_named_current_team() {
+    let service = FakeTeamService::default();
+    let response = router(
+        service.clone(),
+        FakeEntityAccessService::with_membership(USER_ID, TeamRole::Admin),
+    )
+    .oneshot(team_invites_request(&format!("?team_id={TEAM_ID}")))
+    .await
+    .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        service.team_receipt_calls(),
+        vec![TeamReceiptCall {
+            user_id: USER_ID.to_string(),
+            team_id: TEAM_ID.to_string(),
+            role: TeamRole::Admin,
+        }]
+    );
 }

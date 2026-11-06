@@ -1,12 +1,24 @@
 import { analytics } from '@app/lib/analytics';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isPaymentError } from '@core/util/handlePaymentError';
-
+import { catchToResult } from '@core/util/result';
 import { removeHistoryItem } from '@queries/history/history';
+import { duplicateDatabase } from '@queries/storage/databases';
 import {
   getDeletedTree,
   optimisticallyRemoveDeletedItem,
 } from '@queries/storage/deleted';
+import {
+  duplicateEntity,
+  moveEntity,
+  permanentlyDeleteEntity,
+  restoreEntity,
+  trashEntity,
+} from '@queries/storage/entity-mutations';
 import { callServiceClient } from '@service-call/client';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
@@ -21,6 +33,12 @@ import {
 } from '../SharePermissions';
 
 const DEFAULT_CHUNK_SIZE = 10;
+const ENTITY_TYPES = {
+  document: 'DOCUMENT',
+  project: 'PROJECT',
+  chat: 'CHAT',
+  email: 'EMAIL_THREAD',
+} as const;
 
 export async function getItemAccessLevel({
   itemType,
@@ -165,29 +183,37 @@ export async function deleteItem(args: {
 
   if (accessLevel === 'owner') {
     let result;
-    switch (itemType) {
-      case 'document': {
-        result = await storageServiceClient.deleteDocument({
-          documentId: id,
-        });
-        break;
+    if (
+      isFeatureEnabled(enableGraphqlSoup) &&
+      (itemType === 'document' || itemType === 'project' || itemType === 'chat')
+    ) {
+      result = await catchToResult(() =>
+        trashEntity({ type: ENTITY_TYPES[itemType], id })
+      );
+    } else
+      switch (itemType) {
+        case 'document': {
+          result = await storageServiceClient.deleteDocument({
+            documentId: id,
+          });
+          break;
+        }
+        case 'project': {
+          result = await storageServiceClient.projects.delete({
+            id,
+          });
+          break;
+        }
+        case 'chat': {
+          result = await cognitionApiServiceClient.deleteChat({
+            chat_id: id,
+          });
+          break;
+        }
+        default: {
+          return false;
+        }
       }
-      case 'project': {
-        result = await storageServiceClient.projects.delete({
-          id,
-        });
-        break;
-      }
-      case 'chat': {
-        result = await cognitionApiServiceClient.deleteChat({
-          chat_id: id,
-        });
-        break;
-      }
-      default: {
-        return false;
-      }
-    }
     if (result.isErr()) {
       return false;
     }
@@ -257,60 +283,94 @@ export async function moveToFolder(args: {
   folderId: string | null;
 }): Promise<boolean> {
   const { itemType, id, folderId } = args;
-  const accessLevel = await getItemAccessLevel({ itemType, id });
-  if (!accessLevel) return false;
-  if (!hasPermissions(getPermissions(accessLevel), Permissions.CAN_EDIT))
-    return false;
+  // Databases and forms move only through the entity mutation; there is no
+  // REST route for them.
+  if (itemType === 'database' || itemType === 'form') {
+    const result = await catchToResult(() =>
+      moveEntity(
+        { type: itemType === 'database' ? 'DATABASE' : 'FORM', id },
+        folderId
+      )
+    );
+    if (result.isErr()) return false;
+    trackMovedToFolder(itemType, id, folderId);
+    return true;
+  }
+  const graphql = isFeatureEnabled(enableGraphqlSoup);
+  if (!graphql) {
+    const accessLevel = await getItemAccessLevel({ itemType, id });
+    if (!accessLevel) return false;
+    if (!hasPermissions(getPermissions(accessLevel), Permissions.CAN_EDIT))
+      return false;
+  }
 
   let result;
-  switch (itemType) {
-    // Storage/chat backends clear the folder on empty string; email on null.
-    case 'document': {
-      result = await storageServiceClient.editDocument({
-        documentId: id,
-        projectId: folderId ?? '',
-      });
-      break;
+  if (
+    graphql &&
+    (itemType === 'document' ||
+      itemType === 'project' ||
+      itemType === 'chat' ||
+      itemType === 'email')
+  ) {
+    result = await catchToResult(() =>
+      moveEntity({ type: ENTITY_TYPES[itemType], id }, folderId)
+    );
+  } else
+    switch (itemType) {
+      // Storage/chat backends clear the folder on empty string; email on null.
+      case 'document': {
+        result = await storageServiceClient.editDocument({
+          documentId: id,
+          projectId: folderId ?? '',
+        });
+        break;
+      }
+      case 'project': {
+        result = await storageServiceClient.projects.edit({
+          id,
+          projectParentId: folderId ?? '',
+        });
+        break;
+      }
+      case 'chat': {
+        result = await cognitionApiServiceClient.editChatProject({
+          chat_id: id,
+          project_id: folderId ?? '',
+        });
+        break;
+      }
+      case 'email': {
+        result = await emailClient.updateThreadProject({
+          thread_id: id,
+          projectId: folderId,
+        });
+        break;
+      }
+      default: {
+        return false;
+      }
     }
-    case 'project': {
-      result = await storageServiceClient.projects.edit({
-        id,
-        projectParentId: folderId ?? '',
-      });
-      break;
-    }
-    case 'chat': {
-      result = await cognitionApiServiceClient.editChatProject({
-        chat_id: id,
-        project_id: folderId ?? '',
-      });
-      break;
-    }
-    case 'email': {
-      result = await emailClient.updateThreadProject({
-        thread_id: id,
-        projectId: folderId,
-      });
-      break;
-    }
-    default: {
-      return false;
-    }
-  }
 
   if (result.isErr()) {
     return false;
   }
 
+  trackMovedToFolder(itemType, id, folderId);
+  refetchResources();
+  return true;
+}
+
+function trackMovedToFolder(
+  itemType: ItemType,
+  id: string,
+  folderId: string | null
+) {
   analytics.track('update_entity', {
     entityType: itemType,
     entityId: id,
     property: 'parent_project',
     newProjectId: folderId,
   });
-
-  refetchResources();
-  return true;
 }
 
 export async function bulkMoveToFolder(
@@ -351,9 +411,18 @@ export async function bulkMoveToFolder(
   };
 }
 
-/** NOTE: Currently we do not support copying projects */
+/**
+ * Whether an item type can be duplicated. Folders copy with their contents
+ * only through the GraphQL entity mutation, which has no REST counterpart.
+ */
+export function canDuplicateItemType(itemType: ItemType): boolean {
+  if (itemType === 'document' || itemType === 'chat' || itemType === 'database')
+    return true;
+  return itemType === 'project' && isFeatureEnabled(enableGraphqlSoup);
+}
+
 export async function copyItem(args: {
-  itemType: Exclude<ItemType, 'project'>;
+  itemType: ItemType;
   id: string;
   name: string;
 }): Promise<string | null> {
@@ -364,33 +433,54 @@ export async function copyItem(args: {
   };
 
   let newId = '';
-  switch (itemType) {
-    case 'document': {
-      const result = await storageServiceClient.copyDocument({
-        documentId: id,
-        documentName: createCopyName(name),
-      });
-      if (result.isErr()) return null;
-      newId = result.value.documentId;
-      break;
-    }
-    case 'chat': {
-      const result = await cognitionApiServiceClient.copyChat({
-        chat_id: id,
-        name: createCopyName(name),
-      });
-      if (isPaymentError(result)) {
-        showPaywall();
+  // Databases are not Soup items, so the GraphQL mutation could not name
+  // the copy; their own route answers it.
+  if (itemType === 'database') {
+    const result = await duplicateDatabase({ id, name: createCopyName(name) });
+    if (result.isErr()) return null;
+    newId = result.value;
+  } else if (
+    isFeatureEnabled(enableGraphqlSoup) &&
+    (itemType === 'document' || itemType === 'chat' || itemType === 'project')
+  ) {
+    const result = await catchToResult(() =>
+      duplicateEntity(
+        { type: ENTITY_TYPES[itemType], id },
+        // The REST chat endpoint also ignores the supplied name and names the copy itself.
+        itemType === 'chat' ? undefined : createCopyName(name)
+      )
+    );
+    if (itemType === 'chat' && isPaymentError(result)) showPaywall();
+    if (result.isErr()) return null;
+    newId = result.value;
+  } else
+    switch (itemType) {
+      case 'document': {
+        const result = await storageServiceClient.copyDocument({
+          documentId: id,
+          documentName: createCopyName(name),
+        });
+        if (result.isErr()) return null;
+        newId = result.value.documentId;
+        break;
       }
-      if (result.isErr()) {
+      case 'chat': {
+        const result = await cognitionApiServiceClient.copyChat({
+          chat_id: id,
+          name: createCopyName(name),
+        });
+        if (isPaymentError(result)) {
+          showPaywall();
+        }
+        if (result.isErr()) {
+          return null;
+        }
+        newId = result.value.id;
+        break;
+      }
+      default:
         return null;
-      }
-      newId = result.value.id;
-      break;
     }
-    default:
-      return null;
-  }
 
   analytics.track('create_entity', {
     entityType: itemType,
@@ -416,7 +506,7 @@ export async function bulkCopy(
     const results = await Promise.allSettled(
       chunk.map((item) =>
         copyItem({
-          itemType: item.type as Exclude<ItemType, 'project'>,
+          itemType: item.type,
           id: item.id,
           name: item.name,
         })
@@ -447,30 +537,37 @@ export async function revertDelete(args: {
   const { itemType, id } = args;
 
   let result;
-
-  switch (itemType) {
-    case 'document': {
-      result = await storageServiceClient.revertDocumentDelete({
-        documentId: id,
-      });
-      break;
+  if (
+    isFeatureEnabled(enableGraphqlSoup) &&
+    (itemType === 'document' || itemType === 'project' || itemType === 'chat')
+  ) {
+    result = await catchToResult(() =>
+      restoreEntity({ type: ENTITY_TYPES[itemType], id })
+    );
+  } else
+    switch (itemType) {
+      case 'document': {
+        result = await storageServiceClient.revertDocumentDelete({
+          documentId: id,
+        });
+        break;
+      }
+      case 'project': {
+        result = await storageServiceClient.projects.revertDelete({
+          id,
+        });
+        break;
+      }
+      case 'chat': {
+        result = await cognitionApiServiceClient.revertDeleteChat({
+          chat_id: id,
+        });
+        break;
+      }
+      default: {
+        return false;
+      }
     }
-    case 'project': {
-      result = await storageServiceClient.projects.revertDelete({
-        id,
-      });
-      break;
-    }
-    case 'chat': {
-      result = await cognitionApiServiceClient.revertDeleteChat({
-        chat_id: id,
-      });
-      break;
-    }
-    default: {
-      return false;
-    }
-  }
 
   if (result.isErr()) {
     return false;
@@ -490,9 +587,13 @@ export async function permanentlyDelete(args: {
   switch (itemType) {
     case 'document': {
       optimisticallyRemoveDeletedItem(id);
-      result = await storageServiceClient.permanentlyDeleteDocument({
-        documentId: id,
-      });
+      result = isFeatureEnabled(enableGraphqlSoup)
+        ? await catchToResult(() =>
+            permanentlyDeleteEntity({ type: 'DOCUMENT', id })
+          )
+        : await storageServiceClient.permanentlyDeleteDocument({
+            documentId: id,
+          });
       break;
     }
     case 'project': {
@@ -515,16 +616,22 @@ export async function permanentlyDelete(args: {
       });
       optimisticallyRemoveDeletedItem(id);
 
-      result = await storageServiceClient.projects.permanentlyDelete({
-        id,
-      });
+      result = isFeatureEnabled(enableGraphqlSoup)
+        ? await catchToResult(() =>
+            permanentlyDeleteEntity({ type: 'PROJECT', id })
+          )
+        : await storageServiceClient.projects.permanentlyDelete({ id });
       break;
     }
     case 'chat': {
       optimisticallyRemoveDeletedItem(id);
-      result = await cognitionApiServiceClient.permanentlyDeleteChat({
-        chat_id: id,
-      });
+      result = isFeatureEnabled(enableGraphqlSoup)
+        ? await catchToResult(() =>
+            permanentlyDeleteEntity({ type: 'CHAT', id })
+          )
+        : await cognitionApiServiceClient.permanentlyDeleteChat({
+            chat_id: id,
+          });
       break;
     }
     default: {

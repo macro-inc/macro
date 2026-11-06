@@ -10,7 +10,6 @@ export interface ImportRun {
     | 'completed'
     | 'failed'
     | 'dismissed';
-  auto_import: boolean;
   updated_at: string;
 }
 

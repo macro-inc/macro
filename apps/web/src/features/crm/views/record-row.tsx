@@ -1,3 +1,4 @@
+import { ArchivedRecordBadge } from '../components/record-archived-status';
 import '@entity/composed/ListEntity.css';
 import {
   SwipableRow,
@@ -69,6 +70,13 @@ export function CrmListRow(
     streamState: undefined,
     setSnippetContainerRef: () => {},
     chars: 0,
+    get titleTrailing() {
+      return (
+        <Show when={'hidden' in props.entity && props.entity.hidden}>
+          <ArchivedRecordBadge />
+        </Show>
+      );
+    },
     onProjectClick: props.onProjectClick,
   });
 
@@ -82,6 +90,9 @@ export function CrmListRow(
 
   return (
     <Entity.Root
+      role={props.role}
+      tabIndex={props.tabIndex}
+      onKeyDown={props.onKeyDown}
       entity={props.entity}
       onClick={(e) => {
         if (e.metaKey && props.onChecked) {

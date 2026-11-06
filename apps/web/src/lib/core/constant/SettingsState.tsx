@@ -13,9 +13,9 @@ import { settingsTabToSlug } from './settingsTabsConfig';
 
 export type SettingsTab =
   | 'Calendar'
-  | 'Booking links'
   | 'Account'
   | 'API Keys'
+  | 'Account Managers'
   | 'Notifications'
   | 'Usage'
   | 'Billing'
@@ -30,13 +30,14 @@ export type SettingsTab =
   | 'Desktop App'
   | 'Agent'
   | 'Agents'
+  | 'Routines'
   | 'Harness'
   | 'Bots'
   | 'Team'
+  | 'Team Members'
   | 'Tags'
   | 'CRM'
   | 'Connected'
-  | 'Connections'
   | 'Email'
   | 'GitHub'
   | 'Admin';

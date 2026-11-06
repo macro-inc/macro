@@ -429,7 +429,7 @@ where
     /// chronological channel slice is the primary context. In both cases the
     /// triggering message is marked inline rather than repeated at the end.
     async fn build_prompt(&self, event: &BotEvent) -> anyhow::Result<String> {
-        let mentioner = sender_label(event.requesting_user.as_ref());
+        let mentioner = sender_label(event.message.sender.as_ref());
         let trigger_id = event.message.message_id;
         let parent = &event.message.parent;
         let access = self
@@ -441,7 +441,11 @@ where
         let current = self.messages.get(view.clone(), trigger_id).await?;
         if current.deleted_at.is_some()
             || current.root_id() != event.reply_thread_id
-            || current.sender_id.as_user() != Some(&event.requesting_user)
+            || current.sender_id != event.message.sender
+            || messages::domain::events::MessagePostedMetadata::from_message(&current, vec![])
+                .invoking_user()
+                .as_ref()
+                != Some(&event.requesting_user)
         {
             anyhow::bail!("trigger no longer belongs to this conversation");
         }

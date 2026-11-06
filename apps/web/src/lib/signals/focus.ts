@@ -12,6 +12,9 @@ const [rawActiveElement, setRawActiveElement] = createSignal<Element | null>(
 );
 
 const [dirty, setDirty] = createSignal(undefined, { equals: () => false });
+// A listener passed `setDirty` itself would store the event, whose target
+// keeps a removed view alive until the next focus change.
+const markDirty = () => setDirty();
 
 export function mountGlobalFocusListener(withDebug?: boolean) {
   const owner = getOwner();
@@ -22,11 +25,19 @@ export function mountGlobalFocusListener(withDebug?: boolean) {
     return;
   }
   onMount(() => {
-    document.addEventListener('focusin', setDirty);
-    document.addEventListener('focusout', setDirty);
+    document.addEventListener('focusin', markDirty);
+    document.addEventListener('focusout', markDirty);
+    // Removing a focused editor (or one of its ancestors) does not reliably
+    // emit focusout. Reconcile after DOM changes so consumers cannot keep
+    // treating a detached search input/composer as the active editor.
+    const observer = new MutationObserver(() => {
+      if (rawActiveElement() !== document.activeElement) markDirty();
+    });
+    observer.observe(document, { childList: true, subtree: true });
     onCleanup(() => {
-      document.removeEventListener('focusin', setDirty);
-      document.removeEventListener('focusout', setDirty);
+      observer.disconnect();
+      document.removeEventListener('focusin', markDirty);
+      document.removeEventListener('focusout', markDirty);
     });
   });
 
@@ -43,4 +54,4 @@ export function mountGlobalFocusListener(withDebug?: boolean) {
 }
 
 export const activeElement = rawActiveElement;
-const _recheckFocus = () => setDirty();
+const _recheckFocus = markDirty;

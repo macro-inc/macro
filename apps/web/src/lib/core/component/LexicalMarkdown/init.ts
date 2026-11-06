@@ -1,5 +1,7 @@
 import { lazyNamed } from '@core/util/lazyNamed';
 import {
+  AccountManagerRequestNode,
+  AgentActivityNode,
   AgentContextNode,
   AgentSessionMentionNode,
   AwaitNode,
@@ -35,6 +37,8 @@ import {
 } from '@macro-inc/lexical-core/decoratorRegistry';
 import type { HtmlRenderDecoratorProps } from '@macro-inc/lexical-core/nodes/HtmlRenderNode';
 import { createComponent, Suspense } from 'solid-js';
+import { AccountManagerRequest } from './component/decorator/AccountManagerRequest';
+import { AgentActivity } from './component/decorator/AgentActivity';
 import { AgentContext } from './component/decorator/AgentContext';
 import { AgentSessionMention } from './component/decorator/AgentSessionMention';
 import { Await } from './component/decorator/Await';
@@ -83,6 +87,7 @@ const HtmlRender = (props: HtmlRenderDecoratorProps) =>
 export function initializeLexical() {
   clearDecorators();
   setDecorator(AgentContextNode, AgentContext);
+  setDecorator(AgentActivityNode, AgentActivity);
   setDecorator(HorizontalRuleNode, HorizontalRule);
   setDecorator(UserMentionNode, UserMention);
   setDecorator(GroupMentionNode, GroupMention);
@@ -104,6 +109,7 @@ export function initializeLexical() {
   setDecorator(HtmlRenderNode, HtmlRender);
   setDecorator(ThemeMentionNode, ThemeMention);
   setDecorator(ConnectAppNode, ConnectApp);
+  setDecorator(AccountManagerRequestNode, AccountManagerRequest);
   setDecorator(TagMentionNode, TagMention);
   setDecorator(UnknownMentionNode, UnknownMention);
   setDecorator(WatermarkNode, Watermark);

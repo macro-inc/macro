@@ -39,7 +39,6 @@ await page.addInitScript(() =>
     'macro:pref:calendar:settings',
     JSON.stringify({
       periodView: 'timeGridWeek',
-      showTeamCalendars: true,
       hiddenSourceIds: [],
       sourceColors: {},
       accountColors: {},
@@ -54,17 +53,9 @@ const ALICE = 'macro|alice@example.com';
 const BOB = 'macro|bob@example.com';
 const TEAM = '00000000-0000-0000-0000-000000001111';
 let sharing = 'busy_only';
-let included = false;
-let revoked = false;
-let member = true;
-let connected = true;
-let hangTeamRequests = false;
+const included: Record<string, boolean> = { primary: true, followed: false };
 const mutations: unknown[] = [];
-const teamReadLimits: string[] = [];
-const teamMembers = [
-  { userId: ALICE, sharing: 'all', coverage: 'ready' },
-  { userId: BOB, sharing: 'busy_only', coverage: 'ready' },
-];
+const teamReads: string[] = [];
 // Keep the browser clock live: calendar loading transitions compare elapsed time.
 const fixtureDate = new Date().toISOString().slice(0, 10);
 const time = (hour: number) => ({
@@ -102,64 +93,16 @@ const ownPoint = {
     time: pointTime(11),
   },
 };
-const items = [
-  {
-    id: 'opaque-details',
-    ownerId: ALICE,
-    kind: 'details',
-    time: time(10),
-    contributesToAvailability: true,
-    details: {
-      title: 'Team planning',
-      description: '<p>Review roadmap</p>',
-      location: 'Room 2',
-      conferenceUrl: 'https://meet.google.com/abc-defg-hij',
-      organizerEmail: 'alice@example.com',
-      organizerName: 'Alice',
-      attendees: [
-        {
-          email: 'offline@example.com',
-          displayName: 'Offline Fixture',
-          isSelf: true,
-          isOrganizer: false,
-          responseStatus: 'accepted',
-        },
-      ],
-      calendarName: 'Alice primary',
-    },
-  },
-  {
-    id: 'opaque-busy',
-    ownerId: BOB,
-    kind: 'busy',
-    time: time(12),
-    contributesToAvailability: true,
-  },
-  {
-    id: 'opaque-point',
-    ownerId: ALICE,
-    kind: 'details',
-    time: pointTime(13),
-    contributesToAvailability: false,
-    details: {
-      title: 'Shared point',
-      description: null,
-      location: null,
-      conferenceUrl: null,
-      organizerEmail: null,
-      organizerName: null,
-      attendees: [],
-      calendarName: 'Alice primary',
-    },
-  },
-  {
-    id: 'opaque-followed',
-    ownerId: BOB,
-    kind: 'busy',
-    time: time(14),
-    contributesToAvailability: false,
-  },
-];
+const nextDate = new Date(Date.parse(fixtureDate) + 86_400_000)
+  .toISOString()
+  .slice(0, 10);
+// Busy-only sharing withholds the title, so the chip falls back to "Out of office".
+const bobOutOfOffice = {
+  eventId: '00000000-0000-0000-0000-000000009002',
+  occurrenceKey: fixtureDate,
+  ownerId: BOB,
+  time: { kind: 'allDay', startDate: fixtureDate, endDate: nextDate },
+};
 await page.route('**/*', async (route) => {
   const request = route.request();
   const url = new URL(request.url());
@@ -173,30 +116,24 @@ await page.route('**/*', async (route) => {
   if (url.origin !== origin) return route.abort();
   if (path.startsWith('/app') || path === '/') return route.continue();
   if (path === '/auth/jwt/refresh') return respond({});
-  if (!connected && path === '/email/email/links')
-    return respond({ links: [] });
-  if (!connected && path === '/calendar/calendars')
-    return respond({ calendars: [] });
   if (path === '/auth/team')
-    return member
-      ? respond({
-          team: {
-            id: TEAM,
-            name: 'Calendar fixtures',
-            owner_id: USER_ID,
-            slug: 'fixture',
-            enterprise: false,
-            crm_enabled: false,
-            allow_non_admin_invites: true,
-          },
-          members: [USER_ID, ALICE, BOB].map((user_id) => ({
-            user_id,
-            team_id: TEAM,
-            role: 'member',
-            plan: 'free',
-          })),
-        })
-      : respond({}, 404);
+    return respond({
+      team: {
+        id: TEAM,
+        name: 'Calendar fixtures',
+        owner_id: USER_ID,
+        slug: 'fixture',
+        enterprise: false,
+        crm_enabled: false,
+        allow_non_admin_invites: true,
+      },
+      members: [USER_ID, ALICE, BOB].map((user_id) => ({
+        user_id,
+        team_id: TEAM,
+        role: 'member',
+        plan: 'free',
+      })),
+    });
   if (path === '/auth/user/get_names_with_email')
     return respond({
       names: [
@@ -219,19 +156,26 @@ await page.route('**/*', async (route) => {
           calendarId: 'primary',
           name: 'My primary',
           isPrimary: true,
-          contributesToAvailability: true,
+          contributesToAvailability: included.primary,
         },
         {
           calendarId: 'followed',
           name: 'Subscribed coworker',
           isPrimary: false,
-          contributesToAvailability: included,
+          contributesToAvailability: included.followed,
         },
       ],
     });
-  if (path === '/calendar/availability-calendars/followed') {
-    included = request.postDataJSON().contributesToAvailability;
-    mutations.push(request.postDataJSON());
+  const availabilityChange = path.match(
+    /^\/calendar\/availability-calendars\/([^/]+)$/
+  );
+  if (availabilityChange) {
+    included[availabilityChange[1]] =
+      request.postDataJSON().contributesToAvailability;
+    mutations.push({
+      calendarId: availabilityChange[1],
+      ...request.postDataJSON(),
+    });
     return route.fulfill({ status: 204 });
   }
   if (path === '/calendar/calendars')
@@ -247,21 +191,24 @@ await page.route('**/*', async (route) => {
           isSubscription: false,
           defaultReminders: [],
         },
+        {
+          id: 'followed',
+          emailAddress: 'offline@example.com',
+          emailLinkId: '00000000-0000-0000-0000-000000001000',
+          name: 'Subscribed coworker',
+          isPrimary: false,
+          isWritable: false,
+          isSubscription: false,
+          defaultReminders: [],
+        },
       ],
     });
   if (path === '/dss/calendar-events/team') {
-    teamReadLimits.push(url.searchParams.get('limit') ?? 'default');
-    if (hangTeamRequests) return new Promise<void>(() => {});
-    return revoked
-      ? respond({ message: 'Access revoked' }, 403)
-      : respond({
-          members: teamMembers,
-          items: url.searchParams.get('limit') === '0' ? [] : items,
-          nextCursor: null,
-        });
+    teamReads.push(url.search);
+    return respond({}, 404);
   }
   if (path === '/dss/calendar-events/team-out-of-office')
-    return respond({ items: [], hasMore: false });
+    return respond({ items: [bobOutOfOffice], hasMore: false });
   if (
     path === `/calendar/events/${ownPoint.event.id}` &&
     request.method() === 'PATCH'
@@ -273,7 +220,7 @@ await page.route('**/*', async (route) => {
   }
   if (path === '/dss/calendar-events')
     return respond({
-      items: connected ? [ownPoint] : [],
+      items: [ownPoint],
       hasMore: false,
       nextCursor: null,
       syncStatus: 'ready',
@@ -298,48 +245,55 @@ async function expectRevealedCalendar() {
       '[data-calendar-loading-state]:not([data-calendar-loading-state="hidden"])'
     )
   ).toHaveCount(0, { timeout: 15000 });
-  const titles = [
-    'Alice Fixture: Team planning',
-    'Bob Fixture: Busy',
-    'Bob Fixture: Shared calendar block',
-  ];
-  await activePage
-    .getByText(titles[2], { exact: true })
-    .scrollIntoViewIfNeeded();
-  for (const title of titles) {
-    const chip = activePage.getByText(title, { exact: true });
-    await expect(chip).toBeInViewport();
-    await expect
-      .poll(() =>
-        chip.evaluate((element) => {
-          for (
-            let parent: Element | null = element;
-            parent;
-            parent = parent.parentElement
-          ) {
-            const style = getComputedStyle(parent);
-            if (Number(style.opacity) === 0 || style.visibility === 'hidden')
-              return false;
-          }
-          return true;
-        })
-      )
-      .toBe(true);
-  }
 }
+
+/** Record every loading placeholder that appears, however briefly. */
+async function watchLoadingText() {
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    const placeholders = [
+      'Loading your team…',
+      'Loading calendars…',
+      'Loading team calendar settings…',
+    ];
+    const check = () => {
+      const text = document.body.innerText;
+      for (const placeholder of placeholders)
+        if (text.includes(placeholder)) seen.push(placeholder);
+    };
+    new MutationObserver(check).observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    (window as unknown as { __loadingSeen: string[] }).__loadingSeen = seen;
+  });
+}
+
+const loadingSeen = () =>
+  page.evaluate(
+    () => (window as unknown as { __loadingSeen: string[] }).__loadingSeen
+  );
 
 try {
   await page.goto(`${origin}/app/calendar/week`, {
     waitUntil: 'domcontentloaded',
   });
   await page
-    .getByText('Team planning', { exact: false })
+    .getByText('Imported point', { exact: true })
     .first()
     .waitFor({ timeout: 60000 });
   await expectRevealedCalendar();
-  await expect.poll(() => teamReadLimits.includes('0')).toBe(true);
-  assert.equal(teamReadLimits.includes('500'), true);
-  assert.equal(teamReadLimits.includes('1'), false);
+  const sidebar = page.getByRole('complementary', {
+    name: 'Calendar navigation',
+  });
+  await expect(sidebar.getByText('Calendars', { exact: true })).toBeVisible();
+  await expect(page.getByText('Team calendars', { exact: true })).toHaveCount(
+    0
+  );
+  await expect(
+    page.getByRole('switch', { name: 'Show team calendars' })
+  ).toHaveCount(0);
   await page.screenshot({
     path: '/tmp/calendar-team-grid.png',
     fullPage: true,
@@ -409,186 +363,130 @@ try {
     page.getByRole('textbox', { name: 'Title', exact: true })
   ).toHaveCount(0);
   await page.keyboard.press('Escape');
-  const sharedPointChip = activeCalendar
-    .getByText('Alice Fixture: Shared point', { exact: true })
-    .locator(
-      'xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " fc-event ")][1]'
-    );
-  await expect(sharedPointChip).toBeInViewport();
-  const sharedPointBounds = await sharedPointChip.boundingBox();
-  assert.ok(
-    sharedPointBounds &&
-      sharedPointBounds.height > 0 &&
-      sharedPointBounds.height < 30
-  );
-  await expect(sharedPointChip).not.toHaveClass(
-    /fc-event-draggable|fc-event-resizable/
-  );
-  await sharedPointChip.click();
-  await expect(
-    page.locator('section[aria-label="Shared event details"]')
-  ).toContainText('No duration');
-  await expect(
-    page.locator('section[aria-label="Shared event details"]')
-  ).toContainText('Does not count toward their busy time');
-  await page.screenshot({
-    path: '/tmp/calendar-team-points.png',
-    fullPage: true,
+  mutations.length = 0;
+
+  // The section checkbox hides only the grid overlay; the list keeps the row.
+  const teamOooToggle = sidebar.getByRole('checkbox', {
+    name: 'Show team out of office on the calendar',
   });
-  await page.keyboard.press('Escape');
-  await page.getByText('Team planning', { exact: false }).first().click();
-  const detail = page.locator('section[aria-label="Shared event details"]');
-  await expect(detail).toContainText('Shared in Macro · Read only');
-  await expect(detail).toContainText('Offline Fixture (you)');
-  for (const name of [
-    'Edit event',
-    'Delete event',
-    'Copy event',
-    'Copy guest emails',
-    'Email guests',
-  ]) {
-    await expect(page.getByRole('button', { name, exact: true })).toHaveCount(
-      0
-    );
-  }
-  assert.equal(
-    new URL(page.url()).searchParams.has('s0.calendar.eventId'),
-    false
+  const teamOooChip = activeCalendar.getByText('Bob Fixture: Out of office', {
+    exact: true,
+  });
+  const teamOooRow = sidebar.getByRole('button', { name: /Bob Fixture/ });
+  await expect(teamOooToggle).toBeChecked();
+  await expect(teamOooChip).toBeVisible();
+  await expect(teamOooRow).toBeVisible();
+  await sidebar.getByTitle('Show on calendar').click();
+  await expect(teamOooToggle).not.toBeChecked();
+  await expect(teamOooChip).toHaveCount(0);
+  await expect(teamOooRow).toBeVisible();
+  assert.deepEqual(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem('macro:pref:calendar:settings') ?? '{}')
+          .hiddenSourceIds
+    ),
+    ['team-ooo'],
+    'Hiding team out of office must persist with calendar visibility'
   );
   await page.screenshot({
-    path: '/tmp/calendar-team-details.png',
+    path: '/tmp/calendar-team-ooo-hidden.png',
     fullPage: true,
   });
-  await page.keyboard.press('Escape');
-  await page
-    .getByText(/: Busy$/, { exact: false })
-    .first()
-    .click();
-  await expect(detail).toContainText('Counts toward this teammate');
-  await expect(detail).not.toContainText('Organizer:');
-  await expect(
-    detail.getByRole('button', { name: 'Join meeting' })
-  ).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await page
-    .getByText(/: Shared calendar block$/, { exact: false })
-    .first()
-    .click();
-  await expect(detail).toContainText('Does not count toward their busy time');
-  await page.keyboard.press('Escape');
+  await sidebar.getByTitle('Show on calendar').click();
+  await expect(teamOooToggle).toBeChecked();
+  await expect(teamOooChip).toBeVisible();
 
   await page.goto(`${origin}/app/settings/calendar`, {
     waitUntil: 'domcontentloaded',
   });
+  const sharingSelect = page.getByRole('button', {
+    name: 'Share with teammates',
+  });
+  await expect(sharingSelect).toContainText('Busy blocks', { timeout: 30000 });
   await expect(
-    page.getByRole('radio', { name: 'Busy blocks', exact: true })
-  ).toBeChecked({ timeout: 30000 });
-  await expect(
-    page.getByText(
-      'including subscribed or delegated calendars, birthdays and holidays',
-      {
-        exact: false,
-      }
-    )
+    page.getByText('Teammates see when you are busy, not what.', {
+      exact: true,
+    })
   ).toBeVisible();
   await expect(
-    page.getByText(
-      'Calendars unchecked in Google Calendar are included if synced.',
-      {
-        exact: false,
-      }
+    page.getByRole('switch', { name: 'Show team calendars' })
+  ).toHaveCount(0);
+  // The innermost section that holds the heading; the page nests sections.
+  const busySection = page
+    .locator('section')
+    .filter({
+      has: page.getByRole('heading', { name: 'Calendars that count as busy' }),
+    })
+    .last();
+  const account = busySection.getByRole('checkbox', {
+    name: 'offline@example.com',
+    exact: true,
+  });
+  await expect
+    .poll(() =>
+      account.evaluate((element) => (element as HTMLInputElement).indeterminate)
     )
-  ).toBeVisible();
+    .toBe(true);
+  await busySection
+    .getByRole('button', { name: 'Expand offline@example.com', exact: true })
+    .click();
+  const followed = busySection.getByRole('checkbox', {
+    name: 'Subscribed coworker',
+    exact: true,
+  });
   await expect(
-    page.getByText(
-      'Hiding a calendar in your Macro view does not change sharing.',
-      {
-        exact: false,
-      }
-    )
-  ).toBeVisible();
+    busySection.getByRole('checkbox', { name: 'My primary' })
+  ).toBeChecked();
+  await expect(followed).not.toBeChecked();
   await page.screenshot({
     path: '/tmp/calendar-team-settings.png',
     fullPage: true,
   });
-  await page.getByRole('radio', { name: 'Event details', exact: true }).check();
-  await expect(
-    page.getByRole('radio', { name: 'Event details', exact: true })
-  ).toBeChecked();
-  assert.equal(sharing, 'all');
-  const availabilityToggle = page.getByRole('switch', {
-    name: 'Count Subscribed coworker toward my availability',
-  });
-  await availabilityToggle.press('Space');
-  await expect.poll(() => included).toBe(true);
-  await expect(availabilityToggle).toBeChecked();
-  await expect(availabilityToggle).toBeEnabled();
-  await page.getByRole('radio', { name: 'Nothing', exact: true }).check();
-  await expect.poll(() => sharing).toBe('none');
-  await page.getByRole('radio', { name: 'Busy blocks', exact: true }).check();
-  await expect.poll(() => sharing).toBe('busy_only');
 
-  await page.goto(`${origin}/app/calendar/week`, {
-    waitUntil: 'domcontentloaded',
-  });
-  await page.getByText('Team planning', { exact: false }).first().click();
-  await expect(detail).toBeVisible();
-  revoked = true;
-  // A normal focus refresh must discard a now-forbidden range and detached popover.
-  const focusTab = await context.newPage();
-  await focusTab.bringToFront();
-  await page.bringToFront();
-  await focusTab.close();
-  await expect(detail).toHaveCount(0, { timeout: 40000 });
-  await expect(page.getByText('Team planning', { exact: false })).toHaveCount(
-    0
-  );
+  await watchLoadingText();
+  await sharingSelect.click();
+  await page
+    .getByRole('option', { name: 'Event details', exact: true })
+    .click();
+  await expect(sharingSelect).toContainText('Event details');
+  await expect.poll(() => sharing).toBe('all');
   await expect(
-    page
-      .getByText('Team calendars unavailable. Availability is unknown.', {
-        exact: false,
-      })
-      .filter({ visible: true })
-      .first()
+    page.getByText(
+      'Teammates see your events. Private events stay busy blocks.',
+      { exact: true }
+    )
   ).toBeVisible();
-  revoked = false;
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.getByText('Team planning', { exact: false }).first().click();
-  await expect(detail).toBeVisible();
-  member = false;
-  const membershipTab = await context.newPage();
-  await membershipTab.bringToFront();
-  await page.bringToFront();
-  await membershipTab.close();
-  await expect(detail).toHaveCount(0, { timeout: 40000 });
-  await expect(page.getByText('Team planning', { exact: false })).toHaveCount(
-    0
+  await sharingSelect.click();
+  await page.getByRole('option', { name: 'Nothing', exact: true }).click();
+  await expect.poll(() => sharing).toBe('none');
+  await busySection.getByText('Subscribed coworker', { exact: true }).click();
+  await expect.poll(() => included.followed).toBe(true);
+  await expect(followed).toBeChecked();
+  await expect(account).toBeChecked();
+  await busySection.getByText('offline@example.com', { exact: true }).click();
+  await expect.poll(() => included.primary).toBe(false);
+  await expect.poll(() => included.followed).toBe(false);
+  await expect(account).not.toBeChecked();
+  await sharingSelect.click();
+  await page.getByRole('option', { name: 'Busy blocks', exact: true }).click();
+  await expect.poll(() => sharing).toBe('busy_only');
+  // Let the post-save refetches settle before checking for a flash.
+  await page.waitForTimeout(1500);
+  assert.deepEqual(
+    await loadingSeen(),
+    [],
+    'Changing a setting must not flash a loading state'
   );
-  assert.deepEqual(errors, []);
-  member = true;
-  connected = false;
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await expect(
-    page.getByText('Team planning', { exact: false }).first()
-  ).toBeVisible({ timeout: 30000 });
-  await expectRevealedCalendar();
-  await page.getByText('Team planning', { exact: false }).first().click();
-  await expect(detail).toContainText('Shared in Macro · Read only');
   await page.screenshot({
-    path: '/tmp/calendar-team-no-google.png',
+    path: '/tmp/calendar-team-settings-after.png',
     fullPage: true,
   });
-  // Stay online but leave every new team read unresolved. The independent
-  // expiry must remove already visible data and the detached popover anyway.
-  hangTeamRequests = true;
-  await expect(detail).toHaveCount(0, { timeout: 65000 });
-  await expect(page.getByText('Team planning', { exact: false })).toHaveCount(
-    0
-  );
+  assert.deepEqual(teamReads, [], 'No surface reads teammate calendars');
   assert.deepEqual(errors, []);
   assert.deepEqual(requestFailures, []);
   console.log(
-    'PASS: imported own/shared points and metadata-only edit, full-app team settings, sanitized blocks, read-only details, revoked-data removal, membership loss, viewer without Google, and expiry during hung refresh'
+    'PASS: imported point rendering and metadata-only edit, team out-of-office overlay checkbox, no team calendar overlay or controls, team sharing select, account-grouped busy calendars, and settings changes without a loading flash'
   );
 } catch (error) {
   console.error(error);
@@ -600,7 +498,7 @@ try {
         errors,
         requestFailures,
         unknown: [...new Set(unknown)],
-        teamReadLimits: [...new Set(teamReadLimits)],
+        teamReads,
         mutations,
       },
       null,

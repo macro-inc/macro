@@ -11,8 +11,10 @@ use models_permissions::share_permission::channel_share_permission::{
 
 use super::*;
 
+mod anonymous;
 mod booking;
 mod drafts;
+mod folders;
 mod names;
 mod protections;
 mod races;
@@ -170,8 +172,13 @@ fn form_over(table: &Table) -> Form {
         status: FormStatus::Open,
         closes_at: None,
         confirmation_message: "".into(),
+        branding: FormBranding::default(),
         created_at: at(9),
         updated_at: at(9),
+        project_id: None,
+        is_hidden_in_drive: false,
+        responses_visible: false,
+        anonymous: false,
     }
 }
 
@@ -189,6 +196,7 @@ fn layout_over(table: &Table) -> FormLayout {
                     required: true,
                     widget: Some(Widget::Paragraph),
                 }],
+                show_when: None,
             },
             FormSection::Gate {
                 id: FormSectionId::new(),
@@ -210,6 +218,7 @@ fn layout_over(table: &Table) -> FormLayout {
                 title: "Empty".into(),
                 description: "".into(),
                 questions: vec![],
+                show_when: None,
             },
         ],
     }
@@ -252,6 +261,32 @@ async fn a_created_form_reads_back_with_its_layout_and_owner_grant(pool: PgPool)
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_form_hidden_in_drive_stays_hidden_through_a_rename(pool: PgPool) {
+    let table = insert_table(&pool).await;
+    let repo = PgFormsRepo::new(pool.clone());
+    let form = Form {
+        is_hidden_in_drive: true,
+        responses_visible: false,
+        anonymous: false,
+        ..form_over(&table)
+    };
+    repo.create_form(&form, &layout_over(&table), true)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.forms_by_ids(&[form.id]).await.unwrap(),
+        vec![form.clone()]
+    );
+    let renamed = repo
+        .rename_form(form.id, "Lunch?", at(12))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(renamed.is_hidden_in_drive);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_layout_is_replaced_whole_and_a_trashed_forms_is_not(pool: PgPool) {
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool);
@@ -280,6 +315,7 @@ async fn a_layout_is_replaced_whole_and_a_trashed_forms_is_not(pool: PgPool) {
                     widget: Some(Widget::Short),
                 },
             ],
+            show_when: None,
         }],
     };
     assert_eq!(
@@ -314,6 +350,79 @@ async fn a_layout_is_replaced_whole_and_a_trashed_forms_is_not(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_sections_show_when_rules_read_back_as_written_and_clear_with_a_replace(pool: PgPool) {
+    let table = insert_table(&pool).await;
+    let repo = PgFormsRepo::new(pool.clone());
+    let form = form_over(&table);
+    let first = FormSectionId::new();
+    let branch = FormSectionId::new();
+    let branching = FormLayout {
+        sections: vec![
+            FormSection::Questions {
+                id: first,
+                title: "About you".into(),
+                description: "".into(),
+                questions: vec![QuestionLayout {
+                    id: FormQuestionId::new(),
+                    column: table.first,
+                    help_text: "".into(),
+                    required: true,
+                    widget: None,
+                }],
+                show_when: None,
+            },
+            FormSection::Questions {
+                id: branch,
+                title: "Follow-up".into(),
+                description: "".into(),
+                questions: vec![QuestionLayout {
+                    id: FormQuestionId::new(),
+                    column: table.second,
+                    help_text: "".into(),
+                    required: true,
+                    widget: None,
+                }],
+                show_when: Some(FilterGroup {
+                    conjunction: Conjunction::Or,
+                    conditions: vec![FilterNode::Condition(FilterCondition {
+                        column: table.first,
+                        test: FilterTest::Presence {
+                            operator: PresenceOperator::IsNotEmpty,
+                        },
+                    })],
+                }),
+            },
+        ],
+    };
+    repo.create_form(&form, &branching, false).await.unwrap();
+
+    assert_eq!(repo.layout(form.id).await.unwrap(), branching);
+
+    let mut always_shown = branching.clone();
+    let FormSection::Questions { show_when, .. } = &mut always_shown.sections[1] else {
+        panic!("the second section asks questions");
+    };
+    *show_when = None;
+    repo.replace_layout(form.id, &always_shown, at(10), None)
+        .await
+        .unwrap();
+
+    assert_eq!(repo.layout(form.id).await.unwrap(), always_shown);
+    // Only a questions section is ever shown conditionally.
+    let gate_with_show_when = sqlx::query!(
+        r#"
+        INSERT INTO form_sections (id, form_id, position, kind, gate_rules, show_when)
+        VALUES ($1, $2, 'z', 'gate', '{}'::jsonb, '{}'::jsonb)
+        "#,
+        Uuid::now_v7(),
+        form.id.into_uuid(),
+    )
+    .execute(&pool)
+    .await;
+    assert!(gate_with_show_when.is_err());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn facts_change_only_where_given_and_a_closing_time_can_be_cleared(pool: PgPool) {
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool);
@@ -331,6 +440,11 @@ async fn facts_change_only_where_given_and_a_closing_time_can_be_cleared(pool: P
                 status: Some(FormStatus::Closed),
                 closes_at: Some(Some(at(17))),
                 tally_visible: Some(true),
+                responses_visible: None,
+                anonymous: None,
+                logo_file_id: Some(Some(Uuid::from_u128(0x1060))),
+                cover_file_id: None,
+                accent_color: Some(Some(AccentColor::try_from("#1f6feb".to_string()).unwrap())),
             },
             at(10),
             None,
@@ -344,6 +458,11 @@ async fn facts_change_only_where_given_and_a_closing_time_can_be_cleared(pool: P
         *changed,
         Form {
             confirmation_message: "Thanks!".into(),
+            branding: FormBranding {
+                logo_file_id: Some(Uuid::from_u128(0x1060)),
+                cover_file_id: None,
+                accent_color: Some(AccentColor::try_from("#1f6feb".to_string()).unwrap()),
+            },
             audience: Audience::Public,
             status: FormStatus::Closed,
             closes_at: Some(at(17)),
@@ -357,6 +476,7 @@ async fn facts_change_only_where_given_and_a_closing_time_can_be_cleared(pool: P
             form.id,
             &crate::domain::models::UpdateForm {
                 closes_at: Some(None),
+                accent_color: Some(None),
                 ..crate::domain::models::UpdateForm::default()
             },
             at(11),
@@ -369,6 +489,14 @@ async fn facts_change_only_where_given_and_a_closing_time_can_be_cleared(pool: P
     };
     assert_eq!(cleared.closes_at, None);
     assert_eq!(cleared.audience, Audience::Public);
+    assert_eq!(
+        cleared.branding,
+        FormBranding {
+            logo_file_id: Some(Uuid::from_u128(0x1060)),
+            cover_file_id: None,
+            accent_color: None,
+        }
+    );
     let renamed = repo
         .rename_form(form.id, "Offsite", at(12))
         .await
@@ -482,6 +610,33 @@ async fn anonymous_responses_are_unbounded_and_counted(pool: PgPool) {
             submitted: 2,
             stopped_by_section: vec![(gate, 1)],
         }
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn respondents_by_row_name_signed_in_responses_in_submission_order(pool: PgPool) {
+    let table = insert_table(&pool).await;
+    let repo = PgFormsRepo::new(pool.clone());
+    let form = form_over(&table);
+    repo.create_form(&form, &layout_over(&table), false)
+        .await
+        .unwrap();
+    let later = insert_row(&pool, table.table, "a0").await;
+    let earlier = insert_row(&pool, table.table, "a1").await;
+    let anonymous = insert_row(&pool, table.table, "a2").await;
+    repo.record_submission(form.id, Some(&user(OWNER)), later, at(11))
+        .await
+        .unwrap();
+    repo.record_submission(form.id, Some(&user(RESPONDENT)), earlier, at(10))
+        .await
+        .unwrap();
+    repo.record_submission(form.id, None, anonymous, at(9))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.respondents_by_row(form.id).await.unwrap(),
+        vec![(earlier, user(RESPONDENT)), (later, user(OWNER))]
     );
 }
 

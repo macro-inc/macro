@@ -634,6 +634,11 @@ async fn the_dry_run_answers_every_menu_target_for_a_viewer() {
                 &["Sam", "12", "https://macro.com"]
             ),
             no_values_fit(
+                DataType::DateRange,
+                "3 values aren't date ranges",
+                &["Sam", "12", "https://macro.com"]
+            ),
+            no_values_fit(
                 DataType::Boolean,
                 "3 values aren't true or false",
                 &["Sam", "12", "https://macro.com"]

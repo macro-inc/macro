@@ -88,6 +88,7 @@ async fn it_works_with_no_params() {
             original_url: None,
             is_mobile: false,
             referral_code: None,
+            is_agent: false,
         })
     );
 }
@@ -112,6 +113,7 @@ async fn it_works_with_mobile() {
             original_url: None,
             is_mobile: true,
             referral_code: None,
+            is_agent: false,
         })
     );
 }
@@ -137,6 +139,7 @@ async fn it_works_with_mobile_false() {
             is_mobile: false,
 
             referral_code: None,
+            is_agent: false,
         })
     );
 }
@@ -167,6 +170,7 @@ async fn it_works_with_everything() {
        original_url: Some(original_url),
        is_mobile: true,
         referral_code: Some(code),
+       is_agent: false
     }) => {
         assert_eq!(idp_name, "testing");
         assert_eq!(idp_id, "something");
@@ -190,7 +194,8 @@ async fn it_works_with_macro_scheme() {
        login_hint: None,
        original_url: Some(original_url),
        is_mobile: true,
-       referral_code: _
+       referral_code: _,
+       is_agent: false
     }) => {
         assert_eq!(idp_name, "google");
         assert_eq!(original_url.0.as_str(), "macro://login");
@@ -211,9 +216,60 @@ async fn it_works_with_double_encoded_scheme() {
        login_hint: None,
        original_url: Some(original_url),
        is_mobile: true,
-       referral_code: _
+       referral_code: _,
+       is_agent: false
     }) => {
         assert_eq!(idp_name, "google");
         assert_eq!(original_url.0.as_str(), "https://example.com/");
     });
+}
+
+#[test]
+fn local_frontend_origin_is_accepted_only_when_configured() {
+    let origin = Url::parse("https://peter-dev:29809").unwrap();
+    for path in ["/app/login", "/app/inbox-link-callback"] {
+        let url = origin.join(path).unwrap();
+        assert!(is_allowed_original_url_with_local_origin(
+            &url,
+            Some(&origin)
+        ));
+        assert!(!is_allowed_original_url_with_local_origin(&url, None));
+    }
+}
+
+#[test]
+fn local_frontend_origin_requires_exact_https_origin_without_credentials() {
+    let origin = Url::parse("https://peter-dev:29809").unwrap();
+    for candidate in [
+        "http://peter-dev:29809/app/login",
+        "https://peter-dev:29810/app/login",
+        "https://peter-dev/app/login",
+        "https://peter-dev.evil.example:29809/app/login",
+        "https://evil.example:29809/app/login",
+        "https://user:password@peter-dev:29809/app/login",
+        "https://user@peter-dev:29809/app/login",
+    ] {
+        let url = Url::parse(candidate).unwrap();
+        assert!(
+            !is_allowed_original_url_with_local_origin(&url, Some(&origin)),
+            "{url}"
+        );
+    }
+    let http_origin = Url::parse("http://peter-dev:29809").unwrap();
+    assert!(!is_allowed_original_url_with_local_origin(
+        &http_origin,
+        Some(&http_origin)
+    ));
+}
+
+#[test]
+fn it_should_read_the_agent_signup_flag() {
+    let query: Query<LoginQueryParams> = Query::try_from_uri(
+        &"http://test/login/sso?idp_name=Google&is_agent=true"
+            .parse()
+            .unwrap(),
+    )
+    .unwrap();
+
+    assert!(query.is_agent);
 }

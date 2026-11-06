@@ -5,6 +5,7 @@ import {
   offset,
   shift,
 } from '@floating-ui/dom';
+import { Telemetry } from '@macro-inc/observability';
 import {
   createEffect,
   createMemo,
@@ -123,7 +124,11 @@ export function DefinitionLookup(props: IProps) {
       placement: 'bottom',
       strategy: 'absolute',
       middleware: [offset(props.index === 0 ? 2 : 8), shift({ padding: 8 })],
-    }).then(setCoord);
+    })
+      .then(setCoord)
+      .catch((error) =>
+        Telemetry.error(error, { surface: 'pdf-definition-lookup' })
+      );
   };
   createEffect((prevPageWidth) => {
     const newPageWidth = pageWidth();

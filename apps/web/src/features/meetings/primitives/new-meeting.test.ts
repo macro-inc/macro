@@ -31,7 +31,10 @@ const credentials = {
 };
 const preferences = { microphoneEnabled: false, cameraEnabled: false };
 const disposers: (() => void)[] = [];
-afterEach(() => {
+// The session enters the call while invitations ring, so tests settle them last.
+const rings: Promise<void>[] = [];
+afterEach(async () => {
+  await Promise.all(rings.splice(0));
   for (const dispose of disposers.splice(0)) dispose();
 });
 
@@ -79,7 +82,7 @@ function setup(overrides: Partial<NewMeetingCapabilities> = {}) {
       join,
       connect: async () => {
         await connect();
-        void draft.ring();
+        rings.push(draft.ring());
       },
       disconnect: async () => {
         setActiveCallId(null);

@@ -1,9 +1,11 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { isEditableInput } from '@core/util/isEditableInput';
 import { useKeyPressed } from '@core/util/useKeyPressed';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
+import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { useSearchInputFocus } from '@property/utils';
 import { ERROR_MESSAGES } from '@property/utils/errorHandling';
@@ -155,13 +157,14 @@ export const DropdownSelectableRow: ParentComponent<
 type SelectOptionsProps = {
   config: OptionSelectorConfig;
   options: SelectableOption[];
+  optionIconClass?: string;
   isLoading: boolean;
   error: string | null;
   selectedOptions: () => Set<string>;
   onToggleOption: (value: string) => void;
   onAddOption?: (value: string) => Promise<void>;
   /** When provided, renders a "no value" item at the top of the list. */
-  clearOption?: { label: string; onClear: () => void };
+  clearOption?: { label: string; icon?: JSX.Element; onClear: () => void };
   onClose?: () => void;
 };
 
@@ -206,7 +209,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const handleSelectableItem = (idx: number, event?: KeyboardEvent) => {
     const item = selectableItems()[idx];
     if (item?.type === 'add') {
-      handleAddOption(event);
+      fireAndForget(handleAddOption(event), 'property-editor');
     } else if (item?.type === 'clear') {
       props.clearOption?.onClear();
       if (shouldCloseAfterSelect(event) && props.onClose) {
@@ -306,12 +309,23 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     return items;
   });
 
+  // On touch the menu leaves focus in the field behind it; keys typed there
+  // are text, not picks.
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (
+      event.target !== searchInputRef &&
+      isEditableInput(event.target as Element)
+    )
+      return;
+    dropdown.handleKeyDown(event);
+  };
+
   onMount(() => {
-    document.addEventListener('keydown', dropdown.handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
   });
 
   onCleanup(() => {
-    document.removeEventListener('keydown', dropdown.handleKeyDown);
+    document.removeEventListener('keydown', handleKeyDown);
   });
 
   useSearchInputFocus(
@@ -448,6 +462,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                               >
                                 <PropertyValueIcon
                                   optionId={optionItem().option.id}
+                                  class={props.optionIconClass}
                                 />
                                 <div class="flex-1 min-w-0 text-left">
                                   <p class="truncate">
@@ -476,7 +491,9 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                                 showHotkey={dropdown.shouldShowHotkeys()}
                                 hotkeyShortcut="0"
                               >
-                                <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
+                                {clear().icon ?? (
+                                  <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
+                                )}
                                 <div class="flex-1 min-w-0 text-left">
                                   <p class="text-ink-muted truncate">
                                     {clear().label}

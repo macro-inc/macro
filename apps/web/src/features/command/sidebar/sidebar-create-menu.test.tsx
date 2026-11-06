@@ -7,7 +7,6 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SidebarCreateMenu } from './sidebar-create-menu';
 
@@ -42,9 +41,7 @@ vi.mock('@core/hotkey/state', () => ({ setActiveScope: vi.fn() }));
 vi.mock('@core/hotkey/utils', () => ({ activateClosestDOMScope: vi.fn() }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@ui/components/Hotkey', () => ({ Hotkey: () => null }));
-vi.mock('@ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
+
 vi.mock('@ui', async () => ({
   ...(await import('@ui/components/Button')),
   ...(await import('@ui/components/Dropdown')),

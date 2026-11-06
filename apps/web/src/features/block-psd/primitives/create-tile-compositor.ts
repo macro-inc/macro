@@ -25,6 +25,7 @@ import type {
   TileResult,
 } from '@core/psd-engine/client';
 import type { IRect } from '@core/psd-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   canvasToLevel,
   cellSources,
@@ -197,7 +198,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
       evict();
       options.onTile();
     };
-    void settle();
+    fireAndForget(settle(), 'psd-render');
   };
 
   /** Composites the changed part of a tile and patches it in. */
@@ -243,7 +244,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
       stats.millis += result.millis;
       options.onTile();
     };
-    void settle();
+    fireAndForget(settle(), 'psd-render');
   };
 
   const request = (key: TileKey, priority: number, pinned = false) => {

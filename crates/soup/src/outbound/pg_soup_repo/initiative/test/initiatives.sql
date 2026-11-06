@@ -26,6 +26,15 @@ INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, acces
 ('ad000000-0000-0000-0000-000000000003', 'initiative', 'macro|user-1@test.com', 'user', 'view'),
 -- Left-channel grants and an inaccessible row must never leak.
 ('ad000000-0000-0000-0000-000000000005', 'initiative', 'ae000000-0000-0000-0000-000000000003', 'channel', 'view');
+-- Row 7 is owned by the viewer; row 8 is granted through a shared folder.
+-- Both sort after rows 1-4.
+INSERT INTO "SharePermission" (id) VALUES ('soup-initiative-share-7'), ('soup-initiative-share-8');
+INSERT INTO initiative (id, name, owner_user_id, share_permission_id, created_at, updated_at) VALUES
+('ad000000-0000-0000-0000-000000000007', 'Launch 7', 'macro|user-1@test.com', 'soup-initiative-share-7', '2026-01-01', '2026-01-01'),
+('ad000000-0000-0000-0000-000000000008', 'Launch 8', 'macro|initiative-owner@test.com', 'soup-initiative-share-8', '2026-01-01', '2026-01-01');
+INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id) VALUES
+('ad000000-0000-0000-0000-000000000007', 'initiative', 'macro|user-1@test.com', 'user', 'owner', NULL),
+('ad000000-0000-0000-0000-000000000008', 'initiative', 'macro|user-1@test.com', 'user', 'view', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff');
 INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
 SELECT replace(id::text, 'ad000000', 'ab000000')::uuid, id::text, 'INITIATIVE', '00000001-0000-0000-0000-000000000002',
 '{"type":"SelectOption","value":["00000001-0000-0000-0002-000000000001"]}'::jsonb

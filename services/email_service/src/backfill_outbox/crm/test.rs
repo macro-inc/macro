@@ -131,8 +131,15 @@ async fn consent(pool: &PgPool) -> anyhow::Result<(CompaniesRepositoryImpl, Uuid
     .execute(pool)
     .await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
-    repo.change_email_privacy(team, USER, EmailPrivacyChange::SetConsent { enabled: true })
-        .await?;
+    repo.change_email_privacy(
+        team,
+        USER,
+        EmailPrivacyChange::SetConsent {
+            enabled: true,
+            link_id: Some(link),
+        },
+    )
+    .await?;
     Ok((repo, team, link))
 }
 
@@ -188,7 +195,10 @@ async fn withdrawn_consent_discards_pending_request(pool: PgPool) -> anyhow::Res
     repo.change_email_privacy(
         team,
         USER,
-        EmailPrivacyChange::SetConsent { enabled: false },
+        EmailPrivacyChange::SetConsent {
+            enabled: false,
+            link_id: None,
+        },
     )
     .await?;
     assert_eq!(pending(&pool).await?, 1);
@@ -249,7 +259,10 @@ async fn withdrawal_does_not_wait_for_publisher_row_lock(pool: PgPool) -> anyhow
         repo.change_email_privacy(
             team,
             USER,
-            EmailPrivacyChange::SetConsent { enabled: false },
+            EmailPrivacyChange::SetConsent {
+                enabled: false,
+                link_id: None,
+            },
         ),
     )
     .await??;
@@ -260,5 +273,168 @@ async fn withdrawal_does_not_wait_for_publisher_row_lock(pool: PgPool) -> anyhow
     drain(&pool, &queue.sqs).await?;
     assert!(queue.messages().is_empty());
     assert_eq!(pending(&pool).await?, 0);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn consent_trace_survives_outbox_queue_and_deferral_without_payload_fields(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::{
+        propagation::TraceContextPropagator,
+        trace::{InMemorySpanExporter, SdkTracerProvider},
+    };
+    use sqs_client::email::trace_context;
+    use tracing::Instrument as _;
+    use tracing::instrument::WithSubscriber as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("crm-outbox-test")));
+    async {
+        let request = tracing::info_span!(parent: None, "consent.request");
+        let (repo, team, link) = consent(&pool).instrument(request.clone()).await?;
+        let stored = sqlx::query_scalar!(
+            "SELECT traceparent FROM crm_email_backfill_outbox WHERE team_id = $1",
+            team
+        )
+        .fetch_one(&pool)
+        .await?
+        .expect("request context persisted");
+        let trace_id = stored.split('-').nth(1).unwrap();
+        let queue = TestQueue::start().await?;
+        drain(&pool, &queue.sqs).await?;
+        let carried = queue.state.requests.lock().unwrap()[0]["MessageAttributes"]
+            [trace_context::ATTRIBUTE]["StringValue"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert_eq!(carried.split('-').nth(1), Some(trace_id));
+        let delivery = tracing::info_span!(parent: None, "email.backfill.process");
+        trace_context::adopt(&delivery, Some(&carried));
+        let message = queue.messages().remove(0);
+        queue
+            .sqs
+            .defer_email_backfill_message(&message, 5, 1)
+            .instrument(delivery)
+            .await?;
+        let retry = queue.state.requests.lock().unwrap()[1]["MessageAttributes"]
+            [trace_context::ATTRIBUTE]["StringValue"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert_eq!(retry.split('-').nth(1), Some(trace_id));
+        // Exercise the real CRM service/repository boundaries, even though no
+        // stored message exists and these population requests correctly no-op.
+        use crm::domain::{
+            companies_repo::CompaniesRepository,
+            service::{CrmService, CrmServiceImpl},
+        };
+        let service = CrmServiceImpl::new(
+            repo.clone(),
+            crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+        );
+        assert_eq!(service.get_team_id_for_user(USER).await?, Some(team));
+        let now = chrono::Utc::now();
+        service
+            .populate_contact(
+                &team,
+                &link,
+                "outbox@example.com",
+                "person@example.org",
+                Some("Private Contact"),
+                now,
+                now,
+                true,
+            )
+            .await?;
+        repo.populate_contact(
+            &team,
+            &link,
+            "example.org",
+            "person@example.org",
+            Some("Private Contact"),
+            now,
+            now,
+            true,
+        )
+        .await?;
+        assert!(
+            service
+                .populate_contact(
+                    &team,
+                    &link,
+                    "outbox@example.com",
+                    "private-invalid-address",
+                    None,
+                    now,
+                    now,
+                    true
+                )
+                .await
+                .is_err()
+        );
+        let invalid = tracing::info_span!(parent: None, "invalid.context");
+        let before = invalid.in_scope(trace_context::current);
+        trace_context::adopt(&invalid, Some("not-a-traceparent"));
+        trace_context::adopt(&invalid, None);
+        assert_eq!(invalid.in_scope(trace_context::current), before);
+        drop(invalid);
+        // A later request outside tracing must not retain an obsolete parent.
+        repo.change_email_privacy(
+            team,
+            USER,
+            EmailPrivacyChange::RemoveDomain {
+                scope: crm::domain::email_privacy::EmailBlockScope::Personal,
+                domain: "example.org".into(),
+            },
+        )
+        .with_subscriber(tracing::subscriber::NoSubscriber::default())
+        .await?;
+        assert!(
+            sqlx::query_scalar!(
+                "SELECT traceparent FROM crm_email_backfill_outbox WHERE team_id = $1",
+                team
+            )
+            .fetch_one(&pool)
+            .await?
+            .is_none()
+        );
+        drop(request);
+        anyhow::Ok(())
+    }
+    .with_subscriber(subscriber)
+    .await?;
+    provider.force_flush()?;
+    let spans = exporter.get_finished_spans()?;
+    assert!(
+        spans
+            .iter()
+            .any(|span| span.name == "crm.email_backfill.publish")
+    );
+    for span in spans {
+        for field in span.attributes {
+            let value = field.value.to_string();
+            assert!(!value.contains(USER), "personal identity in span field");
+            for private in [
+                "outbox@example.com",
+                "person@example.org",
+                "Private Contact",
+                "private-invalid-address",
+            ] {
+                assert!(
+                    !value.contains(private),
+                    "personal data in span field {}",
+                    field.key
+                );
+            }
+        }
+    }
     Ok(())
 }

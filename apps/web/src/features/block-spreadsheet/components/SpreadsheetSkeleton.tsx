@@ -38,13 +38,13 @@ export function SpreadsheetSkeleton(props: { label?: string }) {
         aria-hidden="true"
       >
         <div
-          class="shrink-0 border-b border-r border-edge"
+          class="shrink-0 border-b border-r border-ink/12"
           style={{ width: `${ROW_HEADER_WIDTH}px` }}
         />
         <For each={COLUMNS}>
           {(column) => (
             <div
-              class="flex shrink-0 items-center justify-center border-b border-r border-edge-muted text-[11px] font-medium opacity-60"
+              class="flex shrink-0 items-center justify-center border-b border-r border-ink/12 text-[11px] font-medium opacity-60"
               style={{ width: `${DEFAULT_COLUMN_WIDTH}px` }}
             >
               {String.fromCharCode(65 + column)}
@@ -57,7 +57,7 @@ export function SpreadsheetSkeleton(props: { label?: string }) {
           {(row) => (
             <div class="flex" style={{ height: `${ROW_HEIGHT}px` }}>
               <div
-                class="flex shrink-0 items-center justify-center border-b border-r border-edge-muted bg-panel text-[11px] text-ink-muted opacity-60 select-none"
+                class="flex shrink-0 items-center justify-center border-b border-r border-ink/12 bg-panel text-[11px] text-ink-muted opacity-60 select-none"
                 style={{ width: `${ROW_HEADER_WIDTH}px` }}
               >
                 {row + 1}
@@ -67,7 +67,7 @@ export function SpreadsheetSkeleton(props: { label?: string }) {
                   const bar = placeholder(row, column);
                   return (
                     <div
-                      class="flex shrink-0 items-center border-b border-r border-edge-muted px-1.5"
+                      class="flex shrink-0 items-center border-b border-r border-ink/12 px-1.5"
                       classList={{ 'justify-end': bar && !bar.start }}
                       style={{ width: `${DEFAULT_COLUMN_WIDTH}px` }}
                     >

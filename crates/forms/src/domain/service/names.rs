@@ -17,7 +17,9 @@ use macro_event_broker::MacroEventBroker;
 
 use super::{FormsServiceImpl, database_error, internal_receipt, repository_error};
 use crate::domain::models::{DatabaseId, Form, FormError, FormId};
-use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
+use crate::domain::ports::{
+    Clock, FormAccessDirectory, FormEventPublisher, FormImageFiles, FormsRepo,
+};
 
 /// The receipt a form's editor renames its database with: Edit on a live
 /// form grants Edit on its database, so the caller's own auth acts there
@@ -39,8 +41,8 @@ fn database_edit_receipt(
     .map_err(|_| FormError::NotFound)
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -49,6 +51,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     /// The name of the database a form goes by, in the trash or not. A
     /// database's forms are removed with it, so a missing one breaks the

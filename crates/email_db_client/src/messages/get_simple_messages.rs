@@ -25,11 +25,14 @@ pub async fn get_simple_messages(
 
 /// retrieve a simplified version of message that has no nested fields (contacts, labels, attachments). Direct
 /// map from the db::message::Message object, with no body attributes. returns None if no message was found.
-pub async fn get_simple_message_by_provider_and_link(
-    pool: &PgPool,
+pub async fn get_simple_message_by_provider_and_link<'e, E>(
+    executor: E,
     provider_id: &str,
     link_id: &Uuid,
-) -> anyhow::Result<Option<message::SimpleMessage>> {
+) -> anyhow::Result<Option<message::SimpleMessage>>
+where
+    E: Executor<'e, Database = Postgres>,
+{
     // Fetch message without body-related attributes
     let db_message = sqlx::query_as!(
         db::message::Message,
@@ -48,7 +51,7 @@ pub async fn get_simple_message_by_provider_and_link(
         provider_id,
         link_id
     )
-        .fetch_optional(pool)
+        .fetch_optional(executor)
         .await?;
 
     if let Some(db_message) = db_message {
@@ -57,6 +60,28 @@ pub async fn get_simple_message_by_provider_and_link(
     } else {
         Ok(None)
     }
+}
+
+/// Resolve a provider deletion while holding the message lock until the caller
+/// commits. Send completion and Undo cannot replace its identity or draft state
+/// between this lookup and deletion. Use only within an explicit transaction.
+#[tracing::instrument(skip(tx), err)]
+pub async fn get_simple_message_by_provider_and_link_for_update(
+    tx: &mut sqlx::PgConnection,
+    provider_id: &str,
+    link_id: &Uuid,
+) -> anyhow::Result<Option<message::SimpleMessage>> {
+    let locked = sqlx::query!(
+        "SELECT id FROM email_messages WHERE provider_id=$1 AND link_id=$2 FOR UPDATE",
+        provider_id,
+        link_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    if locked.is_none() {
+        return Ok(None);
+    }
+    get_simple_message_by_provider_and_link(&mut *tx, provider_id, link_id).await
 }
 
 /// retrieve a simplified version of message that has no nested fields (contacts, labels, attachments). Direct

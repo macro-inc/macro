@@ -4,14 +4,15 @@ import type {
   MessageActionHandler,
 } from '@core/messages/types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import LinkIcon from '@phosphor/link.svg';
-import TaskIcon from '@phosphor/list-checks.svg';
-import EditIcon from '@phosphor/pencil-simple.svg';
-import AddEmojiIcon from '@phosphor/smiley.svg';
-import StarIcon from '@phosphor/sparkle.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import TaskIcon from '@icon/system/regular/list-checks.svg';
+import EditIcon from '@icon/system/regular/pencil-simple.svg';
+import AddEmojiIcon from '@icon/system/regular/smiley.svg';
+import StarIcon from '@icon/system/regular/sparkle.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { cn, Toolbar } from '@ui';
 import {
   type Component,
@@ -103,11 +104,14 @@ function ActionMenuContent(props: ActionMenuProps) {
   onCleanup(() => actionMenuVisibility.setPersistent(false));
 
   const handleReaction = (emoji: string, event?: MessageActionEvent) => {
-    void actions?.onReact?.({
-      message: message(),
-      event,
-      emoji,
-    });
+    fireAndForget(
+      actions?.onReact?.({
+        message: message(),
+        event,
+        emoji,
+      }),
+      'channel-message-actions'
+    );
   };
 
   const hasReactAction = () => actions?.onReact !== undefined;
@@ -179,7 +183,11 @@ function ActionMenuContent(props: ActionMenuProps) {
         // the very top; float the toolbar fully above so it never covers it.
         position={props.showTimestamp ? 'above' : 'straddle'}
       >
-        <Toolbar size="icon-sm" onClick={(event) => event.stopPropagation()}>
+        <Toolbar
+          size="icon-sm"
+          class="max-w-full flex-wrap"
+          onClick={(event) => event.stopPropagation()}
+        >
           <Show when={props.showTimestamp}>
             <Timestamp format="time" class="px-1.5 whitespace-nowrap" />
             <Toolbar.Divider />
@@ -229,7 +237,10 @@ function ActionMenuContent(props: ActionMenuProps) {
                   <ActionButton
                     action={action}
                     onClick={(event) => {
-                      void action.onClick?.({ message: message(), event });
+                      fireAndForget(
+                        action.onClick?.({ message: message(), event }),
+                        'channel-message-actions'
+                      );
                     }}
                   />
                 )}
@@ -275,12 +286,15 @@ function ActionMenuContent(props: ActionMenuProps) {
                             ))
                           : undefined;
                       renderedReplyText = undefined;
-                      void action.onClick?.({
-                        message: message(),
-                        event,
-                        selectedText,
-                        renderedText,
-                      });
+                      fireAndForget(
+                        action.onClick?.({
+                          message: message(),
+                          event,
+                          selectedText,
+                          renderedText,
+                        }),
+                        'channel-message-actions'
+                      );
                     }}
                   />
                 )}

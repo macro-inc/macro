@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import type { FoldedMessage } from '../generated/agent-fold';
 import type {
   AgentSessionChangesResponse,
   AgentSessionResponse,
+  ExecutionRecord,
 } from '../generated/agent-harness/types.gen';
 import { Macro } from '../src/macro';
 
@@ -16,7 +18,8 @@ const session: AgentSessionResponse = {
   model: 'claude-sonnet',
   modifiedAt: '2026-08-24T12:00:00Z',
   name: 'Agent Session',
-  isArchived: false,
+  archivedBy: null,
+  archivedAt: null,
   ownerId: 'macro|owner@example.com',
   sandboxSize: 'default',
   status: { kind: 'no_messages' },
@@ -71,12 +74,82 @@ describe('AgentSession', () => {
     expect(
       requests.every(
         (request) =>
-          request.headers.get('authorization') === 'Bearer user-token'
-      )
+          request.headers.get('authorization') === 'Bearer user-token',
+      ),
     ).toBe(true);
   });
 
-  test('preserves access errors from changes endpoints', async () => {
+  test('reads saved code results with both session and execution scope', async () => {
+    const executionId = '0198a4cc-e138-7670-a308-a6b766602702';
+    const record: ExecutionRecord = {
+      executionId,
+      source: 'return 42;',
+      status: 'succeeded',
+      result: 42,
+      calls: [],
+    };
+    let request: Request | undefined;
+    globalThis.fetch = (async (input) => {
+      request = input instanceof Request ? input : new Request(input);
+      return Response.json(record);
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    await expect(
+      macro.agentSessions
+        .byId(sessionId)
+        .codeExecutions.byId(executionId)
+        .status(),
+    ).resolves.toBe('succeeded');
+    expect(request?.method).toBe('GET');
+    expect(request?.url).toBe(
+      `https://agent.example.test/agent-sessions/${sessionId}/code-executions/${executionId}`,
+    );
+    expect(request?.headers.get('authorization')).toBe('Bearer user-token');
+  });
+
+  test('execution handles are lazy, cache fields, and refresh state without losing session scope', async () => {
+    const requests: string[] = [];
+    const executionId = '0198a4cc-e138-7670-a308-a6b766602702';
+    let record: ExecutionRecord = {
+      executionId,
+      source: 'return null;',
+      status: 'running',
+      calls: [],
+    };
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request.url);
+      return Response.json(record);
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+    const agent = macro.agentSessions.byId(sessionId);
+    const execution = agent.codeExecutions.byId(executionId);
+    expect(execution.id).toBe(executionId);
+    expect(execution.session()).toBe(agent);
+    expect(requests).toEqual([]);
+    await expect(execution.status()).resolves.toBe('running');
+    await expect(execution.source()).resolves.toBe('return null;');
+    await expect(execution.calls()).resolves.toEqual([]);
+    expect(requests).toHaveLength(1);
+    record = { ...record, status: 'succeeded', result: null };
+    await expect(execution.refresh()).resolves.toBe(execution);
+    await expect(execution.status()).resolves.toBe('succeeded');
+    await expect(execution.result()).resolves.toBeNull();
+    expect(requests).toEqual(
+      Array(2).fill(
+        `https://agent.example.test/agent-sessions/${sessionId}/code-executions/${executionId}`,
+      ),
+    );
+  });
+
+  test('preserves access errors from session result endpoints', async () => {
     globalThis.fetch = (async (_input) =>
       Response.json({ message: 'Forbidden' }, { status: 403 })) as typeof fetch;
     const macro = new Macro({
@@ -89,9 +162,13 @@ describe('AgentSession', () => {
       () => agent.changes(),
       () => agent.changesPatch(),
       () => agent.refreshChanges(),
+      () =>
+        agent.codeExecutions
+          .byId('0198a4cc-e138-7670-a308-a6b766602702')
+          .status(),
     ]) {
       await expect(read()).rejects.toMatchObject({
-        name: 'MacroApiError',
+        name: 'MacroForbiddenError',
         status: 403,
         data: { message: 'Forbidden' },
       });
@@ -113,7 +190,7 @@ describe('AgentSession', () => {
 
     expect(request?.method).toBe('PUT');
     expect(request?.url).toBe(
-      `https://agent.example.test/agent-sessions/${sessionId}/name`
+      `https://agent.example.test/agent-sessions/${sessionId}/name`,
     );
     expect(request?.headers.get('authorization')).toBe('Bearer user-token');
     await expect(request?.json()).resolves.toEqual({ name: 'Fix Flaky Tests' });
@@ -139,8 +216,49 @@ describe('AgentSession', () => {
       `https://agent.example.test/agent-sessions/${sessionId}/archived`,
       `https://agent.example.test/agent-sessions/${sessionId}/archived`,
     ]);
-    await expect(requests[0]?.json()).resolves.toEqual({ isArchived: true });
-    await expect(requests[1]?.json()).resolves.toEqual({ isArchived: false });
+    await expect(requests[0]?.json()).resolves.toEqual({ archived: true });
+    await expect(requests[1]?.json()).resolves.toEqual({ archived: false });
+  });
+
+  test('registers, unregisters, and lists work as entity handles', async () => {
+    const registration = {
+      id: '0198a4cc-e138-7670-a308-a6b766602702',
+      accountId: 'macro|agent@example.com',
+      agentSessionId: sessionId,
+      registeredAt: '2026-08-24T12:00:00Z',
+    };
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      if (request.method === 'DELETE') {
+        return new Response(null, { status: 204 });
+      }
+      return Response.json(
+        request.method === 'PUT' ? registration : [registration],
+      );
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+    const agentSession = macro.agentSessions.byId(sessionId);
+
+    const registered = await agentSession.registerAsWork();
+    await agentSession.unregisterAsWork();
+    const [listed] = await macro.agentSessions.registeredWork();
+
+    expect(registered.session.id).toBe(sessionId);
+    expect(registered.account.id).toBe('macro|agent@example.com');
+    expect(registered.registeredAt).toBe('2026-08-24T12:00:00Z');
+    expect(listed?.session.id).toBe(sessionId);
+    expect(
+      requests.map((request) => `${request.method} ${request.url}`),
+    ).toEqual([
+      `PUT https://agent.example.test/agent-sessions/${sessionId}/work-registration`,
+      `DELETE https://agent.example.test/agent-sessions/${sessionId}/work-registration`,
+      'GET https://agent.example.test/agent-work-registrations',
+    ]);
   });
 
   test('resizes a session sandbox through the agent-harness service', async () => {
@@ -155,12 +273,12 @@ describe('AgentSession', () => {
     });
 
     await expect(
-      macro.agentSessions.byId(sessionId).setSandboxSize('large')
+      macro.agentSessions.byId(sessionId).setSandboxSize('large'),
     ).resolves.toBe('large');
 
     expect(request?.method).toBe('PUT');
     expect(request?.url).toBe(
-      `https://agent.example.test/agent-sessions/${sessionId}/sandbox-size`
+      `https://agent.example.test/agent-sessions/${sessionId}/sandbox-size`,
     );
     await expect(request?.json()).resolves.toEqual({ size: 'large' });
   });
@@ -178,10 +296,10 @@ describe('AgentSession', () => {
     });
 
     await expect(macro.agentSessions.defaultSandboxSize()).resolves.toBe(
-      'small'
+      'small',
     );
     await expect(
-      macro.agentSessions.setDefaultSandboxSize('small')
+      macro.agentSessions.setDefaultSandboxSize('small'),
     ).resolves.toBe('small');
 
     expect(requests.map((request) => request.method)).toEqual(['GET', 'PUT']);
@@ -198,7 +316,7 @@ describe('AgentSession', () => {
       requests.push(request.clone());
       return Response.json(
         { createTasks: true, openPullRequests: false },
-        { status: 200 }
+        { status: 200 },
       );
     }) as typeof fetch;
     const macro = new Macro({
@@ -214,7 +332,7 @@ describe('AgentSession', () => {
       macro.agentSessions.setCodingPreferences({
         createTasks: true,
         openPullRequests: false,
-      })
+      }),
     ).resolves.toEqual({ createTasks: true, openPullRequests: false });
 
     expect(requests.map((request) => request.method)).toEqual(['GET', 'PUT']);
@@ -225,6 +343,28 @@ describe('AgentSession', () => {
     await expect(requests[1]?.json()).resolves.toEqual({
       createTasks: true,
       openPullRequests: false,
+    });
+  });
+
+  test('asks the agent-harness service whether a prompt needs a coding agent', async () => {
+    let request: Request | undefined;
+    globalThis.fetch = (async (input) => {
+      request = input instanceof Request ? input : new Request(input);
+      return Response.json({ mode: 'code' }, { status: 200 });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    await expect(
+      macro.agentSessions.chooseMode('Fix the login bug'),
+    ).resolves.toBe('code');
+
+    expect(request?.method).toBe('POST');
+    expect(request?.url).toBe('https://agent.example.test/agent-mode-choice');
+    await expect(request?.json()).resolves.toEqual({
+      prompt: 'Fix the login bug',
     });
   });
 
@@ -241,13 +381,13 @@ describe('AgentSession', () => {
 
     await expect(
       macro.agentSessions.repositoryBranches(
-        'https://github.com/macro-inc/macro'
-      )
+        'https://github.com/macro-inc/macro',
+      ),
     ).resolves.toEqual(['main', 'develop']);
 
     expect(request?.method).toBe('GET');
     expect(request?.url).toBe(
-      'https://agent.example.test/agent-repositories/branches?repoUrl=https%3A%2F%2Fgithub.com%2Fmacro-inc%2Fmacro'
+      'https://agent.example.test/agent-repositories/branches?repoUrl=https%3A%2F%2Fgithub.com%2Fmacro-inc%2Fmacro',
     );
     expect(request?.headers.get('authorization')).toBe('Bearer user-token');
   });
@@ -266,7 +406,7 @@ describe('AgentSession', () => {
       if (request.url.endsWith('/control')) {
         return Response.json(
           { actionId: '0198a4cc-e138-7670-a308-a6b766602702', status: 'sent' },
-          { status: 200 }
+          { status: 200 },
         );
       }
       if (request.url.endsWith('/log')) {
@@ -275,7 +415,7 @@ describe('AgentSession', () => {
             bot: { id: session.botId, name: 'Agent', handle: 'agent' },
             entries: [],
           },
-          { status: 200 }
+          { status: 200 },
         );
       }
       return new Response(null, { status: 200 });
@@ -286,7 +426,12 @@ describe('AgentSession', () => {
     });
 
     const created = await macro.agentSessions.createManaged({
+      agent: macro.agents.byId(session.botId),
       prompt: 'Fix it',
+      instructions: 'Prefer small diffs.',
+      model: 'claude-sonnet',
+      repoUrl: 'https://github.com/org/project',
+      repoBranch: 'main',
     });
     await expect(created.name()).resolves.toBe('Agent Session');
     await expect(created.control({ type: 'stop' })).resolves.toEqual({
@@ -302,6 +447,89 @@ describe('AgentSession', () => {
       'GET',
       'DELETE',
     ]);
+    await expect(requests[0]?.json()).resolves.toEqual({
+      botId: session.botId,
+      prompt: 'Fix it',
+      instructions: 'Prefer small diffs.',
+      model: 'claude-sonnet',
+      repoUrl: 'https://github.com/org/project',
+      repoBranch: 'main',
+    });
+  });
+
+  test('createManaged omits botId when no persona is named', async () => {
+    let body: unknown;
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      if (
+        request.method === 'POST' &&
+        request.url.endsWith('/agent-sessions')
+      ) {
+        body = await request.json();
+        return Response.json({ session }, { status: 201 });
+      }
+      return new Response(null, { status: 200 });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    await macro.agentSessions.createManaged({
+      prompt: 'Fix it',
+      repoUrl: 'https://github.com/org/project',
+    });
+
+    expect(body).toEqual({
+      prompt: 'Fix it',
+      repoUrl: 'https://github.com/org/project',
+    });
+  });
+
+  test('names the reason a create was refused', async () => {
+    globalThis.fetch = (async (_input) =>
+      new Response(
+        'repoUrl needs a Cursor coding agent; choose a Cursor agent persona or omit repoUrl',
+        { status: 422, headers: { 'content-type': 'text/plain' } },
+      )) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    await expect(
+      macro.agentSessions.createManaged({
+        agent: macro.agents.byId(session.botId),
+        repoUrl: 'https://github.com/macro-inc/macro',
+      }),
+    ).rejects.toMatchObject({
+      name: 'MacroApiError',
+      status: 422,
+      message:
+        'Macro API error 422: repoUrl needs a Cursor coding agent; choose a Cursor agent persona or omit repoUrl',
+    });
+  });
+
+  test('a created session serializes with its web app link', async () => {
+    globalThis.fetch = (async (_input) =>
+      Response.json({ session }, { status: 201 })) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+      webAppUrl: 'https://app.example.test',
+    });
+
+    const created = await macro.agentSessions.createManaged({
+      prompt: 'Fix it',
+    });
+
+    expect(created.webUrl()).toBe(
+      'https://app.example.test/app/agent/0198a4cc-e138-7670-a308-a6b766602700',
+    );
+    expect(JSON.parse(JSON.stringify(created))).toMatchObject({
+      id: '0198a4cc-e138-7670-a308-a6b766602700',
+      url: 'https://app.example.test/app/agent/0198a4cc-e138-7670-a308-a6b766602700',
+    });
   });
 
   test('prompt is sugar over control and reports queueing', async () => {
@@ -313,7 +541,7 @@ describe('AgentSession', () => {
           actionId: '0198a4cc-e138-7670-a308-a6b766602703',
           status: 'queued',
         },
-        { status: 200 }
+        { status: 200 },
       );
     }) as typeof fetch;
     const macro = new Macro({
@@ -322,7 +550,7 @@ describe('AgentSession', () => {
     });
 
     await expect(
-      macro.agentSessions.byId(sessionId).prompt('Fix the flaky test')
+      macro.agentSessions.byId(sessionId).prompt('Fix the flaky test'),
     ).resolves.toEqual({
       actionId: '0198a4cc-e138-7670-a308-a6b766602703',
       status: 'queued',
@@ -330,12 +558,49 @@ describe('AgentSession', () => {
 
     expect(request?.method).toBe('POST');
     expect(request?.url).toBe(
-      `https://agent.example.test/agent-sessions/${sessionId}/control`
+      `https://agent.example.test/agent-sessions/${sessionId}/control`,
     );
     await expect(request?.json()).resolves.toEqual({
       type: 'prompt',
       prompt: 'Fix the flaky test',
     });
+  });
+
+  test('reads the folded log', async () => {
+    const bot = { id: session.botId, name: 'Agent', handle: 'agent' };
+    const messages: FoldedMessage[] = [
+      {
+        agentSessionId: sessionId,
+        key: '0:agent',
+        turn: 0,
+        author: { kind: 'agent' },
+        requestId: null,
+        parts: [{ kind: 'text', text: 'Done.' }],
+        stop: null,
+        pending: false,
+        segments: [],
+        phase: null,
+        postedAt: null,
+      },
+    ];
+    let request: Request | undefined;
+    globalThis.fetch = (async (input) => {
+      request = input instanceof Request ? input : new Request(input);
+      return Response.json({ bot, messages }, { status: 200 });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    await expect(
+      macro.agentSessions.byId(sessionId).foldedLog(),
+    ).resolves.toEqual({ bot, messages });
+
+    expect(request?.method).toBe('GET');
+    expect(request?.url).toBe(
+      `https://agent.example.test/agent-sessions/${sessionId}/log/folded`,
+    );
   });
 
   test('lists the queue and edits, steers, or removes an entry through its handle', async () => {
@@ -357,7 +622,7 @@ describe('AgentSession', () => {
               },
             ],
           },
-          { status: 200 }
+          { status: 200 },
         );
       }
       return new Response(null, { status: 204 });
@@ -385,17 +650,78 @@ describe('AgentSession', () => {
       'DELETE',
     ]);
     expect(requests[1]?.url).toBe(
-      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}`
+      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}`,
     );
     await expect(requests[1]?.json()).resolves.toEqual({
       prompt: 'Also update the README',
     });
     expect(requests[2]?.url).toBe(
-      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}/steer`
+      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}/steer`,
     );
     expect(requests[2]?.headers.get('authorization')).toBe('Bearer user-token');
     expect(requests[3]?.url).toBe(
-      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}`
+      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}`,
     );
   });
+});
+
+test('session activity keeps invocation filters and lazily advances its cursor', async () => {
+  const requests: URL[] = [];
+  const invocationId = '0198a4cc-e138-7670-a308-a6b766602709';
+  const timestamp = '2026-11-05T12:00:00Z';
+  globalThis.fetch = (async (input) => {
+    const request = input instanceof Request ? input : new Request(input);
+    requests.push(new URL(request.url));
+    return Response.json({
+      activities: [
+        {
+          id: `row-${requests.length}`,
+          agent_correlation_id: invocationId,
+          actor_id: 'bot|0198a4cc-e138-7670-a308-a6b766602701',
+          subject_id: 'macro|owner@example.com',
+          entity_type: 'document',
+          entity_id: 'document-fixture',
+          action: 'edited',
+          action_payload: null,
+          occurred_at: timestamp,
+        },
+      ],
+      nextCursor:
+        requests.length === 1 ? { occurredAt: timestamp, id: 'row-1' } : null,
+    });
+  }) as typeof fetch;
+  const macro = new Macro({
+    token: 'fixture',
+    hosts: { 'agent-harness': 'https://agent.example.test' },
+  });
+  const session = macro.agentSessions.byId(sessionId);
+  const invocation = session.invocations.byId(invocationId);
+  const activity = invocation.activity({ limit: 1 });
+  expect(requests).toHaveLength(0);
+  const first = await activity.next();
+  expect(first.value?.invocation?.id).toBe(invocationId);
+  expect(requests).toHaveLength(1);
+  const second = await activity.next();
+  expect(second.value?.snapshot.id).toBe('row-2');
+  expect((await activity.next()).done).toBe(true);
+  expect(requests).toHaveLength(2);
+  expect(
+    requests.every(
+      (url) => url.searchParams.get('agentCorrelationId') === invocationId,
+    ),
+  ).toBe(true);
+  expect(requests[1].searchParams.get('beforeAt')).toBe(timestamp);
+  expect(requests[1].searchParams.get('beforeId')).toBe('row-1');
+  expect(JSON.stringify(invocation)).not.toContain('fixture');
+});
+
+test('session activity rejects another session invocation without a request', () => {
+  const macro = new Macro({ token: 'fixture' });
+  const session = macro.agentSessions.byId(sessionId);
+  const foreign = macro.agentSessions
+    .byId('other')
+    .invocations.byId('invocation');
+  expect(() => session.activity({ invocation: foreign })).toThrow(
+    'must belong to this session',
+  );
 });

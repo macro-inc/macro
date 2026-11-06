@@ -1,6 +1,8 @@
 import { type RichMessage, toBody } from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Document } from '../documents/document';
+import type { StaticImage } from '../images/image';
 import { Channel } from './channel';
 import { Message } from './message';
 import { postToChannel } from './post';
@@ -16,6 +18,11 @@ export class Thread {
     /** The id of the message this thread hangs off. */
     readonly rootId: string,
   ) {}
+
+  /** Serialize the thread identity without its authenticated client. */
+  toJSON(): { channelId: string; rootId: string } {
+    return { channelId: this.channelId, rootId: this.rootId };
+  }
 
   /** The channel this thread is in. */
   channel(): Channel {
@@ -47,10 +54,17 @@ export class Thread {
    * Post a reply in this thread.
    *
    * @param body - Plain text, or a rich body composed with {@link msg}.
+   * @param opts.images - Static images to attach, such as one from
+   *   `macro.images.generate()`.
+   * @param opts.documents - Macro documents to attach as file chips, such as
+   *   a file from `macro.documents.upload()`.
    * @returns The created reply.
    */
-  async reply(body: string | RichMessage): Promise<Message> {
-    const id = await postToChannel(this.client, this, toBody(body));
+  async reply(
+    body: string | RichMessage,
+    opts?: { images?: StaticImage[]; documents?: Document[] },
+  ): Promise<Message> {
+    const id = await postToChannel(this.client, this, toBody(body), opts);
     return Message.byId(this.client, this.channelId, id);
   }
 }

@@ -1,4 +1,4 @@
-import SpreadsheetIcon from '@icon/wide-spreadsheet.svg';
+import SpreadsheetIcon from '@icon/system/regular/table.svg';
 import type { SpreadsheetResponse } from '@service-cognition/generated/tools/types';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';

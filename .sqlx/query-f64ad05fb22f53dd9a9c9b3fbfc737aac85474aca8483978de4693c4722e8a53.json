@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_drafts SET checkpoint = checkpoint || '{\"stage\":\"ready\",\"submission_started\":false}'::jsonb WHERE message_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f64ad05fb22f53dd9a9c9b3fbfc737aac85474aca8483978de4693c4722e8a53"
+}

@@ -1,8 +1,13 @@
 import { syncPushRegistrations } from '@core/auth/push-registration-lifecycle';
-import { enableUserInfoQuery } from '@core/context/user-info-gate';
+import {
+  enableUserInfoQuery,
+  shouldQueryUserInfo,
+} from '@core/context/user-info-gate';
 import { hasLoginCookie } from '@core/util/cookies';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
+import { resetGraphqlPresenceRequests } from '@service-storage/graphql-soup';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { resetTeamCalendarSession } from '../calendar/team-cache';
 import { queryClient, queryPersistence } from '../client';
@@ -52,7 +57,7 @@ export function useUserInfoQuery(options?: UseUserInfoQueryOptions) {
     userInfoQueryOptions(
       typeof options?.enabled === 'function'
         ? options.enabled()
-        : (options?.enabled ?? true)
+        : (options?.enabled ?? shouldQueryUserInfo())
     )
   );
 }
@@ -70,6 +75,7 @@ export function invalidateAllAfterLogin() {
   // Login may replace a session without visiting logout (including native auth).
   // Invalidate old display-intent handles before refetching the new identity.
   resetGraphqlSoupDoneSession();
+  resetGraphqlPresenceRequests();
   resetTeamCalendarSession();
   enableUserInfoQuery();
   const invalidated = queryClient.invalidateQueries();
@@ -77,7 +83,10 @@ export function invalidateAllAfterLogin() {
   // exercised the fresh session — registering earlier can race auth state
   // that is still settling. Fire-and-forget so login isn't blocked on the
   // notification service.
-  void invalidated.catch(() => {}).then(() => syncPushRegistrations());
+  fireAndForget(
+    invalidated.catch(() => {}).then(() => syncPushRegistrations()),
+    'push-registration'
+  );
   return invalidated;
 }
 

@@ -1,29 +1,53 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { parseMacroAppUrl } from '@core/component/LexicalMarkdown/plugins';
+import { resolvePastedMacroAppUrl } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import {
   fileTypeToBlockName,
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { GraphicsEditor, TextMeasurer } from '@macro-inc/graphics';
-import { createGraphicsEditor, screenToWorld } from '@macro-inc/graphics';
+import {
+  createGraphicsEditor,
+  createGraphicsEditorFromBackend,
+  screenToWorld,
+} from '@macro-inc/graphics';
+import {
+  createLoroGraphicsBackendFromDoc,
+  type GraphicsPresence,
+} from '@macro-inc/graphics/loro';
 import { fetchDocumentMetadata } from '@queries/storage/document-metadata';
-import { onCleanup, Show } from 'solid-js';
+import type { LoroDoc } from 'loro-crdt';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { CanvasBlockEmbed } from './block-embed-adapter';
 import { createCanvasClipboard } from './clipboard';
+import {
+  ArtifactLibraryContext,
+  NO_ARTIFACT_LIBRARY,
+} from './context/artifact-library';
+import { readSharedCanvas } from './core/collaboration';
 import type { CanvasFile } from './core/document-format';
 import { registerCanvasNextHotkeys } from './hotkeys';
 import { createAssetState } from './primitives/create-asset-state';
+import { createCanvasPresence } from './primitives/create-canvas-presence';
 import { createCanvasState } from './primitives/create-canvas-state';
+import { createCanvasInsertState } from './primitives/create-insert-state';
+import { observeObjectSnapping } from './primitives/observe-object-snapping';
 import { importTextClipboard } from './primitives/text-lexical';
 import { canvasAssetSource } from './queries/assets';
+import type { CanvasSession } from './queries/canvas-session';
 import { CanvasReadOnlyView } from './views/canvas-read-only-view';
 import { CanvasView } from './views/canvas-view';
 import { createCanvasTextMeasurer } from './views/text-content';
 
 export function CanvasNextEditor(props: {
+  documentId: string;
   initial: CanvasFile;
+  doc?: LoroDoc;
+  session?: CanvasSession;
+  displayName?: (userId: string | undefined) => string;
   canEdit: boolean;
   isEmbedded?: boolean;
   fitOnLoad?: boolean;
@@ -31,36 +55,90 @@ export function CanvasNextEditor(props: {
 }) {
   const measurement = createCanvasTextMeasurer();
   onCleanup(measurement.dispose);
-  const editor = createGraphicsEditor(props.initial.document, {
-    measureText: measurement.measure,
-  });
+  const options = { measureText: measurement.measure };
+  const backend = props.doc
+    ? createLoroGraphicsBackendFromDoc(
+        props.doc,
+        readSharedCanvas(props.doc).document.rootId,
+        () => {
+          const state = props.session?.state();
+          return (
+            props.canEdit &&
+            !props.isEmbedded &&
+            (!state || (state.t === 'ready' && state.doc === props.doc))
+          );
+        }
+      )
+    : undefined;
+  if (backend) onCleanup(backend.dispose);
+  const editor = backend
+    ? createGraphicsEditorFromBackend(backend, options)
+    : createGraphicsEditor(props.initial.document, options);
   onCleanup(editor.dispose);
+  const presence =
+    backend && props.session
+      ? createCanvasPresence(
+          editor,
+          props.session,
+          backend.getClock,
+          props.displayName ?? (() => 'Someone')
+        )
+      : undefined;
   let finishText = () => {};
   props.onReady?.(editor, () => finishText());
+  const [artifactLibrary, setArtifactLibrary] = createSignal(
+    backend?.artifactLibrary.read() ?? NO_ARTIFACT_LIBRARY
+  );
+  if (backend)
+    onCleanup(
+      backend.artifactLibrary.subscribe(() =>
+        setArtifactLibrary(backend.artifactLibrary.read())
+      )
+    );
   return (
-    <StaticMarkdownContext>
-      <Show
-        when={props.canEdit && !props.isEmbedded}
-        fallback={
-          <CanvasReadOnlyView editor={editor} fitOnLoad={props.fitOnLoad} />
-        }
-      >
-        <EditableCanvasNext
-          editor={editor}
-          measureText={measurement.measure}
-          fitOnLoad={props.fitOnLoad}
-          canEdit={() => props.canEdit}
-          onFinishReady={(finish) => {
-            finishText = finish;
-          }}
-        />
-      </Show>
-    </StaticMarkdownContext>
+    <ArtifactLibraryContext.Provider
+      value={{
+        library: artifactLibrary,
+        // Read when used, so a change of access while open takes effect.
+        get edit() {
+          return backend && props.canEdit && !props.isEmbedded
+            ? backend.artifactLibrary.edit
+            : undefined;
+        },
+      }}
+    >
+      <StaticMarkdownContext>
+        <Show
+          when={props.canEdit && !props.isEmbedded}
+          fallback={
+            <CanvasReadOnlyView
+              editor={editor}
+              fitOnLoad={props.fitOnLoad}
+              presence={presence}
+            />
+          }
+        >
+          <EditableCanvasNext
+            documentId={props.documentId}
+            editor={editor}
+            presence={presence}
+            measureText={measurement.measure}
+            fitOnLoad={props.fitOnLoad}
+            canEdit={() => props.canEdit}
+            onFinishReady={(finish) => {
+              finishText = finish;
+            }}
+          />
+        </Show>
+      </StaticMarkdownContext>
+    </ArtifactLibraryContext.Provider>
   );
 }
 
 function EditableCanvasNext(props: {
+  documentId: string;
   editor: GraphicsEditor;
+  presence?: GraphicsPresence;
   measureText: TextMeasurer;
   fitOnLoad?: boolean;
   canEdit: () => boolean;
@@ -68,8 +146,11 @@ function EditableCanvasNext(props: {
 }) {
   const editor = props.editor;
   const state = createCanvasState(editor, props.measureText);
+  observeObjectSnapping(editor, props.documentId);
   const assets = createAssetState(state, canvasAssetSource);
+  const insert = createCanvasInsertState(editor.getCamera);
   const { openWithSplit } = useSplitLayout();
+  const resolveAppLink = useMacroMentionLinkResolver();
   let viewport: HTMLElement | undefined;
   const center = () =>
     screenToWorld(editor.getCamera(), {
@@ -80,8 +161,8 @@ function EditableCanvasNext(props: {
     editor,
     state.setNotice,
     (text, html) => {
-      const link = parseMacroAppUrl(text);
-      if (link.isValid && link.id && link.block) {
+      const link = resolvePastedMacroAppUrl(text, resolveAppLink);
+      if (link?.id && link.block) {
         assets.document(
           { id: link.id, name: 'Document', fileType: link.block },
           center()
@@ -92,11 +173,18 @@ function EditableCanvasNext(props: {
       state.chooseTool('select');
     },
     (files) => {
-      void assets.files(files, center());
-    }
+      fireAndForget(assets.files(files, center()), 'canvas-assets');
+    },
+    { canvasId: props.documentId, center }
   );
   const [attachScope, scopeId] = useHotkeyDOMScope('canvas-next');
-  registerCanvasNextHotkeys(scopeId, state, clipboard, props.canEdit);
+  registerCanvasNextHotkeys(
+    scopeId,
+    state,
+    clipboard,
+    props.canEdit,
+    insert.open
+  );
   props.onFinishReady(state.text.finish);
   onCleanup(() => {
     state.text.finish();
@@ -114,9 +202,11 @@ function EditableCanvasNext(props: {
     <CanvasView
       fitOnLoad={props.fitOnLoad}
       state={state}
+      presence={props.presence}
       scopeId={scopeId}
       embedView={CanvasBlockEmbed}
       assets={assets}
+      insert={insert}
       onViewport={(element) => {
         viewport = element;
       }}

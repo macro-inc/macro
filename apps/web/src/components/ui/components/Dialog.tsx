@@ -141,8 +141,8 @@ function DesktopDialog(props: DialogProps) {
       <KobalteDialog.Portal>
         <KobalteDialog.Overlay
           class={cn(
-            // Every floating dialog dims the page behind it with the accent
-            // sheen; `visibleScrim` layers the heavier legacy coat on top for
+            // Every floating dialog dims the page behind it with the shared
+            // scrim; `visibleScrim` layers the heavier legacy coat on top for
             // destructive flows (its background-color wins over the scrim's).
             'fixed inset-0 z-modal scrim-glass',
             animateOnOpen() && 'dialog-overlay-open-animation',
@@ -152,14 +152,13 @@ function DesktopDialog(props: DialogProps) {
         <div
           class={cn(
             'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal flex',
-            props.fullscreen
-              ? 'inset-0'
-              : cn(
-                  'justify-center px-2',
-                  props.position === 'center'
-                    ? 'items-center'
-                    : 'items-start pt-[10vh]'
-                )
+            !props.fullscreen &&
+              cn(
+                'justify-center px-2',
+                props.position === 'center'
+                  ? 'items-center'
+                  : 'items-start pt-[10vh]'
+              )
           )}
         >
           <KobalteDialog.Content

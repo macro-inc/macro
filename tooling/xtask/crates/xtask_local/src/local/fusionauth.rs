@@ -6,7 +6,7 @@ use std::process::Command;
 use anyhow::{Context, Result};
 
 use super::instance::{Instance, Port};
-use super::{gen_compose, identity, kickstart, stage::Stage};
+use super::{frontend, gen_compose, identity, kickstart, proxy, stage::Stage};
 
 /// The FusionAuth lambda sources, read from the tracked templates at
 /// generation time (anchored on [`xtask_paths::repo_root`], so any cwd works).
@@ -43,7 +43,7 @@ pub fn write_kickstart(
     let doc = kickstart::build(
         instance.port(Port::Frontend),
         instance.port(Port::Auth),
-        instance.port(Port::DocCognition),
+        &[proxy::url(instance), frontend::https_origin(instance)?],
         &read_lambda(POPULATE_JWT_LAMBDA)?,
         &read_lambda(RECONCILE_LAMBDA)?,
         google,

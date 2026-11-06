@@ -1,7 +1,7 @@
 /**
  * State management functionality for Loro Mirror
  */
-import { produce } from 'immer';
+import { type Draft, produce } from 'immer';
 import type { LoroDoc } from 'loro-crdt';
 import type { InferType, SchemaType } from '../schema';
 import { Mirror, type UpdateMetadata } from './mirror';
@@ -57,7 +57,9 @@ export interface Store<S extends SchemaType> {
    * Update state and sync to Loro
    */
   setState: (
-    updater: ((state: InferType<S>) => InferType<S>) | Partial<InferType<S>>
+    updater:
+      | ((state: Draft<InferType<S>>) => InferType<S> | void)
+      | Partial<InferType<S>>
   ) => void;
 
   /**

@@ -99,6 +99,8 @@ export function workbookCalculationInputs(
         JSON.stringify(sheet.metadata?.hiddenRows) &&
       JSON.stringify(prior.metadata?.conditionalFormats) ===
         JSON.stringify(sheet.metadata?.conditionalFormats) &&
+      JSON.stringify(prior.metadata?.tables) ===
+        JSON.stringify(sheet.metadata?.tables) &&
       cells === prior.cells
       ? prior
       : { ...sheet, cells };

@@ -5,19 +5,22 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ImportRunError } from './importRunError';
+import type { ImportRunReviewId } from './importRunReviewId';
+import type { ImportRunScanned } from './importRunScanned';
 import type { ImportSource } from './importSource';
 import type { RunStatus } from './runStatus';
 
 /**
- * Gather-run state for one user × source.
+ * Discovery-run state for one user × source.
  */
 export interface ImportRun {
-  /** Whether this run should import its onboarding-staged candidates as
-soon as gathering finishes. */
-  auto_import: boolean;
-  /** Gather or automatic-import failure detail, when the run failed. */
+  /** Discovery failure detail, when the run failed. */
   error?: ImportRunError;
-  /** The source this run gathered from. */
+  /** The review presenting the run's plan, once one does. A Notion plan is
+presented while it is still `running`; rows staged after that take it. */
+  review_id?: ImportRunReviewId;
+  scanned?: ImportRunScanned;
+  /** The source this run discovered from. */
   source: ImportSource;
   /** Where the run is in its lifecycle. */
   status: RunStatus;

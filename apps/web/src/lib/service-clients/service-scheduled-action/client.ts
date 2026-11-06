@@ -11,12 +11,19 @@ import {
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
 import type {
+  ActionConfiguration,
+  ActionConfigurationUpdate,
   ActionExecutionRecord,
-  CreateScheduledAction,
+  CodeUpgrade,
+  Draft,
+  DraftRoutineRequest,
   InProgressExecution,
+  RoutineTemplate,
   ScheduledAction,
+  ScheduledActionResponse,
   SetScheduledActionEnabled,
-  UpdateScheduledAction,
+  ShareRoutineTemplate,
+  StarterRoutine,
 } from './generated/schemas';
 
 const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
@@ -45,14 +52,14 @@ export const scheduledActionClient = {
     }),
   // Include every trigger type in the routine list.
   listSchedules: async () =>
-    scheduledActionFetch<ScheduledAction[]>(
+    scheduledActionFetch<ScheduledActionResponse[]>(
       '/scheduled-actions?include_events=true',
       {
         method: 'GET',
       }
     ),
 
-  createSchedule: async (body: CreateScheduledAction) =>
+  createSchedule: async (body: ActionConfiguration) =>
     scheduledActionFetch<ScheduledAction>('/scheduled-actions', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -60,7 +67,7 @@ export const scheduledActionClient = {
 
   updateSchedule: async (args: {
     scheduleId: string;
-    body: UpdateScheduledAction;
+    body: ActionConfigurationUpdate;
   }) =>
     scheduledActionFetch<ScheduledAction>(
       `/scheduled-actions/${args.scheduleId}`,
@@ -99,5 +106,51 @@ export const scheduledActionClient = {
     scheduledActionFetch<ActionExecutionRecord[]>(
       `/scheduled-actions/${args.scheduleId}/history`,
       { method: 'GET' }
+    ),
+
+  /** Starter routines whose step is code; empty where code can't be saved. */
+  codeStarters: async () =>
+    scheduledActionFetch<StarterRoutine[]>('/scheduled-actions/code/starters', {
+      method: 'GET',
+    }),
+
+  /** Have AI draft a routine or one of its steps, its code checked as saving would. */
+  draftRoutine: async (body: DraftRoutineRequest) =>
+    fetchWithToken<Draft, typeof AI_USAGE_LIMIT_ERROR>(
+      `${scheduledActionHost}/scheduled-actions/drafts`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: aiUsageErrorResponseHandler,
+      }
+    ),
+
+  listCodeUpgrades: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<CodeUpgrade[]>(
+      `/scheduled-actions/${args.scheduleId}/code-upgrades`,
+      { method: 'GET' }
+    ),
+
+  getTemplate: (scheduleId: string) =>
+    scheduledActionFetch<RoutineTemplate>(
+      `/scheduled-actions/${scheduleId}/template`,
+      { method: 'GET' }
+    ),
+
+  shareTemplate: (args: { scheduleId: string; body: ShareRoutineTemplate }) =>
+    scheduledActionFetch<RoutineTemplate>(
+      `/scheduled-actions/${args.scheduleId}/template`,
+      { method: 'PUT', body: JSON.stringify(args.body) }
+    ),
+
+  unshareTemplate: (args: { scheduleId: string }) =>
+    scheduledActionFetch(`/scheduled-actions/${args.scheduleId}/template`, {
+      method: 'DELETE',
+    }),
+
+  activateTemplate: (args: { templateId: string; body: ActionConfiguration }) =>
+    scheduledActionFetch<ScheduledAction>(
+      `/scheduled-actions/${args.templateId}/template/activate`,
+      { method: 'POST', body: JSON.stringify(args.body) }
     ),
 };

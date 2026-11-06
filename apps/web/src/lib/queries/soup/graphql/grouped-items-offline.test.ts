@@ -11,20 +11,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject } from 'wonka';
 
 const mocks = vi.hoisted(() => ({ client: vi.fn(), local: vi.fn() }));
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: vi.fn() },
-}));
+
 vi.mock('@app/lib/graphql-cache', () => ({
   normalizedCacheResultMetadata: () => undefined,
-}));
-vi.mock('@queries/storage/instructions-md', () => ({
-  useInstructionsMdIdQuery: () => ({}),
 }));
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
 });
 vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupCacheHost: () => undefined,
   getGraphqlSoupClient: mocks.client,
   mapGraphqlSoupItem: (item: unknown) => item,
 }));

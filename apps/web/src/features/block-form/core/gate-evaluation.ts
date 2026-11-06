@@ -52,9 +52,10 @@ export function presentValue(
       { type: 'number' },
       { type: 'boolean' },
       { type: 'date' },
+      { type: 'date_range' },
       (scalar) => scalar
     )
-    .exhaustive();
+    .exhaustive(() => undefined);
 }
 
 function conditionPasses(
@@ -75,12 +76,13 @@ function conditionPasses(
           { type: 'number' },
           { type: 'boolean' },
           { type: 'date' },
+          { type: 'date_range' },
           { type: 'options' },
           { type: 'entities' },
           { type: 'rows' },
           () => undefined
         )
-        .exhaustive();
+        .exhaustive(() => undefined);
       if (!texts) return false;
       const needle = expected.toLowerCase();
       const haystacks = texts.map((text) => text.toLowerCase());
@@ -96,7 +98,7 @@ function conditionPasses(
           haystacks.some((text) => text.startsWith(needle))
         )
         .with('endsWith', () => haystacks.some((text) => text.endsWith(needle)))
-        .exhaustive();
+        .exhaustive(() => false);
     })
     .with({ kind: 'number' }, ({ operator, value: expected }) => {
       if (value.type !== 'number') return false;
@@ -108,7 +110,7 @@ function conditionPasses(
         .with('greaterThanOrEqual', () => actual >= expected)
         .with('lessThan', () => actual < expected)
         .with('lessThanOrEqual', () => actual <= expected)
-        .exhaustive();
+        .exhaustive(() => false);
     })
     .with({ kind: 'date' }, ({ operator, value: expected }) => {
       if (value.type !== 'date') return false;
@@ -120,7 +122,25 @@ function conditionPasses(
         .with('after', () => actual > bound)
         .with('onOrBefore', () => actual <= bound)
         .with('onOrAfter', () => actual >= bound)
-        .exhaustive();
+        .exhaustive(() => false);
+    })
+    .with({ kind: 'dateRange' }, ({ operator, value: expected }) => {
+      if (value.type !== 'date_range') return false;
+      const start = Date.parse(value.value.start);
+      const end = Date.parse(value.value.end);
+      // The test is of the whole day starting at `expected`.
+      const day = Date.parse(expected);
+      if ([start, end, day].some(Number.isNaN)) return false;
+      const nextDay = day + 24 * 60 * 60 * 1000;
+      const overlaps = end >= day && start < nextDay;
+      return match(operator)
+        .with('contains', () => overlaps)
+        .with('doesNotContain', () => !overlaps)
+        .with('endsBefore', () => end < day)
+        .with('endsOnOrAfter', () => end >= day)
+        .with('startsAfter', () => start >= nextDay)
+        .with('startsOnOrBefore', () => start < nextDay)
+        .exhaustive(() => false);
     })
     .with(
       { kind: 'checkbox' },
@@ -144,15 +164,16 @@ function conditionPasses(
           { type: 'number' },
           { type: 'boolean' },
           { type: 'date' },
+          { type: 'date_range' },
           { type: 'link' },
           { type: 'options' },
           () => undefined
         )
-        .exhaustive();
+        .exhaustive(() => undefined);
       if (!held) return false;
       return setPasses(operator, held, entities);
     })
-    .exhaustive();
+    .exhaustive(() => false);
 }
 
 function setPasses(
@@ -165,5 +186,5 @@ function setPasses(
     .with('isAnyOf', 'hasAny', () => expected.some(holds))
     .with('isNoneOf', 'hasNone', () => !expected.some(holds))
     .with('hasAll', () => expected.every(holds))
-    .exhaustive();
+    .exhaustive(() => false);
 }

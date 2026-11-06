@@ -12,6 +12,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { enableReminders } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type EmailEntity, isEmailEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import { useEmailReminderCollection } from '@queries/reminders/email-collection';
@@ -291,7 +292,8 @@ export function useReminderEmailSource(
     const signature = JSON.stringify([currentScope, missing]);
     if (signature === reconciled) return;
     reconciled = signature;
-    if (missing.length && active()) untrack(() => void collection.refetch());
+    if (missing.length && active())
+      untrack(() => fireAndForget(collection.refetch(), 'email-view'));
   });
   createEffect(() => {
     scope();

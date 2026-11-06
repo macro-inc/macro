@@ -8,6 +8,10 @@ import type {
 import { type Client, createClient, type Operation } from '@urql/core';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { map, pipe } from 'wonka';
+import { queryClient } from '../client';
+import { refetchSoupEntity } from '../soup/cache';
+import { markThreadDraftSaved } from './draft-cache';
+import { emailKeys } from './keys';
 import {
   localDraftMessage,
   readLocalDraft,
@@ -80,9 +84,11 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.queueBlocked = false;
   mocks.cacheEnabled = true;
+  vi.mocked(queryClient.invalidateQueries).mockResolvedValue(undefined);
+  vi.mocked(refetchSoupEntity).mockResolvedValue(undefined);
 });
 
-async function setup() {
+async function setup(committed = false) {
   const operations: Operation[] = [];
   const client = createClient({
     url: 'http://example.test/graphql',
@@ -96,9 +102,12 @@ async function setup() {
               operation,
               stale: false,
               hasNext: false,
+              ...(committed
+                ? { data: optimisticContextOf(operation)?.optimisticResponse }
+                : {}),
               extensions: {
                 normalizedCacheMutationDisposition: {
-                  kind: 'queued',
+                  kind: committed ? 'committed' : 'queued',
                   transactionId: 'queued',
                 },
               },
@@ -151,6 +160,23 @@ async function setup() {
   );
   return { operations, local, draftResult, threadResult };
 }
+
+it('keeps active thread messages intact after a committed draft save', async () => {
+  await setup(true);
+  expect(await saveEmailDraftQueued({ args })).toEqual({
+    kind: 'committed',
+    draftId: serverId,
+    threadId: 'server-thread',
+  });
+  expect(markThreadDraftSaved).toHaveBeenCalledWith('server-thread');
+  expect(queryClient.invalidateQueries).toHaveBeenCalledExactlyOnceWith({
+    queryKey: emailKeys.previews._def,
+  });
+  expect(refetchSoupEntity).toHaveBeenCalledWith(
+    'server-thread',
+    'emailThread'
+  );
+});
 
 it.each(['save', 'delete'] as const)(
   'blocks an uncached fallback %s before changing local intent or sending a request',
@@ -393,8 +419,50 @@ it('does not reopen unsynced content over an authoritative sent record', async (
   const { draftResult } = await setup();
   const cached = draftResult();
   cached.records[0].record.isDraft = false;
+  cached.records[0].record.isSent = true;
   vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('failed'));
   mocks.readRecordsByKeys.mockResolvedValue(cached);
   expect((await readEmailDraft(serverId))?.draft).toBeUndefined();
   expect(restoreLocalAttachments).not.toHaveBeenCalled();
+});
+
+it('reads a restored generation over an older accepted cache record', async () => {
+  const { draftResult } = await setup();
+  const cached = draftResult();
+  cached.records[0].record.isDraft = false;
+  cached.records[0].record.isSent = false;
+  cached.records[0].record.draftGeneration = 1;
+  const local = workingCopy('dirty');
+  local.content.draft_generation = 2;
+  vi.mocked(readLocalDraft).mockResolvedValue(local);
+  mocks.readRecordsByKeys.mockResolvedValue(cached);
+  expect(await readEmailDraft(serverId)).toMatchObject({ local });
+  expect(localDraftMessage).toHaveBeenCalledWith(local);
+  expect(restoreLocalAttachments).toHaveBeenCalledWith(local);
+});
+
+it('keeps a newer server send authoritative over a restored working copy', async () => {
+  const { draftResult } = await setup();
+  const cached = draftResult();
+  cached.records[0].record.isDraft = false;
+  cached.records[0].record.isSent = true;
+  cached.records[0].record.draftGeneration = 3;
+  const local = workingCopy('dirty');
+  local.content.draft_generation = 2;
+  vi.mocked(readLocalDraft).mockResolvedValue(local);
+  mocks.readRecordsByKeys.mockResolvedValue(cached);
+  expect((await readEmailDraft(serverId))?.draft).toBeUndefined();
+  expect(restoreLocalAttachments).not.toHaveBeenCalled();
+});
+
+it('returns the working copy when cache initialization fails during the status read', async () => {
+  await setup();
+  const local = workingCopy('dirty');
+  vi.mocked(readLocalDraft).mockResolvedValue(local);
+  mocks.readRecordsByKeys.mockRejectedValue(
+    new Error('cache bootstrap failed')
+  );
+  expect(await readEmailDraft(serverId, { attachments: false })).toMatchObject({
+    local,
+  });
 });

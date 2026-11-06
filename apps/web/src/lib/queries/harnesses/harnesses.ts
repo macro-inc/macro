@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { invalidateAgents } from '@queries/agents/agents';
 import { queryClient } from '@queries/client';
 import {
@@ -16,6 +16,12 @@ export type ApproveHarnessPairingParams = {
   teamId?: string;
 };
 
+export type PatchHarnessParams = {
+  harnessId: string;
+  name?: string;
+  allowPermissionBypass?: boolean;
+};
+
 export type DeleteHarnessParams = {
   harnessId: string;
 };
@@ -25,7 +31,12 @@ const harnessesQueryOptions = queryOptions({
   queryKey: harnessKeys.list.queryKey,
   queryFn: async (): Promise<Harness[]> =>
     await throwOnErr(() => storageServiceClient.getHarnesses()),
-  refetchInterval: 15_000,
+  // A dead session answers every poll with a 401, so wait for the next
+  // successful fetch (login invalidates every query) before polling again.
+  refetchInterval: (query) =>
+    thrownResultErrorHasCode(query.state.error, 'UNAUTHORIZED')
+      ? false
+      : 15_000,
 });
 
 /**
@@ -82,6 +93,51 @@ export function useApproveHarnessPairingMutation() {
     },
     onError: (error) =>
       console.error('failed to approve harness pairing', error),
+  }));
+}
+
+/**
+ * Approves a pairing opened by this computer's own daemon, granting exactly
+ * the permission-bypass ceiling the daemon requested from its config, so a
+ * re-pair keeps the access the user chose at setup.
+ */
+export function useApproveOwnHarnessPairingMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    // Approved as a private runtime that prompts; setup turns bypass on
+    // through the runtime's web setting when the user chose Full access in setup.
+    mutationFn: async (code: string) =>
+      await throwOnErr(() =>
+        storageServiceClient.approveHarnessPairing({
+          code,
+          allow_permission_bypass: false,
+        })
+      ),
+    onSuccess: async () => await invalidateHarnesses(),
+    onError: (error) =>
+      console.error('failed to approve local harness pairing', error),
+  }));
+}
+
+export async function patchHarness(vars: PatchHarnessParams) {
+  const updated = await throwOnErr(() =>
+    storageServiceClient.patchHarness({
+      harness_id: vars.harnessId,
+      name: vars.name,
+      allow_permission_bypass: vars.allowPermissionBypass,
+    })
+  );
+  queryClient.setQueryData<Harness[]>(harnessKeys.list.queryKey, (current) =>
+    current?.map((harness) => (harness.id === updated.id ? updated : harness))
+  );
+  return updated;
+}
+
+export function usePatchHarnessMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: patchHarness,
+    onError: (error) => console.error('failed to change harness', error),
   }));
 }
 

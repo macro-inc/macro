@@ -154,7 +154,9 @@
 
 #![deny(missing_docs)]
 
+pub mod actor;
 mod annotations;
+mod caller;
 mod context;
 pub mod schema;
 pub mod telemetry;
@@ -163,6 +165,7 @@ pub mod tool_search;
 mod toolset;
 
 pub use annotations::{ToolAnnotated, ToolAnnotations, ToolKind};
+pub use caller::ToolCaller;
 pub use context::{RequestContext, ServiceContext};
 pub use tool::{AsyncTool, NoContext, ToolCallError, ToolResult};
 pub use tool_search::{SearchableTool, ToolLoader};

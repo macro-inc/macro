@@ -138,9 +138,12 @@ fn soup_response_schema_exposes_frontend_fields() {
         "saveEmailDraft(input: SaveEmailDraftInput!): SaveEmailDraftPayload!",
         "sendEmailMessage(input: SendEmailMessageInput!): SendEmailMessagePayload!",
         "input SendEmailMessageInput {",
+        "sendEmailAttempt(input: SendEmailAttemptInput!): SendEmailAttemptPayload!",
+        "input SendEmailAttemptInput {",
         "draft: SaveEmailDraftInput!",
         "includeSignature: Boolean",
         "type SendEmailMessagePayload {",
+        "type SendEmailAttemptPayload {",
         "messageId: ID!",
         "senderEmail: String",
         "deleteEmailDraft(input: DeleteEmailDraftInput!): DeleteEmailDraftPayload!",
@@ -177,10 +180,29 @@ fn soup_response_schema_exposes_frontend_fields() {
     ] {
         assert_sdl_line(&sdl, expected);
     }
-    assert!(
-        sdl.contains("union GraphqlNotifEvent = GraphqlChannelMentionMetadata |"),
-        "notification metadata must be represented by the typed event union"
-    );
+    let schema = apollo_compiler::Schema::parse_and_validate(&sdl, "schema.graphql")
+        .expect("generated SDL is valid");
+    let apollo_compiler::schema::ExtendedType::Union(metadata) = schema
+        .types
+        .get("GraphqlNotifEvent")
+        .expect("notification metadata union exists")
+    else {
+        panic!("notification metadata must be represented by the typed event union");
+    };
+    for expected in [
+        "GraphqlChannelMentionMetadata",
+        "GraphqlEntityAccessRequestedMetadata",
+        "GraphqlEntityAccessGrantedMetadata",
+        "GraphqlChannelAccessRequestedMetadata",
+    ] {
+        assert!(
+            metadata
+                .members
+                .iter()
+                .any(|member| member.name.as_str() == expected),
+            "notification metadata union missing {expected}"
+        );
+    }
     assert_eq!(
         sdl.lines()
             .filter(|line| line.trim() == "metadata: GraphqlNotifEvent!")
@@ -327,6 +349,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "GraphqlSoupForeignEntity",
         "GraphqlSoupAgentSession",
         "GraphqlSoupDatabaseRow",
+        "GraphqlSoupReminder",
     ] {
         let ExtendedType::Object(object) = schema.types.get(name).expect("Soup object exists")
         else {
@@ -428,7 +451,7 @@ fn property_values_are_a_typed_union_without_soup_names() {
 
     assert_sdl_line(
         &sdl,
-        "union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue",
+        "union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlDateRangePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue",
     );
     assert!(!sdl.contains("GraphqlSoupProperty"));
     assert!(!sdl.contains("GraphqlSoupDataType"));
@@ -624,7 +647,7 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
     assert_sdl_line(&sdl, "scheduledActions: [GraphqlScheduledAction!]!");
     assert_sdl_line(
         &sdl,
-        "union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionMultipleTrigger",
+        "union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionOnceTrigger | GraphqlScheduledActionMultipleTrigger",
     );
     assert!(sdl.contains("AI routines the authenticated user can access."));
     for value in [
@@ -641,6 +664,8 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
         "CHANNEL_MENTIONED",
         "CHANNEL_MESSAGE_PATCHED",
         "CHANNEL_MESSAGE_ATTACHMENT_CREATED",
+        "CALL_STARTED",
+        "CALL_ENDED",
     ] {
         assert_sdl_line(&sdl, value);
     }
@@ -891,5 +916,43 @@ fn assert_sdl_line(sdl: &str, expected: &str) {
     assert!(
         sdl.lines().any(|line| line.trim() == expected),
         "schema missing exact line `{expected}`"
+    );
+}
+
+#[test]
+fn saved_view_contract_is_composed_under_authenticated_user_and_mutations() {
+    let sdl = crate::build_schema().sdl();
+    let user = sdl
+        .split_once("type GraphqlUser {")
+        .expect("user type")
+        .1
+        .split_once('}')
+        .unwrap()
+        .0;
+    assert!(
+        user.contains("savedViews(kind: String, first: Int, after: String): GraphqlSavedViewPage!")
+    );
+    assert!(user.contains("savedView(id: ID!): GraphqlSavedView"));
+    for field in [
+        "createSavedView(input: CreateSavedViewInput!): GraphqlSavedView!",
+        "updateSavedView(input: UpdateSavedViewInput!): GraphqlSavedView!",
+        "deleteSavedView(input: DeleteSavedViewInput!): ID!",
+        "expectedRevision: Int!",
+        "sharing: SavedViewSharingInput",
+        "sharedTeamId: ID",
+        "nextCursor: String",
+    ] {
+        assert!(sdl.contains(field), "missing {field}");
+    }
+    let output = sdl
+        .split_once("type GraphqlSavedView {")
+        .unwrap()
+        .1
+        .split_once('}')
+        .unwrap()
+        .0;
+    assert!(
+        !output.contains("membership"),
+        "membership tokens are internal"
     );
 }

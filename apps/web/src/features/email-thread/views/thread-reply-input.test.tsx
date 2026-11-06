@@ -19,6 +19,7 @@ import { ThreadReplyInput } from './thread-reply-input';
 const lifecycle = vi.hoisted(() => ({
   mounted: [] as string[],
   disposed: [] as string[],
+  sent: undefined as Promise<void> | undefined,
 }));
 const discovery = vi.hoisted(() => ({
   list: vi.fn<() => Promise<LocalDraft[]>>(async () => []),
@@ -40,6 +41,7 @@ vi.mock('@queries/calendar/invitations', () => ({
 beforeEach(() => {
   lifecycle.mounted.length = 0;
   lifecycle.disposed.length = 0;
+  lifecycle.sent = undefined;
   discovery.list.mockReset().mockResolvedValue([]);
   discovery.subscribe.mockClear();
 });
@@ -65,7 +67,11 @@ vi.mock('../../email-compose/views/reply-input', () => ({
         <button onClick={() => props.session.exitToThread('last')}>
           Exit reply
         </button>
-        <button onClick={() => void props.sideEffectOnSend?.('sent')}>
+        <button
+          onClick={() => {
+            lifecycle.sent = props.sideEffectOnSend?.('sent');
+          }}
+        >
           Complete send
         </button>
       </>
@@ -227,6 +233,7 @@ it('focuses the sent card in its own pane before the thread refresh finishes', a
     refresh.resolve();
     await refresh.promise;
     expect(document.activeElement).toBe(view.getAllByTestId('sent-card')[1]);
+    await lifecycle.sent;
   } finally {
     refresh.resolve();
     view.unmount();

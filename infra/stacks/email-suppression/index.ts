@@ -11,7 +11,7 @@ let emailSuppression: EmailSuppressionLambda | undefined;
 if (stack === 'prod') {
   const tags = {
     environment: stack,
-    tech_lead: 'hutch',
+    tech_lead: 'teo',
     project: 'email-suppression',
   };
 

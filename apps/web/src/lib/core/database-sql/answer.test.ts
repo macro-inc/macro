@@ -15,6 +15,7 @@ const party: DatabaseDetail = {
     owner_id: 'macro|owner@databases.test',
     created_at: '2026-01-01T00:00:00Z',
     trashed_at: null,
+    project_id: null,
   },
   grant: 'edit',
   tables: [

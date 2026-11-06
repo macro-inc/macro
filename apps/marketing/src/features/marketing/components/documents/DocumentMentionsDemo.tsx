@@ -32,7 +32,13 @@ export function DocumentMentionsDemo() {
   const playback = createProductWalkthrough({
     root: () => root,
     steps: 5,
-    reset: () => {},
+    loop: { hold: 7500 },
+    reset: () => {
+      setSources([]);
+      setActive(undefined);
+      setPhase(0);
+      setAutomatic(true);
+    },
     reduced: () => {
       setAutomatic(false);
       setSources(['email', 'task']);
@@ -172,7 +178,6 @@ export function DocumentMentionsDemo() {
       <Show when={pointer()}>
         {(p) => (
           <DemoCursor
-            label="Jacob"
             class="doc-organize-pointer"
             style={{ transform: `translate(${p().x}px, ${p().y}px)` }}
           />

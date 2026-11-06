@@ -1,14 +1,16 @@
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debouncedDependent } from '@core/util/debounce';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import StackIcon from '@phosphor/stack.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ProjectIcon from '@icon/system/regular/cube.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   DropdownSearchInput,
   DropdownSelectableRow,
   useDropdownSearch,
 } from '@property/editors/selectors/PropertyOptionSelector';
+import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import { useSearchInputFocus } from '@property/utils';
 import {
   createEffect,
@@ -63,7 +65,11 @@ export function ProjectPicker(props: {
     itemCount: () => items().length,
     onSelect: (index) => {
       const item = items()[index];
-      if (item) void assign(item.type === 'project' ? item.id : undefined);
+      if (item)
+        fireAndForget(
+          assign(item.type === 'project' ? item.id : undefined),
+          'projects'
+        );
     },
     onClose: props.onClose,
   });
@@ -101,7 +107,7 @@ export function ProjectPicker(props: {
     if (!source.hasMore() || source.loadingMore()) return;
     // One row of slack so the next page lands before the list bottoms out.
     if (element.scrollTop + element.clientHeight >= element.scrollHeight - 32)
-      void source.loadMore();
+      fireAndForget(source.loadMore(), 'projects');
   };
 
   onMount(() => document.addEventListener('keydown', dropdown.handleKeyDown));
@@ -150,8 +156,9 @@ export function ProjectPicker(props: {
                     <DropdownSelectableRow
                       isSelected={index() === dropdown.selectedIndex()}
                       onClick={() =>
-                        void assign(
-                          item.type === 'project' ? item.id : undefined
+                        fireAndForget(
+                          assign(item.type === 'project' ? item.id : undefined),
+                          'projects'
                         )
                       }
                       onMouseEnter={() => {
@@ -165,7 +172,10 @@ export function ProjectPicker(props: {
                         when={item.type === 'project' && item}
                         fallback={
                           <>
-                            <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
+                            <PropertyEmptyIcon
+                              propertyDefinitionId={SYSTEM_PROPERTY_IDS.PROJECT}
+                              class="size-3.5 text-ink-extra-muted"
+                            />
                             <p class="flex-1 min-w-0 truncate text-ink-muted">
                               No project
                             </p>
@@ -174,7 +184,7 @@ export function ProjectPicker(props: {
                       >
                         {(project) => (
                           <>
-                            <StackIcon class="size-3 shrink-0" />
+                            <ProjectIcon class="size-3 shrink-0" />
                             <p class="flex-1 min-w-0 truncate">
                               {project().name}
                             </p>

@@ -20,4 +20,11 @@ more than one calendar. Omit to delete the canonical copy.
    * Original-start key of the occurrence a scoped deletion targets.
    */
   recurrenceId?: string;
+  /**
+ * Inbox address holding the copy this request deletes. An agent run
+must name it when the meeting is on more than one of the requester's
+inboxes, and it must be the inbox holding the addressed copy; a
+mismatch is refused whoever sends it.
+ */
+  inbox?: string;
 };

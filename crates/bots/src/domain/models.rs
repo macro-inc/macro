@@ -148,7 +148,7 @@ pub struct Bot {
     pub updated_at: DateTime<Utc>,
     /// Soft-delete timestamp.
     pub deleted_at: Option<DateTime<Utc>>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session.
+    /// Whether this bot runs as an AI agent: mentions and DMs start an agent session.
     pub has_agent: bool,
 }
 
@@ -450,7 +450,7 @@ mod test;
 /// other is never a valid choice.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentHarnessSelection {
-    /// Harness slug, e.g. `in-memory`, `cursor`, `claude-cloud`, or `macrod`.
+    /// Harness slug, e.g. `in-memory`, `cursor`, or `macrod`.
     pub harness: String,
     /// Registered harness to run on. Required when `harness` is `macrod`,
     /// forbidden otherwise.
@@ -615,7 +615,7 @@ pub struct CreateBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    /// Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
     pub has_agent: Option<bool>,
 }
 
@@ -631,7 +631,7 @@ pub struct PatchBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+    /// Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.
     pub has_agent: Option<bool>,
 }
 
@@ -671,7 +671,7 @@ pub struct CreateChannelScopedBotRequest {
     pub token_label: Option<String>,
     /// Optional token expiration timestamp.
     pub token_expires_at: Option<DateTime<Utc>>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    /// Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
     pub has_agent: Option<bool>,
 }
 

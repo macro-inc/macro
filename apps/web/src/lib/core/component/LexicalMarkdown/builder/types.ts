@@ -18,6 +18,7 @@ import type {
   SelectionData,
 } from '../plugins';
 import type { Action } from '../plugins/actions/types';
+import type { RestoreFocusDefault } from '../plugins/restore-focus';
 import type { TagMentionLifecycle } from '../plugins/tags';
 import type { MentionLinkResolver } from '../plugins/text-paste/textPastePlugin';
 import type { createMenuOperations } from '../shared/inlineMenu';
@@ -130,7 +131,10 @@ export interface EditorControls {
  * Props of an Editor component.
  */
 export interface EditorComponentProps {
+  /** Controlled Markdown. Host updates do not echo through onChange. */
+  value?: string;
   placeholder?: string;
+  ariaLabel?: string;
   /** Initialize with markdown text */
   initialValue?: string;
   /** Initialize with a serialized editor state. Takes precedence over initialValue. */
@@ -173,7 +177,8 @@ export interface EditorConfig {
   code: boolean;
   checkboxToTask: boolean;
   filePaste?: FilePasteOptions;
-  restoreFocus: boolean;
+  /** Where programmatic focus puts the caret when the editor has no selection. */
+  restoreFocus: false | RestoreFocusDefault;
   focusLeave?: FocusLeaveCallbacks;
   withIds: boolean;
   selectionData: boolean;

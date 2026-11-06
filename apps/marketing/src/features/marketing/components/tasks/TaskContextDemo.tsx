@@ -2,15 +2,19 @@ import Envelope from '@phosphor/envelope.svg';
 import X from '@phosphor/x.svg';
 import { Button } from '@ui';
 import {
+  createEffect,
   createSignal,
+  For,
   Match,
   onCleanup,
   onMount,
   Show,
   Switch,
 } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import type { WorkspaceView } from '../../core/dummy-workspace';
 import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
+import { demoTypingActions } from '../../primitives/demoTypingActions';
 import { createDemoPointer } from '../agents/createDemoPointer';
 import { DemoCursor } from '../DemoCursor';
 import { ViewShell } from '../DemoWorkspaceChrome';
@@ -48,54 +52,171 @@ export function TaskContextDemo() {
       : mentions[value];
   const [narrow, setNarrow] = createSignal(true);
   let root!: HTMLDivElement;
-  const prefix = 'Share the draft for review in ';
-  const [draft, setDraft] = createSignal('');
-  const [channelLinked, setChannelLinked] = createSignal(false);
-  const [pickerOpen, setPickerOpen] = createSignal(false);
-  const [automatic, setAutomatic] = createSignal(true);
-  const [step, setStep] = createSignal(0);
-  const frames = Math.ceil(prefix.length / 2);
-  const selectChannel = () => {
-    setChannelLinked(true);
-    setPickerOpen(false);
-    setAutomatic(false);
+  const lines = [
+    {
+      id: 'brief',
+      prefix: 'Use ',
+      suffix: ' for the scope.',
+      label: 'Task document reference',
+      group: 'Documents, Agents, & Tasks',
+    },
+    {
+      id: 'email',
+      prefix: 'The deadline is in ',
+      suffix: '.',
+      label: 'Task email reference',
+      group: 'Emails',
+    },
+    {
+      id: 'channel',
+      prefix: 'Share the draft for review in ',
+      suffix: '.',
+      label: 'Task sharing instruction',
+      group: 'Channels',
+    },
+  ] as const;
+  const [drafts, setDrafts] = createStore<Record<Source, string>>({
+    brief: '',
+    email: '',
+    channel: '',
+  });
+  const [linked, setLinked] = createStore<Record<Source, boolean>>({
+    brief: false,
+    email: false,
+    channel: false,
+  });
+  const [picker, setPicker] = createSignal<Source>();
+  const [pickerOffset, setPickerOffset] = createSignal(0);
+  const positionPicker = () => {
+    const current = picker();
+    if (!current || !root?.isConnected) return;
+    const line = root.querySelector<HTMLElement>(
+      `[data-context-line="${current}"]`
+    );
+    const editor = line?.querySelector<HTMLElement>('[role="textbox"]');
+    if (!line || !editor) return;
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    const rects = range.getClientRects();
+    const lastLine = rects[rects.length - 1];
+    const bounds = line.getBoundingClientRect();
+    const menuWidth = Math.min(320, line.clientWidth);
+    setPickerOffset(
+      Math.max(
+        0,
+        Math.min(
+          (lastLine?.right ?? bounds.left) - bounds.left,
+          line.clientWidth - menuWidth
+        )
+      )
+    );
   };
+  createEffect(() => {
+    if (picker()) queueMicrotask(positionPicker);
+  });
+  const [typing, setTyping] = createSignal<Source>();
+  const [automatic, setAutomatic] = createSignal(true);
+  const [target, setTarget] = createSignal<string>();
+  const [clicking, setClicking] = createSignal(false);
+  const [suffixes, setSuffixes] = createStore<Record<Source, string>>({
+    brief: '',
+    email: '',
+    channel: '',
+  });
+  const selectSource = (id: Source, manual = true) => {
+    setLinked(id, true);
+    setPicker(undefined);
+    setTyping(manual ? undefined : id);
+    if (manual) setSuffixes(id, lines.find((line) => line.id === id)!.suffix);
+  };
+  const actions = lines.flatMap((line) => [
+    {
+      delay: 1200,
+      run: () => {
+        setClicking(false);
+        setTarget(`[data-context-line="${line.id}"] [role="textbox"]`);
+      },
+    },
+    {
+      delay: 550,
+      run: () => {
+        setClicking(true);
+        setTyping(line.id);
+      },
+    },
+    ...demoTypingActions(line.prefix, (text) => setDrafts(line.id, text)),
+    {
+      delay: 250,
+      run: () => {
+        setDrafts(line.id, line.prefix + '@');
+        setPicker(line.id);
+      },
+    },
+    {
+      delay: 450,
+      run: () => {
+        setClicking(false);
+        setTarget(`[data-context-line="${line.id}"] [role="option"]`);
+      },
+    },
+    {
+      delay: 650,
+      run: () => {
+        setClicking(true);
+        selectSource(line.id, false);
+      },
+    },
+    ...demoTypingActions(
+      line.suffix,
+      (text) => {
+        setClicking(false);
+        setSuffixes(line.id, text);
+      },
+      350
+    ),
+    { delay: 200, run: () => setTyping(undefined) },
+  ]);
   const playback = createProductWalkthrough({
     root: () =>
-      root.querySelector<HTMLElement>('.task-context-share-line') ?? root,
+      root.querySelector<HTMLElement>('[data-context-line="channel"]') ?? root,
     visibilityThreshold: 1,
-    steps: frames + 3,
-    reset: () => {},
-    reduced: selectChannel,
-    delay: (next) =>
-      next === 1
-        ? 900
-        : next <= frames
-          ? 45
-          : next === frames + 1
-            ? 250
-            : next === frames + 2
-              ? 900
-              : 220,
-    advance: (next) => {
-      setStep(next);
-      if (next <= frames) setDraft(prefix.slice(0, next * 2));
-      else if (next === frames + 1) {
-        setDraft(prefix + '@');
-        setPickerOpen(true);
-      } else if (next === frames + 3) selectChannel();
+    steps: actions.length,
+    loop: { hold: 6500 },
+    reset: () => {
+      setDrafts({ brief: '', email: '', channel: '' });
+      setSuffixes({ brief: '', email: '', channel: '' });
+      setLinked({ brief: false, email: false, channel: false });
+      setPicker(undefined);
+      setTyping(undefined);
+      setSource(undefined);
+      setSharing(false);
+      setTarget(undefined);
+      setClicking(false);
+      setAutomatic(true);
     },
+    reduced: () => {
+      setLinked({ brief: true, email: true, channel: true });
+      for (const line of lines) setSuffixes(line.id, line.suffix);
+      setPicker(undefined);
+      setTyping(undefined);
+      setAutomatic(false);
+    },
+    onTakeover: () => {
+      setAutomatic(false);
+      setTyping(undefined);
+    },
+    delay: (next) => actions[next - 1].delay,
+    advance: (next) => actions[next - 1].run(),
   });
   const pause = () => {
     playback.pause();
     setAutomatic(false);
+    setTyping(undefined);
   };
   const pointer = createDemoPointer({
     frame: () => root,
-    target: () =>
-      automatic() && pickerOpen()
-        ? '.task-context-picker [role="option"]'
-        : undefined,
+    target,
+    active: automatic,
   });
   let closeButton: HTMLButtonElement | undefined;
   let trigger: HTMLButtonElement | undefined;
@@ -105,7 +226,7 @@ export function TaskContextDemo() {
   };
   const open = (value: Source, button: HTMLButtonElement) => {
     pause();
-    setPickerOpen(false);
+    setPicker(undefined);
     trigger = button;
     setSource(value);
     queueMicrotask(() => closeButton?.focus({ preventScroll: true }));
@@ -122,7 +243,10 @@ export function TaskContextDemo() {
     </button>
   );
   onMount(() => {
-    const measure = () => setNarrow(root.clientWidth < 760);
+    const measure = () => {
+      setNarrow(root.clientWidth < 760);
+      positionPicker();
+    };
     const observer = new ResizeObserver(measure);
     observer.observe(root);
     measure();
@@ -150,7 +274,7 @@ export function TaskContextDemo() {
         data-source-open={!!source()}
         onPointerDown={(event) => {
           if (!(event.target as Element).closest('.task-context-share-line'))
-            setPickerOpen(false);
+            setPicker(undefined);
         }}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && source() && !event.defaultPrevented) {
@@ -193,82 +317,100 @@ export function TaskContextDemo() {
                     >
                       {currentTask.description}
                     </div>
-                    <p class="task-context-reference">
-                      Use {mention('brief')} for the scope.
-                    </p>
-                    <p class="task-context-reference">
-                      The deadline is in {mention('email')}.
-                    </p>
-                    <div class="task-context-reference task-context-share-line">
-                      <Show
-                        when={channelLinked()}
-                        fallback={
-                          <p
-                            contentEditable
-                            role="textbox"
-                            aria-label="Task sharing instruction"
-                            aria-autocomplete="list"
-                            class="task-context-sharing-editor"
-                            data-typing={automatic() && !!draft()}
-                            textContent={draft()}
-                            onInput={(event) =>
-                              setPickerOpen(
-                                (
-                                  event.currentTarget.textContent ?? ''
-                                ).includes('@')
-                              )
-                            }
-                            onKeyDown={(event) => {
-                              if (pickerOpen() && event.key === 'Enter') {
-                                event.preventDefault();
-                                selectChannel();
-                              }
-                              if (pickerOpen() && event.key === 'Escape') {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                setPickerOpen(false);
-                              }
-                            }}
-                          />
-                        }
-                      >
-                        <p
-                          contentEditable
-                          role="textbox"
-                          aria-label="Task sharing instruction"
-                          class="task-context-sharing-editor"
-                        >
-                          {prefix}
-                          {mention('channel')}.
-                        </p>
-                      </Show>
-                      <Show when={pickerOpen()}>
+                    <For each={lines}>
+                      {(line) => (
                         <div
-                          class="task-context-picker"
-                          onClick={(event) => {
-                            if (
-                              (event.target as Element).closest(
-                                '[role="option"]'
-                              )
-                            )
-                              selectChannel();
-                          }}
+                          class="task-context-reference task-context-share-line"
+                          data-context-line={line.id}
+                          data-demo-mentions="off"
                         >
-                          <DocMentionMenu
-                            groups={[
-                              { label: 'Channels', rows: [mentions.channel] },
-                            ]}
-                            selected={0}
-                            style={{
-                              position: 'absolute',
-                              left: '0',
-                              bottom: 'calc(100% + 6px)',
-                              width: 'min(320px, 100%)',
-                            }}
-                          />
+                          <Show
+                            when={linked[line.id]}
+                            fallback={
+                              <p
+                                contentEditable
+                                role="textbox"
+                                aria-label={line.label}
+                                aria-autocomplete="list"
+                                class="task-context-sharing-editor"
+                                data-typing={
+                                  automatic() && typing() === line.id
+                                }
+                                textContent={drafts[line.id]}
+                                onInput={(event) => {
+                                  setPicker(
+                                    (
+                                      event.currentTarget.textContent ?? ''
+                                    ).includes('@')
+                                      ? line.id
+                                      : undefined
+                                  );
+                                  queueMicrotask(positionPicker);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (
+                                    picker() === line.id &&
+                                    event.key === 'Enter'
+                                  ) {
+                                    event.preventDefault();
+                                    selectSource(line.id);
+                                  }
+                                  if (
+                                    picker() === line.id &&
+                                    event.key === 'Escape'
+                                  ) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setPicker(undefined);
+                                  }
+                                }}
+                              />
+                            }
+                          >
+                            <p
+                              contentEditable
+                              role="textbox"
+                              aria-label={line.label}
+                              class="task-context-sharing-editor"
+                              data-typing={automatic() && typing() === line.id}
+                            >
+                              {line.prefix}
+                              {mention(line.id)}
+                              {suffixes[line.id]}
+                            </p>
+                          </Show>
+                          <Show when={picker() === line.id}>
+                            <div
+                              class="task-context-picker"
+                              onClick={(event) => {
+                                if (
+                                  (event.target as Element).closest(
+                                    '[role="option"]'
+                                  )
+                                )
+                                  selectSource(line.id);
+                              }}
+                            >
+                              <DocMentionMenu
+                                groups={[
+                                  {
+                                    label: line.group,
+                                    rows: [mentionItem(line.id)],
+                                  },
+                                ]}
+                                selected={0}
+                                style={{
+                                  position: 'absolute',
+                                  left: `${pickerOffset()}px`,
+                                  bottom: 'calc(100% + 6px)',
+                                  width: 'min(320px, 100%)',
+                                }}
+                              />
+                            </div>
+                          </Show>
                         </div>
-                      </Show>
-                    </div>
+                      )}
+                    </For>
                   </>
                 }
               />
@@ -327,9 +469,8 @@ export function TaskContextDemo() {
         <Show when={pointer()}>
           {(point) => (
             <DemoCursor
-              label="Jacob"
               class="task-context-pointer"
-              clicking={step() === frames + 2}
+              clicking={clicking()}
               style={{ transform: `translate(${point().x}px, ${point().y}px)` }}
             />
           )}

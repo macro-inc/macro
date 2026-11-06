@@ -7,12 +7,13 @@
 import { IS_MAC } from '@core/constant/isMac';
 import type { FigEngine } from '@core/fig-engine/client';
 import type { ComponentInfo } from '@core/fig-engine/types';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import DiamondsFour from '@phosphor/diamonds-four.svg';
-import List from '@phosphor/list.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import SquaresFour from '@phosphor/squares-four.svg';
-import X from '@phosphor/x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import DiamondsFour from '@icon/system/regular/diamonds-four.svg';
+import List from '@icon/system/regular/list.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import SquaresFour from '@icon/system/regular/squares-four.svg';
+import X from '@icon/system/regular/x.svg';
 import { createMemo, createResource, createSignal, For, Show } from 'solid-js';
 import { ComponentPreview } from '../components/component-preview';
 import type { FigEditor } from '../primitives/create-fig-editor';
@@ -182,9 +183,12 @@ export function AssetsPanel(props: {
                               : `Go to ${component.name}`
                           }
                           onClick={() =>
-                            props.editor?.enabled()
-                              ? void props.editor.insertInstance(component)
-                              : void jump(component)
+                            fireAndForget(
+                              props.editor?.enabled()
+                                ? props.editor.insertInstance(component)
+                                : jump(component),
+                              'fig-design-system'
+                            )
                           }
                         >
                           <Show
@@ -207,7 +211,12 @@ export function AssetsPanel(props: {
                             aria-label="Go to main component"
                             class="rounded bg-panel p-1 text-ink-muted opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
                             classList={{ 'absolute top-2 right-2': grid() }}
-                            onClick={() => void jump(component)}
+                            onClick={() =>
+                              fireAndForget(
+                                jump(component),
+                                'fig-design-system'
+                              )
+                            }
                           >
                             <ArrowSquareOut class="size-3.5" />
                           </button>

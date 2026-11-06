@@ -15,6 +15,7 @@ use utoipa_swagger_ui::SwaggerUi;
 pub(crate) mod context;
 
 // Routes
+mod agent_api_keys;
 mod codex;
 mod cursor_api_key;
 #[allow(unused_imports)]
@@ -54,15 +55,21 @@ mod test;
 /// alongside `/` so the dedicated ALB keeps working during cutover.
 const GATEWAY_PATH_PREFIX: &str = "/auth";
 
-pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
+pub(crate) async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer_with_headers(vec![HeaderName::from_static(
         MACRO_REFRESH_TOKEN_HEADER,
     )]);
 
     let env = state.environment;
+    let correlation =
+        agent_correlation::inbound::CorrelationState::new(state.db.clone(), state.jwt_args.clone());
 
     let app = api_router(state.clone())
         .with_state(state)
+        .layer(axum::middleware::from_fn_with_state(
+            correlation,
+            agent_correlation::inbound::propagate,
+        ))
         .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
         // The health router is attached here so we don't attach the logging middleware to it
         .merge(health::router())
@@ -117,9 +124,18 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/logout", logout::router())
         .nest("/oauth", oauth::router(state.clone()))
         .nest("/oauth2", oauth2::router())
-        .nest("/user", user::router())
+        .nest(
+            "/user",
+            user::router().merge(user_language::inbound::axum_router::user_language_router(
+                user_language::inbound::axum_router::UserLanguageRouterState::new(
+                    state.user_language_service.clone(),
+                    state.authorization_state.clone(),
+                ),
+            )),
+        )
         .nest("/link", link::router())
         .nest("/cursor-api-key", cursor_api_key::router())
+        .nest("/agents", agent_api_keys::router())
         .nest("/codex", codex::router())
         .nest("/github_pull_requests", github_pull_requests::router())
         .nest(
@@ -127,6 +143,15 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
             teams::inbound::axum_router::teams_router(
                 teams::inbound::axum_router::TeamRouterState {
                     service: state.teams_service.clone(),
+                    entity_access_service: state.entity_access_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            ),
+        )
+        .merge(
+            teams::inbound::axum_router::domain_notice::domain_notice_router(
+                teams::inbound::axum_router::domain_notice::DomainNoticeRouterState {
+                    service: state.domain_notice_service.clone(),
                     entity_access_service: state.entity_access_service.clone(),
                     authorization_state: state.authorization_state.clone(),
                 },
@@ -148,6 +173,15 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 gtm_invite::inbound::axum_router::GtmInviteRouterState {
                     service: state.gtm_invite_service.clone(),
                     rate_limiter: state.rate_limit_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            ),
+        )
+        .nest(
+            "/system-status",
+            system_status::inbound::axum_router::system_status_router(
+                system_status::inbound::axum_router::SystemStatusRouterState {
+                    service: state.system_status_service.clone(),
                     authorization_state: state.authorization_state.clone(),
                 },
             ),

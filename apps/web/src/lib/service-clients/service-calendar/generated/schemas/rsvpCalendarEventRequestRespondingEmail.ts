@@ -7,5 +7,6 @@
 
 /**
  * The owned connected address whose attendance is changed. Validated by the domain.
+Omit to answer as the inbox the addressed copy syncs through.
  */
 export type RsvpCalendarEventRequestRespondingEmail = string | null;

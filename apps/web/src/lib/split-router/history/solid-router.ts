@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type BeforeLeaveEventArgs,
   type Location,
@@ -157,10 +158,13 @@ export function createSolidRouterHistory(
   const revertTo = (previous: Position, landed: HistorySlice | undefined) =>
     new Promise<void>((resolve) => {
       reverting.push(resolve);
-      revertChange(landed, previous.index, {
-        go: (delta) => navigate(delta),
-        replace: () => navigateTo(previous.location, previous.index, true),
-      });
+      fireAndForget(
+        revertChange(landed, previous.index, {
+          go: (delta) => navigate(delta),
+          replace: () => navigateTo(previous.location, previous.index, true),
+        }),
+        'split-router'
+      );
     });
 
   const reportChange = () => {
@@ -234,7 +238,7 @@ export function createSolidRouterHistory(
     event.preventDefault();
     if (verdict === false) return;
 
-    void settleIntercept(verdict, event, dropQueued);
+    fireAndForget(settleIntercept(verdict, event, dropQueued), 'split-router');
   };
 
   /** Back or Forward within the router's routes is the router's to follow; out of them, guards decide. */
@@ -265,7 +269,7 @@ export function createSolidRouterHistory(
     event.preventDefault();
     if (verdict === false) return;
 
-    void settleIntercept(verdict, event);
+    fireAndForget(settleIntercept(verdict, event), 'split-router');
   };
 
   const interceptLeave = (

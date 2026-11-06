@@ -66,31 +66,13 @@ fn test_rename_document_schema_validation() {
 }
 
 #[test]
-fn test_resolve_document_comment_schema_validation() {
-    let result = generate_validated_input_schema::<ResolveDocumentComment>();
+fn test_comment_on_text_schema_validation() {
+    let result = generate_validated_input_schema::<CommentOnText>();
     assert!(result.is_ok(), "{:?}", result);
 
     let validated = result.unwrap();
     assert_eq!(
-        validated.name, "ResolveDocumentComment",
-        "Tool name should match the schemars title"
-    );
-    assert!(
-        validated
-            .description
-            .contains("Only use this when explicitly asked"),
-        "Description should limit when the tool resolves"
-    );
-}
-
-#[test]
-fn test_comment_on_document_schema_validation() {
-    let result = generate_validated_input_schema::<CommentOnDocument>();
-    assert!(result.is_ok(), "{:?}", result);
-
-    let validated = result.unwrap();
-    assert_eq!(
-        validated.name, "CommentOnDocument",
+        validated.name, "CommentOnText",
         "Tool name should match the schemars title"
     );
     assert!(
@@ -102,44 +84,29 @@ fn test_comment_on_document_schema_validation() {
 }
 
 #[test]
-fn test_comment_on_document_schema_fields() {
-    let schema = schemars::schema_for!(CommentOnDocument).to_value();
+fn test_comment_on_text_schema_fields() {
+    let schema = schemars::schema_for!(CommentOnText).to_value();
     assert_eq!(
         schema["required"],
-        serde_json::json!(["documentId", "content"])
+        serde_json::json!(["documentId", "content", "quote"])
     );
     let properties = schema["properties"].as_object().unwrap();
-    assert_eq!(properties.len(), 5);
-    for name in ["documentId", "content", "threadId", "quote", "occurrence"] {
+    assert_eq!(properties.len(), 4);
+    for name in ["documentId", "content", "quote", "occurrence"] {
         assert!(properties.contains_key(name), "missing {name}");
     }
     assert_eq!(properties["occurrence"]["minimum"], 1);
 
-    let response = schemars::schema_for!(comment_on_document::CommentOnDocumentResponse).to_value();
+    let response = schemars::schema_for!(comment_on_text::CommentOnTextResponse).to_value();
     assert_eq!(
         response["required"],
-        serde_json::json!(["documentId", "threadId", "commentId"])
+        serde_json::json!(["documentId", "threadId", "commentId", "markedText"])
     );
-    assert!(response["properties"].get("markedText").is_some());
 }
 
 #[test]
-fn test_comment_mutation_and_skill_schema_validation() {
-    for (name, result) in [
-        (
-            "EditDocumentComment",
-            generate_validated_input_schema::<EditDocumentComment>(),
-        ),
-        (
-            "DeleteDocumentComment",
-            generate_validated_input_schema::<DeleteDocumentComment>(),
-        ),
-        (
-            "CreateSkill",
-            generate_validated_input_schema::<CreateSkill>(),
-        ),
-    ] {
-        let validated = result.unwrap_or_else(|error| panic!("{name}: {error:?}"));
-        assert_eq!(validated.name, name);
-    }
+fn test_create_skill_schema_validation() {
+    let validated = generate_validated_input_schema::<CreateSkill>()
+        .unwrap_or_else(|error| panic!("CreateSkill: {error:?}"));
+    assert_eq!(validated.name, "CreateSkill");
 }

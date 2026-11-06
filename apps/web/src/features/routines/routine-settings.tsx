@@ -1,0 +1,39 @@
+import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
+import { useMobileSettings } from '@app/features/settings/context/mobile-settings';
+import { SettingsPage } from '@app/features/settings/primitives';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
+import { getErrorMessage } from './core/routine-draft';
+import { createRoutineListSource } from './queries/routine-sources';
+import { RoutinesListView } from './views/routines-list';
+
+/** Settings → Routines: the touch entry to the list the Agents sidebar links on desktop. */
+export function RoutineSettings() {
+  const layout = useSplitLayout();
+  const settings = useMobileSettings();
+  const userId = useUserId();
+  const source = createRoutineListSource((error) =>
+    toast.alert('Could not update routine', { subtext: getErrorMessage(error) })
+  );
+  const open = (id: string) => {
+    settings.close();
+    openAgentsPage(layout, 'routines', { routineId: id });
+  };
+  const create = () => {
+    settings.close();
+    // Starting a routine opens its page in Agents, as on desktop.
+    layout.popoverSplit({ type: 'component', id: 'routine-compose' });
+  };
+  return (
+    <SettingsPage title="Routines" bodyClass="[--mobile-content-inset-top:0px]">
+      <RoutinesListView
+        source={source}
+        userId={userId}
+        showTitle={false}
+        onCreate={create}
+        onOpen={open}
+      />
+    </SettingsPage>
+  );
+}

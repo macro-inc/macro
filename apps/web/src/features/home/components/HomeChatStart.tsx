@@ -3,9 +3,11 @@ import {
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
+import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { Show } from 'solid-js';
 import { HomeChatInput } from '../home-chat-input';
@@ -21,7 +23,7 @@ export function HomeChatStart() {
     <ChatInputProvider>
       <Show when={showHomeTopBar()}>
         <ViewShell.TopBar>
-          <ViewSidebar.Title>Home</ViewSidebar.Title>
+          <ViewSidebar.Title caret={false}>Home</ViewSidebar.Title>
         </ViewShell.TopBar>
       </Show>
       <DragDropWrapper class="relative min-h-0 min-w-0 flex-1 overflow-y-auto px-6">
@@ -54,16 +56,23 @@ export function HomeChatStart() {
           >
             <div class="self-end">
               <Show when={!agents().enabled}>
-                <h1 class="mb-6 min-h-0 min-w-0 self-end text-center text-2xl font-normal leading-[42px] text-ink">
-                  What should we get done in Macro?
-                </h1>
+                <div class="mb-6 min-h-0 min-w-0">
+                  <ComposerGreeting as="h1">
+                    What should we get done in Macro?
+                  </ComposerGreeting>
+                </div>
               </Show>
             </div>
-            <HomeChatInput
-              variant="default"
-              placeholder="Type @ to reference / for skills"
-              autoFocusOnMount={false}
-            />
+            <div class="min-w-0">
+              <Show when={!agents().enabled}>
+                <LocalRuntimePrompt />
+              </Show>
+              <HomeChatInput
+                variant="default"
+                placeholder="Type @ to reference / for skills"
+                autoFocusOnMount={false}
+              />
+            </div>
             <div class="min-h-0 min-w-0 pb-8">
               <HomeRecommendedActions />
             </div>

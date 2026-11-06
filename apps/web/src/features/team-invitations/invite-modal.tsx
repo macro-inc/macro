@@ -1,12 +1,11 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useReferralCode } from '@core/context/user';
-
 import { getWebOrigin } from '@core/util/webOrigin';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import CloseIcon from '@phosphor/x.svg';
-import { authServiceClient } from '@service-auth/client';
-import { contactsClient } from '@service-contacts/client';
-import { Button, Dialog, Panel } from '@ui';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
+import { Telemetry } from '@macro-inc/observability';
+import { useSendReferralInvitesMutation } from '@queries/team/referrals';
+import { Button, Dialog, Input, Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
 function parseEmails(raw: string): string[] {
@@ -23,7 +22,8 @@ export { setInviteModalOpen };
 export const InviteModal = () => {
   const [value, setValue] = createSignal('');
   const [copied, setCopied] = createSignal(false);
-  const [sending, setSending] = createSignal(false);
+  const sendInvites = useSendReferralInvitesMutation();
+  const sending = () => sendInvites.isPending;
   const referralCode = useReferralCode();
 
   const referralUrl = () => {
@@ -32,31 +32,26 @@ export const InviteModal = () => {
     return `${getWebOrigin()}/app/signup?referral_code=${code}`;
   };
 
+  const copyReferralUrl = async (url: string) => {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleCopy = () => {
     const url = referralUrl();
     if (!url) return;
-    navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    copyReferralUrl(url).catch((error) => {
+      Telemetry.error(error, { surface: 'team-invitations' });
+      toast.failure('Failed to copy link');
+    });
   };
 
   const handleSend = async () => {
     const emails = parseEmails(value());
     if (!emails.length) return;
-    setSending(true);
-    for (const email of emails) {
-      const result = await authServiceClient.sendReferralInvite(email);
-      if (result.isOk()) {
-        contactsClient.addContact(`macro|${email.toLowerCase()}`);
-      }
-    }
+    await sendInvites.mutateAsync(emails);
     setValue('');
-    setSending(false);
-    toast.success(
-      emails.length === 1
-        ? 'Invite sent successfully'
-        : `${emails.length} invites sent successfully`
-    );
     setInviteModalOpen(false);
   };
 
@@ -70,7 +65,7 @@ export const InviteModal = () => {
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <CloseIcon />
+            <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
             Invite
@@ -79,7 +74,7 @@ export const InviteModal = () => {
 
         <Panel.Body scroll class="p-3 flex flex-col gap-3">
           <p>
-            Invite friends and teammates to Macro. You'll get $100 in credits
+            Invite friends and teammates to Macro. You'll get $10 of AI credit
             for each person who signs up.
           </p>
           <div class="flex flex-col gap-2">
@@ -89,7 +84,7 @@ export const InviteModal = () => {
                   requestAnimationFrame(() => el.focus())
                 );
               }}
-              placeholder={'name@company.com\ncolleague@company.com'}
+              placeholder="name@company.com&#10;colleague@company.com"
               value={value()}
               onInput={(e) => setValue(e.currentTarget.value)}
               rows={4}
@@ -103,7 +98,7 @@ export const InviteModal = () => {
             </Button>
             <Button
               onClick={handleSend}
-              variant="strong"
+              variant="primary"
               disabled={sending() || !parseEmails(value()).length}
               class="font-semibold"
             >
@@ -118,18 +113,19 @@ export const InviteModal = () => {
                   Or share your personal referral link:
                 </p>
                 <div class="flex items-stretch gap-2">
-                  <input
+                  <Input
+                    size="sm"
                     type="text"
                     readOnly
                     value={url()}
-                    class="flex-1 px-3 py-1.5 text-xs border border-edge-muted rounded-xs bg-surface text-ink/70 outline-none select-all"
+                    class="flex-1 select-all text-ink-muted"
                     onClick={(e) => e.currentTarget.select()}
                   />
                   <Button
                     type="button"
                     onClick={handleCopy}
                     size="md"
-                    variant="outline"
+                    variant="secondary"
                     class="font-medium border px-2"
                   >
                     <ClipboardIcon class="size-3" />

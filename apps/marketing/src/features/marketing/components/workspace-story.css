@@ -1,3 +1,4 @@
+:root { --marketing-mention: oklch(.75 .12 250deg); }
 .homepage-sections { position: relative; overflow-x: clip; background: #000; color: var(--color-ink); font-family: 'Roboto Slab Variable', display, serif; }
 .homepage-sections-inner { width: min(1000px, calc(100% - 48px)); margin-inline: auto; padding-bottom: 100px; }
 .homepage-feature { padding: 64px 0; }
@@ -57,7 +58,6 @@
 .homepage-feature-email .homepage-email-demo { --color-composer: var(--color-surface-0); }
 .homepage-feature-email .homepage-compose-loading { height: var(--homepage-email-height); min-height: var(--homepage-email-height); }
 .homepage-spreadsheet { display: flex; flex-direction: column; height: 460px; overflow: hidden; border: 1px solid var(--color-edge-muted); border-radius: 16px; background: var(--color-surface); }
-.homepage-spreadsheet .homepage-compose-status { padding: 16px 20px 0; }
 .homepage-doc-history { position: relative; margin: 0; }
 @media (max-width: 767px) {
   .homepage-doc-history .homepage-doc-timeline { display: none; }
@@ -67,8 +67,8 @@
 .homepage-app-landing { height: 200px; }
 @media(max-width: 699px) { .homepage-sections-inner { width: calc(100% - 36px); } .homepage-feature { padding: 40px 0; } .homepage-conversation { gap: 24px; margin-bottom: 32px; font-size: 15px; } .homepage-message { max-width: 92%; } }
 @media (max-width: 699px) {
-  #documents { padding-bottom: 0; }
-  #coding-agents { padding-top: 0; }
+  #documents { padding-bottom: 20px; }
+  #coding-agents { padding-top: 20px; }
 }
 .workspace-demo { color: var(--color-ink); font-family: var(--font-sans); }
 .homepage-compose-status { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 18px; font-size: 13px; color: var(--color-ink-muted); }
@@ -114,6 +114,6 @@
 .homepage-agent-avatar { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; background: var(--color-panel); border: 1px solid var(--color-edge-muted); color: var(--color-ink); }
 .homepage-agent-avatar[data-agent=claude] { color: #d97757; }
 .homepage-agent-label { margin-left: 7px; font-size: 10px; color: var(--color-ink-placeholder); }
-.homepage-person-mention { color: var(--color-link); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 30%, transparent); text-underline-offset: 3px; }
+.homepage-person-mention { padding: 1px 3px; border-radius: 4px; color: var(--marketing-mention); background: color-mix(in srgb, var(--marketing-mention) 12%, transparent); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 /* Keep the next transition's traveling layer behind the unification copy. */
 .homepage-sections { z-index: 1; }

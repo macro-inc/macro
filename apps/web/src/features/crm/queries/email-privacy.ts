@@ -1,4 +1,7 @@
+import { t } from '@app/lib/i18n';
 import { throwOnErr } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import type {
   CrmEmailPrivacyResponse,
@@ -14,6 +17,7 @@ function fromResponse(data: CrmEmailPrivacyResponse): EmailPrivacy {
   return {
     enabled: data.enabled,
     mailboxEmail: data.mailbox_email ?? null,
+    mailboxLinkId: data.mailbox_link_id ?? null,
     teamDomains: data.team_domains,
     personalDomains: data.personal_domains,
     canRemoveTeamDomains: data.can_remove_team_domains,
@@ -40,18 +44,48 @@ export function createEmailPrivacySource(
   const update = useMutation(
     () => ({
       scope: { id: 'crm-email-privacy' },
-      mutationFn: async (change: EmailPrivacyChange) =>
-        fromResponse(await throwOnErr(() => deps.privacy.update(change))),
-      onMutate: () => ({ queryKey: key() }),
-      onSuccess: async (data: EmailPrivacy, _change, context) => {
-        if (context) deps.client.setQueryData(context.queryKey, data);
-        await deps.client.invalidateQueries({ queryKey: soupKeys._def });
-        await deps.client.invalidateQueries({ queryKey: crmKeys._def });
-      },
+      mutationFn: (change: EmailPrivacyChange) =>
+        Telemetry.span('crm.email_privacy.change', async (span) => {
+          const queryKey = key();
+          span.setAttr('crm.privacy.action', change.action);
+          if (change.action !== 'set_consent') {
+            span.setAttr('crm.privacy.scope', change.scope);
+          }
+          try {
+            const data = fromResponse(
+              await throwOnErr(() => deps.privacy.update(change))
+            );
+            // The response belongs to the identity that started this request.
+            // Never replace another account's settings after an account switch.
+            deps.client.setQueryData(queryKey, data);
+            await span.span('crm.email_privacy.refresh', async (refresh) => {
+              try {
+                // Consent is server-derived; normalized lists also need a
+                // server read after this mutation changes their eligibility.
+                await refreshActiveGraphqlSoupQueries({
+                  where: (body) =>
+                    typeof body === 'object' &&
+                    body !== null &&
+                    ('ecd' in body || 'eca' in body || 'crma' in body),
+                  throwOnError: true,
+                });
+                await deps.client.invalidateQueries({
+                  queryKey: soupKeys._def,
+                });
+                await deps.client.invalidateQueries({ queryKey: crmKeys._def });
+              } catch (error) {
+                refresh.error('CRM email privacy refresh failed');
+                throw error;
+              }
+            });
+            return data;
+          } catch (error) {
+            span.error('CRM email privacy update failed');
+            throw error;
+          }
+        }),
       onError: (error: Error) =>
-        deps.feedback.failure(
-          error.message || 'Could not update CRM email settings'
-        ),
+        deps.feedback.failure(error.message || t('crm.privacyUpdateFailed')),
     }),
     () => deps.client
   );

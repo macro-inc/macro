@@ -9,6 +9,9 @@
         "http://127.0.0.1:9222"
       ]
     },
+    "goalert": {
+      "command": "goalert-mcp-macro"
+    },
     "grafana": {
       "command": "docker",
       "args": [
@@ -26,6 +29,10 @@
     },
     "macro": {
       "url": "https://mcp-server.macro.com/mcp"
+    },
+    "posthog": {
+      "type": "http",
+      "url": "https://mcp.posthog.com/mcp"
     }
   }
 }

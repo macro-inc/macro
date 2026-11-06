@@ -8,11 +8,11 @@ import {
   DatabaseMentionValue,
 } from '@block-database/database-mentions';
 import { createDatabaseRelations } from '@block-database/queries/database-relations';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import Plus from '@phosphor/plus.svg';
-import X from '@phosphor/x.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import X from '@icon/system/regular/x.svg';
 import { useDatabaseTableChanges } from '@queries/storage/databases-sync';
-import { Checkbox, cn } from '@ui';
+import { Checkbox, cn, Input } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import type {
@@ -40,7 +40,7 @@ function entityNoun(target: FormEntityKind): string {
     .with('THREAD', () => 'email')
     .with('CALENDAR_EVENT', () => 'event')
     .with('INITIATIVE', () => 'initiative')
-    .exhaustive();
+    .exhaustive(() => 'item');
 }
 
 export function FormEntityPicker(props: EntityPickerProps) {
@@ -174,12 +174,11 @@ export function FormRelationPicker(props: RelationPickerProps) {
         props.invalid ? 'border-failure' : 'border-edge-muted'
       )}
     >
-      <input
+      <Input
         type="search"
         aria-label={`Search ${source().name() || 'rows'}`}
         placeholder={`Search ${source().name() || 'rows'}`}
         value={search()}
-        class="h-9 w-full rounded-md border border-edge-muted bg-input px-2.5 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-edge-focus"
         onInput={(event) => setSearch(event.currentTarget.value)}
       />
       <Show
@@ -212,7 +211,7 @@ export function FormRelationPicker(props: RelationPickerProps) {
                     onChange={(checked) => toggle(row.id, checked)}
                     class="flex min-h-8 gap-2.5 rounded-md px-1.5 text-sm text-ink hover:bg-hover"
                   >
-                    <Checkbox.Control class="border-ink-extra-muted" />
+                    <Checkbox.Control />
                     <Checkbox.Label class="flex min-h-8 min-w-0 flex-1 items-center">
                       <span class="truncate">{row.name || 'Untitled'}</span>
                     </Checkbox.Label>

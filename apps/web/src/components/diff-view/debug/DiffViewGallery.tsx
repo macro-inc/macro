@@ -3,9 +3,9 @@
  * them, over example changes. Registered as the `diff-view-ui` component.
  */
 
-import CopyIcon from '@phosphor/copy.svg';
-import FileIcon from '@phosphor/file.svg';
-import { Button, SegmentedControl } from '@ui';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import { Button, Tabs } from '@ui';
 import { FileTree } from '@ui/components/FileTree';
 import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 import { DiffCounts } from '../DiffCounts';
@@ -13,7 +13,13 @@ import { DiffView } from '../DiffView';
 import type { DiffFile, DiffStyle } from '../model/diff-file';
 import { StatusLetter } from '../StatusLetter';
 import { CommentsDemo } from './CommentsDemo';
-import { generatedChanges, SAMPLE_FILES, SAMPLE_PATCH } from './fixtures';
+import {
+  COLLAPSE_FILES,
+  COLLAPSE_PATCH,
+  generatedChanges,
+  SAMPLE_FILES,
+  SAMPLE_PATCH,
+} from './fixtures';
 
 function Item(props: { label: string; children: JSX.Element }) {
   return (
@@ -112,7 +118,7 @@ function CustomHeaderDemo() {
                 tooltip="Copy path"
                 onClick={() => setCopied(entry.file.path)}
               >
-                <CopyIcon />
+                <CopyIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </>
           )}
@@ -131,7 +137,8 @@ function LargeChangesetDemo() {
   const changes = createMemo(() => generatedChanges(Number(count())));
   return (
     <>
-      <SegmentedControl
+      <Tabs
+        touch="segmented"
         size="sm"
         aria-label="Files"
         value={count()}
@@ -156,6 +163,9 @@ export default function DiffViewGallery() {
   return (
     <div class="size-full overflow-auto">
       <div class="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-8">
+        <Item label="Expansion defaults: 40 and 41 changed lines">
+          <ComposedDemo files={COLLAPSE_FILES} patch={COLLAPSE_PATCH} />
+        </Item>
         <Item label="Composed: file tree, toolbar, and stack">
           <ComposedDemo files={SAMPLE_FILES} patch={SAMPLE_PATCH} />
         </Item>

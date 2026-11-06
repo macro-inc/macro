@@ -3,14 +3,16 @@ import { unwatchFile, watchFile } from 'node:fs';
 import { resolve } from 'node:path';
 import tailwind from '@tailwindcss/vite';
 import { Features } from 'lightningcss';
-import type { Plugin, UserConfigFn } from 'vite';
+import type { Plugin, Rollup, UserConfigFn } from 'vite';
 import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
-import { version } from './package.json';
+import { browserslist, version } from './package.json';
+import { devCompression } from './scripts/dev-compression';
 import { devHttps } from './scripts/dev-https';
+import { devExternalSourcemaps } from './scripts/dev-sourcemaps';
 import { hostedDevProxy } from './scripts/hosted-dev-proxy';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
 import { localDevServer } from './scripts/local-dev-server';
@@ -56,14 +58,18 @@ function gitBranchHmrPlugin(): Plugin {
         return;
       }
       const headPath = resolve(gitDir, 'HEAD');
-      const emit = () => {
-        readGitBranchAsync().then((branch) => {
-          server.ws.send({
-            type: 'custom',
-            event: 'git-branch:update',
-            data: branch,
-          });
+      const sendBranch = async () => {
+        const branch = await readGitBranchAsync();
+        server.ws.send({
+          type: 'custom',
+          event: 'git-branch:update',
+          data: branch,
         });
+      };
+      const emit = () => {
+        sendBranch().catch((error) =>
+          server.config.logger.error(`git-branch-hmr: ${String(error)}`)
+        );
       };
       watchFile(headPath, { interval: 100 }, emit);
       server.ws.on('connection', emit);
@@ -131,6 +137,97 @@ function cloudFrontCompressionLimit(): Plugin {
 }
 
 /**
+ * PostHog symbolicates every platform's stack frames by fetching the public
+ * `.map` next to each chunk, and gives up on maps over 25,000,000 bytes. The
+ * entry chunk's map once crossed that and every frame in it stayed minified,
+ * so fail the build on a missing or oversized map.
+ */
+function posthogSourceMapLimit(): Plugin {
+  const limitBytes = 25_000_000;
+  return {
+    name: 'posthog-source-map-limit',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const problems = Object.values(bundle).flatMap((file) => {
+        if (file.type === 'chunk') {
+          return file.map ? [] : [`${file.fileName} has no source map`];
+        }
+        if (!file.fileName.endsWith('.map')) return [];
+        const bytes =
+          typeof file.source === 'string'
+            ? Buffer.byteLength(file.source)
+            : file.source.byteLength;
+        return bytes > limitBytes ? [`${file.fileName} is ${bytes} bytes`] : [];
+      });
+      if (problems.length === 0) return;
+      this.error(
+        `PostHog cannot symbolicate these chunks (source maps are required and must be at most ${limitBytes} bytes): ${problems.join(', ')}. Split the chunk behind lazy() boundaries or in startupChunks().`
+      );
+    },
+  };
+}
+
+const isNodeModule = (id: string) => id.includes('/node_modules/');
+const isGeneratedSource = (id: string) =>
+  !isNodeModule(id) && /\/generated\//.test(id);
+
+/**
+ * Splits the entry chunk so each source map stays under PostHog's limit: one
+ * map with every startup module was 44 MB, most of it library code and the
+ * embedded text of generated API clients.
+ *
+ * Only modules the entry already imports statically move, so startup loads
+ * the same code in three files and lazy code stays lazy. A generated module
+ * moves only if it imports nothing but libraries and other generated modules;
+ * otherwise the chunks would import each other and could read bindings before
+ * they are initialized.
+ */
+function startupChunks(): Rollup.ManualChunksOption {
+  const plans = new WeakMap<Rollup.GetModuleInfo, Map<string, string>>();
+  const planChunks = (
+    getModuleInfo: Rollup.GetModuleInfo,
+    moduleIds: Iterable<string>
+  ) => {
+    const imports = (id: string) => getModuleInfo(id)?.importedIds ?? [];
+    const startup = new Set<string>();
+    const pending = [...moduleIds].filter((id) => getModuleInfo(id)?.isEntry);
+    for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+      if (startup.has(id)) continue;
+      startup.add(id);
+      pending.push(...imports(id));
+    }
+    const schemas = new Set([...startup].filter(isGeneratedSource));
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const id of schemas) {
+        const importsAppCode = imports(id).some(
+          (imported) => !isNodeModule(imported) && !schemas.has(imported)
+        );
+        if (importsAppCode) {
+          schemas.delete(id);
+          changed = true;
+        }
+      }
+    }
+    const plan = new Map<string, string>();
+    for (const id of startup) {
+      if (isNodeModule(id)) plan.set(id, 'vendor');
+      else if (schemas.has(id)) plan.set(id, 'api-schemas');
+    }
+    return plan;
+  };
+  return (id, { getModuleInfo, getModuleIds }) => {
+    let plan = plans.get(getModuleInfo);
+    if (!plan) {
+      plan = planChunks(getModuleInfo, getModuleIds());
+      plans.set(getModuleInfo, plan);
+    }
+    return plan.get(id);
+  };
+}
+
+/**
  * loro-crdt's `browser` export downloads its 3 MB WASM with a synchronous
  * XMLHttpRequest and compiles it on the main thread, freezing startup for the
  * whole download. Builds use the `bundler` export that dev already resolves
@@ -152,6 +249,27 @@ function loroAsyncWasm(): Plugin {
   };
 }
 
+const ESBUILD_BROWSERS: Record<string, string> = {
+  safari: 'safari',
+  ios_saf: 'ios',
+  chrome: 'chrome',
+  and_chr: 'chrome',
+  edge: 'edge',
+  firefox: 'firefox',
+};
+
+/** Converts the `browser >= version` floors in package.json `browserslist` to esbuild targets. */
+function esbuildTargets(queries: readonly string[]): string[] {
+  return queries.map((query) => {
+    const match = /^(\w+) >= (\d+(?:\.\d+)?)$/.exec(query);
+    const browser = match ? ESBUILD_BROWSERS[match[1]] : undefined;
+    if (!match || !browser) {
+      throw new Error(`Unsupported browserslist query for esbuild: ${query}`);
+    }
+    return `${browser}${match[2]}`;
+  });
+}
+
 /** Hashed assets the first screen needs; index.html requests them while it parses. */
 const HTML_PRELOADS = [
   // The app waits for Loro to initialize before rendering.
@@ -170,8 +288,7 @@ const HTML_PRELOADS = [
 
 /**
  * Adds `<link rel="preload">` for HTML_PRELOADS, so their downloads start with
- * the HTML instead of after the entry runs. The service worker caches preloads
- * with the shell.
+ * the HTML instead of after the entry runs.
  */
 function htmlPreloads(): Plugin {
   let base = '/';
@@ -224,6 +341,8 @@ export const createAppViteConfig = (): UserConfigFn => {
       },
       plugins: [
         devHttps(),
+        devCompression(),
+        devExternalSourcemaps(),
         hostedDevProxy(),
         // solidDevtools({ autoname: true }),
         pureGeneratedZodSchemas(),
@@ -238,6 +357,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         }),
         gitBranchHmrPlugin(),
         cloudFrontCompressionLimit(),
+        posthogSourceMapLimit(),
       ],
       define: defineEnv(ENV_MODE, command),
       clearScreen: false,
@@ -247,6 +367,7 @@ export const createAppViteConfig = (): UserConfigFn => {
           tsconfigpaths({
             root: './',
           }),
+          posthogSourceMapLimit(),
         ],
         rollupOptions: {
           output: {
@@ -262,7 +383,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         // target older safari to avoid lightningcss using text-decoration shorthand:
         // https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration#browser_compatibility
         cssTarget: ['esnext', 'safari15'],
-        target: 'esnext',
+        target: esbuildTargets(browserslist),
         outDir: 'dist',
         emptyOutDir: true,
         minify: !NO_MINIFY,
@@ -272,11 +393,13 @@ export const createAppViteConfig = (): UserConfigFn => {
         rollupOptions: {
           input: {
             app: resolve(__dirname, 'index.html'),
+            pipedreamConnect: resolve(__dirname, 'pipedream-connect.html'),
+            canvasRender: resolve(__dirname, 'canvas-render.html'),
           },
           // KaTeX and PDF.js are now reachable through lazy boundaries. Let
-          // Rollup place them naturally; forcing named chunks hoists shared
-          // CommonJS helpers into those chunks and makes the entry preload
-          // otherwise-lazy code.
+          // Rollup place them naturally; forcing lazy code into named chunks
+          // hoists shared CommonJS helpers into those chunks and makes the
+          // entry preload otherwise-lazy code.
           output: NO_MINIFY
             ? {
                 // remove hashes from output paths
@@ -284,11 +407,13 @@ export const createAppViteConfig = (): UserConfigFn => {
                 entryFileNames: `assets/[name].js`,
                 chunkFileNames: `assets/[name].js`,
                 assetFileNames: `assets/[name].[ext]`,
+                manualChunks: startupChunks(),
               }
             : {
                 format: 'es',
                 chunkFileNames: '[name]-[hash].js',
                 entryFileNames: '[name]-[hash].js',
+                manualChunks: startupChunks(),
               },
         },
         assetsInlineLimit: (filePath) => {
@@ -351,8 +476,6 @@ export const createAppViteConfig = (): UserConfigFn => {
         ...localDevServer(process.env),
         cors: true,
         watch: {
-          usePolling: true,
-          interval: 100,
           ignored: /(^|[\\/])target([\\/]|$)/,
         },
         fs: {

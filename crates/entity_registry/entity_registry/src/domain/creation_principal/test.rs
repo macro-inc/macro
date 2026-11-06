@@ -17,6 +17,9 @@ fn user_id() -> MacroUserIdStr<'static> {
 
 fn user() -> MacroUserAuthentication {
     MacroUserAuthentication {
+        origin: macro_authorization::CredentialOrigin::Session,
+        agent_id: None,
+        agent_via: None,
         macro_user_id: user_id(),
         user_context: Default::default(),
     }

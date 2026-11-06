@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT call_id, external_updated_at, metadata FROM call_entity_sources\n            WHERE user_id = $1 AND namespace = $2 AND provider = $3 AND object_type = $4 AND external_id = $5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "external_updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "953f1ece49e119bf551b43da504dab7bd2d764a790d473eca86353c3027b0c17"
+}

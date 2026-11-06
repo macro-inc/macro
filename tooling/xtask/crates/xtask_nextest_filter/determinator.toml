@@ -7,6 +7,19 @@ mark-changed = [
   "collab_surface",
   "complete_graph",
   "documents",
+  "graphql_calendar",
   "seed_cli",
+  "xtask_graphql_schema_compat",
   "xtask_workflows",
 ]
+
+# Compiled into code_mode_assets by its build script (and the flake's
+# code-mode-assets package), which cargo cannot see.
+[[path-rule]]
+globs = [
+  "bun.lock",
+  "packages/code-mode-sdk/**",
+  "packages/sdk-docs/**",
+  "packages/sdk/**",
+]
+mark-changed = ["code_mode_assets"]

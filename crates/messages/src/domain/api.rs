@@ -102,6 +102,20 @@ pub trait MessageCommands: Send + Sync + 'static {
         active: bool,
         nonce: Option<String>,
     ) -> Result<(), MessageError>;
+    /// Publish an agent session typing through the bot that speaks for it.
+    ///
+    /// Defaults to plain typing, which drops the session: an adapter that
+    /// cannot carry it still shows the bot typing.
+    async fn agent_typing(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        root: Option<Uuid>,
+        active: bool,
+        agent: AgentTyping,
+    ) -> Result<(), MessageError> {
+        let _ = agent;
+        self.typing(access, root, active, None).await
+    }
     /// Update entity discussion state or detach removed document Markdown text.
     async fn patch_thread(
         &self,
@@ -175,6 +189,22 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageReader for MessageSe
     }
 }
 
+/// Creates a channel call's thread root, for the call domain.
+#[async_trait::async_trait]
+pub trait CallRootPoster: Send + Sync + 'static {
+    /// Create the root once, however often it is asked for.
+    async fn ensure_call_root(&self, call_id: Uuid) -> Result<(), MessageError>;
+}
+
+#[async_trait::async_trait]
+impl<R: MessageRepository, E: MessageEventPublisher> CallRootPoster for MessageService<R, E> {
+    async fn ensure_call_root(&self, call_id: Uuid) -> Result<(), MessageError> {
+        MessageService::ensure_call_root(self, call_id)
+            .await
+            .map(drop)
+    }
+}
+
 #[async_trait::async_trait]
 impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for MessageService<R, E> {
     async fn post(
@@ -226,6 +256,15 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
         nonce: Option<String>,
     ) -> Result<(), MessageError> {
         MessageService::typing(self, access, root, active, nonce).await
+    }
+    async fn agent_typing(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        root: Option<Uuid>,
+        active: bool,
+        agent: AgentTyping,
+    ) -> Result<(), MessageError> {
+        MessageService::agent_typing(self, access, root, active, agent).await
     }
     async fn patch_thread(
         &self,

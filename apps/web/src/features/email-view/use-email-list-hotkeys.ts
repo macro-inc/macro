@@ -60,6 +60,8 @@ export function useEmailListHotkeys(options: UseEmailListHotkeysOptions) {
       options.clearSelection();
       return true;
     },
+    // Without a selection, Escape returns the view to Signal (email-view).
+    registrationType: 'add',
   }).withGroup(group);
 
   onCleanup(() => group.dispose());

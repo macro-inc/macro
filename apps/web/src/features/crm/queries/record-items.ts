@@ -36,7 +36,7 @@ export function crmAssociation(scope: CrmRecordScope) {
   return match(scope)
     .with({ type: 'company' }, ({ id }) => ({ company: id }))
     .with({ type: 'contact' }, ({ id }) => ({ contact: id }))
-    .exhaustive();
+    .exhaustive(() => ({ company: NIL_UUID }));
 }
 
 /** Email addresses or domains of the people at the record. */
@@ -45,10 +45,10 @@ const participants = (scope: CrmRecordScope): AstNode[] =>
     .with({ type: 'company' }, ({ domains }) =>
       domains.map((domain) => leaf({ eap: { Domain: domain } }))
     )
-    .with({ type: 'contact' }, ({ email }) => [
-      leaf({ eap: { Complete: email } }),
-    ])
-    .exhaustive();
+    .with({ type: 'contact' }, ({ email }) =>
+      email ? [leaf({ eap: { Complete: email } })] : []
+    )
+    .exhaustive(() => []);
 
 /**
  * Non-task documents associated with the record, plus attachments of emails

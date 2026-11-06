@@ -1,11 +1,16 @@
-import { type Accessor, Show } from 'solid-js';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { isPlatform } from '@core/util/platform';
+import { type Accessor, type JSX, Show } from 'solid-js';
 import { useMaybeNativeCallState } from '../native-call-state';
+import { setNativeCallKitVideoOverlayMode } from '../use-callkit';
 import { CallControlsDefaultAndPanelRow } from './CallControlsDefaultAndPanelRow';
 
 export type CallControlsProps = {
   /** Leave / hang up — parent supplies tab switch, `leaveCall()`, etc. */
   onLeave: () => void | Promise<void>;
+  onSettingsOpenChange?: (open: boolean) => void;
   when?: boolean | Accessor<boolean>;
+  children?: JSX.Element;
 };
 
 function readWhen(when: boolean | Accessor<boolean> | undefined): boolean {
@@ -18,8 +23,37 @@ export function CallControls(props: CallControlsProps) {
   const nativeCall = useMaybeNativeCallState();
 
   return (
-    <Show when={readWhen(props.when) && !nativeCall?.snapshot()}>
-      <CallControlsDefaultAndPanelRow onLeave={props.onLeave} />
+    <Show when={readWhen(props.when)}>
+      <Show when={isPlatform('android') && nativeCall?.snapshot()}>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              fireAndForget(
+                setNativeCallKitVideoOverlayMode('expanded'),
+                'channel-call'
+              )
+            }
+          >
+            Open call controls
+          </button>
+          <button
+            type="button"
+            onClick={() => fireAndForget(props.onLeave(), 'channel-call')}
+          >
+            End call
+          </button>
+          {props.children}
+        </div>
+      </Show>
+      <Show when={!nativeCall?.snapshot()}>
+        <CallControlsDefaultAndPanelRow
+          onLeave={props.onLeave}
+          onSettingsOpenChange={props.onSettingsOpenChange}
+        >
+          {props.children}
+        </CallControlsDefaultAndPanelRow>
+      </Show>
     </Show>
   );
 }

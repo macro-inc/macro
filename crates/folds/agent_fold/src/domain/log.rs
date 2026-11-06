@@ -9,6 +9,7 @@
 //! meet them.
 
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
@@ -78,6 +79,9 @@ impl std::fmt::Display for AgentSessionId {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "direction", content = "content", rename_all = "snake_case")]
 pub enum Message {
+    /// A trusted system-event invocation. Its ACP request is preserved for
+    /// correlation and replay, while it never becomes a user message.
+    Notification(ToRuntimeMessage),
     /// Runtime → server traffic.
     ToServer(ToServerMessage),
     /// Server → runtime traffic.
@@ -93,4 +97,7 @@ pub struct AgentSessionLog {
     pub user_id: Option<MacroUserIdStr<'static>>,
     /// The logged frame.
     pub content: Message,
+    /// When the log stored the entry. `None` for a frame not stored yet: one
+    /// being appended, or one this client speculated.
+    pub logged_at: Option<DateTime<Utc>>,
 }

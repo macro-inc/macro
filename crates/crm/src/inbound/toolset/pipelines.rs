@@ -1,6 +1,7 @@
 //! Agent tools over CRM pipelines, in the CRM's own words: pipelines hold
-//! entries, each entry tracks a company or contact, and fields such as Stage,
-//! Owner and Revenue belong to the entry. Every tool is a thin adapter over
+//! entries, each entry tracks a company or contact (a generic pipeline's track
+//! nothing), and fields such as Stage, Owner and Revenue belong to the entry.
+//! Every tool is a thin adapter over
 //! [`PipelineWorkflowService`], which resolves names and labels against the
 //! pipeline's schema and writes through the pipeline's own access boundary.
 
@@ -240,6 +241,8 @@ pub enum ToolFieldType {
     Checkbox,
     /// A date-time.
     Date,
+    /// A span of time, written start/end: 2026-10-12/2026-10-16.
+    DateRange,
     /// URLs.
     Link,
     /// Labels from `options`, such as a stage.
@@ -265,6 +268,7 @@ impl From<FieldKind> for ToolFieldType {
             FieldKind::Number => Self::Number,
             FieldKind::Checkbox => Self::Checkbox,
             FieldKind::Date => Self::Date,
+            FieldKind::DateRange => Self::DateRange,
             FieldKind::Link => Self::Link,
             FieldKind::Select => Self::Select,
             FieldKind::Tags => Self::Tags,
@@ -337,13 +341,16 @@ pub struct ToolPipeline {
     pub id: Uuid,
     /// Its name.
     pub name: String,
-    /// What each entry tracks: `company` or `contact`.
-    pub tracks: ToolRecordType,
+    /// What each entry tracks: `company` or `contact`. Missing for a generic
+    /// pipeline, whose entries are free-form rows that track no CRM record.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tracks: Option<ToolRecordType>,
     /// What the user may do with it.
     pub access: ToolPipelineAccess,
     /// Whether the owner's team may edit it; otherwise it is private.
     pub shared_with_team: bool,
-    /// Its fields in column order; the first names the tracked record.
+    /// Its fields in column order; the first names the tracked record, or in a
+    /// generic pipeline the entry itself.
     pub fields: Vec<ToolField>,
     /// Its version now; pass as `baseVersion` to refuse an update if the
     /// pipeline changed in between.
@@ -356,7 +363,7 @@ impl From<&PipelineOverview> for ToolPipeline {
         Self {
             id: pipeline.id,
             name: pipeline.name.clone(),
-            tracks: pipeline.record_type.into(),
+            tracks: pipeline.record_type.map(Into::into),
             access: match overview.pipeline.grant {
                 AccessLevel::View | AccessLevel::Comment => ToolPipelineAccess::View,
                 AccessLevel::Edit => ToolPipelineAccess::Edit,
@@ -399,8 +406,9 @@ impl From<&PipelineRecord> for ToolRecord {
 pub struct ToolEntry {
     /// Pass as `entryId`.
     pub entry_id: Uuid,
-    /// The company or contact it tracks.
-    pub record: ToolRecord,
+    /// The company or contact it tracks; missing in a generic pipeline.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record: Option<ToolRecord>,
     /// Its filled-in fields by name: text, a number, true/false, a date, or a
     /// list when a field holds several values. People are macro| user ids.
     pub fields: BTreeMap<String, serde_json::Value>,
@@ -410,7 +418,7 @@ impl From<&PipelineEntryView> for ToolEntry {
     fn from(entry: &PipelineEntryView) -> Self {
         Self {
             entry_id: entry.entry_id.into_uuid(),
-            record: (&entry.record).into(),
+            record: entry.record.as_ref().map(Into::into),
             fields: entry
                 .fields
                 .iter()
@@ -434,14 +442,18 @@ pub(crate) fn json(value: &FieldValue) -> serde_json::Value {
         }
         FieldValue::Checkbox(checked) => Value::Bool(*checked),
         FieldValue::Date(date) => Value::String(date.to_rfc3339()),
+        FieldValue::DateRange(range) => Value::String(range.iso()),
         FieldValue::Labels(values) | FieldValue::Links(values) | FieldValue::References(values) => {
             many(values)
         }
     }
 }
 
-/// The record a summary line names.
-pub(crate) fn record_name(record: &ToolRecord) -> String {
+/// What a summary line calls an entry: its record, or its id in a generic pipeline.
+pub(crate) fn entry_name(record: Option<&ToolRecord>, entry_id: Uuid) -> String {
+    let Some(record) = record else {
+        return format!("entry {entry_id}");
+    };
     record
         .name
         .clone()

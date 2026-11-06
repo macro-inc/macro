@@ -1,5 +1,7 @@
 import type { ListView } from '@app/constants/list-views';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import type { MobileSearchRouteState } from '@app/features/command/mobile/mobile-search-route-state';
+import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/use-unified-notifications-flag';
 import {
   reviewsTabSearch,
   reviewsTabSearchCodec,
@@ -17,7 +19,13 @@ import { isMobileNavViewId, type MobileNavViewId } from './mobile-nav-views';
  * only reachable through the Views menu or the dynamic nav button (folders,
  * companies, …).
  */
-export type MobileDockNavId = ListView | 'calendar' | 'reviews' | 'settings';
+export type MobileDockNavId =
+  | ListView
+  | 'calendar'
+  | 'reviews'
+  | 'booking-links'
+  | 'external'
+  | 'settings';
 
 function mobileNavContent(id: Exclude<MobileDockNavId, 'settings'>) {
   if (id === 'documents') {
@@ -60,6 +68,8 @@ export function useForegroundMobileView(): Accessor<
     const content = globalSplitManager()?.activeSplit()?.content();
     if (!content) return undefined;
     if (content.type !== 'component') return undefined;
+    // The unified Notifications view is the dock's bell.
+    if (content.id === 'notifications') return 'home';
     return isMobileNavViewId(content.id) ? content.id : undefined;
   });
 }
@@ -74,20 +84,29 @@ export function useForegroundMobileView(): Accessor<
 export function useMobileNavNavigate(): (id: MobileDockNavId) => void {
   const { openWithSplit, replaceAllSplits } = useSplitLayout();
   const { toggleSettings } = useSettingsState();
+  const unifiedNotifications = useUnifiedNotificationsFlag();
 
   return (id) => {
     if (id === 'settings') {
       toggleSettings();
       return;
     }
-    const content = mobileNavContent(id);
+    // The bell labelled Notifications opens the unified view when it's on.
+    const content =
+      id === 'home' && unifiedNotifications()
+        ? { type: 'component' as const, id: 'notifications' }
+        : mobileNavContent(id);
     if (isNativeMobilePlatform()) {
-      replaceAllSplits(content);
+      const routeState: MobileSearchRouteState | undefined =
+        id === 'search' ? { sessionId: crypto.randomUUID() } : undefined;
+      // Search taps intentionally start a new search session.
+      replaceAllSplits(content, { routeState, resume: id !== 'search' });
       return;
     }
     const fgContent = globalSplitManager()?.activeSplit()?.content();
     const isOnNavView = fgContent?.type === 'component';
     openWithSplit(content, {
+      resume: id !== 'search',
       mergeHistory: isOnNavView,
       // Route through the router so an existing pane receives the default tab.
       search: id === 'documents' || id === 'reviews' ? {} : undefined,

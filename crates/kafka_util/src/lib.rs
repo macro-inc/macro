@@ -15,7 +15,9 @@ use std::time::Duration;
 use either::Either;
 use macro_env::Environment;
 use opentelemetry::propagation::{Extractor, Injector};
-use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext, StreamConsumer};
+use rdkafka::consumer::{
+    CommitMode, Consumer, ConsumerContext, DefaultConsumerContext, StreamConsumer,
+};
 use rdkafka::error::{KafkaError, KafkaResult};
 use rdkafka::message::{BorrowedMessage, Header, Headers, Message, OwnedHeaders};
 use rdkafka::producer::{FutureProducer, FutureRecord};
@@ -24,8 +26,11 @@ use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 use uuid::Uuid;
 
 pub use msk_iam::{MskIamClientContext, configure_sasl_iam};
+pub use statistics::ConsumerStatistics;
+use statistics::StatisticsContext;
 
 mod msk_iam;
+mod statistics;
 
 const UNGROUPED_GROUP_PREFIX: &str = "macro-event-broker-independent";
 const MESSAGE_TIMEOUT_MS: &str = "5000";
@@ -145,7 +150,12 @@ pub enum KafkaProducerError {
 }
 
 /// Underlying Kafka consumer transport selected from the runtime environment.
-struct ConsumerTransport(Either<StreamConsumer, StreamConsumer<MskIamClientContext>>);
+struct ConsumerTransport(
+    Either<
+        StreamConsumer<StatisticsContext<DefaultConsumerContext>>,
+        StreamConsumer<StatisticsContext<MskIamClientContext>>,
+    >,
+);
 
 /// Underlying Kafka producer transport selected from the runtime environment.
 #[derive(Clone)]
@@ -243,14 +253,25 @@ fn ungrouped_config(brokers: &str) -> ClientConfig {
 
 fn create_consumer_from_env<T>(
     config: ClientConfig,
+    observer: Option<ConsumerStatistics>,
 ) -> Result<KafkaEventConsumer<T>, KafkaConsumerError> {
     let consumer = match Environment::new_or_prod() {
-        Environment::Local => Either::Left(config.create().map_err(KafkaConsumerError::Plaintext)?),
+        Environment::Local => Either::Left(
+            config
+                .create_with_context(StatisticsContext {
+                    inner: DefaultConsumerContext,
+                    observer,
+                })
+                .map_err(KafkaConsumerError::Plaintext)?,
+        ),
         Environment::Develop | Environment::Production => {
             let config = configure_sasl_iam(config);
             Either::Right(
                 config
-                    .create_with_context(MskIamClientContext::from_env())
+                    .create_with_context(StatisticsContext {
+                        inner: MskIamClientContext::from_env(),
+                        observer,
+                    })
                     .map_err(KafkaConsumerError::MskIam)?,
             )
         }
@@ -398,7 +419,7 @@ impl<T: GroupName> KafkaEventConsumer<T> {
     /// Creates a named-group consumer, selecting plaintext or MSK IAM transport
     /// from the runtime environment.
     pub fn from_env(brokers: &str) -> Result<Self, KafkaConsumerError> {
-        create_consumer_from_env(grouped_config::<T>(brokers))
+        create_consumer_from_env(grouped_config::<T>(brokers), None)
     }
 
     /// Subscribes the consumer to exactly the provided topics.
@@ -422,7 +443,18 @@ impl KafkaEventConsumer<Ungrouped> {
     ///
     /// Call [`Self::assign_topics`] before receiving messages.
     pub fn from_env(brokers: &str) -> Result<Self, KafkaConsumerError> {
-        create_consumer_from_env(ungrouped_config(brokers))
+        create_consumer_from_env(ungrouped_config(brokers), None)
+    }
+
+    /// Creates an independent consumer with statistics sampled every ten seconds.
+    /// The observer does not join a group, store offsets, or issue broker calls.
+    pub fn from_env_with_statistics(
+        brokers: &str,
+        observer: ConsumerStatistics,
+    ) -> Result<Self, KafkaConsumerError> {
+        let mut config = ungrouped_config(brokers);
+        config.set("statistics.interval.ms", "10000");
+        create_consumer_from_env(config, Some(observer))
     }
 
     /// Manually assigns every current partition of `topics` at `initial_offset`.

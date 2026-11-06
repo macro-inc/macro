@@ -7,9 +7,9 @@
 import type { SetPropertyValueOneOfNineType } from './setPropertyValueOneOfNineType';
 
 /**
- * Select option by ID (for select-type properties)
+ * String/text value
  */
 export type SetPropertyValueOneOfNine = {
-  option_id: string;
   type: SetPropertyValueOneOfNineType;
+  value: string;
 };

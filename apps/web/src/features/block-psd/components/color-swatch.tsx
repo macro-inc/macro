@@ -49,7 +49,7 @@ export function ColorSwatch(props: {
             ref={(el) => {
               picker = el;
             }}
-            class="w-56 rounded-lg border border-edge-muted bg-menu p-2 shadow-lg"
+            class="menu-surface w-56 p-2"
             testId={props.testId ? `${props.testId}-picker` : undefined}
           >
             <ColorPicker color={props.color} onChange={props.onChange} />

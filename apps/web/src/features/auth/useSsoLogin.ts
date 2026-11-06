@@ -10,6 +10,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { useEmailLinks } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { RedirectLocation } from '@core/util/authRedirect';
+import { syncLoginStorage } from '@core/util/cookies';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isPlatform } from '@core/util/platform';
 import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
@@ -17,6 +18,7 @@ import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
 import { useLocation } from '@solidjs/router';
 import { DEVELOPMENT_PROXY_PREFIX } from '../../lib/core/constant/developmentProxy';
+import { desktopAuthCallbackUrl } from './core/post-auth-target';
 
 /**
  * Run the hosted flow in the system browser and return through the `macro://`
@@ -33,7 +35,16 @@ async function startDesktopSso(
   authUrl: URL,
   originalLocation: RedirectLocation['originalLocation'] | undefined
 ) {
-  authUrl.searchParams.set('original_url', DESKTOP_AUTH_CALLBACK_URL);
+  // `/login?redirect=` deep links (invites, meetings) ride the callback, so
+  // the login page can open them once signed in, before onboarding for an
+  // invite.
+  authUrl.searchParams.set(
+    'original_url',
+    desktopAuthCallbackUrl(
+      DESKTOP_AUTH_CALLBACK_URL,
+      new URL(window.location.href).searchParams.get('redirect')
+    )
+  );
 
   // The callback route sends the user home, so park the destination they were
   // headed for; BasePathComponent restores it after sign-in.
@@ -49,7 +60,11 @@ async function startDesktopSso(
   }
 }
 
-export function useSsoLogin(opts?: { signupMode?: boolean }) {
+export function useSsoLogin(opts?: {
+  signupMode?: boolean;
+  /** Started on the agent signup page: a new account becomes an agent. */
+  isAgent?: boolean;
+}) {
   const analytics = useAnalytics();
   const location = useLocation<RedirectLocation>();
   const { initEmailLink } = useEmailLinks();
@@ -71,6 +86,7 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
       );
 
     if (referral_code) authUrl.searchParams.set('referral_code', referral_code);
+    if (opts?.isAgent) authUrl.searchParams.set('is_agent', 'true');
 
     const desktop = isPlatform('desktop');
 
@@ -146,6 +162,11 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
 
     analytics.track(analyticsEvent, { method: idp_name }, analyticsProviders);
 
+    // The hosted callback sets only HttpOnly cookies, which the app cannot
+    // see, and the return load probes identity only behind the login hint.
+    // Leave the hint now so that load checks the new session instead of
+    // showing sign-in again; a sign-in that did not complete 401s and clears it.
+    syncLoginStorage(true);
     window.location.href = authUrl.toString();
   };
 }

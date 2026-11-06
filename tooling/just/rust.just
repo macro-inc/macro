@@ -9,6 +9,8 @@ rust-check:
 clippy:
     RUSTFLAGS="-Dwarnings -Dclippy::disallowed_methods" RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo clippy --workspace --all-features --exclude sync_service
     RUSTFLAGS="-Dwarnings -Dclippy::disallowed_methods" RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo clippy -p sync_service -- -A clippy::unnecessary_map_or -A clippy::collapsible_if
+    RUSTFLAGS="-Dwarnings -Dclippy::disallowed_methods" RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo clippy -p soup --no-default-features
+    RUSTFLAGS="-Dwarnings -Dclippy::disallowed_methods" RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo clippy -p soup --no-default-features --features ports
 
 # This can be used in any crate that uses macrodb under the hood
 [no-cd]
@@ -56,10 +58,10 @@ build_lambdas compiler="":
     ulimit -n 10240 && just services/deleted_item_poller/build {{compiler}}
     ulimit -n 10240 && just services/email_refresh_handler/build {{compiler}}
     ulimit -n 10240 && just services/user_link_cleanup_handler/build {{compiler}}
+    ulimit -n 10240 && just services/notification_retention_handler/build {{compiler}}
     ulimit -n 10240 && just services/email_scheduled_handler/build {{compiler}}
     ulimit -n 10240 && just services/email_sfs_delete_handler/build {{compiler}}
     ulimit -n 10240 && just services/image_optimizer/build {{compiler}}
-    ulimit -n 10240 && just services/ai_projections_refresh_handler/build {{compiler}}
 
 # TESTING
 
@@ -68,14 +70,13 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/contacts/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/delete_chat_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_sfs_delete_handler/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/scheduled_action/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/scheduled_action/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/notification_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/notification/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/macro_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_refresh_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms_db_client/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/document_cognition_service/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/document_text_extractor/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/organization_retention_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/organization_retention_trigger/.env
@@ -122,7 +123,6 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/call_recording_preview_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/share_permission_db_utils/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai_projections/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/ai_projections_refresh_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai_billing/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/webhook/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/calendar_events/.env

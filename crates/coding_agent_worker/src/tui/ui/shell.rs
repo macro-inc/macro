@@ -10,6 +10,11 @@ use crate::tui::app::{App, Mode, Tab};
 pub(super) fn render_header(frame: &mut Frame, app: &App, area: Rect) {
     let (dot, dot_style, state) = match &app.snapshot.harness {
         Some(harness) if harness.connected => ("●", Style::new().fg(OK), "connected"),
+        Some(_) if app.runtime_connected() => (
+            "●",
+            Style::new().fg(ERR),
+            "runtime connected, service reports offline",
+        ),
         Some(_) => ("●", Style::new().fg(WARN), "paired, runtime not dialed in"),
         None if app.paired() => ("○", Style::new().fg(WARN), "paired, unreachable"),
         None => ("○", Style::new().fg(DIM), "not paired"),
@@ -18,9 +23,7 @@ pub(super) fn render_header(frame: &mut Frame, app: &App, area: Rect) {
         .snapshot
         .harness
         .as_ref()
-        .map(|harness| harness.name.clone())
-        .or_else(|| app.config.identity.name.clone())
-        .unwrap_or_else(|| "macrod".to_owned());
+        .map_or_else(|| app.machine_name.clone(), |harness| harness.name.clone());
 
     let serving: Vec<Span> = if app.serving() {
         vec![Span::styled("  ⏵ serving SSE", Style::new().fg(OK))]
@@ -92,6 +95,7 @@ pub(super) fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
             (_, Tab::Config) => &[
                 ("↑↓", "select"),
                 ("enter", "edit/toggle"),
+                ("o", "web settings"),
                 ("←→/hl", "tabs"),
                 ("q", "quit"),
             ],
@@ -114,4 +118,16 @@ pub(super) fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(spans)
     };
     frame.render_widget(Paragraph::new(line), area);
+    // Bottom right, under everything else: Windows installs an update for
+    // the next launch rather than restarting into it.
+    if let Some(tag) = &app.update_ready {
+        frame.render_widget(
+            Paragraph::new(Line::styled(
+                format!("Update {tag} ready — restart macrod to use it "),
+                Style::new().fg(OK),
+            ))
+            .alignment(ratatui::layout::Alignment::Right),
+            area,
+        );
+    }
 }

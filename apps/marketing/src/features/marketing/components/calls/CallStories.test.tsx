@@ -77,7 +77,7 @@ const playerTime = (container: HTMLElement) =>
 it('shows the full call record and seeks when a transcript line is clicked', () => {
   const view = render(() => <CallHeroDemo />);
   fireEvent.click(view.getByRole('button', { name: 'After the call' }));
-  expect(view.getByText('teo@macro.com')).toBeTruthy();
+  expect(view.getByText('teo@coparse.com')).toBeTruthy();
   expect(view.getByText('Summary')).toBeTruthy();
   expect(view.getByText('Recording')).toBeTruthy();
   expect(playerTime(view.container)).toBe('0:00 / 18:22');
@@ -180,6 +180,18 @@ it('uses the call to reassign the existing task and add pending next steps', () 
 });
 
 it('starts a call from the channel header and shows everyone who joins', () => {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    width: 800,
+    height: 600,
+    right: 800,
+    bottom: 600,
+    toJSON: () => ({}),
+  });
+
   const view = render(() => <CallStartDemo />);
   expect(view.getByRole('button', { name: 'Call' })).toBeTruthy();
   visible(true);
@@ -395,11 +407,24 @@ it('does not expose an unshared recording to the absent teammate', () => {
 });
 
 it('uses the toolbar hang-up control and a cursor to walk through team memory', () => {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    width: 800,
+    height: 600,
+    right: 800,
+    bottom: 600,
+    toJSON: () => ({}),
+  });
+
   const view = render(() => <CallTeamMemoryDemo />);
   expect(view.queryByRole('button', { name: 'End call' })).toBeNull();
   visible(true);
   vi.advanceTimersByTime(1900);
-  expect(view.container.querySelector('.call-memory-pointer')).toBeTruthy();
+  const pointer = view.container.querySelector('.call-memory-pointer');
+  expect(pointer).toBeTruthy();
   vi.advanceTimersByTime(9000);
   expect(playerTime(view.container)).toContain('1:02');
   expect(view.container.querySelector('.call-memory-pointer')).toBeNull();

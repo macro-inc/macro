@@ -91,6 +91,115 @@ test('selects multiple rows and columns by dragging and shift-clicking headers',
   await expect(address).toHaveValue('A4');
 });
 
+test('drag-selecting past the bottom edge scrolls to the last row in one gesture', async ({
+  page,
+}) => {
+  const grid = page.getByRole('grid', { name: 'Spreadsheet' });
+  const gridBox = await grid.boundingBox();
+  const start = await page.locator('[data-address="B2"]').boundingBox();
+  if (!gridBox || !start) throw new Error('Grid is not visible');
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  // Below the grid, over the footer. Scrolling continues while it rests there.
+  await page.mouse.move(
+    start.x + start.width / 2,
+    gridBox.y + gridBox.height + 12,
+    { steps: 8 }
+  );
+  const address = page.getByRole('textbox', { name: 'Go to cell' });
+  await expect(address).toHaveValue('B2:B200');
+  await page.mouse.up();
+  await expect(page.locator('[data-address="B200"]')).toBeInViewport();
+  await expect(page.locator('[data-address="B200"]')).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await expect(address).toHaveValue('B2:B200');
+});
+
+test('drag-selecting into the right edge scrolls to the last column', async ({
+  page,
+}) => {
+  const grid = page.getByRole('grid', { name: 'Spreadsheet' });
+  const gridBox = await grid.boundingBox();
+  const start = await page.locator('[data-address="B2"]').boundingBox();
+  if (!gridBox || !start) throw new Error('Grid is not visible');
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  // Inside the grid, within the edge zone before its right edge.
+  await page.mouse.move(
+    gridBox.x + gridBox.width - 6,
+    start.y + start.height / 2,
+    { steps: 8 }
+  );
+  const address = page.getByRole('textbox', { name: 'Go to cell' });
+  await expect(address).toHaveValue('B2:Z2');
+  await page.mouse.up();
+  await expect(page.locator('[data-address="Z2"]')).toBeInViewport();
+  await expect(address).toHaveValue('B2:Z2');
+});
+
+test('dragging over the sticky headers scrolls back to the first row and column', async ({
+  page,
+}) => {
+  const grid = page.getByRole('grid', { name: 'Spreadsheet' });
+  await grid.evaluate((element) => {
+    element.scrollTop = 630;
+    element.scrollLeft = 500;
+  });
+  const cell = page.locator('[data-address="H40"]');
+  await expect(cell).toBeInViewport();
+  const gridBox = await grid.boundingBox();
+  const start = await cell.boundingBox();
+  if (!gridBox || !start) throw new Error('Grid is not visible');
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  // The corner where the column letters meet the row numbers.
+  await page.mouse.move(gridBox.x + 8, gridBox.y + 8, { steps: 8 });
+  const address = page.getByRole('textbox', { name: 'Go to cell' });
+  await expect(address).toHaveValue('A1:H40');
+  await page.mouse.up();
+  expect(
+    await grid.evaluate((element) => [element.scrollTop, element.scrollLeft])
+  ).toEqual([0, 0]);
+  await expect(address).toHaveValue('A1:H40');
+});
+
+test('dragging the fill handle past the bottom edge fills down to the last row', async ({
+  page,
+}) => {
+  await edit(page, 'D1', 'Paid');
+  await page.locator('[data-address="D1"]').click();
+  const grid = page.getByRole('grid', { name: 'Spreadsheet' });
+  const gridBox = await grid.boundingBox();
+  const handle = await page
+    .getByRole('button', { name: 'Drag to fill selection' })
+    .boundingBox();
+  if (!gridBox || !handle) throw new Error('Fill handle is not visible');
+  await page.mouse.move(
+    handle.x + handle.width / 2,
+    handle.y + handle.height / 2
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    handle.x + handle.width / 2,
+    gridBox.y + gridBox.height + 12,
+    { steps: 8 }
+  );
+  await expect(page.locator('[data-address="D200"]')).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await page.mouse.up();
+  await expect(page.locator('[data-address="D200"]')).toHaveText('Paid');
+  const cells = await page.evaluate(
+    () => window.spreadsheetFixture.snapshot()[0].cells
+  );
+  expect(cells.D2.value).toBe('Paid');
+  expect(cells.D200.value).toBe('Paid');
+  expect(cells.E200).toBeUndefined();
+});
+
 test('resizes row height with a pointer, saves it, and restores automatic height', async ({
   page,
 }) => {
@@ -168,6 +277,52 @@ test('picks a range on a second sheet and commits the formula back to its origin
   expect(sheets[1].cells.A1.value).toBe('12');
 });
 
+test('picks a reference after a comparison operator on a shorter sheet and returns on Enter', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Add sheet', exact: true }).click();
+  await edit(page, 'B4', '25');
+  await page.getByRole('tab', { name: 'Sheet2', exact: true }).dblclick();
+  await page.getByRole('textbox', { name: 'Sheet name' }).fill('Other Sheet');
+  await page.getByRole('button', { name: 'Save name' }).click();
+  await page.getByRole('tab', { name: 'Sheet1', exact: true }).click();
+  // The formulas sit below the other sheet's last row.
+  await page.getByRole('button', { name: 'Add 100 rows', exact: true }).click();
+  const goTo = page.getByRole('textbox', { name: 'Go to cell' });
+  const formula = page.getByRole('textbox', {
+    name: 'Formula bar',
+    exact: true,
+  });
+  for (const [address, operator] of [
+    ['C250', '<'],
+    ['C251', '>='],
+    ['C252', '<>'],
+  ]) {
+    await goTo.fill(address);
+    await goTo.press('Enter');
+    await page.keyboard.type(`=IF(B2 ${operator}`);
+    await page.getByRole('tab', { name: 'Other Sheet', exact: true }).click();
+    await expect(formula).toHaveValue(`=IF(B2 ${operator}`);
+    await page.locator('[data-address="B4"]').click();
+    await expect(formula).toHaveValue(`=IF(B2 ${operator}'Other Sheet'!B4`);
+    await expect(formula).toBeFocused();
+    await page.keyboard.type(',1,0)');
+    await page.keyboard.press('Enter');
+    await expect(
+      page.getByRole('tab', { name: 'Sheet1', exact: true })
+    ).toHaveAttribute('aria-selected', 'true');
+  }
+  await expect(page.locator('[data-address="C252"]')).toHaveText('1');
+  await expect(page.locator('[data-address="C251"]')).toHaveText('0');
+  await expect(page.locator('[data-address="C250"]')).toHaveText('1');
+  const cells = await page.evaluate(
+    () => window.spreadsheetFixture.snapshot()[0].cells
+  );
+  expect(cells.C250.value).toBe("=IF(B2 <'Other Sheet'!B4,1,0)");
+  expect(cells.C251.value).toBe("=IF(B2 >='Other Sheet'!B4,1,0)");
+  expect(cells.C252.value).toBe("=IF(B2 <>'Other Sheet'!B4,1,0)");
+});
+
 test('drag fill continues numbers and month-end dates and undo restores the empty destination', async ({
   page,
 }) => {
@@ -199,11 +354,16 @@ test('drag fill continues numbers and month-end dates and undo restores the empt
     page.getByRole('button', { name: 'Drag to fill selection' }),
     page.locator('[data-address="E4"]')
   );
+  await expect(page.locator('[data-address="E3"]')).toHaveText('2026-03-31');
+  await expect(page.locator('[data-address="E4"]')).toHaveText('2026-04-30');
   const cells = await page.evaluate(
     () => window.spreadsheetFixture.snapshot()[0].cells
   );
-  expect(cells.E3.value).toBe('2026-03-31');
-  expect(cells.E4.value).toBe('2026-04-30');
+  expect(cells.E4).toEqual({
+    value: '46142',
+    format: 'date',
+    numberFormat: 'yyyy-mm-dd',
+  });
 });
 
 test('types a spaced formula, picks another sheet by pointer, and returns to the source', async ({

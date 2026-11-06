@@ -26,6 +26,15 @@ impl AsRef<str> for GithubAccessToken {
     }
 }
 
+/// Result of storing an OAuth grant on an authentication identity.
+#[derive(Debug, PartialEq, Eq)]
+pub enum GithubGrantLinkOutcome {
+    /// The grant was created or refreshed.
+    Linked,
+    /// The authentication identity no longer exists.
+    IdentityMissing,
+}
+
 /// A GitHub link record (as stored in the database)
 #[derive(Debug, Clone)]
 pub struct GithubLink {

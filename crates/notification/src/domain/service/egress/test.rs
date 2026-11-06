@@ -2,6 +2,40 @@ use super::*;
 use crate::domain::models::apple::{AlertDictionary, Aps};
 use serde_json::json;
 
+#[test]
+fn ios_delivery_binds_the_destination_to_each_receiving_account() {
+    let template = APNSPushNotification {
+        aps: Aps::default(),
+        push_notification_data: json!({
+            "notificationId": "019a0000-0000-7000-8000-000000000004",
+            "recipientId": "macro|stale@example.com",
+            "navigation": {
+                "type": "channel",
+                "channelId": "019a0000-0000-7000-8000-000000000001",
+                "messageId": "019a0000-0000-7000-8000-000000000002",
+                "threadId": null
+            }
+        }),
+    };
+    for email in ["alice@example.com", "bob@example.com"] {
+        let recipient = MacroUserIdStr::try_from_email(email).unwrap();
+        let payload = serde_json::to_value(ios_notification(&template, &recipient)).unwrap();
+        assert_eq!(payload["recipientId"], recipient.as_ref());
+        assert_eq!(
+            payload["navigation"],
+            template.push_notification_data["navigation"]
+        );
+        assert_eq!(
+            payload["notificationId"],
+            template.push_notification_data["notificationId"]
+        );
+    }
+    assert_eq!(
+        template.push_notification_data["recipientId"],
+        "macro|stale@example.com"
+    );
+}
+
 fn notification(alert: Option<Alert>, push_type: PushType) -> FCMMessage<serde_json::Value> {
     android_notification(
         &APNSTargets {

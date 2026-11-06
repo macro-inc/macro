@@ -26,11 +26,13 @@ import type {
 } from '../../../lib/core/database-sql/generated/types';
 import type { DatabaseWriteResult } from '../context/table-source';
 import type { DatabaseViewColumn } from '../core/database-view';
+import type { DatabaseRow } from '../core/table';
 import type { ViewChange } from '../core/view-state';
 import { allRecordsView } from '../core/views';
 import type { DatabaseWriteFailure } from '../core/write-failure';
 import { boardLane } from '../tests/board-layout';
 import { createFakeRowsSource, titleContains } from '../tests/fake-rows-source';
+import { GridResizeObserver } from '../tests/grid-resize-observer';
 import type { BoardPositions } from './database-board-view';
 import {
   type DatabaseRecordsActions,
@@ -210,7 +212,10 @@ function columnOrderFixture() {
   };
 }
 
+let createdRecord: Promise<boolean> | undefined;
+
 beforeEach(() => {
+  createdRecord = undefined;
   const style = document.createElement('style');
   style.textContent =
     '[role="menu"], [role="dialog"] { animation-name: none; }';
@@ -218,12 +223,10 @@ beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   // JSDOM has no layout, so a highlighted row cannot scroll itself into view.
   Element.prototype.scrollIntoView = vi.fn();
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
+  vi.stubGlobal('ResizeObserver', GridResizeObserver);
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.parentElement;
     }
   );
 });
@@ -310,7 +313,7 @@ describe('database table view', () => {
         boardPositions={unplacedCards}
       />
     ));
-    fireEvent.click(screen.getByRole('button', { name: /Name: Unnamed/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Name: Empty/ }));
     const input = screen.getByRole('textbox', { name: 'Edit Name' });
     fireEvent.input(input, { target: { value: 'Saved once' } });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -827,6 +830,103 @@ describe('database table view', () => {
     expect(await screen.findByRole('dialog')).toBeTruthy();
   });
 
+  it.each([
+    ['a table row', allRecords],
+    ['a board card', statusBoard],
+  ])(
+    'hands %s to the host that opens records elsewhere',
+    async (_layout, view) => {
+      const fixture = createFakeRowsSource({
+        columns,
+        table: {
+          version: 1,
+          rows: [
+            { rowId: 'row', cells: { title: 'Plan launch', status: 'To do' } },
+          ],
+        },
+        view: allRecords,
+      });
+      const onOpenRecord = vi.fn(() => true);
+      render(() => (
+        <DatabaseRecordsView
+          name="Projects"
+          source={fixture.source}
+          canEdit
+          view={view}
+          stored={false}
+          addColumn={() => null}
+          boardPositions={unplacedCards}
+          onOpenRecord={onOpenRecord}
+        />
+      ));
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Open Plan launch' })
+      );
+      expect(onOpenRecord).toHaveBeenCalledWith('row');
+      expect(screen.queryByRole('dialog')).toBeNull();
+    }
+  );
+
+  it('opens the record panel when the host cannot open the record elsewhere', async () => {
+    const fixture = createFakeRowsSource({
+      columns,
+      table: {
+        version: 1,
+        rows: [
+          { rowId: 'row', cells: { title: 'Plan launch', status: 'To do' } },
+        ],
+      },
+      view: allRecords,
+    });
+    const onOpenRecord = vi.fn(() => false);
+    render(() => (
+      <DatabaseRecordsView
+        name="Projects"
+        source={fixture.source}
+        canEdit
+        view={allRecords}
+        stored={false}
+        addColumn={() => null}
+        boardPositions={unplacedCards}
+        onOpenRecord={onOpenRecord}
+      />
+    ));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Open Plan launch' })
+    );
+    expect(onOpenRecord).toHaveBeenCalledWith('row');
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+  });
+
+  it('keeps a record created on a board in place when the host opens records elsewhere', async () => {
+    const fixture = createFakeRowsSource({
+      columns,
+      table: { version: 1, rows: [] },
+      view: allRecords,
+    });
+    fixture.persistWrites();
+    const onOpenRecord = vi.fn(() => true);
+    let actions!: DatabaseRecordsActions;
+    render(() => (
+      <DatabaseRecordsView
+        name="Projects"
+        source={fixture.source}
+        canEdit
+        view={statusBoard}
+        stored={false}
+        addColumn={() => null}
+        boardPositions={unplacedCards}
+        onOpenRecord={onOpenRecord}
+        actionsRef={(ready) => {
+          actions = ready;
+        }}
+      />
+    ));
+    await actions.createRow({ values: {}, open: true });
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(onOpenRecord).not.toHaveBeenCalled();
+  });
+
   it('cancels pending initial cell focus when the table is unmounted', async () => {
     const fixture = createFakeRowsSource({
       columns,
@@ -887,7 +987,7 @@ describe('database table view', () => {
           boardPositions={unplacedCards}
         />
       ));
-      fireEvent.click(screen.getByRole('button', { name: /Name: Unnamed/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Name: Empty/ }));
       const name = screen.getByRole('textbox', { name: 'Edit Name' });
       fireEvent.input(name, { target: { value: 'Created from draft' } });
       fireEvent.keyDown(name, { key: 'Enter' });
@@ -952,6 +1052,60 @@ describe('database table view', () => {
     }
   );
 
+  it('clears a Shift+Arrow range in one write, so one undo restores it', async () => {
+    const fixture = createFakeRowsSource({
+      columns,
+      table: {
+        version: 1,
+        rows: [
+          { rowId: 'plan', cells: { title: 'Plan launch', status: 'todo' } },
+          { rowId: 'ship', cells: { title: 'Ship it', status: 'done' } },
+        ],
+      },
+      view: allRecords,
+    });
+    fixture.persistWrites();
+    render(() => (
+      <DatabaseRecordsView
+        name="Projects"
+        source={fixture.source}
+        canEdit
+        view={allRecords}
+        stored={false}
+        addColumn={() => null}
+        boardPositions={unplacedCards}
+      />
+    ));
+    await screen.findByRole('button', { name: 'Open Ship it' });
+    document
+      .querySelector<HTMLElement>(
+        '[data-grid-row-id="plan"] [data-grid-column="1"]'
+      )!
+      .focus();
+
+    fireEvent.keyDown(document.activeElement!, {
+      key: 'ArrowRight',
+      shiftKey: true,
+    });
+    fireEvent.keyDown(document.activeElement!, {
+      key: 'ArrowDown',
+      shiftKey: true,
+    });
+    fireEvent.keyDown(document.activeElement!, { key: 'Delete' });
+
+    await waitFor(() =>
+      expect(fixture.source.write).toHaveBeenCalledExactlyOnceWith(
+        {
+          kind: 'clear',
+          rowIds: ['plan', 'ship'],
+          columnIds: ['title', 'status'],
+        },
+        1,
+        false
+      )
+    );
+  });
+
   it('focuses a new column header and edits its cells in a row created from the blank draft', async () => {
     const fixture = createFakeRowsSource({
       columns,
@@ -982,7 +1136,7 @@ describe('database table view', () => {
         boardPositions={unplacedCards}
       />
     ));
-    fireEvent.click(screen.getByRole('button', { name: /Name: Unnamed/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Name: Empty/ }));
     const name = screen.getByRole('textbox', { name: 'Edit Name' });
     fireEvent.input(name, { target: { value: 'Created from draft' } });
     fireEvent.keyDown(name, { key: 'Enter' });
@@ -1082,6 +1236,84 @@ describe('database table view', () => {
       false
     );
   });
+
+  it.each([false, true])(
+    'opens a duplicate beyond the loaded page without claiming it fails filters (filtered=%s)',
+    async (filtered) => {
+      const view = filtered
+        ? {
+            ...allRecords,
+            query: {
+              filter: {
+                conjunction: 'and' as const,
+                conditions: [
+                  {
+                    kind: 'condition' as const,
+                    column: 'title',
+                    test: {
+                      kind: 'text' as const,
+                      operator: 'contains' as const,
+                      value: 'Plan',
+                    },
+                  },
+                ],
+              },
+              sort: [],
+            },
+          }
+        : allRecords;
+      const fixture = createFakeRowsSource({
+        columns,
+        table: {
+          version: 1,
+          rows: Array.from({ length: 501 }, (_, index) => ({
+            rowId: `row-${index}`,
+            cells: { title: `Plan ${index}`, status: 'To do' },
+          })),
+        },
+        view,
+      });
+      fixture.setAnswer(() => (rows: DatabaseRow[]) => rows.slice(0, 500));
+      fixture.source.pagination = {
+        hasMore: () => true,
+        loading: () => false,
+        version: () => 1,
+        loadMore: () => okAsync(undefined),
+      };
+      fixture.persistWrites();
+      render(() => (
+        <DatabaseRecordsView
+          name="Projects"
+          source={fixture.source}
+          canEdit
+          view={view}
+          stored={false}
+          addColumn={() => null}
+          boardPositions={unplacedCards}
+        />
+      ));
+      fireEvent.contextMenu(
+        screen.getByRole('button', { name: 'Open Plan 0' })
+      );
+      const duplicate = await screen.findByRole('menuitem', {
+        name: 'Duplicate',
+      });
+      duplicate.focus();
+      fireEvent.keyDown(duplicate, { key: 'Enter' });
+      const dialog = await screen.findByRole('dialog');
+      expect(
+        within(dialog).getByRole('heading', { name: 'Plan 0' })
+      ).toBeTruthy();
+      expect(screen.queryByText(/doesn’t match your filters/)).toBeNull();
+      expect(screen.queryByText('Record created outside this view')).toBeNull();
+      expect(fixture.source.write).toHaveBeenCalledTimes(1);
+      expect(
+        fixture.source
+          .snapshot()
+          ?.retained.some((row) => row.rowId === 'created')
+      ).toBe(true);
+    }
+  );
 
   it('confirms a context-menu deletion and retries the same record without leaving a stale failure', async () => {
     const fixture = createFakeRowsSource({
@@ -1442,7 +1674,7 @@ describe('database table view', () => {
       />
     ));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Name: Unnamed. Click to edit' })
+      screen.getByRole('button', { name: 'Name: Empty. Click to edit' })
     );
     const draft = await screen.findByRole('textbox', { name: 'Edit Name' });
     fireEvent.input(draft, { target: { value: 'Outside view' } });
@@ -1491,7 +1723,12 @@ describe('database table view', () => {
           stored={false}
           addColumn={() => null}
           renderToolbar={(actions) => (
-            <button type="button" onClick={() => void actions.createRecord()}>
+            <button
+              type="button"
+              onClick={() => {
+                createdRecord = actions.createRecord();
+              }}
+            >
               New record
             </button>
           )}
@@ -1527,6 +1764,7 @@ describe('database table view', () => {
           false
         )
       );
+      await createdRecord;
     }
   );
 
@@ -1720,7 +1958,12 @@ describe('database table view', () => {
         boardPositions={unplacedCards}
         addColumn={() => <button type="button">Add property</button>}
         renderToolbar={(actions) => (
-          <button type="button" onClick={() => void actions.createRecord()}>
+          <button
+            type="button"
+            onClick={() => {
+              createdRecord = actions.createRecord();
+            }}
+          >
             New record
           </button>
         )}
@@ -1751,6 +1994,7 @@ describe('database table view', () => {
       )
     );
     expect(screen.queryByRole('dialog')).toBeNull();
+    await createdRecord;
   });
 
   it('creates a card without writing a read-only string title', async () => {
@@ -1984,7 +2228,9 @@ describe('database table view', () => {
           <button
             type="button"
             disabled={actions.pending()}
-            onClick={() => void actions.createRecord()}
+            onClick={() => {
+              createdRecord = actions.createRecord();
+            }}
           >
             Create from toolbar
           </button>
@@ -2022,6 +2268,7 @@ describe('database table view', () => {
         false
       )
     );
+    await createdRecord;
   });
 
   it('persists menu moves past the neighboring column in both directions', async () => {
@@ -2422,7 +2669,12 @@ describe('database table view', () => {
         stored={false}
         addColumn={() => <button type="button">Add column</button>}
         renderToolbar={(actions) => (
-          <button type="button" onClick={() => void actions.createRecord()}>
+          <button
+            type="button"
+            onClick={() => {
+              createdRecord = actions.createRecord();
+            }}
+          >
             New record
           </button>
         )}
@@ -2439,7 +2691,7 @@ describe('database table view', () => {
     fireEvent.click(
       within(screen.getByRole('grid', { name: 'Playground' })).getByRole(
         'button',
-        { name: 'Name: Unnamed. Click to edit' }
+        { name: 'Name: Empty. Click to edit' }
       )
     );
     const name = await screen.findByRole('textbox', { name: 'Edit Name' });
@@ -2457,13 +2709,14 @@ describe('database table view', () => {
         screen.getAllByRole('button', { name: /Name: First record/ })
       ).toHaveLength(1)
     );
-    expect(
-      screen.getByRole('button', { name: 'Name: Unnamed. Click to edit' })
-    ).toBeTruthy();
+    const next = screen.getByRole('textbox', { name: 'Edit Name' });
+    expect(document.activeElement).toBe(next);
+    expect((next as HTMLInputElement).value).toBe('');
     expect(fixture.source.write).toHaveBeenCalledExactlyOnceWith(
       { kind: 'create', values: { title: 'First record' } },
       1,
       false
     );
+    await createdRecord;
   });
 });

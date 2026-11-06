@@ -8,7 +8,7 @@ import type {
 import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { ActivityTimelineRow } from '@app/features/activity/views/activity-timeline-row';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import ClockCounterClockwise from '@phosphor-icons/core/regular/clock-counter-clockwise.svg';
+import ClockCounterClockwise from '@icon/system/regular/clock-counter-clockwise.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createMemo, createSignal, For } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -79,7 +79,7 @@ function activityAction(action: Activity['action']): ActivityAction {
       kind: 'unknown' as const,
       tag,
     }))
-    .exhaustive();
+    .exhaustive(() => ({ kind: 'unknown' as const, tag: action.type }));
 }
 
 function activityEvent(activity: Activity, index: number): ActivityEvent {

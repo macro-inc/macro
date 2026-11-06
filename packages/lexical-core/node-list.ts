@@ -13,6 +13,8 @@ import {
   TabNode,
   TextNode,
 } from 'lexical';
+import { AccountManagerRequestNode } from './nodes/AccountManagerRequestNode';
+import { AgentActivityNode } from './nodes/AgentActivityNode';
 import { AgentContextNode } from './nodes/AgentContextNode';
 import { AgentSessionMentionNode } from './nodes/AgentSessionMentionNode';
 import { AwaitNode } from './nodes/AwaitNode';
@@ -121,9 +123,11 @@ export const SupportedNodeTypes = [
   ThemeMentionNode,
   TagMentionNode,
   ConnectAppNode,
+  AccountManagerRequestNode,
   UnknownMentionNode,
   AwaitNode,
   MagicChipNode,
+  AgentActivityNode,
   AgentContextNode,
   CursorSystemNotificationNode,
 ] as const;
@@ -136,7 +140,8 @@ export const NodeReplacements: LexicalNodeReplacement[] = [
   },
   {
     replace: ListNode,
-    with: (node: ListNode) => new TaskListNode(node.getListType()),
+    with: (node: ListNode) =>
+      new TaskListNode(node.getListType(), node.getStart()),
     withKlass: TaskListNode,
   },
 ];
@@ -154,7 +159,9 @@ export const RegisteredNodesByType: { [K in EditorType]: ValidNode[] } = {
   'plain-text': [ParagraphNode, TextNode],
   markdown: [...SupportedNodeTypes],
   'markdown-sync': [...SupportedNodeTypes],
-  chat: exclude([ImageNode, VideoNode]),
+  // Chat carries URL images (GIFs); uploaded media still goes as attachments,
+  // and the Image/Video slash actions need VideoNode, so they stay hidden.
+  chat: exclude([VideoNode]),
   // Calendar descriptions are provider-supplied HTML from anyone who can write
   // the event, so the editor must not carry a node that renders raw markup.
   calendar: exclude([HtmlRenderNode, ImageNode, VideoNode]),

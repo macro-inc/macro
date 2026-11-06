@@ -1,5 +1,6 @@
 import { ENABLE_SCRIPTING } from '@core/constant/featureFlags';
 import { showMessageBoxSync } from '@core/util/dialog';
+import { Telemetry } from '@macro-inc/observability';
 import debounce from 'lodash/debounce';
 import { AnnotationMode, type PageViewport } from 'pdfjs-dist';
 import scriptingSandbox from 'pdfjs-dist/build/pdf.sandbox.js?url';
@@ -561,7 +562,11 @@ export class InternalPDFViewer {
 
           const popupViewer = this._popupViewer;
           popupViewer?._viewer._pagesCapability.promise.then(() => {
-            popupViewer._linkService.goToDestination(destination);
+            popupViewer._linkService
+              .goToDestination(destination)
+              .catch((error) =>
+                Telemetry.error(error, { surface: 'pdf-viewer' })
+              );
             this.showPopupAt(el);
           });
         };

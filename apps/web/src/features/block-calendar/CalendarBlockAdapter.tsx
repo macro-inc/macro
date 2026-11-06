@@ -2,7 +2,7 @@ import { CalendarViewContextProvider } from '@app/features/calendar/components/C
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { CalendarFocusContextProvider } from '@app/features/calendar-view/calendar-focus-target';
-import { resolveCalendarTarget } from '@app/features/calendar-view/calendar-target';
+import { createCalendarFocusTarget } from '@app/features/calendar-view/calendar-target';
 import { createCalendarTargetAim } from '@app/features/calendar-view/calendar-target-request';
 import { Workspace } from '@app/features/calendar-view/components/Workspace';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -15,7 +15,7 @@ import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCalendarOccurrencesQuery } from '@queries/calendar/occurrences';
 import { useSearchParams } from '@solidjs/router';
-import { createMemo, onMount, Show } from 'solid-js';
+import { onMount, Show } from 'solid-js';
 import type { CalendarBlockProps } from './types';
 
 function CalendarBlockDisabledRedirect() {
@@ -78,18 +78,10 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
       };
     }
   );
-  // A cold `.data` read suspends the nearest <Suspense>, which is the one
-  // wrapping each calendar page: the first aim of a session enables this
-  // query, so reading it unguarded blanks the whole grid for the length of
-  // the fetch and remounts it. There is no target to resolve until the
-  // occurrences land anyway.
-  const focusTarget = createMemo(() => {
-    const request = targetRequest();
-    if (!request || !occurrencesQuery.isSuccess) {
-      return undefined;
-    }
-    return resolveCalendarTarget(occurrencesQuery.data?.items ?? [], request);
-  });
+  const focusTarget = createCalendarFocusTarget(
+    targetRequest,
+    occurrencesQuery
+  );
 
   onMount(() => {
     analytics.pageView('calendar');

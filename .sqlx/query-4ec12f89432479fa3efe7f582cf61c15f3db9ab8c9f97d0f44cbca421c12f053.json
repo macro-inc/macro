@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT s.transcript_id, s.sequence_num, s.participant_id, s.speaker_label, s.content,\n               s.start_ms, s.end_ms, t.started_at AS transcript_started_at\n        FROM call_entity_transcript_segments s\n        JOIN call_entity_transcripts t ON t.call_id = s.call_id AND t.id = s.transcript_id\n        WHERE s.call_id = $1\n        ORDER BY t.started_at NULLS LAST, t.id, s.sequence_num\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "transcript_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence_num",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "participant_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "speaker_label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "start_ms",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "end_ms",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "transcript_started_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "4ec12f89432479fa3efe7f582cf61c15f3db9ab8c9f97d0f44cbca421c12f053"
+}

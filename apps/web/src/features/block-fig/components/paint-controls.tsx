@@ -8,10 +8,11 @@
  */
 
 import type { PaintInfo, StopInfo } from '@core/fig-engine/types';
-import DotsSixVertical from '@phosphor/dots-six-vertical.svg';
-import Eye from '@phosphor/eye.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import Minus from '@phosphor/minus.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import DotsSixVertical from '@icon/system/regular/dots-six-vertical.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import Minus from '@icon/system/regular/minus.svg';
 import { createSignal, For, Index, Show } from 'solid-js';
 import { cssHex, hexToRgba, normalizeHex, rgbaToHex } from '../core/color';
 import { cssColor } from '../core/css';
@@ -233,7 +234,9 @@ function PaintEditor(props: {
         accept="image/*"
         class="sr-only"
         tabIndex={-1}
-        onChange={(e) => void chooseImage(e.currentTarget.files?.[0])}
+        onChange={(e) =>
+          fireAndForget(chooseImage(e.currentTarget.files?.[0]), 'fig-editor')
+        }
       />
       <Show when={isGradient(p().type)}>
         <GradientBar

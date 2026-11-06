@@ -1,3 +1,5 @@
+import { usePending } from '@app/observability/flow';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   batch,
@@ -16,6 +18,8 @@ import {
   type EntityFilterCacheArgs,
   parseCacheRevision,
 } from '../../../graphql-cache/protocol';
+import { createHiddenDeferral } from '../../visible-refresh';
+import { soupCacheTelemetry } from './cache-activity-telemetry';
 
 /** A declared source and generated fragment; no mutation-specific query updates. */
 export type PredicateQueryRequest<T> = {
@@ -44,6 +48,12 @@ type LiveQueryHost = Pick<
   'entityFilter' | 'onCacheChanged' | 'onCacheGenerationChanged'
 >;
 
+export type PredicateQueryStatus =
+  | 'idle'
+  | 'loading'
+  | 'ready'
+  | 'unsupported'
+  | 'error';
 /**
  * Binds one cache-engine maintained view for `createSoupLiveQuery`. Owns
  * subscription, coalescing, generation recovery, and keyed Solid rows.
@@ -56,9 +66,7 @@ export function createPredicateQuery<T extends object>(options: {
   query: Accessor<PredicateQueryRequest<T> | undefined>;
 }) {
   const [data, setData] = createSignal<LiveQuerySnapshot<T>>();
-  const [status, setStatus] = createSignal<
-    'idle' | 'loading' | 'ready' | 'unsupported' | 'error'
-  >('idle');
+  const [status, setStatus] = createSignal<PredicateQueryStatus>('idle');
   const [error, setError] = createSignal<unknown>();
   let requestRefresh = () => {};
   // A caller may derive a new request object from a query snapshot even when
@@ -107,15 +115,25 @@ export function createPredicateQuery<T extends object>(options: {
           while (pending && active) {
             pending = false;
             const observedEpoch = epoch;
+            let outcome: 'success' | 'unsupported' | 'error' | 'discarded' =
+              'discarded';
+            let upserts = 0;
+            let patches = 0;
+            let removed = 0;
+            const startedAt = performance.now();
             try {
               const result = await host.entityFilter(args());
               if (!active || epoch !== observedEpoch) continue;
               if (result.kind !== 'live-query') {
+                outcome = 'unsupported';
                 unsupported = true;
                 pending = false;
                 setStatus('unsupported');
                 continue;
               }
+              upserts = result.upserts.length;
+              patches = result.patches.length;
+              removed = result.removed.length;
               const revision = parseCacheRevision(result.revision);
               if (latest !== undefined && BigInt(revision) < BigInt(latest)) {
                 pending = true;
@@ -196,10 +214,23 @@ export function createPredicateQuery<T extends object>(options: {
                   setStatus('ready');
                 })
               );
+              outcome = 'success';
             } catch (cause) {
               if (!active || epoch !== observedEpoch) continue;
+              outcome = 'error';
               setError(() => cause);
               setStatus('error');
+            } finally {
+              soupCacheTelemetry.record('predicate', {
+                durationMs: performance.now() - startedAt,
+                rows: orderedRows.length,
+                upserts,
+                patches,
+                removed,
+                error: outcome === 'error',
+                discarded: outcome === 'discarded',
+                incomplete: outcome === 'unsupported',
+              });
             }
           }
         } finally {
@@ -212,10 +243,13 @@ export function createPredicateQuery<T extends object>(options: {
         if (!running) runPromise = run();
       };
       requestRefresh = refresh;
+      // Every open tab shares one cache engine. A hidden tab keeps a dirty bit
+      // instead of reading on each revision; initial and explicit reads still run.
+      const deferral = createHiddenDeferral(refresh);
       const unsubscribeChanges = host.onCacheChanged(
         (revision) => {
           latest = revision;
-          refresh();
+          deferral.request();
         },
         { includeHydration: true }
       );
@@ -228,11 +262,12 @@ export function createPredicateQuery<T extends object>(options: {
           setData(undefined);
           setStatus('loading');
         });
-        refresh();
+        deferral.request();
       });
       refresh();
       onCleanup(() => {
         active = false;
+        deferral.dispose();
         unsubscribeChanges();
         unsubscribeGeneration();
         // Serialize release after any pending read, so disposal cannot recreate
@@ -245,9 +280,10 @@ export function createPredicateQuery<T extends object>(options: {
             /* Host may have retired. */
           }
         };
-        void release();
+        fireAndForget(release(), 'soup-predicate-query');
       });
     })
   );
+  usePending('soup.cache', () => status() === 'loading');
   return { data, status, error, refresh: () => requestRefresh() };
 }

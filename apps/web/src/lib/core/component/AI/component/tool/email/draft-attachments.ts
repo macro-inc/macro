@@ -10,6 +10,7 @@
  */
 
 import type { DraftFormAttachment } from '@app/features/email-compose/primitives/email-form-state';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EmailAttachment } from '@service-cognition/generated/tools/types';
 import { createSignal } from 'solid-js';
 
@@ -65,6 +66,7 @@ export function createDraftAttachments(options: DraftAttachmentsOptions) {
     )
   );
   const [uploadingCount, setUploadingCount] = createSignal(0);
+  const pending = new Set<Promise<boolean>>();
 
   const describe = async (documentId: string) => {
     let description: DocumentDescription;
@@ -84,7 +86,8 @@ export function createDraftAttachments(options: DraftAttachmentsOptions) {
     );
   };
   for (const attachment of list()) {
-    if (attachment.type === 'document') void describe(attachment.documentId);
+    if (attachment.type === 'document')
+      fireAndForget(describe(attachment.documentId), 'ai-email-draft');
   }
 
   const removeUploading = (file: File) =>
@@ -112,7 +115,7 @@ export function createDraftAttachments(options: DraftAttachmentsOptions) {
       );
       if (!uploaded || !stillListed) {
         removeUploading(entry.file);
-        return;
+        return !stillListed;
       }
       setList((current) =>
         current.map(
@@ -129,15 +132,29 @@ export function createDraftAttachments(options: DraftAttachmentsOptions) {
         )
       );
       options.onChange();
+      return true;
     } finally {
       setUploadingCount((count) => count - 1);
     }
   };
 
+  async function forgetUpload(task: Promise<boolean>) {
+    try {
+      await task;
+    } finally {
+      pending.delete(task);
+    }
+  }
+
   return {
     list,
     /** Whether a file added by the user is still becoming a document. */
     uploading: () => uploadingCount() > 0,
+    /** Batch submission waits for uploads and stops when one fails. */
+    waitForUploads: async () => {
+      const outcomes = await Promise.all(pending);
+      return outcomes.every(Boolean);
+    },
     /** Only the attachments the send can carry; uploads in flight are not yet documents. */
     toToolArgs: (): EmailAttachment[] =>
       list().flatMap((attachment) =>
@@ -152,7 +169,11 @@ export function createDraftAttachments(options: DraftAttachmentsOptions) {
       );
       if (uploads.length === 0) return;
       setList((current) => [...current, ...uploads]);
-      for (const entry of uploads) void upload(entry);
+      for (const entry of uploads) {
+        const task = upload(entry);
+        pending.add(task);
+        fireAndForget(forgetUpload(task), 'ai-email-draft');
+      }
     },
     remove: (removed: DraftFormAttachment) => {
       if (removed.type === 'local') {

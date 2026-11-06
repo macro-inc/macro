@@ -1,0 +1,343 @@
+# Forms
+
+A form is a questionnaire whose answers land as rows of one database table.
+Every question is a column of that table; the form stores only presentation
+(sections, order, help text, required, gates). Authoring is behind the
+`enable-forms` flag (`VITE_ENABLE_FORMS=true|false`; on under `bun run dev`
+and HMR, PostHog otherwise). Until the flag is enabled, including while remote
+flags are loading, `/app/form/<uuid>` opens on the
+respond view (no builder), and no Create entry, mention bucket, `/poll`,
+`/form` or database form control exists. Responding (the respond route, form
+cards and mentions in messages) does not depend on the flag: the service
+decides who may respond.
+
+## Creating
+
+- **Create → Form** (shortcut **C → Q**, **Shift** opens it in a new split)
+  creates "Untitled form" with a new database whose table is "Responses",
+  and opens the builder at `/app/form/<uuid>`. Drive's **New → Form** opens
+  it inline instead, at `/app/drive/form/<uuid>`.
+- On a database page you own, **+ → New form** in the table selector makes
+  a form with a question per existing column while no form writes to the current
+  table. Each table has at most one form; the control opens that form once created.
+  A trashed form reserves its table until restored or permanently deleted.
+  Creating over an existing table needs
+  database Owner: editors and viewers see the existing forms only.
+- In a channel composer, `/form` creates a form and opens the builder beside
+  the channel; its card joins the draft once the builder saves a question.
+  `/poll` opens the poll dialog (question, at least two options, **Multiple
+  answers**, **Share responses with team**, **Anonymous**); **Post poll** puts
+  the poll's card in the message and sends it. Closing the dialog while it
+  posts sends nothing and trashes the poll. Everyone who can vote sees the
+  counts. **Share responses with team** lets everyone who
+  can vote open that table. **Anonymous** makes votes anonymous to everyone
+  in Macro, the poll's owner included: the server keeps who voted apart from
+  what they chose, so each person still votes once, but no vote can be
+  traced to them. An anonymous poll's table has no Respondent column, its
+  vote times keep only the day, and a vote can't be changed.
+- Asked for a poll, or for a form for a channel, the Macro agent makes a poll
+  and posts it as its card in one message (its channel reply), the same card
+  `/poll` posts. A form the agent made for the request and presented as a card
+  in its reply's steps is shared with the channel the same way, so everyone in
+  the channel, people outside the team included, can respond to a
+  members-only form.
+
+## The form page
+
+Editors see **Build**, **Responses** (with its count), and **Settings** in the
+shared pill tab selector beside the form title in the top bar, kept per split (a split opened with
+`params.view` `responses` or `share` starts there). On touch devices the tabs sit at the top
+of the page, below the floating header. Viewers (respondents) land on the respond page
+instead. The header's primary button, for owners, is **Publish** (opens sharing)
+until someone responds or the form is shared (public, a channel, the team),
+then **Open form** (respond view in a new split); other editors always see
+**Open form**. The header badge follows the form's own access.
+
+### Build
+
+Build uses the same centered 768px content column as a Markdown document.
+The editable title sits above a linked-database property pill and a read-only
+status pill ("Accepting responses", "Closed", or "Table deleted"), then the
+description.
+A compact document-style outline rail on the left previews sections and questions
+on hover and navigates to them on click. It marks the selected section or question.
+Each question section ends with a large **Add question** menu. It appends a new
+question or existing database field to that section, regardless of the current
+selection. Three visible actions sit below the canvas: **Add section** adds a
+question section directly, **Add gate** adds a gate with its inline rule editor
+open, and **Add meeting link** opens the booking-link picker (when scheduling is
+available). On touch devices these three float above the dock as an **Add**
+menu (Section, Gate, Meeting link) in place of New. Hover a question boundary to reveal a plus that inserts a question
+at that position. Hover between sections to insert a **Section** or **Gate**.
+These controls also appear on keyboard focus and stay visible while their menus
+are open. Meeting links can only be added at the end; adding other sections later
+keeps the meeting link last. Start an empty form by adding a section, then its questions.
+
+- **Database row** asks which table to use before adding the question.
+  Existing questions and sections can still be reordered with their drag handles.
+- After **Section** (or
+  focusing a section's title, which outlines it) it goes to the end of that
+  section. An empty section has its own **Add question** menu.
+- Click a section or question in the left **Outline** to reveal it in the
+  canvas. A question opens for editing on the first click, including while a
+  rename saves. Selecting a section also directs subsequent question additions
+  there. Incoming edits preserve keyboard focus in the outline.
+- Click a row to select it: the title input renames the column, the type chip
+  opens the same grouped type menu (Short answer … Database row), choice questions edit
+  their options in place, and the footer has Duplicate, **Remove from form**
+  (keeps the column), **Required**, and the ⋯ menu (Move up / Move down / Move
+  to section / **Delete column and answers…**, which confirms with the row
+  count).
+- A **Time range** question (Numbers & dates) asks with the calendar
+  composer's **Start** → **End** date/time fields and **All day** switch, as a
+  database cell does; the answer counts once both ends are set, and an end
+  before the start is refused. Receipts show it as the table does. Gates test
+  it with the database's range tests.
+- Required questions show a **Required** badge below their answer preview.
+  Selecting the question puts its Required switch at the bottom right, with
+  duplicate, remove, and more actions on the left.
+- Drag by the six-dot handle (mouse: move 4 px; touch: hold 200 ms). A line
+  shows where it lands; a red line with a note means a gate or a section's
+  condition checks that question and it must stay above it. Escape cancels; nothing saves
+  until the drop. Keyboard: focus a handle, **Space**, **↑/↓**, **Space** to
+  drop, **Escape** to cancel, **Tab** leaves (cancelling).
+- Sections drag by their own handle. A gate section's **Add rule / Edit rules**
+  opens the grid's condition editor over questions of earlier sections only;
+  **Add condition** adds a row that saves once it is complete (pick a value).
+  Rules are sent to respondents' browsers, so keep confidential criteria out.
+  A gate whose rule tests a question that is gone shows **Remove broken
+  rules**.
+- A questions section after another one has **Show only when…** in its
+  **⋯** menu. It opens the same condition editor, over questions of earlier
+  sections, in a **Show this section only** row under the section header; the
+  row then reads the rule (`IF Team is Contractor`) with **Edit** and
+  **Remove**, and the routing footer above it says where a skipped section
+  leads ("Continue to section 2, or skip to section 3"). Removing the last
+  question a condition tests removes the condition, and a condition naming a
+  question that went in the grid shows **Remove broken rules**.
+- "N columns not on this form" at the bottom lists table columns that are not
+  questions; **Add** puts one on the form.
+- Layout edits collaborate live through Loro. Other editors' selections appear
+  in the builder. Connection and save failures are visible; there is no
+  persistent saved badge. Invalid gate drafts remain editable while the
+  public form keeps its last valid layout.
+- A type change that existing answers do not fit shows **Convert into a new
+  question**: a new column gets the answers that convert and the question
+  moves to it; the old column stays (listed under columns not on the form).
+- **Preview** opens a new tab with the respondent experience after pending
+  question and form settings edits are saved, including edits started before
+  switching tabs. Fill it, try the gates, and return to the builder. Preview
+  creates no response rows, file uploads or bookings.
+  On touch devices, Preview, Publish (or Open form), and Share are in the
+  floating header above the editor.
+- **Add meeting link** selects an existing booking link from the
+  **More → Scheduling** workspace, or opens that workspace to create one.
+  It is always the last step. Once added, the action becomes **View meeting link**
+  and focuses the existing step rather than adding a duplicate. **Change** selects another link;
+  **Remove booking step** leaves the link itself intact. A form's gates
+  control when its respondents see the link; the native link still works directly.
+- New standalone forms share their name with the database they create. Rename
+  either to change both. Forms added to existing tables have independent names.
+
+### Responses
+
+The linked table's grid, embedded and live, with summary tiles: Responses, Stopped submissions (per gate in its hint), Rows in
+the table, and (owners, when posted in channels) People in its channels (the
+owner excluded; a dash for public forms). Every row of the table shows,
+including rows added in the grid. Stopped submissions counts signed-in respondents
+whose latest recorded result is stopped. Retrying does not add another count;
+a successful submission clears that stop. Anonymous attempts and stops before
+submitting are not recorded; answers stay in the browser until Submit.
+
+### Settings
+
+**Who can respond**: Invited people (sign in, one response each, editable
+while open) or Anyone with the link (anonymous; no file questions). The
+respond link with Copy, Accepting responses, Close automatically, Share
+responses with team, Anonymous (locked, with a tooltip
+saying why, once anyone has responded), Confirmation message, **Branding**, and **Manage access** (the
+share dialog, which also shows the audience panel). Branding (editors) sets a
+logo (**Upload**/**Replace**/**Remove**, shown above the title), a cover image
+(a banner across the top of the respond page) and an accent color (color
+swatch or `#rrggbb` field, **Reset** for Macro's accent) that colors the
+respond page's buttons and selected answers. Images must be PNG, JPEG,
+WebP or GIF uploaded by the person setting them; nothing set keeps Macro's
+look, and inline form cards in channels never show branding. Anyone with the link: visitors who aren't signed in respond anonymously;
+people signed in to Macro respond as themselves. Roles: View can respond; when responses are shared it also reads the linked database (view only). Edit can change
+questions and also edits the linked database (its response rows and columns)
+through derived access; Owner can also change the audience, close and trash.
+Posting a form in a channel grants that channel View, which means it can
+respond; its row in the share dialog reads "Can respond (channel)", and roles
+offered on a form are View and Edit. A database's own share dialog lists the forms over it: their editors
+can also edit the database, and each form's chip opens its sharing. Owners also get **Move to trash** at the bottom; the database and its
+rows stay.
+
+## Finding forms
+
+Drive lists forms you can open (type facet **Form**) and opens them inline at
+`/app/drive/form/<uuid>`. The owner can file a form in a folder by dragging its
+row onto the folder or with **Move to folder** in the form's title menu; it
+then appears in that folder's contents and inherits the folder's sharing, while
+its database stays where it was. Quick Access has a
+Forms bucket. Both come from `/forms/accessible`, so a form shared with you
+appears without access to its database. Deleting a database table warns which
+forms it deletes; deleting a column warns which forms ask it (both say so
+while still checking, or when the check failed, instead of saying nothing).
+
+## Responding
+
+`/app/form/<uuid>/respond` is one page in two shells: signed-in visitors see
+it inside the app shell (sidebar, command menu); anonymous visitors get a
+focused page, so a public form never hits login. Signed in, a respondent
+keeps their identity on either audience and can edit their response while the
+form is open; anonymous visitors cannot. The response page has no top bar:
+it uses the builder’s centered 768px content column, the form's cover image and
+logo when set, plain title and description,
+and questions grouped within a single section card. Public sign-in guidance
+sits below the form. One section per screen with
+**Back / Next**, **Submit** on the last. A section with a condition is shown
+only when the answers of the sections shown before it pass it, and skipped
+otherwise: Back and Next skip it, "Section N of M" counts only the sections
+shown, its required questions are not required, and its answers are not
+sent (an edited response clears them). Answers typed into a section that a
+changed earlier answer later skips stay on screen if the respondent goes back
+and chooses it again. Required fields keep their asterisks;
+the legend and response-editing guidance sit below the questions. Next checks required answers and any
+gate locally; a failing gate shows "This form can't take your response" with
+the gate's message (never its rules), **Check my answers** and, signed in,
+**Message the owner** (opens a direct conversation). Submit shows the
+confirmation with a receipt; signed-in respondents (either audience) get
+**Edit my response** while it is open and land on their receipt when they
+return. A closed form says "This form is closed"; a returning respondent
+sees their saved answers with that reason.
+
+Presence avatars appear only in the editor. Respondent pages (including an
+owner’s Preview) do not announce presence or show other viewers; their form
+metadata refreshes periodically without a presence subscription.
+
+Choice answers use the app’s themed radio and checkbox controls in both Preview
+and the live form. Verify light and dark themes: radio arrow keys select one
+answer, **Clear selection** removes it, and Space toggles checkboxes independently.
+While submitting, **Clear selection** stays visible but disabled to keep the layout stable.
+
+Temporary background refresh failures keep unsent answers on screen. If Submit
+discovers an existing response but cannot load its receipt, **Try again** reloads
+that response without submitting another one.
+
+When the form ends with a booking step, the last action reads **Continue to
+booking**. After the server accepts the response and its gates, Macro's
+time picker appears. Booking opens `/app/booking/<id>#<private-token>`; retain
+that private link for cancellation or rescheduling. A returning signed-in
+respondent can use **Book a time** on their receipt if their saved answers still
+pass. A form with only a booking step still offers **Continue to booking** and
+waits for server acceptance. Preview can show real slots, but its booking button
+is disabled.
+
+In a message or document, a form card fills in place; a poll card shows one
+bar per option, your vote marked, and "N votes · one vote each". An anonymous
+poll says "Anonymous poll: votes aren't linked to people"; once you vote it
+says "You voted", marks no option, and the vote can't be changed. Its respond
+page shows that you responded without your answers. Click an
+option to vote; click another to change it. Editors, and everyone who can vote
+when responses are shared, get **Results**: each option with the people who
+chose it (avatar and name, yours marked "(you)") and a **Responses table** link
+to the Responses tab. An anonymous poll never names voters, so its editors (and
+its voters, when shared) get **Responses** instead; other respondents get
+neither, since the bars already show the counts. In a draft, the card menu's **Convert to Inline Mention** minimizes it;
+in a sent message, **Collapse / Expand** hides the body for you only. Arrow
+keys move between poll options; Space or Enter votes. Polls can also be voted
+on directly in mobile channels. In New poll, Add option focuses the new
+choice; removing a choice focuses its replacement. Duplicate choice names
+(ignore case and surrounding spaces) show an inline error and disable Post
+until corrected. Poll cards omit permission badges and display the question
+once, in the card header. Newly posted poll cards
+store their option count in Lexical preview metadata to reserve a minimum
+height before loading, which matches a one-line poll. The card then grows to
+its content (wrapped text, many options, expanded results); nothing scrolls or
+clips inside it. Older cards without that metadata size to their content. A
+viewer without access to the card's item sees "You don’t have access to this
+poll" (or form/item), and a deleted item reads "This poll was deleted", never
+an empty card.
+
+## Reading responses as an agent
+
+Use the Responses tab grid, or open the database (`/app/database/<uuid>`) linked
+in the form's banner. Each submission is a row; the `Submitted` and
+`Respondent` columns are written by the form. An anonymous form never writes
+Respondent (a poll created anonymous has none), stamps Submitted with the day
+only, and writes rows as its owner. They can be renamed and moved,
+but their types cannot change and they cannot be deleted while the form exists
+(including while it is in the trash). Permanently deleting the form releases
+those protections and preserves its database, columns, and answer rows.
+
+## Forms through the AI tools
+
+`CreateForm` creates a complete questionnaire over a new database, or an explicitly
+selected table whose database you own. Give questions and sections distinct local
+keys; gates refer to earlier question keys and choice rules can refer to their
+option keys. The result maps these keys to saved identities. New forms start
+**closed and members-only**. A successful create returns the actual saved draft,
+and its builder and respondent URLs.
+A respondent URL alone does not mean the form accepts responses.
+
+Use `ReadForm` in authoring mode before changing an existing form. It reads the
+shared durable editor document, including a draft that has not reached the
+respondent page. `EditForm` applies named fields or placements to the current
+Loro document without a read-time baseline or a separate snapshot table. Changes
+arriving during the write merge as CRDT operations, including concurrent text
+edits. The merged layout must still pass Forms validation. There is no
+staged release: valid edits to an open form can become visible immediately.
+Question removal retains the response column and its existing answers. Submitted
+and Respondent remain protected. Additive columns are supported; column cleanup,
+linked type changes, independent display-label overrides, and reference pickers
+are not offered by these tools.
+
+Required means an answer must be present; it does not mean the answer qualifies.
+Use nonempty AND/OR gates for qualification. Rules must refer to questions in
+earlier sections and options belonging to those questions. Empty answers pass
+only an `isEmpty` presence check, including for negative comparisons. Zero and
+false are answers. To branch, give a questions section `showWhen` rules
+(`CreateForm`) or change them with `setShowWhen` (`EditForm`, `null` clears);
+they follow the same rules as a gate but name only questions of earlier
+sections, never the section's own. A skipped section's questions are not
+required and their answers are not saved. Put at most one booking section last. Select a saved accessible
+profile/event identity from the scheduling UI or available booking tools. Booking
+gates reveal a link after an accepted response; the independent booking URL
+remains usable. Requests for strict booking enforcement are refused.
+
+`ListForms` searches forms reachable through your actual grants, not every public
+form. It returns at most 50 matches; narrow the name, database, status or access
+filter when truncated. Respondent-mode `ReadForm` omits authoring revisions,
+response summaries and hidden booking destinations. Authoring summaries contain
+counts, never response rows.
+
+The owner calls `SetFormAccess` with complete audience, open/closed, deadline and
+tally settings. Optional `responsesVisible` lets View holders read response rows;
+optional `anonymous` makes the form anonymous to everyone, its owner included,
+and is refused once anyone has responded. It executes directly without a sharing review card. Channel View
+allows responding. When responses are shared it also grants database View.
+Channel Edit also permits reading and editing the entire
+backing database, including columns the form does not ask. Explicit grant deltas
+leave other grants unchanged and do not post messages or send invitations.
+A passed deadline keeps an otherwise open form closed to responses. Settings and
+channel grants use the same services as the browser and are separate writes;
+a partial result requires inspecting the form before retrying.
+
+Mutations do not retain a retry history or deduplicate repeated calls. Each
+`CreateForm` invocation can create a new form. After a timeout, use `ListForms`
+and `ReadForm` to inspect existing work before creating again. A partial result
+includes the target form ID; inspect it and make targeted repairs.
+Forms tool UI follows the existing `enable-forms` feature flag; server execution
+uses the same authenticated user/delegated-agent permissions as the rest of Forms.
+Owners can still close a form or remove access when its draft needs repair.
+
+For timing Build → Responses → Settings, inspect `form.tab` and its panel phase
+in the same trace. Response counts and the database grid have separate waits.
+Switch back to Build and verify that its editing state/layout session survives.
+
+On the respondent route (spans in the
+[observability guide](observability.md#navigation-and-view-phases)), failed
+`form.submit` saves record an error outcome and retain answers;
+retry after restoring transport and verify there is still one saved response.
+Leaving the respondent view cancels its UI measurement; an in-flight save
+still finishes without scrolling or measuring a different view.

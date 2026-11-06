@@ -32,6 +32,15 @@ impl ActivityReads for FakeReads {
         unreachable!()
     }
 
+    async fn teammate_feed(
+        &self,
+        _viewer_id: &str,
+        _cursor: Option<(DateTime<Utc>, Uuid)>,
+        _limit: NonZeroU32,
+    ) -> Result<ActivityFeedPage, Self::Err> {
+        unreachable!()
+    }
+
     async fn entity_activity(
         &self,
         _keys: &[(crate::EntityType, String)],
@@ -100,6 +109,7 @@ fn time(value: &str) -> DateTime<Utc> {
 
 fn property_record(id: u128) -> ActivityRecord {
     ActivityRecord {
+        agent_correlation_id: None,
         id: Uuid::from_u128(id),
         actor: Actor::new_from_user(user()),
         subject_id: user().to_string(),

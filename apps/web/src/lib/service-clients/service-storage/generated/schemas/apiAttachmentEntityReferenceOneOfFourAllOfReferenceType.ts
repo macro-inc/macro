@@ -10,5 +10,5 @@ export type ApiAttachmentEntityReferenceOneOfFourAllOfReferenceType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ApiAttachmentEntityReferenceOneOfFourAllOfReferenceType = {
-  generic: 'generic',
+  comment: 'comment',
 } as const;

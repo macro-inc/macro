@@ -29,6 +29,7 @@ describe('spreadsheet document validation outside sync', () => {
       ['spreadsheetFontNames', 'Calibri'],
       ['spreadsheetBorderBottomStyles', 'double'],
       ['spreadsheetBorderBottomColors', '#123456'],
+      ['spreadsheetIndent', 250],
     ])
       doc.getMap(root).set('A1', value);
     doc
@@ -66,6 +67,8 @@ describe('spreadsheet document validation outside sync', () => {
     ['spreadsheetValues', 'A1', 'x'.repeat(10_001)],
     ['spreadsheetValues', 'bad!sheet!A1', 'bad'],
     ['spreadsheetFontSize', 'A1', 'large'],
+    ['spreadsheetIndent', 'A1', 251],
+    ['spreadsheetIndent', 'A1', 1.5],
     ['spreadsheetFormats', 'A1', 'unsupported'],
     ['spreadsheetSheetNames', 'sheet1', ' Untrimmed '],
     ['spreadsheetSheetOrder', 'bad!id', 1],

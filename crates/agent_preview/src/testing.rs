@@ -1,3 +1,4 @@
+pub mod repository;
 use crate::domain::{ports::*, *};
 use agent_fold::domain::log::AgentSessionId;
 use async_trait::async_trait;
@@ -19,7 +20,7 @@ pub fn session() -> AgentSessionId {
 pub fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(USER.to_owned()).unwrap()
 }
-pub struct TestAuthority(pub AtomicBool);
+pub struct TestAuthority(pub AtomicBool, pub Arc<repository::MemoryRepository>);
 #[async_trait]
 impl Authority for TestAuthority {
     async fn agent(&self, token: &str) -> Result<AgentIdentity, PreviewError> {
@@ -92,7 +93,8 @@ pub fn fixture_with(
             .success()
     );
     let key = crate::inbound::ssh::host_key(&std::fs::read_to_string(path).unwrap()).unwrap();
-    let authority = Arc::new(TestAuthority(AtomicBool::new(true)));
+    let store = Arc::new(repository::MemoryRepository::default());
+    let authority = Arc::new(TestAuthority(AtomicBool::new(true), store.clone()));
     let mut settings = Settings {
         domain: "preview.test".into(),
         https_port: 443,
@@ -104,7 +106,20 @@ pub fn fixture_with(
         app_origin: "https://macro.test".into(),
     };
     adjust(&mut settings);
-    let service = PreviewService::new(settings, authority.clone(), Arc::new(TestEvents)).unwrap();
+    let replica = uuid::Uuid::now_v7();
+    store.0.lock().unwrap().replicas.insert(
+        replica,
+        ("127.0.0.1:1".parse().unwrap(), repository::now() + 45000),
+    );
+    let service = PreviewService::new(
+        settings,
+        authority.clone(),
+        Arc::new(TestEvents),
+        store,
+        replica,
+        Arc::new(crate::outbound::peer::TcpPeerConnector),
+    )
+    .unwrap();
     (service, authority, key)
 }
 pub struct TcpTunnel(pub std::net::SocketAddr);

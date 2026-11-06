@@ -3,7 +3,11 @@ import type {
   GoalSeekResult,
 } from '@macro-inc/spreadsheet/goal-seek';
 import { sheetPivotLayouts } from '@macro-inc/spreadsheet/pivot-layout';
-import type { AxisChange } from '@macro-inc/spreadsheet/workbook-structure';
+import { sheetTableLayouts } from '@macro-inc/spreadsheet/sheet-tables';
+import type {
+  AxisChange,
+  RangeMove,
+} from '@macro-inc/spreadsheet/workbook-structure';
 import {
   type Accessor,
   createEffect,
@@ -177,6 +181,8 @@ export function createCalculation(
       let changed = false;
       const patches: CalculationSheetPatch[] = sheets.map((sheet) => {
         const pivots = sheetPivotLayouts(sheet.metadata?.pivotTables);
+        // Column names come from header cells, so a header edit changes them.
+        const tables = sheetTableLayouts(sheet);
         const descriptor = {
           id: sheet.id,
           name: sheet.name,
@@ -191,6 +197,7 @@ export function createCalculation(
           // Where pivot tables show their values, for GETPIVOTDATA; the
           // tables themselves are too large to send with every edit.
           ...(pivots.length && { pivots }),
+          ...(tables.length && { tables }),
         };
         const previous = sent.get(sheet.id);
         if (
@@ -232,12 +239,13 @@ export function createCalculation(
           clockCells.delete(id);
         }
       const layout = JSON.stringify(
-        patches.map(({ id, name, rowCount, metadata, pivots }) => [
+        patches.map(({ id, name, rowCount, metadata, pivots, tables }) => [
           id,
           name,
           rowCount,
           metadata,
           pivots,
+          tables,
         ])
       );
       if (layout !== sentSheets) changed = true;
@@ -446,6 +454,12 @@ export function createCalculation(
       const result = await copier.run({ type: 'change-axis', sheets, change });
       if (result.type !== 'change-axis')
         throw new Error('Unable to change sheet structure.');
+      return result.sheets;
+    },
+    async moveRange(sheets: SpreadsheetWorkbookSheet[], move: RangeMove) {
+      const result = await copier.run({ type: 'move-range', sheets, move });
+      if (result.type !== 'move-range')
+        throw new Error('Unable to move cells.');
       return result.sheets;
     },
     async copy(copies: CellCopy[]) {

@@ -1,8 +1,12 @@
 #![deny(missing_docs)]
 //! Analytics client for tracking events to GA, Meta, and PostHog.
 
+mod background;
+mod product_event;
 mod providers;
 
+pub use background::BackgroundSender;
+pub use product_event::ProductEventProperties;
 pub use providers::{MetaActionSource, MetaUserData};
 
 use providers::{GoogleAnalyticsProvider, MetaProvider, PostHogProvider};
@@ -147,7 +151,7 @@ impl AnalyticsClient {
     /// - `distinct_id`: Unique identifier for the user (e.g., email or user ID)
     /// - `event_name`: Name of the event (e.g., "subscription_created")
     /// - `properties`: Additional event properties
-    #[tracing::instrument(skip(self, properties), err)]
+    #[tracing::instrument(skip(self, distinct_id, properties), err)]
     pub async fn track_posthog(
         &self,
         distinct_id: &str,

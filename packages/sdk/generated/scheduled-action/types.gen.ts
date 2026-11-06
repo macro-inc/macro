@@ -5,12 +5,21 @@ export type ClientOptions = {
 };
 
 /**
- * Canonical client configuration. Ownership and execution state are server-owned.
+ * Client configuration, the create body. Ownership and execution state are
+ * server-owned.
  */
 export type ActionConfiguration = {
+    /**
+     * What the routine is for, in the owner's words; empty when unset.
+     */
+    description?: string;
     enabled: boolean;
     kind: ActionKind;
     name: string;
+    /**
+     * Omitted by clients that predate the setting; runs then start unlisted.
+     */
+    run_visibility?: RunVisibility;
     task: {
         [key: string]: unknown;
     };
@@ -18,10 +27,15 @@ export type ActionConfiguration = {
 };
 
 /**
- * Canonical configuration replacement. Activation has its own endpoint, so
- * omitting `enabled` keeps the stored value.
+ * Configuration replacement, the update body. Activation has its own endpoint, so
+ * omitting `enabled` keeps the stored value; omitting `run_visibility` or
+ * `description` keeps them too, so clients that predate them do not reset them.
  */
 export type ActionConfigurationUpdate = {
+    /**
+     * An empty string clears it.
+     */
+    description?: string | null;
     /**
      * Still sent by clients deployed before the activation endpoint.
      *
@@ -30,6 +44,7 @@ export type ActionConfigurationUpdate = {
     enabled?: boolean | null;
     kind: ActionKind;
     name: string;
+    run_visibility?: null | RunVisibility;
     task: {
         [key: string]: unknown;
     };
@@ -66,14 +81,49 @@ export type ActionTrigger = {
     filters: EventFilters;
     type: 'events';
 } | {
+    at: string;
+    type: 'once';
+} | {
     triggers: RoutineTriggers;
     type: 'multiple';
 };
 
+/**
+ * One Pipedream app an agent lists under [`AgentMcpServers::Selected`].
+ *
+ * Only the catalog identity is stored. Whether a given person has connected
+ * the app is theirs, resolved at call time by the egress proxy, never here.
+ */
+export type AgentMcpServer = {
+    /**
+     * Pipedream app slug, e.g. `linear`.
+     */
+    app_slug: string;
+    /**
+     * Display name, e.g. `Linear`.
+     */
+    server_name: string;
+};
+
+/**
+ * The single agent task: how routines were stored before they had steps,
+ * and still how a routine that is only an agent is saved.
+ */
 export type AgentTask = {
     agent?: null | AgentTaskAgent;
+    /**
+     * Apps the routine requires on top of the agent's own. The owner must
+     * have each one connected to save the routine and for it to run.
+     */
+    mcp_servers?: Array<AgentMcpServer>;
     model?: null | RoutineModelId;
+    /**
+     * Instructions placed before the user's.
+     */
     prompt: string;
+    /**
+     * What the agent should do.
+     */
     user_prompt: string;
 };
 
@@ -81,6 +131,9 @@ export type AgentTask = {
  * A persona selection, independent of its runtime and current default model.
  */
 export type AgentTaskAgent = {
+    /**
+     * The agent's bot id.
+     */
     bot_id: string;
 };
 
@@ -100,6 +153,40 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * One time a routine's code was brought to a new SDK.
+ */
+export type CodeUpgrade = {
+    createdAt: string;
+    /**
+     * The SDK the code was checked against before; none when it never was.
+     */
+    fromSdk?: string | null;
+    id: string;
+    outcome: UpgradeOutcome;
+    /**
+     * The task before.
+     */
+    previousTask: {
+        [key: string]: unknown;
+    };
+    /**
+     * Why the routine needs its owner.
+     */
+    reason?: string | null;
+    /**
+     * The saved rewrite, or the rewrite that failed its checks.
+     */
+    task?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * The SDK it was brought to.
+     */
+    toSdk: string;
+    updatedAt: string;
+};
+
+/**
  * Why an event-triggered run was skipped before it started.
  */
 export type ConditionResult = {
@@ -113,9 +200,107 @@ export type ConditionResult = {
 };
 
 /**
- * Exactly one representation is accepted, even if mixed fields agree or are null.
+ * What AI drafted, or why it couldn't.
  */
-export type CreateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
+export type Draft = (DraftedRoutine & {
+    outcome: 'routine';
+}) | (DraftedStep & {
+    outcome: 'step';
+}) | {
+    message: string;
+    outcome: 'failed';
+};
+
+/**
+ * What the drafter may write, and the person's workspace by name and id.
+ */
+export type DraftContext = {
+    /**
+     * The model Ask AI steps it writes run on.
+     */
+    agentModel: string;
+    /**
+     * Whether it may write code steps; otherwise it writes Ask AI steps.
+     * Changing a code step needs no permission.
+     */
+    code?: boolean;
+    /**
+     * Whether triggers may ask AI a yes/no question before a run. This host
+     * must also be able to answer it.
+     */
+    conditions?: boolean;
+    /**
+     * IANA time zone schedules are written in, e.g. `America/New_York`.
+     */
+    timezone: string;
+    workspace?: Workspace;
+};
+
+/**
+ * What to draft.
+ */
+export type DraftRequest = {
+    description: string;
+    type: 'routine';
+} | {
+    description: string;
+    kind?: null | StepKind;
+    routine: RoutineSoFar;
+    type: 'add_step';
+} | {
+    index: number;
+    instruction: string;
+    routine: RoutineSoFar;
+    type: 'change_step';
+};
+
+/**
+ * What to draft, and what the drafter may write and name.
+ */
+export type DraftRoutineRequest = {
+    context: DraftContext;
+    draft: DraftRequest;
+};
+
+/**
+ * A drafted routine.
+ */
+export type DraftedRoutine = {
+    name: string;
+    /**
+     * Steps whose code still fails the type checker.
+     */
+    problems: Array<StepProblem>;
+    /**
+     * What it does, in the shape a routine's task holds steps, each code
+     * step named as saving names it.
+     */
+    steps: Array<{
+        [key: string]: unknown;
+    }>;
+    trigger?: null | ActionTrigger;
+};
+
+/**
+ * A drafted step.
+ */
+export type DraftedStep = {
+    /**
+     * What the type checker still finds in its code.
+     */
+    problems: Array<string>;
+    /**
+     * Why AI made a step it chose code or Ask AI, in a few words; empty
+     * when it gave no short reason or didn't choose.
+     */
+    reason: string;
+    /**
+     * The step, in the shape a routine's task holds it.
+     */
+    step: {
+        [key: string]: unknown;
+    };
+};
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -127,6 +312,11 @@ export type EmptyResponse = {
 /**
  * An event name AND an entity ID must match within the same filter. A
  * condition further requires the event's content to answer it with yes.
+ *
+ * `github` comes from outside Macro and carries its payload: it stands
+ * alone in its filter, takes no ids, and may require
+ * exact payload values with `match`. A `github` filter narrows deliveries
+ * with its `github` selector.
  */
 export type EventFilter = {
     /**
@@ -135,7 +325,13 @@ export type EventFilter = {
      */
     condition?: string | null;
     events: Array<EventName>;
+    github?: null | GithubSelector;
     ids?: Array<string> | null;
+    /**
+     * Exact tests on the payload, all of which must pass.
+     */
+    match?: Array<PayloadCondition> | null;
+    property?: null | PropertySelector;
 };
 
 /**
@@ -147,7 +343,7 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
 
 /**
  * Transcript resource created by a run. Never infer this from current task configuration.
@@ -168,9 +364,45 @@ export type ExecutionResourceType = 'chat' | 'agent';
  */
 export type ExecutionResult = {
     condition?: null | ConditionResult;
+    /**
+     * The routine configuration the run used. Step paths only name the same
+     * steps in that configuration; a later edit can put another step there.
+     */
+    configuration_revision?: number | null;
     error?: string | null;
     resource?: null | ExecutionResource;
+    run?: null | RunInfo;
+    /**
+     * What each step that ran did, in order: decisions, tool calls, the agent.
+     */
+    steps?: Array<{
+        [key: string]: unknown;
+    }>;
     version: number;
+};
+
+/**
+ * Which GitHub deliveries match.
+ */
+export type GithubSelector = {
+    /**
+     * Payload actions, such as `completed` or `opened`; any when empty.
+     */
+    actions?: Array<string>;
+    /**
+     * GitHub event names, such as `workflow_run` or `pull_request`; any when empty.
+     */
+    events?: Array<string>;
+    /**
+     * Also run for deliveries caused by bots and apps, including Macro's own.
+     */
+    includeBots?: boolean;
+    /**
+     * Repositories as `owner/name`, matched without regard to case; every
+     * repository the owner's installations cover when empty. A renamed
+     * repository stops matching until it is chosen again.
+     */
+    repositories?: Array<string>;
 };
 
 export type InProgressExecution = {
@@ -180,23 +412,112 @@ export type InProgressExecution = {
 };
 
 /**
- * Deprecated cron-only input, accepted during the compatibility rollout.
+ * An item and its name.
  */
-export type LegacyActionConfiguration = {
-    enabled: boolean;
-    kind: ActionKind;
+export type NamedItem = {
+    id: string;
     name: string;
-    schedule: Schedule;
-    task: {
-        [key: string]: unknown;
-    };
-    timezone: string;
+};
+
+/**
+ * `path` walks objects by key; `*` steps into every element of an array and
+ * a number into one. Give exactly one test. `notIn` also passes when the
+ * path finds nothing.
+ */
+export type PayloadCondition = {
+    equals?: null | PayloadScalar;
+    /**
+     * Whether the path finds a non-null value.
+     */
+    exists?: boolean | null;
+    /**
+     * Some text found matches this glob; `*` matches any run of characters.
+     */
+    glob?: string | null;
+    /**
+     * Some value found is one of these.
+     */
+    in?: Array<PayloadScalar> | null;
+    /**
+     * No value found is one of these.
+     */
+    notIn?: Array<PayloadScalar> | null;
+    /**
+     * Keys from the payload's root, e.g. `["workflow_run", "conclusion"]`.
+     */
+    path: Array<string>;
+};
+
+/**
+ * A JSON text, number, boolean or null that payload values are compared with.
+ */
+export type PayloadScalar = null | boolean | number | string;
+
+/**
+ * Narrows a task property change filter to one property and, optionally, the
+ * values it must gain.
+ */
+export type PropertySelector = {
+    /**
+     * The property definition that must have changed.
+     */
+    definitionId: string;
+    /**
+     * Select option ids or referenced entity ids, one of which the change must
+     * add. Any change to the property matches when empty.
+     */
+    values?: Array<string>;
 };
 
 /**
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
  */
 export type RoutineModelId = string;
+
+/**
+ * The routine a step is added to or changed in.
+ */
+export type RoutineSoFar = {
+    /**
+     * Its steps, in the shape a routine's task holds them.
+     */
+    steps: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Its trigger as it would be saved, for AI to read; absent while it has none.
+     */
+    trigger?: {
+        [key: string]: unknown;
+    } | null;
+};
+
+/**
+ * A shared routine's snapshot, readable by signed-in users with sharing enabled.
+ */
+export type RoutineTemplate = {
+    /**
+     * Routines activated from this template, including stopped ones.
+     */
+    active_count: number;
+    /**
+     * Who shared it: the source routine's owner.
+     */
+    author: string;
+    created_at: string;
+    description: string;
+    /**
+     * The routine it was shared from.
+     */
+    id: string;
+    name: string;
+    task: {
+        [key: string]: unknown;
+    };
+    trigger: ActionTrigger;
+    updated_at: string;
+    variables: Array<TemplateVariable>;
+};
 
 /**
  * An individual trigger in a routine's trigger list.
@@ -208,12 +529,77 @@ export type RoutineTrigger = {
 } | {
     filters: EventFilters;
     type: 'events';
+} | {
+    at: string;
+    type: 'once';
 };
 
 /**
  * Bounded schedules and one combined set of event filters.
  */
 export type RoutineTriggers = Array<RoutineTrigger>;
+
+/**
+ * What the run page says about a run: what started it, when it counts as
+ * happening, and since when.
+ */
+export type RunInfo = {
+    /**
+     * When the run counts as happening: its trigger's time.
+     */
+    at: string;
+    /**
+     * When the routine's previous finished run started.
+     */
+    previous_at?: string | null;
+    /**
+     * What started it.
+     */
+    started_by: RunStart;
+    /**
+     * The IANA time zone code reads `at` in, when the run had one.
+     */
+    timezone?: string | null;
+};
+
+/**
+ * What started a run, for its page.
+ */
+export type RunStart = {
+    kind: 'schedule';
+    /**
+     * The cron expression.
+     */
+    schedule: string;
+    /**
+     * Its IANA time zone.
+     */
+    timezone: string;
+} | {
+    /**
+     * The item the event is about.
+     */
+    entity_id?: string | null;
+    /**
+     * The event's name, e.g. `email.message_received`.
+     */
+    event: string;
+    kind: 'event';
+} | {
+    /**
+     * Who started it.
+     */
+    by: string;
+    kind: 'manual';
+};
+
+/**
+ * Whether a routine's runs are listed in Home and the Agents list. Routines
+ * that run often would bury the owner's own work, so runs start unlisted;
+ * either way they stay in the routine's history. The string form is the
+ * `scheduled_action.run_visibility` column's.
+ */
+export type RunVisibility = 'listed' | 'unlisted';
 
 export type Schedule = string;
 
@@ -224,6 +610,10 @@ export type ScheduledAction = {
      */
     configuration_revision: number;
     created_at: string;
+    /**
+     * What the routine is for, in the owner's words; empty when unset.
+     */
+    description?: string;
     /**
      * When false, automatic dispatch skips this action. `run_now` remains
      * available regardless.
@@ -247,9 +637,17 @@ export type ScheduledAction = {
      * rather than failing to parse.
      */
     owner: string;
+    /**
+     * Whether the action's runs are listed in Home and the Agents list.
+     */
+    run_visibility: RunVisibility;
     task: {
         [key: string]: unknown;
     };
+    /**
+     * The shared template this routine was activated from, if any.
+     */
+    template_id?: string | null;
     trigger: ActionTrigger;
     updated_at: string;
 };
@@ -259,6 +657,7 @@ export type ScheduledAction = {
  * responses omit legacy fields rather than inventing a schedule or timezone.
  */
 export type ScheduledActionResponse = ScheduledAction & {
+    last_run?: null | ActionExecutionRecord;
     /**
      * Deprecated: use `trigger.schedule`. Present only for cron actions.
      *
@@ -302,9 +701,124 @@ export type SetScheduledActionEnabled = {
 };
 
 /**
- * Full replacement of client configuration, not of server-owned action state.
+ * What the owner supplies when sharing; the rest is snapshotted from the routine.
  */
-export type UpdateScheduledAction = ActionConfigurationUpdate | LegacyActionConfiguration;
+export type ShareRoutineTemplate = {
+    description: string;
+    variables: Array<TemplateVariable>;
+};
+
+/**
+ * A starter routine whose step is code: offered when a routine is created,
+ * and shown to the drafter as a worked example.
+ */
+export type StarterRoutine = {
+    /**
+     * Names it, e.g. `inbox`.
+     */
+    key: string;
+    /**
+     * What someone asks for, with when it runs.
+     */
+    request: string;
+    /**
+     * Its steps, in the shape a routine's task holds them.
+     */
+    steps: Array<{
+        [key: string]: unknown;
+    }>;
+};
+
+/**
+ * Code written once, or Ask AI each run.
+ */
+export type StepKind = 'code' | 'agent';
+
+/**
+ * A drafted step whose code still fails the type checker.
+ */
+export type StepProblem = {
+    /**
+     * Its place among the steps, from zero.
+     */
+    index: number;
+    problems: Array<string>;
+};
+
+/**
+ * A user-specific part of a shared routine.
+ */
+export type TemplateVariable = {
+    fill: VariableFill;
+    id: string;
+    kind: 'user';
+    label: string;
+} | {
+    /**
+     * The mention's block name, such as `channel` or `md`.
+     */
+    block_name: string;
+    fill: VariableFill;
+    id: string;
+    kind: 'item';
+    label: string;
+} | {
+    fill: VariableFill;
+    kind: 'time_zone';
+    timezone: string;
+};
+
+/**
+ * How an upgrade went.
+ */
+export type UpgradeOutcome = 'running' | 'checked' | 'rewritten' | 'needs_update';
+
+/**
+ * How a variable is filled when someone activates the template.
+ */
+export type VariableFill = 'activator' | 'shared' | 'choice';
+
+/**
+ * The items AI may name in a draft. They are data for the model; saving
+ * checks every id the draft uses.
+ */
+export type Workspace = {
+    /**
+     * Agents a step may hand the run to.
+     */
+    agents?: Array<WorkspaceAgent>;
+    channels?: Array<NamedItem>;
+    /**
+     * Projects.
+     */
+    folders?: Array<NamedItem>;
+    /**
+     * Email label names.
+     */
+    labels?: Array<string>;
+    people?: Array<NamedItem>;
+    /**
+     * Tag options, by the property definition they belong to.
+     */
+    tags?: Array<WorkspaceTag>;
+};
+
+/**
+ * An agent and its bot id.
+ */
+export type WorkspaceAgent = {
+    botId: string;
+    name: string;
+};
+
+/**
+ * A tag: one option of a property.
+ */
+export type WorkspaceTag = {
+    definitionId: string;
+    label: string;
+    optionId: string;
+};
 
 export type ScheduledActionHealthData = {
     body?: never;
@@ -349,7 +863,7 @@ export type ListScheduledActionsResponses = {
 export type ListScheduledActionsResponse = ListScheduledActionsResponses[keyof ListScheduledActionsResponses];
 
 export type CreateScheduledActionData = {
-    body: CreateScheduledAction;
+    body: ActionConfiguration;
     path?: never;
     query?: never;
     url: '/scheduled-actions';
@@ -369,6 +883,60 @@ export type CreateScheduledActionResponses = {
 };
 
 export type CreateScheduledActionResponse = CreateScheduledActionResponses[keyof CreateScheduledActionResponses];
+
+export type RoutineCodeStartersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/code/starters';
+};
+
+export type RoutineCodeStartersErrors = {
+    401: string;
+};
+
+export type RoutineCodeStartersError = RoutineCodeStartersErrors[keyof RoutineCodeStartersErrors];
+
+export type RoutineCodeStartersResponses = {
+    /**
+     * Starter routines whose step is code; empty where code steps aren't available
+     */
+    200: Array<StarterRoutine>;
+};
+
+export type RoutineCodeStartersResponse = RoutineCodeStartersResponses[keyof RoutineCodeStartersResponses];
+
+export type DraftRoutineData = {
+    body: DraftRoutineRequest;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/drafts';
+};
+
+export type DraftRoutineErrors = {
+    400: string;
+    401: string;
+    /**
+     * AI usage limit reached
+     */
+    402: AiAdmissionErrorBody;
+    500: string;
+    /**
+     * AI usage validation unavailable
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type DraftRoutineError = DraftRoutineErrors[keyof DraftRoutineErrors];
+
+export type DraftRoutineResponses = {
+    /**
+     * A routine or step to review before saving, with any code problems AI couldn't fix, or why AI couldn't draft it
+     */
+    200: Draft;
+};
+
+export type DraftRoutineResponse = DraftRoutineResponses[keyof DraftRoutineResponses];
 
 export type DeleteScheduledActionData = {
     body?: never;
@@ -423,7 +991,7 @@ export type GetScheduledActionResponses = {
 export type GetScheduledActionResponse = GetScheduledActionResponses[keyof GetScheduledActionResponses];
 
 export type UpdateScheduledActionData = {
-    body: UpdateScheduledAction;
+    body: ActionConfigurationUpdate;
     path: {
         /**
          * ID of the scheduled action
@@ -452,6 +1020,35 @@ export type UpdateScheduledActionResponses = {
 };
 
 export type UpdateScheduledActionResponse = UpdateScheduledActionResponses[keyof UpdateScheduledActionResponses];
+
+export type ListScheduledActionCodeUpgradesData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/code-upgrades';
+};
+
+export type ListScheduledActionCodeUpgradesErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type ListScheduledActionCodeUpgradesError = ListScheduledActionCodeUpgradesErrors[keyof ListScheduledActionCodeUpgradesErrors];
+
+export type ListScheduledActionCodeUpgradesResponses = {
+    /**
+     * How the routine's code steps were brought to new SDKs, newest first
+     */
+    200: Array<CodeUpgrade>;
+};
+
+export type ListScheduledActionCodeUpgradesResponse = ListScheduledActionCodeUpgradesResponses[keyof ListScheduledActionCodeUpgradesResponses];
 
 export type SetScheduledActionEnabledData = {
     body: SetScheduledActionEnabled;
@@ -548,3 +1145,116 @@ export type ListScheduledActionHistoryResponses = {
 };
 
 export type ListScheduledActionHistoryResponse = ListScheduledActionHistoryResponses[keyof ListScheduledActionHistoryResponses];
+
+export type UnshareScheduledActionTemplateData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type UnshareScheduledActionTemplateErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type UnshareScheduledActionTemplateError = UnshareScheduledActionTemplateErrors[keyof UnshareScheduledActionTemplateErrors];
+
+export type UnshareScheduledActionTemplateResponses = {
+    204: void;
+};
+
+export type UnshareScheduledActionTemplateResponse = UnshareScheduledActionTemplateResponses[keyof UnshareScheduledActionTemplateResponses];
+
+export type GetScheduledActionTemplateData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type GetScheduledActionTemplateErrors = {
+    401: string;
+    /**
+     * The routine is not shared
+     */
+    404: string;
+    500: string;
+};
+
+export type GetScheduledActionTemplateError = GetScheduledActionTemplateErrors[keyof GetScheduledActionTemplateErrors];
+
+export type GetScheduledActionTemplateResponses = {
+    200: RoutineTemplate;
+};
+
+export type GetScheduledActionTemplateResponse = GetScheduledActionTemplateResponses[keyof GetScheduledActionTemplateResponses];
+
+export type ShareScheduledActionTemplateData = {
+    body: ShareRoutineTemplate;
+    path: {
+        /**
+         * ID of the routine to share
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type ShareScheduledActionTemplateErrors = {
+    400: string;
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type ShareScheduledActionTemplateError = ShareScheduledActionTemplateErrors[keyof ShareScheduledActionTemplateErrors];
+
+export type ShareScheduledActionTemplateResponses = {
+    200: RoutineTemplate;
+};
+
+export type ShareScheduledActionTemplateResponse = ShareScheduledActionTemplateResponses[keyof ShareScheduledActionTemplateResponses];
+
+export type ActivateScheduledActionTemplateData = {
+    body: ActionConfiguration;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template/activate';
+};
+
+export type ActivateScheduledActionTemplateErrors = {
+    400: string;
+    401: string;
+    403: string;
+    /**
+     * The routine is not shared
+     */
+    404: string;
+    500: string;
+};
+
+export type ActivateScheduledActionTemplateError = ActivateScheduledActionTemplateErrors[keyof ActivateScheduledActionTemplateErrors];
+
+export type ActivateScheduledActionTemplateResponses = {
+    201: ScheduledActionResponse;
+};
+
+export type ActivateScheduledActionTemplateResponse = ActivateScheduledActionTemplateResponses[keyof ActivateScheduledActionTemplateResponses];

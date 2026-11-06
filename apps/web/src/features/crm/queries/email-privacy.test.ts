@@ -1,3 +1,4 @@
+import { registerActiveGraphqlSoupQuery } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import type {
   CrmEmailPrivacyResponse,
@@ -96,6 +97,34 @@ describe('CRM email privacy query adapter', () => {
     expect(h.client.getQueryState(emailsKey)?.isInvalidated).toBe(true);
     expect(h.client.getQueryState(companyKey)?.isInvalidated).toBe(true);
     expect(h.feedback.failure).not.toHaveBeenCalled();
+  });
+
+  it('refreshes maintained GraphQL CRM email readers after withdrawal', async () => {
+    const h = mount();
+    await signIn(h);
+    const readers = [
+      { body: { ecd: ['example.com'] }, refresh: vi.fn(async () => {}) },
+      { body: { eca: ['person@example.com'] }, refresh: vi.fn(async () => {}) },
+      { body: { crma: 'activity' }, refresh: vi.fn(async () => {}) },
+      { body: { emailView: 'inbox' }, refresh: vi.fn(async () => {}) },
+    ];
+    for (const reader of readers) {
+      cleanups.push(
+        registerActiveGraphqlSoupQuery({
+          isEnabled: () => true,
+          cacheMaintained: () => true,
+          body: () => reader.body,
+          refresh: reader.refresh,
+        })
+      );
+    }
+    await h.source.update.mutateAsync({
+      action: 'set_consent',
+      enabled: false,
+    });
+    for (const reader of readers.slice(0, 3))
+      expect(reader.refresh).toHaveBeenCalledOnce();
+    expect(readers[3].refresh).not.toHaveBeenCalled();
   });
 
   it('keeps the confirmed sharing state and reports a failed withdrawal', async () => {

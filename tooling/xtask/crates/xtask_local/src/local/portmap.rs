@@ -22,7 +22,10 @@ pub fn write(instance: &Instance) -> Result<PathBuf> {
     let url = |port| format!("http://localhost:{}", instance.port(port));
     let hosts = BTreeMap::from([
         ("auth", url(Port::Auth)),
-        ("cognition", url(Port::DocCognition)),
+        (
+            "cognition",
+            format!("{}/cognition", url(Port::AgentHarness)),
+        ),
         ("connection", url(Port::ConnGateway)),
         ("contacts", url(Port::Contacts)),
         ("email", url(Port::Email)),

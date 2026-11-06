@@ -1,6 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
+import * as doppler from '@pulumiverse/doppler';
 import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
@@ -10,12 +11,14 @@ import {
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
+  AGENT_PUBLIC_URLS,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
   getGatewayAlb,
   getKafkaClusterPolicy,
   getServiceUrl,
   GatewayService,
+  GATEWAY_PRIORITIES,
   ServiceUrl,
   stack,
 } from '../../packages/shared';
@@ -23,6 +26,9 @@ import {
 const gatewayLoadBalancer = getGatewayAlb();
 
 const BASE_NAME = pulumi.getProject();
+/** Must match `ENCRYPTION_PURPOSE` in `mcp_auth_proxy::outbound::postgres`. */
+const MCP_OAUTH_KMS_PURPOSE = 'mcp-oauth-authorization-code';
+const MCP_OAUTH_KMS_ACTIONS = ['kms:Encrypt', 'kms:Decrypt'];
 const REPO_ROOT = '../../..';
 
 type Args = {
@@ -34,14 +40,20 @@ type Args = {
   containerEnvVars: { name: string; value: pulumi.Output<string> | string }[];
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   serviceContainerPort: number;
+  configurationSecrets: pulumi.Resource[];
   /** Container port of the sandbox-facing egress proxy listener. */
   egressContainerPort: number;
+  previewSecurityGroupId: pulumi.Input<string>;
+  previewControlTargetGroupArn: pulumi.Input<string>;
+  previewHttpTargetGroupArn: pulumi.Input<string>;
+  previewSshTargetGroupArn: pulumi.Input<string>;
   healthCheckPath: string;
   ecsClusterArn: pulumi.Output<string> | string;
   cloudStorageClusterName: pulumi.Output<string> | string;
   secretKeyArns: (pulumi.Output<string> | string)[];
   /** SQS queues the service is allowed to send messages to. */
-  queueArns: (pulumi.Output<string> | string)[];
+  queueArns: pulumi.Input<string>[];
+  projectionQueueArn: pulumi.Input<string>;
   /** S3 buckets the service needs access to. */
   bucketArns: (pulumi.Output<string> | string)[];
 };
@@ -133,6 +145,15 @@ export class AgentHarnessService extends pulumi.ComponentResource {
               Resource: queueArns,
               Effect: 'Allow',
             },
+            {
+              Action: [
+                'sqs:ReceiveMessage',
+                'sqs:DeleteMessage',
+                'sqs:ChangeMessageVisibility',
+              ],
+              Resource: [args.projectionQueueArn],
+              Effect: 'Allow',
+            },
           ],
         },
         tags,
@@ -196,49 +217,6 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const claudeOauthKey = new aws.kms.Key(
-      `${BASE_NAME}-claude-oauth-key`,
-      {
-        description:
-          'Encrypt per-user Claude OAuth grants and browser sign-in state',
-        enableKeyRotation: true,
-        deletionWindowInDays: 30,
-        tags,
-      },
-      { parent: this }
-    );
-    new aws.kms.Alias(
-      `${BASE_NAME}-claude-oauth-alias`,
-      {
-        name: `alias/agent-harness-service-claude-oauth-${stack}`,
-        targetKeyId: claudeOauthKey.keyId,
-      },
-      { parent: this }
-    );
-    const claudeOauthPolicy = new aws.iam.RolePolicy(
-      `${BASE_NAME}-claude-oauth-policy`,
-      {
-        role: this.role.name,
-        policy: pulumi.jsonStringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: ['kms:Encrypt', 'kms:Decrypt'],
-              Resource: claudeOauthKey.arn,
-              Condition: {
-                StringEquals: {
-                  'kms:EncryptionContext:purpose': 'claude-cloud-oauth',
-                },
-                Null: { 'kms:EncryptionContext:user_id': 'false' },
-              },
-            },
-          ],
-        }),
-      },
-      { parent: this }
-    );
-
     // Producer/consumer access to the macro event Kafka cluster: the harness
     // consumes `macro.channels` and `macro.agent_sessions`, publishes agent
     // triggers, and publishes channel side effects.
@@ -250,6 +228,8 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       },
       { parent: this, dependsOn: [this.role] }
     );
+
+    const mcpOauthKms = this.createMcpOauthKmsKey(tags);
 
     const image = new EcrImage(
       `${BASE_NAME}-ecr-image-${stack}`,
@@ -289,6 +269,81 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     );
 
     this.targetGroup = gatewayTargetGroup.target_group;
+    // Keep public OAuth identities and pinned clients on their original hosts.
+    // This shares the API target group, preserving ECS's five-target-group limit.
+    const publicHostRules = [
+      new aws.lb.ListenerRule(
+        `${BASE_NAME}-cognition-public-host-${stack}`,
+        {
+          listenerArn: gatewayLoadBalancer.httpsListenerArn,
+          priority:
+            GATEWAY_PRIORITIES[GatewayService.AGENT_COGNITION_PUBLIC_HOST],
+          conditions: [
+            {
+              hostHeader: {
+                values: [new URL(AGENT_PUBLIC_URLS.cognition).hostname],
+              },
+            },
+          ],
+          transforms: [
+            {
+              type: 'url-rewrite',
+              urlRewriteConfig: {
+                rewrite: {
+                  regex: '^/(cognition/)?(.*)$',
+                  replace: '/cognition/$2',
+                },
+              },
+            },
+          ],
+          actions: [{ type: 'forward', targetGroupArn: this.targetGroup.arn }],
+          tags,
+        },
+        { parent: this }
+      ),
+      new aws.lb.ListenerRule(
+        `${BASE_NAME}-mcp-public-host-${stack}`,
+        {
+          listenerArn: gatewayLoadBalancer.httpsListenerArn,
+          priority: GATEWAY_PRIORITIES[GatewayService.AGENT_MCP_PUBLIC_HOST],
+          conditions: [
+            {
+              hostHeader: { values: [new URL(AGENT_PUBLIC_URLS.mcp).hostname] },
+            },
+          ],
+          actions: [{ type: 'forward', targetGroupArn: this.targetGroup.arn }],
+          tags,
+        },
+        { parent: this }
+      ),
+    ];
+    const sharedApiRoutes: [GatewayService, string][] = [
+      [GatewayService.MCP_SERVER, '/mcp'],
+      [GatewayService.DOCUMENT_COGNITION_SERVICE, '/cognition'],
+      [GatewayService.AGENT_SCHEDULE_SERVICE, '/scheduled-action'],
+    ];
+    const sharedApiRules = sharedApiRoutes.map(
+      ([service, prefix]) =>
+        new aws.lb.ListenerRule(
+          `${BASE_NAME}-${service}-${stack}`,
+          {
+            listenerArn: gatewayLoadBalancer.httpsListenerArn,
+            priority: GATEWAY_PRIORITIES[service],
+            actions: [
+              { type: 'forward', targetGroupArn: this.targetGroup.arn },
+            ],
+            conditions: [
+              {
+                pathPattern: {
+                  values: [prefix, `${prefix}/*`],
+                },
+              },
+            ],
+            tags,
+          },
+          { parent: this }
+        )
+    );
 
     // Forward the egress prefix unchanged to its own listener. Session-token
     // Authorization headers are handled by the egress router as before.
@@ -324,7 +379,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         cluster: ecsClusterArn,
         networkConfiguration: {
           subnets: vpc.privateSubnetIds,
-          securityGroups: [serviceSg.id],
+          securityGroups: [serviceSg.id, args.previewSecurityGroupId],
         },
         continueBeforeSteadyState: DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
         deploymentCircuitBreaker: {
@@ -333,10 +388,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         },
         deploymentMinimumHealthyPercent: 100,
         deploymentMaximumPercent: 200,
-        // Every environment runs two, so dev stays prod-shaped: forwarding is
-        // dead code at one task (management() can only answer Ours or
-        // Unmanaged), and a path only dev never exercises is one whose
-        // regressions surface in prod.
+        // Keep dev and production replicated, including during rolling updates.
         desiredCount: 2,
         // ALB checks /health every 10s and fails the target after two
         // misses (~20s). HTTP does not listen until after DB, AWS config,
@@ -346,6 +398,21 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         // Both listeners use the shared gateway, with separate target groups
         // for the control API and sandbox egress proxy.
         loadBalancers: [
+          {
+            targetGroupArn: args.previewControlTargetGroupArn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+          {
+            targetGroupArn: args.previewHttpTargetGroupArn,
+            containerName: 'service',
+            containerPort: 8111,
+          },
+          {
+            targetGroupArn: args.previewSshTargetGroupArn,
+            containerName: 'service',
+            containerPort: 2222,
+          },
           {
             targetGroupArn: gatewayTargetGroup.target_group.arn,
             containerName: 'service',
@@ -369,13 +436,13 @@ export class AgentHarnessService extends pulumi.ComponentResource {
               name: BASE_NAME,
               image: image.image.imageUri,
               // Daytona cleanup can make two 30-second stop attempts. Give the
-              // singleton time to release sandbox capacity before ECS kills it.
+              // draining replica time to release capacity before ECS kills it.
               stopTimeout: 120,
-              cpu: 1024,
-              memory: 2048,
+              // Shared by the harness and up to eight restricted Deno children.
+              cpu: 4096,
+              memory: 8192,
               environment: [
                 ...containerEnvVars,
-                { name: 'CLAUDE_OAUTH_KMS_KEY_ID', value: claudeOauthKey.arn },
                 {
                   name: 'BASE_URL',
                   value: this.domain,
@@ -395,6 +462,8 @@ export class AgentHarnessService extends pulumi.ComponentResource {
                 },
               },
               portMappings: [
+                { containerPort: 8111, hostPort: 8111, protocol: 'tcp' },
+                { containerPort: 2222, hostPort: 2222, protocol: 'tcp' },
                 {
                   appProtocol: 'http',
                   name: `${BASE_NAME}-tcp-${stack}`,
@@ -427,14 +496,116 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         // with a load balancer; it is the listener rule that creates that
         // association.
         dependsOn: [
+          ...args.configurationSecrets,
+          ...mcpOauthKms,
           gatewayTargetGroup.listener_rule,
+          ...publicHostRules,
+          ...sharedApiRules,
           egress.listener_rule,
-          claudeOauthPolicy,
         ],
       }
     );
 
     this.setupServiceAlarms();
+  }
+
+  /**
+   * The key the public MCP OAuth broker encrypts its authorization codes'
+   * upstream tokens with, and the Doppler value naming it. Returns what the
+   * ECS service must wait for, so no task starts unable to issue a code.
+   */
+  private createMcpOauthKmsKey(tags: { [key: string]: string }) {
+    const accountRootArn = pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentityOutput().accountId}:root`;
+    const key = new aws.kms.Key(
+      `${BASE_NAME}-mcp-oauth-key`,
+      {
+        description: `Public MCP OAuth authorization code encryption key for ${stack}`,
+        deletionWindowInDays: 30,
+        enableKeyRotation: true,
+        policy: aws.iam.getPolicyDocumentOutput({
+          statements: [
+            {
+              sid: 'AllowAccountKeyAdministration',
+              effect: 'Allow',
+              principals: [{ type: 'AWS', identifiers: [accountRootArn] }],
+              actions: [
+                'kms:CancelKeyDeletion',
+                'kms:Create*',
+                'kms:Delete*',
+                'kms:Describe*',
+                'kms:Disable*',
+                'kms:Enable*',
+                'kms:Get*',
+                'kms:List*',
+                'kms:Put*',
+                'kms:Revoke*',
+                'kms:ScheduleKeyDeletion',
+                'kms:TagResource',
+                'kms:UntagResource',
+                'kms:Update*',
+              ],
+              resources: ['*'],
+            },
+            {
+              sid: 'AllowMcpOauthCodeEncryption',
+              effect: 'Allow',
+              principals: [{ type: 'AWS', identifiers: [this.role.arn] }],
+              actions: MCP_OAUTH_KMS_ACTIONS,
+              resources: ['*'],
+              conditions: [
+                {
+                  test: 'StringEquals',
+                  variable: 'kms:EncryptionContext:macro:purpose',
+                  values: [MCP_OAUTH_KMS_PURPOSE],
+                },
+              ],
+            },
+          ],
+        }).json,
+        tags,
+      },
+      { parent: this, protect: stack === 'prod' }
+    );
+    const alias = new aws.kms.Alias(
+      `${BASE_NAME}-mcp-oauth-key-alias`,
+      { name: `alias/${BASE_NAME}-mcp-oauth-${stack}`, targetKeyId: key.keyId },
+      { parent: this }
+    );
+    const rolePolicy = new aws.iam.RolePolicy(
+      `${BASE_NAME}-mcp-oauth-kms-policy`,
+      {
+        role: this.role.id,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: MCP_OAUTH_KMS_ACTIONS,
+              Resource: key.arn,
+              Effect: 'Allow',
+              Condition: {
+                StringEquals: {
+                  'kms:EncryptionContext:macro:purpose': MCP_OAUTH_KMS_PURPOSE,
+                },
+              },
+            },
+          ],
+        },
+      },
+      { parent: this }
+    );
+    // MacroConfig reads only Doppler in ECS, so the key reaches the service
+    // through it rather than the container environment.
+    const dopplerKeyId = new doppler.Secret(
+      `harness-MCP_OAUTH_KMS_KEY_ID-${stack}`,
+      {
+        project: 'agent-harness-service',
+        config: stack === 'prod' ? 'prd' : 'dev',
+        name: 'MCP_OAUTH_KMS_KEY_ID',
+        value: alias.name,
+      },
+      { parent: this }
+    );
+    return [rolePolicy, dopplerKeyId];
   }
 
   private initializeSecurityGroups({
@@ -483,7 +654,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       `${BASE_NAME}-service-cpu-alarm`,
       {
         name: `${BASE_NAME}-service-cpu-${stack}`,
-        alarmDescription: `Alarm when ${BASE_NAME} CPU stays elevated (no autoscaling on this service - single replica only)`,
+        alarmDescription: `Alarm when ${BASE_NAME} CPU stays elevated across its replicas`,
         namespace: 'AWS/ECS',
         metricName: 'CPUUtilization',
         statistic: 'Average',

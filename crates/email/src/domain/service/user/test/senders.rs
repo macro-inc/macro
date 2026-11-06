@@ -63,3 +63,23 @@ async fn delegated_inboxes_use_their_own_grant_and_hide_unverified_senders() {
     assert_eq!(senders[0].email_address.0.as_ref(), "verified@example.com");
     assert_eq!(*provider.requested.lock().unwrap(), vec![inbox.id]);
 }
+
+#[tokio::test]
+async fn outlook_senders_use_the_primary_address_without_a_gmail_lookup() {
+    let provider = Provider::default();
+    let mut inbox = link(Uuid::from_u128(3), "viewer@outlook.com");
+    inbox.provider = UserProvider::Outlook;
+    let service = service(FakeUserRepo {
+        inboxes: vec![inbox.clone()],
+        ..Default::default()
+    })
+    .with_sender_provider(provider.clone());
+    let senders = service
+        .get_user_email_senders(user_id(), inbox.id)
+        .await
+        .unwrap();
+    assert_eq!(senders.len(), 1);
+    assert_eq!(senders[0].email_address.0.as_ref(), "viewer@outlook.com");
+    assert!(senders[0].verified);
+    assert!(provider.requested.lock().unwrap().is_empty());
+}

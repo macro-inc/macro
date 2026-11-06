@@ -43,9 +43,9 @@ async function fixture(page: Page, multipleTables = false) {
     errors.push(error.message);
     console.error(error);
   });
-  await page.routeWebSocket('**', (socket) => {
+  await page.routeWebSocket('**', async (socket) => {
     if (!socket.url().includes('connection-gateway')) {
-      socket.close();
+      await socket.close();
       return;
     }
     gateway = socket;
@@ -64,40 +64,42 @@ async function fixture(page: Page, multipleTables = false) {
     const request = route.request();
     const url = new URL(request.url());
     if (url.pathname.endsWith('/items/soup/graphql')) {
-      await route.fulfill({
-        json: {
-          data: {
-            user: {
-              soup: {
-                nextCursor: null,
-                items: [storedName, ...externalRows].map((name, index) => ({
-                  __typename: 'GraphqlSoupDatabaseRow',
-                  id: index
-                    ? `${rowId.slice(0, -4)}${String(index + 1).padStart(4, '0')}`
-                    : rowId,
-                  tableId,
-                  position: '80',
-                  ownerId: detail.database.owner_id,
-                  createdAt: detail.database.created_at,
-                  updatedAt: detail.database.created_at,
-                  cacheProjection: null,
-                  notifications: [],
-                  properties: [
-                    {
-                      id: definitionId,
-                      propertyDefinitionId: definitionId,
-                      value: {
-                        __typename: 'GraphqlStringPropertyValue',
-                        stringValue: name,
-                      },
-                    },
-                  ],
-                })),
-              },
+      const items = [storedName, ...externalRows].map((name, index) => ({
+        __typename: 'GraphqlSoupDatabaseRow',
+        id: index
+          ? `${rowId.slice(0, -4)}${String(index + 1).padStart(4, '0')}`
+          : rowId,
+        tableId,
+        position: '80',
+        ownerId: detail.database.owner_id,
+        createdAt: detail.database.created_at,
+        updatedAt: detail.database.created_at,
+        cacheProjection: null,
+        notifications: [],
+        properties: [
+          {
+            id: definitionId,
+            propertyDefinitionId: definitionId,
+            value: {
+              __typename: 'GraphqlStringPropertyValue',
+              stringValue: name,
             },
           },
-        },
-      });
+        ],
+      }));
+      // Rows are read through the view's own page; other queries read soup.
+      const user =
+        request.postDataJSON()?.operationName === 'DatabaseViewRows'
+          ? {
+              id: detail.database.owner_id,
+              databaseViewRows: {
+                items,
+                nextCursor: null,
+                version: detail.tables[0].table.version,
+              },
+            }
+          : { soup: { nextCursor: null, items } };
+      await route.fulfill({ json: { data: { user } } });
       return;
     }
     if (url.pathname.endsWith('/databases') && request.method() === 'POST') {
@@ -257,6 +259,45 @@ test('the shared toolbar changes inline filters and sorting without writing the 
   expect(saved.writes()).toBe(0);
   expect(saved.errors).toEqual([]);
 });
+
+for (const viewport of [
+  { name: 'desktop', width: 1280, height: 800 },
+  { name: 'phone', width: 390, height: 844 },
+]) {
+  test(`a clicked row opens the underlying table at that row on ${viewport.name}`, async ({
+    page,
+  }) => {
+    const saved = await fixture(page);
+    await page.setViewportSize(viewport);
+    await page
+      .getByRole('button', { name: 'Mention existing database' })
+      .click();
+    await page.getByRole('button', { name: 'Expand database' }).click();
+    await expect(page.getByRole('grid', { name: 'Tasks' })).toBeVisible();
+    await page.getByRole('row', { name: /Finish onboarding/ }).hover();
+    await page
+      .getByRole('button', { name: 'Open Finish onboarding', exact: true })
+      .click();
+    await expect
+      .poll(async () =>
+        JSON.parse(
+          (await page.getByLabel('Opened split').textContent()) || 'null'
+        )
+      )
+      .toEqual({
+        type: 'database',
+        id: databaseId,
+        params: {
+          databaseId,
+          tableId,
+          viewId: tableId,
+          rowId,
+        },
+      });
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(saved.errors).toEqual([]);
+  });
+}
 
 test('the app table picker switches tables with the keyboard and restores focus when dismissed', async ({
   page,

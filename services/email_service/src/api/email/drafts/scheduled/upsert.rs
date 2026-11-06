@@ -1,14 +1,16 @@
 use crate::api::context::{ApiContext, AuthorizationService, EmailSvc};
 use axum::Json;
-use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::extract::{Path, Query, State};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum_extra::extract::Cached;
 use email::domain::{
     models::EmailErr,
     scheduled::{EmailSchedulingService, ScheduleChange},
 };
+use email::inbound::axum::api_types::DraftEditPrecondition;
 use email::inbound::axum::axum_impls::EmailLinkExtractor;
+use email::inbound::axum::send_router::{SendMessageError, refuse_program_send};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 use sqlx_core::types::chrono::{DateTime, Utc};
@@ -17,26 +19,36 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Debug, Error)]
-#[error("{0}")]
-pub struct UpsertScheduledError(#[from] EmailErr);
+pub enum UpsertScheduledError {
+    #[error("{0}")]
+    Email(#[from] EmailErr),
+    /// A scheduled draft sends without anyone seeing it, so a program must
+    /// quote the user's approval here.
+    #[error("{0}")]
+    Program(#[from] SendMessageError),
+}
 
 impl IntoResponse for UpsertScheduledError {
     fn into_response(self) -> Response {
-        let status = match &self.0 {
+        let error = match self {
+            UpsertScheduledError::Email(error) => error,
+            UpsertScheduledError::Program(refusal) => return refusal.into_response(),
+        };
+        let status = match &error {
             EmailErr::MessageNotFound(_) => StatusCode::NOT_FOUND,
             EmailErr::Unauthorized => StatusCode::FORBIDDEN,
             EmailErr::MessageDeliveryConflict(_) | EmailErr::InvalidScheduleTime => {
                 StatusCode::BAD_REQUEST
             }
             _ => {
-                tracing::error!(error=?self.0, "schedule transition failed");
+                tracing::error!(error=?error, "schedule transition failed");
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
         let message = if status == StatusCode::INTERNAL_SERVER_ERROR {
             "Failed to update scheduled message".to_owned()
         } else {
-            self.to_string()
+            error.to_string()
         };
         (
             status,
@@ -54,6 +66,11 @@ pub struct UpsertScheduledRequest {
     pub send_time: DateTime<Utc>,
     /// Per-message signature override; absent uses the inbox's send defaults.
     pub include_signature: Option<bool>,
+    /// The user's own reply approving this send, quoted verbatim. Required
+    /// from an agent's program, which is refused without it; ignored for a
+    /// person in the app, whose Send Later is their confirmation.
+    #[serde(default)]
+    pub user_confirmation: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize, ToSchema)]
@@ -66,7 +83,7 @@ pub struct UpsertScheduledResponse {
 #[utoipa::path(
     put, tag = "Draft Scheduling", path = "/email/drafts/scheduled/{id}",
     operation_id = "upsert_scheduled_message",
-    params(("id" = Uuid, Path, description = "The ID of the draft message to schedule")),
+    params(DraftEditPrecondition, ("id" = Uuid, Path, description = "The ID of the draft message to schedule")),
     request_body = UpsertScheduledRequest,
     responses(
         (status = 200, body = UpsertScheduledResponse),
@@ -77,16 +94,23 @@ pub struct UpsertScheduledResponse {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, link), err)]
+#[tracing::instrument(skip(ctx, authorization, headers, link), err)]
 pub async fn handler(
+    Query(precondition): Query<DraftEditPrecondition>,
     State(ctx): State<ApiContext>,
     Cached(authorization): Cached<
         MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     >,
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<EmailSvc, AuthorizationService>>,
     Path(draft_id): Path<Uuid>,
+    headers: HeaderMap,
     Json(request): Json<UpsertScheduledRequest>,
 ) -> Result<Json<UpsertScheduledResponse>, UpsertScheduledError> {
+    refuse_program_send(
+        authorization.authorization.user.agent_id.is_some(),
+        &headers,
+        request.user_confirmation.as_deref(),
+    )?;
     ctx.email_service
         .service()
         .change_schedule(
@@ -95,6 +119,7 @@ pub async fn handler(
             draft_id,
             ScheduleChange::Set(request.send_time),
             request.include_signature,
+            precondition.draft_generation,
         )
         .await?;
     Ok(Json(UpsertScheduledResponse {

@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
     <uses-permission android:name="android.permission.BATTERY_STATS" tools:node="remove" />
+    <!-- LiveKit ships a screen-share service; Android calls don't share screens. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" tools:node="remove" />
 
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
@@ -24,6 +26,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize"
+            android:supportsPictureInPicture="true"
             android:enableOnBackInvokedCallback="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -95,5 +98,9 @@
             android:name="android.support.FILE_PROVIDER_PATHS"
             android:resource="@xml/file_paths" />
         </provider>
+
+        <service
+          android:name="io.livekit.android.room.track.screencapture.ScreenCaptureService"
+          tools:node="remove" />
     </application>
 </manifest>

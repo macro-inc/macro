@@ -24,7 +24,7 @@ import {
 import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Harness } from './Harness';
-import { chooseSelectOption } from './tests/select-helpers';
+import { chooseModelOption } from './tests/select-helpers';
 
 vi.mock('@ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ui')>()),
@@ -33,31 +33,6 @@ vi.mock('@ui', async (importOriginal) => ({
 
 vi.mock('./codex/views/CodexHarness', () => ({
   CodexHarness: () => <div data-testid="codex-harness" />,
-}));
-
-const claudeFlag = vi.hoisted(() => ({ enabled: true, source: vi.fn() }));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: (flag: { key: string }) => {
-    expect(flag.key).toBe('claude-cloud');
-    return () => ({ enabled: claudeFlag.enabled });
-  },
-}));
-
-vi.mock('@core/context/user', () => ({
-  useUserId: () => () => 'macro|demo@example.com',
-}));
-vi.mock('@queries/claude-auth/connection', () => ({
-  useClaudeConnectionSource: () => {
-    claudeFlag.source();
-    return {
-      status: () => ({ enabled: true, connected: false, ephemeral: true }),
-      failed: () => false,
-      begin: vi.fn(),
-      complete: vi.fn(),
-      disconnect: vi.fn(),
-      refresh: vi.fn(),
-    };
-  },
 }));
 
 const mocks = vi.hoisted(() => ({
@@ -97,12 +72,12 @@ const harnessMocks = vi.hoisted(() => ({
     isError: false,
   },
   deleteHarness: vi.fn(),
+  patchHarness: vi.fn(),
   approve: vi.fn(),
   pairing: {
     data: {
       code: 'KX7M-4QHD',
       requested_name: 'Dev laptop',
-      requested_scope: null,
       host: 'erics-mbp.local',
       created_at: '2026-08-27T12:00:00Z',
       expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
@@ -137,6 +112,10 @@ vi.mock('@queries/harnesses/harnesses', () => ({
   useHarnessesQuery: () => harnessMocks.query,
   useDeleteHarnessMutation: () => ({
     mutateAsync: harnessMocks.deleteHarness,
+    isPending: false,
+  }),
+  usePatchHarnessMutation: () => ({
+    mutateAsync: harnessMocks.patchHarness,
     isPending: false,
   }),
   useHarnessPairingQuery: (code: () => string | undefined) => ({
@@ -182,6 +161,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 
 const REGISTERED_HARNESS = {
   id: '3f1c9d2e-8a4b-4c5d-9e6f-1a2b3c4d5e6f',
+  allow_permission_bypass: false,
   kind: 'macrod',
   name: 'Dev box',
   owner: { type: 'team', team_id: 'team-1' },
@@ -232,21 +212,6 @@ describe('Harness', () => {
       expect(Boolean(screen.queryByTestId('codex-harness'))).toBe(enabled);
     }
   );
-
-  it('hides the Claude connection outside its rollout', () => {
-    claudeFlag.enabled = false;
-    claudeFlag.source.mockClear();
-    try {
-      render(() => <Harness />);
-      expect(
-        screen.queryByRole('region', { name: 'Claude Cloud connection' })
-      ).toBeNull();
-      expect(claudeFlag.source).not.toHaveBeenCalled();
-      expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
-    } finally {
-      claudeFlag.enabled = true;
-    }
-  });
 
   it.each(['success', 'error'] as const)(
     'keeps settings visible while Cursor models load and after %s',
@@ -314,17 +279,11 @@ describe('Harness', () => {
     }
   );
 
-  it('shows Claude with the Anthropic logo above Cursor in the harness list', () => {
+  it('lists Macro Agent and Cursor in the harness list', () => {
     render(() => <Harness />);
 
     expect(screen.getByRole('heading', { name: 'Macro Agent' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
-    const claude = screen.getByRole('heading', { name: 'Claude Cloud' });
-    const cursor = screen.getByRole('heading', { name: 'Cursor' });
-    expect(
-      claude.compareDocumentPosition(cursor) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
-    expect(screen.getByLabelText('Anthropic')).toBeTruthy();
     expect(
       screen.getByText(/Uses official Macro tools and MCPs to get the job done/)
     ).toBeTruthy();
@@ -388,7 +347,7 @@ describe('Harness', () => {
     expect(screen.queryByLabelText('API key')).toBeNull();
     expect(screen.getByText(/does not revoke it in Cursor/)).toBeTruthy();
 
-    chooseSelectOption(screen.getByLabelText('Default model'), 'Another Model');
+    chooseModelOption(screen.getByLabelText('Default model'), 'Another Model');
     await waitFor(() => {
       expect(mocks.setDefaultModel).toHaveBeenCalledWith('another-model');
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Default model updated');
@@ -416,7 +375,7 @@ describe('Harness', () => {
 
     expect(screen.queryByText('No paired runtimes yet')).toBeNull();
     expect(
-      screen.queryByRole('heading', { name: 'Paired runtimes' })
+      screen.queryByRole('heading', { name: 'Connected runtimes' })
     ).toBeNull();
     expect(
       screen.queryByRole('button', { name: 'Enter pairing code' })
@@ -446,6 +405,9 @@ describe('Harness', () => {
 
     render(() => <Harness />);
 
+    expect(
+      screen.getByRole('heading', { name: 'Connected runtimes' })
+    ).toBeTruthy();
     expect(screen.getByText('Dev box')).toBeTruthy();
     expect(screen.getByText('Team')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
@@ -453,11 +415,32 @@ describe('Harness', () => {
     expect(screen.queryByText('Never connected')).toBeNull();
   });
 
-  it('shows a disconnected private harness that never connected', () => {
+  it('lists an offline runtime below the connected ones', () => {
+    const offline = {
+      ...REGISTERED_HARNESS,
+      id: 'harness-offline',
+      name: 'Old laptop',
+      owner: { type: 'user' as const, user_id: 'macro|user@example.com' },
+      connected: false,
+      last_connected_at: null,
+    };
+    harnessMocks.query.data = [offline, REGISTERED_HARNESS];
+
+    render(() => <Harness />);
+
+    expect(screen.getByText('Private')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Offline' })).toBeTruthy();
+    expect(screen.getByText('Never connected')).toBeTruthy();
+    const names = screen
+      .getAllByText(/Dev box|Old laptop/)
+      .map((node) => node.textContent);
+    expect(names).toEqual(['Dev box', 'Old laptop']);
+  });
+
+  it('hides the section when every runtime is offline', () => {
     harnessMocks.query.data = [
       {
         ...REGISTERED_HARNESS,
-        owner: { type: 'user', user_id: 'macro|user@example.com' },
         connected: false,
         last_connected_at: null,
       },
@@ -465,9 +448,10 @@ describe('Harness', () => {
 
     render(() => <Harness />);
 
-    expect(screen.getByText('Private')).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Disconnected' })).toBeTruthy();
-    expect(screen.getByText('Never connected')).toBeTruthy();
+    expect(
+      screen.queryByRole('heading', { name: 'Connected runtimes' })
+    ).toBeNull();
+    expect(screen.queryByText('Dev box')).toBeNull();
   });
 
   it('confirms before removing a harness', async () => {
@@ -496,6 +480,68 @@ describe('Harness', () => {
     });
   });
 
+  it('allows permission bypass on a paired runtime after confirming', async () => {
+    harnessMocks.query.data = [REGISTERED_HARNESS];
+
+    render(() => <Harness />);
+    const toggle = screen.getByRole('switch', {
+      name: 'Allow bypassing permission requests',
+    });
+    expect(toggle).toHaveProperty('checked', false);
+    expect(
+      screen.getByText('Every agent on this runtime must ask for permission.')
+    ).toBeTruthy();
+    fireEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(harnessMocks.patchHarness).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        allowPermissionBypass: true,
+      })
+    );
+  });
+
+  it('withdraws permission bypass without confirming', async () => {
+    const { confirmDialog } = await import('@ui');
+    harnessMocks.query.data = [
+      { ...REGISTERED_HARNESS, allow_permission_bypass: true },
+    ];
+
+    render(() => <Harness />);
+    fireEvent.click(
+      screen.getByRole('switch', {
+        name: 'Allow bypassing permission requests',
+      })
+    );
+
+    await waitFor(() =>
+      expect(harnessMocks.patchHarness).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        allowPermissionBypass: false,
+      })
+    );
+    expect(confirmDialog).not.toHaveBeenCalled();
+  });
+
+  it('renames a paired runtime', async () => {
+    harnessMocks.query.data = [REGISTERED_HARNESS];
+
+    render(() => <Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByLabelText('Name');
+    fireEvent.input(input, { target: { value: '  Studio  ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(harnessMocks.patchHarness).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        name: 'Studio',
+      });
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  });
+
   it('opens the pairing dialog prefilled from the pair search param', async () => {
     harnessMocks.searchParams.pair = 'KX7M-4QHD';
 
@@ -509,5 +555,11 @@ describe('Harness', () => {
       { pair: undefined },
       { replace: true }
     );
+  });
+  it('uses the supplied return destination for the back button', () => {
+    const onBack = vi.fn();
+    render(() => <Harness onBack={onBack} backLabel="Integrations" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Integrations' }));
+    expect(onBack).toHaveBeenCalledOnce();
   });
 });

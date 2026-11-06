@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::error::Result as SessionResult;
-use crate::domain::model::{AgentMcpServers, ReplicaId, SandboxSize};
+use crate::domain::model::{
+    AgentMcpServer, AgentMcpServers, ReplicaId, SandboxSize, SessionSource, SessionVisibility,
+};
 use crate::domain::ports::{
     AcceptedControl, BotFacts, ManagedAgentProfile, NoOpAgentSessionNameGenerator, NoOpRealtime,
     NoOpTurnObserver, NoopLifecyclePublisher, OpenExternalAgentSession, QueuedControl,
@@ -179,16 +181,29 @@ impl AgentSessionNotificationRecipient for Controls {
     }
 }
 
+#[derive(Clone, Default)]
+struct Apps(Arc<Mutex<Vec<String>>>);
+
+impl ConnectedApps for Apps {
+    async fn connected_app_slugs(
+        &self,
+        _: &MacroUserIdStr<'static>,
+    ) -> anyhow::Result<Vec<String>> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+}
+
 type Sessions = AgentSessionServiceImpl<
     InMemoryAgentSessionRepo,
     FoldedMessageService<InMemoryAgentSessionRepo>,
     NoOpRealtime,
 >;
-type Service = RoutineSessionsService<Directory, Openings, Openings, Sessions, Controls>;
+type Service = RoutineSessionsService<Directory, Openings, Openings, Sessions, Controls, Apps>;
 
 struct Fixture {
     service: Service,
     directory: Directory,
+    apps: Apps,
     openings: Openings,
     controls: Controls,
     repo: InMemoryAgentSessionRepo,
@@ -227,16 +242,19 @@ impl Fixture {
         let openings = Openings::default();
         *openings.response.lock().unwrap() = Some(session.clone());
         let controls = Controls::default();
+        let apps = Apps::default();
         let service = RoutineSessionsService::new(
             directory.clone(),
             openings.clone(),
             openings.clone(),
             sessions,
             controls.clone(),
+            apps.clone(),
         );
         Self {
             service,
             directory,
+            apps,
             openings,
             controls,
             repo,
@@ -249,6 +267,7 @@ impl Fixture {
             owner: self.session.owner_user().unwrap().clone(),
             bot_id: self.session.bot_id,
             model: None,
+            mcp_servers: Vec::new(),
         }
     }
 
@@ -256,6 +275,8 @@ impl Fixture {
         PrepareRoutineSession {
             selection: self.selection(),
             session_id: self.session.id,
+            source: SessionSource::Routine,
+            visibility: SessionVisibility::Unlisted,
         }
     }
 
@@ -284,6 +305,7 @@ async fn managed_preparation_preserves_persona_and_applies_override_without_prom
     assert!(request.prompt.is_none());
     assert!(request.instructions.is_none());
     assert!(request.repo_url.is_none() && request.repo_branch.is_none());
+    assert_eq!(request.source, SessionSource::Routine);
     let persona = request.profile.as_ref().unwrap();
     assert_eq!(persona.bot_id, fx.session.bot_id);
     let profile = persona.profile.as_ref().unwrap();
@@ -314,6 +336,8 @@ async fn external_preparation_uses_requested_identity_and_model() {
                 bot_id: fx.session.bot_id,
                 owner: fx.session.owner_user().unwrap().clone(),
                 model: override_model,
+                source: SessionSource::Routine,
+                visibility: SessionVisibility::Unlisted,
             }]
         );
         assert!(fx.openings.managed.lock().unwrap().is_empty());
@@ -513,6 +537,7 @@ async fn refuses_known_prompt_replays_even_after_completion() {
         agent_session_id: fx.session.id,
         user_id: Some(action.owner.clone()),
         content: crate::domain::model::Message::ToRuntime(content),
+        logged_at: None,
     }]);
     let response = serde_json::json!({
         "direction": "to_server",
@@ -577,4 +602,141 @@ fn commands_reject_malformed_owner_and_ids_at_deserialization() {
     let mut value = serde_json::to_value(&command).unwrap();
     value["session_id"] = serde_json::json!("not-a-uuid");
     assert!(serde_json::from_value::<RoutineSessionAction>(value).is_err());
+}
+
+#[tokio::test]
+async fn a_routine_app_must_be_connected_to_save_and_to_run() {
+    let fx = Fixture::new(true);
+    let mut selection = fx.selection();
+    selection.mcp_servers = vec![AgentMcpServer {
+        app_slug: "linear".into(),
+        server_name: "Linear".into(),
+    }];
+    *fx.apps.0.lock().unwrap() = vec!["notion".into()];
+    assert_eq!(
+        fx.service.validate(selection.clone()).await.unwrap_err(),
+        RoutineSessionError::AppNotConnected
+    );
+
+    *fx.apps.0.lock().unwrap() = vec!["notion".into(), "linear".into()];
+    fx.service.validate(selection.clone()).await.unwrap();
+
+    // Disconnected after saving: the run fails before any session opens.
+    *fx.apps.0.lock().unwrap() = vec!["notion".into()];
+    assert_eq!(
+        fx.service
+            .prepare(PrepareRoutineSession {
+                selection,
+                ..fx.prepare()
+            })
+            .await
+            .unwrap_err(),
+        RoutineSessionError::AppNotConnected
+    );
+    assert!(fx.openings.managed.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn routine_apps_are_added_to_an_agent_limited_to_selected_apps() {
+    let fx = Fixture::new(true);
+    fx.directory
+        .0
+        .lock()
+        .unwrap()
+        .as_mut()
+        .unwrap()
+        .managed_profile
+        .as_mut()
+        .unwrap()
+        .mcp_servers = AgentMcpServers::Selected {
+        servers: vec![
+            AgentMcpServer {
+                app_slug: "notion".into(),
+                server_name: "Notion".into(),
+            },
+            AgentMcpServer {
+                app_slug: "linear".into(),
+                server_name: "Linear".into(),
+            },
+        ],
+    };
+    *fx.apps.0.lock().unwrap() = vec!["linear".into(), "slack".into()];
+    let mut command = fx.prepare();
+    command.selection.mcp_servers = vec![
+        AgentMcpServer {
+            app_slug: "linear".into(),
+            server_name: "Linear".into(),
+        },
+        AgentMcpServer {
+            app_slug: "slack".into(),
+            server_name: "Slack".into(),
+        },
+    ];
+    fx.service.prepare(command).await.unwrap();
+    let requests = fx.openings.managed.lock().unwrap();
+    assert_eq!(
+        requests[0]
+            .profile
+            .as_ref()
+            .unwrap()
+            .profile
+            .as_ref()
+            .unwrap()
+            .mcp_servers,
+        AgentMcpServers::Selected {
+            servers: vec![
+                AgentMcpServer {
+                    app_slug: "notion".into(),
+                    server_name: "Notion".into(),
+                },
+                AgentMcpServer {
+                    app_slug: "linear".into(),
+                    server_name: "Linear".into(),
+                },
+                AgentMcpServer {
+                    app_slug: "slack".into(),
+                    server_name: "Slack".into(),
+                },
+            ],
+        }
+    );
+}
+
+#[tokio::test]
+async fn an_agent_using_every_connected_app_keeps_that_scope() {
+    let fx = Fixture::new(true);
+    *fx.apps.0.lock().unwrap() = vec!["linear".into()];
+    let mut command = fx.prepare();
+    command.selection.mcp_servers = vec![AgentMcpServer {
+        app_slug: "linear".into(),
+        server_name: "Linear".into(),
+    }];
+    fx.service.prepare(command).await.unwrap();
+    let requests = fx.openings.managed.lock().unwrap();
+    assert_eq!(
+        requests[0]
+            .profile
+            .as_ref()
+            .unwrap()
+            .profile
+            .as_ref()
+            .unwrap()
+            .mcp_servers,
+        AgentMcpServers::OwnerConnections
+    );
+}
+
+#[tokio::test]
+async fn an_external_agent_cannot_take_routine_apps() {
+    let fx = Fixture::new(false);
+    *fx.apps.0.lock().unwrap() = vec!["linear".into()];
+    let mut selection = fx.selection();
+    selection.mcp_servers = vec![AgentMcpServer {
+        app_slug: "linear".into(),
+        server_name: "Linear".into(),
+    }];
+    assert_eq!(
+        fx.service.validate(selection).await.unwrap_err(),
+        RoutineSessionError::AppsUnsupported
+    );
 }

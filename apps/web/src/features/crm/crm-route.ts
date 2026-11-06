@@ -1,41 +1,182 @@
 import {
   createSearchParamsCodec,
+  type SerializedSearchParams,
   type SplitReference,
   type SplitSearchState,
 } from '@app/lib/split-router';
 import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { z } from 'zod';
-import { pipelineIdOfTab, pipelineTab } from './core/navigation';
+import { pipelineIdOfTab } from './core/navigation';
+import { COMPANY_SECTIONS, CONTACT_SECTIONS } from './core/record';
 import {
   CRM_VIEW_URL_PARAM,
   decodeCrmViewParam,
 } from './queries/saved-view-codec';
 
-/** Customers pane search. `tab` is the open view. A new `seek` repeats a pipeline request. */
+/** Customers pane search. `tab` is the open list; a pipeline is its own route. */
 export const crmSearch = {
   namespace: 'crm',
-  schema: z.object({
-    tab: z.string(),
-    pipeline: z.string(),
-    seek: z.string(),
-  }),
-  defaults: { tab: 'active', pipeline: '', seek: '' },
+  schema: z.object({ tab: z.string() }),
+  defaults: { tab: 'active' },
 };
 
 export type CrmSearchParams = z.infer<typeof crmSearch.schema>;
 
 export const crmSearchCodec = createSearchParamsCodec(crmSearch);
 
-/** The Customers pane search that opens it on `pipelineId`. */
-export function crmPipelineSearch(pipelineId: string): SplitSearchState {
-  return {
-    [crmSearch.namespace]:
-      crmSearchCodec.serialize({
-        tab: pipelineTab(pipelineId),
-        pipeline: pipelineId,
-        seek: crypto.randomUUID(),
-      }) ?? {},
-  };
+/** The Customers pane search of the People list, where contacts open from. */
+export const crmPeopleSearch: SplitSearchState = {
+  [crmSearch.namespace]: { tab: ['people'] },
+};
+
+/** The Discussion message an open record shows; a new `seek` repeats a request. */
+export const crmRecordSearch = {
+  namespace: 'crm-record',
+  schema: z.object({ commentId: z.string(), seek: z.string() }),
+  defaults: { commentId: '', seek: '' },
+};
+
+export const crmPipelineParams = z.object({ pipelineId: z.string().min(1) });
+
+/** A company or contact opened inside Customers; no section is its Overview. */
+export const crmRecordParams = z.object({
+  recordType: z.enum(['company', 'contact']),
+  recordId: z.string().min(1),
+  section: z
+    .enum([...new Set([...COMPANY_SECTIONS, ...CONTACT_SECTIONS])])
+    .optional(),
+});
+
+export type CrmRecordParams = z.infer<typeof crmRecordParams>;
+
+/** A CRM-linked item keeps its source record trail and display name in history. */
+export const crmItemParams = z.object({
+  itemType: z.enum(['document', 'email', 'call']),
+  itemId: z.string().min(1),
+  itemFileType: z.string().optional(),
+  itemSubType: z.enum(['task', 'snippet', 'skill']).optional(),
+});
+
+export type CrmItemParams = z.infer<typeof crmItemParams>;
+
+const CRM_SECTION_ITEM_TYPES = {
+  tasks: { itemType: 'document', itemFileType: 'md', itemSubType: 'task' },
+  emails: { itemType: 'email' },
+  calls: { itemType: 'call' },
+} as const;
+
+/** Typed record sections supply all renderer metadata without extra URL segments. */
+export const crmRecordItemParams = crmRecordParams
+  .extend({
+    section: z.enum(['tasks', 'emails', 'calls']),
+    itemId: crmItemParams.shape.itemId,
+  })
+  .transform((params) => ({
+    ...params,
+    ...CRM_SECTION_ITEM_TYPES[params.section],
+  }));
+
+/** Files and overview notes need document metadata, unlike typed sections. */
+export const crmRecordFileItemParams = crmRecordParams.extend({
+  ...crmItemParams.shape,
+  section: z.enum(['overview', 'files']).optional(),
+  itemType: z.literal('document'),
+});
+
+/** The canonical entity kind used by item claims, references, and fallback names. */
+export function crmItemBlockType({
+  itemType,
+  itemFileType,
+  itemSubType,
+}: CrmItemParams) {
+  return itemType === 'document'
+    ? (itemSubType ?? itemFileType ?? 'md')
+    : itemType;
+}
+
+/** Records opened on the way to the shown one, kept with its history entry. */
+export const crmRecordTrailSchema = z
+  .array(
+    z.object({
+      type: z.enum(['company', 'contact']),
+      id: z.string().min(1),
+      name: z.string(),
+    })
+  )
+  .min(1);
+
+export const crmItemStateSchema = z.object({
+  trail: crmRecordTrailSchema.optional(),
+  name: z.string(),
+});
+
+export function crmRecordClaim({ recordType, recordId }: CrmRecordParams) {
+  return { namespace: 'block', id: `${recordType}:${recordId}` };
+}
+
+export function crmRecordReference({
+  recordType,
+  recordId,
+}: CrmRecordParams): SplitReference | undefined {
+  return uuidRouteReference(recordId, recordType);
+}
+
+export const CRM_RETIRED_DATABASES_ROUTE_IDS = {
+  database: 'companies-retired-database',
+  pipelineDatabase: 'companies-pipeline-retired-database',
+  record: 'companies-retired-record-databases',
+  pipelineRecord: 'companies-pipeline-retired-record-databases',
+} as const;
+
+export function isCrmRetiredDatabasesRoute(routeId: string) {
+  return Object.values<string>(CRM_RETIRED_DATABASES_ROUTE_IDS).includes(
+    routeId
+  );
+}
+
+/** Links to the retired Customers Databases views, kept so they still open. */
+export const crmRetiredDatabaseParams = z.object({
+  databaseId: z.string().min(1),
+});
+
+export const crmRetiredRecordDatabasesParams = z.object({
+  recordType: crmRecordParams.shape.recordType,
+  recordId: crmRecordParams.shape.recordId,
+  databaseId: z.string().min(1).optional(),
+});
+
+/**
+ * Where a retired Databases link now goes: a database to the database, and a
+ * record's Databases section to the record.
+ */
+export function retiredCrmDatabasesPath({
+  pipelineId,
+  recordType,
+  recordId,
+  databaseId,
+}: {
+  pipelineId?: unknown;
+  recordType?: unknown;
+  recordId?: unknown;
+  databaseId?: unknown;
+}): string | undefined {
+  if (typeof databaseId === 'string')
+    return `/database/${encodeURIComponent(databaseId)}`;
+  if (typeof recordType !== 'string' || typeof recordId !== 'string')
+    return undefined;
+  const source =
+    typeof pipelineId === 'string'
+      ? `/companies/pipeline/${encodeURIComponent(pipelineId)}`
+      : '/companies';
+  return `${source}/${recordType}/${encodeURIComponent(recordId)}`;
+}
+
+/** A pipeline link references the pipeline, not a place within it. */
+export function crmPipelineReference(
+  pipelineId: string
+): SplitReference | undefined {
+  const reference = uuidRouteReference(pipelineId, 'pipeline');
+  return reference && { ...reference, params: {} };
 }
 
 function crmTabFromQuery(query: URLSearchParams): string | undefined {
@@ -47,14 +188,34 @@ function crmTabFromQuery(query: URLSearchParams): string | undefined {
   return undefined;
 }
 
-/** A shared Customers link that shows a pipeline references the pipeline. */
+/** A Customers list link that shows a pipeline references the pipeline. */
 export function crmViewReference(
   query: URLSearchParams
 ): SplitReference | undefined {
-  const reference = uuidRouteReference(
-    pipelineIdOfTab(crmTabFromQuery(query)),
-    'pipeline'
+  const id = pipelineIdOfTab(crmTabFromQuery(query));
+  return id ? crmPipelineReference(id) : undefined;
+}
+
+/** The pipeline a shared `crmView` link shows, if any. */
+export function crmViewPipelineId(query: URLSearchParams): string | undefined {
+  const view = query.get(CRM_VIEW_URL_PARAM);
+  return view
+    ? pipelineIdOfTab(decodeCrmViewParam(view)?.activeTab)
+    : undefined;
+}
+
+/**
+ * The pipeline a Customers list URL from before pipelines had their own route
+ * shows: its tab, its one-time pipeline request, or a shared view's tab.
+ */
+export function legacyCrmPipelineId(
+  search: SplitSearchState | undefined,
+  externalSearch: string | undefined
+): string | undefined {
+  const crm: SerializedSearchParams | undefined = search?.[crmSearch.namespace];
+  return (
+    pipelineIdOfTab(crm?.tab?.at(-1)) ??
+    crm?.pipeline?.at(-1) ??
+    crmViewPipelineId(new URLSearchParams(externalSearch))
   );
-  // The rest of the shared view state is no place within the pipeline.
-  return reference && { ...reference, params: {} };
 }

@@ -69,6 +69,14 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
     return this;
   }
 
+  /** Start closed until reconnect() is called, without resolving a URL. */
+  public withAutoConnect(
+    autoConnect: boolean
+  ): WebsocketBuilder<Send, Receive> {
+    this._options = { ...this._options, autoConnect };
+    return this;
+  }
+
   /**
    * Getter for the protocols.
    *
@@ -187,6 +195,7 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
     );
     newBuilder._protocols = this._protocols;
     newBuilder._options = {
+      autoConnect: this._options?.autoConnect,
       retry: this._options?.retry,
       heartbeat: this._options?.heartbeat,
       listeners: this._options?.listeners,

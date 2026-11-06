@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Stepper } from '@ui/components/Stepper';
 import {
   type Accessor,
@@ -27,6 +28,7 @@ export type SignupJourneySlots = {
   onGoogle: () => Promise<void>;
   onBackFromEmail: () => void;
   onSignIn: () => void;
+  onAgentSignup: () => void;
   emailForm: JSX.Element;
   showingEmail: boolean;
 };
@@ -46,6 +48,8 @@ export function AuthView(props: {
   signupJourney?: (slots: SignupJourneySlots) => JSX.Element;
   /** Switches a returning visitor from sign-up to sign-in. */
   onSignIn?: () => void;
+  /** Switches an agent from sign-up to the agent signup page. */
+  onAgentSignup?: () => void;
   /**
    * Shown while the session is still resolving on a cold load, instead of the
    * signed-out screens a returning visitor would otherwise see flash by.
@@ -78,6 +82,7 @@ export function AuthView(props: {
             onGoogle: () => context.startSso('google', 'signup'),
             onBackFromEmail: login.back,
             onSignIn: () => props.onSignIn?.(),
+            onAgentSignup: () => props.onAgentSignup?.(),
             showingEmail: login.step() !== 'choose',
             emailForm: (
               <Show when={login.step() !== 'choose'}>
@@ -98,7 +103,10 @@ export function AuthView(props: {
         }
       </Match>
       <Match when={true}>
-        <LoginCard compact={props.compact}>
+        <LoginCard
+          compact={props.compact}
+          agentSignup={props.intent === 'agent-signup'}
+        >
           <Stepper
             step={STEP_INDEX[login.step()]}
             transition={Stepper.transitions.scale}
@@ -106,8 +114,15 @@ export function AuthView(props: {
             <Stepper.Step>
               <LoginPicker
                 showApple={props.showApple}
-                onGoogle={() => void context.startSso('google', props.intent)}
-                onApple={() => void context.startSso('apple', props.intent)}
+                onGoogle={() =>
+                  fireAndForget(
+                    context.startSso('google', props.intent),
+                    'auth'
+                  )
+                }
+                onApple={() =>
+                  fireAndForget(context.startSso('apple', props.intent), 'auth')
+                }
                 onEmail={login.chooseEmail}
               />
             </Stepper.Step>
@@ -168,7 +183,7 @@ function VerifyStep(props: { login: EmailLogin }) {
       error={props.login.verifyError() ?? props.login.sendError()}
       onCodeInput={props.login.setCode}
       onVerify={props.login.verify}
-      onResend={() => void props.login.resend()}
+      onResend={() => fireAndForget(props.login.resend(), 'auth')}
       onBack={props.login.back}
     />
   );

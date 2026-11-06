@@ -155,6 +155,8 @@ impl WorkExecutor for Dispatcher {
                     // the runtime, and it delivers the mention itself through
                     // the control endpoint. Sending one here is refused.
                     prompt: None,
+                    prompt_action_id: None,
+                    prompt_attachments: Vec::new(),
                     repo_url: self.workspace.repo_url.clone(),
                     repo_branch: None,
                     owner: Some(sender.as_ref().to_owned()),
@@ -202,7 +204,9 @@ impl WorkExecutor for Dispatcher {
                             .ensure_connected()
                             .await
                             .map_err(DispatchError::Dial)?;
-                        self.api.prompt(session, &sender, &content, context).await?;
+                        self.api
+                            .prompt(session, &sender, &content, message_id, context)
+                            .await?;
                         return Ok(());
                     }
                     Err(ApiError::ThreadSessionExists { session: None }) => {
@@ -225,7 +229,9 @@ impl WorkExecutor for Dispatcher {
                 // answer. SSE has no redelivery; a later `agent_trigger.existing`
                 // or a 409 on a repeat create (session already exists) is how
                 // a follow-up lands on the same session.
-                self.api.prompt(session, &sender, &content, context).await?;
+                self.api
+                    .prompt(session, &sender, &content, message_id, context)
+                    .await?;
                 Ok(())
             }
             TriggerWork::OpenRequested {
@@ -244,6 +250,8 @@ impl WorkExecutor for Dispatcher {
                     bot_id: Some(bot.as_uuid()),
                     workspace: Some(workspace),
                     prompt: None,
+                    prompt_action_id: None,
+                    prompt_attachments: Vec::new(),
                     repo_url: repo_url.or_else(|| self.workspace.repo_url.clone()),
                     repo_branch: None,
                     owner: Some(sender.as_ref().to_owned()),
@@ -262,6 +270,7 @@ impl WorkExecutor for Dispatcher {
                 Ok(())
             }
             TriggerWork::PromptExisting {
+                message_id,
                 session,
                 sender,
                 content,
@@ -272,7 +281,9 @@ impl WorkExecutor for Dispatcher {
                     .ensure_connected()
                     .await
                     .map_err(DispatchError::Dial)?;
-                self.api.prompt(session, &sender, &content, context).await?;
+                self.api
+                    .prompt(session, &sender, &content, message_id, context)
+                    .await?;
                 Ok(())
             }
         }

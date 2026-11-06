@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { WorkerPoolManager } from '@pierre/diffs/worker';
 import DiffWorker from '@pierre/diffs/worker/worker.js?worker';
 import { createSingletonRoot } from '@solid-primitives/rootless';
@@ -31,6 +32,6 @@ export const useDiffWorkers = createSingletonRoot(() => {
       setState({ kind: 'failed' });
     }
   }
-  void initialize();
+  fireAndForget(initialize(), 'agent-diff-workers');
   return state;
 });

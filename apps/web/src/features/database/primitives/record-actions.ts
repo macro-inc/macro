@@ -1,3 +1,4 @@
+import type { ViewLayout } from '@service-storage/generated/schemas/viewLayout';
 import { until } from '@solid-primitives/promise';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type {
@@ -22,12 +23,14 @@ import type { createTableController } from './table-controller';
 /** How long a revealed row stays tinted. */
 const HIGHLIGHT_MS = 1_600;
 
-/** A saved record the view's filters leave out. */
+/** A saved record outside the currently loaded rows. */
 type HiddenSavedRecord = {
   rowId: string;
   created: boolean;
   /** The record was created, but the view has no column to type its first value in. */
   noEditableColumns?: boolean;
+  /** More pages remain, so absence does not prove a filter exclusion. */
+  unloaded?: boolean;
 };
 
 /** A new record: its first values, and whether to start editing it once saved. */
@@ -38,6 +41,8 @@ export type RecordCreation = {
   titleColumn?: string;
   open: boolean;
   intentId?: string;
+  /** A label among `values` that the write may add as a new option. */
+  option?: string;
 };
 
 /**
@@ -51,7 +56,7 @@ export function createRecordActions(options: {
   source: DatabaseRowsSource;
   columns: Accessor<DatabaseViewColumn[]>;
   visibleColumns: Accessor<DatabaseViewColumn[]>;
-  layout: Accessor<'table' | 'board'>;
+  layout: Accessor<ViewLayout['kind']>;
   canEdit: Accessor<boolean>;
   /** The view filters, so a saved record can fall outside it. */
   constrained: Accessor<boolean>;
@@ -132,10 +137,14 @@ export function createRecordActions(options: {
     }
     if (
       mutation.kind !== 'delete' &&
-      options.constrained() &&
+      (options.constrained() || options.source.pagination?.hasMore()) &&
       !rows().some((row) => row.rowId === rowId)
     ) {
-      setHiddenSavedRecord({ rowId, created: mutation.kind === 'create' });
+      setHiddenSavedRecord({
+        rowId,
+        created: mutation.kind === 'create',
+        unloaded: options.source.pagination?.hasMore(),
+      });
     } else if (hiddenSavedRecord()?.rowId === rowId) {
       setHiddenSavedRecord(undefined);
     }
@@ -177,7 +186,8 @@ export function createRecordActions(options: {
   }
   /**
    * Show a record arrived at from elsewhere where it sits in the table. A
-   * record this view does not show (filtered out, or a board) opens instead.
+   * record this view does not show (filtered out, or a board or timeline)
+   * opens instead.
    */
   function reveal(rowId: string) {
     if (
@@ -207,6 +217,7 @@ export function createRecordActions(options: {
       options.editCell(rowId, field.id);
     else if (!field)
       setHiddenSavedRecord({ rowId, created: true, noEditableColumns: true });
+    else open(rowId);
   }
   async function duplicateRow(rowId: string) {
     const actualId = actualRowId(rowId);
@@ -268,14 +279,18 @@ export function createRecordActions(options: {
       values[titleField.id] = creation.title;
     const saved = await controller.save(
       { kind: 'create', values },
-      { label: 'new record', createIntentId: creation.intentId }
+      {
+        label: 'new record',
+        createIntentId: creation.intentId,
+        option: creation.option,
+      }
     );
     if (saved.isErr()) return false;
     const rowId = saved.value.insertedRowIds[0];
     if (rowId && creation.open) editCreatedRow(rowId);
     return true;
   }
-  /** Start typing in the first record, or the blank row; a board opens its first card. */
+  /** Start typing in the first record, or the blank row; a board or timeline opens its first record. */
   function focusFirstCell(): Promise<void> {
     if (firstCellRequest) return firstCellRequest;
     firstCellRequest = (async () => {

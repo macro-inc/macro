@@ -32,7 +32,7 @@ use item_filters::ast::EntityFilterAst;
 use crate::{
     domain::{
         models::{
-            EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
+            DynamicSort, EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
             NotifiedQueryInner, SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery,
             SoupRequest, SoupSortDirection, SoupType, TouchedQueryInner,
             grouping::ItemGroupingInfo,
@@ -42,6 +42,8 @@ use crate::{
     inbound::axum_router::ApiEntityFilterAst,
     inbound::axum_router::{SoupRouterState, soup_router},
 };
+
+/// Date-range grouping, sort routing, and nullable continuation coverage.
 
 static CURSOR: &str = "eyJpZCI6ImUzNmM5MTJlLTU2M2MtNDIxZS1iMTAzLWE0YjAwY2ZmMzBlZSIsImxpbWl0IjoxMDAsInZhbCI6eyJzb3J0X3R5cGUiOiJ1cGRhdGVkX2F0IiwibGFzdF92YWwiOiIyMDI1LTExLTA3VDE5OjEyOjU5Ljc4MFoifSwiZmlsdGVyIjp7fX0=";
 const USER_ID: &str = "macro|test@example.com";
@@ -58,6 +60,8 @@ enum MockCursorKind {
     TouchedCursor,
     NotifiedSort,
     NotifiedCursor,
+    PropertySort,
+    PropertyCursor,
 }
 
 #[derive(Debug)]
@@ -74,6 +78,7 @@ struct MockSoupCall {
 #[derive(Clone)]
 struct MockSoup {
     called: Arc<std::sync::Mutex<Vec<MockSoupCall>>>,
+    grouped_calls: Arc<std::sync::Mutex<Vec<(models_grouping::GroupingConfig, DynamicSort)>>>,
     succeeds: bool,
 }
 
@@ -81,6 +86,7 @@ impl MockSoup {
     fn new() -> Self {
         Self {
             called: Arc::new(std::sync::Mutex::new(Vec::new())),
+            grouped_calls: Arc::new(std::sync::Mutex::new(Vec::new())),
             succeeds: false,
         }
     }
@@ -156,6 +162,8 @@ impl SoupService for MockSoup {
         T: Clone + Serialize + Send,
     {
         let cursor_kind = match &req.cursor {
+            SoupQuery::Property(Query::Sort(..)) => MockCursorKind::PropertySort,
+            SoupQuery::Property(Query::Cursor(..)) => MockCursorKind::PropertyCursor,
             SoupQuery::Simple(SimpleQueryInner(Query::Sort(..))) => MockCursorKind::SimpleSort,
             SoupQuery::Simple(SimpleQueryInner(Query::Cursor(..))) => MockCursorKind::SimpleCursor,
             SoupQuery::Frecency(FrecencyQueryInner(Query::Sort(..))) => {
@@ -204,11 +212,27 @@ impl SoupService for MockSoup {
 
     async fn get_user_soup_grouped(
         &self,
-        _req: GroupedSortRequest<'_>,
+        req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
-        Err::<std::vec::IntoIter<ItemGroupingInfo<SoupPropertiesField>>, _>(SoupErr::SoupDbErr(
-            anyhow::anyhow!("Not implemented"),
-        ))
+        let sort = *req.cursor.sort_method();
+        self.grouped_calls
+            .lock()
+            .unwrap()
+            .push((req.grouping, sort));
+        if self.succeeds {
+            Ok(Vec::<ItemGroupingInfo<SoupPropertiesField>>::new().into_iter())
+        } else {
+            Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+        }
+    }
+
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a crate::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<crate::domain::models::grouping::GroupLabels, SoupErr> {
+        Ok(Default::default())
     }
 
     async fn caller_tag_sets<'a>(
@@ -225,6 +249,22 @@ impl SoupService for MockSoup {
 struct MockEmail;
 
 impl EmailService for MockEmail {
+    async fn resolve_thread_read_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        Ok(thread_id)
+    }
+
+    async fn resolve_message_operation(
+        &self,
+        _actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        _request: email::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> Result<Uuid, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("unused test capability")))
+    }
+
     async fn send_message_for_user(
         &self,
         _user: MacroUserIdStr<'static>,
@@ -284,10 +324,11 @@ impl EmailService for MockEmail {
         }))
     }
 
-    async fn get_link_by_macro_id(
+    async fn resolve_sending_inbox(
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        _request: email::domain::models::SendingInboxRequest<'_>,
+    ) -> Result<email::domain::models::ResolvedSendingInbox, email::domain::models::EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -346,6 +387,7 @@ impl EmailService for MockEmail {
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         _draft_id: uuid::Uuid,
+        _expected_generation: i32,
     ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
@@ -396,6 +438,7 @@ impl EmailService for MockEmail {
 
     async fn set_sender_policy(
         &self,
+        _actor: &macro_user_id::user_id::MacroUserIdStr<'_>,
         _link: &email::domain::models::Link,
         _sender_email: &str,
         _policy: email::domain::models::SenderPolicy,
@@ -578,6 +621,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -710,6 +762,22 @@ struct MockEmailLinkResult {
 }
 
 impl EmailService for MockEmailLinkResult {
+    async fn resolve_thread_read_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        Ok(thread_id)
+    }
+
+    async fn resolve_message_operation(
+        &self,
+        _actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        _request: email::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> Result<Uuid, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("unused test capability")))
+    }
+
     async fn send_message_for_user(
         &self,
         _user: MacroUserIdStr<'static>,
@@ -759,10 +827,11 @@ impl EmailService for MockEmailLinkResult {
         (self.get_link_result)()
     }
 
-    async fn get_link_by_macro_id(
+    async fn resolve_sending_inbox(
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        _request: email::domain::models::SendingInboxRequest<'_>,
+    ) -> Result<email::domain::models::ResolvedSendingInbox, email::domain::models::EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -821,6 +890,7 @@ impl EmailService for MockEmailLinkResult {
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         _draft_id: uuid::Uuid,
+        _expected_generation: i32,
     ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
@@ -871,6 +941,7 @@ impl EmailService for MockEmailLinkResult {
 
     async fn set_sender_policy(
         &self,
+        _actor: &macro_user_id::user_id::MacroUserIdStr<'_>,
         _link: &email::domain::models::Link,
         _sender_email: &str,
         _policy: email::domain::models::SenderPolicy,
@@ -1747,6 +1818,29 @@ async fn it_can_expand_assoc_ast() {
 use item_filters::ast::CrmScope;
 
 #[test]
+fn ast_endpoint_initiative_filter_opts_initiatives_in() {
+    use item_filters::ast::initiative::{InitiativeLiteral, initiatives_requested};
+    let api: ApiEntityFilterAst =
+        serde_json::from_value(json!({ "if": { "l": { "ns": "unseen" } } })).unwrap();
+    let ast = api.into_entity_ast().unwrap();
+    let tree = ast
+        .initiative_filter
+        .as_deref()
+        .expect("initiative filter kept");
+    assert!(initiatives_requested(Some(tree)));
+    assert!(matches!(
+        tree,
+        filter_ast::Expr::Literal(InitiativeLiteral::NotificationState(
+            item_filters::NotificationState::Unseen
+        ))
+    ));
+
+    // Omitted on the wire means no initiatives, as before.
+    let api: ApiEntityFilterAst = serde_json::from_value(json!({})).unwrap();
+    assert!(api.into_entity_ast().unwrap().initiative_filter.is_none());
+}
+
+#[test]
 fn ast_endpoint_email_crm_domains_stamps_scope_and_ands_into_tree() {
     let js = json!({
         "ecd": ["acme.com"],
@@ -2224,4 +2318,100 @@ async fn ascending_notified_is_rejected() {
             "message": "sort_direction=asc is not supported with sort_method=notified_at"
         })
     );
+}
+
+#[tokio::test]
+async fn property_sort_uses_the_ordinary_route_in_both_directions() {
+    for direction in ["asc", "desc"] {
+        let soup = MockSoup::succeeding();
+        let calls = soup.called.clone();
+        let router = mock_router_with(
+            soup,
+            MockEmailLinkResult {
+                get_link_result: Arc::new(|| Ok(None)),
+            },
+        );
+        let request = authenticated_request().uri("/soup/ast").method(Method::POST)
+            .header("content-type", "application/json")
+            .body(axum::body::Body::from(serde_json::to_vec(&json!({
+                "sort_method": "property", "sort_property_definition_id": Uuid::from_u128(17), "sort_direction": direction
+            })).unwrap())).unwrap();
+        let (status, _) = send_json(router, request).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(matches!(
+            calls.lock().unwrap()[0].cursor_kind,
+            MockCursorKind::PropertySort
+        ));
+    }
+}
+
+#[tokio::test]
+async fn property_cursor_with_missing_key_is_not_restarted() {
+    let sort = DynamicSort::Property {
+        property_definition_id: Uuid::from_u128(17),
+        direction: SoupSortDirection::Asc,
+    };
+    let cursor = models_pagination::Base64Str::encode_json(CursorWithValAndFilter {
+        id: Uuid::from_u128(1),
+        limit: 10,
+        val: CursorVal {
+            sort_type: sort,
+            last_val: sort.position(None, chrono::DateTime::default()),
+        },
+        filter: ApiEntityFilterAst::default(),
+    })
+    .type_erase();
+    let soup = MockSoup::succeeding();
+    let calls = soup.called.clone();
+    let router = mock_router_with(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    );
+    let request = authenticated_request()
+        .uri(format!("/soup/ast?cursor={cursor}"))
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from("{}"))
+        .unwrap();
+    let (status, _) = send_json(router, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(matches!(
+        calls.lock().unwrap()[0].cursor_kind,
+        MockCursorKind::PropertyCursor
+    ));
+}
+
+#[tokio::test]
+async fn invalid_date_buckets_are_rejected_before_the_service_runs() {
+    for ranges in [
+        json!([]),
+        json!([
+            {"key": "before", "start": null, "end": "2026-10-21T00:00:00Z"},
+            {"key": "after", "start": "2026-10-20T00:00:00Z", "end": null}
+        ]),
+    ] {
+        let request = authenticated_request()
+            .uri("/soup/ast/grouped")
+            .method(Method::POST)
+            .header("content-type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&json!({
+                    "mode": "initial",
+                    "group_by": {"property": {
+                        "property_definition_id": Uuid::from_u128(17),
+                        "bucketing": {
+                            "type": "date_ranges",
+                            "ranges": ranges,
+                            "missing_value_bucket_key": "missing"
+                        }
+                    }}
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let (status, _) = send_json(mock_router(), request).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
 }

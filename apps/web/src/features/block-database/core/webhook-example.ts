@@ -25,6 +25,7 @@ function exampleValue(column: DatabaseViewColumn, today: string): ExampleValue {
     .with('NUMBER', () => 1)
     .with('BOOLEAN', () => true)
     .with('DATE', () => today)
+    .with('DATE_RANGE', () => `${today}/${today}`)
     .with('LINK', () => 'https://example.com')
     .with('SELECT_STRING', 'SELECT_NUMBER', 'TAG', () => {
       const label = column.options[0]?.label;
@@ -34,7 +35,7 @@ function exampleValue(column: DatabaseViewColumn, today: string): ExampleValue {
         : label;
     })
     .with('ENTITY', () => null)
-    .exhaustive();
+    .exhaustive(() => null);
 }
 
 /** A `curl` that posts the payload to the webhook. */

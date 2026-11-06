@@ -6,6 +6,8 @@ use documents::domain::legacy_office_upgrade::{
     LegacyOfficeUpgradeRequest, UpgradedObjectDestination,
 };
 use documents::domain::models::DocumentError;
+use documents::domain::notion_markdown::NotionMarkdown;
+use documents::domain::ports::markdown::MarkdownSnapshot;
 use model::document::DocumentBasic;
 use model_owner::Owner;
 
@@ -193,6 +195,17 @@ impl MarkdownInitializationPort for NoMarkdown {
         _markdown: &str,
     ) -> Result<Vec<u8>, DocumentError> {
         Ok(Vec::new())
+    }
+
+    async fn initialize_existing_notion(
+        &self,
+        _document_id: &str,
+        _notion: &NotionMarkdown,
+    ) -> Result<MarkdownSnapshot, DocumentError> {
+        Ok(MarkdownSnapshot {
+            snapshot: Vec::new(),
+            markdown: String::new(),
+        })
     }
 }
 

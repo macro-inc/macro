@@ -12,12 +12,12 @@ use channels::{
 use import::{
     domain::{
         models::{
-            ImportEntity, ImportSource, ImportStatus, ImportTargetKey, ImportTargetKind,
-            ImportTargetReservation, Initiator, SlackConversationId,
+            ImportEntity, ImportKind, ImportSource, ImportStatus, ImportTargetKey,
+            ImportTargetKind, ImportTargetReservation, Initiator, SlackConversationId,
         },
         ports::{
             CanonicalImportRepo, EntityCreator, ImportRepo, ImportedDocumentProperties,
-            ImportedTaskProperties,
+            ImportedTaskProperties, NotionLinks,
         },
         service::{ImportService, ImportServiceImpl},
     },
@@ -73,11 +73,12 @@ impl EntityCreator for ReservedCreator {
     ) -> anyhow::Result<String> {
         unreachable!()
     }
-    async fn create_markdown_doc(
+    async fn create_notion_document(
         &self,
         _: &MacroUserIdStr<'static>,
         _: &str,
         _: &str,
+        _: &NotionLinks,
         _: &ImportedDocumentProperties,
     ) -> anyhow::Result<String> {
         unreachable!()
@@ -123,7 +124,8 @@ async fn stage(repo: &PgImportRepo) -> ImportEntity {
     repo.upsert_staged(
         &user(),
         ImportSource::Slack,
-        Initiator::Onboarding,
+        ImportKind::Channel,
+        Initiator::Manual,
         key().foreign_id.as_str(),
         &serde_json::json!({"name": "engineering", "channel_id": key().foreign_id.as_str()}),
     )

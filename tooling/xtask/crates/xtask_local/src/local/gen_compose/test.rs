@@ -57,3 +57,20 @@ fn fusionauth_kickstart_is_privately_relabelled_and_replaces_inherited_mounts() 
         );
     }
 }
+
+#[test]
+fn every_local_harness_publishes_the_api_port_used_by_the_sdk() {
+    for name in [None, Some("harness-ports")] {
+        let instance = Instance::derive(name, None).unwrap();
+        let service = services_for_mode(Mode::Local)
+            .find(|service| service.compose_name == EGRESS_SERVICE)
+            .unwrap();
+        let ports = published_ports(Mode::Local, &instance, service);
+        assert!(ports.contains(&format!("{}:8080", instance.port(Port::AgentHarness))));
+        assert!(ports.contains(&format!(
+            "{}:{EGRESS_CONTAINER_PORT}",
+            instance.port(Port::AgentHarnessEgress)
+        )));
+        assert!(ports.contains(&format!("{}:2222", instance.port(Port::PreviewSsh))));
+    }
+}

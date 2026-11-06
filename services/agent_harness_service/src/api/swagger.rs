@@ -5,7 +5,10 @@ use agent_changes::inbound::axum_router::{
     CaptureAttemptDto, CaptureOutcomeDto, ChangedFileDto, ChangesetDto, ChangesetSourceDto,
     FileChangeKindDto, GitRefDto,
 };
+use agent_harness::domain::mode_choice::AgentMode;
+use agent_harness::inbound::app_connections::{self, AppConnectedRequest};
 use agent_harness::inbound::capability_discovery;
+use agent_harness::inbound::mode_choice::{self, AgentModeChoiceRequest, AgentModeChoiceResponse};
 use agent_harness::inbound::model_load::{
     self, AgentModelDto, AgentModelsStatusDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
     ModelHarnessDto,
@@ -18,24 +21,27 @@ use agent_harness::inbound::tool_approvals::{
     ToolApprovalStatusDto,
 };
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
-use agent_session::domain::model::{SandboxSize, SessionBot};
+use agent_session::domain::model::{ArchiveCause, SandboxSize, SessionBot};
 use agent_session::domain::pull_request_links::{
     PullRequestLinkSource, PullRequestLinkedSession, PullRequestSessions, SessionPullRequestLink,
+};
+use agent_session::inbound::axum_router::auto_archive::{
+    AutoArchiveOverridesBody, AutoArchivePreferencesBody, SessionAutoArchiveResponse,
 };
 use agent_session::inbound::axum_router::pull_requests::{
     PullRequestSessionsResponse, PullRequestUrl, PullRequestUrls, PullRequestsSessionsResponse,
     SessionPullRequestsResponse,
 };
+use agent_session::inbound::axum_router::work_registration::WorkRegistrationResponse;
 use agent_session::inbound::axum_router::{
-    self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionPreviewData,
-    AgentSessionPreviewDto, AgentSessionQueueResponse, AgentSessionResponse, CodingPreferencesBody,
-    ControlRequest, ControlResponse, ControlStatusDto, CreateAgentSessionRequest,
-    CreateAgentSessionResponse, CreateSessionThread, EditQueuedActionRequest, LogDirectionDto,
-    LogFrameDto, PreviewAgentSessionsRequest, PreviewAgentSessionsResponse, QueuedActionDto,
-    RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto, SetAgentSessionArchivedRequest,
-    WithAgentSessionId,
+    self, AgentSessionFoldedLogResponse, AgentSessionLogEntryDto, AgentSessionLogResponse,
+    AgentSessionPreviewData, AgentSessionPreviewDto, AgentSessionQueueResponse,
+    AgentSessionResponse, CodingPreferencesBody, ControlRequest, ControlResponse, ControlStatusDto,
+    CreateAgentSessionRequest, CreateAgentSessionResponse, CreateSessionThread,
+    EditQueuedActionRequest, LogDirectionDto, LogFrameDto, PreviewAgentSessionsRequest,
+    PreviewAgentSessionsResponse, QueuedActionDto, RenameAgentSessionRequest, SandboxSizeBody,
+    SessionStatusDto, SetAgentSessionArchivedRequest, WithAgentSessionId,
 };
-use claude_cloud_agents::inbound::auth as claude_auth;
 use utoipa::{
     Modify, OpenApi,
     openapi::security::{Http, HttpAuthScheme, SecurityScheme},
@@ -59,10 +65,21 @@ impl Modify for SecurityAddon {
     modifiers(&SecurityAddon),
     info(terms_of_service = "https://macro.com/terms"),
     paths(
-        claude_auth::status,
-        claude_auth::start,
-        claude_auth::complete,
-        claude_auth::disconnect,
+        universal_input::inbound::axum_router::classify,
+        universal_input::inbound::axum_router::extract,
+        agent_code_mode::inbound::axum_router::get_code_execution,
+        agent_session::inbound::axum_router::activity::get_agent_session_activity,
+        agent_code_mode::inbound::axum_router::create_review,
+        agent_code_mode::inbound::axum_router::present_view,
+        agent_code_mode::inbound::axum_router::get_review,
+        agent_code_mode::inbound::axum_router::list_reviews,
+        agent_code_mode::inbound::axum_router::decide_review,
+        agent_code_mode::inbound::axum_router::list_connected_apps,
+        agent_code_mode::inbound::axum_router::list_connected_app_tools,
+        agent_code_mode::inbound::axum_router::call_connected_app_tool,
+        agent_code_mode::inbound::axum_router::search_connected_app_tools,
+        agent_code_mode::inbound::axum_router::discover_connected_apps,
+        agent_code_mode::inbound::axum_router::add_connected_mcp_server,
         axum_router::create_agent_session_handler,
         axum_router::warm_agent_session_handler,
         axum_router::get_agent_session_handler,
@@ -77,6 +94,7 @@ impl Modify for SecurityAddon {
         axum_router::pull_requests::sessions_for_pull_request,
         axum_router::pull_requests::sessions_for_pull_requests,
         axum_router::get_agent_session_log_handler,
+        axum_router::get_agent_session_folded_log_handler,
         axum_router::control_agent_session_handler,
         axum_router::get_agent_session_queue_handler,
         axum_router::edit_queued_action_handler,
@@ -88,20 +106,28 @@ impl Modify for SecurityAddon {
         axum_router::put_agent_sandbox_size_handler,
         axum_router::get_agent_coding_preferences_handler,
         axum_router::put_agent_coding_preferences_handler,
+        axum_router::auto_archive::get_auto_archive_preferences,
+        axum_router::auto_archive::put_auto_archive_preferences,
+        axum_router::auto_archive::get_session_auto_archive,
+        axum_router::auto_archive::put_session_auto_archive,
+        axum_router::work_registration::register_work,
+        axum_router::work_registration::unregister_work,
+        axum_router::work_registration::list_own_work,
         model_load::load_agent_models_handler,
         capability_discovery::discover_agent_capabilities_handler,
+        agent_harness::inbound::conversations::list_agent_conversations,
+        agent_harness::inbound::conversations::retry_agent_conversation_turn,
+        agent_harness::inbound::conversations::start_fresh_agent_conversation,
         repositories::list_agent_repositories_handler,
         repositories::list_agent_repository_branches_handler,
+        mode_choice::choose_agent_mode_handler,
         changes_router::get_agent_session_changes_handler,
         changes_router::get_agent_session_changes_patch_handler,
         changes_router::refresh_agent_session_changes_handler,
         tool_approvals::answer_tool_approval_handler,
+        app_connections::app_connected_handler,
     ),
     components(schemas(
-        claude_auth::StatusResponse,
-        claude_auth::StartResponse,
-        claude_auth::CompleteRequest,
-        claude_auth::EmptyRequest,
         CreateAgentSessionRequest,
         CreateAgentSessionResponse,
         CreateSessionThread,
@@ -133,6 +159,7 @@ impl Modify for SecurityAddon {
         PullRequestLinkSource,
         SessionStatusDto,
         AgentSessionLogResponse,
+        AgentSessionFoldedLogResponse,
         AgentSessionLogEntryDto,
         SessionBot,
         LogFrameDto,
@@ -140,12 +167,20 @@ impl Modify for SecurityAddon {
         SandboxSize,
         SandboxSizeBody,
         CodingPreferencesBody,
+        AutoArchivePreferencesBody,
+        AutoArchiveOverridesBody,
+        ArchiveCause,
+        SessionAutoArchiveResponse,
+        WorkRegistrationResponse,
         LoadAgentModelsRequest,
         LoadAgentModelsResponse,
         AgentModelDto,
         AgentModelsStatusDto,
         ModelHarnessDto,
         AgentRepositoriesResponse,
+        AgentModeChoiceRequest,
+        AgentModeChoiceResponse,
+        AgentMode,
         AgentRepositoryBranchesResponse,
         AgentRepositoryDto,
         AgentSessionChangesResponse,
@@ -158,6 +193,7 @@ impl Modify for SecurityAddon {
         ChangesetSourceDto,
         FileChangeKindDto,
         AnswerToolApprovalRequest,
+        AppConnectedRequest,
         AnswerToolApprovalResponse,
         ToolApprovalAnswerDto,
         ToolApprovalStatusDto,
@@ -165,7 +201,8 @@ impl Modify for SecurityAddon {
     tags(
         (name = "agent-sessions", description = "Agent sessions"),
         (name = "agent-models", description = "Fresh provider model discovery"),
-        (name = "agent-repositories", description = "Repositories a coding session can work on")
+        (name = "agent-repositories", description = "Repositories a coding session can work on"),
+        (name = "agent-mode-choice", description = "Whether a composer prompt goes to a chat or a coding agent")
     )
 )]
 pub struct ApiDoc;

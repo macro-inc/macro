@@ -1,10 +1,12 @@
 import { verifyBlockName } from '@core/constant/allBlocks';
 import { untrackMention } from '@core/signal/mention';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { $wrapNodeInElement, mergeRegister } from '@lexical/utils';
 import type { PeerIdValidator } from '@macro-inc/lexical-core';
 import {
   $collapseInlineSearch,
   $createAgentSessionMentionNode,
+  $createBookingLinkMentionNode,
   $createContactMentionNode,
   $createDateMentionNode,
   $createDocumentMentionNode,
@@ -26,6 +28,8 @@ import {
   $removeInlineSearch,
   type AgentSessionMentionInfo,
   AgentSessionMentionNode,
+  type BookingLinkMentionInfo,
+  BookingLinkMentionNode,
   type ContactMentionInfo,
   ContactMentionNode,
   type DateMentionInfo,
@@ -132,6 +136,9 @@ export const INSERT_PR_MENTION_COMMAND: LexicalCommand<PullRequestMentionInfo> =
 export const INSERT_THEME_MENTION_COMMAND: LexicalCommand<ThemeMentionInfo> =
   createCommand('INSERT_THEME_MENTION_COMMAND');
 
+export const INSERT_BOOKING_LINK_MENTION_COMMAND: LexicalCommand<BookingLinkMentionInfo> =
+  createCommand('INSERT_BOOKING_LINK_MENTION_COMMAND');
+
 export type ItemMention = {
   itemType:
     | 'document'
@@ -157,7 +164,8 @@ export type ItemMention = {
     | 'crm_company'
     | 'crm_contact'
     | 'crm_pipeline'
-    | 'skill';
+    | 'skill'
+    | 'external_chat';
   itemId: string;
   fileType?: string;
   documentName?: string;
@@ -255,6 +263,10 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     } else if (blockName === 'pipeline') {
       fileType = 'pipeline';
       itemType = 'crm_pipeline';
+    } else if (blockName === 'external_chat') {
+      // Posting it shares the group with the channel's members.
+      fileType = 'external_chat';
+      itemType = 'external_chat';
     } else if (blockName === 'unknown') {
       fileType = 'unknown';
     }
@@ -322,10 +334,13 @@ function $deleteSelectedMentions(sourceDocumentId?: string) {
       if (!$isGroupMentionNode(node)) {
         const mentionUuid = node.getMentionUuid();
         if (mentionUuid && sourceDocumentId) {
-          untrackMention(
-            sourceDocumentId,
-            mentionUuid,
-            $mentionItemFromNode(node).itemType
+          fireAndForget(
+            untrackMention(
+              sourceDocumentId,
+              mentionUuid,
+              $mentionItemFromNode(node).itemType
+            ),
+            'mention-tracking'
           );
         }
       }
@@ -486,7 +501,10 @@ function registerMentionsPlugin(
               sourceDocumentId &&
               !databaseReferenceRemains(uuid)
             )
-              void untrackMention(sourceDocumentId, uuid, 'database');
+              fireAndForget(
+                untrackMention(sourceDocumentId, uuid, 'database'),
+                'mention-tracking'
+              );
             onRemoveMention?.({ itemType: card.itemType, itemId: card.itemId });
           }
         }
@@ -664,7 +682,10 @@ function registerMentionsPlugin(
           if (mutation === 'destroyed') {
             const mentionUuid = node.getMentionUuid();
             if (mentionUuid && sourceDocumentId) {
-              untrackMention(sourceDocumentId, mentionUuid, 'agent_session');
+              fireAndForget(
+                untrackMention(sourceDocumentId, mentionUuid, 'agent_session'),
+                'mention-tracking'
+              );
             }
             onRemoveMention?.($mentionItemFromNode(node));
           }
@@ -710,6 +731,23 @@ function registerMentionsPlugin(
             mentionNode.selectEnd();
             return true;
           }
+          $insertNodes([mentionNode]);
+          if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
+            $wrapNodeInElement(mentionNode, $createParagraphNode);
+          }
+          mentionNode.selectEnd();
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      INSERT_BOOKING_LINK_MENTION_COMMAND,
+      (payload) => {
+        if (!editor.hasNode(BookingLinkMentionNode)) return false;
+        editor.update(() => {
+          const mentionNode = $createBookingLinkMentionNode(payload);
           $insertNodes([mentionNode]);
           if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
             $wrapNodeInElement(mentionNode, $createParagraphNode);
@@ -925,7 +963,10 @@ function registerMentionsPlugin(
               (node.getBlockName() !== 'database' ||
                 !databaseReferenceRemains(mentionUuid))
             ) {
-              untrackMention(sourceDocumentId, mentionUuid, itemType);
+              fireAndForget(
+                untrackMention(sourceDocumentId, mentionUuid, itemType),
+                'mention-tracking'
+              );
             }
             if (onRemoveMention) {
               onRemoveMention({
@@ -963,7 +1004,10 @@ function registerMentionsPlugin(
             if (node) {
               const mentionUuid = node.getMentionUuid();
               if (mentionUuid && sourceDocumentId) {
-                untrackMention(sourceDocumentId, mentionUuid, 'user');
+                fireAndForget(
+                  untrackMention(sourceDocumentId, mentionUuid, 'user'),
+                  'mention-tracking'
+                );
               }
               if (onRemoveMention) {
                 onRemoveMention({
@@ -1001,7 +1045,10 @@ function registerMentionsPlugin(
             if (node) {
               const mentionUuid = node.getMentionUuid();
               if (mentionUuid && sourceDocumentId) {
-                untrackMention(sourceDocumentId, mentionUuid, 'contact');
+                fireAndForget(
+                  untrackMention(sourceDocumentId, mentionUuid, 'contact'),
+                  'mention-tracking'
+                );
               }
               if (onRemoveMention) {
                 onRemoveMention({
@@ -1036,7 +1083,10 @@ function registerMentionsPlugin(
             if (node) {
               const mentionUuid = node.getMentionUuid();
               if (mentionUuid && sourceDocumentId) {
-                untrackMention(sourceDocumentId, mentionUuid, 'date');
+                fireAndForget(
+                  untrackMention(sourceDocumentId, mentionUuid, 'date'),
+                  'mention-tracking'
+                );
               }
               if (onRemoveMention) {
                 onRemoveMention({
@@ -1101,7 +1151,10 @@ function registerMentionsPlugin(
           if (mutation === 'destroyed') {
             const mentionUuid = node.getMentionUuid();
             if (mentionUuid && sourceDocumentId) {
-              untrackMention(sourceDocumentId, mentionUuid, 'foreign');
+              fireAndForget(
+                untrackMention(sourceDocumentId, mentionUuid, 'foreign'),
+                'mention-tracking'
+              );
             }
             onRemoveMention?.($mentionItemFromNode(node));
           } else if (mutation === 'created') {

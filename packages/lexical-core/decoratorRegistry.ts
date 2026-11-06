@@ -1,5 +1,13 @@
 import type { Klass, LexicalNode } from 'lexical';
 import type {
+  AccountManagerRequestDecoratorProps,
+  AccountManagerRequestNode,
+} from './nodes/AccountManagerRequestNode';
+import type {
+  AgentActivityDecoratorProps,
+  AgentActivityNode,
+} from './nodes/AgentActivityNode';
+import type {
   AgentContextDecoratorProps,
   AgentContextNode,
 } from './nodes/AgentContextNode';
@@ -187,6 +195,10 @@ export interface NodeDecoratorMap {
     klass: typeof TagMentionNode;
     props: TagMentionDecoratorProps;
   };
+  AccountManagerRequestNode: {
+    klass: typeof AccountManagerRequestNode;
+    props: AccountManagerRequestDecoratorProps;
+  };
   ConnectAppNode: {
     klass: typeof ConnectAppNode;
     props: ConnectAppDecoratorProps;
@@ -206,6 +218,10 @@ export interface NodeDecoratorMap {
   MagicChipNode: {
     klass: typeof MagicChipNode;
     props: MagicChipDecoratorProps;
+  };
+  AgentActivityNode: {
+    klass: typeof AgentActivityNode;
+    props: AgentActivityDecoratorProps;
   };
   CursorSystemNotificationNode: {
     klass: typeof CursorSystemNotificationNode;

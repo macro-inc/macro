@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_entity\n            SET metadata = jsonb_set(metadata, '{plan,shared}', to_jsonb(id = ANY($2::uuid[]))),\n                updated_at = NOW()\n            WHERE user_id = $1 AND status = 'staged' AND metadata->'plan' IS NOT NULL\n              AND (id = ANY($2::uuid[]) OR id = ANY($3::uuid[]))\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "71cfcfd36d1fba1d5f3319def96b75378b854b92c648ab3eb37f79cea1d10002"
+}

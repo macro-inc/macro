@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT l.id,l.macro_id,l.grant_id,l.grant_generation,l.sync_generation,\n            l.provider_tenant_id,l.provider_mailbox_id,l.disconnect_requested_at,\n            EXISTS(SELECT 1 FROM macro_user_links e WHERE e.link_id = l.id\n                AND e.primary_macro_id = $4 AND e.child_macro_id = l.macro_id) AS \"actor_has_access!\"\n        FROM email_links l WHERE l.provider = 'OUTLOOK'\n            AND ((l.provider_tenant_id = $1 AND l.provider_mailbox_id = $2) OR lower(l.email_address) = lower($3))\n        ORDER BY (l.provider_tenant_id = $1 AND l.provider_mailbox_id = $2) DESC NULLS LAST,l.id\n        LIMIT 1 FOR UPDATE OF l\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "grant_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "provider_tenant_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "provider_mailbox_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "disconnect_requested_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "actor_has_access!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "0da81e042b5e08bfa3c7c9999c67b76bd5a03d182b4c9fee7305e2f415825ab9"
+}

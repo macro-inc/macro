@@ -1,3 +1,4 @@
+import { canMarkNotDone } from '@app/features/next-soup/actions/can-mark-not-done';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -11,6 +12,33 @@ vi.mock('@core/constant/allBlocks', () => ({
 }));
 vi.mock('@core/context/channels', () => ({ useChannelsContext: vi.fn() }));
 vi.mock('@core/user', () => ({ emailToId: vi.fn() }));
+
+it('preserves channel team identity for section assignment checks', () => {
+  const item = {
+    tag: 'channel',
+    frecency_score: 0,
+    is_favorited: false,
+    data: {
+      channel: {
+        id: 'channel',
+        name: 'Design',
+        channel_type: 'team',
+        team_id: 'team',
+        owner_id: 'owner',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+      participants: [],
+      is_participant: true,
+    },
+  } satisfies SoupApiItem;
+
+  expect(mapApiSoupItemToEntity(item)).toMatchObject({
+    type: 'channel',
+    channelType: 'team',
+    teamId: 'team',
+  });
+});
 
 describe('email soup entities', () => {
   it.each([true, false])(
@@ -42,6 +70,131 @@ describe('email soup entities', () => {
         isSignal,
         isImportant: !isSignal,
       });
+    }
+  );
+
+  it.each([
+    ['no attachments', [], false],
+    [
+      'an attached PDF',
+      [{ filename: 'contract.pdf', mimeType: 'application/pdf' }],
+      true,
+    ],
+    [
+      'a PDF that carries a Content-ID',
+      [
+        {
+          filename: 'contract.pdf',
+          mimeType: 'application/pdf',
+          contentId: '<contract@outlook>',
+        },
+      ],
+      true,
+    ],
+    [
+      'an attached photo',
+      [{ filename: 'photo.jpg', mimeType: 'image/jpeg' }],
+      true,
+    ],
+    [
+      'only an inline signature logo',
+      [
+        {
+          filename: 'logo.png',
+          mimeType: 'image/png',
+          contentId: '<logo@signature>',
+        },
+      ],
+      false,
+    ],
+    [
+      'only a calendar invite',
+      [{ filename: 'invite.ics', mimeType: 'text/calendar' }],
+      false,
+    ],
+    [
+      'an inline logo alongside a spreadsheet',
+      [
+        {
+          filename: 'logo.png',
+          mimeType: 'image/png',
+          contentId: '<logo@signature>',
+        },
+        {
+          filename: 'budget.xlsx',
+          mimeType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
+      ],
+      true,
+    ],
+  ])('flags a file attachment for %s', (_case, files, hasFileAttachment) => {
+    const item = {
+      tag: 'emailThread',
+      frecency_score: 0,
+      is_favorited: false,
+      data: {
+        id: 'email',
+        ownerId: 'owner',
+        properties: [],
+        attachments: files.map((file, index) => ({
+          ...file,
+          id: `attachment-${index}`,
+          messageId: 'message',
+          createdAt: '2026-09-01T00:00:00Z',
+        })),
+        labels: [],
+        participants: [],
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+        sortTs: '2026-09-01T00:00:00Z',
+        inboxVisible: true,
+        isDraft: false,
+        isRead: false,
+        isImportant: false,
+        isSignal: false,
+      },
+    } satisfies SoupApiItem;
+    expect(mapApiSoupItemToEntity(item)).toMatchObject({
+      type: 'email',
+      hasFileAttachment,
+    });
+  });
+
+  it.each([
+    [false, false],
+    [true, true],
+    [undefined, true],
+  ])(
+    'an archived row with received mail %s offers Mark not done: %s',
+    (hasReceivedMail, offered) => {
+      // GraphQL rows carry the flag beyond the REST preview type.
+      const data = {
+        id: 'email',
+        ownerId: 'owner',
+        properties: [],
+        attachments: [],
+        labels: [],
+        participants: [],
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+        sortTs: '2026-09-01T00:00:00Z',
+        inboxVisible: false,
+        hasReceivedMail,
+        isDraft: false,
+        isRead: true,
+        isImportant: false,
+        isSignal: false,
+      };
+      const item = {
+        tag: 'emailThread',
+        frecency_score: 0,
+        is_favorited: false,
+        data,
+      } satisfies SoupApiItem;
+      const entity = mapApiSoupItemToEntity(item);
+      expect(entity).toMatchObject({ type: 'email', done: true });
+      expect(canMarkNotDone(entity)).toBe(offered);
     }
   );
 });
@@ -187,4 +340,16 @@ describe('document soup entities', () => {
       });
     }
   );
+});
+
+describe('unknown soup entities', () => {
+  it('maps a tag from a newer server to a placeholder row instead of throwing', () => {
+    const fromNewerServer = JSON.parse(
+      '{"tag":"whiteboard","frecency_score":0,"is_favorited":false,"data":{"id":"board"}}'
+    );
+    expect(mapApiSoupItemToEntity(fromNewerServer)).toMatchObject({
+      type: 'document',
+      id: 'board',
+    });
+  });
 });

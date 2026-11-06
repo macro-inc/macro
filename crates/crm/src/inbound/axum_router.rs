@@ -40,6 +40,12 @@ pub mod create_company;
 /// Manually create a contact (name + email) under a CRM company.
 pub mod create_contact;
 
+/// Manually create a contact without a company for the caller's team.
+pub mod create_team_contact;
+
+/// The domains a team keeps out of email sync.
+pub mod blocked_domains;
+
 /// Team-level CRM configuration (permission thresholds, closed stages,
 /// team saved views).
 pub mod team_settings;
@@ -165,7 +171,8 @@ where
         )
         .route(
             "/contacts",
-            get(search_contacts::handler::<C, St, Eas, Auth>),
+            get(search_contacts::handler::<C, St, Eas, Auth>)
+                .post(create_team_contact::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/contacts/by-email",
@@ -187,6 +194,15 @@ where
             "/settings",
             get(team_settings::get_handler::<C, St, Eas, Auth>)
                 .put(team_settings::update_handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/blocked-domains",
+            get(blocked_domains::list_handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/blocked-domains/{domain}",
+            put(blocked_domains::block_handler::<C, St, Eas, Auth>)
+                .delete(blocked_domains::unblock_handler::<C, St, Eas, Auth>),
         )
         .route(
             "/stages",
@@ -257,12 +273,6 @@ impl IntoResponse for CrmError {
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
                     message: "a crm contact with this email already exists for the company".into(),
-                }),
-            ),
-            CrmError::ContactEmailDomainMismatch => (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: "contact email domain must match one of the company's domains".into(),
                 }),
             ),
             CrmError::CrmDisabledForTeam => (

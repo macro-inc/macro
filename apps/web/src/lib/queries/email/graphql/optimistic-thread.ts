@@ -26,10 +26,12 @@ function draftPreview(draft: DraftMessage): NonNullable<
   };
 }
 
-/** What one local draft contributes to its thread's aggregated Mail state. */
+/** What one local draft contributes to its thread's aggregated Mail state. A
+ * draft returns its thread to the inbox only as a reply to received mail. */
 function draftAggregateEntry(
   draft: DraftMessage,
-  isSignal: boolean
+  isSignal: boolean,
+  hasReceivedMail: boolean
 ): DraftState['drafts'][number] {
   return {
     id: draft.id,
@@ -37,9 +39,9 @@ function draftAggregateEntry(
     facts: {
       ...emptyAggregate(),
       messageCount: 1,
-      inboxVisible: true,
+      inboxVisible: hasReceivedMail,
       isSignal,
-      latestInboundMessageTs: draft.updatedAt,
+      latestInboundMessageTs: hasReceivedMail ? draft.updatedAt : null,
       latestNonSpamMessageTs: draft.updatedAt,
       preview: draftPreview(draft),
       previewTs: draft.internalDateTs ?? draft.createdAt,
@@ -68,17 +70,19 @@ export function createDraftThread(
     senderEmail: preview.senderEmail,
     senderName: preview.senderName,
     senderPhotoUrl: preview.senderPhotoUrl,
-    inboxVisible: true,
+    inboxVisible: false,
+    hasReceivedMail: false,
     isRead: true,
     isDraft: true,
     isSignal,
     isImportant: isSignal,
     isFavorited: false,
     projectId: null,
-    sortTs: draft.updatedAt,
     createdAt: draft.createdAt,
     updatedAt: draft.updatedAt,
-    latestInboundMessageTs: draft.updatedAt,
+    latestInboundMessageTs: null,
+    latestOutboundMessageTs: null,
+    latestNonSpamMessageTs: draft.updatedAt,
     reminderReturnedAt: null,
     viewedAt: null,
     frecencyScore: null,
@@ -96,7 +100,7 @@ export function createDraftThread(
     },
     mailDraftState: {
       baseline: emptyAggregate(),
-      drafts: [draftAggregateEntry(draft, isSignal)],
+      drafts: [draftAggregateEntry(draft, isSignal, false)],
     },
     messages: [draft],
   };
@@ -164,6 +168,15 @@ function applyDraftState(
     emptyAggregate()
   );
   const all = mergeAggregate(state.baseline, drafts);
+  // A provider draft in junk can remain in Drafts, but cannot supply All Mail's
+  // preview. Each draft's non-spam timestamp records that eligibility.
+  const allPreview = state.drafts.reduce(
+    (sum, entry) =>
+      entry.facts.latestNonSpamMessageTs === null
+        ? sum
+        : mergeAggregate(sum, entry.facts),
+    state.baseline
+  ).preview;
   // Read/unread mutations can update the canonical thread before the message
   // aggregate is refreshed. Preserve that newer intent across draft edits;
   // otherwise deleting the sole unread draft still recomputes the read state.
@@ -178,20 +191,21 @@ function applyDraftState(
     ...existing,
     mailDraftState: state,
     updatedAt,
-    sortTs: all.latestNonSpamMessageTs ?? updatedAt,
     latestInboundMessageTs: all.latestInboundMessageTs,
+    latestOutboundMessageTs: all.latestOutboundMessageTs,
+    latestNonSpamMessageTs: all.latestNonSpamMessageTs,
     inboxVisible: all.inboxVisible,
     isDraft: drafts.preview !== null,
     isRead: hasNewerReadIntent ? existing.isRead : all.isRead,
     isSignal: all.isSignal,
     isImportant: all.isSignal,
-    displayName: all.preview?.subject ?? null,
-    emailName: all.preview?.subject ?? null,
-    snippet: all.preview?.snippet ?? null,
-    senderEmail: all.preview?.senderEmail ?? null,
-    senderName: all.preview?.senderName ?? null,
-    senderPhotoUrl: all.preview?.senderPhotoUrl ?? null,
-    mailAllPreview: all.preview,
+    displayName: allPreview?.subject ?? null,
+    emailName: allPreview?.subject ?? null,
+    snippet: allPreview?.snippet ?? null,
+    senderEmail: allPreview?.senderEmail ?? null,
+    senderName: allPreview?.senderName ?? null,
+    senderPhotoUrl: allPreview?.senderPhotoUrl ?? null,
+    mailAllPreview: allPreview,
     mailDraftPreview: drafts.preview,
   };
 }
@@ -215,7 +229,10 @@ export function updateDraftThread(
   const previous = existing.mailDraftState.drafts.find(
     (entry) => entry.id === draft.id
   );
-  const fresh = draftAggregateEntry(draft, isSignal);
+  // Cache entries written before the field existed lack it; the server's
+  // default for unrecomputed threads is that they have received mail.
+  const hasReceivedMail = existing.hasReceivedMail !== false;
+  const fresh = draftAggregateEntry(draft, isSignal, hasReceivedMail);
   const entry = previous
     ? {
         ...previous,
@@ -223,12 +240,17 @@ export function updateDraftThread(
           ...previous.facts,
           isRead: true,
           isSignal: previous.facts.preview ? isSignal : false,
+          inboxVisible: previous.macroDraft
+            ? fresh.facts.inboxVisible
+            : previous.facts.inboxVisible,
           latestInboundMessageTs: previous.macroDraft
-            ? draft.updatedAt
+            ? fresh.facts.latestInboundMessageTs
             : previous.facts.latestInboundMessageTs,
-          latestNonSpamMessageTs: previous.macroDraft
-            ? draft.updatedAt
-            : previous.facts.latestNonSpamMessageTs,
+          latestNonSpamMessageTs:
+            previous.macroDraft &&
+            previous.facts.latestNonSpamMessageTs !== null
+              ? draft.updatedAt
+              : previous.facts.latestNonSpamMessageTs,
           preview: previous.facts.preview ? fresh.facts.preview : null,
         },
       }

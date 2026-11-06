@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.metadata FROM whatsapp_roster r\n            JOIN whatsapp_chat_membership m ON m.account_id = r.account_id\n            WHERE m.chat_id = $1 AND m.consent_ended_at IS NULL AND r.group_jid = $2\n            ORDER BY r.observed_at DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d4e387fadf135fcd598fa228ebc4bb0a9a9461fcf128e99ad5d3d9206913d0cf"
+}

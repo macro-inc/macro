@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const callClient = vi.hoisted(() => ({
   getCallRecord: vi.fn(),
   editCallRecord: vi.fn(),
+  graphql: false,
+  graphqlShare: vi.fn(),
 }));
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
@@ -23,6 +25,10 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: vi.fn(), failure: vi.fn(), success: vi.fn() },
 }));
 vi.mock('@core/constant/featureFlags', () => ({ ENABLE_CALLS: true }));
+vi.mock('../storage/entity-mutations', () => ({
+  usesGraphqlSharePolicy: () => callClient.graphql,
+  updateEntitySharePolicy: callClient.graphqlShare,
+}));
 
 import { queryClient } from '@queries/client';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
@@ -30,6 +36,7 @@ import {
   buildCallTeamSharePayload,
   fetchCallSharePermission,
   isCallSharedWithTeam,
+  refetchLeftCallRecord,
   setActiveCallEndedCache,
   setActiveCallStartedCache,
   setCallRecordTeamShareCache,
@@ -108,6 +115,7 @@ describe('active call cache writers', () => {
 const record = (over: Partial<CallRecord>): CallRecord => ({
   callId: 'call-1',
   channelId: 'channel-1',
+  discussion: { kind: 'call_chat', call_id: 'call-1' },
   createdBy: 'macro|a@test.com',
   isActive: false,
   participants: [],
@@ -121,10 +129,20 @@ const record = (over: Partial<CallRecord>): CallRecord => ({
 });
 
 describe('call team sharing helpers', () => {
+  it('uses the GraphQL share policy for flagged archived-call updates', async () => {
+    callClient.graphql = true;
+    await updateCallTeamShare('call-1', true);
+    expect(callClient.graphqlShare).toHaveBeenCalledWith('call', 'call-1', {
+      teamShareAccessLevel: 'view',
+    });
+    expect(callClient.editCallRecord).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     queryClient.clear();
     callClient.getCallRecord.mockReset();
     callClient.editCallRecord.mockReset();
+    callClient.graphql = false;
+    callClient.graphqlShare.mockReset();
   });
 
   it('never represents standalone calls as team shared, including stale record and cache values', () => {
@@ -331,5 +349,55 @@ describe('call team sharing helpers', () => {
     expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
       shareWithTeam: true,
     });
+  });
+});
+
+describe('refetchLeftCallRecord', () => {
+  beforeEach(() => {
+    queryClient.clear();
+    callClient.getCallRecord.mockReset();
+  });
+
+  it('refetches the left call record even with no mounted reader', async () => {
+    const participant = {
+      userId: 'macro|a@test.com',
+      joinedAt: '2026-08-21T09:00:00.000Z',
+    };
+    queryClient.setQueryData(
+      callKeys.active('channel-1').queryKey,
+      started({ callId: 'call-1', channelId: 'channel-1' })
+    );
+    const key = callKeys.record('call-1').queryKey;
+    const recordFetch = vi
+      .fn<() => CallRecord>()
+      .mockReturnValueOnce(
+        record({
+          isActive: true,
+          participants: [{ ...participant, leftAt: null }],
+        })
+      )
+      .mockReturnValueOnce(
+        record({
+          isActive: true,
+          participants: [
+            { ...participant, leftAt: '2026-08-21T09:05:00.000Z' },
+          ],
+        })
+      );
+    // Cached by a reader that has since unmounted.
+    await queryClient.fetchQuery({ queryKey: key, queryFn: recordFetch });
+
+    refetchLeftCallRecord('channel-1');
+
+    await vi.waitFor(() =>
+      expect(
+        queryClient.getQueryData<CallRecord>(key)?.participants[0]?.leftAt
+      ).toBe('2026-08-21T09:05:00.000Z')
+    );
+  });
+
+  it('does nothing when the channel has no cached call', () => {
+    refetchLeftCallRecord('channel-1');
+    expect(callClient.getCallRecord).not.toHaveBeenCalled();
   });
 });

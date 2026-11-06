@@ -26,9 +26,12 @@ struct StoredMessage {
     parent_entity_type: String,
     parent_entity_id: String,
     thread_id: Option<Uuid>,
+    kind: MessageKind,
     sender_id: String,
+    guest_name: Option<String>,
     imported_author: Option<String>,
     triggered_by_user_id: Option<String>,
+    triggered_via: Option<String>,
     content: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -257,7 +260,10 @@ impl PgMessageRepository {
                         .try_into()
                         .map_err(|e| MessageError::Repository(rootcause::Report::new(e).into()))?,
                     imported_author: r.imported_author.map(|name| ImportedAuthor { name }),
+                    kind: r.kind,
+                    guest_name: r.guest_name,
                     triggered_by: r.triggered_by_user_id,
+                    triggered_via: r.triggered_via,
                     content: if deleted { String::new() } else { r.content },
                     created_at: r.created_at,
                     updated_at: r.updated_at,
@@ -532,6 +538,56 @@ impl PgMessageRepository {
 }
 
 impl MessageRepository for PgMessageRepository {
+    async fn call_thread_facts(
+        &self,
+        call_id: Uuid,
+    ) -> Result<Option<CallThreadFacts>, MessageError> {
+        let row = sqlx::query!(
+            r#"SELECT channel_id AS "channel_id!", user_id FROM call_entities
+               WHERE id = $1 AND discussion = 'channel_thread' AND channel_id IS NOT NULL"#,
+            call_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(database_error)?;
+        Ok(row.map(|row| CallThreadFacts {
+            channel_id: row.channel_id,
+            created_by: row.user_id,
+        }))
+    }
+
+    #[tracing::instrument(err, skip_all, name = "messages.call_entries", fields(calls = call_ids.len()))]
+    async fn call_entry_statuses(
+        &self,
+        call_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, CallEntryStatus>, MessageError> {
+        let rows = sqlx::query!(
+            "SELECT id, started_at, ended_at, duration_ms FROM call_entities WHERE id = ANY($1)",
+            call_ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(database_error)?;
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let status = match row.ended_at {
+                    None => CallEntryStatus::Live,
+                    Some(ended_at) => {
+                        let measured = row
+                            .started_at
+                            .map(|started_at| (ended_at - started_at).num_milliseconds());
+                        CallEntryStatus::Ended {
+                            ended_at,
+                            duration_ms: row.duration_ms.or(measured).unwrap_or(0).max(0),
+                        }
+                    }
+                };
+                (row.id, status)
+            })
+            .collect())
+    }
+
     async fn replies(
         &self,
         parent: &MessageParent,
@@ -577,7 +633,7 @@ impl MessageRepository for PgMessageRepository {
                 .fetch_one(&self.pool).await,
             MessageParent::Channel(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM comms_channels WHERE id = $1) AS "exists!""#, id)
                 .fetch_one(&self.pool).await,
-            MessageParent::Call(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM calls WHERE id = $1 UNION ALL SELECT 1 FROM call_records WHERE id = $1) AS "exists!""#, id)
+            MessageParent::Call(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM call_entities WHERE id = $1) AS "exists!""#, id)
                 .fetch_one(&self.pool).await,
         };
         exists.map_err(database_error)
@@ -690,7 +746,7 @@ impl MessageRepository for PgMessageRepository {
             .await
             .map_err(database_error)?;
             let parent_exists = sqlx::query_scalar!(
-                r#"SELECT EXISTS(SELECT 1 FROM calls WHERE id = $1 UNION ALL SELECT 1 FROM call_records WHERE id = $1) AS "exists!""#,
+                r#"SELECT EXISTS(SELECT 1 FROM call_entities WHERE id = $1) AS "exists!""#,
                 root_id,
             )
             .fetch_one(&mut *tx)
@@ -739,16 +795,23 @@ impl MessageRepository for PgMessageRepository {
         }
         sqlx::query!(
             r#"INSERT INTO comms_messages(id, parent_entity_type, parent_entity_id, thread_id,
-                    sender_id, triggered_by_user_id, content, client_message_id)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
+                    sender_id, triggered_by_user_id, triggered_via, content, client_message_id,
+                    guest_name, kind)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"#,
             id,
             command.parent.entity_type(),
             command.parent.entity_id(),
             command.input.thread_id,
             command.actor.as_ref(),
             command.triggered_by,
+            command.triggered_via,
             command.input.content,
             command.canonical_root_id.and(command.input.id),
+            command.guest_name,
+            match command.kind {
+                MessageKind::Message => "message",
+                MessageKind::CallRoot => "call_root",
+            },
         )
         .execute(&mut *tx)
         .await

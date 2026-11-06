@@ -1,0 +1,26 @@
+.email-accounts-demo .mail-app { height: 560px; min-height: 0; }
+.email-accounts-demo .mail-sidebar { flex-basis: 264px; width: 264px; }
+.email-accounts-demo .mail-sidebar [data-view-sidebar-content] { overflow-y: auto; scrollbar-width: thin; }
+.email-accounts-demo [data-connecting=true] { background: var(--color-active); outline: 1px solid var(--color-edge); outline-offset: -1px; }
+.email-accounts-toolbar { min-width: 0; border-bottom: 1px solid var(--color-edge-muted); }
+.email-accounts-toolbar > span:first-of-type { flex-shrink: 0; font-weight: 500; }
+.email-accounts-toolbar .email-account-scope { margin-left: 4px; min-width: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-ink-muted); font-size: 12px; }
+.email-accounts-mobile, .email-account-mobile-tabs { display: none; }
+.email-account-search { flex: none; padding: 18px 16px 8px; }
+.email-account-list, .email-account-thread, .email-account-compose { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.email-account-compose { padding: 20px; }
+.email-account-list .mail-rows { animation: mail-account-in 180ms ease-out; }
+.email-account-connected { position: absolute; right: 20px; bottom: 20px; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid var(--color-edge-muted); border-radius: 8px; background: var(--color-panel); box-shadow: 0 8px 24px #0002; font-size: 13px; }
+.email-account-connected svg { width: 16px; height: 16px; }
+@keyframes mail-account-in { from { opacity: .5; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@media(max-width:699px) {
+ .email-accounts-demo .mail-app { height: 540px; }
+ .email-accounts-mobile { display: block; margin-left: auto; }
+ .email-accounts-toolbar .email-account-scope { max-width: 45%; }
+ .email-account-mobile-tabs { display:flex; gap: 4px; padding: 12px 12px 0; }
+ .email-account-mobile-tabs button { display:flex; align-items:center; gap:6px; padding: 6px 10px; border-radius:6px; color:var(--color-ink-muted); font:inherit; font-size:13px; }
+ .email-account-mobile-tabs button[aria-pressed=true] { background:var(--color-active); color:var(--color-ink); }
+ .email-account-mobile-tabs svg { width:16px; height:16px; }
+ .email-account-compose { padding:12px; }
+}
+@media(prefers-reduced-motion:reduce) { .email-account-list .mail-rows { animation:none; } }

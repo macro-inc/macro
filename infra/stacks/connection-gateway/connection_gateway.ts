@@ -208,8 +208,8 @@ export class ConnectionGateway extends pulumi.ComponentResource {
               name: BASE_NAME,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
-              cpu: 4096,
-              memory: 8192,
+              cpu: stack === 'prod' ? 1024 : 512,
+              memory: stack === 'prod' ? 3584 : 2560,
               environment: [...(containerEnvVars ?? [])],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
@@ -301,8 +301,7 @@ export class ConnectionGateway extends pulumi.ComponentResource {
       `${BASE_NAME}-service-scalable-target-${stack}`,
       {
         maxCapacity: stack === 'prod' ? 15 : 3,
-        // TODO: reset min capacity to 1 for dev, after testing
-        minCapacity: stack === 'prod' ? 3 : 3,
+        minCapacity: stack === 'prod' ? 3 : 1,
         resourceId: pulumi.interpolate`service/${this.cloudStorageClusterName}/${this.service.service.name}`,
         scalableDimension: 'ecs:service:DesiredCount',
         serviceNamespace: 'ecs',

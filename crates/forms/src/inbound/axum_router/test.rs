@@ -307,6 +307,20 @@ async fn an_owner_reaches_every_route_with_their_own_receipt() {
 }
 
 #[tokio::test]
+async fn a_form_an_agent_creates_with_its_sdk_token_is_attributed_to_the_agent() {
+    let body = json!({ "name": "Lunch?", "source": { "kind": "new" } });
+    for (token, bot) in [("agent", Some(AGENT)), ("owner", None)] {
+        let (router, service) = router(Grants::default());
+        let created = router
+            .oneshot(request(Method::POST, "/", Some(token), Some(body.clone())))
+            .await
+            .unwrap();
+        assert_eq!(created.status(), StatusCode::CREATED, "{token}");
+        assert_eq!(*service.creating_bots.lock().unwrap(), vec![bot], "{token}");
+    }
+}
+
+#[tokio::test]
 async fn creating_over_a_table_needs_owner_on_its_database() {
     let body = json!({
         "name": "RSVP",
@@ -450,6 +464,11 @@ async fn refusals_read_as_a_code_status_and_the_question_at_fault() {
         ),
         (FormError::OwnerOnly, StatusCode::FORBIDDEN, "ownerOnly"),
         (FormError::TallyHidden, StatusCode::FORBIDDEN, "tallyHidden"),
+        (
+            FormError::InvalidBranding("the image must be one you uploaded"),
+            StatusCode::BAD_REQUEST,
+            "invalidBranding",
+        ),
         (
             FormError::Repository(rootcause::report!("down").into_dynamic()),
             StatusCode::INTERNAL_SERVER_ERROR,

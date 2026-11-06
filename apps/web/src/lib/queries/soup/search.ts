@@ -29,6 +29,7 @@ export type SearchSoupQueryArgs = {
 
 interface SearchQueryOptions {
   enabled?: boolean;
+  staleTime?: number;
 }
 
 /** Search service won't accept text less than 3 characters */
@@ -36,11 +37,12 @@ export const validateSearchServiceText = (text: string) => {
   return text.length >= 3;
 };
 
-// Only plain request values and channel names enter the cached callbacks.
+// Only plain request values and channel metadata enter the cached callbacks.
 function searchSoupQueryOptions(
   args: SearchSoupQueryArgs,
-  channels: ReadonlyArray<{ id: string; name?: string | null }>,
-  enabled: boolean
+  channels: Parameters<typeof createSearchResponseItemMapper>[0],
+  enabled: boolean,
+  staleTime: number | undefined
 ) {
   const mapSearchResponseItem = createSearchResponseItemMapper(channels);
   return infiniteQueryOptions({
@@ -78,6 +80,8 @@ function searchSoupQueryOptions(
       });
     },
     enabled: enabled,
+    // An undefined staleTime would replace the client default, not inherit it.
+    ...(staleTime === undefined ? {} : { staleTime }),
     placeholderData: keepPreviousData,
     meta: { normalize: false },
   });
@@ -106,15 +110,16 @@ export const useSearchSoupQuery = (
   });
 
   const { channels } = useChannelsContext();
-  const channelNames = createMemo(() =>
-    channels().map(({ id, name }) => ({ id, name }))
+  const channelMetadata = createMemo(() =>
+    channels().map(({ id, name, team_id }) => ({ id, name, team_id }))
   );
 
   return useInfiniteQuery(() =>
     searchSoupQueryOptions(
       { params: args().params, body: request() },
-      channelNames(),
-      enabled()
+      channelMetadata(),
+      enabled(),
+      options?.().staleTime
     )
   );
 };

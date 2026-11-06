@@ -31,16 +31,21 @@ export function eventTimeFromOccurrenceKey(
   return { kind: 'timed', startsAt: occurrenceKey };
 }
 
-/** Open or retarget the singleton Calendar application view. */
-export async function openCalendarEventSplit(target: CalendarEventOpenTarget) {
-  if (!isFeatureEnabled(enableCalendarUi)) return;
+/**
+ * Open or retarget the singleton Calendar application view. Resolves false
+ * when nothing opened.
+ */
+export async function openCalendarEventSplit(
+  target: CalendarEventOpenTarget
+): Promise<boolean> {
+  if (!isFeatureEnabled(enableCalendarUi)) return false;
   const time =
     target.time ??
     (target.occurrenceKey
       ? eventTimeFromOccurrenceKey(target.occurrenceKey)
       : undefined);
 
-  openCalendarView(
+  return openCalendarView(
     {
       eventId: target.eventId,
       occurrenceKey: target.occurrenceKey,

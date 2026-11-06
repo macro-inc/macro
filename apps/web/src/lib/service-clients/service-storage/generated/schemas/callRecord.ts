@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { CallDiscussion } from './callDiscussion';
 import type { CallRecordChannelId } from './callRecordChannelId';
 import type { CallRecordChannelName } from './callRecordChannelName';
 import type { CallRecordCustomName } from './callRecordCustomName';
@@ -15,6 +17,8 @@ import type { CallRecordParticipant } from './callRecordParticipant';
 import type { CallRecordRecordingPreviewUrl } from './callRecordRecordingPreviewUrl';
 import type { CallRecordRecordingStartedAt } from './callRecordRecordingStartedAt';
 import type { CallRecordRecordingUrl } from './callRecordRecordingUrl';
+import type { CallRecordRoomName } from './callRecordRoomName';
+import type { CallRecordSourceProperty } from './callRecordSourceProperty';
 import type { CallRecordStatus } from './callRecordStatus';
 import type { CallRecordSummary } from './callRecordSummary';
 import type { CallRecordTeamShareAccessLevel } from './callRecordTeamShareAccessLevel';
@@ -37,6 +41,8 @@ export interface CallRecord {
   /** User-supplied or AI-generated display name for the call. Only set on
 archived `call_records`; active calls always return `None`. */
   customName?: CallRecordCustomName;
+  /** Where this call's discussion lives. */
+  discussion: CallDiscussion;
   /** Call duration in milliseconds (None if still active). */
   durationMs?: CallRecordDurationMs;
   /** Recording egress ID, if any. */
@@ -59,12 +65,13 @@ this value when present, falling back to `started_at` otherwise. */
   recordingStartedAt?: CallRecordRecordingStartedAt;
   /** Presigned URL for the call recording, if available. */
   recordingUrl?: CallRecordRecordingUrl;
-  /** The RTC room name. */
-  roomName: string;
+  /** The RTC room name. `None` for imported calls, which never had a room. */
+  roomName?: CallRecordRoomName;
   /** Whether the call is shared with the creator's team. While the call is
 live this is the pending toggle applied at archive; afterwards it
 mirrors `team_share_access_level`. */
   shareWithTeam: boolean;
+  source?: CallRecordSourceProperty;
   /** When the call started (created_at for active, started_at for archived). */
   startedAt: string;
   status?: CallRecordStatus;

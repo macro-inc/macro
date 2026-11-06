@@ -24,7 +24,6 @@ const env = {
     process.env.INTERNAL_AUTH_KEY || process.env.INTERNAL_API_SECRET_KEY,
   SYNC_SERVICE_AUTH_KEY: process.env.SYNC_SERVICE_AUTH_KEY,
   SYNC_SERVICE_URL: process.env.SYNC_SERVICE_URL,
-  SYNC_SERVICE: undefined,
 };
 
 const requiredVars = [

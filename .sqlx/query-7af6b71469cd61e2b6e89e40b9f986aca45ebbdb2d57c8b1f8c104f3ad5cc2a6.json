@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_mailbox_commands c SET lease_until = now() + interval '3 minutes'\n            FROM email_links l WHERE c.id = $1 AND c.lease_id = $2 AND c.lease_until > now() AND c.status = 'running'\n                AND l.id = c.link_id AND l.is_sync_active AND l.sync_generation = c.generation AND l.grant_generation = $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7af6b71469cd61e2b6e89e40b9f986aca45ebbdb2d57c8b1f8c104f3ad5cc2a6"
+}

@@ -1,0 +1,19 @@
+[package]
+edition = "2024"
+name = "notification_retention_handler"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+lambda_runtime = { workspace = true }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+notification = { path = "../../crates/notification" }
+serde = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -2,7 +2,12 @@ import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 import type { RoutineDetailSource } from '../context/routine-sources';
 import { isClaimActive } from '../core/claim';
 import type { ScheduleDraft } from '../core/draft';
-import { formatDateTime, validateRoutineDraft } from '../core/routine-draft';
+import {
+  formatDateTime,
+  validateRoutineApps,
+  validateRoutineDraft,
+} from '../core/routine-draft';
+import { assignedOutputs, withAssignedOutputs } from '../core/routine-steps';
 import { hasOnlyScheduledTriggers } from '../core/routine-triggers';
 import { createRoutineAutosave } from './routine-autosave';
 
@@ -17,6 +22,7 @@ export function createRoutineDetail(
   source: RoutineDetailSource,
   options: {
     userId: Accessor<string | undefined>;
+    connectedApps: Accessor<ReadonlySet<string> | undefined>;
     onRename(name: string): void;
   }
 ) {
@@ -37,7 +43,11 @@ export function createRoutineDetail(
 
   const formError = () => {
     const draft = state();
-    return draft ? validateRoutineDraft(draft) : null;
+    if (!draft) return null;
+    return (
+      validateRoutineDraft(draft) ??
+      validateRoutineApps(draft.apps, options.connectedApps())
+    );
   };
 
   const autosave = createRoutineAutosave<ScheduleDraft>(async (draft) => {
@@ -45,14 +55,27 @@ export function createRoutineDetail(
     if (!previous || !editableTrigger()) {
       throw new Error('This routine is no longer editable.');
     }
+    // A code upgrade changes the configuration but not its revision.
     if (
-      previous.revision > baselineRevision &&
+      previous.revision >= baselineRevision &&
       previous.configurationKey !== baselineKey
     )
       throw new RoutineConflictError();
     const saved = await source.update(draft);
     baselineRevision = saved.revision;
     baselineKey = saved.configurationKey;
+    // Saving names steps' outputs; keep those names so a later edit, such
+    // as a new step with the same tool before this one, can't move them.
+    const outputs = assignedOutputs(
+      draft.steps ?? [],
+      saved.draft?.steps ?? []
+    );
+    if (outputs.size)
+      setRawState((current) =>
+        current?.steps
+          ? { ...current, steps: withAssignedOutputs(current.steps, outputs) }
+          : current
+      );
   });
 
   function setState(update: (prev: ScheduleDraft) => ScheduleDraft): void {
@@ -66,6 +89,19 @@ export function createRoutineDetail(
     }
     autosave.queue(formError() ? undefined : next);
   }
+
+  // An edit held back only by an unconnected app saves once it is connected.
+  createEffect(
+    on(
+      formError,
+      (error, previous) => {
+        const draft = state();
+        if (!error && previous && draft && autosave.dirty())
+          autosave.queue(draft);
+      },
+      { defer: true }
+    )
+  );
 
   function runNow(): void {
     if (
@@ -92,19 +128,18 @@ export function createRoutineDetail(
     options.onRename(current.name);
   }
 
-  // A server revision refreshes clean settings, while a pending edit keeps its
+  // A server change refreshes clean settings, while a pending edit keeps its
   // original revision so a conflicting remote change cannot be overwritten.
+  // A code upgrade rewrites steps without a new revision.
   createEffect(
     on(
-      () => schedule()?.revision,
-      (revision) => {
+      () => [schedule()?.revision, schedule()?.configurationKey] as const,
+      ([revision, key]) => {
         if (revision === undefined) return;
-        if (
-          !state() ||
-          (revision > baselineRevision &&
-            !autosave.dirty() &&
-            !autosave.saving())
-        )
+        const changed =
+          revision > baselineRevision ||
+          (revision === baselineRevision && key !== baselineKey);
+        if (!state() || (changed && !autosave.dirty() && !autosave.saving()))
           initializeDraft();
       }
     )

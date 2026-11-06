@@ -49,6 +49,8 @@ pub enum FormErrorCode {
     AlreadyResponded,
     /// The caller has no saved response to read or edit.
     NoResponse,
+    /// A response to an anonymous form can't be changed.
+    AnonymousResponseFinal,
     /// An answer names a question the form does not ask.
     UnknownQuestion,
     /// A question is answered twice.
@@ -70,6 +72,8 @@ pub enum FormErrorCode {
     InvalidSharing,
     /// The form's owner keeps its tallies from respondents.
     TallyHidden,
+    /// A logo or cover image is not an image the caller uploaded.
+    InvalidBranding,
     /// The table changed under the request; try again.
     Conflict,
     /// Something failed on the server.
@@ -93,7 +97,7 @@ pub enum FormErrorCode {
     rename_all_fields = "camelCase"
 )]
 pub enum LayoutProblem {
-    /// A booking step must be unique and follow all questions and screeners.
+    /// A booking step must be unique and follow all questions and gates.
     #[error("the booking step must be the final section of the form")]
     BookingMustBeLast,
     /// A question names a column the form's table does not have.
@@ -133,6 +137,21 @@ pub enum LayoutProblem {
     /// A gate's rule does not fit its column.
     #[error("a gate rule does not fit its column: {reason}")]
     GateRule {
+        /// Why.
+        reason: String,
+    },
+    /// A section's show-when rules test a column no earlier section asks.
+    #[error(
+        "a section can only be shown on answers to questions of earlier sections; column {column} is not one"
+    )]
+    ConditionNamesLaterColumn {
+        /// The column.
+        #[schema(value_type = Uuid)]
+        column: ColumnId,
+    },
+    /// A section's show-when rule does not fit its column.
+    #[error("a show-when rule does not fit its column: {reason}")]
+    ConditionRule {
         /// Why.
         reason: String,
     },

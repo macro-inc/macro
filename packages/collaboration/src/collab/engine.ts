@@ -1,5 +1,5 @@
 import { type InferType, SyncDirection } from '@loro-mirror/core';
-import type { Attributes } from '@macro-inc/observability';
+import type { Attributes, Span } from '@macro-inc/observability';
 import { Mutex } from 'async-mutex';
 import type { VersionVector } from 'loro-crdt';
 import type { ResultAsync } from 'neverthrow';
@@ -55,6 +55,7 @@ export type SyncSources = {
 
 export type SyncEngineParams<S extends GenericRootSchema, D> = {
   loroManager: SyncEngineManager<S>;
+  parentSpan?: Span;
   awareness: Awareness<D>;
   syncs: SyncSources;
   bindings: EngineBindings<S>;
@@ -73,6 +74,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     return this._isRunning;
   }
 
+  private readonly parentSpan?: Span;
   private readonly loroManager: SyncEngineManager<S>;
   private readonly awareness: Awareness<D>;
   private readonly syncs: SyncSources;
@@ -97,6 +99,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
   constructor({
     loroManager,
+    parentSpan,
     awareness,
     syncs,
     bindings,
@@ -106,6 +109,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     makeChatter = () => noopChatter(),
   }: SyncEngineParams<S, D>) {
     this.loroManager = loroManager;
+    this.parentSpan = parentSpan;
     this.awareness = awareness;
     this.syncs = syncs;
     this.bindings = bindings;
@@ -149,7 +153,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         .with({ type: 'awareness' }, (m) =>
           this.awareness.importRemoteAwareness(m.data)
         )
-        .exhaustive()
+        .exhaustive(() =>
+          this.log('warn', 'engine.chatter: unknown message ignored')
+        )
     );
 
     this._isRunning = true;
@@ -228,15 +234,25 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     if (wasRunning) {
       this.stop();
     }
+    const generation = this.lifecycleGeneration;
 
-    await this.syncLock.runExclusive(async () => {
+    const replaced = await this.syncLock.runExclusive(async () => {
+      if (generation !== this.lifecycleGeneration) return false;
       this.log('info', 'engine.reset: starting');
+      // The snapshot replaces this document, and this peer's unsent edits
+      // can't be merged into it locally afterwards; deliver them first so the
+      // server's snapshot holds them. Any the server doesn't acknowledge stay
+      // in the WAL for later delivery (the canvas replays them onto the
+      // replacement).
+      await this.flushUnsentEdits();
+      if (generation !== this.lifecycleGeneration) return false;
       const snapshot = await (snapshotThunk ?? this.defaultSnapshotThunk)();
+      if (generation !== this.lifecycleGeneration) return false;
       if (snapshot.isErr()) {
         this.log('error', 'engine.reset: failed to get snapshot', {
           err: String(snapshot.error),
         });
-        return;
+        return false;
       }
 
       const resetResult = await this.loroManager.reset(snapshot.value);
@@ -244,12 +260,30 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         this.log('error', 'engine.reset: loro manager reset failed', {
           err: JSON.stringify(resetResult.error),
         });
-        return;
+        return false;
       }
+      if (generation !== this.lifecycleGeneration) return false;
+      if (!wasRunning) return true;
+
+      // The binding still shows the replaced document, and local edits sync
+      // its whole state. Restart and hand it the new state under this lock,
+      // so nothing the restart triggers can write the stale one back first.
+      this.start();
+      const state = this.loroManager.state?.state;
+      if (state) this.bindings.onRemoteState(state);
+      return true;
     });
 
-    if (wasRunning) {
+    if (!replaced && wasRunning && generation === this.lifecycleGeneration) {
       this.start();
+    }
+  }
+
+  private async flushUnsentEdits(): Promise<void> {
+    try {
+      await this.syncs.wal.flushPending();
+    } catch {
+      // The WAL reports its own failures.
     }
   }
 
@@ -286,7 +320,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
     try {
       const doc = this.loroManager.doc;
-      this.log('debug', 'engine: persisting snapshot', { doc: doc.toJSON() });
+      this.log('debug', 'engine: persisting snapshot', {
+        operations: doc.opCount(),
+      });
       const snapshot = doc.export({
         mode: 'shallow-snapshot',
         frontiers: doc.oplogFrontiers(),
@@ -307,41 +343,49 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private async handleRemoteUpdate(
     update: RawUpdate
   ): Promise<'applied' | 'pending' | 'reset'> {
-    return this.syncLock.runExclusive(() =>
-      telemetrySpan(this.syncs.live.documentId, 'edit.apply', async (span) => {
-        span.setAttr('update.bytes', update.length);
-        const importResult = this.loroManager.importUpdate(update);
-        await Promise.resolve();
-        if (importResult.isErr()) {
-          const pendingOnly = importResult.error.every(
-            (e) => e.code === LoroManagerError.ImportPending
-          );
-          if (pendingOnly) {
-            // Loro retains causally-ahead updates. Pull the missing operations
-            // rather than resetting the document.
-            this.log('debug', 'engine: remote update pending on missing ops');
-            span.setAttr('outcome', 'pending');
-            void this.convergeFromServer();
-            return 'pending';
-          }
-
-          this.log(
-            'error',
-            'engine: failed to import remote update, resetting',
-            {
-              err: JSON.stringify(importResult.error),
+    const generation = this.lifecycleGeneration;
+    return this.syncLock.runExclusive(() => {
+      // A queued packet can outlive stop/reset and its document's WASM owner.
+      if (!this.isActiveGeneration(generation)) return 'applied';
+      return telemetrySpan(
+        this.syncs.live.documentId,
+        'edit.apply',
+        async (span) => {
+          span.setAttr('update.bytes', update.length);
+          const importResult = this.loroManager.importUpdate(update);
+          await Promise.resolve();
+          if (!this.isActiveGeneration(generation)) return 'applied';
+          if (importResult.isErr()) {
+            const pendingOnly = importResult.error.every(
+              (e) => e.code === LoroManagerError.ImportPending
+            );
+            if (pendingOnly) {
+              // Loro retains causally-ahead updates. Pull the missing operations
+              // rather than resetting the document.
+              this.log('debug', 'engine: remote update pending on missing ops');
+              span.setAttr('outcome', 'pending');
+              void this.convergeFromServer();
+              return 'pending';
             }
-          );
-          span.error(importResult.error);
-          span.setAttr('outcome', 'reset');
-          this.reset();
-          return 'reset';
+
+            this.log(
+              'error',
+              'engine: failed to import remote update, resetting',
+              {
+                err: JSON.stringify(importResult.error),
+              }
+            );
+            span.error(importResult.error);
+            span.setAttr('outcome', 'reset');
+            this.reset();
+            return 'reset';
+          }
+          span.setAttr('outcome', 'applied');
+          span.setAttr('did_change', importResult.value);
+          return 'applied';
         }
-        span.setAttr('outcome', 'applied');
-        span.setAttr('did_change', importResult.value);
-        return 'applied';
-      })
-    );
+      );
+    });
   }
 
   private handleSourceEvent(event: SyncSourceEvent) {
@@ -417,7 +461,12 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     // The catch-up flow: "give me everything after the version I hold".
     // The span shows the anchor version, what came back, and whether it
     // applied — the trail for "client was stale and (never) reconciled".
-    const span = telemetrySpan(this.syncs.live.documentId, 'doc.sync.catchup');
+    const span = telemetrySpan(
+      this.syncs.live.documentId,
+      'doc.sync.catchup',
+      undefined,
+      this.parentSpan
+    );
     span.setAttr('since.version', vvAttr(since));
     span.setAttr('attempt', attempt);
     this.log('debug', `engine: requestUpdatesSince (attempt ${attempt})`);

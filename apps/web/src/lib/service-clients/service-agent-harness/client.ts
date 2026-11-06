@@ -6,6 +6,7 @@ import {
   readAiUsageLimitError,
 } from '../ai-usage-limit';
 import type {
+  AgentModeChoiceResponse,
   AgentRepositoriesResponse,
   AgentRepositoryBranchesResponse,
   AgentSessionChangesPatchResponse,
@@ -14,6 +15,10 @@ import type {
   AgentSessionQueueResponse,
   AgentSessionResponse,
   AnswerToolApprovalResponse,
+  AppConnectedRequest,
+  ArchiveCause,
+  AutoArchiveOverridesBody,
+  AutoArchivePreferencesBody,
   CodingPreferencesBody,
   ControlRequest,
   ControlResponse,
@@ -21,6 +26,7 @@ import type {
   CreateAgentSessionResponse,
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
+  ExecutionRecord,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
@@ -28,6 +34,7 @@ import type {
   PullRequestsSessionsResponse,
   SandboxSize,
   SandboxSizeBody,
+  SessionAutoArchiveResponse,
   SessionPullRequestsResponse,
   SharePermissionV2,
   ToolApprovalAnswerDto,
@@ -35,7 +42,15 @@ import type {
   WarmAgentSessionResponse,
 } from './generated/schemas';
 
-export type { CodingPreferencesBody, SandboxSize, SandboxSizeBody };
+export type {
+  ArchiveCause,
+  AutoArchiveOverridesBody,
+  AutoArchivePreferencesBody,
+  CodingPreferencesBody,
+  SandboxSize,
+  SandboxSizeBody,
+  SessionAutoArchiveResponse,
+};
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
 
@@ -123,6 +138,18 @@ export const agentHarnessServiceClient = {
     });
   },
 
+  /** Whether the composer's Auto mode sends `prompt` to a chat or a coding agent. */
+  chooseMode(prompt: string) {
+    return fetchWithToken<AgentModeChoiceResponse>(
+      `${agentHarnessHost}/agent-mode-choice`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      }
+    );
+  },
+
   /**
    * The GitHub repositories the caller can select for a coding session, with
    * the branch each one's sessions start on by default.
@@ -194,13 +221,13 @@ export const agentHarnessServiceClient = {
     ).then((result) => result.map(() => undefined));
   },
 
-  setArchived(sessionId: string, isArchived: boolean) {
+  setArchived(sessionId: string, archived: boolean) {
     return fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/archived`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isArchived }),
+        body: JSON.stringify({ archived }),
         errorResponseHandler: sessionError,
       }
     ).then((result) => result.map(() => undefined));
@@ -317,10 +344,59 @@ export const agentHarnessServiceClient = {
     );
   },
 
+  getAutoArchivePreferences() {
+    return fetchWithToken<AutoArchivePreferencesBody>(
+      `${agentHarnessHost}/agent-auto-archive-preferences`,
+      { method: 'GET' }
+    );
+  },
+
+  setAutoArchivePreferences(preferences: AutoArchivePreferencesBody) {
+    return fetchWithToken<AutoArchivePreferencesBody>(
+      `${agentHarnessHost}/agent-auto-archive-preferences`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preferences),
+      }
+    );
+  },
+
+  /** The session's own auto-archive choices, its owner's defaults, and the archive a trigger made. */
+  getSessionAutoArchive(sessionId: string) {
+    return fetchWithToken<SessionAutoArchiveResponse>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/auto-archive`,
+      { method: 'GET', errorResponseHandler: sessionError }
+    );
+  },
+
+  /** Owner only; `null` follows the owner's default. */
+  setSessionAutoArchive(
+    sessionId: string,
+    overrides: AutoArchiveOverridesBody
+  ) {
+    return fetchWithToken<AutoArchiveOverridesBody>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/auto-archive`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(overrides),
+        errorResponseHandler: sessionError,
+      }
+    );
+  },
+
   /**
    * The session's latest captured changes: changed files with statuses and
    * line counts, plus how the latest capture attempt went.
    */
+  getCodeExecution(sessionId: string, executionId: string) {
+    return fetchWithToken<ExecutionRecord>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/code-executions/${executionId}`,
+      { method: 'GET', errorResponseHandler: sessionError }
+    );
+  },
+
   getChanges(sessionId: string) {
     return fetchWithToken<AgentSessionChangesResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/changes`,
@@ -420,6 +496,23 @@ export const agentHarnessServiceClient = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answer }),
+      }
+    );
+  },
+
+  /**
+   * Continue the session now that its owner connected `appSlug`. The
+   * harness wakes it with an `app.connected` system event, so the transcript
+   * shows no prompt. 422 when the app is not actually connected.
+   */
+  reportAppConnected(sessionId: string, appSlug: string) {
+    return fetchWithToken<Record<string, never>, typeof AI_USAGE_LIMIT_ERROR>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/app-connections`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appSlug } satisfies AppConnectedRequest),
+        errorResponseHandler: sessionAiError,
       }
     );
   },

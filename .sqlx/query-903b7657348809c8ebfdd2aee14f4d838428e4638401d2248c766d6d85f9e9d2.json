@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_links SET grant_id = $2,grant_generation = $3,fusionauth_user_id = $4,\n                        sync_generation = sync_generation + 1,needs_reauth = $5,last_sync_error_at = CASE WHEN $5 THEN now() ELSE NULL END,updated_at = now()\n                        WHERE id = $1 RETURNING sync_generation",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "903b7657348809c8ebfdd2aee14f4d838428e4638401d2248c766d6d85f9e9d2"
+}

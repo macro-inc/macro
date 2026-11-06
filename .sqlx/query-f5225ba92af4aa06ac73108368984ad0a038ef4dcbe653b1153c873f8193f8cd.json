@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM in_progress_user_link WHERE id IN (\n            SELECT id FROM in_progress_user_link\n            WHERE email_provider='OUTLOOK' AND created_at <= $1::timestamptz\n            ORDER BY created_at LIMIT $2 FOR UPDATE SKIP LOCKED)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f5225ba92af4aa06ac73108368984ad0a038ef4dcbe653b1153c873f8193f8cd"
+}

@@ -1,14 +1,13 @@
 use bot_id::BotIdStr;
 use channel_sender::ChannelSender;
-use either::Either;
 use nom::{
     Finish, IResult, Parser,
     branch::alt,
     bytes::complete::{tag, tag_no_case, take_till1, take_while1},
     character::complete::anychar,
-    combinator::{eof, peek, recognize, verify},
+    combinator::{eof, not, peek, recognize, verify},
     multi::{many_till, many0},
-    sequence::{delimited, preceded},
+    sequence::{delimited, preceded, terminated},
 };
 use serde::Deserialize;
 use std::{
@@ -114,8 +113,54 @@ impl<'de> XmlTaggedParsed<'de> for ParsedDateMention<'de> {
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct ParsedDocumentMention<'a> {
-    #[serde(borrow)]
+    /// A cached label; agents leave it empty or omit it, since the app shows
+    /// the live name.
+    #[serde(borrow, default)]
     pub document_name: Cow<'a, str>,
+    #[serde(borrow, default)]
+    pub block_name: Cow<'a, str>,
+    /// Free-form navigation parameters. Any shape is accepted, so an odd
+    /// value never stops the rest of the text from being formatted.
+    #[serde(default)]
+    pub block_params: serde_json::Value,
+}
+
+impl ParsedDocumentMention<'_> {
+    /// What the mention points at, as a lowercase noun, for text that cannot
+    /// show the live name.
+    pub fn kind(&self) -> &'static str {
+        let is_message = self
+            .block_params
+            .get("channel_message_id")
+            .is_some_and(|id| !id.is_null());
+
+        match self.block_name.as_ref() {
+            "channel" if is_message => "message",
+            "channel" => "channel",
+            "md" | "write" | "pdf" | "code" | "canvas" | "spreadsheet" | "csv" | "pptx" | "psd"
+            | "fig" | "ai" | "unknown" => "document",
+            "task" => "task",
+            "email" => "email",
+            "calendar" => "event",
+            "database" => "database",
+            "form" => "form",
+            "initiative" => "project",
+            "project" => "folder",
+            "company" => "company",
+            "contact" => "contact",
+            "pipeline" => "pipeline",
+            "call" => "call",
+            "chat" => "chat",
+            "agent" => "agent session",
+            "pr" => "pull request",
+            "image" => "image",
+            "video" => "video",
+            "skill" => "skill",
+            "snippet" => "snippet",
+            "routine" | "automation" => "routine",
+            _ => "item",
+        }
+    }
 }
 
 impl<'de> XmlTaggedParsed<'de> for ParsedDocumentMention<'de> {
@@ -321,18 +366,52 @@ pub struct ParsedXmlText<'de>(pub Vec<TextSegment<'de>>);
 #[error(transparent)]
 pub struct ParseErr(#[from] nom::error::Error<String>);
 
+/// One piece of message markup: a recognized tag, a run of text up to the next
+/// `<`, or an unrecognized `<m-*>` tag, which is dropped.
+fn parse_segment(s: &str) -> IResult<&str, Option<TextSegment<'_>>> {
+    alt((
+        parse_xml_tag.map(|xml| Some(TextSegment::Xml(xml))),
+        take_till1(|c| c == '<').map(|text| Some(TextSegment::Plain(text))),
+        parse_unknown_xml_tag.map(|()| None),
+    ))
+    .parse(s)
+}
+
 impl<'de> ParsedXmlText<'de> {
     pub fn parse(s: &'de str) -> Result<Self, ParseErr> {
-        let (_, (out, _)) = many0(alt((
-            parse_xml_tag.map(|xml| Some(TextSegment::Xml(xml))),
-            take_till1(|c| c == '<').map(|text| Some(TextSegment::Plain(text))),
-            parse_unknown_xml_tag.map(|()| None),
-        )))
-        .and(eof)
-        .parse(s)
-        .finish()
-        .map_err(|e| e.cloned())?;
+        let (_, (out, _)) = many0(parse_segment)
+            .and(eof)
+            .parse(s)
+            .finish()
+            .map_err(|e| e.cloned())?;
         Ok(ParsedXmlText(out.into_iter().flatten().collect()))
+    }
+
+    /// Parses text that need not be valid message markup, such as an agent's
+    /// Markdown reply, where `Vec<String>` or `a < b` is ordinary prose. A `<`
+    /// that does not open an `<m-*>` tag stays as plain text instead of failing
+    /// the whole input, so the tags around it are still recognized.
+    ///
+    /// From the first `<m-*>` tag that does not parse, the rest is kept as
+    /// plain text. Retrying after it would rescan the remaining input for a
+    /// closing tag at every such tag, which is quadratic in a long reply.
+    pub fn parse_lenient(s: &'de str) -> Self {
+        let stray_lt = terminated(tag("<"), not(tag_no_case("m-")));
+        let parsed = many0(alt((
+            parse_segment,
+            stray_lt.map(|lt| Some(TextSegment::Plain(lt))),
+        )))
+        .parse(s);
+        let Ok((rest, out)) = parsed else {
+            // Every alternative consumes input or fails recoverably, so this is
+            // not reached; keep the text rather than lose it if it ever is.
+            return ParsedXmlText(vec![TextSegment::Plain(s)]);
+        };
+        let mut segments: Vec<_> = out.into_iter().flatten().collect();
+        if !rest.is_empty() {
+            segments.push(TextSegment::Plain(rest));
+        }
+        ParsedXmlText(segments)
     }
 }
 
@@ -463,14 +542,22 @@ impl XmlFormatter for PlainTextFormatter {
         write!(f, "{}", link.text)
     }
 
+    /// A nameless mention reads as its kind in angle brackets, e.g. `<task>`.
+    /// The brackets are literal text: HTML consumers must escape them.
     fn format_doc(doc: &ParsedDocumentMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if doc.document_name.trim().is_empty() {
+            return write!(f, "<{}>", doc.kind());
+        }
         write!(f, "{}", doc.document_name)
     }
 
     fn format_user(user: &ParsedUserMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match &user.user_id.0 {
-            Either::Left(bot) => write!(f, "{}", user.bot_display_name(bot)),
-            Either::Right(r) => write!(f, "{}", r.email_part().as_ref()),
+        if let Some(bot) = user.user_id.as_bot() {
+            write!(f, "{}", user.bot_display_name(bot))
+        } else if let Some(account) = user.user_id.as_user() {
+            write!(f, "{}", account.email_part().as_ref())
+        } else {
+            write!(f, "Guest")
         }
     }
 

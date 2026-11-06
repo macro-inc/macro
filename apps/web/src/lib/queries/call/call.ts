@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type CallRecord, callServiceClient } from '@service-call/client';
@@ -9,6 +10,10 @@ import type { SharePermissionV2 } from '@service-storage/generated/schemas/share
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import {
+  updateEntitySharePolicy,
+  usesGraphqlSharePolicy,
+} from '../storage/entity-mutations';
 import { callKeys } from './keys';
 
 function activeCallQueryOptions(channelId: string) {
@@ -120,7 +125,7 @@ function _useJoinCallMutation() {
     mutationFn: async (channelId: string) =>
       await throwOnErr(() => callServiceClient.getOrCreateCall(channelId)),
     onSuccess() {
-      invalidateActiveCallQueries();
+      fireAndForget(invalidateActiveCallQueries(), 'call-membership');
     },
     onError(error: Error) {
       if (
@@ -145,6 +150,22 @@ function isNotFoundResultError(error: unknown) {
   );
 }
 
+/**
+ * Refetches the record of the channel's call after the user leaves it, even
+ * while unmounted, so the Call tab doesn't list them in the call. Runs before
+ * the active-call invalidation, whose refetch may clear the call id.
+ */
+export function refetchLeftCallRecord(channelId: string) {
+  const callId = queryClient.getQueryData<CallActiveResponse | null>(
+    callKeys.active(channelId).queryKey
+  )?.callId;
+  if (!callId) return;
+  queryClient.invalidateQueries({
+    queryKey: callKeys.record(callId).queryKey,
+    refetchType: 'all',
+  });
+}
+
 export function useLeaveCallMutation() {
   return useMutation(() => ({
     gcTime: 0,
@@ -159,8 +180,9 @@ export function useLeaveCallMutation() {
         throw error;
       }
     },
-    onSuccess() {
-      invalidateActiveCallQueries();
+    onSuccess(_result, channelId) {
+      refetchLeftCallRecord(channelId);
+      fireAndForget(invalidateActiveCallQueries(), 'call-membership');
     },
     onError(error: Error) {
       console.error('failed to leave call', error);
@@ -183,6 +205,20 @@ function callRecordQueryOptions(callId: string) {
 
 export function useCallRecordQuery(callId: Accessor<string>) {
   return useQuery(() => callRecordQueryOptions(callId()));
+}
+
+function liveCallRecordQueryOptions(callId: string) {
+  return queryOptions({
+    ...callRecordQueryOptions(callId),
+    // Participants join and leave without an event; poll like the active call.
+    staleTime: 0,
+    refetchInterval: 15_000,
+  });
+}
+
+/** The call record with current participants, for presence in a live call. */
+export function useLiveCallRecordQuery(callId: Accessor<string>) {
+  return useQuery(() => liveCallRecordQueryOptions(callId()));
 }
 
 export function fetchCallRecord(
@@ -229,6 +265,12 @@ export function buildCallTeamSharePayload(
 }
 
 export function updateCallTeamShare(callId: string, shared: boolean) {
+  if (usesGraphqlSharePolicy('call'))
+    return updateEntitySharePolicy(
+      'call',
+      callId,
+      buildCallTeamSharePayload(shared)
+    );
   return callServiceClient.editCallRecord({
     callId,
     sharePermission: buildCallTeamSharePayload(shared),
@@ -254,14 +296,16 @@ function patchCachedCallTeamShare(
 export function setCallRecordTeamShareCache(callId: string, shared: boolean) {
   const queryKey = callKeys.record(callId).queryKey;
   // Drop in-flight GETs so a slower record response cannot overwrite this write.
-  void queryClient.cancelQueries({ queryKey });
+  queryClient.cancelQueries({ queryKey });
   queryClient.setQueryData<CallRecord>(queryKey, (prev) =>
     prev ? patchCachedCallTeamShare(prev, shared) : prev
   );
 }
 
 function invalidateCallRecord(callId: string) {
-  queryClient.invalidateQueries({ queryKey: callKeys.record(callId).queryKey });
+  queryClient.invalidateQueries({
+    queryKey: callKeys.record(callId).queryKey,
+  });
 }
 
 /**

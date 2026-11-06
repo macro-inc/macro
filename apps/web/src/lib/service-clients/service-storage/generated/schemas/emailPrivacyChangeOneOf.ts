@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmailPrivacyChangeOneOfAction } from './emailPrivacyChangeOneOfAction';
+import type { EmailPrivacyChangeOneOfLinkId } from './emailPrivacyChangeOneOfLinkId';
 
 /**
  * Consent covers all available past and future emails in the primary mailbox.
@@ -13,4 +14,6 @@ export type EmailPrivacyChangeOneOf = {
   action: EmailPrivacyChangeOneOfAction;
   /** False withdraws this mailbox's CRM contribution without deleting records. */
   enabled: boolean;
+  /** Required when enabling; must match the displayed primary connection. */
+  link_id?: EmailPrivacyChangeOneOfLinkId;
 };

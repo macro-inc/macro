@@ -57,14 +57,14 @@ export function TableTabs(props: {
           )
           .map(() => undefined)
       }
-      onReorder={(tableIds) =>
-        void reorderDatabaseTables({
+      onReorder={(tableIds) => {
+        reorderDatabaseTables({
           databaseId: props.databaseId,
           tableIds,
-        }).mapErr((errors) => toast.failure(tableOrderMessage(errors)))
-      }
-      onDelete={(tableId) =>
-        void ResultAsync.fromSafePromise(
+        }).mapErr((errors) => toast.failure(tableOrderMessage(errors)));
+      }}
+      onDelete={(tableId) => {
+        ResultAsync.fromSafePromise(
           patchDetail(props.databaseId, (detail) => ({
             ...detail,
             tables: detail.tables.filter((entry) => entry.table.id !== tableId),
@@ -78,8 +78,8 @@ export function TableTabs(props: {
               return error;
             })
           )
-          .mapErr((error) => toast.failure(tableDeleteMessage(error)))
-      }
+          .mapErr((error) => toast.failure(tableDeleteMessage(error)));
+      }}
       onCreate={(name, existingTableId) =>
         createTableWithName({
           databaseId: props.databaseId,

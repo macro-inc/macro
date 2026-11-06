@@ -71,13 +71,16 @@ fn event() -> MessageEvent {
     let actor = "macro|author@example.com".to_owned();
     let parent = MessageParent::parse("document", "legacy-document").unwrap();
     let message = Message {
+        kind: MessageKind::Message,
         id: Uuid::from_u128(3),
         parent: parent.clone(),
         thread_id: Some(Uuid::from_u128(2)),
         sender_id: actor.clone().try_into().unwrap(),
         bot_profile: None,
         mentions: vec![],
+        guest_name: None,
         imported_author: None,
+        triggered_via: None,
         triggered_by: None,
         content: "A private discussion".into(),
         created_at: Utc::now(),

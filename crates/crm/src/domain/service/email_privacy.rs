@@ -14,6 +14,7 @@ use entity_access::domain::models::MemberTeamRole;
 impl<CR: CompaniesRepository, R: CompanyMetadataResolver> EmailPrivacyService
     for CrmServiceImpl<CR, R>
 {
+    #[tracing::instrument(skip_all, fields(team_id = %team), err)]
     async fn contribution_mailbox(
         &self,
         team: uuid::Uuid,
@@ -24,6 +25,7 @@ impl<CR: CompaniesRepository, R: CompanyMetadataResolver> EmailPrivacyService
             .await
     }
 
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
     async fn email_privacy(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
@@ -39,6 +41,7 @@ impl<CR: CompaniesRepository, R: CompanyMetadataResolver> EmailPrivacyService
         Ok(settings)
     }
 
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
     async fn change_email_privacy(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,

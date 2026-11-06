@@ -34,8 +34,8 @@ use super::{
 pub struct CompanyContactItem {
     /// The CRM contact id.
     pub id: Uuid,
-    /// The contact's email address.
-    pub email: String,
+    /// The contact's email address, if it has one.
+    pub email: Option<String>,
     /// The contact's display name, when known.
     pub name: Option<String>,
     /// Most recent known interaction with this contact.
@@ -257,6 +257,7 @@ fn to_property_item(prop: EntityPropertyWithDefinition) -> CompanyPropertyItem {
     let data_type = match prop.definition.data_type {
         DataType::Boolean => "boolean",
         DataType::Date => "date",
+        DataType::DateRange => "date_range",
         DataType::Number => "number",
         DataType::String => "string",
         DataType::SelectNumber => "select_number",

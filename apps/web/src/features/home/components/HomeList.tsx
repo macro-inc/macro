@@ -1,3 +1,9 @@
+import {
+  TutorialRow,
+  TutorialSidebarItem,
+} from '@app/features/video-tutorials';
+import { usePending } from '@app/observability/flow';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import '@entity/composed/ListEntity.css';
 import {
   createListController,
@@ -30,6 +36,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { useChannelsContext } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EntityData,
   EntitySelectionToolbar,
@@ -38,7 +45,7 @@ import {
   type WithNotification,
 } from '@entity';
 import { getChannelThreadName } from '@entity/utils/channel-thread-name';
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button } from '@ui';
@@ -59,7 +66,6 @@ import {
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { InboxListEntity } from '../../next-soup/soup-view/views/inbox/InboxListEntity';
 import {
-  markCalendarNotificationSeenOnOpen,
   markChannelNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '../../next-soup/utils';
@@ -90,9 +96,31 @@ type HomeListActivationMetadata = {
 
 type HomeListProps = {
   hasPreview: boolean;
-  onPreviewEntityChange: (entity: PreviewSelection | undefined) => void;
+  onPreviewEntityChange: (
+    entity: PreviewSelection | undefined,
+    options?: { activate?: boolean }
+  ) => void;
   onPreviewActivate?: () => void;
 };
+
+/**
+ * Home's tutorial entry, shaped like the rows under it: desktop Home is a rail
+ * of sidebar items, touch Home a list of inbox rows.
+ */
+function HomeTutorial() {
+  return (
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <div class="mx-(--sidebar-gutter) my-(--sidebar-row-gap) empty:hidden">
+          <TutorialSidebarItem tutorial="home" />
+        </div>
+      }
+    >
+      <TutorialRow tutorial="home" />
+    </Show>
+  );
+}
 
 /** Compact notification list used by the Notifications workspace. */
 export function HomeList(props: HomeListProps) {
@@ -108,6 +136,8 @@ export function HomeList(props: HomeListProps) {
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     useHomeDataSource(state)
   );
+
+  usePending('home.items', source.isLoading);
 
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
     createListController<HomeDataSourceItem, HomeListActivationMetadata>({
@@ -130,10 +160,14 @@ export function HomeList(props: HomeListProps) {
       controller: list,
       handle: panel.handle,
       openEntityInSplit: (entity, options) => {
-        void openEntityInSplitFromUnifiedList(entity, {
-          splitHandle: panel.handle,
-          ...options,
-        });
+        markRowNotificationsSeenOnOpen(entity, notificationSource);
+        fireAndForget(
+          openEntityInSplitFromUnifiedList(entity, {
+            splitHandle: panel.handle,
+            ...options,
+          }),
+          'open-entity-in-split'
+        );
       },
     });
   });
@@ -163,29 +197,41 @@ export function HomeList(props: HomeListProps) {
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
     if (!isTouchDevice() && !newSplit) {
-      markEntitySeen(sourceRow.entity);
-      showPreview(sourceRow.entity);
+      if (!isNonMemberChannelEntity(sourceRow.entity)) {
+        markChannelNotificationsSeenOnOpen(
+          sourceRow.entity,
+          notificationSource
+        );
+      }
+      showPreview(sourceRow.entity, { activate: true });
       props.onPreviewActivate?.();
+      // Home keeps the keyboard only when the item opened in Home itself.
+      if (panel.isPanelActive()) listRoot()?.focus({ preventScroll: true });
       return;
     }
 
-    void openEntity(sourceRow.entity, {
-      event: metadata?.event,
-      newSplit,
-    });
+    fireAndForget(
+      openEntity(sourceRow.entity, {
+        event: metadata?.event,
+        newSplit,
+      }),
+      'home'
+    );
   }
 
   function markEntitySeen(entity: WithNotification<EntityData>) {
-    markCalendarNotificationSeenOnOpen(entity, notificationSource);
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
     if (!isNonMemberChannelEntity(entity)) {
       markChannelNotificationsSeenOnOpen(entity, notificationSource);
     }
   }
 
-  function showPreview(entity: WithNotification<EntityData>) {
-    props.onPreviewEntityChange(
-      entity?.type === 'initiative' ? undefined : entity
-    );
+  function showPreview(
+    entity: WithNotification<EntityData> | undefined,
+    options?: { activate?: boolean }
+  ) {
+    if (entity) markRowNotificationsSeenOnOpen(entity, notificationSource);
+    props.onPreviewEntityChange(entity, options);
   }
 
   const previewAfterNavigation = debounce(showPreview, 150);
@@ -285,9 +331,7 @@ export function HomeList(props: HomeListProps) {
 
     return ({ entity }) => {
       previewAfterNavigation.clear();
-      props.onPreviewEntityChange(
-        entity?.type === 'initiative' ? undefined : entity
-      );
+      showPreview(entity);
     };
   };
 
@@ -346,7 +390,7 @@ export function HomeList(props: HomeListProps) {
 
         if (distanceFromEnd > 3) return;
 
-        void source.loadMore();
+        fireAndForget(source.loadMore(), 'home');
       },
     },
     activation: {
@@ -356,12 +400,18 @@ export function HomeList(props: HomeListProps) {
   });
 
   const onRowClick = (rowId: string, event: MouseEvent) => {
+    // Rows cancel their press, so the browser never moves focus into Home.
+    // Activate Home before opening: an item that opens in another split
+    // activates that split afterwards, without a focus change in Home that
+    // the split focus tracker could later use to take activation back.
+    panel.handle.activate();
     if (
       event.metaKey ||
       event.ctrlKey ||
       (isTouchDevice() && list.selection.count() > 0)
     ) {
       listInteractions.selection.toggle(rowId);
+      listRoot()?.focus({ preventScroll: true });
       return;
     }
 
@@ -475,7 +525,7 @@ export function HomeList(props: HomeListProps) {
     const distance =
       container.scrollHeight - container.scrollTop - container.clientHeight;
     if (distance < 300) {
-      void source.loadMore();
+      fireAndForget(source.loadMore(), 'home');
     }
   }
 
@@ -512,7 +562,7 @@ export function HomeList(props: HomeListProps) {
               <button
                 type="button"
                 class="underline"
-                onClick={() => void source.refresh()}
+                onClick={() => fireAndForget(source.refresh(), 'home')}
               >
                 Retry
               </button>
@@ -540,7 +590,7 @@ export function HomeList(props: HomeListProps) {
               if (!action) return;
 
               focusActionRow(row);
-              void action.onClick();
+              fireAndForget(action.onClick(), 'home');
             }}
           >
             <Switch>
@@ -565,9 +615,9 @@ export function HomeList(props: HomeListProps) {
                 >
                   <span>Home couldn’t be loaded.</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
-                    onClick={() => void source.refresh()}
+                    onClick={() => fireAndForget(source.refresh(), 'home')}
                   >
                     Try again
                   </Button>
@@ -579,7 +629,19 @@ export function HomeList(props: HomeListProps) {
                   ref={setEmptyViewport}
                   class="min-h-0 flex-1 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
                 >
-                  <HomeEmptyState />
+                  {/* A new account's Home starts empty, when the tutorial
+                      matters most. The row then takes the touch top inset. */}
+                  <Show
+                    when={state.tab === 'signal'}
+                    fallback={<HomeEmptyState />}
+                  >
+                    <div class="touch:pt-(--mobile-content-inset-top)">
+                      <HomeTutorial />
+                    </div>
+                    <div class="contents touch:[--mobile-content-inset-top:0px]">
+                      <HomeEmptyState />
+                    </div>
+                  </Show>
                 </div>
               </Match>
 
@@ -592,19 +654,22 @@ export function HomeList(props: HomeListProps) {
                   class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none pb-[max(0.5rem,var(--mobile-content-inset-bottom,0px))]"
                   onScroll={checkNearEnd}
                 >
-                  {/* The spacer scrolls away; the viewport stays behind the filters. */}
-                  <div
-                    ref={setTopSpacer}
-                    aria-hidden="true"
-                    class="h-0 touch:h-(--mobile-content-inset-top)"
-                  />
+                  {/* The spacer scrolls away; the viewport stays behind the filters.
+                      It holds the touch inset and the pinned tutorial row. */}
+                  <div ref={setTopSpacer}>
+                    <div
+                      aria-hidden="true"
+                      class="h-0 touch:h-(--mobile-content-inset-top)"
+                    />
+                    <Show when={state.tab === 'signal'}>
+                      <HomeTutorial />
+                    </Show>
+                  </div>
                   <Virtualizer
                     ref={registerVirtualizer}
                     data={rows()}
                     scrollRef={viewport()}
-                    startMargin={
-                      isTouchDevice() ? (topSpacerSize.height ?? 0) : 0
-                    }
+                    startMargin={topSpacerSize.height ?? 0}
                     bufferSize={500}
                     itemSize={isTouchDevice() ? 44 : 36}
                     keepMounted={
@@ -631,6 +696,9 @@ export function HomeList(props: HomeListProps) {
                               selectedEntities={selectedEntities}
                               viewContext={entityActionViewContext()}
                               markDoneDelegate={source.markDoneDelegate}
+                              createActionNavigationHandler={
+                                createActionNavigationHandler
+                              }
                               onOpenChange={(open) => {
                                 if (!open) return;
                                 focusActionRow({

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type JSX, onCleanup, Show } from 'solid-js';
 import { GoogleAccountsStep } from '../components/google-accounts-step';
 import {
@@ -22,6 +23,8 @@ export function SignupJourneyView(props: {
   onBackFromEmail: () => void;
   /** Sends a returning user to sign in. */
   onSignIn: () => void;
+  /** Sends an agent to the agent signup page. */
+  onAgentSignup: () => void;
   /** The host's email sign-up form, shown in place of Google when chosen. */
   emailForm?: JSX.Element;
   showingEmail: boolean;
@@ -58,7 +61,10 @@ export function SignupJourneyView(props: {
       }
       heroFooter={
         journey.step() === 'welcome' && !props.showingEmail ? (
-          <SignInInstead onSignIn={props.onSignIn} />
+          <SignInInstead
+            onSignIn={props.onSignIn}
+            onAgentSignup={props.onAgentSignup}
+          />
         ) : undefined
       }
       explainer={
@@ -90,7 +96,12 @@ export function SignupJourneyView(props: {
                 mode="work"
                 connecting={journey.connecting() ? 'work' : undefined}
                 error={journey.error()}
-                onConnectWork={() => void journey.connectGoogle(props.onGoogle)}
+                onConnectWork={() =>
+                  fireAndForget(
+                    journey.connectGoogle(props.onGoogle),
+                    'onboarding'
+                  )
+                }
                 onConnectPersonal={() => {}}
               />
             }

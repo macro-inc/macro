@@ -13,14 +13,19 @@ import {
   type PrLinkKind,
 } from '@block-pr/data/pr-links';
 import { PR_ORIGIN_LABELS, PR_ORIGIN_TOOLS } from '@block-pr/data/pr-origin';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import BoardIcon from '@icon/system/regular/kanban.svg';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import { createSignal, For, Show } from 'solid-js';
+import { ButtonGroup } from '@ui';
+import { createSignal, For } from 'solid-js';
 import { UNKNOWN_ORIGIN } from '../reviews-filter';
 import type {
   ReviewsFilterId,
   ReviewsFilterSelection,
+  ReviewsLayout,
   ReviewsReviewFilterId,
   ReviewsSortId,
   ReviewsStatusFilterId,
@@ -141,7 +146,12 @@ function isSelected(
 export const activeReviewsFilterCount = (selected: ReviewsFilterSelection) =>
   Object.values(selected).reduce((count, ids) => count + ids.length, 0);
 
-export function ReviewsControls(props: ReviewsControlProps) {
+export function ReviewsControls(
+  props: ReviewsControlProps & {
+    layout: ReviewsLayout;
+    onLayoutChange: (layout: ReviewsLayout) => void;
+  }
+) {
   const panel = useSplitPanelOrThrow();
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
   let filterTrigger: HTMLButtonElement | undefined;
@@ -178,34 +188,57 @@ export function ReviewsControls(props: ReviewsControlProps) {
   const activeCount = () => activeReviewsFilterCount(props.selected);
 
   return (
-    <div class="flex min-w-0 shrink-0 items-center justify-end gap-2 @max-[720px]/view-shell:gap-1">
-      <ListSortDropdown
-        label="Sort pull requests"
-        value={props.sort}
-        options={SORT_OPTIONS}
-        open={openMenu() === 'sort'}
-        onChange={props.onSortChange}
-        onOpenChange={handleMenuOpenChange('sort')}
-        triggerRef={(element) => (sortTrigger = element)}
-      />
-      <div class="relative shrink-0">
+    <>
+      <HeaderActionGroup label="Review filters">
         <ListFilterDropdown
+          grouped
           label="Filter pull requests"
+          activeCount={activeCount()}
           groups={filterGroups(props)}
           open={openMenu() === 'filters'}
           onOpenChange={handleMenuOpenChange('filters')}
           triggerRef={(element) => (filterTrigger = element)}
           isSelected={(group, id) => isSelected(props, group, id)}
+          selectedIds={(group) => props.selected[group]}
           onSelectionChange={props.onFilterChange}
           onClear={props.onClearFilters}
         />
-        <Show when={activeCount() > 0}>
-          <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-            {activeCount()}
-          </span>
-        </Show>
-      </div>
-    </div>
+      </HeaderActionGroup>
+      <HeaderActionGroup label="Review layout">
+        <ButtonGroup.Button
+          aria-label="List"
+          tooltip="List"
+          variant="ghost"
+          size="icon-sm"
+          aria-pressed={props.layout === 'list'}
+          onClick={() => props.onLayoutChange('list')}
+        >
+          <ListIcon class="size-4" />
+        </ButtonGroup.Button>
+        <ButtonGroup.Button
+          aria-label="Board"
+          tooltip="Board"
+          variant="ghost"
+          size="icon-sm"
+          aria-pressed={props.layout === 'board'}
+          onClick={() => props.onLayoutChange('board')}
+        >
+          <BoardIcon class="size-4" />
+        </ButtonGroup.Button>
+      </HeaderActionGroup>
+      <HeaderActionGroup label="Review view options">
+        <ListSortDropdown
+          grouped
+          label="Sort pull requests"
+          value={props.sort}
+          options={SORT_OPTIONS}
+          open={openMenu() === 'sort'}
+          onChange={props.onSortChange}
+          onOpenChange={handleMenuOpenChange('sort')}
+          triggerRef={(element) => (sortTrigger = element)}
+        />
+      </HeaderActionGroup>
+    </>
   );
 }
 

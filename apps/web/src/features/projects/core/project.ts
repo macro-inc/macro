@@ -9,7 +9,14 @@ export type Project = {
   completedTaskCount?: number;
 };
 
+export type ProjectScope = 'all' | 'assigned-to-me' | 'created-by-me';
+
 export type ProjectAccess = 'view' | 'comment' | 'edit' | 'owner';
+
+/** What chips and previews may read; counts and membership stay on the project view. */
+export type ProjectIdentity = Pick<Project, 'id' | 'name'> & {
+  access: ProjectAccess;
+};
 
 export type ProjectDetail = Project & {
   ownerId: string;
@@ -24,6 +31,7 @@ export type ProjectFilters = {
   status?: string;
   priority?: string;
   assignee?: string;
+  owner?: string;
   dueBefore?: string;
   dueAfter?: string;
   sort?: 'updated' | 'created';

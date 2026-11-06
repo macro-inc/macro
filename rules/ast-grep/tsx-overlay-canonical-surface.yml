@@ -1,0 +1,43 @@
+id: tsx-overlay-canonical-surface
+language: tsx
+severity: error
+message: Overlays use the canonical surface, `menu-surface` for menus and popovers or `@ui` Dialog (`elevated-surface`) for dialogs, never a hand-built fill or shadow.
+note: |-
+  Rule FE-67 in .agents/rules/web/design-system.md. Overlay content that
+  paints its own background or shadow drifts from every other menu. Drop the
+  fill and shadow and add `menu-surface`, or render the dialog with `Dialog`.
+  `bg-menu-glass` is the retired menu recipe; the reply composer, mobile
+  drawer, and call controls keep it deliberately, and fullscreen media viewers
+  paint their own backdrop. Tooltips keep the tooltip surface.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/components/ui/**
+  - apps/web/src/features/email-compose/views/reply-input.tsx
+  - apps/web/src/components/app/mobile/MobileDrawer.tsx
+  - apps/web/src/features/channel/Call/CallControls/CallControlBar.tsx
+  - apps/web/src/features/channel/Media/MediaViewerDialog.tsx
+  - apps/web/src/lib/core/component/Lightbox/Lightbox.tsx
+rule:
+  kind: string_fragment
+  any:
+    - regex: (^|\s)bg-menu-glass(\s|$)
+    - all:
+        - regex: (^|\s)(bg-(menu|surface|panel|dialog)|shadow-(sm|md|lg|xl|2xl))(\s|$)
+        - inside:
+            kind: jsx_attribute
+            stopBy: end
+            has:
+              kind: property_identifier
+              regex: ^class$
+            inside:
+              any:
+                - kind: jsx_opening_element
+                - kind: jsx_self_closing_element
+              has:
+                field: name
+                regex: \.(Content|SubContent)$
+              not:
+                has:
+                  field: name
+                  regex: ^Tooltip\.

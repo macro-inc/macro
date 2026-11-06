@@ -2,10 +2,15 @@ use std::borrow::Cow;
 
 use crate::{FusionAuthClient, Result};
 
+// Grant replacement holds a shared account lock across these requests.
+const LINK_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 mod link;
 mod login;
 mod lookup;
 mod search;
+#[cfg(test)]
+mod test;
 mod unlink;
 
 pub use link::{IdentityProviderLink, Link, LinkUserRequest, RetrieveLinkResponse};
@@ -58,7 +63,7 @@ impl FusionAuthClient {
     }
 
     /// Completes the identity provider login
-    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    #[tracing::instrument(skip(self, code), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn complete_identity_provider_login(
         &self,
         idp_id: &str,

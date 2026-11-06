@@ -1,29 +1,41 @@
 import type { SoupGroupHeaderRow } from '@app/features/soup';
 import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
+import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { getPropertyOptionLabel } from '@entity';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CircleDashedIcon from '@phosphor/circle-dashed.svg';
-import FolderIcon from '@phosphor/folder-simple.svg';
-import { PROPERTY_OPTION_IDS } from '@property';
+import { SOUP_ROW_CLASS } from '@entity/composed/list-entity/row-geometry';
+import { useListLayout } from '@entity/composed/list-entity/shared';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue';
+import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
+import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
-import { cn, Layer, Surface } from '@ui';
+import { ComposerSurface, cn, Layer } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import type { TaskGroupBy } from '../../types';
 
+export const EMPTY_GROUP_PROPERTY_IDS: Partial<Record<TaskGroupBy, string>> = {
+  priority: SYSTEM_PROPERTY_IDS.PRIORITY,
+  project: SYSTEM_PROPERTY_IDS.PROJECT,
+  assignee: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+  date: SYSTEM_PROPERTY_IDS.DUE_DATE,
+};
+
 export const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
   [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
-    'bg-task/5 border-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
+    'bg-task-status-not-started/5 border-task-status-not-started/10 data-highlighted:bg-task-status-not-started/10 hover:bg-task-status-not-started/10',
   [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
-    'bg-alert/5 border-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
+    'bg-task-status-in-progress/5 border-task-status-in-progress/10 data-highlighted:bg-task-status-in-progress/10 hover:bg-task-status-in-progress/10',
   [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
-    'bg-note/5 border-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
+    'bg-task-status-in-review/5 border-task-status-in-review/10 data-highlighted:bg-task-status-in-review/10 hover:bg-task-status-in-review/10',
   [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
-    'bg-accent/5 border-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
+    'bg-task-status-completed/5 border-task-status-completed/10 data-highlighted:bg-task-status-completed/10 hover:bg-task-status-completed/10',
   [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
-    'bg-ink/5 border-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
+    'bg-task-status-canceled/5 border-task-status-canceled/10 data-highlighted:bg-task-status-canceled/10 hover:bg-task-status-canceled/10',
 };
 
 export function TaskGroupHeader(props: {
@@ -36,16 +48,31 @@ export function TaskGroupHeader(props: {
   onToggle: () => void;
   onFocus: () => void;
 }) {
+  const isWide = useListLayout()?.isWide ?? (() => true);
+  const alignWithRows = () => isWide() && !isMobile();
   const agent = usePropertyUserDisplay(() =>
     props.groupBy === 'assignee' && isBotPrincipalId(props.row.groupId)
       ? props.row.groupId
       : ''
+  );
+  // The grouped page names a project group the viewer can read; a group still
+  // labeled by its key resolves the name here.
+  const unnamedProjectId = () =>
+    props.groupBy === 'project' && props.row.label === props.row.groupId
+      ? props.row.groupId
+      : '';
+  const project = usePropertyEntityDisplay(unnamedProjectId, () =>
+    unnamedProjectId() ? 'INITIATIVE' : undefined
   );
   const label = createMemo(() => {
     if (!props.row.groupId) return props.row.label || 'Not set';
 
     if (props.groupBy === 'status' || props.groupBy === 'priority') {
       return getPropertyOptionLabel(props.row.groupId) ?? props.row.label;
+    }
+
+    if (props.groupBy === 'project') {
+      return unnamedProjectId() ? project.name() : props.row.label;
     }
 
     if (props.groupBy === 'assignee') {
@@ -67,70 +94,110 @@ export function TaskGroupHeader(props: {
   );
 
   return (
-    <div id={props.row.id} role="row">
+    <div
+      id={props.row.id}
+      role="row"
+      class={isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow}
+    >
       <div role="gridcell" aria-colspan={props.columnCount}>
-        <Surface
-          depth={3}
-          hideBorder
-          data-highlighted={props.focused || undefined}
-          class={cn(
-            'group/header mx-1 my-0.5 h-auto w-[calc(100%-0.5rem)] rounded-lg border border-edge-muted text-ink-muted hover:bg-active',
-            statusTint(),
-            props.focused && 'bg-active'
-          )}
-        >
-          <button
-            type="button"
-            tabIndex={-1}
-            class="flex w-full items-center gap-2.5 rounded-[inherit] px-2 py-1.5 text-left text-xs font-semibold tracking-tight"
-            aria-expanded={props.expanded}
-            onMouseMove={props.onFocus}
-            onClick={props.onToggle}
+        {/* Desktop shares the email card's composer chrome: soft shadow in
+            light mode, glass rim in dark mode. */}
+        <Layer depth={3}>
+          <ComposerSurface
+            as="div"
+            data-highlighted={props.focused || undefined}
+            class={cn(
+              'group/header relative mr-1 my-0.5 w-[calc(100%-0.5rem)] rounded-xl text-ink-muted hover:bg-active',
+              !isMobile() && 'ml-(--soup-row-gutter)',
+              // Paint the touch border without shifting the shared row geometry.
+              isTouchDevice() &&
+                'rounded-lg border-edge-muted bg-surface after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:border after:border-inherit',
+              statusTint(),
+              props.focused && 'bg-active'
+            )}
           >
-            <Layer depth={3}>
-              <span class="flex size-4.5 items-center justify-center rounded-xs group-hover/header:bg-ink/5">
-                <CaretRightIcon
+            <button
+              type="button"
+              tabIndex={-1}
+              class={cn(
+                'grid min-w-0 w-full items-center gap-x-2 whitespace-nowrap rounded-[inherit] py-2 text-left text-xs font-semibold tracking-tight touch:min-h-11',
+                alignWithRows()
+                  ? 'grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)] pl-(--soup-row-padding-l) pr-3'
+                  : 'grid-cols-[1rem_minmax(0,1fr)] px-2'
+              )}
+              aria-expanded={props.expanded}
+              onMouseMove={props.onFocus}
+              onClick={props.onToggle}
+            >
+              <Layer depth={3}>
+                <span class="flex aspect-square w-full items-center justify-center rounded-xs group-hover/header:bg-ink/5">
+                  <CaretRightIcon
+                    class={cn(
+                      'size-4 transition-transform',
+                      props.expanded && 'rotate-90'
+                    )}
+                  />
+                </span>
+              </Layer>
+              <div class="flex min-w-0 items-center gap-2">
+                <span
                   class={cn(
-                    'size-2.5 transition-transform',
-                    props.expanded && 'rotate-90'
+                    'flex h-5 shrink-0 items-center justify-center',
+                    isMobile() ? 'w-5' : 'w-6 touch:w-9'
                   )}
-                />
-              </span>
-            </Layer>
-            <Switch>
-              <Match when={!props.row.groupId}>
-                <CircleDashedIcon class="size-3.5 text-ink-extra-muted" />
-              </Match>
-              <Match
-                when={
-                  props.groupBy === 'status' || props.groupBy === 'priority'
-                }
-              >
-                <PropertyValueIcon
-                  optionId={props.row.groupId}
-                  class="size-3.5"
-                />
-              </Match>
-              <Match when={props.groupBy === 'assignee'}>
-                <UserIcon
-                  id={props.row.groupId}
-                  size="sm"
-                  suppressClick
-                  showTooltip={false}
-                />
-              </Match>
-              <Match when={props.groupBy === 'project'}>
-                <FolderIcon class="size-3.5 shrink-0" />
-              </Match>
-            </Switch>
-            <span class="truncate">{label()}</span>
-            <Show when={props.row.count !== undefined}>
-              <span class="shrink-0 rounded-full bg-ink/10 px-1.5 py-px text-xs font-medium tabular-nums text-ink-extra-muted">
-                {props.row.count}
-              </span>
-            </Show>
-          </button>
-        </Surface>
+                >
+                  <Switch>
+                    <Match
+                      when={
+                        !props.row.groupId ||
+                        (props.groupBy === 'date' &&
+                          props.row.groupId === 'no_due_date')
+                      }
+                    >
+                      <PropertyEmptyIcon
+                        propertyDefinitionId={
+                          EMPTY_GROUP_PROPERTY_IDS[props.groupBy]
+                        }
+                        class={cn(
+                          'size-3.5 text-ink-extra-muted',
+                          props.groupBy === 'priority' && 'size-4'
+                        )}
+                      />
+                    </Match>
+                    <Match
+                      when={
+                        props.groupBy === 'status' ||
+                        props.groupBy === 'priority'
+                      }
+                    >
+                      <PropertyValueIcon
+                        optionId={props.row.groupId}
+                        class="min-h-4 min-w-4 shrink-0"
+                      />
+                    </Match>
+                    <Match when={props.groupBy === 'assignee'}>
+                      <UserIcon
+                        id={props.row.groupId}
+                        size="sm"
+                        suppressClick
+                        showTooltip={false}
+                      />
+                    </Match>
+                    <Match when={props.groupBy === 'project'}>
+                      <ProjectIcon class="size-3.5 shrink-0" />
+                    </Match>
+                  </Switch>
+                </span>
+                <span class="truncate">{label()}</span>
+                <Show when={props.row.count !== undefined}>
+                  <span class="shrink-0 rounded-full bg-ink/10 px-1.5 py-px text-xs font-medium tabular-nums text-ink-extra-muted">
+                    {props.row.count}
+                  </span>
+                </Show>
+              </div>
+            </button>
+          </ComposerSurface>
+        </Layer>
       </div>
     </div>
   );

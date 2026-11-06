@@ -1,13 +1,26 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { UserGroup } from '@core/component/UserGroup';
+import { useChannel } from '@core/context/channels';
+import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName, tryMacroId } from '@core/user';
-import PhoneIcon from '@phosphor/phone-call.svg';
-import { useActiveCallQuery, useCallRecordQuery } from '@queries/call/call';
+import PhoneIcon from '@icon/system/regular/phone-call.svg';
+import { Telemetry } from '@macro-inc/observability';
+import { useActiveCallQuery, useLiveCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';
-import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { ActiveCallLink } from './ActiveCallLink';
 import { CallOverlay } from './CallOverlay';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
+import { CallDiscussionContent } from './discussion/CallDiscussionContent';
+import { callDiscussionOf } from './discussion/call-discussion';
 import { useCall } from './use-call';
 
 function ParticipantFirstName(props: { id: string }) {
@@ -49,7 +62,7 @@ function JoinCallEmptyState(props: {
   onJoin: () => void;
 }) {
   const activeCallQuery = useActiveCallQuery(() => props.channelId);
-  const callRecordQuery = useCallRecordQuery(
+  const callRecordQuery = useLiveCallRecordQuery(
     () => activeCallQuery.data?.callId ?? ''
   );
   const participantIds = createMemo(
@@ -76,7 +89,7 @@ function JoinCallEmptyState(props: {
       </div>
 
       <Button
-        variant="cta"
+        variant="primary"
         size="lg"
         class="px-5"
         onClick={props.onJoin}
@@ -100,6 +113,7 @@ export function ChannelCallTab(props: {
   pendingJoin?: Accessor<boolean>;
 }) {
   const { setActiveTab } = useChannelTab();
+  let leaving = false;
 
   // Match ChannelCallButton / ChannelCallAutoJoin so leaving from the
   // overlay (or disconnect) switches back to Messages — not only when
@@ -109,11 +123,36 @@ export function ChannelCallTab(props: {
     onLeave: () => setActiveTab(getCallLeaveTab()),
   });
 
+  const record = useLiveCallRecordQuery(
+    () => call.callCtx.activeCallId() ?? ''
+  );
+  const discussion = () =>
+    callDiscussionOf(record, call.callCtx.activeCallId());
+  const channel = useChannel(props.channelId);
+  const [outsideCount, setOutsideCount] = createSignal(0);
+
   async function handleJoin() {
     try {
       await call.joinCall();
     } catch (error) {
       console.error('Failed to join call', error);
+    }
+  }
+
+  // Leaving keeps the user in this channel (onLeave switches to Messages),
+  // even when their hangup ends the call.
+  async function handleLeave() {
+    if (leaving) return;
+    leaving = true;
+    const callId = call.callCtx.activeCallId();
+    try {
+      await Telemetry.span('call.leave', async (span) => {
+        if (callId) span.setAttr('call.id', callId);
+        const result = await call.leaveCall();
+        span.setAttr('call.leave.ended', result?.callEnded ?? false);
+      });
+    } finally {
+      leaving = false;
     }
   }
 
@@ -128,13 +167,37 @@ export function ChannelCallTab(props: {
       }
     >
       <Match when={call.isInThisChannel() && !call.joinError()}>
-        <div class="flex size-full min-h-0 flex-col">
-          <div class="px-2 pt-2">
-            <ActiveCallLink />
-          </div>
-          <div class="min-h-0 flex-1">
-            <CallOverlay onLeave={call.leaveCall} />
-          </div>
+        <div class="size-full min-h-0">
+          <Show when={isMobile()}>
+            <SplitHeaderRight>
+              <ActiveCallLink />
+            </SplitHeaderRight>
+          </Show>
+          <CallOverlay
+            onLeave={handleLeave}
+            discussion={{
+              label: () =>
+                discussion()?.kind === 'channel_thread'
+                  ? (channel()?.name ?? undefined)
+                  : undefined,
+              opensByDefault: () =>
+                !isMobile() && discussion()?.kind === 'channel_thread',
+              hasUpdates: () => outsideCount() > 0,
+              render: (panel) => (
+                <CallDiscussionContent
+                  discussion={discussion}
+                  panel={panel}
+                  onViewChannel={() => setActiveTab('messages')}
+                  onOutsideCountChange={setOutsideCount}
+                />
+              ),
+            }}
+            footerLeading={
+              <Show when={!isMobile()}>
+                <ActiveCallLink />
+              </Show>
+            }
+          />
         </div>
       </Match>
       <Match when={call.joinError()}>

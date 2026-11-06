@@ -1,6 +1,6 @@
 ---
 name: cloud-storage-hexagonal-architecture
-description: Enforce hexagonal architecture in the Rust backend. Use before modifying crates or Rust services, especially inbound axum/tool/listener adapters, domain services/ports, outbound adapters, authorization, permissions, database access, or external clients.
+description: Enforce hexagonal architecture in the Rust backend. Use before modifying crates/ or Rust services, especially inbound axum/tool/listener adapters, domain services/ports, outbound adapters, authorization, permissions, database access, or external clients.
 ---
 
 # Cloud Storage Hexagonal Architecture Guard
@@ -190,7 +190,7 @@ If a step has no answer, stop and design that boundary before writing code.
 
 ## Review checklist
 
-For every diff under `crates/**` or `services/**`, reject or refactor if any of these are true:
+For every Rust backend diff, reject or refactor if any of these are true:
 
 - `src/domain/**` imports `axum`, `http::StatusCode`, `IntoResponse`, `Json`, `Router`, `Request`, `HeaderMap`, SQLx pools/queries, AWS SDK clients, Redis clients, reqwest clients, `crate::inbound`, or `crate::outbound`.
 - `src/inbound/**` contains SQLx queries, transaction handling, repository calls, AWS/Redis/OpenSearch/reqwest calls, or direct calls to outbound implementations.

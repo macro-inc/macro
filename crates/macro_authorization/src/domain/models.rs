@@ -13,10 +13,46 @@ use uuid::Uuid;
 /// A user identity that has been authenticated or verified for a bot.
 #[derive(Clone, Debug)]
 pub struct MacroUserAuthentication {
+    /// The kind of credential that established this user.
+    pub origin: CredentialOrigin,
+    /// Signed agent attribution for user-authorized SDK messages, not a bot credential.
+    pub agent_id: Option<BotId>,
+    /// Signed label of the client the user drives `agent_id` through.
+    pub agent_via: Option<String>,
     /// The user's parsed Macro identifier.
     pub macro_user_id: MacroUserIdStr<'static>,
     /// The authenticated user context.
     pub user_context: UserContext,
+}
+
+/// The kind of credential that authenticated a user, set where the credential
+/// is verified. Policies that need a person's own session match on it rather
+/// than on request hints.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CredentialOrigin {
+    /// A personal session JWT.
+    Session,
+    /// A verified Macro API JWT (SDK, MCP), with or without agent attribution.
+    MacroApiJwt,
+    /// A user API key.
+    UserApiKey,
+    /// A manager's credential for this account, held by another account.
+    AccountManager(AccountManagerCredential),
+    /// The acting user of a verified bot credential.
+    Bot,
+    /// The acting user of a verified harness credential.
+    Harness,
+    /// The acting user claimed by a verified internal service caller.
+    Internal,
+}
+
+/// Who holds an account manager credential, and through which grant.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AccountManagerCredential {
+    /// The grant that issued the credential.
+    pub grant_id: Uuid,
+    /// The agent account holding the credential.
+    pub manager_user_id: MacroUserIdStr<'static>,
 }
 
 /// The access scope selected for a bot-authorized request.
@@ -214,6 +250,17 @@ pub struct ResolvedApiKeyUser {
     pub fusion_user_id: String,
     /// The user's organization, when present.
     pub organization_id: Option<i32>,
+    /// Set when the key is an account manager's credential, not the user's own.
+    pub account_manager: Option<AccountManagerCredential>,
+}
+
+/// A user API key's owner, and the manager holding the key when it isn't theirs.
+#[derive(Clone, Debug)]
+pub struct AuthorizedUserApiKey {
+    /// The account the key acts as.
+    pub user_context: UserContext,
+    /// Set when the key is an account manager's credential, not the user's own.
+    pub account_manager: Option<AccountManagerCredential>,
 }
 
 /// Unverified acting-user claims presented by a bot.
@@ -253,6 +300,10 @@ pub struct InternalAuthConfig {
 /// to the authorization service.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ValidatedIdentity {
+    /// Agent attribution from a cryptographically verified Macro API token.
+    pub agent_id: Option<BotId>,
+    /// Client label signed with `agent_id`, such as "Claude Code".
+    pub agent_via: Option<String>,
     /// The user's Macro identifier.
     pub user_id: String,
     /// The user's FusionAuth or root identifier.
@@ -261,6 +312,32 @@ pub struct ValidatedIdentity {
     pub organization_id: Option<i32>,
     /// Permissions established while validating or enriching the identity.
     pub permissions: Option<HashSet<String>>,
+}
+
+/// A validated identity together with its cryptographically established origin.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatedCredential {
+    /// Identity established by credential validation.
+    pub identity: ValidatedIdentity,
+    /// The kind of credential that was verified.
+    pub origin: CredentialOrigin,
+}
+
+impl ValidatedCredential {
+    /// A personal session for this user context, with no agent attribution.
+    pub fn session(context: UserContext) -> Self {
+        Self {
+            origin: CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                agent_via: None,
+                user_id: context.user_id,
+                fusion_user_id: context.fusion_user_id,
+                organization_id: context.organization_id,
+                permissions: context.permissions,
+            },
+        }
+    }
 }
 
 /// Errors returned when a credential cannot authorize a caller.

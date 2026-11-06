@@ -57,6 +57,7 @@ impl SkillSearcher for SearchServiceSkillSearcher {
             filters: entity_filters_from_include(vec![UnifiedSearchIndex::Documents], base_filters),
             search_on: models_search::SearchOn::Name,
             include_crm: false,
+            calendar_event_scope: Default::default(),
             collapse: None,
         };
 
@@ -73,6 +74,7 @@ impl SkillSearcher for SearchServiceSkillSearcher {
                 UnifiedSearchResponseItem::Document(doc) => Some(SkillSummary {
                     document_id: doc.extra.id,
                     name: doc.extra.document_name,
+                    description: None,
                     updated_at: doc.metadata.as_ref().map(|m| m.updated_at),
                 }),
                 _ => None,

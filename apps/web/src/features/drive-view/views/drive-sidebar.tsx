@@ -1,15 +1,26 @@
+import { createDragAutoScroll } from '@app/components/drag-drop/create-drag-auto-scroll';
 import {
   CollapsibleSection,
   SearchBar,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
+import { createFolderDropTargets } from '@app/features/next-soup/actions';
+import { TutorialSidebarItem } from '@app/features/video-tutorials';
+import { t } from '@app/lib/i18n';
 import { useFavoriteDisplayName } from '@app/util/favorites';
-import FolderIcon from '@phosphor/folder.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import { createScrollTopFade } from '@core/util/createScrollTopFade';
+import { fireAndForget } from '@core/util/fireAndForget';
+import DatabaseIcon from '@icon/system/regular/database.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { Button } from '@ui';
+import { useDragDropContext } from '@thisbeyond/solid-dnd';
+import { Button, cn, Scroll } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { DriveNavigation } from '../components/drive-navigation';
 import { FolderTree } from '../components/folder-tree';
@@ -17,6 +28,45 @@ import { useDriveView } from '../context/drive-context';
 import { buildFolderTree, filterFolderTree } from '../core/folder-tree';
 import { DriveCreateMenu } from '../drive-create-menu';
 import { DriveLocationMenu } from '../drive-location-menu';
+
+/** Past this many databases, the section scrolls within its own height. */
+const DATABASE_SCROLL_THRESHOLD = 10;
+
+function DriveDatabases(props: { onNavigate?: () => void }) {
+  const { sidebar, actions } = useDriveView();
+  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  createScrollTopFade(scrollRoot);
+
+  return (
+    <Scroll
+      fill={false}
+      scrollRef={setScrollRoot}
+      class={cn(
+        sidebar.databases().length > DATABASE_SCROLL_THRESHOLD &&
+          'max-h-[calc(10*var(--sidebar-row-height)+9*var(--sidebar-row-gap))] touch:max-h-[calc(10*2.75rem+9*var(--sidebar-row-gap))]'
+      )}
+    >
+      <ViewSidebar.Nav aria-label="Databases">
+        <For each={sidebar.databases()}>
+          {(database) => (
+            <ViewSidebar.Item
+              title={database.name}
+              onClick={(event) => {
+                actions.openEntity(database, event);
+                props.onNavigate?.();
+              }}
+            >
+              <ViewSidebar.Icon>
+                <DatabaseIcon class="size-4" />
+              </ViewSidebar.Icon>
+              <span class="truncate">{database.name}</span>
+            </ViewSidebar.Item>
+          )}
+        </For>
+      </ViewSidebar.Nav>
+    </Scroll>
+  );
+}
 
 function DriveFavorite(props: { favorite: Favorite; onNavigate?: () => void }) {
   const { actions } = useDriveView();
@@ -36,6 +86,7 @@ function DriveFavorite(props: { favorite: Favorite; onNavigate?: () => void }) {
           <FavoriteIcon favorite={props.favorite} class="size-4" />
         </ViewSidebar.Icon>
         <span class="truncate">{name()}</span>
+        <FavoriteUnreadIndicator favorite={props.favorite} />
       </ViewSidebar.Item>
     </FavoriteContextMenu>
   );
@@ -44,6 +95,9 @@ function DriveFavorite(props: { favorite: Favorite; onNavigate?: () => void }) {
 /** Also used by the narrow-layout navigation menu. */
 export function DriveSidebarContent(props: { onNavigate?: () => void }) {
   const { state, sidebar } = useDriveView();
+
+  // Rows here live in the same split as the list, so its rows can drop on them.
+  const createDropTarget = createFolderDropTargets();
 
   const [folderSearch, setFolderSearch] = createSignal('');
 
@@ -99,6 +153,20 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
           </CollapsibleSection.Content>
         </CollapsibleSection.Root>
       </Show>
+      <Show when={sidebar.databases().length > 0}>
+        <CollapsibleSection.Root
+          open={state.value().databasesOpen}
+          onOpenChange={state.setDatabasesOpen}
+        >
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Databases</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+          <CollapsibleSection.Content>
+            <DriveDatabases onNavigate={props.onNavigate} />
+          </CollapsibleSection.Content>
+        </CollapsibleSection.Root>
+      </Show>
       <CollapsibleSection.Root
         open={state.value().rootOpen}
         onOpenChange={state.setRootOpen}
@@ -109,7 +177,7 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
             <CollapsibleSection.Indicator />
           </CollapsibleSection.Trigger>
           <CollapsibleSection.Action
-            label="Search folders"
+            aria-label="Search folders"
             onClick={() => {
               const open = !searchingFolders();
 
@@ -163,7 +231,9 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
                       Folders couldn’t be loaded.
                       <Button
                         variant="ghost"
-                        onClick={() => void sidebar.retryFolders()}
+                        onClick={() =>
+                          fireAndForget(sidebar.retryFolders(), 'drive-view')
+                        }
                       >
                         Try again
                       </Button>
@@ -178,6 +248,7 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
                     searching={!!folderSearch().trim()}
                     onToggle={state.toggleFolder}
                     onSelect={selectFolder}
+                    createDropTarget={createDropTarget}
                   />
                   <Show when={filteredTree().length === 0}>
                     <p class="px-3 py-2 text-sm text-ink-extra-muted">
@@ -196,10 +267,51 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
   );
 }
 
+/** The import card, offering local uploads beside connected apps. */
+function DriveImportPromotion() {
+  const { actions } = useDriveView();
+  return (
+    <ConnectorImportSidebar
+      category="files"
+      class="mt-auto"
+      alternatives={[
+        {
+          icon: UploadIcon,
+          label: 'Upload files',
+          description: 'Choose files from this computer.',
+          onSelect: actions.uploadFiles,
+        },
+        {
+          icon: FolderIcon,
+          label: 'Upload a folder',
+          description: 'Bring over a folder and everything in it.',
+          onSelect: actions.uploadFolder,
+        },
+      ]}
+    />
+  );
+}
+
 export function DriveSidebar() {
+  const { state } = useDriveView();
+  const [content, setContent] = createSignal<HTMLDivElement>();
+  // A long folder tree scrolls under a drag held at its edge.
+  if (useDragDropContext()) {
+    createDragAutoScroll({ getViewport: content, axis: 'both' });
+  }
   return (
     <ViewSidebar.Root aria-label="Drive navigation">
-      <ViewSidebar.Header>
+      <ViewSidebar.Header
+        searchLabel="Search files"
+        search={() => (
+          <SearchBar
+            label="Search files"
+            placeholder="Search files"
+            value={state.value().search}
+            onValueChange={state.setSearch}
+          />
+        )}
+      >
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Drive</ViewSidebar.Title>
@@ -208,8 +320,16 @@ export function DriveSidebar() {
       <ViewSidebar.Primary>
         <DriveCreateMenu />
       </ViewSidebar.Primary>
-      <ViewSidebar.Content>
+      <ViewSidebar.Content ref={setContent}>
+        {/* Drive's list carries Drive's tutorial row; Docs, listed in Drive, takes the sidebar. */}
+        <ViewSidebar.Nav
+          aria-label={t('tutorials.watchTutorial')}
+          class="empty:hidden"
+        >
+          <TutorialSidebarItem tutorial="docs" />
+        </ViewSidebar.Nav>
         <DriveSidebarContent />
+        <DriveImportPromotion />
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

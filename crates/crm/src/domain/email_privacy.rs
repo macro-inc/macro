@@ -24,6 +24,8 @@ pub struct EmailPrivacySettings {
     pub enabled: bool,
     /// The primary mailbox that would contribute; absent before email connection.
     pub mailbox_email: Option<String>,
+    /// Exact current primary connection; clients bind opt-in to this identifier.
+    pub mailbox_link_id: Option<Uuid>,
     /// Domains excluded across the team, including legacy company exclusions.
     pub team_domains: Vec<String>,
     /// Domains excluded only for the caller's contributions.
@@ -49,6 +51,8 @@ pub enum EmailPrivacyChange {
     SetConsent {
         /// False withdraws this mailbox's CRM contribution without deleting records.
         enabled: bool,
+        /// Required when enabling; must match the displayed primary connection.
+        link_id: Option<Uuid>,
     },
     /// Add a domain and its subdomains to an exclusion list.
     AddDomain {

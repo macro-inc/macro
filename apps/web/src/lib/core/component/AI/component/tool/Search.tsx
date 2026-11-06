@@ -11,7 +11,7 @@ import {
   SearchTimestamp,
   type WithSearch,
 } from '@entity';
-import MagnifyingGlass from '@phosphor-icons/core/regular/magnifying-glass.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
 import { useSearchResponseItemMapper } from '@queries/soup/transform-utils';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -38,11 +38,7 @@ function SearchResultRow(props: {
   const hit = () => props.entity.search.contentHitData?.[0];
 
   return (
-    <button
-      type="button"
-      class="block w-full text-left hover:bg-hover"
-      onClick={props.onClick}
-    >
+    <Tool.ListButton onClick={props.onClick}>
       <Tool.ListItem icon={<EntityRowIcon entity={props.entity} />}>
         <div class="flex min-w-0 items-center gap-2">
           <div class="min-w-0 flex flex-1 items-center gap-1.5">
@@ -68,7 +64,7 @@ function SearchResultRow(props: {
           </span>
         </div>
       </Tool.ListItem>
-    </button>
+    </Tool.ListButton>
   );
 }
 

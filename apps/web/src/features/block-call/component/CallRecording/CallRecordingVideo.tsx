@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 
@@ -40,26 +41,29 @@ export function CallRecordingVideo(props: {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     });
 
-    void (async () => {
-      try {
-        const response = await fetch(posterUrl, {
-          mode: 'cors',
-          signal: abortController.signal,
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch poster: ${response.status}`);
+    fireAndForget(
+      (async () => {
+        try {
+          const response = await fetch(posterUrl, {
+            mode: 'cors',
+            signal: abortController.signal,
+          });
+          if (!response.ok) {
+            throw new Error(`Failed to fetch poster: ${response.status}`);
+          }
+
+          const blob = await response.blob();
+          if (abortController.signal.aborted) return;
+
+          objectUrl = URL.createObjectURL(blob);
+          setPosterBlobUrl(objectUrl);
+        } catch (error) {
+          if (abortController.signal.aborted) return;
+          console.error('Failed to load call recording preview poster', error);
         }
-
-        const blob = await response.blob();
-        if (abortController.signal.aborted) return;
-
-        objectUrl = URL.createObjectURL(blob);
-        setPosterBlobUrl(objectUrl);
-      } catch (error) {
-        if (abortController.signal.aborted) return;
-        console.error('Failed to load call recording preview poster', error);
-      }
-    })();
+      })(),
+      'call-recording'
+    );
   });
 
   const stopTicking = () => {

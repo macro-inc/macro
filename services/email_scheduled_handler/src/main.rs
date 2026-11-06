@@ -1,6 +1,9 @@
+#![recursion_limit = "256"]
+
 mod config;
 mod context;
 mod handler;
+mod outbound;
 #[cfg(test)]
 mod test;
 
@@ -34,8 +37,10 @@ async fn main() -> Result<(), Error> {
     .email_scheduled_queue(&email_scheduled_queue);
 
     let ctx = context::Context {
-        db,
-        sqs_client: Arc::new(sqs_client),
+        recovery: email::domain::scheduled_delivery::recovery::ScheduledRecovery::new(
+            outbound::RecoveryRepository(db),
+            outbound::RecoveryQueue(Arc::new(sqs_client)),
+        ),
     };
 
     let func = service_fn(move |event: LambdaEvent<EventBridgeEvent>| {

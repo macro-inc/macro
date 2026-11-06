@@ -8,6 +8,25 @@ fn feed_input_defaults_to_the_whole_work_feed() {
     assert!(!query.scope.include_snippets);
     assert_eq!(query.limit, 50);
     assert!(query.after.is_none());
+    assert!(query.state.is_none());
+}
+
+#[test]
+fn feed_input_filters_by_unseen_or_seen_only() {
+    let unseen = WorkFeedInput {
+        state: Some(GraphqlWorkFeedItemState::Unseen),
+        ..Default::default()
+    };
+    assert_eq!(
+        unseen.into_query().unwrap().state,
+        Some(WorkFeedItemState::Unseen)
+    );
+
+    let done = WorkFeedInput {
+        state: Some(GraphqlWorkFeedItemState::Done),
+        ..Default::default()
+    };
+    assert!(done.into_query().is_err());
 }
 
 #[test]
@@ -32,6 +51,7 @@ fn scope_input_maps_types_and_mode() {
         types: Some(vec![
             GraphqlWorkFeedItemType::ChannelThread,
             GraphqlWorkFeedItemType::PullRequest,
+            GraphqlWorkFeedItemType::Task,
         ]),
         include_snippets: Some(true),
     }
@@ -41,7 +61,8 @@ fn scope_input_maps_types_and_mode() {
         scope.types,
         vec![
             WorkFeedItemType::ChannelThread,
-            WorkFeedItemType::PullRequest
+            WorkFeedItemType::PullRequest,
+            WorkFeedItemType::Task
         ]
     );
     assert!(scope.include_snippets);
@@ -49,7 +70,7 @@ fn scope_input_maps_types_and_mode() {
 
 #[test]
 fn done_input_parses_ids_and_revisions() {
-    let revision = WorkFeedRevision::default().encode();
+    let revision = FeedRevision::default().encode();
     let targets = MarkWorkFeedItemsDoneInput {
         items: vec![WorkFeedDoneItemInput {
             id: ID("document:11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa".to_string()),
@@ -59,7 +80,7 @@ fn done_input_parses_ids_and_revisions() {
     .into_targets()
     .unwrap();
     assert_eq!(targets.len(), 1);
-    assert_eq!(targets[0].revision, Some(WorkFeedRevision::default()));
+    assert_eq!(targets[0].revision, Some(FeedRevision::default()));
 
     let bad_id = MarkWorkFeedItemsDoneInput {
         items: vec![WorkFeedDoneItemInput {

@@ -1,14 +1,17 @@
 use sqlx::types::Uuid;
 use sqlx::{PgPool, Postgres, Transaction};
 use std::num::NonZeroU32;
+use std::time::Duration;
 
 #[cfg(test)]
 mod test;
 
-/// How many rows each [`purge_link`] transaction removes. Every batch commits on its own,
-/// so no single transaction holds locks, WAL or the xmin horizon for a whole mailbox.
+/// How fast [`purge_link`] removes a link's data. Every batch commits on its own, so no
+/// single transaction holds locks, WAL or the xmin horizon for a whole mailbox, and the
+/// pause between batches caps how much write I/O one purge generates, so several purges
+/// running at once can't saturate the database.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PurgeBatchSizes {
+pub struct PurgePacing {
     /// Messages per transaction, deleted together with their labels, recipients,
     /// attachments and scheduled sends, and with the threads the batch finishes. Message
     /// bodies are most of a mailbox's bytes (TOAST), so this is the knob that bounds a
@@ -18,14 +21,17 @@ pub struct PurgeBatchSizes {
     pub threads: NonZeroU32,
     /// Contacts per transaction.
     pub contacts: NonZeroU32,
+    /// Wait after a full batch before the next one starts.
+    pub pause: Duration,
 }
 
-impl Default for PurgeBatchSizes {
+impl Default for PurgePacing {
     fn default() -> Self {
         Self {
-            messages: NonZeroU32::new(1_000).expect("non-zero"),
+            messages: NonZeroU32::new(500).expect("non-zero"),
             threads: NonZeroU32::new(2_000).expect("non-zero"),
             contacts: NonZeroU32::new(5_000).expect("non-zero"),
+            pause: Duration::from_secs(2),
         }
     }
 }
@@ -69,8 +75,8 @@ pub async fn mark_link_deleting(pool: &PgPool, link_id: Uuid) -> anyhow::Result<
 
 /// Deletes a link and all of its email data incrementally: messages (deepest children
 /// first) with the threads they belong to, then any remaining threads, then contacts,
-/// each in bounded short transactions, and finally the `email_links` row, whose cascade
-/// only has small per-link tables left to clear.
+/// each in bounded short transactions paced by `pacing`, and finally the `email_links`
+/// row, whose cascade only has small per-link tables left to clear.
 ///
 /// Marks the link via [`mark_link_deleting`] first, so it can be called on its own. Safe to
 /// rerun after a crash (it resumes from whatever is left) and to run concurrently for the
@@ -79,46 +85,124 @@ pub async fn mark_link_deleting(pool: &PgPool, link_id: Uuid) -> anyhow::Result<
 pub async fn purge_link(
     pool: &PgPool,
     link_id: Uuid,
-    batch_sizes: PurgeBatchSizes,
+    pacing: PurgePacing,
 ) -> anyhow::Result<PurgeSummary> {
     mark_link_deleting(pool, link_id).await?;
 
     let mut summary = PurgeSummary::default();
-
-    let mut thread_cursor = Uuid::nil();
-    loop {
-        let batch = purge_message_batch(pool, link_id, thread_cursor, batch_sizes.messages).await?;
-        summary.messages += batch.messages;
-        summary.threads += batch.threads;
-        let Some(next_cursor) = batch.next_cursor else {
-            break;
-        };
-        thread_cursor = next_cursor;
-    }
-
-    loop {
-        let batch = purge_thread_batch(pool, link_id, batch_sizes.threads).await?;
-        summary.threads += batch.deleted;
-        if !batch.full {
-            break;
-        }
-    }
-
-    let mut contact_cursor = String::new();
-    loop {
-        let batch =
-            purge_contact_batch(pool, link_id, &contact_cursor, batch_sizes.contacts).await?;
-        summary.contacts += batch.deleted;
-        let Some(next_cursor) = batch.next_cursor else {
-            break;
-        };
-        contact_cursor = next_cursor;
-    }
-
+    (summary.messages, summary.threads) = purge_messages(pool, link_id, pacing).await?;
+    summary.threads += purge_threads(pool, link_id, pacing).await?;
+    summary.contacts = purge_contacts(pool, link_id, pacing).await?;
     summary.link_deleted = delete_marked_link(pool, link_id).await?;
 
     tracing::info!(?summary, "Purged email link");
     Ok(summary)
+}
+
+/// Deletes the link's messages with the threads each batch finishes, returning how many
+/// of each it deleted.
+#[tracing::instrument(
+    name = "email.purge_link.messages",
+    skip_all,
+    fields(
+        batches = tracing::field::Empty,
+        paused_ms = tracing::field::Empty,
+        messages = tracing::field::Empty,
+        threads = tracing::field::Empty,
+    ),
+    err
+)]
+async fn purge_messages(
+    pool: &PgPool,
+    link_id: Uuid,
+    pacing: PurgePacing,
+) -> anyhow::Result<(u64, u64)> {
+    let (mut batches, mut messages, mut threads) = (0, 0, 0);
+    let mut thread_cursor = Uuid::nil();
+    loop {
+        let batch = purge_message_batch(pool, link_id, thread_cursor, pacing.messages).await?;
+        batches += 1;
+        messages += batch.messages;
+        threads += batch.threads;
+        let Some(next_cursor) = batch.next_cursor else {
+            break;
+        };
+        thread_cursor = next_cursor;
+        tokio::time::sleep(pacing.pause).await;
+    }
+
+    let span = record_phase(batches, pacing);
+    span.record("messages", messages);
+    span.record("threads", threads);
+    Ok((messages, threads))
+}
+
+/// Deletes the threads left once every message is gone.
+#[tracing::instrument(
+    name = "email.purge_link.threads",
+    skip_all,
+    fields(
+        batches = tracing::field::Empty,
+        paused_ms = tracing::field::Empty,
+        deleted = tracing::field::Empty,
+    ),
+    err
+)]
+async fn purge_threads(pool: &PgPool, link_id: Uuid, pacing: PurgePacing) -> anyhow::Result<u64> {
+    let (mut batches, mut deleted) = (0, 0);
+    loop {
+        let batch = purge_thread_batch(pool, link_id, pacing.threads).await?;
+        batches += 1;
+        deleted += batch.deleted;
+        if !batch.full {
+            break;
+        }
+        tokio::time::sleep(pacing.pause).await;
+    }
+
+    record_phase(batches, pacing).record("deleted", deleted);
+    Ok(deleted)
+}
+
+/// Deletes the link's contacts.
+#[tracing::instrument(
+    name = "email.purge_link.contacts",
+    skip_all,
+    fields(
+        batches = tracing::field::Empty,
+        paused_ms = tracing::field::Empty,
+        deleted = tracing::field::Empty,
+    ),
+    err
+)]
+async fn purge_contacts(pool: &PgPool, link_id: Uuid, pacing: PurgePacing) -> anyhow::Result<u64> {
+    let (mut batches, mut deleted) = (0, 0);
+    let mut contact_cursor = String::new();
+    loop {
+        let batch = purge_contact_batch(pool, link_id, &contact_cursor, pacing.contacts).await?;
+        batches += 1;
+        deleted += batch.deleted;
+        let Some(next_cursor) = batch.next_cursor else {
+            break;
+        };
+        contact_cursor = next_cursor;
+        tokio::time::sleep(pacing.pause).await;
+    }
+
+    record_phase(batches, pacing).record("deleted", deleted);
+    Ok(deleted)
+}
+
+/// Records a finished phase's batch count and pause time on its span. Every batch but the
+/// last came back full and was followed by a pause.
+fn record_phase(batches: u32, pacing: PurgePacing) -> tracing::Span {
+    let span = tracing::Span::current();
+    span.record("batches", batches);
+    span.record(
+        "paused_ms",
+        (pacing.pause * batches.saturating_sub(1)).as_millis(),
+    );
+    span
 }
 
 /// Opens a purge batch transaction holding the link's purge lock until commit, so a

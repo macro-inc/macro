@@ -1,4 +1,5 @@
 import type { AgentSession } from '@core/agent-session/AgentSession';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EffortSelection,
   effortConfigOption,
@@ -39,14 +40,19 @@ export function sessionConfigReported(
       () => finish(new Error('The agent did not report its configuration.')),
       60_000
     );
-    const unsubscribe = session.subscribe(() => void inspect());
-    void inspect();
+    const unsubscribe = session.subscribe(() =>
+      fireAndForget(inspect(), 'agent-session')
+    );
+    fireAndForget(inspect(), 'agent-session');
   });
 }
 
 /** Validate against the model's confirmed runtime snapshot before setting effort. */
 export async function configureSessionModel(
-  session: Pick<AgentSession, 'issue' | 'snapshot' | 'subscribe'>,
+  session: Pick<
+    AgentSession,
+    'id' | 'issue' | 'snapshot' | 'subscribe' | 'refresh' | 'retract'
+  >,
   model: string | undefined,
   effort?: EffortSelection
 ) {

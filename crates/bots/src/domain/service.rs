@@ -1,5 +1,7 @@
 //! Bot service implementation.
 
+mod agent_dm;
+
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
@@ -590,6 +592,19 @@ where
         self.replace_agent(caller, &current, req).await
     }
 
+    async fn manageable_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> Result<Agent, BotError> {
+        self.ensure_manageable(caller, bot_id).await?;
+        self.repo
+            .get_agent(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("agent not found".to_string()))
+    }
+
     async fn patch_agent(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -780,13 +795,18 @@ where
         let bot = self.ensure_manageable(caller.clone(), bot_id).await?;
         if let Some(BotOwner::Team { team_id }) = &bot.owner
             && bot.created_by.as_deref() != Some(caller.as_ref())
-            && !self
-                .repo
-                .user_owns_team(caller.clone(), *team_id)
-                .await
-                .map_err(|err| BotError::Repo(err.into()))?
         {
-            return Err(BotError::Unauthorized);
+            let allowed = if bot.has_agent {
+                self.repo
+                    .user_can_administer_team(caller.clone(), *team_id)
+                    .await
+            } else {
+                self.repo.user_owns_team(caller.clone(), *team_id).await
+            }
+            .map_err(|err| BotError::Repo(err.into()))?;
+            if !allowed {
+                return Err(BotError::Unauthorized);
+            }
         }
         if !self
             .repo
@@ -928,9 +948,11 @@ where
     }
 
     async fn ensure_bot_in_channel(&self, bot_id: BotId, channel_id: Uuid) -> Result<(), BotError> {
+        // A direct agent conversation is answered the same as a channel the
+        // bot is not in, so the answer does not tell which channels are one.
         if self
             .repo
-            .bot_active_in_channel(channel_id, bot_id)
+            .bot_may_post_in_channel(channel_id, bot_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
         {

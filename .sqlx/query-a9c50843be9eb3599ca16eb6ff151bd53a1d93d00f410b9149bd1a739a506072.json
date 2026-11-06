@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(reply) AS \"value!\" FROM agent_external_replies reply WHERE target IS NOT NULL AND NOT finalized AND (completion IS NOT NULL OR created_at > now() - interval '24 hours' OR updated_at <= now() - interval '1 hour') ORDER BY updated_at, session_id, action_id LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "value!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a9c50843be9eb3599ca16eb6ff151bd53a1d93d00f410b9149bd1a739a506072"
+}

@@ -93,7 +93,6 @@ describe('detectPrOrigin', () => {
 describe('toolForHarness', () => {
   it.each([
     ['claude-code', 'claude'],
-    ['claude-cloud', 'claude'],
     ['codex-cloud', 'codex'],
     ['cursor', 'cursor'],
     ['macrod', 'macro'],

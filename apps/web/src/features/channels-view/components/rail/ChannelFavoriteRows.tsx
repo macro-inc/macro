@@ -4,12 +4,13 @@ import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import { UnreadIndicator } from '@entity/components/UnreadIndicator';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
-import { ChannelLabelMenuItems } from './ChannelLabelRows';
 import {
+  ChannelAvatar,
   ChannelRailItemContextMenu,
   isPrimaryMouseDown,
 } from './ChannelRailItems';
@@ -19,6 +20,7 @@ import {
   useChannelRailFavoriteItemState,
   useChannelRailFavoritesState,
 } from './hooks/useChannelRailState';
+import { ChannelLabelMenuItems } from './next/ChannelLabelRows';
 
 /**
  * A favorite row in the Chat sidebar. The rail only favorites channels, so the
@@ -56,16 +58,27 @@ export function ChannelFavoriteRow(props: { favorite: Favorite }) {
       )}
       active={item().selected && !isTouchDevice()}
       aria-current={item().selected ? 'page' : undefined}
+      onPointerDown={(event) =>
+        rail.prefetchRow(rowKeyForFavorite(props.favorite), event)
+      }
       onClick={(event) => {
         if (!isPrimaryMouseDown(event)) return;
         rail.activateRow(rowKeyForFavorite(props.favorite), event);
       }}
     >
       <ViewSidebar.Icon>
-        <FavoriteIcon favorite={props.favorite} class="size-4" />
+        <Show
+          when={channel()?.channelType === 'private' ? channel() : undefined}
+          fallback={<FavoriteIcon favorite={props.favorite} class="size-4" />}
+        >
+          {(channel) => <ChannelAvatar channel={channel()} />}
+        </Show>
       </ViewSidebar.Icon>
       <span class="min-w-0 flex-1 truncate">{displayName()}</span>
       <ChannelMutedIndicator muted={item().muted} />
+      <Show when={item().unread}>
+        <UnreadIndicator active />
+      </Show>
     </ViewSidebar.Item>
   );
 

@@ -1,12 +1,20 @@
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import { describe, expect, it, vi } from 'vitest';
 import type { ScheduleDraft } from '../core/draft';
-import { createEmptyDraft, validateRoutineDraft } from '../core/routine-draft';
+import {
+  clampDescription,
+  createEmptyDraft,
+  draftSteps,
+  validateRoutineDraft,
+  withDraftSteps,
+} from '../core/routine-draft';
 import {
   draftFromSchedule,
   draftToCreateBody,
   draftToUpdateBody,
+  isUnchangedUpdate,
   onceFromCron,
+  routineTargetKind,
   scheduleToDuplicateBody,
 } from './routine-draft';
 
@@ -33,6 +41,7 @@ const cron: ScheduledAction = {
     prompt: '',
   },
   enabled: true,
+  run_visibility: 'unlisted',
   created_at: '2026-09-22T12:00:00Z',
   updated_at: '2026-09-22T12:00:00Z',
   configuration_revision: 1,
@@ -151,6 +160,7 @@ describe('routine execution payloads', () => {
         trigger: action.trigger,
         kind: action.kind,
         task: action.task,
+        run_visibility: action.run_visibility,
       });
       expect(JSON.stringify(body?.task)).toBe(before);
       expect(body?.task).toBe(action.task);
@@ -314,6 +324,7 @@ describe('cron routine payloads', () => {
         kind: 'Agent',
         task: cron.task,
         trigger: cron.trigger,
+        run_visibility: 'unlisted',
       });
     }
   );
@@ -325,6 +336,7 @@ describe('cron routine payloads', () => {
       kind: 'Agent',
       task: cron.task,
       trigger: cron.trigger,
+      run_visibility: 'unlisted',
     });
   });
 
@@ -388,11 +400,7 @@ describe('one-off routines', () => {
     const created = draftToCreateBody(draft);
     expect(
       created && 'trigger' in created ? created.trigger : undefined
-    ).toEqual({
-      type: 'cron',
-      schedule: '12 0 13 3 10 * 2030',
-      timezone: 'UTC',
-    });
+    ).toEqual({ type: 'once', at: '2030-10-03T13:00:12.000Z' });
   });
   it('rejects past one-off creation but permits editing a completed routine', () => {
     const once = {
@@ -412,5 +420,266 @@ describe('one-off routines', () => {
     expect(
       validateRoutineDraft({ ...draft(), timezone: 'Mars/Olympus' })
     ).toContain('valid time zone');
+  });
+});
+
+describe('run visibility', () => {
+  it('creates routines whose runs are hidden unless shown', () => {
+    expect(draftToCreateBody(draft())).toMatchObject({
+      run_visibility: 'unlisted',
+    });
+    expect(
+      draftToCreateBody({ ...draft(), runVisibility: 'listed' })
+    ).toMatchObject({ run_visibility: 'listed' });
+  });
+
+  it('loads, changes, and duplicates the setting', () => {
+    const shown: ScheduledAction = { ...cron, run_visibility: 'listed' };
+    const loaded = loadedDraft(shown);
+    expect(loaded.runVisibility).toBe('listed');
+    expect(draftToUpdateBody(loaded, shown)).toMatchObject({
+      run_visibility: 'listed',
+    });
+    expect(
+      draftToUpdateBody({ ...loaded, runVisibility: 'unlisted' }, shown)
+    ).toMatchObject({ run_visibility: 'unlisted' });
+    expect(scheduleToDuplicateBody(shown)).toMatchObject({
+      run_visibility: 'listed',
+    });
+  });
+
+  it('keeps the stored setting for a draft saved before it existed', () => {
+    const shown: ScheduledAction = { ...cron, run_visibility: 'listed' };
+    const { runVisibility: _, ...older } = loadedDraft(shown);
+    expect(draftToUpdateBody(older, shown)).toMatchObject({
+      run_visibility: 'listed',
+    });
+  });
+});
+
+describe('routine required apps', () => {
+  it('reads, creates, and updates the apps a routine requires', () => {
+    const withApps: ScheduledAction = {
+      ...cron,
+      task: {
+        model: 'claude-sonnet-4-6',
+        user_prompt: 'Summarize updates',
+        prompt: '',
+        mcp_servers: [{ app_slug: 'linear', server_name: 'Linear' }],
+      },
+    };
+    const restored = loadedDraft(withApps);
+    expect(restored.apps).toEqual([
+      { app_slug: 'linear', server_name: 'Linear' },
+    ]);
+    expect(draftToCreateBody(restored).task.mcp_servers).toEqual([
+      { app_slug: 'linear', server_name: 'Linear' },
+    ]);
+    expect(draftToCreateBody(loadedDraft(cron)).task.mcp_servers).toEqual([]);
+
+    // Untouched apps keep the stored task as it was.
+    expect(draftToUpdateBody(restored, withApps)?.task).toBe(withApps.task);
+
+    // Removing every app sends an explicit empty list.
+    expect(
+      draftToUpdateBody({ ...restored, apps: [] }, withApps)?.task
+    ).toEqual({
+      model: 'claude-sonnet-4-6',
+      user_prompt: 'Summarize updates',
+      prompt: '',
+      mcp_servers: [],
+    });
+
+    expect(
+      draftToUpdateBody(
+        {
+          ...loadedDraft(cron),
+          apps: [{ app_slug: 'slack', server_name: 'Slack' }],
+        },
+        cron
+      )?.task
+    ).toEqual({
+      model: 'claude-sonnet-4-6',
+      user_prompt: 'Summarize updates',
+      prompt: '',
+      mcp_servers: [{ app_slug: 'slack', server_name: 'Slack' }],
+    });
+  });
+});
+
+describe('routines with steps', () => {
+  const program: ScheduledAction = {
+    ...events,
+    trigger: {
+      type: 'events',
+      filters: [{ events: ['email.message_received'] }],
+    },
+    task: {
+      steps: [
+        {
+          type: 'code',
+          id: 'archive_it',
+          title: 'Archive it',
+          source: 'export async function main() {}',
+        },
+        { type: 'agent', model: 'claude', instructions: 'Draft a reply' },
+      ],
+    },
+  };
+
+  it('edits a stored program and keeps its untouched task', () => {
+    const parsed = draftFromSchedule(program);
+    expect(parsed?.steps?.map((step) => step.kind)).toEqual(['code', 'agent']);
+    expect(parsed?.prompt).toBe('Draft a reply');
+    expect(validateRoutineDraft(parsed!)).toBeNull();
+    // Unchanged steps write back the exact stored task.
+    expect(draftToUpdateBody(parsed!, program)?.task).toBe(program.task);
+    // Analytics count a routine with steps as one.
+    expect(routineTargetKind(program)).toBe('steps');
+    expect(routineTargetKind(cron)).toBe('model');
+    const edited = {
+      ...parsed!,
+      steps: parsed!.steps!.slice(0, 1),
+    };
+    expect(draftToUpdateBody(edited, program)?.task).toEqual({
+      steps: [
+        {
+          type: 'code',
+          id: 'archive_it',
+          title: 'Archive it',
+          source: 'export async function main() {}',
+        },
+      ],
+    });
+  });
+
+  it('recognizes a save that writes back what is stored, so it is skipped', () => {
+    const parsed = draftFromSchedule(program)!;
+    // Blurring a field without changing it, or picking the same value again,
+    // makes a new draft with the same content.
+    const repicked = {
+      ...parsed,
+      steps: parsed.steps!.map((step) =>
+        step.kind === 'code' ? { ...step, knobs: [...step.knobs] } : { ...step }
+      ),
+    };
+    for (const draft of [parsed, repicked]) {
+      const body = draftToUpdateBody(draft, program)!;
+      expect(isUnchangedUpdate(body, program)).toBe(true);
+    }
+    const unchangedCron = draftToUpdateBody(draftFromSchedule(cron)!, cron)!;
+    expect(isUnchangedUpdate(unchangedCron, cron)).toBe(true);
+
+    const renamed = draftToUpdateBody({ ...parsed, name: 'Renamed' }, program)!;
+    expect(isUnchangedUpdate(renamed, program)).toBe(false);
+    const described = draftToUpdateBody(
+      { ...parsed, description: 'Triage mail' },
+      program
+    )!;
+    expect(isUnchangedUpdate(described, program)).toBe(false);
+    const archivedOnly = draftToUpdateBody(
+      { ...parsed, steps: parsed.steps!.slice(0, 1) },
+      program
+    )!;
+    expect(isUnchangedUpdate(archivedOnly, program)).toBe(false);
+  });
+
+  it('creates programs with steps and single agents as before', () => {
+    const parsed = draftFromSchedule(program)!;
+    expect(draftToCreateBody({ ...parsed, name: '' }).task).toEqual(
+      program.task
+    );
+    expect(draftToCreateBody({ ...parsed, name: '' }).name).toBe(
+      'Draft a reply'
+    );
+    expect(draftToCreateBody(draft()).task).toEqual({
+      prompt: '',
+      user_prompt: 'Summarize updates',
+      mcp_servers: [],
+      model: 'anthropic/claude-sonnet-4-5',
+    });
+  });
+
+  it('turns a single agent routine into a program once a step is added', () => {
+    const simple = draftFromSchedule(events)!;
+    expect(simple.steps).toBeUndefined();
+    const steps = draftSteps(simple);
+    expect(withDraftSteps(simple, steps)).toBe(simple);
+    const renamed = withDraftSteps(simple, [
+      { ...steps[0]!, kind: 'agent', instructions: 'New' } as never,
+    ]);
+    expect(renamed.prompt).toBe('New');
+    expect(renamed.steps).toBeUndefined();
+    const added = withDraftSteps(simple, [
+      ...steps,
+      {
+        id: 'x',
+        kind: 'code',
+        title: 'Create a task',
+        summary: '',
+        source: 'export async function main() {}',
+        knobs: [],
+      },
+    ]);
+    expect(added.steps).toHaveLength(2);
+    expect(draftToUpdateBody(added, events)?.task).toMatchObject({
+      steps: [
+        { type: 'agent', instructions: 'Summarize updates' },
+        { type: 'code' },
+      ],
+    });
+  });
+
+  it('keeps instructions stored ahead of the prompt when steps are added', () => {
+    const stored = {
+      ...events,
+      task: { ...(events.task as object), prompt: 'Be brief.' },
+    } as ScheduledAction;
+    const simple = draftFromSchedule(stored)!;
+    expect(simple.prompt).toBe('Summarize updates');
+    const steps = draftSteps(simple);
+    const renamed = withDraftSteps(simple, [
+      { ...steps[0]!, kind: 'agent', instructions: 'New' } as never,
+    ]);
+    expect(draftToUpdateBody(renamed, stored)?.task).toMatchObject({
+      prompt: 'Be brief.',
+      user_prompt: 'New',
+    });
+    const added = withDraftSteps(simple, [
+      ...steps,
+      {
+        id: 'x',
+        kind: 'code',
+        title: 'Archive it',
+        summary: '',
+        source: 'export async function main() {}',
+        knobs: [],
+      },
+    ]);
+    expect(draftToUpdateBody(added, stored)?.task).toMatchObject({
+      steps: [
+        { type: 'agent', instructions: 'Be brief.\n\nSummarize updates' },
+        { type: 'code' },
+      ],
+    });
+  });
+});
+
+describe('descriptions', () => {
+  it('keeps a description within what the scheduler stores', () => {
+    const draft = {
+      ...createEmptyDraft('m'),
+      prompt: 'Summarize',
+      triggers: [],
+    };
+    expect(
+      validateRoutineDraft({ ...draft, description: 'x'.repeat(1001) })
+    ).toMatch(/description under 1,000 characters/);
+    expect(
+      validateRoutineDraft({ ...draft, description: 'x'.repeat(1000) })
+    ).not.toMatch(/description/);
+    // A description drafted from a long request fits once clamped.
+    expect(clampDescription(`  ${'y'.repeat(1200)}  `)).toHaveLength(1000);
+    expect(clampDescription('  Label invoices.  ')).toBe('Label invoices.');
   });
 });

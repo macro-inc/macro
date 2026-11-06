@@ -8,9 +8,9 @@
  * tokens and Tailwind.
  */
 
-import Check from '@phosphor/check.svg';
-import Copy from '@phosphor/copy.svg';
-import Prohibit from '@phosphor/prohibit.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import Check from '@icon/system/regular/check.svg';
+import Copy from '@icon/system/regular/copy.svg';
 import { Button } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { ToolCard } from './ToolCard';
@@ -91,7 +91,6 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
     <ToolCard
       title={title()}
       subtitle={subtitle() === 'Failed' ? undefined : subtitle()}
-      icon={<Prohibit />}
       status="failed"
       open={props.open}
       defaultOpen={props.defaultOpen}
@@ -105,13 +104,12 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
           type="button"
           variant="ghost"
           size="sm"
-          noTouchResize
           class="shrink-0 px-1 text-ink-extra-muted hover:text-ink-muted"
           aria-label={copied() ? 'Copied' : 'Copy error'}
           onMouseDown={(event) => event.preventDefault()}
           onClick={(event) => {
             event.stopPropagation();
-            void copy();
+            fireAndForget(copy(), 'agent-tool-error');
           }}
         >
           <Show when={copied()} fallback={<Copy class="size-3.5" />}>

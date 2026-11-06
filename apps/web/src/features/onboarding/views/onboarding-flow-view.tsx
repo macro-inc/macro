@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, Match, onCleanup, Show, Switch } from 'solid-js';
 import { BypassButton } from '../components/bypass-button';
 import {
@@ -29,6 +30,8 @@ import { ToolsStep } from './tools-step';
 export function OnboardingFlowView(props: {
   /** A deep link to land on after onboarding. */
   next: string | undefined;
+  /** Raw `?step` from the entry link. Unknown values are ignored. */
+  step?: string;
   checkoutReturn: CheckoutReturn | undefined;
   onNavigate: (target: string) => void;
   /** Leaves the app for hosted checkout. */
@@ -42,6 +45,7 @@ export function OnboardingFlowView(props: {
   // Read once for the completion rollup; only the tools step polls.
   const connectedTools = context.createConnectedTools({ poll: false });
   const record = context.createOnboardingRecord();
+  const teamDirectory = context.createTeamDirectory();
 
   const finish = createFlowFinish(context, {
     next: () => props.next,
@@ -51,12 +55,13 @@ export function OnboardingFlowView(props: {
       const accounts = emailAccounts.accounts();
       return {
         emails_connected: accounts.t === 'ready' ? accounts.value.length : 0,
-        connectors_connected: [...(connectedTools() ?? [])],
+        connectors_connected: [...connectedTools.connected()],
       };
     },
   });
   const flow = createOnboardingFlow(context, {
     checkoutReturn: () => props.checkoutReturn,
+    requestedStep: () => props.step,
     record,
     signupMethod: () => {
       const accounts = emailAccounts.accounts();
@@ -95,19 +100,28 @@ export function OnboardingFlowView(props: {
       queueMicrotask(() => focusStepHeading(content));
     });
   };
+  // Someone who already joined a team (invite link or domain) has nothing to
+  // do on the team step, so the flow passes over it in both directions.
+  const passesTeam = (target: OnboardingStep | undefined) => {
+    const teams = teamDirectory.teams();
+    return target === 'team' && teams.t === 'ready' && teams.value.length > 0;
+  };
   const advance = (outcome: StepOutcome = 'completed') => {
     if (finish.finishing()) return;
     const next = flow.leave(outcome);
+    const skipsTeam = passesTeam(next);
+    if (skipsTeam)
+      context.track('onboarding_v4_team', { action: 'already_on_team' });
     const viewer = context.viewer();
     if (
-      step() === 'team' &&
+      (step() === 'team' || skipsTeam) &&
       viewer.t === 'signed-in' &&
       viewer.viewer.licensed
     ) {
-      void finish.finishPremium();
+      fireAndForget(finish.finishPremium(), 'onboarding');
       return;
     }
-    goTo(next);
+    goTo(skipsTeam ? 'plan' : next);
   };
   const viewerEmail = () => {
     const viewer = context.viewer();
@@ -125,7 +139,8 @@ export function OnboardingFlowView(props: {
   const back = () => {
     const current = step();
     const previous = current && previousOnboardingStep(current);
-    return previous && !finish.finishing() ? () => goTo(previous) : undefined;
+    const target = passesTeam(previous) ? 'tools' : previous;
+    return target && !finish.finishing() ? () => goTo(target) : undefined;
   };
 
   return (
@@ -137,7 +152,9 @@ export function OnboardingFlowView(props: {
           {(current) => (
             <BypassButton
               disabled={finish.finishing()}
-              onBypass={() => void finish.bypass(current())}
+              onBypass={() =>
+                fireAndForget(finish.bypass(current()), 'onboarding')
+              }
             />
           )}
         </Show>
@@ -147,10 +164,15 @@ export function OnboardingFlowView(props: {
         showPlanOffer() ? (
           <PlanComparisonView
             disabled={finish.finishing()}
-            onContinueFree={() => void finish.finishFree()}
+            onContinueFree={() =>
+              fireAndForget(finish.finishFree(), 'onboarding')
+            }
             onBackToPro={() => focusStepHeading(content, true)}
             onStartMax={() =>
-              void finish.startPremiumCheckout('max', 'standard')
+              fireAndForget(
+                finish.startPremiumCheckout('max', 'standard'),
+                'onboarding'
+              )
             }
           />
         ) : step() === 'security' ||
@@ -199,9 +221,14 @@ export function OnboardingFlowView(props: {
               checkoutReturn={props.checkoutReturn}
               finishing={finish.finishing()}
               onStartCheckout={(tier, terms) =>
-                void finish.startPremiumCheckout(tier, terms)
+                fireAndForget(
+                  finish.startPremiumCheckout(tier, terms),
+                  'onboarding'
+                )
               }
-              onContinueFree={() => void finish.finishFree()}
+              onContinueFree={() =>
+                fireAndForget(finish.finishFree(), 'onboarding')
+              }
               renderInviteOffer={props.renderInviteOffer}
               onPremiumPaid={finish.finishPremium}
             />

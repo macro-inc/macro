@@ -1,10 +1,11 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import LinkIcon from '@icon/system/regular/link-simple.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import LinkIcon from '@phosphor/link-simple.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, buttonClasses } from '@ui/components/Button';
 import { InputGroup } from '@ui/components/InputGroup';
 import {
@@ -114,10 +115,13 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
     }
   }
   function toggle(id: string) {
-    void write(
-      selected().includes(id)
-        ? selected().filter((value) => value !== id)
-        : [...selected(), id]
+    fireAndForget(
+      write(
+        selected().includes(id)
+          ? selected().filter((value) => value !== id)
+          : [...selected(), id]
+      ),
+      'database'
     );
   }
   async function commitAndNavigate(direction: 1 | -1) {
@@ -208,7 +212,7 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
             ) {
               event.preventDefault();
               event.stopPropagation();
-              void write([]);
+              fireAndForget(write([]), 'database');
             }
           }}
         />
@@ -349,7 +353,10 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                       }
                     } else if (event.key === 'Tab') {
                       event.preventDefault();
-                      void commitAndNavigate(event.shiftKey ? -1 : 1);
+                      fireAndForget(
+                        commitAndNavigate(event.shiftKey ? -1 : 1),
+                        'database'
+                      );
                     } else if (event.key === 'Escape') {
                       event.preventDefault();
                       close();
@@ -376,9 +383,13 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                           </Button>
                           <Show when={editable()}>
                             <Button
+                              variant="ghost"
+                              aria-label={`Remove ${name(id)}`}
+                              tooltip={{
+                                content: `Remove ${name(id)}`,
+                                disabled: true,
+                              }}
                               size="icon-xs"
-                              label={`Remove ${name(id)}`}
-                              tooltipDisabled
                               onClick={() => toggle(id)}
                             >
                               <XIcon class="size-3" />
@@ -443,9 +454,10 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                         'Related records could not be loaded.'}
                     </p>
                     <Button
+                      variant="ghost"
                       size="xs"
                       class="mt-1"
-                      onClick={() => void refresh()}
+                      onClick={() => fireAndForget(refresh(), 'database')}
                     >
                       Retry
                     </Button>
@@ -461,7 +473,11 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                 <span class="truncate">
                   {saving() ? 'Saving…' : props.source.name()}
                 </span>
-                <Button size="xs" onClick={() => void finish()}>
+                <Button
+                  variant="primary"
+                  size="xs"
+                  onClick={() => fireAndForget(finish(), 'database')}
+                >
                   {saveError() ? 'Retry' : 'Done'}
                 </Button>
               </div>

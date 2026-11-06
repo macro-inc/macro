@@ -105,6 +105,7 @@ fn held(
         session,
         owner: owner(),
         prompter: TurnPrompter {
+            kind: agent_session::domain::model::PrompterKind::User,
             action_id: AgentActionId::mint(),
             user: Some(asker()),
         },
@@ -419,6 +420,7 @@ fn in_process(session: AgentSessionId) -> InProcessCall {
         session,
         owner: owner(),
         prompter: TurnPrompter {
+            kind: agent_session::domain::model::PrompterKind::User,
             action_id: AgentActionId::mint(),
             user: Some(asker()),
         },
@@ -576,6 +578,7 @@ async fn approving_one_macro_tool_for_good_still_asks_about_anything_else() {
 
     let someone_else = InProcessCall {
         prompter: TurnPrompter {
+            kind: agent_session::domain::model::PrompterKind::User,
             action_id: AgentActionId::mint(),
             user: Some(MacroUserIdStr::try_from_email("someone@macro.com").unwrap()),
         },
@@ -696,6 +699,7 @@ async fn only_the_owner_approves_for_good_and_never_for_a_bot() {
 
     let from_a_bot = InProcessCall {
         prompter: TurnPrompter {
+            kind: agent_session::domain::model::PrompterKind::User,
             action_id: AgentActionId::mint(),
             user: None,
         },

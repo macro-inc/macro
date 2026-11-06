@@ -4,14 +4,22 @@ import HomepageCollaborativeDoc from './HomepageCollaborativeDoc';
 
 let intersections: IntersectionObserverCallback[];
 let reduced = false;
+let motionListeners: Set<() => void>;
 beforeEach(() => {
   intersections = [];
   reduced = false;
+  motionListeners = new Set();
   vi.useFakeTimers();
   vi.stubGlobal('matchMedia', () => ({
-    matches: reduced,
-    addEventListener() {},
-    removeEventListener() {},
+    get matches() {
+      return reduced;
+    },
+    addEventListener(_type: string, listener: () => void) {
+      motionListeners.add(listener);
+    },
+    removeEventListener(_type: string, listener: () => void) {
+      motionListeners.delete(listener);
+    },
   }));
   vi.stubGlobal(
     'IntersectionObserver',
@@ -52,7 +60,7 @@ it('restores actual document content in both directions and holds the chosen edi
   show();
   fireEvent.input(slider, { target: { value: '1000' } });
   const finished = scene.textContent;
-  expect(finished).toContain('Q3 launch plan');
+  expect(finished).toContain('Website launch plan');
   fireEvent.input(slider, { target: { value: '200' } });
   const earlier = scene.textContent;
   expect(earlier).not.toBe(finished);
@@ -85,4 +93,18 @@ it('shows the completed document with reduced motion but still permits scrubbing
   fireEvent.input(slider, { target: { value: '300' } });
   vi.advanceTimersByTime(5000);
   expect(slider.value).toBe('300');
+});
+
+it('finishes a partially played document when reduced motion is enabled', () => {
+  const view = render(() => <HomepageCollaborativeDoc />);
+  const slider = view.getByRole('slider') as HTMLInputElement;
+  show();
+  vi.advanceTimersByTime(2000);
+  expect(Number(slider.value)).toBeGreaterThan(0);
+  expect(Number(slider.value)).toBeLessThan(1000);
+  reduced = true;
+  motionListeners.forEach((listener) => listener());
+  expect(slider.value).toBe('1000');
+  vi.advanceTimersByTime(5000);
+  expect(slider.value).toBe('1000');
 });

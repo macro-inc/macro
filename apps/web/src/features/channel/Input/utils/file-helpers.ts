@@ -8,6 +8,15 @@ import type { InputAttachmentData, InputAttachmentKind } from '../types';
 
 export type UploadFailedResult = {
   failed: true;
+  /** Shown instead of the generic failure, when the uploader knows why. */
+  reason?: string;
+};
+
+/** A file the host stored for its own send, such as a WhatsApp group upload. */
+type UploadStagedSuccessResult = {
+  failed: false;
+  destination: 'staged';
+  id: string;
 };
 
 export type UploadStaticSuccessResult = {
@@ -27,6 +36,7 @@ export type UploadDocumentSuccessResult = {
 export type UploadResult =
   | UploadFailedResult
   | UploadStaticSuccessResult
+  | UploadStagedSuccessResult
   | UploadDocumentSuccessResult
   | {
       failed: false;
@@ -75,7 +85,7 @@ export function buildUploadedAttachment(
   pendingKind: InputAttachmentKind,
   result: UploadSuccess
 ): InputAttachmentData | undefined {
-  if (result.destination === 'static') {
+  if (result.destination === 'static' || result.destination === 'staged') {
     // A static upload keeps the kind the file was classified as: channels
     // only send media here, but the agent composer sends every file, and a
     // PDF stored as a static file is still a document chip.

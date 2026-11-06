@@ -3,13 +3,16 @@
 //! `macrod` runs the serving core (SSE listener, harness bridge) inside a
 //! terminal UI that shows what the server knows about this harness - its
 //! registration, the agents bound to it, their sessions, and the daemon's
-//! own logs - and drives its lifecycle: edit `macrod.toml`, pair (or re-pair,
+//! own logs - and drives its lifecycle: edit this machine's `macrod.toml`
+//! (runtime settings live on the web), pair (or re-pair,
 //! restarting the core on the new credential), and retire the harness.
 
-mod agent_catalog;
+// `service` reuses agent discovery and the comment-preserving config editor;
+// they live here because the TUI grew them first.
+pub(crate) mod agent_catalog;
 mod api;
 mod app;
-mod config_form;
+pub(crate) mod config_form;
 #[cfg(unix)]
 mod herdr_pane;
 mod input;

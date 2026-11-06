@@ -5,7 +5,7 @@ language: typescript
 severity: warning
 message: Don't import a service client outside the queries package — wrap the call in a query/mutation under queries/ and import that instead.
 note: |-
-  Rule FE-01 in docs/STYLE_GUIDE.md (also apps/web/AGENTS.md, General). UI code
+  Rule FE-01 in docs/development/style-guide.md (also apps/web/AGENTS.md, General). UI code
   calling an endpoint directly is usually re-fetching data an existing query
   already caches, and it bypasses the cache seeding / invalidation the query
   layer owns. Add (or reuse) a query or mutation in src/lib/queries (shared)

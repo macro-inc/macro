@@ -1,3 +1,4 @@
+import { COMPOSER_STORAGE_CLEARED } from '@core/auth/clear-composer-storage';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RoutineDraftStorage } from '../context/routine-sources';
@@ -16,7 +17,10 @@ const draft = {
 let dispose = () => {};
 afterEach(() => dispose());
 
-function setup(create: () => Promise<string>) {
+function setup(
+  create: () => Promise<string>,
+  connected: () => ReadonlySet<string> | undefined = () => new Set()
+) {
   const storage: RoutineDraftStorage = {
     load: () => draft,
     save: vi.fn(),
@@ -37,7 +41,13 @@ function setup(create: () => Promise<string>) {
   };
   const composer = createRoot((cleanup) => {
     dispose = cleanup;
-    return createRoutineComposer(source, storage, 'default-model', onCreated);
+    return createRoutineComposer(
+      source,
+      storage,
+      'default-model',
+      onCreated,
+      connected
+    );
   });
   return { composer, storage, onCreated, source };
 }
@@ -90,5 +100,54 @@ describe('routine creation state without app providers', () => {
     expect(storage.save).toHaveBeenCalledWith(
       expect.objectContaining({ triggers: [] })
     );
+  });
+
+  it('creates a routine only once every app it requires is connected', async () => {
+    const [connected, setConnected] = createSignal<ReadonlySet<string>>(
+      new Set()
+    );
+    const { composer, source } = setup(async () => 'created', connected);
+    composer.change((current) => ({
+      ...current,
+      apps: [{ app_slug: 'linear', server_name: 'Linear' }],
+    }));
+    await composer.create();
+    expect(composer.formError()).toBe(
+      'Connect every app this routine requires.'
+    );
+    expect(source.create).not.toHaveBeenCalled();
+
+    setConnected(new Set(['linear']));
+    expect(composer.formError()).toBeNull();
+    await composer.create();
+    expect(source.create).toHaveBeenCalledOnce();
+  });
+
+  it('never writes its draft back after logging out cleared it', () => {
+    const { composer, storage } = setup(async () => 'created');
+    composer.change((current) => ({ ...current, name: 'Half done' }));
+    window.dispatchEvent(new Event(COMPOSER_STORAGE_CLEARED));
+    composer.change((current) => ({ ...current, name: 'Typed after' }));
+    dispose();
+    expect(storage.save).not.toHaveBeenCalled();
+  });
+
+  it('starts a new routine with no trigger and no steps', () => {
+    const storage: RoutineDraftStorage = {
+      load: () => null,
+      save: vi.fn(),
+      clear: vi.fn(),
+    };
+    const composer = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createRoutineComposer(
+        { pending: () => false, create: vi.fn() },
+        storage,
+        'default-model',
+        vi.fn(),
+        () => new Set()
+      );
+    });
+    expect(composer.draft()).toMatchObject({ triggers: [], steps: [] });
   });
 });

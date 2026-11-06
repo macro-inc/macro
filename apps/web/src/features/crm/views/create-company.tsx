@@ -1,16 +1,14 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import GlobeIcon from '@phosphor/globe.svg';
-import XIcon from '@phosphor/x.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, EntityComposer, Panel } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
+import { isCompanyDomain } from '../core/pipeline-record';
 import { useCreateCompanyMutation } from './use-crm';
 
-// Light client-side check for a bare domain like "acme.com"; the server
-// enforces the real rules (no scheme/path/@, not a generic email provider).
-const DOMAIN_PATTERN = /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i;
-
-function createErrorMessage(cause: unknown): string {
+export function companyCreationError(cause: unknown): string {
   if (cause instanceof ThrownResultError) {
     if (cause.errors.some((e) => e.code === 'CONFLICT')) {
       return 'A company with this domain already exists.';
@@ -34,10 +32,7 @@ export function CreateCompanyModal(props: {
   const companyName = createMemo(() => name().trim());
   const companyDomain = createMemo(() => domain().trim().toLowerCase());
   const canSubmit = createMemo(
-    () =>
-      companyName().length > 0 &&
-      companyDomain().length > 0 &&
-      !createCompanyMutation.isPending
+    () => companyName().length > 0 && !createCompanyMutation.isPending
   );
 
   function reset() {
@@ -62,7 +57,7 @@ export function CreateCompanyModal(props: {
       setError('Enter a company name');
       return;
     }
-    if (!DOMAIN_PATTERN.test(companyDomain())) {
+    if (companyDomain() && !isCompanyDomain(companyDomain())) {
       setError('Enter a valid domain like acme.com');
       return;
     }
@@ -71,13 +66,13 @@ export function CreateCompanyModal(props: {
     try {
       const { id } = await createCompanyMutation.mutateAsync({
         name: companyName(),
-        domain: companyDomain(),
+        domain: companyDomain() || undefined,
       });
       resetAndClose();
       props.onCreated(id);
     } catch (cause) {
       console.error('Failed to create company', cause);
-      setError(createErrorMessage(cause));
+      setError(companyCreationError(cause));
     }
   }
 
@@ -90,7 +85,7 @@ export function CreateCompanyModal(props: {
             aria-label="New company"
             onSubmit={(event) => {
               event.preventDefault();
-              void submit();
+              fireAndForget(submit(), 'crm');
             }}
             onKeyDown={(event) => {
               if (
@@ -100,7 +95,7 @@ export function CreateCompanyModal(props: {
               ) {
                 event.preventDefault();
                 event.stopPropagation();
-                void submit();
+                fireAndForget(submit(), 'crm');
               }
             }}
           >
@@ -125,14 +120,15 @@ export function CreateCompanyModal(props: {
                   />
                 </EntityComposer.Title>
                 <Button
+                  variant="ghost"
                   tabIndex={-1}
                   aria-label="Close"
                   tooltip="Close"
-                  size="icon-composer"
+                  size="icon-md"
                   disabled={createCompanyMutation.isPending}
                   onClick={close}
                 >
-                  <XIcon />
+                  <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </EntityComposer.Header>
               <EntityComposer.Main class="gap-4">
@@ -143,7 +139,7 @@ export function CreateCompanyModal(props: {
                   />
                   <input
                     aria-label="Domain"
-                    placeholder="Domain, like acme.com"
+                    placeholder="Domain (optional), like acme.com"
                     autocomplete="off"
                     spellcheck={false}
                     data-1p-ignore
@@ -171,7 +167,9 @@ export function CreateCompanyModal(props: {
                 <span class="flex min-w-0 items-center gap-1.5 px-2 text-xs text-ink-muted">
                   <EnvelopeIcon class="size-4 shrink-0" />
                   <span class="truncate">
-                    Emails from this domain link to the company
+                    {companyDomain()
+                      ? 'Emails from this domain link to the company'
+                      : 'Add contacts to the company by email'}
                   </span>
                 </span>
                 <EntityComposer.Submit

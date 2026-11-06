@@ -46,7 +46,7 @@ export function createMeetingNavigation(
     setConnection({ owner, connected, shareToken });
   }
 
-  function leave(owner: MeetingRouteEntry) {
+  function leave(owner: MeetingRouteEntry, path = '/') {
     if (
       entry() !== owner ||
       owner === leavingOwner ||
@@ -57,7 +57,7 @@ export function createMeetingNavigation(
     // Cleanup may report a disconnected session before the router unmounts it.
     // Explicit Leave returns to Macro; only unexpected disconnects show setup.
     setConnection(undefined);
-    capabilities.returnToApp();
+    capabilities.returnToApp(path);
   }
 
   // Reflect session state in the URL; visiting an active URL does not join.

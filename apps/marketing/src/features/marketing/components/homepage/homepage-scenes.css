@@ -1,0 +1,65 @@
+.homepage-scene { height: 100%; min-height: 0; color: var(--color-ink); background: var(--color-panel); }
+.homepage-scene .product-demo-stage::before { display: none; }
+.homepage-scene-agents .product-demo { box-sizing: border-box; padding-bottom: 200px; }
+.homepage-scene > .dummy-workspace { height: 100%; }
+:is(.homepage-scene-docs, .homepage-scene-agents) .product-demo-stage { height: 100%; margin: 0; }
+:is(.homepage-scene-docs, .homepage-scene-agents) .product-demo { height: 100%; min-height: 0; border: 0; border-radius: 0; box-shadow: none; mask-image: none; -webkit-mask-image: none; }
+.homepage-crm-scene { position: relative; flex-direction: row; }
+.homepage-crm-sidebar { width: 256px; flex: none; border-right: 1px solid var(--color-edge-muted); }
+.homepage-crm-section-label { margin: 0 12px 8px; font-size: 12px; color: var(--color-ink-muted); }
+.homepage-crm-main { min-width: 0; flex: 1; }
+.homepage-crm-toolbar { gap: 12px; display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--color-edge-muted); }
+.homepage-crm-toolbar [aria-pressed=true] { background: var(--color-active); color: var(--color-ink); }
+.homepage-crm-toolbar > :last-child { flex: 0 1 240px; max-width: 44%; }
+.homepage-crm-nav-toggle { display: none; }
+.homepage-crm-search { padding: 12px 16px; }
+.homepage-crm-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; white-space: nowrap; }
+.homepage-crm-table th { height: 40px; padding: 8px 12px; color: var(--color-ink-extra-muted); font-size: 12px; font-weight: 400; border-bottom: 1px solid var(--color-edge-muted); }
+.homepage-crm-table td { height: 52px; padding: 6px 12px; border-bottom: 1px solid var(--color-edge-muted); }
+.homepage-crm-table td > button { display: flex; align-items: center; gap: 10px; text-align: left; }
+.homepage-crm-table td > svg { display: inline-block; }
+.homepage-crm-table small { display: block; margin-top: 3px; color: var(--color-ink-muted); font-size: 11px; }
+.homepage-crm-table tr:hover td { background: var(--color-hover); }
+.homepage-crm-value { width: 96px; padding: 7px; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; }
+.homepage-crm-value:focus { outline: 1px solid var(--color-accent); background: var(--color-surface); }
+/* Current database Kanban: 336px lanes, muted lane surfaces and 8px cards. */
+.homepage-pipeline-board { display: flex; align-items: flex-start; min-height: 100%; gap: 16px; padding: 16px 20px; }
+.homepage-pipeline-board > section { width: 336px; flex: none; padding: 8px; border: 1px solid var(--color-edge-frame); border-radius: 12px; background: color-mix(in oklch, var(--color-panel) 94%, var(--color-ink)); }
+.homepage-pipeline-board header { display: flex; align-items: center; gap: 8px; padding: 4px 8px 8px; font-size: 14px; font-weight: 500; color: var(--color-ink); }
+.homepage-pipeline-board header > span { font-size: 12px; font-weight: 400; color: var(--color-ink-muted); }
+.homepage-pipeline-board article { padding: 12px; margin-top: 12px; border: 1px solid var(--color-edge-muted); border-radius: 8px; background: var(--color-surface-3); box-shadow: 0 1px 2px #0001; }
+.homepage-pipeline-board article:hover { border-color: var(--color-edge); box-shadow: 0 2px 4px #0002; }
+.homepage-pipeline-company { min-width: 0; display: flex; align-items: flex-start; gap: 8px; text-align: left; font-size: 14px; font-weight: 500; line-height: 24px; }
+.homepage-pipeline-company > svg { width: 16px; height: 16px; margin-top: 4px; flex: none; color: var(--color-ink-muted); }
+.homepage-pipeline-company:hover { text-decoration: underline; }
+.homepage-pipeline-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding-top: 8px; padding-left: 32px; color: var(--color-ink-muted); font-size: 12px; }
+.homepage-pipeline-fields button { min-height: 24px; height: 24px; padding: 0 4px; font-size: 12px; }
+.homepage-pipeline-fields img { width: 16px; height: 16px; }
+.homepage-pipeline-revenue { display: flex; align-items: center; gap: 8px; min-height: 24px; padding: 0 6px; font-size: 12px; }
+@media (max-width: 650px) {
+  .homepage-crm-sidebar { display: none; position: absolute; z-index: 8; inset: 0 auto 0 0; width: 220px; background: var(--color-panel); box-shadow: 10px 0 30px #0006; }
+  .homepage-crm-scene[data-sidebar-open=true] .homepage-crm-sidebar { display: block; }
+}
+
+.homepage-scene > .dummy-workspace[data-embedded=true],
+.homepage-scene .product-demo.dummy-workspace {
+  border: 0; border-radius: 0; box-shadow: none;
+}
+
+/* database-board.tsx: drag handle, title, actions, then property-icon metadata. */
+.homepage-pipeline-card-header { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.homepage-pipeline-grip { display: grid; place-items: center; width: 24px; height: 24px; color: var(--color-ink-muted); cursor: grab; }
+.homepage-pipeline-actions { opacity: 0; }
+.homepage-pipeline-board article:hover .homepage-pipeline-actions, .homepage-pipeline-board article:focus-within .homepage-pipeline-actions { opacity: 1; }
+.homepage-pipeline-field { display: flex; align-items: center; gap: 8px; min-height: 24px; max-width: 160px; padding-left: 6px; }
+.homepage-pipeline-field > svg, .homepage-pipeline-revenue > svg { color: var(--color-ink-placeholder); flex: none; }
+.homepage-crm-main .homepage-crm-header { height: 48px; min-height: 48px; padding-inline: 16px; }
+@media (hover: none) { .homepage-pipeline-actions { opacity: 1; } }
+
+@media (max-width: 650px) {
+  .homepage-crm-nav-toggle { display: inline-flex; }
+  .homepage-crm-main [data-view-shell-top-bar] { display: flex; }
+  .homepage-crm-sidebar { top: 48px; }
+  .homepage-crm-toolbar { padding-inline: 10px; }
+  .homepage-crm-toolbar [data-button] { padding-inline: 8px; }
+}

@@ -1,8 +1,9 @@
 import type { EntityData } from '@entity';
+import { ATTENTION_FEED_RESUBSCRIBE_DELAY_MS } from '@queries/attention-feed/live-attention-feed';
+import { createFakeAttentionFeedClient } from '@queries/attention-feed/tests/fake-client';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { WorkFeedScope } from '../core/work-feed';
-import { createFakeWorkFeedClient } from '../tests/fake-client';
+import type { WorkFeedPageState, WorkFeedScope } from '../core/work-feed';
 import {
   documentEntry,
   invalidatedPatch,
@@ -10,7 +11,7 @@ import {
   upsertedPatch,
   workFeedPage,
 } from '../tests/wire';
-import { createWorkFeed, WORK_FEED_RESUBSCRIBE_DELAY_MS } from './work-feed';
+import { createWorkFeed } from './work-feed';
 
 // Row mapping imports allBlocks, which loads every block module; one of them
 // opens a websocket that jsdom rejects after the test ends.
@@ -48,9 +49,9 @@ const docB = documentEntry({
 
 function setup(
   mutationData: Record<string, unknown> = {},
-  options: { cache?: boolean } = {}
+  options: { cache?: boolean; state?: WorkFeedPageState } = {}
 ) {
-  const fake = createFakeWorkFeedClient(mutationData);
+  const fake = createFakeAttentionFeedClient(mutationData);
   const revalidateNotifications = vi.fn(async () => {});
   let feed!: ReturnType<typeof createWorkFeed>;
   const dispose = createRoot((rootDispose) => {
@@ -58,6 +59,7 @@ function setup(
       client: () => fake.client,
       cacheHost: () => (options.cache === false ? undefined : fake.host),
       scope: () => SCOPE,
+      state: () => options.state,
       enabled: () => true,
       revalidateNotifications,
     });
@@ -110,6 +112,36 @@ describe('createWorkFeed', () => {
     expect(itemIds()).toEqual(['document:doc-c', 'document:doc-b']);
   });
 
+  it('narrows pages to a state while live changes keep every state', async () => {
+    vi.useFakeTimers();
+    const { fake, itemIds } = setup({}, { state: 'unseen' });
+    await flush();
+
+    expect(fake.queries[0].variables).toEqual({
+      input: { scope: WIRE_SCOPE, state: 'UNSEEN', limit: 50, cursor: null },
+    });
+    expect(fake.subscriptions[0].variables).toEqual({ scope: WIRE_SCOPE });
+
+    fake.queries[0].resolve(workFeedPage([docA]));
+    await flush();
+
+    // A row that turns seen is written into the narrowed page, not dropped.
+    const reads = fake.queries.length;
+    fake.subscriptions[0].next({
+      workFeedUpdates: [
+        upsertedPatch({ ...docA, item: { ...docA.item, state: 'SEEN' } }),
+      ],
+    });
+    await flush();
+
+    expect(fake.queries).toHaveLength(reads);
+    expect(fake.writes[0].variables).toEqual(fake.queries[0].variables);
+    expect(itemIds()).toEqual(['document:doc-a']);
+    expect(fake.writes[0].data).toEqual(
+      workFeedPage([{ ...docA, item: { ...docA.item, state: 'SEEN' } }])
+    );
+  });
+
   it('writes changes only after a page read in flight lands', async () => {
     vi.useFakeTimers();
     const { fake, feed, itemIds } = setup();
@@ -117,7 +149,7 @@ describe('createWorkFeed', () => {
     fake.queries[0].resolve(workFeedPage([docA]));
     await flush();
 
-    void feed.refetch();
+    const refetching = feed.refetch();
     await flush();
     const read = fake.queries.at(-1);
     expect(read?.context.requestPolicy).toBe(NETWORK_ONLY);
@@ -128,6 +160,7 @@ describe('createWorkFeed', () => {
 
     read?.resolve(workFeedPage([docA, docB]));
     await flush();
+    await refetching;
     expect(fake.writes).toHaveLength(1);
     expect(itemIds()).toEqual([
       'document:doc-a',
@@ -275,7 +308,7 @@ describe('createWorkFeed', () => {
     await flush();
 
     fake.subscriptions[0].fail('work feed subscription ended');
-    await vi.advanceTimersByTimeAsync(WORK_FEED_RESUBSCRIBE_DELAY_MS - 1);
+    await vi.advanceTimersByTimeAsync(ATTENTION_FEED_RESUBSCRIBE_DELAY_MS - 1);
     expect(fake.subscriptions).toHaveLength(1);
 
     const reads = fake.queries.length;

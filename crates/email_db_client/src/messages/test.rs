@@ -550,3 +550,79 @@ async fn filter_existing_provider_message_ids_partitions_known_and_missing(
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("draft_exists_with_id"))
+)]
+async fn parsed_reads_preserve_restored_draft_generation(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::messages::get_parsed::{
+        get_paginated_parsed_messages_by_thread_id, get_parsed_message_by_id,
+        get_parsed_messages_by_id_batch,
+    };
+    let draft_id = Uuid::parse_str("00000000-0000-0000-0000-00000000e501")?;
+    sqlx::query!(
+        "UPDATE email_messages SET draft_generation = 2 WHERE id = $1",
+        draft_id
+    )
+    .execute(&pool)
+    .await?;
+    let single = get_parsed_message_by_id(&pool, &draft_id).await?.unwrap();
+    assert_eq!(single.draft_generation, 2);
+    assert_eq!(serde_json::to_value(&single)?["draft_generation"], 2);
+    let batch = get_parsed_messages_by_id_batch(&pool, &[draft_id]).await?;
+    assert_eq!(batch[0].draft_generation, 2);
+    let page =
+        get_paginated_parsed_messages_by_thread_id(&pool, single.thread_db_id, 0, 100).await?;
+    assert_eq!(
+        page.iter()
+            .find(|message| message.db_id == draft_id)
+            .unwrap()
+            .draft_generation,
+        2
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("get_thread_summary_info"))
+)]
+async fn get_message_sender_and_pretty_sender_skips_messages_without_sender_contact(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000301")?;
+    let with_contact_id = Uuid::parse_str("00000000-0000-0000-0000-0000000e0601")?;
+    let without_contact_id = Uuid::parse_str("00000000-0000-0000-0000-0000000e0626")?;
+
+    sqlx::query!(
+        r#"
+        INSERT INTO email_messages (id, thread_id, link_id, is_draft, is_sent, from_contact_id)
+        VALUES ($1, $2, $3, false, false, NULL)
+        "#,
+        without_contact_id,
+        thread_id,
+        link_id
+    )
+    .execute(&pool)
+    .await?;
+
+    let senders = crate::messages::get::get_message_sender_and_pretty_sender(
+        &pool,
+        &[link_id],
+        &[with_contact_id, without_contact_id],
+    )
+    .await?;
+
+    assert_eq!(senders.len(), 1);
+    assert!(!senders.contains_key(&without_contact_id));
+    let sender = senders.get(&with_contact_id).unwrap();
+    assert_eq!(sender.sender, "alice@example.com");
+    assert_eq!(sender.pretty_sender, "Alice Smith");
+
+    Ok(())
+}

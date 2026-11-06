@@ -55,6 +55,7 @@ function mount() {
       search: 'persisted text',
       inboxIds: ['selected-inbox'],
       facets: {},
+      focusSort: 'importance',
       collapsedSidebarSectionIds: [],
     });
     const [collection, setCollection] = createStore({
@@ -327,7 +328,7 @@ it('shares the in-flight final-page wait until native hydration publishes the ne
   const concurrent = source.loadMore();
   expect(concurrent).toBe(first);
   let settled = false;
-  void first.then(() => {
+  const observed = first.then(() => {
     settled = true;
   });
   await Promise.resolve();
@@ -345,6 +346,7 @@ it('shares the in-flight final-page wait until native hydration publishes the ne
     data: { entities: [email('last')] },
   });
   await first;
+  await observed;
   await nextEmail;
   expect(mocks.open).toHaveBeenCalledWith({ id: 'last', fallbackName: 'last' });
   expect(

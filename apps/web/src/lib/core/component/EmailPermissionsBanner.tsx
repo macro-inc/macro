@@ -1,5 +1,6 @@
 import { useAddInboxFlow } from '@core/email-link';
-import Caution from '@phosphor/warning.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import Caution from '@icon/system/regular/warning.svg';
 import { Button } from '@ui';
 
 export function EmailPermissionsBanner() {
@@ -13,10 +14,10 @@ export function EmailPermissionsBanner() {
           <div class="text-sm shrink-0">No email account connected.</div>
           <span class="grow" />
           <Button
-            variant="accent"
+            variant="primary"
             size="sm"
             class="px-4"
-            onClick={() => void startAddInbox()}
+            onClick={() => fireAndForget(startAddInbox(), 'add-inbox')}
           >
             Connect Gmail
           </Button>

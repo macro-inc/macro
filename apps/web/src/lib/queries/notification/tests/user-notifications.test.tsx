@@ -144,6 +144,14 @@ type GraphqlMutationOptions = {
   ) => unknown;
 };
 
+const inFlightMutations = new Set<Promise<unknown>>();
+
+afterEach(async () => {
+  const pending = [...inFlightMutations];
+  inFlightMutations.clear();
+  await Promise.all(pending);
+});
+
 beforeEach(() => {
   graphqlCacheEnabledMock.mockReturnValue(true);
   graphqlSoupEnabledMock.mockReturnValue(true);
@@ -196,7 +204,7 @@ beforeEach(() => {
           return error;
         },
         mutate: (input: GraphqlMutationInput) => {
-          void mutateAsync(input);
+          inFlightMutations.add(mutateAsync(input));
         },
         mutateAsync,
       };
@@ -1059,7 +1067,8 @@ describe('optimisticInsertNotification', () => {
     );
     expect(mockRefetchSoupEntity).toHaveBeenCalledWith(
       'thread-1',
-      'channelThread'
+      'channelThread',
+      { notified: true }
     );
     expect(mockRefetchSoupEntity).not.toHaveBeenCalledWith(
       'channel-1',
@@ -1104,7 +1113,8 @@ describe('optimisticInsertNotification', () => {
       ).toHaveBeenCalledExactlyOnceWith(rootId, reaction.created_at);
       expect(mockRefetchSoupEntity).toHaveBeenCalledExactlyOnceWith(
         rootId,
-        'channelThread'
+        'channelThread',
+        { notified: true }
       );
       expect(
         vi.mocked(restoreSoupEntityToDoneFilteredQueries)
@@ -1146,7 +1156,8 @@ describe('optimisticInsertNotification', () => {
 
     expect(mockRefetchSoupEntity).toHaveBeenCalledWith(
       'thread-1',
-      'emailThread'
+      'emailThread',
+      { notified: true }
     );
     expect(mockOptimisticUpdateSoupItemUpdatedAt).not.toHaveBeenCalled();
   });

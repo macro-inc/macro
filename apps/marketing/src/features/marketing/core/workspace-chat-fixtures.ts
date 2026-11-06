@@ -140,7 +140,7 @@ export function sampleWorkspaceChannels(): DummyData['channels'] {
           'teo-case-reply',
           'jacob',
           '8:23 AM',
-          'that’s the one Dana hit right?'
+          'that’s the one Valentina hit right?'
         ),
         message('teo-confirm', 'teo', '8:24 AM', 'Yep. I’ve got a repro now.'),
         message(
@@ -309,7 +309,7 @@ export function sampleWorkspaceChannels(): DummyData['channels'] {
           'm3',
           'jacob',
           '9:41 AM',
-          'Dana confirmed Thursday. Sharing the rollout plan here.',
+          'Valentina confirmed Thursday. Sharing the rollout plan here.',
           { documentId: 'rollout' }
         ),
         message(
@@ -492,7 +492,7 @@ export function sampleWorkspaceChannels(): DummyData['channels'] {
           'm5',
           'julia',
           '8:09 AM',
-          'Meadow is starting the team rollout this week. Dana wants to begin with email and customer follow-ups.',
+          'Meadow is starting the team rollout this week. Valentina wants to begin with email and customer follow-ups.',
           { documentId: 'rollout' }
         ),
         message(
@@ -527,7 +527,7 @@ export function sampleWorkspaceChannels(): DummyData['channels'] {
           'customers-invite',
           'teo',
           '9:02 AM',
-          'Dana’s invite issue is fixed. Existing members land in the selected team after signing in.',
+          'Valentina’s invite issue is fixed. Existing members land in the selected team after signing in.',
           { taskId: 'invite' }
         ),
         message(
@@ -587,7 +587,7 @@ export function sampleWorkspaceChannels(): DummyData['channels'] {
           'customers-followup',
           'julia',
           '10:48 AM',
-          'Dana confirmed the time. I’m sending the setup steps ahead of the call.',
+          'Valentina confirmed the time. I’m sending the setup steps ahead of the call.',
           { taskId: 'follow-up' }
         ),
         message('customers-response', 'jacob', '10:50 AM', 'great. thanks'),

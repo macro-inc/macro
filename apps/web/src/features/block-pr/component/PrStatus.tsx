@@ -1,5 +1,5 @@
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import { cn, Layer } from '@ui';
 import { Show } from 'solid-js';
 
@@ -7,12 +7,14 @@ const STATUS_ICON_CLASS: Record<string, string> = {
   open: 'text-success',
   merged: 'text-note',
   closed: 'text-failure',
+  draft: 'text-ink-muted',
 };
 
 const STATUS_TEXT_CLASS: Record<string, string> = {
   open: 'text-success',
   merged: 'text-note',
   closed: 'text-failure',
+  draft: 'text-ink-muted',
 };
 
 function capitalize(value: string): string {

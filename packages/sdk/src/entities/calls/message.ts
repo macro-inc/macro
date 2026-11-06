@@ -12,7 +12,7 @@ export class CallMessage extends MacroEntity<MessageRecord> {
     client: MacroClient,
     readonly callId: string,
     id: string,
-    seed?: MessageRecord
+    seed?: MessageRecord,
   ) {
     super(client, id, seed);
   }
@@ -23,7 +23,7 @@ export class CallMessage extends MacroEntity<MessageRecord> {
 
   protected async fetch(): Promise<MessageRecord> {
     return unwrap(
-      await this.client.storage.entityMessageGetMessage({ path: this.path })
+      await this.client.storage.entityMessageGetMessage({ path: this.path }),
     );
   }
 
@@ -36,7 +36,7 @@ export class CallMessage extends MacroEntity<MessageRecord> {
   static from(
     client: MacroClient,
     callId: string,
-    record: MessageRecord
+    record: MessageRecord,
   ): CallMessage {
     return new CallMessage(client, callId, record.id, record);
   }
@@ -66,7 +66,7 @@ export class CallMessage extends MacroEntity<MessageRecord> {
       await this.client.storage.entityMessageCreate({
         path: { parent_type: 'call', parent_id: this.callId },
         body: { ...toBody(body), thread_id: this.callId },
-      })
+      }),
     );
     return CallMessage.from(this.client, this.callId, record);
   }
@@ -78,7 +78,7 @@ export class CallMessage extends MacroEntity<MessageRecord> {
       client.storage.entityMessageEdit({
         path: this.path,
         body: { content, mentions },
-      })
+      }),
     );
     return this;
   }
@@ -86,7 +86,7 @@ export class CallMessage extends MacroEntity<MessageRecord> {
   /** Delete this message, preserving the rest of the call's chat. */
   async delete(): Promise<void> {
     await this.mutate((client) =>
-      client.storage.entityMessageDeleteMessage({ path: this.path })
+      client.storage.entityMessageDeleteMessage({ path: this.path }),
     );
   }
 }

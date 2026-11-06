@@ -1,6 +1,6 @@
 import { ItemPreview } from '@core/component/ItemPreview';
 import { announcePresentationChanged } from '@core/pptx-engine/changes';
-import PresentationIcon from '@phosphor-icons/core/regular/presentation.svg';
+import PresentationIcon from '@icon/system/regular/presentation.svg';
 import { createSignal, type JSX, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
@@ -102,7 +102,7 @@ export const editPresentationHandler = createToolRenderer({
     };
     return (
       <PresentationToolRow
-        verb={copy() ? 'Created' : 'Edit'}
+        verb={copy() ? (ctx.response ? 'Created' : 'Create') : 'Edit'}
         documentId={ctx.response?.data.documentId ?? ctx.tool.data.documentId}
         summary={summary()}
         details={ctx.response?.data.changedSlides || undefined}

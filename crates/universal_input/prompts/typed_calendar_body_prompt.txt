@@ -1,0 +1,1 @@
+Additional event description beyond its name, date, time and location. Null if no additional description was provided.

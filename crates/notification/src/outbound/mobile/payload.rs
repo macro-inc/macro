@@ -5,6 +5,7 @@ use crate::domain::models::{
     apple::{APNSPushNotification, Alert, VoipPushPayload},
 };
 use serde::{Serialize, Serializer};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 #[cfg(test)]
 mod test;
@@ -16,6 +17,8 @@ pub enum SnsTarget<'a, T> {
     Ios(&'a APNSPushNotification<T>),
     /// iOS VoIP target via APNS_VOIP.
     Voip(&'a VoipPushPayload),
+    /// Data-only, short-lived Android incoming-call push and its recipient.
+    AndroidCall(&'a VoipPushPayload, &'a str),
     /// Android target via FCM.
     Android(&'a FCMMessage<T>),
 }
@@ -45,6 +48,14 @@ pub(crate) enum SnsPayload<'a, T> {
         /// Sandbox APNS VoIP payload.
         #[serde(rename = "APNS_VOIP_SANDBOX", serialize_with = "stringified_json")]
         apns_voip_sandbox: &'a VoipPushPayload,
+    },
+    /// Android incoming-call payload.
+    AndroidCall {
+        /// Default message text.
+        default: String,
+        /// FCM v1 envelope, serialized as an SNS platform string.
+        #[serde(rename = "GCM", serialize_with = "stringified_json")]
+        gcm: serde_json::Value,
     },
     /// Android payload with GCM key.
     Android {
@@ -123,13 +134,15 @@ impl<T> SnsTarget<'_, T> {
                     Alert::Dictionary(alert_dictionary) => alert_dictionary.title.clone(),
                 })
                 .unwrap_or(String::new()),
-            SnsTarget::Voip(payload) => format!("Incoming call in {}", payload.channel_name),
+            SnsTarget::Voip(payload) | SnsTarget::AndroidCall(payload, _) => {
+                format!("Incoming call in {}", payload.channel_name)
+            }
             SnsTarget::Android(fcmmessage) => fcmmessage.title.clone().unwrap_or_default(),
         }
     }
 
-    fn as_payload(&self) -> SnsPayload<'_, T> {
-        match self {
+    fn as_payload(&self) -> Result<SnsPayload<'_, T>, serde_json::Error> {
+        Ok(match self {
             SnsTarget::Ios(apnspush_notification) => SnsPayload::Ios {
                 default: self.default_string(),
                 apns: apnspush_notification,
@@ -140,17 +153,38 @@ impl<T> SnsTarget<'_, T> {
                 apns_voip: payload,
                 apns_voip_sandbox: payload,
             },
+            SnsTarget::AndroidCall(payload, recipient) => {
+                let mut offer = serde_json::to_value(payload)?;
+                let mut context = std::collections::HashMap::new();
+                opentelemetry::global::get_text_map_propagator(|propagator| {
+                    propagator.inject_context(&tracing::Span::current().context(), &mut context);
+                });
+                // Only W3C trace context crosses the push boundary; never forward baggage.
+                for key in ["traceparent", "tracestate"] {
+                    if let Some(value) = context.remove(key) {
+                        offer[key] = serde_json::Value::String(value);
+                    }
+                }
+                SnsPayload::AndroidCall {
+                    default: self.default_string(),
+                    gcm: serde_json::json!({"fcmV1Message": {"message": {
+                        "android": {"priority": "high", "ttl": "60s"},
+                        "data": {"type": "call", "recipientId": recipient,
+                            "payload": offer.to_string()}
+                    }}}),
+                }
+            }
             SnsTarget::Android(fcmmessage) => SnsPayload::Android {
                 default: self.default_string(),
                 gcm: fcmmessage,
             },
-        }
+        })
     }
 }
 
 impl<T: Serialize> SnsTarget<'_, T> {
     /// Serialize the target to JSON for SNS.
     pub fn as_json(&self) -> Result<String, serde_json::Error> {
-        self.as_payload().as_json()
+        self.as_payload()?.as_json()
     }
 }

@@ -94,7 +94,10 @@ pub(super) async fn consent_to_mailbox(
         .change_email_privacy(
             team,
             &user,
-            EmailPrivacyChange::SetConsent { enabled: true },
+            EmailPrivacyChange::SetConsent {
+                enabled: true,
+                link_id: Some(link),
+            },
         )
         .await?;
     Ok(())

@@ -66,6 +66,7 @@ function syncEventForMessage(message: FromRemote): SyncSourceEvent | null {
 interface MessageWaiter {
   match: (message: FromRemote) => boolean;
   resolve: (message: FromRemote) => void;
+  cancelOnDisconnect?: () => void;
 }
 
 export interface SyncServiceSourceOptions {
@@ -94,6 +95,8 @@ export class SyncServiceSource implements LiveSyncSource {
   private hasEverHadListener = false;
   /** Pending request/response waiters, matched against each incoming message. */
   private readonly waiters = new Set<MessageWaiter>();
+  /** Peer ids registered through this source, re-sent on every reconnect. */
+  private readonly peerIds = new Set<bigint>();
   private initialSyncReceived = false;
   private readonly initialSyncPromise: ResultAsync<InitialSync, TimeoutError>;
 
@@ -170,7 +173,10 @@ export class SyncServiceSource implements LiveSyncSource {
   public status: LiveSyncSource['status'] = () =>
     mapToSyncStatus(this.ws.connectionState);
 
-  public pushUpdate = async (updates: RawUpdate[]): Promise<boolean> => {
+  public pushUpdate: LiveSyncSource['pushUpdate'] = async (
+    updates,
+    options
+  ) => {
     if (!this.initialSyncReceived) return false;
     if (updates.length === 0) return true;
 
@@ -179,13 +185,18 @@ export class SyncServiceSource implements LiveSyncSource {
     // can't be missed.
     const acked = this.awaitMessage(
       (message) => message.isRemoteUpdateAck() && message.value.id === id,
-      TIMEOUTS.ACK
+      TIMEOUTS.ACK,
+      true
     ).then(
       () => true,
       () => false
     );
 
-    this.ws.send(FromPeer.fromPeerUpdate({ updates, id }));
+    this.ws.send(
+      options?.commentOnly
+        ? FromPeer.fromPeerCommentUpdate({ updates, id })
+        : FromPeer.fromPeerUpdate({ updates, id })
+    );
     return acked;
   };
 
@@ -197,8 +208,20 @@ export class SyncServiceSource implements LiveSyncSource {
   };
 
   public registerPeerId = (peerId: bigint): void => {
+    this.peerIds.add(peerId);
     this.ws.send(FromPeer.fromPeerRegisterId({ peerid: peerId }));
   };
+
+  /**
+   * The server keeps registrations per connection (blame, active peers, and
+   * clearing a peer's cursor when it leaves), so a new connection must hear
+   * them again before the reconnect replays edits.
+   */
+  private reregisterPeerIds(): void {
+    for (const peerid of this.peerIds) {
+      this.ws.send(FromPeer.fromPeerRegisterId({ peerid }));
+    }
+  }
 
   public requestSnapshot = (): ResultAsync<RawUpdate, TimeoutError> => {
     this.ws.send(FromPeer.fromPeerRequestSnapshot({}));
@@ -285,11 +308,23 @@ export class SyncServiceSource implements LiveSyncSource {
    */
   private awaitMessage(
     match: (message: FromRemote) => boolean,
-    timeoutMs: number
+    timeoutMs: number,
+    cancelOnDisconnect = false
   ): Promise<FromRemote> {
-    const { promise, resolve, reject } = Promise.withResolvers<FromRemote>();
+    let resolve!: (message: FromRemote) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<FromRemote>((settle, fail) => {
+      resolve = settle;
+      reject = fail;
+    });
     const waiter: MessageWaiter = {
       match,
+      cancelOnDisconnect: cancelOnDisconnect
+        ? () => {
+            remove();
+            reject(SyncError.connectionFailed());
+          }
+        : undefined,
       resolve: (message) => {
         remove();
         resolve(message);
@@ -322,6 +357,7 @@ export class SyncServiceSource implements LiveSyncSource {
       // waiter. Accept the eventual authorized connection and converge the
       // locally seeded document instead of permanently blocking WAL replay.
       this.ws.startHeartbeat();
+      this.reregisterPeerIds();
       const sync = message.value as InitialSync;
       this.emit({
         type: 'reconnect',
@@ -337,6 +373,10 @@ export class SyncServiceSource implements LiveSyncSource {
     IFromPeer,
     FromRemote
   > = (_ws, event) => {
+    this.initialSyncReceived = false;
+    // Release pending WAL pushes before a fast reconnect can request replay.
+    // A disconnected socket cannot supply a durable acknowledgement.
+    for (const waiter of [...this.waiters]) waiter.cancelOnDisconnect?.();
     logSyncService({
       documentId: this.documentId,
       level: 'warn',
@@ -396,6 +436,7 @@ export class SyncServiceSource implements LiveSyncSource {
           message:
             'sync source: reconnect initial sync received, emitting reconnect event',
         });
+        this.reregisterPeerIds();
         this.emit({
           type: 'reconnect',
           snapshot: sync.snapshot,

@@ -25,3 +25,26 @@ pub const PAID_DEFAULT_MODEL: &str = "anthropic/claude-sonnet-5-5";
 
 /// The only model available to free (non-professional) users.
 pub const FREE_MODEL: &str = "google/gemini-3.8-flash";
+
+/// OpenAPI schema publishing [`FREE_MODEL`] as a string enum, so the web
+/// client generates its free-tier model list from this crate instead of
+/// copying the id.
+pub struct FreeTierModel;
+
+impl utoipa::ToSchema for FreeTierModel {
+    fn name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("FreeTierModel")
+    }
+}
+
+impl utoipa::PartialSchema for FreeTierModel {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        utoipa::openapi::schema::ObjectBuilder::new()
+            .schema_type(utoipa::openapi::schema::Type::String)
+            .enum_values(Some([FREE_MODEL]))
+            .description(Some(
+                "A `provider/model` id every user may request without professional features.",
+            ))
+            .into()
+    }
+}

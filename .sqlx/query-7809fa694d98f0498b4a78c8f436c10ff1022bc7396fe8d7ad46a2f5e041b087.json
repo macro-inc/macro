@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                log.id,\n                log.agent_session_id,\n                log.user_id AS \"user_id: MacroUserIdStr\",\n                log.direction,\n                log.content,\n                log.created_at\n            FROM agent_session_log AS log\n            WHERE log.agent_session_id = $1\n              AND (log.created_at, log.id) >= (\n                  SELECT COALESCE(boundary.created_at, '-infinity'::timestamptz),\n                         COALESCE(boundary.id, '00000000-0000-0000-0000-000000000000'::uuid)\n                  FROM agent_session AS session\n                  LEFT JOIN LATERAL (\n                    SELECT id, created_at FROM agent_session_log\n                    WHERE id = session.history_start_log_id\n                      AND agent_session_id = $1\n                      AND NOT EXISTS (\n                          SELECT 1 FROM agent_session_log AS trusted\n                          WHERE trusted.agent_session_id = $1\n                            AND trusted.direction IN ('notification', 'to_runtime')\n                            AND trusted.content->'params'->'_meta' ? 'macro.dev/notifications'\n                      )\n                    LIMIT 1\n                  ) AS boundary ON true\n                  WHERE session.id = $1\n              )\n            ORDER BY log.created_at ASC, log.id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id: MacroUserIdStr",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "direction",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "content",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7809fa694d98f0498b4a78c8f436c10ff1022bc7396fe8d7ad46a2f5e041b087"
+}

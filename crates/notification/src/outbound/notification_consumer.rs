@@ -4,8 +4,11 @@
 //! assigns all `macro.notifications` partitions without joining a durable consumer group. It does
 //! not commit offsets.
 
+mod health;
 #[cfg(test)]
 mod test;
+
+use health::ConsumerHealth;
 
 use std::{marker::PhantomData, time::Duration};
 
@@ -44,6 +47,7 @@ where
     T: Clone + Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     consumer: NotificationEventConsumer,
+    _health: ConsumerHealth,
     payload: PhantomData<fn() -> T>,
 }
 
@@ -54,7 +58,8 @@ where
     /// Creates a consumer and assigns every current notification topic partition.
     #[tracing::instrument(fields(brokers), err)]
     pub fn from_env(brokers: &str) -> Result<Self, Report> {
-        let consumer = KafkaEventConsumer::<Ungrouped>::from_env(brokers)
+        let (observer, health) = ConsumerHealth::start();
+        let consumer = KafkaEventConsumer::<Ungrouped>::from_env_with_statistics(brokers, observer)
             .context("failed to create independent notification topic consumer")?;
         let consumer =
             IndependentKafkaConsumer::new(consumer, InitialOffset::Latest, TOPIC_METADATA_TIMEOUT)
@@ -67,6 +72,7 @@ where
 
         Ok(Self {
             consumer: NotificationEventConsumer::new(consumer),
+            _health: health,
             payload: PhantomData,
         })
     }

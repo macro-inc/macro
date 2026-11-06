@@ -7,7 +7,7 @@ import { ChannelTypeEnum } from '@service-storage/client';
 import type { ApiActivity as ChannelsActivity } from '@service-storage/generated/schemas/apiActivity';
 import { type Accessor, createMemo } from 'solid-js';
 import { createAssertedContextProvider } from './createContext';
-import { useUserId } from './user';
+import { useIsAuthenticated, useUserId } from './user';
 
 type ChannelsContextValue = {
   channels: Accessor<ApiChannelWithLatest[]>;
@@ -20,16 +20,18 @@ type ChannelsContextValue = {
 
 export const [ChannelsContextProvider, useChannelsContext] =
   createAssertedContextProvider('ChannelsContext', (): ChannelsContextValue => {
-    const channelsQuery = useListChannelsQuery();
-    const activityQuery = useChannelsActivityQuery();
+    const authenticated = useIsAuthenticated();
+    const enabled = () => authenticated() === true;
+    const channelsQuery = useListChannelsQuery(enabled);
+    const activityQuery = useChannelsActivityQuery(enabled);
 
     const channels = () =>
-      queryReadyGate(channelsQuery) ? channelsQuery.data : [];
+      enabled() && queryReadyGate(channelsQuery) ? channelsQuery.data : [];
     const activity = () =>
-      queryReadyGate(activityQuery) ? activityQuery.data : [];
+      enabled() && queryReadyGate(activityQuery) ? activityQuery.data : [];
 
     const channelsById = createMemo(() => {
-      if (!queryReadyGate(channelsQuery)) return {};
+      if (!enabled() || !queryReadyGate(channelsQuery)) return {};
       return channelsQuery.data.reduce<Record<string, ApiChannelWithLatest>>(
         (acc, ch) => {
           acc[ch.id] = ch;
@@ -40,7 +42,7 @@ export const [ChannelsContextProvider, useChannelsContext] =
     });
 
     const activityByChannelId = createMemo(() => {
-      if (!queryReadyGate(activityQuery)) return {};
+      if (!enabled() || !queryReadyGate(activityQuery)) return {};
       return activityQuery.data.reduce<Record<string, ChannelsActivity>>(
         (acc, a) => {
           acc[a.channel_id] = a;
@@ -63,6 +65,22 @@ export const [ChannelsContextProvider, useChannelsContext] =
 export function useChannel(channelId: string) {
   const ctx = useChannelsContext();
   return createMemo(() => ctx.channelsById()[channelId]);
+}
+
+/**
+ * Whether a channel can host a call: unknown while the channel list first
+ * loads, and never in an agent DM. A channel the loaded list lacks is not
+ * one of the user's agent DMs, so it can, as before agent DMs existed.
+ */
+export function useChannelCanCall(
+  channelId: string
+): Accessor<boolean | undefined> {
+  const ctx = useChannelsContext();
+  return createMemo(() => {
+    const channel = ctx.channelsById()[channelId];
+    if (channel) return !channel.agent_dm;
+    return ctx.isLoading() ? undefined : true;
+  });
 }
 
 export function useChannelName(channelId: string, fallback?: string) {

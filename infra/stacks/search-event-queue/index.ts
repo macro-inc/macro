@@ -4,7 +4,7 @@ import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'cloud-storage-search',
 };
 

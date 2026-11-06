@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Key } from '@solid-primitives/keyed';
 import { Scroll } from '@ui/components/Scroll';
 import {
@@ -14,6 +15,10 @@ import {
   useContext,
 } from 'solid-js';
 import {
+  createLayoutAnimation,
+  type LayoutAnimationItem,
+} from '../drag-drop/create-layout-animation';
+import {
   Kanban,
   KanbanCard,
   KanbanCardInsertion,
@@ -22,10 +27,6 @@ import {
   KanbanLane,
   useKanbanDropTarget,
 } from './kanban';
-import {
-  createKanbanAnimation,
-  type KanbanAnimationItem,
-} from './kanban-animation';
 import {
   CardActions,
   CardFields,
@@ -106,14 +107,14 @@ function Root(props: {
     revealGeneration += 1;
     setReveal({ kind, toLane, scope: props.animationScope });
   }
-  const motion = createKanbanAnimation({
+  const motion = createLayoutAnimation({
     viewport: () => viewport,
     items: () => {
       if (!viewport) {
         return [];
       }
 
-      const items: KanbanAnimationItem[] = [];
+      const items: LayoutAnimationItem[] = [];
 
       for (const layout of viewport.querySelectorAll<HTMLElement>(
         '[data-kanban-board-column]'
@@ -218,7 +219,7 @@ function Root(props: {
 
   function commitDrop(drop: KanbanDrop, visual?: KanbanDropVisual) {
     if (drop.kind === 'lane') {
-      void props.onDrop(drop);
+      fireAndForget(props.onDrop(drop), 'kanban-drop');
       return;
     }
     if (!canDropCard(drop)) return;
@@ -251,7 +252,7 @@ function Root(props: {
         finish();
       }
     }
-    void saveAndReveal();
+    fireAndForget(saveAndReveal(), 'kanban-drop');
   }
 
   const dragProps =

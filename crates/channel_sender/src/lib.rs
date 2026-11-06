@@ -1,20 +1,25 @@
 #![deny(missing_docs)]
-//! This crate defines the [ChannelSender] which is a wrapper type which denotes either a first party macro user, OR, a bot user
+//! Message author identities: Macro users, bots, and call-scoped guests.
 
 use bot_id::{BotId, BotIdStr, cowlike::CowLike};
-use either::Either;
 use macro_user_id::{error::ParseErr, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 #[cfg(test)]
 mod test;
 
-type InnerVal<'a> = Either<BotIdStr<'a>, MacroUserIdStr<'a>>;
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum InnerVal<'a> {
+    Bot(BotIdStr<'a>),
+    User(MacroUserIdStr<'a>),
+    Guest(Cow<'a, str>),
+}
 
 /// Actor identity for channel mutations.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
-pub struct ChannelSender<'a>(pub InnerVal<'a>);
+pub struct ChannelSender<'a>(InnerVal<'a>);
 
 #[cfg(feature = "schema")]
 impl<'a> utoipa::ToSchema for ChannelSender<'a> {
@@ -56,58 +61,94 @@ impl<'a> CowLike<'a> for ChannelSender<'a> {
     type Owned<'b> = ChannelSender<'b>;
 
     fn into_owned(self) -> Self::Owned<'static> {
-        ChannelSender(self.0.into_owned())
+        ChannelSender(match self.0 {
+            InnerVal::Bot(id) => InnerVal::Bot(id.into_owned()),
+            InnerVal::User(id) => InnerVal::User(id.into_owned()),
+            InnerVal::Guest(id) => InnerVal::Guest(Cow::Owned(id.into_owned())),
+        })
     }
 
     fn copied(&'a self) -> Self {
-        ChannelSender(self.0.copied())
+        ChannelSender(match &self.0 {
+            InnerVal::Bot(id) => InnerVal::Bot(id.copied()),
+            InnerVal::User(id) => InnerVal::User(id.copied()),
+            InnerVal::Guest(id) => InnerVal::Guest(Cow::Borrowed(id)),
+        })
     }
 }
 
 impl<'a> ChannelSender<'a> {
     /// attempt to return the user id str if this value contains a user
     pub fn as_user(&self) -> Option<&MacroUserIdStr<'a>> {
-        self.0.as_ref().right()
+        match &self.0 {
+            InnerVal::User(id) => Some(id),
+            _ => None,
+        }
     }
     /// attempt to return the bot id str if this value contains a bot
     pub fn as_bot(&self) -> Option<&BotIdStr<'a>> {
-        self.0.as_ref().left()
+        match &self.0 {
+            InnerVal::Bot(id) => Some(id),
+            _ => None,
+        }
     }
     /// attempt to return the user id str if this value contains a user
     pub fn into_user(self) -> Option<MacroUserIdStr<'a>> {
-        self.0.right()
+        match self.0 {
+            InnerVal::User(id) => Some(id),
+            _ => None,
+        }
     }
     /// attempt to return the bot id str if this value contains a bot
     pub fn into_bot(self) -> Option<BotIdStr<'a>> {
-        self.0.left()
+        match self.0 {
+            InnerVal::Bot(id) => Some(id),
+            _ => None,
+        }
     }
 
     /// attempt to parse a value of self from an input str
     pub fn parse_from_str(value: &'a str) -> Result<Self, ParseErr> {
+        if let Some(id) = value.strip_prefix("guest|")
+            && uuid::Uuid::parse_str(id).is_ok_and(|uuid| uuid.to_string() == id)
+        {
+            return Ok(Self(InnerVal::Guest(Cow::Borrowed(value))));
+        }
         match BotIdStr::try_from(value) {
-            Ok(bot_id) => Ok(ChannelSender(Either::Left(bot_id))),
+            Ok(bot_id) => Ok(ChannelSender(InnerVal::Bot(bot_id))),
             Err(_) => MacroUserIdStr::try_from(value)
-                .map(Either::Right)
+                .map(InnerVal::User)
                 .map(ChannelSender),
         }
     }
 
     /// create a new instance of self containing a [MacroUserIdStr]
     pub fn new_from_user(user: MacroUserIdStr<'a>) -> Self {
-        Self(InnerVal::Right(user))
+        Self(InnerVal::User(user))
     }
 
     /// create a new instance of self containing a [BotIdStr] derived from the given [BotId]
     pub fn new_from_bot(bot_id: BotId) -> ChannelSender<'static> {
-        ChannelSender(Either::Left(bot_id.into_storage_id()))
+        ChannelSender(InnerVal::Bot(bot_id.into_storage_id()))
+    }
+
+    /// Author identity only; callers must separately authorize active call membership.
+    pub fn new_from_guest(id: uuid::Uuid) -> ChannelSender<'static> {
+        ChannelSender(InnerVal::Guest(Cow::Owned(format!("guest|{id}"))))
+    }
+
+    /// Whether this is a non-account guest, never a user or bot principal.
+    pub fn is_guest(&self) -> bool {
+        matches!(self.0, InnerVal::Guest(_))
     }
 }
 
 impl<'a> AsRef<str> for ChannelSender<'a> {
     fn as_ref(&self) -> &str {
         match &self.0 {
-            Either::Left(l) => l.as_ref(),
-            Either::Right(r) => r.as_ref(),
+            InnerVal::Bot(id) => id.as_ref(),
+            InnerVal::User(id) => id.as_ref(),
+            InnerVal::Guest(id) => id.as_ref(),
         }
     }
 }

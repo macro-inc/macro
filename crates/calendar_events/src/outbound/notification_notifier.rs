@@ -1,16 +1,18 @@
-//! Notification-service implementation of the calendar reminder notifier port.
+//! Notification-service implementations of the calendar reminder and join
+//! request notifier ports.
 
 use std::collections::HashSet;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
-use model_notifications::CalendarEventReminderMetadata;
+use model_notifications::{CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata};
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
 use rootcause::Report;
 
-use crate::domain::models::{DueCalendarReminder, EventTime};
-use crate::domain::ports::CalendarReminderNotifier;
+use crate::domain::join_requests::CalendarJoinRequest;
+use crate::domain::models::{DueCalendarReminder, EventTime, ReminderDeliveryMethod};
+use crate::domain::ports::{CalendarJoinRequestNotifier, CalendarReminderNotifier};
 
 /// Delivers due calendar reminders by handing them to the notification
 /// ingress, which owns everything downstream: recipient filtering,
@@ -58,24 +60,86 @@ impl<I: NotificationIngress> CalendarReminderNotifier for NotificationCalendarRe
             // out of their own notification, and a calendar reminder's only
             // recipient is the event's owner.
             sender_id: None,
-            recipient_ids: HashSet::from([owner_id]),
+            recipient_ids: HashSet::from([owner_id.clone()]),
+        }
+        .into_request();
+
+        let result = match due.firing.method {
+            ReminderDeliveryMethod::Popup => {
+                self.ingress
+                    .send_notification(request.with_apns().with_conn_gateway())
+                    .await
+            }
+            ReminderDeliveryMethod::Email => {
+                let destination = MacroUserIdStr::try_from_email(&due.email_address)
+                    .map_err(|error| rootcause::report!(error).into_dynamic())?;
+                self.ingress
+                    .send_notification(request.with_email_destination(&owner_id, destination)?)
+                    .await
+            }
+        };
+        result.map_err(|error| {
+            tracing::error!(
+                error = ?error,
+                event_id = %due.firing.event_id,
+                "calendar reminder notification rejected"
+            );
+            rootcause::report!("failed to send calendar reminder notification").into_dynamic()
+        })?;
+
+        Ok(())
+    }
+}
+
+/// Tells the person who shared an event about a request to join it, through
+/// the notification ingress. The requester is the sender, so the sharer sees
+/// who asked.
+#[derive(Debug, Clone)]
+pub struct NotificationCalendarJoinRequestNotifier<I> {
+    ingress: I,
+}
+
+impl<I> NotificationCalendarJoinRequestNotifier<I> {
+    /// Wrap a notification ingress.
+    pub fn new(ingress: I) -> Self {
+        Self { ingress }
+    }
+}
+
+impl<I: NotificationIngress> CalendarJoinRequestNotifier
+    for NotificationCalendarJoinRequestNotifier<I>
+{
+    #[tracing::instrument(skip_all, fields(event_id = %request.event_id, request_id = %request.id))]
+    async fn notify_join_request(
+        &self,
+        sharer_id: &str,
+        request: &CalendarJoinRequest,
+        event_title: &str,
+    ) {
+        let (Ok(sharer), Ok(requester)) = (
+            MacroUserIdStr::parse_from_str(sharer_id),
+            MacroUserIdStr::parse_from_str(&request.requester_id),
+        ) else {
+            tracing::error!("calendar join request parties are not macro user ids");
+            return;
+        };
+        let notification = SendNotificationRequestBuilder {
+            notification_entity: EntityType::CalendarEvent
+                .with_entity_string(request.event_id.to_string()),
+            secondary_notification_entity: None,
+            notification: CalendarEventJoinRequestMetadata {
+                request_id: request.id,
+                event_id: request.event_id,
+                title: event_title.to_string(),
+            },
+            sender_id: Some(requester),
+            recipient_ids: HashSet::from([sharer]),
         }
         .into_request()
         .with_apns()
         .with_conn_gateway();
-
-        self.ingress
-            .send_notification(request)
-            .await
-            .map_err(|error| {
-                tracing::error!(
-                    error = ?error,
-                    event_id = %due.firing.event_id,
-                    "calendar reminder notification rejected"
-                );
-                rootcause::report!("failed to send calendar reminder notification").into_dynamic()
-            })?;
-
-        Ok(())
+        if let Err(error) = self.ingress.send_notification(notification).await {
+            tracing::error!(error = ?error, "calendar join request notification rejected");
+        }
     }
 }

@@ -37,12 +37,19 @@ function box(element: HTMLElement, top: number, bottom: number): void {
 function cardInList(
   top: number,
   bottom: number,
-  list: { top?: number; bottom?: number; paddingTop?: number } = {}
+  list: {
+    top?: number;
+    bottom?: number;
+    paddingTop?: number;
+    paddingBottom?: number;
+  } = {}
 ) {
   const container = document.createElement('div');
   const element = document.createElement('div');
   if (list.paddingTop)
     container.style.scrollPaddingTop = `${list.paddingTop}px`;
+  if (list.paddingBottom)
+    container.style.scrollPaddingBottom = `${list.paddingBottom}px`;
   box(container, list.top ?? 0, list.bottom ?? 800);
   box(element, top, bottom);
   return { container, element };
@@ -154,6 +161,23 @@ describe('revealDelta', () => {
   it('start-aligns a card taller than the list', () => {
     const { container, element } = cardInList(200, 1200);
     expect(revealDelta(container, element)).toBe(200);
+  });
+
+  it('keeps the revealed card clear of the mobile chrome', () => {
+    // A card that ends 40px above the scrollport edge is still under a 106px
+    // dock, so it has to scroll up to the padded edge rather than stay put.
+    const { container, element } = cardInList(200, 760, {
+      paddingBottom: 122,
+    });
+    expect(revealDelta(container, element)).toBe(82);
+  });
+
+  it('start-aligns a card that only fits the raw scrollport', () => {
+    const { container, element } = cardInList(100, 800, {
+      paddingTop: 76,
+      paddingBottom: 122,
+    });
+    expect(revealDelta(container, element)).toBe(24);
   });
 });
 

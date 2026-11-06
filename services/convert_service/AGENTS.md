@@ -1,0 +1,63 @@
+# convert_service
+
+## What it is
+
+Documents feature: converts uploaded Office documents (docx/xlsx/legacy
+Office formats) into Macro documents using LibreOfficeKit, triggered
+synchronously via HTTP or asynchronously via SQS.
+
+## Start here
+
+- `src/process/convert.rs` + `src/process/runner.rs`: the LibreOfficeKit
+  conversion pipeline and the SQS-driven worker loop.
+- `src/api/convert.rs`: the synchronous HTTP conversion endpoint.
+- `src/api/backfill.rs` + `helpers/backfill.ts`: backfilling existing documents
+  through conversion (bun script, hits the deployed gateway endpoint).
+- `src/main.rs`: `smoke_test_lok` — forks a child process at startup to verify
+  LibreOfficeKit's shared libraries load before accepting traffic.
+
+## Scope
+
+- Owns: office-document-to-Macro conversion and its worker/backfill paths.
+
+## Recipes
+
+- Change conversion behavior: `src/process/convert.rs` → `src/process/test.rs`.
+- Backfill existing documents: `helpers/backfill.ts` (`bun backfill`, needs
+  `BASE_URL`/`INTERNAL_API_KEY`/`LIMIT`/`OFFSET` — see `helpers/README.md`).
+- Load-test: `load-test/artillery.yml` (`artillery run artillery.yml`).
+
+## Checks
+
+- `cargo test -p convert_service` (`SQLX_OFFLINE` unset).
+
+## Gotchas
+
+- Startup fails fast if LibreOfficeKit can't load (`smoke_test_lok`); a
+  conversion regression that looks like a code bug may actually be a missing
+  LOK shared library in the environment.
+- The `disable_cleanup`/`disable_worker`/`local_queue` Cargo features gate
+  local-dev behavior — don't assume they're enabled in deployed builds.
+- Removing the job folder is the only disk cleanup; the conversion child's
+  `TMPDIR` points there so LibreOffice's scratch files go with it. Anything
+  written elsewhere stays on the task's 20 GiB ephemeral disk until ECS
+  replaces the task. A full disk looks like LibreOffice failing
+  (`loadComponentFromURL returned an empty reference`, `Failed to save
+  document`) next to `No space left on device`; check
+  `ecs.fargate.ephemeral_storage.utilized` before debugging LibreOffice.
+- Any `tracing::error!` inside `process_message` errors its span and counts
+  toward the internal span error monitor; log expected outcomes (such as a
+  job folder that is already gone) below `error`, and let the returned error
+  mark real failures.
+- The convert queue's visibility timeout (`infra/stacks/convert-service`)
+  must stay above `conversion_timeout`; failed messages go to the DLQ after
+  their second receive.
+- DOCX conversions report `Completed`/`Failed` to the job update Lambda
+  (`WEB_SOCKET_RESPONSE_LAMBDA`) only when the message's `notify_job` is set
+  (`job_update` in `src/process/convert.rs`). The Lambda fails on job ids it
+  doesn't track, and async invocation retries each failure twice, so a
+  producer that mints its own `job_id` must send `notify_job: false`.
+
+## Related
+
+- Rules: `.agents/rules/config-and-service-urls.md`

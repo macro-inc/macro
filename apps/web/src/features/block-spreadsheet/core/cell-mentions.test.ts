@@ -178,8 +178,16 @@ describe('spreadsheet mention source', () => {
         A7: { value: '=A1-DATE(2026,9,20)' },
       });
       // The pill's time of day is dropped so date arithmetic stays whole days.
-      expect(values.A1).toEqual({ display: '9/28/2026', number: 46293 });
-      expect(values.A2).toEqual({ display: '10/5/2026', number: 46300 });
+      expect(values.A1).toEqual({
+        display: '9/28/2026',
+        number: 46293,
+        date: true,
+      });
+      expect(values.A2).toEqual({
+        display: '10/5/2026',
+        number: 46300,
+        date: true,
+      });
       expect(values.A3).toEqual({ display: 'Due Tomorrow' });
       expect(values.A4).toEqual({ display: 'Due Tomorrow' });
       expect(values.A5).toEqual({ display: '46,293.00', number: 46293 });

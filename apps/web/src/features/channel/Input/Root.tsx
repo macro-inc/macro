@@ -19,7 +19,8 @@ const NoopInputCommands: InputCommands = {
 
 type RootProps = JSX.HTMLAttributes<HTMLDivElement> & {
   input: InputData;
-  commands?: InputCommands;
+  /** Supply the commands used by the slots mounted under this root. */
+  commands?: Partial<InputCommands>;
 };
 
 export function Root(props: RootProps) {
@@ -51,7 +52,7 @@ export function Root(props: RootProps) {
       <InputProvider
         value={{
           view: () => local.input,
-          commands: local.commands ?? NoopInputCommands,
+          commands: { ...NoopInputCommands, ...local.commands },
         }}
       >
         {local.children}

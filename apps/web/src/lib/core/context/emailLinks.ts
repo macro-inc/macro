@@ -1,4 +1,5 @@
 import { useEmailLinksQuery } from '@queries/email/link';
+import { queryReadyGate } from '@queries/gate';
 import type { Link } from '@service-email/generated/schemas';
 import { type Accessor, createMemo } from 'solid-js';
 import { macroIdToEmail, tryMacroId } from '../user/macroId';
@@ -24,9 +25,11 @@ export const [EmailLinksContextProvider, useEmailLinksContext] =
       const isAuthenticated = useIsAuthenticated();
       const linksQuery = useEmailLinksQuery(() => isAuthenticated() === true);
 
+      // Inbox attribution is optional. Its REST request must not suspend
+      // cached email rows or avatars during a cold offline launch.
       const links = (): Link[] =>
-        isAuthenticated() === true
-          ? (linksQuery.data?.links ?? EMPTY_LINKS)
+        isAuthenticated() === true && queryReadyGate(linksQuery)
+          ? linksQuery.data.links
           : EMPTY_LINKS;
 
       const secondaryInboxEmails = createMemo(() => {

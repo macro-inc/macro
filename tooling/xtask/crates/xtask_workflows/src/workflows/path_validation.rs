@@ -178,6 +178,9 @@ fn validate_dorny_filters(filters: &str, repo_root: &Path, context: &str) -> Res
                     yaml_key(group_name)
                 )
             })?;
+            // `!pattern` excludes paths matched by an earlier pattern; the
+            // excluded paths must exist like any other.
+            let pattern = pattern.strip_prefix('!').unwrap_or(pattern);
             validate_glob(
                 pattern,
                 repo_root,
@@ -276,6 +279,27 @@ jobs:
         let error = format!("{error:#}");
         assert!(error.contains("working directory"));
         assert!(error.contains("definitely-missing"));
+    }
+
+    #[test]
+    fn validates_negated_embedded_path_filters_like_positive_ones() {
+        let yaml = r#"
+jobs:
+  check:
+    steps:
+      - name: Filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            changed:
+              - apps/web/tauri/**
+              - '!apps/web/tauri/android_*/**'
+"#;
+        validate("fixture.yml", yaml, &xtask_paths::repo_root()).unwrap();
+
+        let yaml = yaml.replace("android_*", "definitely-missing");
+        let error = validate("fixture.yml", &yaml, &xtask_paths::repo_root()).unwrap_err();
+        assert!(format!("{error:#}").contains("matches no paths"));
     }
 
     #[test]

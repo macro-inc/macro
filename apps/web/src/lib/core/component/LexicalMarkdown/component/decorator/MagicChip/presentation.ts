@@ -129,7 +129,7 @@ function toolActivity(
       label: failed ? `${label} failed` : label,
       busy,
     }))
-    .with({ kind: 'macro' }, () => ({
+    .with({ kind: 'macro' }, { kind: 'view' }, () => ({
       label: failed ? `${label} failed` : busy ? `Using ${label}` : label,
       busy,
     }))
@@ -274,6 +274,15 @@ function partActivity(part: MessagePart): MagicChipActivity {
         label: 'Question answered',
         busy: true,
       }))
+      // The agent wakes to answer a background task's report.
+      .with({ kind: 'task_notification' }, (part) => ({
+        label:
+          part.status === 'failed'
+            ? 'Background task failed'
+            : 'Background task update',
+        detail: part.summary || undefined,
+        busy: true,
+      }))
       .with({ kind: 'plan' }, ({ entries }) => {
         const completed = entries.filter(
           (entry) => entry.status === 'completed'
@@ -388,7 +397,11 @@ function statusActivity(status: MagicChipStatus): MagicChipActivity {
       busy: false,
       tone: 'stopped' as const,
     }))
-    .exhaustive();
+    .exhaustive(() => ({
+      label: 'Queued',
+      busy: false,
+      tone: 'neutral' as const,
+    }));
 }
 
 /**

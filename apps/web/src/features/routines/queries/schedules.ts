@@ -1,12 +1,13 @@
+import { analytics } from '@app/lib/analytics';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type {
-  CreateScheduledAction,
+  ActionConfiguration,
+  ActionConfigurationUpdate,
   InProgressExecution,
   ScheduledAction,
-  UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import {
   keepPreviousData,
@@ -16,6 +17,7 @@ import {
 } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { scheduledActionKeys } from './keys';
+import { routineTargetKind } from './routine-draft';
 
 const QUERY_REFETCH_BEHAVIOR = {
   refetchOnMount: 'always' as const,
@@ -110,6 +112,35 @@ export function useScheduleHistoryQuery(
   return useQuery(() => scheduleHistoryQueryOptions(scheduleId(), enabled()));
 }
 
+// Cached past unmount; closes over the resolved schedule id only.
+function codeUpgradesQueryOptions(
+  scheduleId: string | null | undefined,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: scheduledActionKeys.codeUpgrades({
+      scheduleId: scheduleId ?? '__none__',
+    }).queryKey,
+    enabled: enabled && Boolean(scheduleId),
+    queryFn: async () =>
+      throwOnErr(
+        async () =>
+          await scheduledActionClient.listCodeUpgrades({
+            scheduleId: scheduleId!,
+          })
+      ),
+    ...QUERY_REFETCH_BEHAVIOR,
+  });
+}
+
+/** How the routine's code steps were brought to new SDKs, newest first. */
+export function useCodeUpgradesQuery(
+  scheduleId: Accessor<string | null | undefined>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => codeUpgradesQueryOptions(scheduleId(), enabled()));
+}
+
 export function invalidateSchedules() {
   return Promise.all([
     queryClient.invalidateQueries({
@@ -128,16 +159,25 @@ function _invalidateScheduleHistory(scheduleId: string) {
 }
 
 export function useCreateScheduleMutation(
-  callbacks?: MutationCallbacks<ScheduledAction, Error, CreateScheduledAction>
+  callbacks?: MutationCallbacks<ScheduledAction, Error, ActionConfiguration>,
+  /** Whether the user created the routine or duplicated one, for analytics. */
+  source: 'new' | 'duplicate' = 'new'
 ) {
   return useMutation(() => ({
-    mutationFn: async (request: CreateScheduledAction) =>
+    mutationFn: async (request: ActionConfiguration) =>
       throwOnErr(
         async () => await scheduledActionClient.createSchedule(request)
       ),
     ...withCallbacks(
       {
         onSuccess: async (schedule) => {
+          // Client-side until scheduled_action reports to PostHog itself.
+          analytics.track('routine_created', {
+            routineId: schedule.id ?? undefined,
+            source,
+            triggerType: schedule.trigger.type,
+            targetKind: routineTargetKind(schedule),
+          });
           upsertSchedule(schedule);
           await invalidateSchedules();
         },
@@ -151,13 +191,13 @@ export function useUpdateScheduleMutation(
   callbacks?: MutationCallbacks<
     ScheduledAction,
     Error,
-    { scheduleId: string; body: UpdateScheduledAction }
+    { scheduleId: string; body: ActionConfigurationUpdate }
   >
 ) {
   return useMutation(() => ({
     mutationFn: async (args: {
       scheduleId: string;
-      body: UpdateScheduledAction;
+      body: ActionConfigurationUpdate;
     }) =>
       throwOnErr(async () => await scheduledActionClient.updateSchedule(args)),
     ...withCallbacks(
@@ -277,6 +317,28 @@ export function useRunScheduleNowMutation(
       throwOnErr(
         async () => await scheduledActionClient.runNow({ scheduleId })
       ),
-    ...withCallbacks({}, callbacks),
+    ...withCallbacks(
+      {
+        // A run the server accepted, not its outcome; scheduled and event
+        // runs never pass through the client.
+        onSuccess: (_execution, { scheduleId }) => {
+          const schedule =
+            queryClient.getQueryData<ScheduledAction>(
+              scheduledActionKeys.detail({ scheduleId }).queryKey
+            ) ??
+            queryClient
+              .getQueryData<ScheduledAction[]>(
+                scheduledActionKeys.list.queryKey
+              )
+              ?.find((item) => item.id === scheduleId);
+          analytics.track('routine_run', {
+            routineId: scheduleId,
+            trigger: 'manual',
+            targetKind: schedule && routineTargetKind(schedule),
+          });
+        },
+      },
+      callbacks
+    ),
   }));
 }

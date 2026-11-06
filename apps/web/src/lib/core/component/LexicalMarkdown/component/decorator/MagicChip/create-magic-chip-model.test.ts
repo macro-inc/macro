@@ -104,21 +104,29 @@ function createModel(props: MagicChipDecoratorProps) {
 const prompt: FoldedMessage = {
   requestId: null,
   agentSessionId: 'session',
+  key: '0:user',
   turn: 0,
   author: { kind: 'user', userId: 'macro|wolf@macro.com' },
   parts: [{ kind: 'text', text: 'Say hi' }],
   stop: null,
   pending: false,
+  segments: [],
+  phase: null,
+  postedAt: null,
 };
 
 const response: FoldedMessage = {
   requestId: null,
   agentSessionId: 'session',
+  key: '0:agent',
   turn: 0,
   author: { kind: 'agent' },
   parts: [{ kind: 'text', text: 'Hi!' }],
   stop: { kind: 'end_turn' },
   pending: false,
+  segments: [],
+  phase: null,
+  postedAt: null,
 };
 
 const openResponse: FoldedMessage = {
@@ -233,6 +241,7 @@ describe('createMagicChipModel', () => {
         {
           ...openResponse,
           turn: 4,
+          key: '4:agent',
           parts: [
             {
               kind: 'tool_use',
@@ -360,7 +369,9 @@ describe('createMagicChipModel', () => {
           resolveStale = resolve;
         })
       );
-      void handleAgentSessionUpdated({ agentSessionId: 'session' });
+      const staleUpdate = handleAgentSessionUpdated({
+        agentSessionId: 'session',
+      });
       await settle();
       serviceClient.get.mockResolvedValue(snapshot(first));
       await handleAgentSessionUpdated({ agentSessionId: 'session' });
@@ -374,6 +385,7 @@ describe('createMagicChipModel', () => {
       expect(model.header()?.pullRequestUrl).toBe(first);
       expect(sibling.header()?.pullRequestUrl).toBe(first);
       resolveStale(snapshot(null));
+      await staleUpdate;
       await settle();
       expect(model.header()?.pullRequestUrl).toBe(first);
 
@@ -459,6 +471,7 @@ describe('createMagicChipModel', () => {
       {
         ...openResponse,
         turn: 3,
+        key: '3:agent',
         parts: [{ kind: 'text', text: 'Newest stream' }],
       },
     ]);
@@ -470,6 +483,7 @@ describe('createMagicChipModel', () => {
       {
         ...response,
         turn: 1,
+        key: '1:agent',
         parts: [{ kind: 'text', text: 'Late old patch' }],
       },
     ]);
@@ -478,6 +492,7 @@ describe('createMagicChipModel', () => {
       {
         ...response,
         turn: 3,
+        key: '3:agent',
         parts: [{ kind: 'text', text: 'Newest answer' }],
       },
     ]);

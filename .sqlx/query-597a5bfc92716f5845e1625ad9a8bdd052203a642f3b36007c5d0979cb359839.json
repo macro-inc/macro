@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_preview_replica (id, address, expires_at) VALUES ($1, $2, now() + make_interval(secs => $3)) ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "597a5bfc92716f5845e1625ad9a8bdd052203a642f3b36007c5d0979cb359839"
+}

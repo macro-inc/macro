@@ -7,16 +7,26 @@ import {
   initializeGoogleAnalytics,
   initializeMetaPixel,
 } from '@app/lib/analytics/providers';
+import { frontendInstanceId } from '@app/observability/frontend-instance';
 import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform, isTauri } from '@core/util/platform';
 import {
-  redactCallLinkProperties,
-  redactCallLinkTokens,
+  redactLinkTokenProperties,
+  redactLinkTokens,
 } from '@core/util/telemetryUrl';
+import { getWebOrigin } from '@core/util/webOrigin';
+import type { Language } from '@service-auth/generated/schemas/language';
+import type { Team } from '@service-auth/generated/schemas/team';
 import { type CaptureOptions, PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
+import { isIgnorableException, rewriteNativeFrameUrls } from './exceptionList';
+import { normalizeAnalyticsEmail } from './mobileCaptureIdentity';
 import { getPlanAnalyticsProperties } from './planProperties';
+import {
+  clearMobileEmailAttribution,
+  mobileEmailPersonProperties,
+} from './signupAttribution';
 
 /**
  * Resolves the user's device context for analytics enrichment.
@@ -33,6 +43,14 @@ const DEVICE_PROPERTY = 'macro_device' as const;
 const ENVIRONMENT_PROPERTY = 'macro_environment' as const;
 const PLAN_TIER_AT_EVENT_PROPERTY = 'plan_tier_at_event' as const;
 const HAS_PAID_ACCESS_AT_EVENT_PROPERTY = 'has_paid_access_at_event' as const;
+/**
+ * The interface language being shown, as a BCP 47 tag (`en`, `zh-Hans`):
+ * the person's choice, else the team's, else the browser's, else English.
+ * A person property, so a breakdown uses the current language.
+ */
+const INTERFACE_LANGUAGE_PROPERTY = 'interface_language' as const;
+/** PostHog group type for team analytics; server events send the same key. */
+const TEAM_GROUP_TYPE = 'team' as const;
 
 function getEnvironment(): 'dev' | 'prod' | 'unknown' {
   if (PROD_MODE_ENV) return 'prod';
@@ -68,10 +86,33 @@ type TrackFn = <E extends EventName>(
   options?: TrackOptions
 ) => void;
 
+type TeamGroupInfo = Pick<Team, 'id' | 'name' | 'enterprise'>;
+
 interface UserIdentifyInfo {
   email: string;
   os: string;
+  /** Person properties applied once (`$set_once`), not on the event. */
+  setOnce: Record<string, string>;
 }
+
+const MERGED_EMAIL_KEY = 'macro_ph_merged_email:';
+
+const readMergedEmail = (userId: string): string | null => {
+  try {
+    return localStorage.getItem(MERGED_EMAIL_KEY + userId);
+  } catch {
+    return null;
+  }
+};
+
+const rememberMergedEmail = (userId: string, email: string) => {
+  try {
+    localStorage.setItem(MERGED_EMAIL_KEY + userId, email);
+  } catch {
+    // The merge was still sent. A repeat is safe; PostHog no-ops an id that
+    // already belongs to this person.
+  }
+};
 
 interface PageViewOptions {
   /** Override the page path (defaults to window.location.pathname) */
@@ -111,18 +152,13 @@ export type MetaStandardEvent = (typeof META_STANDARD_EVENT_NAMES)[number];
 
 const META_STANDARD_EVENTS: Set<string> = new Set(META_STANDARD_EVENT_NAMES);
 
-const IGNORABLE_ERRORS = [
-  // This error is reported very frequently but is not an actual issue.
-  'ResizeObserver loop completed with undelivered notifications',
-];
-
 // Privacy filter lists block the upstream filename; the proxy maps this opaque alias back.
 const POSTHOG_RECORDER_SCRIPT_NAME = 'posthog-recorder.js';
 const POSTHOG_RECORDER_PROXY_SCRIPT_NAME = 'runtime.js';
 
 function isPrivateCallPage() {
   const path = window.location.pathname + window.location.hash;
-  return redactCallLinkTokens(path) !== path;
+  return redactLinkTokens(path) !== path;
 }
 
 const initializePosthog = (instance: PostHog) => {
@@ -133,6 +169,13 @@ const initializePosthog = (instance: PostHog) => {
     api_host: 'https://macro-prox.macroverse.workers.dev/i/ph',
     ui_host: 'https://us.posthog.com',
     defaults: '2026-01-30',
+    // Scroll depth listens to every scroll in the app (capture phase) and
+    // reads window geometry, forcing a layout per scroll. The app shell never
+    // scrolls the window, so the depth it reports is always zero.
+    disable_scroll_properties: true,
+    // PostHog captures utm_* and click ids on its own. `signup_flow` is added
+    // on the mobile-email desktop link so that path is its own campaign field.
+    custom_campaign_params: ['signup_flow'],
     prepare_external_dependency_script: (script) => {
       const url = new URL(script.src);
 
@@ -147,10 +190,11 @@ const initializePosthog = (instance: PostHog) => {
       // Call URLs are bearer capabilities and meeting content must not replay.
       if (isPrivateCallPage()) return null;
       if (cr) {
-        cr.properties = redactCallLinkProperties(cr.properties);
-        if (cr.$set) cr.$set = redactCallLinkProperties(cr.$set);
+        cr.properties = redactLinkTokenProperties(cr.properties);
+        cr.properties.frontend_instance_id = frontendInstanceId;
+        if (cr.$set) cr.$set = redactLinkTokenProperties(cr.$set);
         if (cr.$set_once) {
-          cr.$set_once = redactCallLinkProperties(cr.$set_once);
+          cr.$set_once = redactLinkTokenProperties(cr.$set_once);
         }
         cr.properties.env = DEV_MODE_ENV
           ? 'DEV'
@@ -161,12 +205,10 @@ const initializePosthog = (instance: PostHog) => {
 
       if (cr?.event !== '$exception') return cr;
 
-      const exceptionValues = cr.properties.$exception_values;
+      if (isIgnorableException(cr.properties.$exception_list)) return null;
 
-      if (!exceptionValues || !Array.isArray(exceptionValues)) return cr;
-
-      if (IGNORABLE_ERRORS.some((e) => exceptionValues.includes(e))) {
-        return null;
+      if (isTauri()) {
+        rewriteNativeFrameUrls(cr.properties.$exception_list, getWebOrigin());
       }
 
       return cr;
@@ -313,24 +355,82 @@ const createAnalytics = () => {
     }
   };
 
+  /**
+   * Mobile capture identifies PostHog as the normalized email. This app and
+   * the create-user webhook use `macro|{email}`. `identify` only merges an
+   * anonymous id into an identified one, and `alias` refuses an id that was
+   * already passed to `identify`, so those two persons stay split.
+   * `$merge_dangerously` is the merge PostHog applies; the event's distinct
+   * id is the person that survives.
+   *
+   * The account id is preferred, matching server `sign_up`. When this browser
+   * is already identified as the email (in-app capture), `identify(accountId)`
+   * is dropped, so the account id is merged into that email person instead.
+   */
+  const linkMobileCapturePerson = (
+    userId: string,
+    email: string | null | undefined
+  ) => {
+    if (disabled) return;
+    const normalized = normalizeAnalyticsEmail(email);
+    if (!normalized || normalized === userId) return;
+    if (readMergedEmail(userId) === normalized) return;
+
+    try {
+      const current = posthog.get_distinct_id();
+      if (current === userId) {
+        posthog.capture('$merge_dangerously', { alias: normalized });
+        rememberMergedEmail(userId, normalized);
+        return;
+      }
+      if (current === normalized) {
+        posthog.capture('$merge_dangerously', { alias: userId });
+        rememberMergedEmail(userId, normalized);
+      }
+    } catch (e) {
+      console.error('[Analytics] Failed to link mobile capture:', e);
+    }
+  };
+
   const identify = (userID: string, info: Partial<UserIdentifyInfo>) => {
     if (disabled) return;
+
+    const { setOnce, email: rawEmail, ...rest } = info;
+    const email = normalizeAnalyticsEmail(rawEmail);
+    const properties = {
+      ...rest,
+      ...(email ? { email } : {}),
+    };
 
     try {
       gtag('config', GA_ID, {
         user_id: userID,
-        ...(info.email && { email: info.email }),
-        ...(info.os && { os: info.os }),
+        ...(email && { email }),
+        ...(rest.os && { os: rest.os }),
       });
 
       if (metaPixelEnabled) {
         fbq('init', '639142540393286', {
           external_id: userID,
-          em: info.email,
+          em: email || undefined,
         });
       }
 
-      posthog.identify(userID, { ...info });
+      if (setOnce && Object.keys(setOnce).length > 0) {
+        posthog.identify(userID, properties, setOnce);
+      } else {
+        posthog.identify(userID, properties);
+      }
+      linkMobileCapturePerson(userID, email);
+      // The desktop link's parameters are cookied before the identity-provider
+      // redirect strips the query string. Apply them only after this identify
+      // succeeds, then drop the cookie so a later account on this browser
+      // cannot inherit the campaign.
+      const attribution = mobileEmailPersonProperties();
+      if (attribution) {
+        posthog.setPersonProperties(attribution.set, attribution.once);
+        clearMobileEmailAttribution();
+      }
     } catch (e) {
       console.error('[Analytics] Failed to identify user:', e);
     }
@@ -349,14 +449,68 @@ const createAnalytics = () => {
     }
   };
 
+  // Person properties are per PostHog identity. Forget the last value on
+  // reset so the next account is recorded even when the tag matches.
+  let reportedInterfaceLanguage: Language | undefined;
+
+  const setInterfaceLanguage = (language: Language) => {
+    if (disabled || reportedInterfaceLanguage === language) return;
+
+    try {
+      posthog.setPersonProperties({ [INTERFACE_LANGUAGE_PROPERTY]: language });
+      reportedInterfaceLanguage = language;
+    } catch (e) {
+      console.error('[Analytics] Failed to set interface language:', e);
+    }
+  };
+
+  // `group` with properties captures a `$groupidentify` event, so only send
+  // it when the team or its properties change, not on every team refetch.
+  let syncedTeamGroupKey: string | undefined;
+
+  const setTeamGroup = (team: TeamGroupInfo) => {
+    if (disabled) return;
+
+    const key = `${team.id}:${team.name}:${team.enterprise}`;
+    if (syncedTeamGroupKey === key) return;
+
+    try {
+      posthog.group(TEAM_GROUP_TYPE, team.id, {
+        name: team.name,
+        enterprise: team.enterprise,
+      });
+      syncedTeamGroupKey = key;
+    } catch (e) {
+      console.error('[Analytics] Failed to set team group:', e);
+    }
+  };
+
+  const clearTeamGroup = () => {
+    if (disabled) return;
+
+    syncedTeamGroupKey = undefined;
+    try {
+      // The group persists across reloads; clear it only when one is set,
+      // since `resetGroups` also reloads feature flags.
+      if (posthog.getGroups()[TEAM_GROUP_TYPE] === undefined) return;
+      posthog.resetGroups();
+    } catch (e) {
+      console.error('[Analytics] Failed to clear team group:', e);
+    }
+  };
+
   const reset = () => {
     if (disabled) return;
 
     try {
       gtag('config', GA_ID, { user_id: undefined });
 
+      // `posthog.reset()` clears the persisted groups.
+      syncedTeamGroupKey = undefined;
+
       posthog.unregister(PLAN_TIER_AT_EVENT_PROPERTY);
       posthog.unregister(HAS_PAID_ACCESS_AT_EVENT_PROPERTY);
+      reportedInterfaceLanguage = undefined;
       posthog.reset();
     } catch (e) {
       console.error('[Analytics] Failed to reset:', e);
@@ -367,10 +521,8 @@ const createAnalytics = () => {
     if (disabled) return;
 
     if (isPrivateCallPage()) return;
-    const pagePath = redactCallLinkTokens(
-      opts?.path ?? window.location.pathname
-    );
-    const pageLocation = redactCallLinkTokens(
+    const pagePath = redactLinkTokens(opts?.path ?? window.location.pathname);
+    const pageLocation = redactLinkTokens(
       opts?.location ?? window.location.href
     );
     const deviceType = getDeviceType();
@@ -412,7 +564,11 @@ const createAnalytics = () => {
     trackMeta,
     trackGoogleConversion,
     identify,
+    linkMobileCapturePerson,
     setPlanProperties,
+    setInterfaceLanguage,
+    setTeamGroup,
+    clearTeamGroup,
     reset,
     pageView,
   };
@@ -431,7 +587,17 @@ export type AnalyticsInterface = {
     data?: { value?: number; currency?: string; transaction_id?: string }
   ) => void;
   identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;
+  linkMobileCapturePerson: (
+    userId: string,
+    email: string | null | undefined
+  ) => void;
   setPlanProperties: (licenseStatus: string | undefined) => void;
+  /** Records the interface language currently shown, for usage breakdowns. */
+  setInterfaceLanguage: (language: Language) => void;
+  /** Associates this user's events with their team (PostHog group analytics). */
+  setTeamGroup: (team: TeamGroupInfo) => void;
+  /** Detaches events from any team, e.g. after leaving it. */
+  clearTeamGroup: () => void;
   reset: () => void;
   pageView: (pageTitle: string, opts?: PageViewOptions) => void;
 };

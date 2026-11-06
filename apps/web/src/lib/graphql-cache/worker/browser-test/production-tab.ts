@@ -13,9 +13,7 @@ const parameters = new URLSearchParams(location.search);
 const tabId = parameters.get('tabId') ?? '';
 const scope = parameters.get('scope') ?? '';
 if (!tabId || !scope) throw new Error('missing production harness parameters');
-// A named build gets its own coordinator, as each deployed build does, and
-// reports its build time so the newer build can take the database over.
-const build = parameters.get('build');
+// Exercise the real coordinator identity even when builds share its script URL.
 const buildTime = Number(parameters.get('buildTime') ?? 0);
 
 const QUERY = `query Soup($input: SoupInput!) {
@@ -46,6 +44,22 @@ const report = (
   } satisfies ProductionHarnessEnvelope);
 };
 
+const errorText = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+const failCommand =
+  (commandId: string) =>
+  (error: unknown): void => {
+    report({
+      kind: 'command-result',
+      commandId,
+      ok: false,
+      error: errorText(error),
+    });
+  };
+const reportProtocolError = (error: unknown): void => {
+  report({ kind: 'protocol-error', error: errorText(error) });
+};
+
 let nextRequestId = 1;
 let currentWorker: DedicatedWorkerLike | undefined;
 const pending = new Map<number, (response: CacheResponse) => void>();
@@ -54,18 +68,6 @@ const adapter = createCacheCoordinatorPageAdapter({
   scope,
   tabId,
   buildTime,
-  ...(build
-    ? {
-        createSharedWorker: (workerScope: string) =>
-          new SharedWorker(
-            new URL('../cache.coordinator.shared-worker.ts', import.meta.url),
-            {
-              type: 'module',
-              name: `graphql-cache-coordinator:${workerScope}:build-${build}`,
-            }
-          ),
-      }
-    : {}),
   createDedicatedWorker: (_workerScope, ownerEpoch) =>
     new Worker(
       new URL('./production-cache.engine-worker.ts', import.meta.url),
@@ -92,7 +94,9 @@ const adapter = createCacheCoordinatorPageAdapter({
     report({ kind: 'cache-superseded', reason });
     // What the app's host does: leave like a navigating page, which stops
     // this tab's engine so the newer build can open the database.
-    void adapter.dispose({ graceful: false, preserveDatabase: true });
+    adapter
+      .dispose({ graceful: false, preserveDatabase: true })
+      .catch(reportProtocolError);
   },
 });
 
@@ -141,7 +145,7 @@ const sendRequest = async (
 const handleCommand = (command: ProductionHarnessCommand): void => {
   match(command)
     .with({ kind: 'write' }, (value) => {
-      void sendRequest(value.commandId, {
+      sendRequest(value.commandId, {
         kind: 'write',
         query: QUERY,
         operationName: 'Soup',
@@ -156,33 +160,36 @@ const handleCommand = (command: ProductionHarnessCommand): void => {
           },
         },
         identity: 'production-test-user',
-      });
+      }).catch(failCommand(value.commandId));
     })
     .with({ kind: 'read' }, (value) => {
-      void sendRequest(value.commandId, {
+      sendRequest(value.commandId, {
         kind: 'read',
         query: QUERY,
         operationName: 'Soup',
         variables: VARIABLES,
-      });
+      }).catch(failCommand(value.commandId));
     })
     .with({ kind: 'slow-read' }, (value) => {
-      void sendRequest(value.commandId, {
+      sendRequest(value.commandId, {
         kind: 'read',
         query: SLOW_QUERY,
         operationName: 'Slow',
         variables: VARIABLES,
-      });
+      }).catch(failCommand(value.commandId));
     })
     .with({ kind: 'graceful-close' }, (value) => {
-      void adapter.dispose({ graceful: true }).then(() => {
-        report({
-          kind: 'command-result',
-          commandId: value.commandId,
-          ok: true,
-        });
-        setTimeout(() => window.close());
-      });
+      adapter
+        .dispose({ graceful: true })
+        .then(() => {
+          report({
+            kind: 'command-result',
+            commandId: value.commandId,
+            ok: true,
+          });
+          setTimeout(() => window.close());
+        })
+        .catch(failCommand(value.commandId));
     })
     .with({ kind: 'crash-worker' }, (value) => {
       if (!currentWorker) {
@@ -214,7 +221,9 @@ const handleCommand = (command: ProductionHarnessCommand): void => {
       report({ kind: 'command-result', commandId: value.commandId, ok: true });
     })
     .with({ kind: 'request' }, (value) => {
-      void sendRequest(value.commandId, value.request);
+      sendRequest(value.commandId, value.request).catch(
+        failCommand(value.commandId)
+      );
     })
     .with({ kind: 'terminate-worker' }, (value) => {
       if (!currentWorker) {
@@ -230,7 +239,7 @@ const handleCommand = (command: ProductionHarnessCommand): void => {
       report({ kind: 'command-result', commandId: value.commandId, ok: true });
     })
     .with({ kind: 'navigate-away' }, (value) => {
-      void (async () => {
+      (async () => {
         await adapter.dispose({ graceful: false, preserveDatabase: true });
         report({
           kind: 'command-result',
@@ -238,7 +247,7 @@ const handleCommand = (command: ProductionHarnessCommand): void => {
           ok: true,
         });
         setTimeout(() => window.close());
-      })();
+      })().catch(failCommand(value.commandId));
     })
     .exhaustive();
 };
@@ -251,4 +260,7 @@ channel.onmessage = (event: MessageEvent<ProductionHarnessEnvelope>) => {
 };
 
 adapter.postMessage({ id: nextRequestId++, kind: 'init', scope });
-void adapter.start().then(() => report({ kind: 'registered' }));
+adapter
+  .start()
+  .then(() => report({ kind: 'registered' }))
+  .catch(reportProtocolError);

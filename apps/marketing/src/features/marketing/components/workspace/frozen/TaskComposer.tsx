@@ -28,6 +28,11 @@ export function TaskComposer(props: {
   update: (patch: Partial<WorkspaceTask>) => void;
   submit: () => void;
   close: () => void;
+  priorityPlayback?: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    automatic?: boolean;
+  };
 }) {
   const [createMore, setCreateMore] = createSignal(false);
   const [shared, setShared] = createSignal(true);
@@ -95,6 +100,7 @@ export function TaskComposer(props: {
         />
         <TaskPriorityMenu
           task={props.draft}
+          playback={props.priorityPlayback}
           onSave={(priority) => props.update({ priority })}
         />
         <TaskOwnerMenu

@@ -362,7 +362,7 @@ export function HomepageUnification(
         <h2 id="unification-heading">
           Replace 27+ apps
           <br />
-          with a single system.
+          with one system.
         </h2>
         <p class="unification-subtext">
           <span class="unification-subtext-desktop">

@@ -74,6 +74,7 @@ pub fn map_db_attachment_to_service(
         db_id: db_att.id,
         provider_id: db_att.provider_attachment_id,
         data_url: None,
+        reference_url: db_att.reference_url,
         filename: db_att.filename,
         mime_type: db_att.mime_type,
         size_bytes: db_att.size_bytes,

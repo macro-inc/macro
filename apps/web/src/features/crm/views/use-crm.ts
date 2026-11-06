@@ -14,15 +14,13 @@ export const useIsTeamAdmin = (
 export const useTeamCrmConfig = (
   ...args: Parameters<CrmContext['createTeamConfigSource']>
 ) => useCrmContext().createTeamConfigSource(...args);
+export const useBlockedDomains = () => useCrmContext().createBlockedDomains();
 export const useCrmPermissions = (
   ...args: Parameters<CrmContext['createCapabilities']>
 ) => useCrmContext().createCapabilities(...args);
 export const useDealStages = (
   ...args: Parameters<CrmContext['createDealStages']>
 ) => useCrmContext().createDealStages(...args);
-export const useClosedStageIds = (
-  ...args: Parameters<CrmContext['createClosedStageIds']>
-) => useCrmContext().createClosedStageIds(...args);
 export const usePersonalCrmViews = (
   ...args: Parameters<CrmContext['createPersonalViews']>
 ) => useCrmContext().createPersonalViews(...args);
@@ -34,6 +32,7 @@ export const useCrmLists = (...args: Parameters<CrmContext['createLists']>) =>
 export const useCreateCompanyMutation = (
   ...args: Parameters<CrmContext['createCompany']>
 ) => useCrmContext().createCompany(...args);
+export const useCompanyImporter = () => useCrmContext().createCompanyImporter();
 export const useCreateContactMutation = (
   ...args: Parameters<CrmContext['createContact']>
 ) => useCrmContext().createContact(...args);
@@ -77,3 +76,6 @@ export const useResetCrmStagesMutation = (
 export const useQuickAccessCrmCompaniesQuery = (
   ...args: Parameters<CrmContext['createCompanySuggestions']>
 ) => useCrmContext().createCompanySuggestions(...args);
+export const useQuickAccessCrmContactsQuery = (
+  ...args: Parameters<CrmContext['createContactSuggestions']>
+) => useCrmContext().createContactSuggestions(...args);

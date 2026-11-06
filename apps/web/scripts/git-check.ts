@@ -95,4 +95,4 @@ async function main() {
   return 0;
 }
 
-main().then(process.exit);
+process.exit(await main());

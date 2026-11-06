@@ -6,7 +6,9 @@ import {
 } from '@queries/properties/options';
 import { usablePropertyOptions } from '@queries/properties/options-data';
 import { onMount, Show } from 'solid-js';
+import { SYSTEM_PROPERTY_IDS } from '../../constants';
 import { useProperty } from '../../core/context';
+import { PropertyEmptyIcon } from '../../extractors/PropertyEmpty';
 import type { PropertyApiValues, SelectProperty } from '../../types';
 import { formatOptionValue, isSelectProperty } from '../../utils';
 import { PropertyOptionSelector } from '../selectors/PropertyOptionSelector';
@@ -68,7 +70,6 @@ function SelectEditorBody() {
     };
     try {
       await ctx.onSave?.(property, apiValues);
-      ctx.onRefresh?.();
     } catch {
       // mutation onError owns toast
     }
@@ -99,6 +100,12 @@ function SelectEditorBody() {
             id: opt.id,
             label: formatOptionValue(opt),
           }))}
+          optionIconClass={
+            property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS ||
+            property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY
+              ? 'size-4'
+              : undefined
+          }
           isLoading={false}
           error={null}
           selectedOptions={editor.selectedOptions}
@@ -108,6 +115,12 @@ function SelectEditorBody() {
             !property.isMultiSelect && !property.isRequired
               ? {
                   label: `No ${property.displayName.toLowerCase()}`,
+                  icon: (
+                    <PropertyEmptyIcon
+                      propertyDefinitionId={property.propertyDefinitionId}
+                      class="size-4 text-ink-extra-muted"
+                    />
+                  ),
                   onClear: editor.clearOptions,
                 }
               : undefined

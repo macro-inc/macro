@@ -33,7 +33,8 @@ function isMobilePlatform(platform: MacroPlatform = getPlatform()): boolean {
   return platform === 'ios' || platform === 'android';
 }
 
-function _isDesktopPlatform(): boolean {
+/** Whether this is the desktop (Tauri) app on macOS/Windows/Linux. */
+export function isDesktopPlatform(): boolean {
   return isPlatform('desktop');
 }
 

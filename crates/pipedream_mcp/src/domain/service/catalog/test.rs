@@ -1,11 +1,18 @@
 use super::*;
 use crate::domain::models::CatalogEntry;
+
+fn user() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email("caller@example.com").unwrap()
+}
 use std::sync::Mutex;
+
+/// Search text, pagination cursor, and page size sent to the directory.
+type RecordedQuery = (Option<String>, Option<String>, u32);
 
 /// Fake directory returning a canned page and recording the query it got.
 struct FakeDirectory {
     page: CatalogPage,
-    seen: Mutex<Vec<(Option<String>, Option<String>, u32)>>,
+    seen: Mutex<Vec<RecordedQuery>>,
 }
 
 impl FakeDirectory {
@@ -23,6 +30,7 @@ impl FakeDirectory {
 impl ConnectorDirectory for FakeDirectory {
     async fn search(
         &self,
+        _user_id: &MacroUserIdStr<'static>,
         search: Option<&str>,
         cursor: Option<&str>,
         limit: u32,
@@ -35,7 +43,11 @@ impl ConnectorDirectory for FakeDirectory {
         Ok(self.page.clone())
     }
 
-    async fn retrieve(&self, app_slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
+    async fn retrieve(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        app_slug: &str,
+    ) -> anyhow::Result<Option<CatalogEntry>> {
         Ok(self
             .page
             .entries
@@ -47,6 +59,7 @@ impl ConnectorDirectory for FakeDirectory {
 
 fn directory_entry(app_slug: &str) -> CatalogEntry {
     CatalogEntry {
+        categories: vec![],
         app_slug: app_slug.to_owned(),
         display_name: app_slug.to_owned(),
         description: Some("from the directory".to_owned()),
@@ -59,7 +72,9 @@ async fn directory_results_pass_through_in_order() {
     let directory =
         FakeDirectory::returning(vec![directory_entry("slack"), directory_entry("airtable")]);
 
-    let page = browse_catalog(&directory, None, None, None).await.unwrap();
+    let page = browse_catalog(&directory, &user(), None, None, None)
+        .await
+        .unwrap();
 
     let slugs: Vec<_> = page.entries.iter().map(|e| e.app_slug.as_str()).collect();
     assert_eq!(slugs, ["slack", "airtable"]);
@@ -69,9 +84,15 @@ async fn directory_results_pass_through_in_order() {
 async fn search_is_trimmed_and_forwarded() {
     let directory = FakeDirectory::returning(vec![]);
 
-    browse_catalog(&directory, Some("  linear  "), Some("cursor-1"), Some(5))
-        .await
-        .unwrap();
+    browse_catalog(
+        &directory,
+        &user(),
+        Some("  linear  "),
+        Some("cursor-1"),
+        Some(5),
+    )
+    .await
+    .unwrap();
 
     let seen = directory.seen.lock().unwrap();
     let (search, cursor, limit) = seen[0].clone();
@@ -84,7 +105,7 @@ async fn search_is_trimmed_and_forwarded() {
 async fn blank_search_browses_and_limit_is_clamped() {
     let directory = FakeDirectory::returning(vec![]);
 
-    browse_catalog(&directory, Some("   "), None, Some(9999))
+    browse_catalog(&directory, &user(), Some("   "), None, Some(9999))
         .await
         .unwrap();
 

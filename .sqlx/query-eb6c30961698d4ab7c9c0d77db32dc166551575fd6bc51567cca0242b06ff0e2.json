@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT review_id FROM import_run\n            WHERE user_id = $1 AND source = $2 AND status = 'running'\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "review_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "eb6c30961698d4ab7c9c0d77db32dc166551575fd6bc51567cca0242b06ff0e2"
+}

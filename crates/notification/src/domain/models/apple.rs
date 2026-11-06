@@ -1,10 +1,11 @@
 //! Apple Push Notification Service (APNS) payload models.
 
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// The APNS payload container.
-#[derive(Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Aps {
     /// The alert content.
@@ -62,7 +63,7 @@ impl Default for Aps {
 }
 
 /// The alert content of an APNS notification.
-#[derive(Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum Alert {
     /// A simple string alert.
@@ -72,7 +73,7 @@ pub enum Alert {
 }
 
 /// Dictionary-based alert with structured fields.
-#[derive(Serialize, Debug, Default, Deserialize)]
+#[derive(Serialize, Debug, Default, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct AlertDictionary {
     /// The title of the notification.
@@ -109,7 +110,7 @@ pub struct AlertDictionary {
 }
 
 /// Notification sound configuration.
-#[derive(Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum Sound {
     /// Default sound (usually "default").
@@ -119,7 +120,7 @@ pub enum Sound {
 }
 
 /// Critical sound configuration with volume control.
-#[derive(Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 pub struct CriticalSound {
     /// Set to 1 for critical sound.
     pub critical: u8,
@@ -130,7 +131,7 @@ pub struct CriticalSound {
 }
 
 /// The interruption level of a notification.
-#[derive(Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum InterruptionLevel {
     /// Delivered silently.
@@ -144,7 +145,7 @@ pub enum InterruptionLevel {
 }
 
 /// A complete APNS push notification with custom data.
-#[derive(Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct APNSPushNotification<T> {
     /// The APNS payload.
@@ -197,6 +198,7 @@ pub struct VoipPushPayload {
 /// the value we send as the payload in the ios notification
 /// This data is accessible to the client
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct PushNotificationData {
     /// The id of the notification record (UserNotification.id)
@@ -206,4 +208,31 @@ pub struct PushNotificationData {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub sender_profile_picture_url: Option<String>,
+    /// Account that owns the receiving device, set during per-recipient delivery.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
+    pub recipient_id: Option<MacroUserIdStr<'static>>,
+    /// Destination to open without fetching the notification record first.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub navigation: Option<PushNotificationNavigation>,
+}
+
+/// A destination carried by a push notification. Access is checked when opened.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum PushNotificationNavigation {
+    /// Open a channel at a specific message.
+    Channel {
+        /// Channel containing the message.
+        #[serde(rename = "channelId")]
+        channel_id: Uuid,
+        /// Message to highlight.
+        #[serde(rename = "messageId")]
+        message_id: Uuid,
+        /// Root of the message's thread; null identifies a top-level message.
+        #[serde(rename = "threadId")]
+        #[cfg_attr(feature = "schema", schema(required = true))]
+        thread_id: Option<Uuid>,
+    },
 }

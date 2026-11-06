@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n        EXISTS(SELECT 1 FROM \"RolesOnUsers\" ru JOIN \"RolesOnPermissions\" rp ON rp.\"roleId\"=ru.\"roleId\"\n            WHERE ru.\"userId\"=$1 AND rp.\"permissionId\"='read:professional_features') AS \"professional!\",\n        (SELECT count(*) FROM email_links l WHERE l.macro_id=$1 OR EXISTS(SELECT 1 FROM macro_user_links u WHERE u.link_id=l.id AND u.primary_macro_id=$1)) AS \"inboxes!\",\n        EXISTS(SELECT 1 FROM email_links l WHERE l.provider='GMAIL' AND lower(l.email_address)=lower($2)\n            AND (l.macro_id=$1 OR EXISTS(SELECT 1 FROM macro_user_links u WHERE u.link_id=l.id AND u.primary_macro_id=$1))) AS \"reconnecting!\"\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "professional!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "inboxes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "reconnecting!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "6db05966b67453605b00634893e2b7c16f36fe041edbb41df4e7c6910293b6b1"
+}

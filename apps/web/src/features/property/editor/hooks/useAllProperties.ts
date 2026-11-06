@@ -1,16 +1,16 @@
 import type { PropertyDefinitionDomain } from '@property/types';
-import { toPropertyDefinitionDomain } from '@property/utils';
+import { toPropertyDefinitionDomain } from '@property/utils/transforms';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
-import { createMemo } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 
-export function useAllProperties() {
-  const query = useListPropertiesQuery(() => ({
-    scope: 'all',
-    includeOptions: true,
-  }));
+export function useAllProperties(enabled: Accessor<boolean> = () => true) {
+  const query = useListPropertiesQuery(
+    () => ({ scope: 'all', includeOptions: true }),
+    enabled
+  );
 
   return createMemo<PropertyDefinitionDomain[]>(() => {
-    if (query.isLoading || query.isError || !query.data) {
+    if (!query.isSuccess) {
       return [];
     }
 

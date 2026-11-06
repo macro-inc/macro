@@ -24,11 +24,14 @@ ios_resolve_toolchain() {
   ios_rustc="$(command -v "${RUSTC:-${CARGO_BUILD_RUSTC:-rustc}}")"
   ios_rust_target="${1:?Rust target is required}"
   ios_rust_libdir="$("$ios_rustc" --print target-libdir --target "$ios_rust_target")"
-  if ! compgen -G "$ios_rust_libdir/libstd-*.rlib" > /dev/null; then
-    echo "The active Rust toolchain is missing $ios_rust_target: $ios_rust_libdir" >&2
-    echo "Re-enter nix develop to load the updated rust-toolchain.toml, or install the target with rustup if building outside Nix." >&2
-    exit 1
-  fi
+  # Nix's noninteractive Bash omits compgen; use ordinary globbing instead.
+  local ios_stdlib
+  for ios_stdlib in "$ios_rust_libdir"/libstd-*.rlib; do
+    [[ -f "$ios_stdlib" ]] && return 0
+  done
+  echo "The active Rust toolchain is missing $ios_rust_target: $ios_rust_libdir" >&2
+  echo "Re-enter nix develop to load the updated rust-toolchain.toml, or install the target with rustup if building outside Nix." >&2
+  exit 1
 }
 
 ios_activate_toolchain() {
@@ -48,4 +51,23 @@ ios_activate_toolchain() {
   # the CLI environment. Xcode can retain a previous nix develop shell's TMPDIR.
   # Use the same per-user directory as the Xcode build phase.
   export TMPDIR="$(/usr/bin/getconf DARWIN_USER_TEMP_DIR)"
+}
+
+ios_require_posthog_key() {
+  # Production analytics must be configured before Vite embeds the key.
+  if [[ -z "${VITE_POSTHOG_API_KEY:-}" ]]; then
+    if ! VITE_POSTHOG_API_KEY="$(doppler secrets get VITE_POSTHOG_API_KEY \
+      --project web-release --config prd --plain --raw --no-check-version 2>/dev/null)" \
+      || [[ -z "$VITE_POSTHOG_API_KEY" ]]; then
+      echo "Unable to fetch VITE_POSTHOG_API_KEY. Install the Doppler CLI and authenticate with read access to web-release/prd, or supply VITE_POSTHOG_API_KEY in the environment." >&2
+      exit 1
+    fi
+  fi
+  export VITE_POSTHOG_API_KEY
+}
+
+ios_production_telemetry() {
+  # Without an exporter the app sends no traces or logs to Datadog.
+  export VITE_OTEL_EXPORTER_URL="${VITE_OTEL_EXPORTER_URL:-https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces}"
+  export VITE_OTEL_ENV="${VITE_OTEL_ENV:-prod}"
 }

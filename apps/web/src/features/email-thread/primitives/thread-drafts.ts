@@ -8,6 +8,7 @@ export function createThreadDrafts(
     | {
         db_id: string;
         draftMap: Record<string, EmailMessage>;
+        filtered: EmailMessage[];
       }
     | undefined
   >
@@ -20,6 +21,8 @@ export function createThreadDrafts(
   // revalidation of a stale cache wins, but an out-of-order response can't
   // downgrade a draft. Entries missing from a fetch are kept: deletes are
   // handled locally below, and dropping one would collapse an open composer.
+  // A draft the snapshot lists as a sent message is gone for good: keeping it
+  // would reopen the sent email as an editable draft.
   const serverDrafts = createMemo<
     { threadDbId: string; map: Record<string, EmailMessage> } | undefined
   >((prev) => {
@@ -29,9 +32,11 @@ export function createThreadDrafts(
     if (!prev || prev.threadDbId !== data.db_id) {
       return { threadDbId: data.db_id, map: next };
     }
+    const sent = new Set(data.filtered.map((message) => message.db_id));
     const map: Record<string, EmailMessage> = { ...next };
     for (const [messageId, prevDraft] of Object.entries(prev.map)) {
       const nextDraft = map[messageId];
+      if (sent.has(prevDraft.db_id)) continue;
       if (
         !nextDraft ||
         (nextDraft.db_id === prevDraft.db_id &&
@@ -48,21 +53,54 @@ export function createThreadDrafts(
   // a fetch that still contains the deleted draft (delete propagation lag)
   // can't resurrect it.
   const [deletedDraftIds, setDeletedDraftIds] = createStore<
-    Record<string, true>
+    Record<string, true | undefined>
+  >({});
+  const [restoredDrafts, setRestoredDrafts] = createStore<
+    Record<
+      string,
+      { draft: EmailMessage; sourceDraftId: string | undefined } | undefined
+    >
   >({});
 
   const deleteDraftForMessage = (messageId: string) => {
     setDeletedDraftIds(messageId, true);
+    setRestoredDrafts(messageId, undefined);
+  };
+
+  const restoreDraftForMessage = (draft: EmailMessage) => {
+    if (!draft.replying_to_id || draft.thread_db_id !== source()?.db_id) return;
+    setRestoredDrafts(draft.replying_to_id, {
+      draft,
+      sourceDraftId: serverDrafts()?.map[draft.replying_to_id]?.db_id,
+    });
+    setDeletedDraftIds(draft.replying_to_id, undefined);
   };
 
   const getDraftForMessage = (messageId: string) => {
     if (deletedDraftIds[messageId]) return undefined;
-    return serverDrafts()?.map[messageId];
+    const current = serverDrafts()?.map[messageId];
+    const restoration = restoredDrafts[messageId];
+    if (!restoration || restoration.draft.thread_db_id !== source()?.db_id)
+      return current;
+    const restored = restoration.draft;
+    // Keep the pre-restoration source behind the explicit snapshot, but adopt a
+    // subsequent canonical identity even when the client's clock is ahead.
+    return current &&
+      (current.db_id !== restoration.sourceDraftId ||
+        (current.db_id === restored.db_id &&
+          new Date(current.updated_at) >= new Date(restored.updated_at)))
+      ? current
+      : restored;
   };
 
   // Drafts derive straight from the query, so "settled" is simply "we have a
   // thread snapshot" — cached or fresh, revalidating or not.
   const initialDraftsSettled = () => serverDrafts() !== undefined;
 
-  return { getDraftForMessage, deleteDraftForMessage, initialDraftsSettled };
+  return {
+    getDraftForMessage,
+    deleteDraftForMessage,
+    restoreDraftForMessage,
+    initialDraftsSettled,
+  };
 }

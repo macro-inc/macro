@@ -18,6 +18,7 @@ it('refuses to send a gate without rules rather than inventing an empty rule gro
           kind: 'gate',
           gateRules: null,
           gateMessage: 'Not this time.',
+          showWhen: null,
           bookingTarget: null,
           questions: [],
         },
@@ -101,6 +102,68 @@ it('reads the shared layout document as the builder edits it, and writes it back
   expect(toLayoutDocument(layout)).toEqual(document);
 });
 
+it('reads the condition a section is shown on and writes it back, leaving it out of a section always shown', () => {
+  const document = {
+    sections: [
+      {
+        kind: 'questions' as const,
+        id: 'about',
+        title: 'About you',
+        description: '',
+        questions: [
+          {
+            id: 'q-team',
+            column: 'column-team',
+            helpText: '',
+            required: true,
+            widget: 'choice' as const,
+          },
+        ],
+      },
+      {
+        kind: 'questions' as const,
+        id: 'contractors',
+        title: 'Your agency',
+        description: '',
+        showWhen: {
+          conjunction: 'and' as const,
+          conditions: [
+            {
+              kind: 'condition' as const,
+              column: 'column-team',
+              test: {
+                kind: 'options' as const,
+                operator: 'isAnyOf' as const,
+                options: ['option-contractor'],
+              },
+            },
+          ],
+        },
+        questions: [],
+      },
+    ],
+  };
+  const layout = toFormLayout(document);
+  expect(layout.sections.map((section) => section.showWhen)).toEqual([
+    null,
+    {
+      conjunction: 'and',
+      conditions: [
+        {
+          kind: 'condition',
+          column: 'column-team',
+          test: {
+            kind: 'options',
+            operator: 'isAnyOf',
+            options: ['option-contractor'],
+          },
+        },
+      ],
+    },
+  ]);
+  expect(toLayoutDocument(layout)).toEqual(document);
+});
+
 describe('the booking step', () => {
   const form = {
     id: 'form-1',
@@ -113,11 +176,16 @@ describe('the booking step', () => {
     status: 'open',
     closesAt: null,
     tallyVisible: false,
+    responsesVisible: false,
+    anonymous: false,
     confirmationMessage: '',
+    branding: { logoFileId: null, coverFileId: null, accentColor: null },
     submittedColumnId: null,
     respondentColumnId: null,
     createdAt: '2026-10-01T12:00:00Z',
     updatedAt: '2026-10-01T12:00:00Z',
+    projectId: null,
+    isHiddenInDrive: false,
   } as const;
 
   it('reads an editor’s booking step with its target and writes it back', () => {
@@ -144,6 +212,7 @@ describe('the booking step', () => {
           kind: 'booking',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: { profileId: 'profile-1', eventTypeId: 'intro-call' },
           questions: [],
         },
@@ -180,6 +249,41 @@ describe('the booking step', () => {
     expect(() => toLayoutDocument(detail.layout)).toThrow(
       'Booking step “call” has no booking link'
     );
+  });
+
+  it('reads a step kind from a newer server as a plain section instead of throwing', () => {
+    const fromNewerServer = JSON.parse(
+      '{"kind":"payment","id":"pay","title":"Pay the fee","description":"Ten dollars."}'
+    );
+    const detail = toFormDetail({
+      form,
+      access: 'view',
+      tableGone: false,
+      sections: [fromNewerServer],
+    });
+    expect(detail.layout.sections).toEqual([
+      {
+        id: 'pay',
+        title: 'Pay the fee',
+        description: 'Ten dollars.',
+        kind: 'questions',
+        gateRules: null,
+        gateMessage: '',
+        showWhen: null,
+        bookingTarget: null,
+        questions: [],
+      },
+    ]);
+  });
+
+  it('does not report an outcome from a newer server as a submission', () => {
+    const fromNewerServer = JSON.parse('{"outcome":"queued","response":"r-1"}');
+
+    expect(toSubmitOutcome(fromNewerServer)).toEqual({
+      kind: 'stopped',
+      sectionId: '',
+      message: 'Update Macro to see whether your response was submitted.',
+    });
   });
 
   it('unlocks the booking step only from an accepted submission or a passing saved response', () => {
@@ -221,6 +325,7 @@ describe('the booking step', () => {
     ).toEqual({ kind: 'stopped', sectionId: 'fit', message: 'Not a fit yet.' });
     expect(
       toMyResponse({
+        kind: 'saved',
         response: {
           id: 'response-1',
           formId: 'form-1',

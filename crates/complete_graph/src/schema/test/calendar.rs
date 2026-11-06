@@ -3,10 +3,11 @@ use std::sync::{Arc, Mutex};
 use calendar_events::domain::{
     changes::{CalendarChangeQueryService, CalendarChangesPage, CalendarWatermark},
     models::{
-        CalendarEvent, CalendarMentionPreview, CalendarMentionRequestItem, CalendarOccurrence,
-        CalendarOccurrenceCursor, CalendarSyncStatus, EventReminders, EventStatus, EventTime,
-        EventTransparency, EventType, EventVisibility, OccurrenceException, OccurrenceListing,
-        OccurrenceRange, TeamOutOfOffice, VisibleCalendar,
+        CalendarCapabilities, CalendarEvent, CalendarMentionPreview, CalendarMentionRequestItem,
+        CalendarOccurrence, CalendarOccurrenceCursor, CalendarProvider, CalendarSyncStatus,
+        EventReminders, EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
+        GuestPolicy, OccurrenceException, OccurrenceListing, OccurrenceRange, TeamOutOfOffice,
+        ViewerCapabilities, VisibleCalendar,
     },
     ports::CalendarOccurrenceService,
 };
@@ -57,6 +58,9 @@ fn listing() -> OccurrenceListing {
             is_read_only: false,
             attendees: Vec::new(),
             reminders: EventReminders::default(),
+            guest_policy: GuestPolicy::default(),
+            is_snapshot: false,
+            viewer_can: ViewerCapabilities::NONE,
             created_at: starts_at,
             updated_at: starts_at,
         },
@@ -102,7 +106,10 @@ impl CalendarOccurrenceService for RecordingCalendarReads {
             is_primary: true,
             is_writable: true,
             is_subscription: false,
+            contributes_to_availability: true,
             sync_error: None,
+            provider: CalendarProvider::Google,
+            capabilities: CalendarCapabilities::google(),
             default_reminders: Vec::new(),
         }])
     }
@@ -125,6 +132,22 @@ impl CalendarOccurrenceService for RecordingCalendarReads {
     }
 
     async fn primary_time_zone(&self, _requester_id: &str) -> Result<Option<String>, Report> {
+        unreachable!("not part of the calendar user fields")
+    }
+
+    async fn meeting_copies(
+        &self,
+        _requester_id: &str,
+        _event_id: uuid::Uuid,
+    ) -> Result<Vec<calendar_events::domain::models::MeetingCopy>, Report> {
+        unreachable!("no GraphQL read lists a meeting's copies")
+    }
+
+    async fn event_ics(
+        &self,
+        _requester_id: &str,
+        _event_id: uuid::Uuid,
+    ) -> Result<Option<calendar_events::domain::ics::CalendarEventIcs>, Report> {
         unreachable!("not part of the calendar user fields")
     }
 }
@@ -280,11 +303,56 @@ impl calendar_events::domain::ports::CalendarMutationService for RecordingCalend
         unreachable!("only deletion is exercised")
     }
 
+    async fn invite_guests(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+        _guests: Vec<calendar_events::domain::models::CalendarAttendeeInput>,
+        _scope: calendar_events::domain::ports::CalendarUpdateScope,
+    ) -> Result<CalendarEvent, calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+
+    async fn copy_shared_event(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+    ) -> Result<CalendarEvent, calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+
+    async fn respond_to_join_request(
+        &self,
+        _requester_id: &str,
+        _request_id: Uuid,
+        _accept: bool,
+    ) -> Result<
+        calendar_events::domain::join_requests::CalendarJoinRequest,
+        calendar_events::domain::ports::CalendarMutationError,
+    > {
+        unreachable!("only deletion is exercised")
+    }
+
     async fn disconnect_calendar(
         &self,
         _requester_id: &str,
         _email_link_id: Uuid,
     ) -> Result<(), calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+}
+
+impl calendar_events::domain::ports::CalendarMacroCallService for RecordingCalendarMutations {
+    async fn create_event_with_macro_call(
+        &self,
+        _requester_id: &str,
+        _email_link_id: Option<Uuid>,
+        _calendar_id: Option<Uuid>,
+        _draft: calendar_events::domain::models::CalendarEventDraft,
+    ) -> Result<CalendarEvent, calendar_events::domain::meeting_links::CreateEventWithMacroCallError>
+    {
         unreachable!("only deletion is exercised")
     }
 }

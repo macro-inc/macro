@@ -28,6 +28,7 @@ import type {
   TextPos,
   TransitionPatch,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { PptxEditorContext } from '../context/pptx-editor-context';
 import { effectInfo, specOf } from '../core/animation-catalog';
 import { orderRange, textInRange } from '../core/caret';
@@ -388,7 +389,10 @@ export function createEditorCommands(options: EditorCommandsOptions) {
   const arrange = (to: 'front' | 'back' | 'forward' | 'backward') => {
     const s = slide();
     if (!s) return;
-    void apply(reorderOps(s.id, targets(), s.shapes, to));
+    fireAndForget(
+      apply(reorderOps(s.id, targets(), s.shapes, to)),
+      'pptx-editor'
+    );
   };
   /** Moves one shape `steps` places toward the front (negative: back). */
   const moveInZOrder = (shape: number, steps: number) => {
@@ -423,17 +427,20 @@ export function createEditorCommands(options: EditorCommandsOptions) {
   const alignShapes = (mode: AlignMode, toSlide = false) => {
     const s = slide();
     if (!s) return;
-    void apply(alignOps(s.id, targets(), mode, options.slideSize(), toSlide));
+    fireAndForget(
+      apply(alignOps(s.id, targets(), mode, options.slideSize(), toSlide)),
+      'pptx-editor'
+    );
   };
   const rotate = (change: 'right90' | 'left90' | 'flipH' | 'flipV') => {
     const s = slide();
     if (!s) return;
-    void apply(rotateOps(s.id, targets(), change));
+    fireAndForget(apply(rotateOps(s.id, targets(), change)), 'pptx-editor');
   };
   const resize = (size: { w?: number; h?: number }) => {
     const s = slide();
     if (!s) return;
-    void apply(sizeOps(s.id, targets(), size));
+    fireAndForget(apply(sizeOps(s.id, targets(), size)), 'pptx-editor');
   };
   const move = (at: { x?: number; y?: number }) =>
     each((s, shape) => ({
@@ -735,12 +742,15 @@ export function createEditorCommands(options: EditorCommandsOptions) {
   const applyBackgroundToAll = () => {
     const deck = session.outline();
     if (!deck) return;
-    void apply(
-      deck.slides.map((x) => ({
-        op: 'setBackground' as const,
-        slide: x.id,
-        fill: lastBackground ?? undefined,
-      }))
+    fireAndForget(
+      apply(
+        deck.slides.map((x) => ({
+          op: 'setBackground' as const,
+          slide: x.id,
+          fill: lastBackground ?? undefined,
+        }))
+      ),
+      'pptx-editor'
     );
   };
   const setBackground = (fill: FillSpec | null, all = false) => {
@@ -751,12 +761,15 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     const ids = all
       ? deck.slides.map((x) => x.id)
       : selectedSlides().map((x) => x.id);
-    void apply(
-      ids.map((id) => ({
-        op: 'setBackground' as const,
-        slide: id,
-        fill: fill ?? undefined,
-      }))
+    fireAndForget(
+      apply(
+        ids.map((id) => ({
+          op: 'setBackground' as const,
+          slide: id,
+          fill: fill ?? undefined,
+        }))
+      ),
+      'pptx-editor'
     );
   };
 

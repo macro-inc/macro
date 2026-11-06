@@ -2,6 +2,7 @@ import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useReauthenticateGithubMutation } from '@queries/auth';
 import { authServiceClient } from '@service-auth/client';
 import { createSignal, onCleanup, onMount } from 'solid-js';
@@ -43,7 +44,10 @@ export function GithubReauthenticationPrompt() {
   }
 
   onMount(() => {
-    void checkGithubReauthenticationStatus().then(setNeedsReauth);
+    fireAndForget(
+      checkGithubReauthenticationStatus().then(setNeedsReauth),
+      'github-reauth'
+    );
     if (isNativeMobilePlatform()) return;
 
     async function onPageShow(event: PageTransitionEvent) {
@@ -74,7 +78,7 @@ export function GithubReauthenticationPrompt() {
         {
           label: 'Reconnect',
           onClick: () => {
-            void reconnect();
+            fireAndForget(reconnect(), 'github-reauth');
           },
         },
       ],

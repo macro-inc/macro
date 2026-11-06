@@ -1,4 +1,5 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import { Telemetry } from '@macro-inc/observability';
 import { makePersisted } from '@solid-primitives/storage';
 import {
   type Accessor,
@@ -71,7 +72,9 @@ export function createInputView(options: CreateInputViewOptions): InputView {
     on(
       snapshot,
       (current) => {
-        options.callbacks?.onChange?.(current);
+        Promise.resolve(options.callbacks?.onChange?.(current)).catch((error) =>
+          Telemetry.error(error, { surface: 'channel-input' })
+        );
       },
       { defer: true }
     )

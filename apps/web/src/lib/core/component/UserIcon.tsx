@@ -1,4 +1,3 @@
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { staticFileSizedUrl } from '@core/constant/servers';
@@ -13,9 +12,10 @@ import {
   tryMacroId,
   useIsConnectedSecondaryInbox,
 } from '@core/user';
-import RobotIcon from '@phosphor/robot.svg';
-import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
-import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { useOpenDirectMessage } from '@core/util/open-direct-message';
+import RobotIcon from '@icon/system/regular/robot.svg';
+import Trash from '@icon/system/regular/trash.svg?component-solid';
 import { Avatar, type AvatarSize, cn } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -142,22 +142,17 @@ export function UserIcon(props: UserIconProps) {
     return props.email;
   });
 
-  const { openWithSplit } = useSplitLayout();
-  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
+  const openDirectMessage = useOpenDirectMessage();
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
 
-  const getOrCreateDm = (event: MouseEvent) => {
+  const openDm = (event: MouseEvent) => {
     if (!props.id || isConnectedSecondaryInbox(props.id)) return;
-    getOrCreateDmMutation.mutate(
-      { recipient_id: props.id },
-      {
-        onSuccess: ({ channel_id }) => {
-          openWithSplit(
-            { type: 'channel', id: channel_id },
-            { activate: true, preferNewSplit: event.shiftKey }
-          );
-        },
-      }
+    fireAndForget(
+      openDirectMessage(props.id, {
+        activate: true,
+        preferNewSplit: event.shiftKey,
+      }),
+      'user-icon-dm'
     );
   };
 
@@ -167,7 +162,7 @@ export function UserIcon(props: UserIconProps) {
   // On touch the tap belongs to the user card, which offers the DM as one of
   // its actions rather than jumping straight into a conversation.
   const avatarMouseDown = () =>
-    props.suppressClick || isTouchDevice() ? undefined : getOrCreateDm;
+    props.suppressClick || isTouchDevice() ? undefined : openDm;
 
   const triggerClass = () =>
     size() === 'fill' ? 'size-full' : 'inline-flex shrink-0';
@@ -213,7 +208,7 @@ export function UserIcon(props: UserIconProps) {
         <Avatar
           size={size()}
           class={props.class}
-          onMouseDown={props.suppressClick ? undefined : getOrCreateDm}
+          onMouseDown={props.suppressClick ? undefined : openDm}
         >
           <UserIconContent
             id={props.id}

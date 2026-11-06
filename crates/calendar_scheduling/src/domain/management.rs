@@ -53,6 +53,6 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         date: NaiveDate,
     ) -> Result<Vec<Slot>, Error> {
         let record = self.manage(user, id).await?;
-        self.replacement_slots(id, record.token, date).await
+        self.replacement_slots(id, record.token, date, None).await
     }
 }

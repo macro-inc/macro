@@ -2,6 +2,13 @@ use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
 
 use crate::{config::Config, service::s3::S3};
+use account_manager::{
+    domain::service::AccountManagerServiceImpl,
+    inbound::axum_router::AccountManagerRouterState,
+    outbound::{
+        dm_delivery::DmAccountManagerDelivery, pg_account_manager_repo::PgAccountManagerRepo,
+    },
+};
 use axum::extract::FromRef;
 use bots::{
     domain::service::BotServiceImpl,
@@ -13,7 +20,8 @@ use cal::{
     outbound::analytics_client::AnalyticsClientSink,
 };
 use calendar_events::{
-    domain::service::CalendarService, inbound::axum_router::CalendarRouterState,
+    domain::{ports::CalendarEventLabelReader, service::CalendarService},
+    inbound::axum_router::CalendarRouterState,
     outbound::pg::PgCalendarRepository,
 };
 use call::{
@@ -35,9 +43,10 @@ use channels::{
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::NotificationChannelSender,
+        notification_sender::{NotificationChannelSender, NotificationReaderCompletion},
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
+        pg_channels_repo::PgChannelsRepo,
+        pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
 use connection::{
@@ -45,7 +54,9 @@ use connection::{
     outbound::connection_gateway_client::ConnectionGatewayImpl,
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
-use documents_hex::domain::ports::{TaskPropertiesPort, task_property_edit_receipt};
+use documents_hex::domain::ports::{
+    TaskPropertiesPort, credited_task_edit_receipt, task_property_edit_receipt,
+};
 use documents_hex::domain::purge::DocumentPurger;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
@@ -59,7 +70,13 @@ use email::{
     domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
     outbound::EmailPgRepo,
 };
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::{
+    domain::{
+        models::{EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel},
+        service::EntityAccessServiceImpl,
+    },
+    outbound::PgAccessRepository,
+};
 use favorites::{
     domain::{mutation_service::FavoritesMutationServiceImpl, service::FavoritesServiceImpl},
     inbound::axum_router::FavoritesRouterState,
@@ -117,6 +134,8 @@ use macro_authorization::{
 };
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
+use models_properties::service::property_change_source::PropertyChangeSource;
+use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
@@ -149,7 +168,7 @@ use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 use system_properties::{
     PgSystemPropertiesRepository, StatusOption, SystemPropertiesService as _,
-    SystemPropertiesServiceImpl,
+    SystemPropertiesServiceImpl, SystemPropertyKey,
 };
 use tokio_util::task::TaskTracker;
 use webhook::{
@@ -292,6 +311,23 @@ pub(crate) type DssCalendarService = CalendarService<PgCalendarRepository>;
 /// Calendar occurrence router state.
 pub(crate) type DssCalendarState = CalendarRouterState<DssCalendarService, AuthorizationService>;
 
+/// Service for asking to join calendar events shared with a channel.
+pub(crate) type DssCalendarJoinRequestService =
+    calendar_events::domain::join_requests::CalendarJoinRequestServiceImpl<
+        PgCalendarRepository,
+        calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier<
+            NotificationIngressType,
+        >,
+        crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh,
+    >;
+
+/// Calendar join-request router state.
+pub(crate) type DssCalendarJoinRequestState =
+    calendar_events::inbound::join_request_router::CalendarJoinRequestRouterState<
+        DssCalendarJoinRequestService,
+        AuthorizationService,
+    >;
+
 /// Adapter implementing [`TaskPropertiesPort`] for the system properties service.
 pub(crate) struct TaskPropertiesAdapter {
     pub system_properties: Arc<SystemPropertiesService>,
@@ -307,14 +343,59 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             .map_err(Into::into)
     }
 
-    async fn update_task_status(&self, task_id: &str, status: &str) -> anyhow::Result<()> {
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            task_id = %access.entity().entity_id,
+            status,
+            unchanged = tracing::field::Empty,
+            credited = tracing::field::Empty
+        ),
+        err
+    )]
+    async fn update_task_status(
+        &self,
+        access: &EntityAccessReceipt<EditAccessLevel>,
+        credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+        source: Option<&PropertyChangeSource>,
+        status: &str,
+    ) -> anyhow::Result<()> {
+        use properties::PropertiesService as _;
+
         let status_option = StatusOption::try_from(status).map_err(|e| anyhow::anyhow!(e))?;
-
-        self.system_properties
-            .update_task_status(task_id, status_option)
+        let current = self
+            .properties
+            .get_system_property_value(
+                &access.clone().try_into_requirement::<ViewAccessLevel>()?,
+                SystemPropertyKey::Status,
+            )
             .await?;
-
-        Ok(())
+        // PR edits and comments re-send In Review; an unchanged status publishes nothing.
+        if current == Some(PropertyValue::SelectOption(vec![status_option.uuid()])) {
+            tracing::Span::current().record("unchanged", true);
+            return Ok(());
+        }
+        let access =
+            credited_task_edit_receipt(self.entity_access_service.as_ref(), access, credited_user)
+                .await;
+        tracing::Span::current().record(
+            "credited",
+            matches!(access.auth(), EntityAccessAuth::Authenticated(_)),
+        );
+        self.properties
+            .set_entity_property_with_source(
+                &access,
+                SystemPropertyKey::STATUS_UUID,
+                Some(
+                    models_properties::api::requests::SetPropertyValue::SelectOption {
+                        option_id: status_option.uuid(),
+                    },
+                ),
+                source.cloned(),
+            )
+            .await
+            .map(|_| ())
+            .map_err(Into::into)
     }
 
     async fn set_entity_property(
@@ -377,6 +458,14 @@ pub(crate) type DssDocumentPurger = DocumentPurger<
 /// Type alias for the authorization service.
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 
+pub(crate) type AccessRequestsState =
+    access_requests::inbound::axum_router::AccessRequestsRouterState<
+        access_requests::outbound::postgres::PgRequestRepository,
+        EntityAccessService,
+        access_requests::domain::ports::SystemClock,
+        AuthorizationService,
+    >;
+
 /// Type alias for the documents router state.
 pub(crate) type DocumentsState =
     DocumentRouterState<DocumentService, EntityAccessService, AuthorizationService>;
@@ -411,7 +500,13 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
         ChannelSideEffectService<
             PgChannelSideEffectContext,
             ConnectionGatewayChannelRealtimePublisher,
-            NotificationChannelSender<NotificationIngressType>,
+            NotificationChannelSender<
+                NotificationIngressType,
+                NotificationReaderCompletion<
+                    ai_tools::ToolNotificationService,
+                    notification::outbound::withdrawal::PgNotificationWithdrawal,
+                >,
+            >,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
             DssEventBroker,
         >,
@@ -558,6 +653,16 @@ pub(crate) type DssChannelLabelsState =
 pub(crate) type DssFavoritesState =
     FavoritesRouterState<FavoritesServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the account manager service.
+pub(crate) type AccountManagerServiceType = AccountManagerServiceImpl<
+    PgAccountManagerRepo,
+    DmAccountManagerDelivery<DssChannelService, EntityAccessService>,
+>;
+
+/// Type alias for the account manager router state.
+pub(crate) type DssAccountManagerState =
+    AccountManagerRouterState<AccountManagerServiceType, AuthorizationService>;
+
 /// Type alias for the user API key service.
 pub(crate) type UserApiKeyServiceType = UserApiKeyServiceImpl<PgUserApiKeysRepo>;
 
@@ -568,6 +673,18 @@ pub(crate) type DssUserApiKeyState =
 /// Type alias for the databases service.
 pub(crate) type DatabasesServiceType =
     PgDatabasesService<GatewayTableEventPublisher, DssEventBroker, EntityAccessService>;
+
+/// HTTP SQL queries over the same database, access and Soup services.
+pub(crate) type DssSqlState = databases_sql::inbound::axum_router::SqlRouterState<
+    DatabasesServiceType,
+    EntityAccessService,
+    DssSoupService,
+    contacts::domain::service::ContactsDomainService<
+        contacts::outbound::repository::DbContactsRepository,
+        Option<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+    >,
+    AuthorizationService,
+>;
 
 /// Type alias for the databases router state.
 pub(crate) type DssDatabasesState =
@@ -836,19 +953,29 @@ pub(crate) struct ApiContext {
     pub favorites_mutation_service: Arc<FavoritesMutationServiceType>,
     pub channel_labels_state: DssChannelLabelsState,
     pub user_api_key_state: DssUserApiKeyState,
+    pub account_manager_state: DssAccountManagerState,
     pub reminders_state: DssRemindersState,
+    pub access_requests_state: AccessRequestsState,
     pub slack_state: DssSlackState,
+    pub external_chat_state: crate::external_chat::State,
     pub initiative_state: DssInitiativeState,
     pub graphql_crm_context: graphql_crm::CrmGraphqlContext,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
+    pub graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext,
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
     pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
     pub graphql_calendar_mutation_context: graphql_calendar::CalendarGraphqlMutationContext,
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
+    pub graphql_registered_work_context: complete_graph::RegisteredWorkGraphqlContext,
+    pub graphql_notification_inbox_context: complete_graph::NotificationInboxGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader,
-    pub graphql_soup_update_hydration_loader: graphql_soup::SoupUpdateHydrationLoader,
+    /// Focus reads for the GraphQL `emailFocus` list and thread `focus` field.
+    pub email_focus_reader: Arc<dyn complete_graph::EmailFocusReader>,
+    pub graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader,
+    pub graphql_soup_item_loader: graphql_soup::SoupItemDataLoader,
     pub databases_state: DssDatabasesState,
+    pub sql_state: DssSqlState,
     pub database_webhooks_state: DssDatabaseWebhooksState,
     pub forms_state: DssFormsState,
     pub database_starter_state: DssDatabaseStarterState,
@@ -861,6 +988,7 @@ pub(crate) struct ApiContext {
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
     pub sync_service_client: Arc<SyncServiceClient>,
+    pub sync_sessions: sync_router::session::SyncSessionFactory,
     pub system_properties_service: Arc<SystemPropertiesService>,
     pub properties_service: Arc<PropertiesService>,
     pub opensearch_client: Arc<OpensearchClient>,
@@ -874,10 +1002,12 @@ pub(crate) struct ApiContext {
     pub channel_list_state: DssChannelListState,
     pub entity_access_service: Arc<EntityAccessService>,
     pub calendar_state: DssCalendarState,
+    pub calendar_join_request_state: DssCalendarJoinRequestState,
     pub documents_state: DocumentsState,
     pub projects_state: ProjectsState,
     pub channels_state: DssChannelsState,
     pub messages_state: DssMessagesState,
+    pub guest_chat_service: Arc<dyn messages::domain::service::guest_chat::GuestChatApi>,
     pub annotation_service: Arc<DssAnnotationService>,
     /// Shared channel service, for calling channel domain operations outside
     /// the channels router (starter-doc seeding records mention backlinks).
@@ -939,6 +1069,9 @@ impl From<&ApiContext> for SearchHandlerState {
             ))
                 as Arc<dyn AgentSessionSearchMetadataService>,
             calendar_search_enabled: ctx.config.calendar_search_enabled,
+            calendar_event_labels: Arc::new(CalendarService::new(PgCalendarRepository::new(
+                ctx.readonly_db.0.clone(),
+            ))) as Arc<dyn CalendarEventLabelReader>,
         }
     }
 }

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { GoogleAccountsStep } from '../components/google-accounts-step';
 import { useOnboardingContext } from '../context/onboarding-context';
 import { createEmailAccounts } from '../primitives/email-accounts';
@@ -25,8 +26,10 @@ export function EmailStep(props: {
           : undefined
       }
       onRetry={inboxes.retry}
-      onConnectWork={() => void inboxes.connect('work')}
-      onConnectPersonal={() => void inboxes.connect('personal')}
+      onConnectWork={() => fireAndForget(inboxes.connect('work'), 'onboarding')}
+      onConnectPersonal={() =>
+        fireAndForget(inboxes.connect('personal'), 'onboarding')
+      }
       onContinue={props.onContinue}
       onSkip={props.onSkip}
     />

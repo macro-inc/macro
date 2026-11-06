@@ -145,7 +145,44 @@ async fn normalizes_full_threads() {
         .await
         .unwrap();
     assert_eq!(messages.len(), 1);
-    assert_eq!(messages[0].provider_thread_id.as_deref(), Some("thread-1"));
+    assert_eq!(
+        messages[0].message.provider_thread_id.as_deref(),
+        Some("thread-1")
+    );
+}
+
+#[tokio::test]
+async fn get_thread_keeps_each_messages_calendar_parts_from_one_wire_fetch() {
+    let (server, repository) = repository().await;
+    let thread: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/thread_full.json")).unwrap();
+    let mut messages = thread["messages"].as_array().unwrap().clone();
+    // The invitation is the later message, so normalization reorders nothing
+    // and each message must keep the parts found on its own wire payload.
+    let mut invitation = calendar_message_body();
+    invitation["internalDate"] = serde_json::json!("1700000001000");
+    messages.push(invitation);
+    Mock::given(method("GET"))
+        .and(path("/users/me/threads/thread-1"))
+        .and(query_param("format", "full"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({ "id": "thread-1", "messages": messages })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let fetched = repository
+        .get_thread(&AccessToken::new("token"), Uuid::now_v7(), "thread-1")
+        .await
+        .unwrap();
+
+    assert_eq!(fetched.len(), 2);
+    assert_eq!(fetched[0].message.provider_id.as_deref(), Some("message-1"));
+    assert!(fetched[0].calendar_parts.is_empty());
+    assert_eq!(fetched[1].message.provider_id.as_deref(), Some("calendar"));
+    assert_calendar_parts(&fetched[1].calendar_parts);
 }
 
 #[tokio::test]
@@ -217,5 +254,39 @@ async fn modifies_labels_and_maps_conversion_errors_as_permanent() {
             .get_message(&AccessToken::new("token"), Uuid::now_v7(), "malformed")
             .await,
         Err(EmailApiError::Permanent { .. })
+    ));
+}
+
+#[tokio::test]
+async fn raw_message_decodes_and_maps_missing_to_not_found() {
+    use crate::domain::ports::MailboxRawMessageClient;
+    use base64::Engine as _;
+
+    let (server, repository) = repository().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages/message-1"))
+        .and(query_param("format", "raw"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "raw": base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b"Subject: hi\r\n\r\nbody")
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages/missing"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&server)
+        .await;
+
+    let token = AccessToken::new("token");
+    assert_eq!(
+        repository
+            .get_raw_message(&token, "message-1")
+            .await
+            .unwrap(),
+        b"Subject: hi\r\n\r\nbody"
+    );
+    assert!(matches!(
+        repository.get_raw_message(&token, "missing").await,
+        Err(EmailApiError::NotFound)
     ));
 }

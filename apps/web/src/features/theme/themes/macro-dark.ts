@@ -1,15 +1,14 @@
 import type { ThemeV3 } from '../types/themeTypes';
 
-/** Near-black neutral gray surfaces with a restrained depth ramp and muted blue accent. */
+/** Neutral outer background and inset content surfaces with a muted blue accent. */
 export const macroDarkTheme = {
   id: 'Macro Dark',
   name: 'Macro Dark',
   version: 3,
   mode: 'dark',
   colorTokens: {
-    'surface-0': 'oklch(0.17 0 0deg)',
-    'surface-1':
-      'color-mix(in oklch, var(--color-surface-0) 97%, var(--color-content-0))',
+    'surface-0': '#0e0e0e',
+    'surface-1': '#121212',
     'surface-2':
       'color-mix(in oklch, var(--color-surface-0) 95%, var(--color-content-0))',
     'surface-3':
@@ -47,7 +46,7 @@ export const macroDarkTheme = {
     'link-hover': 'var(--color-accent)',
     'link-visited': 'var(--color-accent)',
     page: 'var(--color-surface-0)',
-    panel: 'var(--color-surface-0)',
+    panel: 'var(--color-surface-1)',
     dialog: 'var(--color-surface-2)',
     menu: 'var(--color-surface-2)',
     tooltip: 'var(--color-surface-2)',

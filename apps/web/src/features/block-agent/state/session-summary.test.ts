@@ -12,8 +12,12 @@ import {
 function message(turn: number, parts: MessagePart[]): FoldedMessage {
   return {
     agentSessionId: 'session',
+    key: `${turn}:agent`,
     requestId: null,
     pending: false,
+    segments: [],
+    phase: null,
+    postedAt: null,
     turn,
     author: { kind: 'agent' },
     parts,

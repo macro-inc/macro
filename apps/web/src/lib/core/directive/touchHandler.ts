@@ -217,6 +217,8 @@ export function touchHandler(
   element.addEventListener('touchcancel', handleTouchCancel, { passive: true });
 
   onCleanup(() => {
+    clearState();
+    cancelTouchClassExit();
     cancelTouchClassEnter();
     endTouchClass();
     element.removeEventListener('touchstart', handleTouchStart);
@@ -224,4 +226,7 @@ export function touchHandler(
     element.removeEventListener('touchend', handleTouchEnd);
     element.removeEventListener('touchcancel', handleTouchCancel);
   });
+
+  // Drag sensors can abort a pending hold when the window or gesture changes.
+  return handleTouchCancel;
 }

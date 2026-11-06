@@ -24,7 +24,10 @@ async fn create_standalone(world: &Shared) -> (FormId, DatabaseId) {
             viewer(OWNER),
             CreateFormCommand {
                 name: "Offsite RSVP".into(),
-                source: CreateSource::NewDatabase,
+                source: CreateSource::NewDatabase {
+                    is_hidden_in_drive: false,
+                    anonymous: false,
+                },
             },
         )
         .await
@@ -126,8 +129,13 @@ async fn which_name_a_new_form_goes_by_is_recorded_from_where_it_was_created() {
                 status: FormStatus::Open,
                 closes_at: None,
                 confirmation_message: "".into(),
+                branding: FormBranding::default(),
                 created_at: start_of_tests(),
                 updated_at: start_of_tests(),
+                project_id: None,
+                is_hidden_in_drive: false,
+                responses_visible: false,
+                anonymous: false,
             },
             trashed_at: None,
             name_follows_database: true,
@@ -350,6 +358,7 @@ async fn renaming_the_database_renames_its_form_wherever_the_form_is_read() {
                     title: "".into(),
                     description: "".into(),
                     questions: vec![],
+                    show_when: None,
                 }],
             },
         )

@@ -9,6 +9,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { useUserId } from '@core/context/user';
 import { MessageThread, threadListItem } from '@core/messages/MessageThread';
 import { MessageReferenceNavigation } from '@core/messages/message-reference-navigation';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   newMessageId,
   useSendMessageMutation,
@@ -22,24 +23,24 @@ import {
   Suspense,
 } from 'solid-js';
 import { buildCallMessageLink } from './build-call-message-link';
-import { CallChatPanel } from './components/CallChatPanel';
+import { CallChatBody } from './components/CallChatBody';
 import { useCallChat } from './queries/use-call-chat';
 
 export default function CallChat(props: {
   callId: string;
-  id: string;
   open: boolean;
+  focusOnOpen?: boolean;
   onClose: () => void;
 }) {
   // Queries and all shared Markdown descendants stay within the chat boundary.
   return (
     <Suspense
       fallback={
-        <CallChatPanel {...props} composer={null}>
+        <CallChatBody open={props.open} composer={null}>
           <p role="status" class="text-sm text-ink-muted">
             Loading chat…
           </p>
-        </CallChatPanel>
+        </CallChatBody>
       }
     >
       <CallChatContent {...props} />
@@ -49,8 +50,8 @@ export default function CallChat(props: {
 
 function CallChatContent(props: {
   callId: string;
-  id: string;
   open: boolean;
+  focusOnOpen?: boolean;
   onClose: () => void;
 }) {
   const chat = useCallChat(() => props.callId);
@@ -66,7 +67,11 @@ function CallChatContent(props: {
 
   createEffect(
     on([() => props.open, canSend, input], ([open, ready, handle]) => {
-      if (open && ready) handle?.focus();
+      if (open && ready && props.focusOnOpen !== false) {
+        handle?.focus({
+          when: () => props.open && props.focusOnOpen !== false,
+        });
+      }
     })
   );
 
@@ -106,10 +111,8 @@ function CallChatContent(props: {
       }}
     >
       <StaticMarkdownContext>
-        <CallChatPanel
-          id={props.id}
+        <CallChatBody
           open={props.open}
-          onClose={props.onClose}
           composer={
             <div inert={!canSend()} classList={{ 'opacity-50': !canSend() }}>
               <Show when={sendFailed()}>
@@ -147,7 +150,7 @@ function CallChatContent(props: {
             <button
               type="button"
               class="mt-2 text-sm text-accent"
-              onClick={() => void chat.refresh()}
+              onClick={() => fireAndForget(chat.refresh(), 'channel-call')}
             >
               Retry
             </button>
@@ -189,7 +192,7 @@ function CallChatContent(props: {
               />
             )}
           </Show>
-        </CallChatPanel>
+        </CallChatBody>
       </StaticMarkdownContext>
     </MessageReferenceNavigation.Provider>
   );

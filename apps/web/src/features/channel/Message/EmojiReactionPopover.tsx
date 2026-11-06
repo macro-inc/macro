@@ -41,7 +41,12 @@ export function EmojiReactionPopover(props: EmojiReactionPopoverProps) {
       overflowPadding={8}
       slide={true}
     >
-      <Popover.Trigger as={Button} type="button" {...local.triggerProps}>
+      <Popover.Trigger
+        variant="ghost"
+        as={Button}
+        type="button"
+        {...local.triggerProps}
+      >
         {local.trigger}
       </Popover.Trigger>
       <Popover.Portal>
@@ -49,7 +54,7 @@ export function EmojiReactionPopover(props: EmojiReactionPopoverProps) {
           <Popover.Content class="z-modal">
             <Popover.Arrow class="fill-surface" />
             <div
-              class="w-64.5 h-78.75 pl-2 pt-2 rounded-xl flex flex-col glass bg-menu-glass"
+              class="menu-surface w-64.5 h-78.75 pl-2 pt-2 flex flex-col"
               role="dialog"
               aria-label="Emoji search"
             >

@@ -34,8 +34,8 @@ pub enum Skipped {
     /// The event is another deployment's to act on: an open for a bot whose
     /// runtime opens its own sessions, or managed traffic that is not ours.
     ForeignBot,
-    /// The sender is not a user, so there is nobody to own the session.
-    NotFromUser,
+    /// Neither a user sender nor trusted bot attribution names a session owner.
+    MissingInvokingUser,
     /// An event shape this harness does not recognise yet - the trigger's
     /// vocabulary is non-exhaustive on purpose, and unknown shapes are
     /// skipped rather than wedging the partition.
@@ -62,6 +62,38 @@ pub fn route_agent_trigger(
     links: &StaticFileLinks,
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::ConversationMessage(event)) => {
+            let Some(runtime) = runtime else {
+                return Err(Skipped::ForeignBot);
+            };
+            let sender = event
+                .message
+                .sender
+                .as_user()
+                .cloned()
+                .ok_or(Skipped::MissingInvokingUser)?;
+            let mut context = event.context;
+            links.link_context_attachments(context.as_mut());
+            let attachments =
+                links.prompt_attachments_for(&event.message.attachments, context.as_ref());
+            Ok(RoutedTrigger::Command(
+                event.session_id,
+                HarnessCommand::ConversationMessage(OpenSession {
+                    bot_id: event.bot_id,
+                    runtime,
+                    origin: SessionOrigin::Mention(MentionOrigin {
+                        reply_placement: super::model::ReplyPlacement::Timeline,
+                        parent: event.message.parent,
+                        thread_id: event.message.thread_id.unwrap_or(event.message.message_id),
+                        message_id: event.message.message_id,
+                        sender,
+                        content: event.message.content,
+                        attachments,
+                        context,
+                    }),
+                }),
+            ))
+        }
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(assigned)) => {
             let Some(runtime) = runtime.filter(|runtime| runtime.kind.is_managed()) else {
                 return Err(Skipped::ForeignBot);
@@ -91,7 +123,7 @@ pub fn route_agent_trigger(
             let Some(OpeningMention {
                 bot_id,
                 message,
-                context,
+                mut context,
             }) = event.mention()
             else {
                 return Err(Skipped::Unrecognized);
@@ -100,16 +132,17 @@ pub fn route_agent_trigger(
                 return Err(Skipped::ForeignBot);
             };
             let sender = message
-                .sender
-                .as_user()
-                .cloned()
-                .ok_or(Skipped::NotFromUser)?;
+                .invoking_user()
+                .ok_or(Skipped::MissingInvokingUser)?;
+            links.link_context_attachments(context.as_mut());
+            let attachments = links.prompt_attachments_for(&message.attachments, context.as_ref());
             Ok(RoutedTrigger::Command(
                 AgentSessionId::new(),
                 HarnessCommand::Open(OpenSession {
                     bot_id,
                     runtime,
                     origin: SessionOrigin::Mention(MentionOrigin {
+                        reply_placement: Default::default(),
                         parent: message.parent,
                         // A top-level mention roots its own thread; a mention
                         // inside a thread answers into that thread.
@@ -117,7 +150,7 @@ pub fn route_agent_trigger(
                         message_id: message.message_id,
                         sender,
                         content: message.content,
-                        attachments: links.prompt_attachments(&message.attachments),
+                        attachments,
                         context,
                     }),
                 }),
@@ -129,12 +162,14 @@ pub fn route_agent_trigger(
                 session_id,
                 kind: _,
                 message,
-                context,
+                mut context,
             }) = event.session_message()
             else {
                 return Err(Skipped::Unrecognized);
             };
+            let sender = message.invoking_user();
             let origin = AnnounceOrigin {
+                reply_placement: Default::default(),
                 reuse_origin_message: false,
                 parent: message.parent,
                 thread_id: message.thread_id.unwrap_or(message.message_id),
@@ -143,27 +178,23 @@ pub fn route_agent_trigger(
             let kind = runtime
                 .as_ref()
                 .map_or(AgentKind::External, |runtime| runtime.kind);
+            links.link_context_attachments(context.as_mut());
             if kind.is_managed() {
+                // The session already saw its thread's files on its first turn.
+                let attachments = links.prompt_attachments_for(&message.attachments, None);
                 return Ok(RoutedTrigger::Command(
                     session_id,
                     HarnessCommand::Deliver(DeliverAction {
                         context,
                         ..DeliverAction::prompt(
-                            AgentAction::prompt_with_attachments(
-                                message.content,
-                                links.prompt_attachments(&message.attachments),
-                            ),
-                            message.sender.as_user().cloned(),
+                            AgentAction::prompt_with_attachments(message.content, attachments),
+                            sender.clone(),
                             Some(origin),
                         )
                     }),
                 ));
             }
-            let sender = message
-                .sender
-                .as_user()
-                .cloned()
-                .ok_or(Skipped::NotFromUser)?;
+            let sender = sender.ok_or(Skipped::MissingInvokingUser)?;
             Ok(RoutedTrigger::Announce(
                 session_id,
                 AnnouncePrompt {

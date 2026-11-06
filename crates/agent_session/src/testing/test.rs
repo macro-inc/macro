@@ -12,6 +12,7 @@ fn seeded_frames_remain_ordered_when_the_clock_has_not_advanced() {
         content: Message::ToServer(ToServerMessage::Event {
             event: SystemEvent::AcpReady,
         }),
+        logged_at: None,
     };
     // Put the existing seed ahead of the wall clock to exercise the tie/backward
     // clock path deterministically, rather than hoping two calls share a tick.
@@ -47,6 +48,7 @@ async fn effective_history_orders_timestamps_and_uuid_ties_before_selecting_boun
             content: Message::ToServer(ToServerMessage::Event {
                 event: SystemEvent::AcpReady,
             }),
+            logged_at: None,
         },
     };
     // Intentionally scrambled insertion order and UUIDs contrary to timestamp order.

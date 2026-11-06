@@ -11,6 +11,7 @@ import {
   REST_T,
 } from '../../../app/components/featureGraphics/DocsMarkdownScene';
 import { createVisible } from '../../../app/utils/utilVisible';
+import { observeDemoTakeover } from '../primitives/observeDemoTakeover';
 import { HomepageVersionHistory } from './HomepageVersionHistory';
 import './homepage-collaborative-doc.css';
 
@@ -20,21 +21,33 @@ export default function HomepageCollaborativeDoc() {
   const [playing, setPlaying] = createSignal(false);
   const [foreground, setForeground] = createSignal(true);
   let root: HTMLDivElement | undefined;
+  let takenOver = false;
+  const takeOver = () => {
+    takenOver = true;
+    setPlaying(false);
+  };
   const visible = createVisible(() => root);
   onMount(() => {
+    const releaseTakeover = root
+      ? observeDemoTakeover(root, takeOver)
+      : undefined;
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     if (!motion.matches) {
       setTime(0);
       setPlaying(true);
     }
     const stopForReducedMotion = () => {
-      if (motion.matches) setPlaying(false);
+      if (motion.matches && !takenOver) {
+        setPlaying(false);
+        setTime(REST_T);
+      }
     };
     const visibility = () => setForeground(!document.hidden);
     visibility();
     motion.addEventListener('change', stopForReducedMotion);
     document.addEventListener('visibilitychange', visibility);
     onCleanup(() => {
+      releaseTakeover?.();
       motion.removeEventListener('change', stopForReducedMotion);
       document.removeEventListener('visibilitychange', visibility);
     });
@@ -54,16 +67,21 @@ export default function HomepageCollaborativeDoc() {
     onCleanup(() => cancelAnimationFrame(id));
   });
   return (
-    <div class="homepage-collaborative-doc" ref={root}>
+    <div
+      class="homepage-collaborative-doc"
+      ref={root}
+      onPointerDown={takeOver}
+      onKeyDown={takeOver}
+    >
       <DocsGraphicFrame label="Julia's document edits. Use the version history slider below to move backward or forward through the changes.">
         <DocsMarkdownScene t={time} />
       </DocsGraphicFrame>
       <div class="homepage-doc-timeline">
         <HomepageVersionHistory
           position={time() / REST_T}
-          onPause={() => setPlaying(false)}
+          onPause={takeOver}
           onSeek={(position) => {
-            setPlaying(false);
+            takeOver();
             setTime(position * REST_T);
           }}
         />

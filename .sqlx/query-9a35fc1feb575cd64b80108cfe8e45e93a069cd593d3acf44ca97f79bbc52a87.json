@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE comms_channel_participants\n            SET left_at = now()\n            WHERE user_id = $1\n              AND left_at IS NULL\n              AND NOT EXISTS (\n                  SELECT 1\n                  FROM comms_channel_agents ca\n                  WHERE ca.channel_id = comms_channel_participants.channel_id\n                    AND ca.kind = 'direct'\n              )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9a35fc1feb575cd64b80108cfe8e45e93a069cd593d3acf44ca97f79bbc52a87"
+}

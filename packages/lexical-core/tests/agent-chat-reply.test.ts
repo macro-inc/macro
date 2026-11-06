@@ -1,10 +1,13 @@
+import type { SerializedElementNode } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import {
   AGENT_SESSION_LINK_LABEL,
+  type AgentReplySegment,
   composeAgentChatReply,
   PENDING_REPLY_TEXT,
 } from '../utils/agent-chat-reply';
 import { markdownToSerializedEditorStateWithIds } from '../utils/markdown-state';
+import { markdownToPlainText } from '../utils/parsers';
 
 const SESSION = '00000000-0000-0000-0000-00000000000a';
 const LINK = `<m-agent-session-mention>{"id":"${SESSION}","label":"${AGENT_SESSION_LINK_LABEL}"}</m-agent-session-mention>`;
@@ -66,5 +69,166 @@ describe('composeAgentChatReply', () => {
         },
       ],
     });
+  });
+});
+
+describe('composeAgentChatReply with segments', () => {
+  const rows = [
+    {
+      id: 't1',
+      label: 'Ran',
+      detail: 'cargo test',
+      status: 'completed' as const,
+    },
+    { id: 't2', label: 'Reading', status: 'running' as const },
+  ];
+
+  it('interleaves passages as written with live steps, in order', () => {
+    const markdown = composeAgentChatReply({
+      sessionId: SESSION,
+      link: false,
+      body: {
+        kind: 'segments',
+        segments: [
+          { kind: 'prose', markdown: 'Checking the **tests** first.' },
+          { kind: 'activity', turn: 3, segment: 1, rows, sealed: false },
+        ],
+      },
+    });
+    expect(markdown.startsWith('Checking the **tests** first.\n\n')).toBe(true);
+    const state = markdownToSerializedEditorStateWithIds(markdown);
+    expect(state.root.children.map((child) => child.type)).toEqual([
+      'paragraph',
+      'agent-activity',
+    ]);
+    expect(state.root.children[1]).toMatchObject({
+      agentSessionId: SESSION,
+      turn: 3,
+      segment: 1,
+      rows,
+      sealed: false,
+    });
+  });
+
+  it('reads as its passages alone in plain text', () => {
+    const markdown = composeAgentChatReply({
+      sessionId: SESSION,
+      link: false,
+      body: {
+        kind: 'segments',
+        segments: [
+          { kind: 'activity', turn: 3, segment: 0, rows, sealed: true },
+          { kind: 'prose', markdown: 'All tests pass.' },
+        ],
+      },
+    });
+    expect(markdownToPlainText(markdown)).toBe('All tests pass.');
+  });
+
+  it('shows a running thread reply working once: by its open steps, or else the spinner', () => {
+    const check = (segments: AgentReplySegment[], expected: string[]) => {
+      const markdown = composeAgentChatReply({
+        sessionId: SESSION,
+        body: { kind: 'segments', segments, pending: true },
+      });
+      const state = markdownToSerializedEditorStateWithIds(markdown);
+      expect(
+        state.root.children.map((child) =>
+          child.type === 'paragraph'
+            ? (child as SerializedElementNode).children[0]?.type
+            : child.type
+        )
+      ).toEqual(expected);
+    };
+    check(
+      [{ kind: 'activity', turn: 0, segment: 0, rows, sealed: false }],
+      ['agent-session-mention', 'agent-activity']
+    );
+    check(
+      [
+        { kind: 'activity', turn: 0, segment: 0, rows, sealed: true },
+        { kind: 'prose', markdown: 'On it.' },
+      ],
+      ['agent-session-mention', 'agent-activity', 'text', 'await']
+    );
+    check(
+      [
+        { kind: 'prose', markdown: 'On it.' },
+        { kind: 'activity', turn: 0, segment: 1, rows, sealed: true },
+      ],
+      ['agent-session-mention', 'text', 'agent-activity', 'await']
+    );
+  });
+
+  it('closes with the footer the harness wrote', () => {
+    const markdown = composeAgentChatReply({
+      sessionId: SESSION,
+      link: false,
+      body: {
+        kind: 'segments',
+        segments: [{ kind: 'prose', markdown: 'Partial answer' }],
+        footer: 'I stopped before finishing that.',
+      },
+    });
+    expect(markdown).toBe(
+      'Partial answer\n\n_I stopped before finishing that._'
+    );
+  });
+
+  it('keeps the view a step presented through the message and back', () => {
+    const rows = [
+      {
+        id: 'view_1',
+        label: 'Present view',
+        status: 'completed' as const,
+        card: {
+          kind: 'view' as const,
+          view: { title: 'Your week', widgets: [] },
+        },
+      },
+    ];
+    const markdown = composeAgentChatReply({
+      sessionId: SESSION,
+      link: false,
+      body: {
+        kind: 'segments',
+        segments: [
+          { kind: 'activity', turn: 3, segment: 0, rows, sealed: true },
+        ],
+      },
+    });
+    const state = markdownToSerializedEditorStateWithIds(markdown);
+    expect(state.root.children[0]).toMatchObject({
+      type: 'agent-activity',
+      rows,
+    });
+    expect(markdownToPlainText(markdown)).toBe('');
+  });
+
+  it('keeps the steps when a card is one this version cannot read', () => {
+    const state = markdownToSerializedEditorStateWithIds(
+      `<m-agent-activity>${JSON.stringify({
+        agentSessionId: SESSION,
+        turn: 1,
+        segment: 0,
+        sealed: true,
+        rows: [
+          {
+            id: 't1',
+            label: 'Ran',
+            status: 'completed',
+            card: { kind: 'hologram', shape: 'cube' },
+          },
+        ],
+      })}</m-agent-activity>`
+    );
+    expect(state.root.children[0]?.type).toBe('agent-activity');
+  });
+
+  it('an invalid activity payload falls back instead of breaking the message', () => {
+    const state = markdownToSerializedEditorStateWithIds(
+      '<m-agent-activity>{"agentSessionId":"x"}</m-agent-activity>'
+    );
+    expect(state.root.children[0]?.type).not.toBe('agent-activity');
   });
 });

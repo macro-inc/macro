@@ -1,7 +1,7 @@
 use super::*;
 
-const LEGACY_DOCUMENT_FILTER: &str = r#"
-    AND (
+const DOCUMENT_FILTER: &str = r#"
+    AND a.reference_url IS NULL AND (
         a.mime_type IN (
             'application/pdf',
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -17,14 +17,14 @@ const LEGACY_DOCUMENT_FILTER: &str = r#"
     )
 "#;
 
-const LEGACY_MEDIA_FILTER: &str = r#"
-    (a.mime_type LIKE 'image/%' OR a.mime_type LIKE 'video/%')
+const MEDIA_FILTER: &str = r#"
+    a.reference_url IS NULL AND (a.mime_type LIKE 'image/%' OR a.mime_type LIKE 'video/%')
 "#;
 
 #[test]
-fn generated_sql_matches_legacy_filters() {
-    assert_eq!(ATTACHMENT_MIME_TYPE_FILTERS, LEGACY_DOCUMENT_FILTER);
-    assert_eq!(ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA, LEGACY_MEDIA_FILTER);
+fn generated_sql_filters_binary_attachments_by_document_and_media_types() {
+    assert_eq!(ATTACHMENT_MIME_TYPE_FILTERS, DOCUMENT_FILTER);
+    assert_eq!(ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA, MEDIA_FILTER);
 }
 
 #[test]

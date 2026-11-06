@@ -9,14 +9,15 @@ import type {
   CommentOutline,
   CommentReplyOutline,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ChatText from '@icon/system/regular/chat-text.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import PaperPlaneRight from '@icon/system/regular/paper-plane-right.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import X from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import ChatText from '@phosphor/chat-text.svg';
-import CheckCircle from '@phosphor/check-circle.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
-import Trash from '@phosphor/trash.svg';
-import X from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
 import {
   createEffect,
@@ -60,19 +61,19 @@ function MoreMenu(props: {
       gutter={2}
     >
       <Popover.Trigger
+        aria-label={props.label}
+        tooltip={{ content: props.label, placement: 'top' }}
         as={Button}
         size="icon-sm"
         variant="ghost"
-        label={props.label}
-        tooltipPlacement="top"
         data-testid="pptx-comment-menu"
         onClick={(e: MouseEvent) => e.stopPropagation()}
       >
-        <DotsThree />
+        <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          class="z-action-menu w-48 rounded-xl border border-edge bg-menu p-1 text-ink text-xs shadow-xl outline-none"
+          class="menu-surface z-action-menu w-48 p-1 text-xs outline-none"
           onCloseAutoFocus={(e) => e.preventDefault()}
         >
           {props.children(() => setOpen(false))}
@@ -108,18 +109,18 @@ function CommentBox(props: {
   };
   const send = (
     <Button
+      aria-label={props.submitLabel}
       size={props.compact ? 'icon-sm' : 'sm'}
-      variant={props.compact ? 'ghost' : 'accent'}
-      label={props.submitLabel}
+      variant={props.compact ? 'ghost' : 'primary'}
       tooltip={`${props.submitLabel} (Ctrl+Enter)`}
       disabled={!text().trim()}
       data-testid={props.submitTestId}
       onClick={(e: MouseEvent) => {
         e.stopPropagation();
-        void submit();
+        fireAndForget(submit(), 'pptx-editor');
       }}
     >
-      <PaperPlaneRight />
+      <PaperPlaneRight class="size-4 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
   return (
@@ -149,7 +150,7 @@ function CommentBox(props: {
           e.stopPropagation();
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
-            void submit();
+            fireAndForget(submit(), 'pptx-editor');
           } else if (e.key === 'Escape') {
             e.preventDefault();
             props.onCancel?.();
@@ -335,7 +336,7 @@ export function CommentsPane(props: {
                 testId="pptx-comment-delete"
                 onClick={() => {
                   close();
-                  void c.remove(t().id);
+                  fireAndForget(c.remove(t().id), 'pptx-editor');
                 }}
               />
               <Show when={!t().legacy}>
@@ -349,7 +350,10 @@ export function CommentsPane(props: {
                   }
                   onClick={() => {
                     close();
-                    void c.resolve(t().id, !t().resolved);
+                    fireAndForget(
+                      c.resolve(t().id, !t().resolved),
+                      'pptx-editor'
+                    );
                   }}
                 />
               </Show>
@@ -388,7 +392,7 @@ export function CommentsPane(props: {
                         testId="pptx-comment-delete"
                         onClick={() => {
                           close();
-                          void c.remove(reply.id);
+                          fireAndForget(c.remove(reply.id), 'pptx-editor');
                         }}
                       />
                     </>
@@ -431,24 +435,25 @@ export function CommentsPane(props: {
         <span class="flex-1 font-semibold text-ink text-sm">Comments</span>
         <Show when={!props.readonly}>
           <Button
+            aria-label="New comment"
             size="sm"
             variant="ghost"
-            label="New comment"
             tooltip="New comment (Ctrl+Alt+M)"
             data-testid="pptx-comments-new"
             onClick={() => c.newComment()}
           >
-            <ChatText />
+            <ChatText class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             New
           </Button>
         </Show>
         <Button
+          aria-label="Close"
+          tooltip="Close"
           size="icon-sm"
           variant="ghost"
-          label="Close"
           onClick={props.onClose}
         >
-          <X />
+          <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div
@@ -487,7 +492,7 @@ export function CommentsPane(props: {
             <Show when={!props.readonly}>
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 onClick={() => c.newComment()}
               >
                 New comment

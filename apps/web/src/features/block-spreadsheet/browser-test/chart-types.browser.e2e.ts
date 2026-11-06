@@ -15,7 +15,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('[data-address="B4"]')).toHaveText('30');
   const chooser = page.waitForEvent('filechooser');
-  await menu(page, 'Import and export', 'Import…');
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
   await (await chooser).setFiles(
     fileURLToPath(
       new URL('../core/xlsx-fixtures/chart-types.xlsx', import.meta.url)
@@ -97,7 +97,10 @@ test('more chart types are inserted from the Insert menu and downloaded', async 
   await sheet(page, 'Ratings');
   await page.locator('[data-address="B3"]').click();
   await page
-    .getByRole('button', { name: 'Insert chart or image', exact: true })
+    .getByRole('button', {
+      name: 'Insert chart, image or checkbox',
+      exact: true,
+    })
     .click();
   await page.getByRole('menuitem', { name: 'More charts' }).click();
   await page
@@ -129,7 +132,7 @@ test('more chart types are inserted from the Insert menu and downloaded', async 
   await dialog.getByRole('button', { name: 'Cancel' }).click();
 
   const downloaded = page.waitForEvent('download');
-  await menu(page, 'Import and export', 'Download as Excel (.xlsx)');
+  await menu(page, 'Download', 'Download as Excel (.xlsx)');
   const path = await (await downloaded).path();
   if (!path) throw new Error('Workbook download missing');
   const files = unzipSync(new Uint8Array(readFileSync(path)));
@@ -157,7 +160,10 @@ test('100% stacked columns and combo charts are inserted from the menu', async (
   await sheet(page, 'Ratings');
   await page.locator('[data-address="B3"]').click();
   await page
-    .getByRole('button', { name: 'Insert chart or image', exact: true })
+    .getByRole('button', {
+      name: 'Insert chart, image or checkbox',
+      exact: true,
+    })
     .click();
   await page
     .getByRole('menuitem', { name: '100% stacked column', exact: true })
@@ -175,7 +181,10 @@ test('100% stacked columns and combo charts are inserted from the menu', async (
   await stacked.press('Escape');
   await page.locator('[data-address="B3"]').click();
   await page
-    .getByRole('button', { name: 'Insert chart or image', exact: true })
+    .getByRole('button', {
+      name: 'Insert chart, image or checkbox',
+      exact: true,
+    })
     .click();
   await page.getByRole('menuitem', { name: 'Column', exact: true }).click();
   const combo = page.getByRole('figure', { name: 'Chart: Chart 4' });

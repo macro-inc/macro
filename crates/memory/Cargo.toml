@@ -6,19 +6,21 @@ version = "0.1.0"
 
 
 [dependencies]
+scheduled_action = { path = "../scheduled_action" }
+async-trait = { workspace = true }
+schemars = { workspace = true }
+prompt = { path = "../prompt" }
+strum = { workspace = true }
+
 ai_billing = { path = "../ai_billing" }
 rootcause = { workspace = true }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
-ai_tools = { path = "../ai_tools" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 axum = { workspace = true }
-bots = { path = "../bots", default-features = false, features = ["outbound"] }
 chrono = { workspace = true }
-call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 futures = { workspace = true }
-macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
@@ -26,7 +28,6 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 ] }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
-reminders = { path = "../reminders", default-features = false, features = ["ports"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
@@ -36,30 +37,6 @@ tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 
-# For building ToolServiceContext
-channels = { path = "../channels", features = ["outbound"] }
-crm = { path = "../crm" }
-documents = { path = "../documents" }
-email = { path = "../email" }
-email_service_client = { path = "../email_service_client" }
-entity_access = { path = "../entity_access" }
-entity_access_management = { path = "../entity_access_management" }
-entity_registry = { path = "../entity_registry/entity_registry" }
-entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils" }
-foreign_entity = { path = "../foreign_entity" }
-github_pull_requests = { path = "../github_pull_requests" }
-frecency = { path = "../frecency" }
-lexical_client = { path = "../lexical_client" }
-macro_aws_config = { path = "../macro_aws_config" }
-notification = { path = "../notification", features = ["ai_tool"] }
-readonly_pool = { path = "../readonly_pool" }
-search_service_client = { path = "../search_service_client" }
-soup = { path = "../soup", features = ["all"] }
-sqs_client = { path = "../sqs_client", default-features = false, features = [
-  "email",
-  "gmail",
-] }
-sync_service_client = { path = "../sync_service_client" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 

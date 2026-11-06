@@ -1,4 +1,4 @@
-/** A table's typed views as the grid and board draw them, and the layouts new views start with. */
+/** A table's typed views as the grid, board and timeline draw them, and the layouts new views start with. */
 
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import type { ViewColumn } from '@service-storage/generated/schemas/viewColumn';
@@ -22,7 +22,7 @@ type LayoutColumn = {
 
 /**
  * Every column in display order: the layout's listed ones first, then the
- * rest in the table's order. A board lists none.
+ * rest in the table's order. A board or timeline lists none.
  */
 export function layoutColumns(
   layout: ViewLayout,
@@ -141,6 +141,30 @@ export function boardLayout(
   };
 }
 
+/** The date-range columns a timeline can lay its bars along. */
+export function timelineRangeColumns(
+  columns: readonly DatabaseViewColumn[]
+): DatabaseViewColumn[] {
+  return columns.filter(
+    (column) => column.dataType === 'DATE_RANGE' && !column.relation
+  );
+}
+
+/** A new timeline along `range`, its bars labelled by the first column, ungrouped, uncolored and showing no other fields. */
+export function timelineLayout(
+  range: string,
+  columns: readonly DatabaseViewColumn[]
+): ViewLayout {
+  return {
+    kind: 'timeline',
+    range,
+    title: titleColumn(columns)?.id ?? range,
+    groupBy: null,
+    barFields: [],
+    colorBy: null,
+  };
+}
+
 /** A lane as one string: for keyed lists, drop targets and comparing lanes. */
 export function laneId(lane: LaneKey): string {
   return match(lane)
@@ -198,9 +222,9 @@ export function laneValue(
 
 type BoardLayout = Extract<ViewLayout, { kind: 'board' }>;
 
-/** The column a board titles its cards by. */
+/** The column a board titles its cards, or a timeline labels its bars, by. */
 export function cardTitleColumn(
-  layout: BoardLayout,
+  layout: { title: string },
   columns: readonly DatabaseViewColumn[]
 ): DatabaseViewColumn | undefined {
   return columns.find((column) => column.id === layout.title);
@@ -252,17 +276,25 @@ function withoutColumnNode(
   return conditions.length ? { ...node, conditions } : undefined;
 }
 
+/** Why a column cannot be removed from a view, as the service refuses too. */
+export type ColumnInUse =
+  | { kind: 'board-groups-by-column' }
+  | { kind: 'timeline-spans-column' };
+
 /**
  * The view without a removed column: its conditions, sort key and layout
- * entry go. A board grouped by it has nothing else to group by, so the
- * column cannot be removed from it, as the service refuses too.
+ * entry go, and a timeline grouped or colored by it no longer is. A board
+ * grouped by it, or a timeline along it, has nothing else to lay out by, so
+ * the column cannot be removed from it.
  */
 export function withoutColumn<T extends DatabaseViewState>(
   view: T,
   columnId: string
-): Result<T, { kind: 'board-groups-by-column' }> {
+): Result<T, ColumnInUse> {
   if (view.layout.kind === 'board' && view.layout.groupBy === columnId)
     return err({ kind: 'board-groups-by-column' });
+  if (view.layout.kind === 'timeline' && view.layout.range === columnId)
+    return err({ kind: 'timeline-spans-column' });
   const filter = view.query.filter;
   const kept = filter
     ? withoutColumnNode({ kind: 'group', ...filter }, columnId)
@@ -276,18 +308,23 @@ export function withoutColumn<T extends DatabaseViewState>(
           : null,
       sort: (view.query.sort ?? []).filter((key) => key.column !== columnId),
     },
-    layout:
-      view.layout.kind === 'table'
-        ? {
-            ...view.layout,
-            columns: view.layout.columns.filter(
-              (entry) => entry.column !== columnId
-            ),
-          }
-        : {
-            ...view.layout,
-            cardFields: view.layout.cardFields.filter((id) => id !== columnId),
-          },
+    layout: match(view.layout)
+      .returnType<ViewLayout>()
+      .with({ kind: 'table' }, (layout) => ({
+        ...layout,
+        columns: layout.columns.filter((entry) => entry.column !== columnId),
+      }))
+      .with({ kind: 'board' }, (layout) => ({
+        ...layout,
+        cardFields: layout.cardFields.filter((id) => id !== columnId),
+      }))
+      .with({ kind: 'timeline' }, (layout) => ({
+        ...layout,
+        groupBy: layout.groupBy === columnId ? null : layout.groupBy,
+        barFields: (layout.barFields ?? []).filter((id) => id !== columnId),
+        colorBy: layout.colorBy === columnId ? null : layout.colorBy,
+      }))
+      .exhaustive(),
   });
 }
 

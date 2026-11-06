@@ -4,6 +4,11 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { FavoritableEntity } from '../entity';
 import {
+  MessageThread,
+  type TimelineOptions,
+  timeline,
+} from '../messages/thread';
+import {
   CrmComment,
   type CrmCommentParent,
   type CrmCommentThread,
@@ -16,6 +21,30 @@ type ContactDetail = GetContactResponses[200];
 
 /** A CRM contact: a person observed interacting with the team. */
 export class Contact extends FavoritableEntity<ContactDetail> {
+  /** A shared message thread scoped to this resource. */
+  messageThreadById(id: string): MessageThread {
+    return MessageThread.byId(
+      this.client,
+      { type: 'crm_contact', entity: this },
+      id,
+    );
+  }
+
+  /** A mixed message and activity timeline page. */
+  timelinePage(selection?: TimelineOptions<CrmComment>) {
+    return timeline(
+      this.client,
+      { type: 'crm_contact', entity: this },
+      (record) =>
+        CrmComment.from(
+          this.client,
+          { type: 'crm_contact', id: this.id },
+          record,
+        ),
+      selection,
+    );
+  }
+
   /** Favorites identify CRM contacts as `crm_contact`. */
   readonly entityType = 'crm_contact';
 
@@ -40,12 +69,12 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   /** The contact's display name, if one has been observed. */
   readonly name = this.field('name');
 
-  /** The contact's email address. */
+  /** The contact's email address; absent for a contact added by name alone. */
   readonly email = this.field('email');
 
-  /** The CRM company this contact belongs to. */
+  /** The CRM company this contact belongs to, if it has one. */
   readonly company = this.mappedField('companyId', (id) =>
-    Company.byId(this.client, id),
+    id ? Company.byId(this.client, id) : undefined,
   );
 
   /** Whether the contact is hidden from CRM listings. */

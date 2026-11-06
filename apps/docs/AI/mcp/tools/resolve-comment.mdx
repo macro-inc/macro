@@ -1,0 +1,17 @@
+---
+title: ResolveComment
+description: >-
+  Resolve or reopen a comment thread in the Discussion of a document, task,
+  Tasks project, CRM company or CRM contact on behalf of the user.
+---
+
+# ResolveComment
+
+Resolve or reopen a comment thread in the Discussion of a document, task, Tasks project, CRM company or CRM contact on behalf of the user. A thread id is enough to find its item. Only use this when explicitly asked to resolve or reopen a comment. Thread ids come from ReadDiscussion, or from ReadContent for a document.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `threadId` | string | Yes | The id of the thread to resolve or reopen. |
+| `resolved` | boolean | No | True to resolve the thread, false to reopen a resolved thread. Defaults to true. |

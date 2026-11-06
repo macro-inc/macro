@@ -1,4 +1,70 @@
-Split layout should support an arbitrary number of vertical splits.
+Splits tile like a window manager: any split can be split again beside
+(left/right) or stacked (above/below), nested to any depth.
+
+## Tiling
+
+The split router owns the tiling as a tree (`lib/split-router/panes/layout-tree.ts`):
+row and column splits whose leaves, depth-first, are the open panes in order.
+`TiledSplits` renders desktop panes from it. Every pane stays in one keyed
+list and is positioned absolutely at the rectangle `split-geometry.ts` solves,
+so splitting or closing a neighbour never moves a pane's content to another
+parent and remounts it. Keep it that way: don't nest a `Resize.Zone` per
+split. Gutters reuse `Resize`'s `Gutter` and `moveHandleShares`; sizes live in
+the tree but not in the URL. A split is at least `DEFAULT_SPLIT_MIN_WIDTH` wide
+and, stacked, `DEFAULT_SPLIT_MIN_HEIGHT` tall (`splitContentSizing.ts`).
+With desktop tabs, `SplitLayout` renders one `TiledSplits` per tab layer: the
+live layer tiles as `router.layout()`, and a parked one keeps the tiles its
+panes were parked in (`router.layoutOf`), so a background tab comes back
+stacked as it was. Only the live layer reports its area or resizes.
+
+Open beside a split with `beside: { split, side }` on `openWithSplit` or
+`createNewSplit`; without it a new split is a full-height column at the end.
+The new-split keys (`\`, `|`) and title-bar buttons open beside the active split.
+`canAppendSplit()` checks room for that column and `canSplit(id, side)` for a
+split along `side`'s axis, both against the area `TiledSplits` measured.
+A Shift-click that also holds Option (Alt) opens below the split it came from:
+`split-below-intent.ts` remembers the click, as `tab-layout/open-in-tab-intent.ts`
+does for Cmd-click. Moving panes (swap left/right, mobile bring-to-front)
+keeps the tiles and their sizes and changes which split shows where.
+
+`browser-test/` is a backend-free Playwright regression over the real router
+and `TiledSplits`:
+`bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
+
+## Opt-in view restoration
+
+`SplitLayoutProvider` owns a memory-only, account-scoped view-state store.
+A view opts in by calling `useViewRestoration()` in its stable route component.
+The default key comes from the current router location, with Agents conversations
+normalized to `agents`; pass an explicit key to override that grouping.
+
+The hook captures its current location, route state, and entry-state slices in
+`useBeforeLeave`. It stages the snapshot with the navigation's `onCommit`
+callback, so a refused, cancelled, failed, or superseded navigation cannot replace
+the saved snapshot. Solid cleanup only unregisters the hook; it never saves state.
+
+Ordinary rail, Go To, and mobile dock navigation sets `resume: true` on the existing
+layout actions. Only opted-in views resume. A mounted view can supply its current
+state directly, and the last focused instance wins when several splits show a view.
+Explicit links and new-split actions stay fresh. Native dock navigation still
+resets the pane stack, and dock Search starts a fresh session. Reload, sign-out,
+and account changes retire the saved state. Views still unmount normally.
+
+Desktop app switches skip a retained destination claimed by another pane or
+its inline preview, opening the requested root view in the target pane instead.
+Check router claims, including preview owners, before applying the snapshot;
+do not bypass entity deduplication. Native dock stack replacement still resumes
+the retained destination.
+
+Views retain local context through `useEntryState` or `registerEntryStateCaptor`.
+These slices restore through both pane Back/Forward and opted-in app switches;
+route/schema state stays separate. Restores use the existing router, including
+leave guards, middleware, URL updates, and single-owner content claims.
+
+Resolve restoration keys and initial entry-state slices from the current router
+entry, not the layout mirror: an outlet can mount before the mirror updates.
+
+The remaining notes below describe the original split layout.
 
 
 SplitLayoutRouter is responsible for handling the routing of the splits.
@@ -56,3 +122,10 @@ TODO AFTER:
 - [ ] useBeforeLeave won't work as expected going forward, since we use the split layout as the source of truth.
       Lots of places use `isLeavingCurrentBlock` to run some side effects, we need to abstract this under the split
       Might need something like `useBeforeSplitClose` or `useBeforeBlockClose`
+
+## Priority collapse
+
+Split headers and toolbars create their own controllers from
+`src/components/priority-collapse/`. `layoutUtils.ts` keeps only the
+split-specific header and toolbar registration wrappers; other rows register
+with the shared controller directly.

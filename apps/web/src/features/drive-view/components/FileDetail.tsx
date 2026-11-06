@@ -1,21 +1,33 @@
 import {
+  DocumentAccessDenied,
+  useSharedAccessUpdates,
+} from '@app/features/access-requests/access-requests';
+import { shareEntity } from '@app/features/access-requests/core/types';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFlow, usePending } from '@app/observability/flow';
+import {
   DocumentFileSidePanelSections,
   SidePanel,
 } from '@components/app/side-panel';
+import { toEntityLoadError } from '@core/component/EntityLoadGate';
 import {
   getPermissions,
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import type { Span } from '@macro-inc/observability';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { Button } from '@ui';
 import {
+  createEffect,
   createResource,
   ErrorBoundary,
   type JSX,
   Match,
+  onCleanup,
   type ParentProps,
   Suspense,
   Switch,
@@ -62,6 +74,7 @@ function FileDetailBodyState(props: {
       <Switch
         fallback={
           <SpinnerIcon
+            aria-hidden={false}
             aria-label={`Loading ${props.label}`}
             class="size-5 animate-spin"
           />
@@ -76,7 +89,7 @@ function FileDetailBodyState(props: {
             <pre class="max-h-48 max-w-full overflow-auto whitespace-pre-wrap text-left text-failure text-xs">
               {String(props.error)}
             </pre>
-            <Button variant="outline" size="sm" onClick={props.onAction}>
+            <Button variant="secondary" size="sm" onClick={props.onAction}>
               {props.actionLabel ?? 'Reset'}
             </Button>
           </div>
@@ -86,45 +99,145 @@ function FileDetailBodyState(props: {
   );
 }
 
-export function FileDetailLoadGate<T extends object>(props: {
+export function FileDetailLoadGate<
+  T extends { userAccessLevel: AccessLevel },
+>(props: {
   documentId: string;
+  /** The block the document opens as, reported on `open_entity`. */
+  entityType: string;
   label: string;
-  load: (documentId: string) => Promise<T>;
+  load: (documentId: string, parentSpan?: Span) => Promise<T>;
+  /**
+   * Releases what a load opened, such as a markdown document's sync source,
+   * once its result can no longer be shown: its content replaced or removed,
+   * superseded by a newer load, resolved after the gate unmounted, or on
+   * unmount.
+   */
+  dispose?: (data: T) => void;
   children: (data: T) => JSX.Element;
 }) {
-  const [document, { refetch }] = createResource(
+  const analytics = useAnalytics();
+  const flow = useFlow();
+  // Shown results are released when their content is disposed (after the
+  // editor it rendered); the rest here. Each result is released once.
+  const released = new WeakSet<T>();
+  const release = (data: T | undefined) => {
+    if (data === undefined || released.has(data)) return;
+    released.add(data);
+    props.dispose?.(data);
+  };
+  let unmounted = false;
+  let latestLoad = 0;
+  let current: T | undefined;
+  const load = async (documentId: string): Promise<T | undefined> => {
+    const request = ++latestLoad;
+    const data = await flow.task('document.load', (span) => {
+      span.setAttr('doc.type', props.entityType);
+      span.setAttr('document.id', documentId);
+      return props.load(documentId, span);
+    });
+    // The resource ignores a superseded result; one unloaded while pending
+    // (access revoked) must not become current either, so a later grant finds
+    // nothing loaded and reloads. Nothing will show it, so release it now.
+    if (unmounted || request !== latestLoad) {
+      release(data);
+      return undefined;
+    }
+    current = data;
+    return data;
+  };
+  const unload = () => {
+    latestLoad++;
+    const previous = current;
+    current = undefined;
+    mutate(undefined);
+    release(previous);
+  };
+  onCleanup(() => {
+    unmounted = true;
+    release(current);
+  });
+  const [document, { refetch, mutate }] = createResource(
     () => props.documentId,
-    props.load
+    load
   );
+  usePending('document.resource', () => document.loading);
+  // Counts the open once per document, as BlockLoader does for blocks; access
+  // changes and retries reload the same document without reopening it.
+  let trackedDocumentId: string | undefined;
+  createEffect(() => {
+    if (document.state !== 'ready') return;
+    const documentId = props.documentId;
+    if (trackedDocumentId === documentId) return;
+    trackedDocumentId = documentId;
+    analytics.pageView(props.entityType);
+    analytics.track('open_entity', {
+      entityType: props.entityType,
+      entityId: documentId,
+    });
+  });
+  const reload = () => {
+    // Dispose the old editor and its sync source before loading a new token.
+    unload();
+    fireAndForget(refetch(), 'drive-view');
+  };
+  const sharedAccess = useSharedAccessUpdates(
+    () => shareEntity('document', props.documentId),
+    (level) => {
+      if (level === null) {
+        unload();
+        return;
+      }
+      const loaded = document.state === 'ready' ? document.latest : undefined;
+      if (loaded?.userAccessLevel !== level) reload();
+    }
+  );
+  const accessDenied = () => {
+    if (sharedAccess() === null) return true;
+    const error = toEntityLoadError(document.error);
+    return error === 'UNAUTHORIZED' || error === 'FORBIDDEN';
+  };
 
   return (
     <Suspense fallback={<FileDetailBodyState label={props.label} />}>
       <Switch>
+        <Match when={accessDenied()}>
+          <DocumentAccessDenied
+            documentId={props.documentId}
+            onAccessGranted={() => {
+              if (document.error) reload();
+            }}
+          />
+        </Match>
         <Match when={document.error}>
           {(error) => (
             <FileDetailBodyState
               label={props.label}
               error={error()}
               actionLabel="Try again"
-              onAction={() => void refetch()}
+              onAction={() => fireAndForget(refetch(), 'drive-view')}
             />
           )}
         </Match>
-        <Match when={document()}>
-          {(data) => (
-            <ErrorBoundary
-              fallback={(error, reset) => (
-                <FileDetailBodyState
-                  label={props.label}
-                  error={error}
-                  actionLabel="Reset"
-                  onAction={reset}
-                />
-              )}
-            >
-              {props.children(data())}
-            </ErrorBoundary>
-          )}
+        <Match when={document()} keyed>
+          {(data) => {
+            // Runs after this content, and the editor it renders, is disposed.
+            onCleanup(() => release(data));
+            return (
+              <ErrorBoundary
+                fallback={(error, reset) => (
+                  <FileDetailBodyState
+                    label={props.label}
+                    error={error}
+                    actionLabel="Reset"
+                    onAction={reset}
+                  />
+                )}
+              >
+                {props.children(data)}
+              </ErrorBoundary>
+            );
+          }}
         </Match>
       </Switch>
     </Suspense>

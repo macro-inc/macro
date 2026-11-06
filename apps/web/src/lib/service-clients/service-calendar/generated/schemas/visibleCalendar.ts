@@ -4,7 +4,8 @@
  * calendar_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { CalendarCapabilities } from './calendarCapabilities';
+import type { CalendarProvider } from './calendarProvider';
 import type { EventReminderOverride } from './eventReminderOverride';
 import type { VisibleCalendarColor } from './visibleCalendarColor';
 import type { VisibleCalendarSyncError } from './visibleCalendarSyncError';
@@ -13,8 +14,15 @@ import type { VisibleCalendarSyncError } from './visibleCalendarSyncError';
  * A calendar visible to a requester, listed for pickers and filters.
  */
 export interface VisibleCalendar {
+  /** Provider features available on this actual calendar. */
+  capabilities: CalendarCapabilities;
   /** Provider color. */
   color?: VisibleCalendarColor;
+  /** Whether this calendar counts toward the requester's busy time: their
+setting, by default only the primary calendars of inboxes they own.
+The nearest thing to "this is the requester's own": a provider's
+access role only says what they may do, on a colleague's calendar too. */
+  contributesToAvailability?: boolean;
   /** Default reminders applied to events that keep `useDefault`. */
   defaultReminders: EventReminderOverride[];
   /** Connected inbox address, for grouping in multi-inbox pickers. */
@@ -32,6 +40,8 @@ birthdays) the account subscribes to rather than one a person maintains. */
   isWritable: boolean;
   /** Provider display name. */
   name: string;
+  /** Calendar provider, for display and reconnect routing. */
+  provider: CalendarProvider;
   /** A persistent sync failure isolated to this calendar, surfaced so the
 settings row can badge it. `None` while the calendar is syncing
 normally or a failure has not yet crossed the persistence threshold. */

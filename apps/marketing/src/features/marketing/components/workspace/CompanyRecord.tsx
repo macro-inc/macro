@@ -1,3 +1,4 @@
+import ArrowLeft from '@phosphor/arrow-left.svg';
 import BuildingOffice from '@phosphor/building-office.svg';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
@@ -11,6 +12,7 @@ import Files from '@phosphor/files.svg';
 import Globe from '@phosphor/globe.svg';
 import LinkIcon from '@phosphor/link.svg';
 import ListBullets from '@phosphor/list-bullets.svg';
+import ListChecks from '@phosphor/list-checks.svg';
 import Phone from '@phosphor/phone.svg';
 import PhoneCall from '@phosphor/phone-call.svg';
 import Plus from '@phosphor/plus.svg';
@@ -30,6 +32,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import type {
   WorkspaceComment,
   WorkspaceView,
@@ -45,6 +48,7 @@ import {
   type SampleCompany,
 } from '../../core/workspace-fixtures';
 import type { DummyWorkspace } from '../../primitives/createDummyWorkspace';
+import type { ChannelComposerHandle } from '../email/frozen/ChannelComposer';
 import { ChannelComposer } from '../email/frozen/ChannelComposer';
 import { SearchBar } from '../email/frozen/SearchBar';
 import { PanelGrid, PanelRow } from './frozen/DetailPanel';
@@ -168,6 +172,8 @@ function Description(props: { text: string }) {
 function Discussion(props: {
   comments: WorkspaceComment[];
   onChange: (comments: WorkspaceComment[]) => void;
+  onComposerReady?: (handle: ChannelComposerHandle | undefined) => void;
+  richComposer?: boolean;
 }) {
   const [expanded, setExpanded] = createSignal(true);
   const [replying, setReplying] = createSignal<string>();
@@ -297,6 +303,8 @@ function Discussion(props: {
         <div class="mt-4" data-discussion-composer>
           <ChannelComposer
             label="Comment on company"
+            richMentions={props.richComposer}
+            onReady={props.onComposerReady}
             placeholder="Leave a comment..."
             onSend={(body) => send(body)}
           />
@@ -706,7 +714,10 @@ function CompanyTeam(props: { company: SampleCompany }) {
   );
 }
 
-function CompanyTasks(props: { company: SampleCompany }) {
+function CompanyTasks(props: {
+  company: SampleCompany;
+  onOpen?: (id: string) => void;
+}) {
   const [search, setSearch] = createSignal('');
   const tasks = () =>
     (props.company.tasks ?? []).filter((task) =>
@@ -753,10 +764,15 @@ function CompanyTasks(props: { company: SampleCompany }) {
                 </div>
                 <For each={group.tasks}>
                   {(task) => (
-                    <div class="sample-record-task">
-                      <PropertyValueIcon
-                        optionId={STATUS_IDS[task.status]}
-                        class="size-4"
+                    <Dynamic
+                      component={props.onOpen ? 'button' : 'div'}
+                      type={props.onOpen ? 'button' : undefined}
+                      class="sample-record-task"
+                      onClick={() => props.onOpen?.(task.id)}
+                    >
+                      <ListChecks
+                        class="size-4 shrink-0 text-task"
+                        aria-label="Task"
                       />
                       <span class="truncate font-medium">{task.title}</span>
                       <span class="sample-record-task-priority">
@@ -770,7 +786,7 @@ function CompanyTasks(props: { company: SampleCompany }) {
                         <PersonIcon person={task.owner} />
                         <span>{homepagePeople[task.owner].shortName}</span>
                       </span>
-                    </div>
+                    </Dynamic>
                   )}
                 </For>
               </>
@@ -814,6 +830,12 @@ export function CompanyRecord(props: {
   panelOpen: boolean;
   onPanelChange: (open: boolean) => void;
   onOpenItem: (view: WorkspaceView, id: string) => void;
+  pipeline?: JSX.Element;
+  onComposerReady?: (handle: ChannelComposerHandle | undefined) => void;
+  richComposer?: boolean;
+  hideCopyLink?: boolean;
+  onOpenCall?: (id: string) => void;
+  onOpenTask?: (id: string) => void;
 }) {
   const w = props.workspace;
   const update = (patch: Partial<SampleCompany>) =>
@@ -839,6 +861,15 @@ export function CompanyRecord(props: {
       data-panel-open={props.panelOpen ? 'true' : 'false'}
     >
       <div class="sample-company-topbar">
+        <Button
+          class="sample-company-mobile-back"
+          variant="ghost"
+          size="icon-sm"
+          label={`Back to ${w.companyFilter()}`}
+          onClick={() => w.open('crm')}
+        >
+          <ArrowLeft />
+        </Button>
         <nav aria-label="CRM record location" class="sample-company-crumbs">
           <button
             type="button"
@@ -885,22 +916,24 @@ export function CompanyRecord(props: {
           />
         </div>
         <div class="ml-auto flex shrink-0 items-center gap-1">
-          <Button
-            variant="outline"
-            size="sm"
-            class="sample-company-copy shrink-0 bg-surface"
-            label="Copy company link"
-            onClick={() =>
-              void navigator.clipboard
-                ?.writeText(
-                  `${location.origin}/demo#company-${props.company.id}`
-                )
-                .catch(() => {})
-            }
-          >
-            <LinkIcon class="size-3.5" />
-            <span>Copy link</span>
-          </Button>
+          <Show when={!props.hideCopyLink}>
+            <Button
+              variant="outline"
+              size="sm"
+              class="sample-company-copy shrink-0 bg-surface"
+              label="Copy company link"
+              onClick={() =>
+                void navigator.clipboard
+                  ?.writeText(
+                    `${location.origin}/demo#company-${props.company.id}`
+                  )
+                  .catch(() => {})
+              }
+            >
+              <LinkIcon class="size-3.5" />
+              <span>Copy link</span>
+            </Button>
+          </Show>
           <Button
             variant="ghost"
             size="icon-md"
@@ -950,7 +983,10 @@ export function CompanyRecord(props: {
                   {(text) => <Description text={text()} />}
                 </Show>
               </div>
+              {props.pipeline}
               <Discussion
+                onComposerReady={props.onComposerReady}
+                richComposer={props.richComposer}
                 comments={props.company.comments}
                 onChange={(comments) => update({ comments })}
               />
@@ -1007,7 +1043,7 @@ export function CompanyRecord(props: {
           </RecordSection>
         </Show>
         <Show when={props.section === 'tasks'}>
-          <CompanyTasks company={props.company} />
+          <CompanyTasks company={props.company} onOpen={props.onOpenTask} />
         </Show>
         <Show when={props.section === 'calls'}>
           <RecordSection title="Calls">
@@ -1023,6 +1059,11 @@ export function CompanyRecord(props: {
                         <PhoneCall class="size-4 shrink-0 text-ink-muted" />
                       }
                       title={call.title}
+                      onOpen={
+                        props.onOpenCall
+                          ? () => props.onOpenCall?.(call.id)
+                          : undefined
+                      }
                       label={`${call.title} ${call.time}`}
                       detail={
                         <>

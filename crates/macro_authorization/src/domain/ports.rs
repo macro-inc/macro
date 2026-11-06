@@ -4,9 +4,10 @@ use model_user::UserContext;
 use rootcause::Report;
 
 use super::models::{
-    BotActingUserClaims, BotAuthentication, BotScope, BotTokenAuthorization, HarnessAuthentication,
-    HarnessTokenAuthorization, InternalIdentityClaims, MacroAuthorizationError, ResolvedApiKeyUser,
-    ResolvedBotActingUser, ValidatedIdentity,
+    AuthorizedUserApiKey, BotActingUserClaims, BotAuthentication, BotScope, BotTokenAuthorization,
+    HarnessAuthentication, HarnessTokenAuthorization, InternalIdentityClaims,
+    MacroAuthorizationError, ResolvedApiKeyUser, ResolvedBotActingUser, ValidatedCredential,
+    ValidatedIdentity,
 };
 use uuid::Uuid;
 
@@ -78,15 +79,21 @@ pub trait UserApiKeyAuthorizationRepo: Clone + Send + Sync + 'static {
         &self,
         api_key: &str,
     ) -> impl Future<Output = Result<Option<ResolvedApiKeyUser>, Self::Err>> + Send;
+
+    /// Record that an account manager credential was just used.
+    fn mark_account_manager_grant_used(
+        &self,
+        grant_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Validates user API key credentials and resolves the owner's identity.
 pub trait UserApiKeyAuthorizer: Clone + Send + Sync + 'static {
-    /// Authorize a user API key and return the owner's user context.
+    /// Authorize a user API key and return the account it acts as.
     fn authorize_user_api_key(
         &self,
         api_key: &str,
-    ) -> impl Future<Output = Result<UserContext, Report<MacroAuthorizationError>>> + Send;
+    ) -> impl Future<Output = Result<AuthorizedUserApiKey, Report<MacroAuthorizationError>>> + Send;
 }
 
 /// User API key authorizer used by services that do not support this credential.
@@ -97,7 +104,7 @@ impl UserApiKeyAuthorizer for NoUserApiKeyAuthorizer {
     async fn authorize_user_api_key(
         &self,
         _api_key: &str,
-    ) -> Result<UserContext, Report<MacroAuthorizationError>> {
+    ) -> Result<AuthorizedUserApiKey, Report<MacroAuthorizationError>> {
         Err(Report::new(MacroAuthorizationError::InvalidCredentials))
     }
 }
@@ -166,8 +173,19 @@ impl HarnessAuthorizer for NoHarnessAuthorizer {
 /// Implementations resolve any required secrets during startup, allowing this
 /// operation to remain synchronous.
 pub trait JwtValidator: Clone + Send + Sync + 'static {
+    /// Validate a credential and return its identity together with the kind
+    /// of credential it was, derived from the cryptographically validated
+    /// token, never from request hints.
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>>;
+
     /// Validate a credential and return its transport-independent identity.
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>>;
+    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+        self.validate_credential(jwt)
+            .map(|credential| credential.identity)
+    }
 }
 
 /// Authorizes credentials and constructs application user contexts.
@@ -180,6 +198,14 @@ pub trait MacroAuthorizationService: Clone + Send + Sync + 'static {
         &self,
         jwt: &str,
     ) -> impl Future<Output = Result<UserContext, Report<MacroAuthorizationError>>> + Send;
+
+    /// Authorize a user credential while retaining its verified origin and
+    /// signed agent attribution. Every authorizer states the origin of the
+    /// credentials it accepts; there is no default that assumes a session.
+    fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> impl Future<Output = Result<ValidatedCredential, Report<MacroAuthorizationError>>> + Send;
 
     /// Authorize a bot token, verifying any acting-user claims.
     ///
@@ -218,14 +244,15 @@ pub trait MacroAuthorizationService: Clone + Send + Sync + 'static {
         claims: InternalIdentityClaims,
     ) -> impl Future<Output = Result<Option<UserContext>, Report<MacroAuthorizationError>>> + Send;
 
-    /// Authorize a user API key and return the owner's user context.
+    /// Authorize a user API key and return the account it acts as.
     ///
     /// Services reject user API keys unless they explicitly provide a user API
     /// key authorizer.
     fn authorize_user_api_key(
         &self,
         _api_key: &str,
-    ) -> impl Future<Output = Result<UserContext, Report<MacroAuthorizationError>>> + Send {
+    ) -> impl Future<Output = Result<AuthorizedUserApiKey, Report<MacroAuthorizationError>>> + Send
+    {
         async { Err(Report::new(MacroAuthorizationError::InvalidCredentials)) }
     }
 }

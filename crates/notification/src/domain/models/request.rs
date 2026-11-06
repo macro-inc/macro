@@ -1,8 +1,8 @@
 //! Request and response models for the notification service.
 
 use crate::domain::models::{
-    ExclusionReason, FilteredRecipient, Notification, NotificationExtEmail, NotificationExtIos,
-    RecipientExclusion, TaggedContent,
+    ExclusionReason, FilteredRecipient, MobilePushRecipients, Notification, NotificationExtEmail,
+    NotificationExtIos, RecipientExclusion, TaggedContent,
     apple::APNSPushNotification,
     mobile::{self, MessageAttributes},
     queue_message::EmailCreateBundle,
@@ -86,6 +86,7 @@ where
             build_apns: None,
             build_email: None,
             send_conn_gateway: false,
+            mobile_push_exclusions: MobilePushRecipients::default(),
         }
     }
 }
@@ -111,6 +112,9 @@ pub struct SendNotificationRequest<'a, T, U> {
     pub(crate) build_email: Option<EmailCreateBundle>,
     /// connection gateway accepts arbitrary json so we just ask if its enabled or not
     pub(crate) send_conn_gateway: bool,
+    /// Platforms already handled by another delivery path for these recipients.
+    #[serde(default)]
+    pub(crate) mobile_push_exclusions: MobilePushRecipients,
 }
 
 impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
@@ -122,6 +126,7 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             build_email,
             uuid_to_write,
             send_conn_gateway,
+            mobile_push_exclusions,
         } = self;
 
         let sender = req.sender_id.clone().map(CowLike::into_owned);
@@ -152,11 +157,31 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             build_apns,
             build_email,
             send_conn_gateway,
+            mobile_push_exclusions,
         }
     }
 }
 
 impl<'a, T: NotificationExtEmail, U> SendNotificationRequest<'a, T, U> {
+    /// Deliver one user's notification to a connected address verified by the
+    /// producing domain. Recipient preference/access filtering still uses the
+    /// actual Macro user. Multi-recipient redirection is deliberately rejected.
+    pub fn with_email_destination(
+        mut self,
+        owner: &MacroUserIdStr<'_>,
+        destination: MacroUserIdStr<'static>,
+    ) -> Result<Self, rootcause::Report> {
+        if self.req.recipient_ids.len() != 1 || !self.req.recipient_ids.contains(owner) {
+            return Err(rootcause::report!(
+                "An email destination requires one matching notification recipient"
+            ));
+        }
+        self.build_email = Some(
+            EmailCreateBundle::new(&self.req.notification.content).with_destination(destination),
+        );
+        Ok(self)
+    }
+
     /// Add a custom email content builder.
     pub fn with_email(mut self) -> Self {
         self.build_email = Some(EmailCreateBundle::new(&self.req.notification.content));
@@ -173,6 +198,14 @@ impl<'a, T: Notification, U> SendNotificationRequest<'a, T, U> {
 }
 
 impl<'a, T, U> SendNotificationRequest<'a, T, U> {
+    /// Skip ordinary mobile alerts for recipients already handled on that platform.
+    /// Android exclusions apply only to devices registered with native call support;
+    /// older APKs always retain ordinary alerts. Other channels and persistence are unchanged.
+    pub fn with_mobile_push_exclusions(mut self, recipients: MobilePushRecipients) -> Self {
+        self.mobile_push_exclusions = recipients;
+        self
+    }
+
     pub(crate) fn update_recipients(
         mut self,
         muted_users: HashSet<MacroUserIdStr<'a>>,

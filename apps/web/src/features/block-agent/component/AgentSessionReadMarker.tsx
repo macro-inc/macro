@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { markNotificationsForEntityAsRead } from '@notifications/notification-helpers';
 import type { NotificationSource } from '@notifications/notification-source';
 import { compositeEntity } from '@notifications/types';
@@ -48,7 +49,10 @@ function ActiveSessionReadMarker(props: {
       );
     }
   };
-  const scheduleRead = debounce(() => void markRead(), 2_000);
+  const scheduleRead = debounce(
+    () => fireAndForget(markRead(), 'agent-session'),
+    2_000
+  );
 
   // Notification loading and incoming updates can happen after the session
   // mounts. Observe those external events for the lifetime of the active view;

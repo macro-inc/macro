@@ -19,6 +19,7 @@
  * rows the socket delivers after it are appended to the cached copy here.
  */
 
+import { analytics } from '@app/lib/analytics';
 import {
   AgentFoldWorkerUnavailable,
   closeSession,
@@ -27,6 +28,7 @@ import {
   readSession,
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   AgentSessionLogUnavailable,
   canFollowAgentSessionLog,
@@ -50,6 +52,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { CombinedError } from '@urql/core';
+import { err, ok, type Result } from 'neverthrow';
 import { v7 as uuidv7 } from 'uuid';
 import {
   type LoadFailure,
@@ -171,14 +174,22 @@ export class AgentSession {
   /**
    * The shared instance for `id`, created on first acquisition. Every
    * acquisition needs a matching {@link release}; the last one closes the
-   * machine and drops the subscriptions.
+   * machine and drops the subscriptions. `hold` keeps a session open for a
+   * later view without being one, so it is not traced as an open.
    */
-  static acquire(id: string): AgentSession {
+  static acquire(id: string, purpose: 'view' | 'hold' = 'view'): AgentSession {
     const open = AgentSession.open.get(id);
     const session = open ?? new AgentSession(id);
     AgentSession.open.set(id, session);
     session.references += 1;
+    if (purpose === 'hold') return session;
     traceAcquire(id, open === undefined, session.references);
+    // A surface opening a session that is already folded waits for nothing;
+    // its render is measured from now, not from the load long ago.
+    if (session.loaded) {
+      session.trace = new SessionLoadTrace(id);
+      session.trace.end('reused');
+    }
     return session;
   }
 
@@ -198,8 +209,11 @@ export class AgentSession {
   static ingest(event: AgentSessionLogEvent): void {
     const session = AgentSession.open.get(event.agentSessionId);
     if (!session || session.followed) return;
-    void session.enqueueAll(
-      event.entries.map((row) => ({ kind: 'confirmed', row }))
+    fireAndForget(
+      session.enqueueAll(
+        event.entries.map((row) => ({ kind: 'confirmed', row }))
+      ),
+      'agent-session'
     );
   }
 
@@ -236,7 +250,8 @@ export class AgentSession {
   private readonly unsubscribeSocket: () => void;
   private readonly unsubscribeUpdated: () => void;
   private readonly unsubscribeReconnected: () => void;
-  private syncing = false;
+  /** The refetch in flight; it loops while another is requested. */
+  private syncRun?: Promise<void>;
   private resyncRequested = false;
   private resyncRetry = 0;
   private resyncTimer?: ReturnType<typeof setTimeout>;
@@ -259,6 +274,11 @@ export class AgentSession {
   /** Prompts issued here still waiting for their first output. */
   private readonly prompts = new Set<PromptTrace>();
 
+  /** The fetched log is folded and live rows go straight in. */
+  get loaded(): boolean {
+    return this.ready && !this.loadFailed;
+  }
+
   private setTurn(turn: TurnState | undefined): void {
     const next = turn ?? 'idle';
     this.turn = next;
@@ -270,15 +290,18 @@ export class AgentSession {
     // Subscribed before the fetch so no row between the two is lost: rows
     // that arrive during the load are buffered and folded after the snapshot.
     this.unsubscribeSocket = subscribeSocketSessionStarted(() => {
-      void this.resync();
+      fireAndForget(this.resync(), 'agent-session');
     });
     this.unsubscribeUpdated = subscribeAgentSessionUpdated((event) => {
-      if (event.agentSessionId === this.id) void this.resync();
+      if (event.agentSessionId === this.id)
+        fireAndForget(this.resync(), 'agent-session');
     });
     // The subscription survives a reconnect, but not the rows published
     // while the socket was down.
     this.unsubscribeReconnected = this.followed
-      ? subscribeGraphqlSoupReconnected(() => void this.resync())
+      ? subscribeGraphqlSoupReconnected(() =>
+          fireAndForget(this.resync(), 'agent-session')
+        )
       : () => undefined;
     this.trace = new SessionLoadTrace(id);
     this.watch = this.openWatch();
@@ -303,11 +326,14 @@ export class AgentSession {
       this.followed
         ? {
             rows: (rows) => {
-              void this.enqueueAll(
-                rows.map((row) => ({ kind: 'confirmed', row }))
+              fireAndForget(
+                this.enqueueAll(
+                  rows.map((row) => ({ kind: 'confirmed', row }))
+                ),
+                'agent-session'
               );
             },
-            gap: () => void this.resync(),
+            gap: () => fireAndForget(this.resync(), 'agent-session'),
           }
         : undefined
     );
@@ -343,6 +369,19 @@ export class AgentSession {
    * afresh. The old watch is stopped first: its rows belong to a load that
    * is no longer the one in flight.
    */
+  /**
+   * Read the session row again, for a surface reopening a session that was
+   * held open since an earlier view: the fold is current, the row may not
+   * be. A refusal forgets the cached log, as a load's does.
+   */
+  async readRow(): Promise<Result<AgentSessionResponse, 'denied' | 'failed'>> {
+    const row = await agentHarnessServiceClient.get(this.id);
+    if (row.isOk()) return ok(row.value);
+    if (!accessDenied(row.error)) return err('failed');
+    this.forgetCached();
+    return err('denied');
+  }
+
   private reissueReads(): void {
     this.watch.stop();
     this.watch = this.openWatch();
@@ -382,12 +421,15 @@ export class AgentSession {
       // window would both speculate - the second one showing a bubble the
       // server's `queued` then takes away again.
       if (occupiesTurn(action)) this.setTurn('starting');
-      void this.enqueue({
-        kind: 'speculated',
-        actionId,
-        action,
-        userId: options.userId,
-      });
+      fireAndForget(
+        this.enqueue({
+          kind: 'speculated',
+          actionId,
+          action,
+          userId: options.userId,
+        }),
+        'agent-session'
+      );
     }
 
     // The harness adopts the id the client speculated under; the response
@@ -399,29 +441,38 @@ export class AgentSession {
 
     if (!speculated) return result;
     if (result.isErr()) {
-      void this.enqueue({ kind: 'retracted', actionId });
+      fireAndForget(
+        this.enqueue({ kind: 'retracted', actionId }),
+        'agent-session'
+      );
       return result;
     }
     // Queued after all: the turn opened between the check and the POST. The
     // harness logs the row only when the queue dispatches it, so holding the
     // speculation would show an open turn for the whole wait.
     if (result.value.status === 'queued') {
-      void this.enqueue({ kind: 'retracted', actionId });
+      fireAndForget(
+        this.enqueue({ kind: 'retracted', actionId }),
+        'agent-session'
+      );
       return result;
     }
     // A stop is a notification and carries no id on the wire, so the log
     // confirms it by content whatever id the harness accepted it under.
     const accepted = result.value.actionId;
     if (accepted !== actionId && action.type !== 'stop') {
-      void this.enqueueAll([
-        { kind: 'retracted', actionId },
-        {
-          kind: 'speculated',
-          actionId: accepted,
-          action,
-          userId: options.userId,
-        },
-      ]);
+      fireAndForget(
+        this.enqueueAll([
+          { kind: 'retracted', actionId },
+          {
+            kind: 'speculated',
+            actionId: accepted,
+            action,
+            userId: options.userId,
+          },
+        ]),
+        'agent-session'
+      );
     }
     return result;
   }
@@ -448,7 +499,14 @@ export class AgentSession {
           new Error(result.error.map((error) => error.message).join(' '))
         );
       } else {
-        trace.accepted(result.value.actionId, result.value.status === 'queued');
+        const queued = result.value.status === 'queued';
+        trace.accepted(result.value.actionId, queued);
+        const attachments =
+          request.type === 'prompt' ? (request.attachments?.length ?? 0) : 0;
+        fireAndForget(
+          this.trackPromptSent(trace, queued, attachments),
+          'agent-session'
+        );
       }
       return result;
     } catch (error) {
@@ -459,6 +517,28 @@ export class AgentSession {
       if (this.closed) trace.end('released');
       if (trace.ended) this.prompts.delete(trace);
     }
+  }
+
+  /**
+   * Count an accepted prompt as an AI message, with the files it carries as
+   * `attachmentCount`, as the retired AI chat reported its messages, so AI
+   * engagement keeps one definition across both.
+   */
+  private async trackPromptSent(
+    trace: PromptTrace,
+    queued: boolean,
+    attachmentCount: number
+  ): Promise<void> {
+    const row = await this.sessionRow;
+    analytics.track('ai_message_sent', {
+      surface: 'agent',
+      agentSessionId: this.id,
+      agentId: row.isOk() ? row.value.botId : undefined,
+      newSession: trace.newSession,
+      submitSurface: trace.submitSurface,
+      queued,
+      attachmentCount,
+    });
   }
 
   /**
@@ -475,17 +555,43 @@ export class AgentSession {
     options: { userId?: string } = {}
   ): void {
     if (occupiesTurn(action)) this.setTurn('starting');
-    void this.enqueue({
-      kind: 'speculated',
-      actionId,
-      action,
-      userId: options.userId,
-    });
+    fireAndForget(
+      this.enqueue({
+        kind: 'speculated',
+        actionId,
+        action,
+        userId: options.userId,
+      }),
+      'agent-session'
+    );
+  }
+
+  /**
+   * Show a prompt another request already delivered - the create that opened
+   * this session can carry its first one - and trace it to its first output.
+   * Nothing is sent: the delivery named `actionId`, so the confirmed row
+   * promotes this speculation in place, or, having landed first, makes it a
+   * no-op.
+   */
+  adoptPrompt(
+    actionId: string,
+    action: AgentAction,
+    options: { userId?: string; trace: PromptTrace }
+  ): void {
+    this.expect(actionId, action, { userId: options.userId });
+    if (this.closed) {
+      options.trace.end('released');
+      return;
+    }
+    this.prompts.add(options.trace);
   }
 
   /** Take back a speculation the log will not confirm. Unknown ids are a no-op. */
   retract(actionId: string): void {
-    void this.enqueue({ kind: 'retracted', actionId });
+    fireAndForget(
+      this.enqueue({ kind: 'retracted', actionId }),
+      'agent-session'
+    );
   }
 
   /**
@@ -735,7 +841,7 @@ export class AgentSession {
       );
       throw error;
     }
-    if (this.resyncRequested) void this.resync();
+    if (this.resyncRequested) fireAndForget(this.resync(), 'agent-session');
     return { session: session.value, bot: log.log.bot };
   }
 
@@ -748,19 +854,45 @@ export class AgentSession {
   }
 
   /**
+   * Refetch the log and fold it, resolving once a fetch that started after
+   * this call has been folded. For a caller that has waited on a row the
+   * live feed should have delivered: the log itself settles the question.
+   * A failed fetch resolves too, leaving the fold as it was.
+   */
+  refresh(): Promise<void> {
+    return this.resync();
+  }
+
+  /**
    * A reopened socket is a new socket session: rows may have been missed
    * while it was down. Refetch, and let the machine reconcile the overlap
    * and settle any speculation the log confirmed meanwhile.
    */
-  private async resync(retrying = false): Promise<void> {
-    if (this.closed) return;
+  private resync(retrying = false): Promise<void> {
+    if (this.closed) return Promise.resolve();
     if (!retrying) {
       clearTimeout(this.resyncTimer);
       this.resyncRetry = 0;
     }
     this.resyncRequested = true;
-    if (!this.ready || this.syncing) return;
-    this.syncing = true;
+    // The run in flight fetches again before it ends.
+    if (this.syncRun) return this.syncRun;
+    if (!this.ready) return this.afterLoad();
+    this.syncRun = this.runResync();
+    return this.syncRun;
+  }
+
+  /** The load in flight starts a run after its snapshot; a failed one never does. */
+  private async afterLoad(): Promise<void> {
+    try {
+      await this.loading;
+    } catch {
+      return;
+    }
+    await this.syncRun;
+  }
+
+  private async runResync(): Promise<void> {
     this.ready = false;
     let failed = false;
     try {
@@ -785,13 +917,16 @@ export class AgentSession {
       // A snapshot may predate frames received during its fetch. Replay those
       // frames after it, retaining speculation and the fold's overlap deduping.
       await this.drainBuffered();
-      this.syncing = false;
+      this.syncRun = undefined;
       if (!this.closed && this.resyncRequested) {
-        void this.resync(true);
+        await this.resync(true);
       } else if (!this.closed && failed) {
         const delay = RESYNC_RETRY_DELAYS_MS[this.resyncRetry++];
         if (delay !== undefined)
-          this.resyncTimer = setTimeout(() => void this.resync(true), delay);
+          this.resyncTimer = setTimeout(
+            () => fireAndForget(this.resync(true), 'agent-session'),
+            delay
+          );
       }
     }
   }
@@ -840,7 +975,23 @@ export class AgentSession {
         prompt.observe(events, delivery);
         if (prompt.ended) this.prompts.delete(prompt);
       }
+      const projectionStartedAt = performance.now();
       for (const listener of this.listeners) listener(events);
+      if (snapshot) {
+        this.trace.projected(
+          projectionStartedAt,
+          events.reduce(
+            (count, event) =>
+              count +
+              (event.kind === 'metadata'
+                ? 0
+                : event.kind === 'replace'
+                  ? event.messages.length
+                  : 1),
+            0
+          )
+        );
+      }
     });
     // A failed push must not poison the chain for every input after it.
     this.chain = run.catch((error: unknown) => {

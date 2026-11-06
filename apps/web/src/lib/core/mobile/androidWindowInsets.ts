@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { addPluginListener, invoke } from '@tauri-apps/api/core';
 import { onCleanup, onMount } from 'solid-js';
@@ -111,11 +112,11 @@ export function useAndroidWindowInsets() {
         console.error('Unable to initialize Android window insets', error);
       }
     };
-    void initialize();
+    fireAndForget(initialize(), 'android-window-insets');
     onCleanup(() => {
       disposed = true;
       window.removeEventListener('resize', onResize);
-      if (remove) void remove();
+      if (remove) fireAndForget(remove(), 'android-window-insets');
     });
   });
 }

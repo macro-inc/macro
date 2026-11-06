@@ -432,6 +432,20 @@ impl std::fmt::Display for SimpleMention {
     }
 }
 
+/// What a persisted message is. Set by the server, never by a client.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum MessageKind {
+    /// Something someone wrote.
+    #[default]
+    Message,
+    /// The root of a channel call's thread. Its id is the call id, and it
+    /// stands for the call rather than for anything the caller said.
+    CallRoot,
+}
+
 /// Shared message representation for channel timelines and entity discussions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -443,10 +457,16 @@ pub struct Message {
     pub parent: MessageParent,
     /// Root message UUID for replies; absent on roots.
     pub thread_id: Option<Uuid>,
+    /// What this message is.
+    #[serde(default)]
+    pub kind: MessageKind,
     /// Authenticated actor or owner of imported content.
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     #[cfg_attr(feature = "json-schema", schemars(with = "String"))]
     pub sender_id: ChannelSender<'static>,
+    /// Display name of a verified call guest, retained after the call ends.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guest_name: Option<String>,
     /// Original external author, when imported.
     pub imported_author: Option<ImportedAuthor>,
     /// Public bot name and avatar for rendering shared message authors.
@@ -455,6 +475,10 @@ pub struct Message {
     pub mentions: Vec<SimpleMention>,
     /// User who triggered a bot-authored message.
     pub triggered_by: Option<String>,
+    /// Self-reported name of the client the user triggered it through, such
+    /// as "Claude Code"; a display label only.
+    #[serde(default)]
+    pub triggered_via: Option<String>,
     /// Macro Markdown body.
     pub content: String,
     /// Creation time.
@@ -518,13 +542,35 @@ pub enum PatchMessageNotificationPolicy {
 }
 
 /// Attribution of a trusted bot post, distinct from the scope used to authorize it.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum MessageAttribution {
     /// A user invoked the agent; use the verified acting user from its capability.
     #[default]
     ActingUser,
+    /// A user invoked the agent through a named client, such as an MCP client;
+    /// the post records the acting user and the client's label.
+    ActingUserVia {
+        /// The client's self-reported name, for display only.
+        client: String,
+    },
+    /// An account manager posted with its credential for the sender's account;
+    /// the post records the manager's account.
+    AccountManager {
+        /// The agent account holding the credential.
+        manager_user_id: String,
+    },
     /// Autonomous webhook delivery has no invoking user.
     Unprompted,
+}
+
+impl MessageAttribution {
+    /// Whether the post records the verified acting user as its trigger.
+    pub fn has_acting_user(&self) -> bool {
+        match self {
+            Self::ActingUser | Self::ActingUserVia { .. } => true,
+            Self::AccountManager { .. } | Self::Unprompted => false,
+        }
+    }
 }
 
 /// Create a root or reply. Thread state may only be supplied on a root.

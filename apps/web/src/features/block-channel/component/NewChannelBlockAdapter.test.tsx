@@ -66,6 +66,7 @@ vi.mock('@channel/Bots/use-channel-bot-management', () => ({
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({}));
 vi.mock('@channel/Attachments/ChannelAttachmentsTab', () => ({}));
+vi.mock('@channel/views/pending-direct-message', () => ({}));
 vi.mock('@channel/Call/CallEventSync', () => ({}));
 vi.mock('@channel/Call/ChannelCallAutoJoin', () => ({}));
 vi.mock('@channel/Call/ChannelCallButton', () => ({}));
@@ -79,7 +80,10 @@ vi.mock('@channel/channel-picture', () => ({}));
 vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({}));
 vi.mock('@components/app/split-layout/components/SplitLabel', () => ({}));
 vi.mock('@components/app/split-layout/components/SplitHeader', () => ({}));
-vi.mock('@core/context/channels', () => ({}));
+vi.mock('@core/context/channels', () => ({
+  useChannel: () => () => undefined,
+  useChannelCanCall: () => () => true,
+}));
 vi.mock('@core/context/user', () => ({}));
 vi.mock('@queries/call/call', () => ({}));
 vi.mock('@queries/channel/channel-participants', () => ({}));

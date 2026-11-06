@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelMessageSendMetadata } from './channelMessageSendMetadata';
+import type { CrmDiscussionMetadata } from './crmDiscussionMetadata';
 import type { NotifEventOneOfOnesevenTag } from './notifEventOneOfOnesevenTag';
 
 /**
- * A user sent a message in a channel.
+ * Someone commented, replied, or mentioned the recipient on a CRM company or contact.
  */
 export type NotifEventOneOfOneseven = {
-  /** A user sent a message in a channel. */
-  content: ChannelMessageSendMetadata;
+  /** Someone commented, replied, or mentioned the recipient on a CRM company or contact. */
+  content: CrmDiscussionMetadata;
   tag: NotifEventOneOfOnesevenTag;
 };

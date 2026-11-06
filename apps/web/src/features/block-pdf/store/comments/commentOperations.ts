@@ -12,6 +12,7 @@ import {
 } from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Message } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import { usePdfComments } from '../../context/pdf-comments-context';
@@ -210,9 +211,12 @@ export function useScrollToCommentThread() {
           mutationObserver.disconnect();
           intersectionObserver.disconnect();
 
-          viewer_.scrollTo({
-            pageNumber: rootComment.layout.pageIndex + 1,
-          });
+          fireAndForget(
+            viewer_.scrollTo({
+              pageNumber: rootComment.layout.pageIndex + 1,
+            }),
+            'pdf-comments'
+          );
 
           measureContainer = document.getElementById(measureContainerId);
           if (measureContainer) {

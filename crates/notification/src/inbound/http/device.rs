@@ -37,6 +37,7 @@ async fn register_device<S: NotificationReader, Auth: MacroAuthorizationService>
             user.authorization.user.macro_user_id,
             &req.token,
             &req.device_type,
+            req.native_call_capable,
         )
         .await
         .map_err(|e| {

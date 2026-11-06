@@ -11,7 +11,8 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_authorization::{
-    AnyPrincipal, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    AnyPrincipal, CredentialOrigin, MacroAuthorization, MacroAuthorizationExtractor,
+    MacroAuthorizationService, MacroAuthorizationState,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -149,6 +150,8 @@ pub struct ParentPath {
 }
 
 /// HTTP failure mapping; business decisions are made by the domain service.
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
 pub struct MessageHttpError(MessageError);
 impl From<MessageError> for MessageHttpError {
     fn from(value: MessageError) -> Self {
@@ -179,6 +182,19 @@ async fn receipt<P: RequiredPermission, A: EntityAccessService, Auth: MacroAutho
     user: &MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     path: &ParentPath,
 ) -> Result<EntityAccessReceipt<P>, MessageHttpError> {
+    receipt_with_sender(access, user, path, false).await
+}
+
+async fn receipt_with_sender<
+    P: RequiredPermission,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: &A,
+    user: &MacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    path: &ParentPath,
+    as_sender: bool,
+) -> Result<EntityAccessReceipt<P>, MessageHttpError> {
     let parent = MessageParent::parse(&path.parent_type, &path.parent_id)
         .map_err(|_| MessageError::Invalid("invalid message parent"))?;
     let kind = match parent {
@@ -189,14 +205,22 @@ async fn receipt<P: RequiredPermission, A: EntityAccessService, Auth: MacroAutho
         MessageParent::CrmContact(_) => EntityType::CrmContact,
         MessageParent::Call(_) => EntityType::Call,
     };
-    entity_access::inbound::axum_extractors::principal_entity_access_receipt::<P>(
-        access,
-        &user.authorization,
-        &path.parent_id,
-        kind,
-    )
-    .await
-    .map_err(|error| match error {
+    use entity_access::inbound::axum_extractors::{
+        message_sender_entity_access_receipt, principal_entity_access_receipt,
+    };
+    let receipt = if as_sender {
+        message_sender_entity_access_receipt::<P>(
+            access,
+            &user.authorization,
+            &path.parent_id,
+            kind,
+        )
+        .await
+    } else {
+        principal_entity_access_receipt::<P>(access, &user.authorization, &path.parent_id, kind)
+            .await
+    };
+    receipt.map_err(|error| match error {
         entity_access::domain::models::AccessError::Unavailable(error)
         | entity_access::domain::models::AccessError::Internal(error) => {
             MessageError::Repository(error).into()
@@ -216,18 +240,48 @@ pub async fn create<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
-    Json(input): Json<PostMessage>,
+    Json(mut input): Json<PostMessage>,
 ) -> Result<Json<Message>, MessageHttpError>
 where
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    input.attribution = sender_attribution(&user.authorization);
     Ok(Json(
         state
             .service
-            .post(receipt(state.access.as_ref(), &user, &path).await?, input)
+            .post(
+                receipt_with_sender(state.access.as_ref(), &user, &path, true).await?,
+                input,
+            )
             .await?,
     ))
+}
+
+/// How a new message's signed agent attribution labels it: with the client a
+/// user drives the agent through, when the credential names one.
+/// Only a user credential carries one; it is set only alongside `agent_id`.
+fn sender_attribution(principal: &MacroAuthorization) -> MessageAttribution {
+    if let MacroAuthorization::User(user) = principal
+        && let CredentialOrigin::AccountManager(credential) = &user.origin
+    {
+        return MessageAttribution::AccountManager {
+            manager_user_id: credential.manager_user_id.as_ref().to_owned(),
+        };
+    }
+
+    let via = match principal {
+        MacroAuthorization::User(user) => user.agent_via.as_ref(),
+        MacroAuthorization::Bot(_)
+        | MacroAuthorization::Harness(_)
+        | MacroAuthorization::Internal(_) => None,
+    };
+    match via {
+        Some(client) => MessageAttribution::ActingUserVia {
+            client: client.clone(),
+        },
+        None => MessageAttribution::ActingUser,
+    }
 }
 
 #[utoipa::path(operation_id = "entity_message_get_message", get, path = "/messages/{parent_type}/{parent_id}/items/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), responses((status = 200, body = Message)))]

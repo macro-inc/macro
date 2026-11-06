@@ -607,6 +607,14 @@ export interface IronCalcTheme {
   fol_hlink: string;
 }
 
+/** MACRO: the cells of a filtered table, for setFilteredRanges. */
+export interface FilteredRange {
+  /** The index of its sheet. */
+  sheet: number;
+  /** The cells it covers: [top, left, bottom, right], counted from 1. */
+  range: [number, number, number, number];
+}
+
 /** MACRO: a pivot table as GETPIVOTDATA reads it, for setPivotTables.
  *  Names and texts are trimmed and in lower case. */
 export interface PivotLayout {
@@ -812,6 +820,11 @@ export class Model {
     setCellLink(sheet: number, row: number, column: number, link: Link, label?: string | null): void;
     setColumnsHidden(sheet: number, column_start: number, column_end: number, hidden: boolean): void;
     setColumnsWidth(sheet: number, column_start: number, column_end: number, width: number): void;
+    /**
+     * MACRO: describes the host's filtered tables, whose hidden rows
+     * SUBTOTAL(1-11) leaves out, from the next evaluation on.
+     */
+    setFilteredRanges(ranges: FilteredRange[]): void;
     setFrozenColumnsCount(sheet: number, count: number): void;
     setFrozenRowsCount(sheet: number, count: number): void;
     /**
@@ -1016,6 +1029,7 @@ export interface InitOutput {
     readonly model_setCellLink: (a: number, b: number, c: number, d: number, e: any, f: number, g: number) => [number, number];
     readonly model_setColumnsHidden: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly model_setColumnsWidth: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+    readonly model_setFilteredRanges: (a: number, b: any) => [number, number];
     readonly model_setFrozenColumnsCount: (a: number, b: number, c: number) => [number, number];
     readonly model_setFrozenRowsCount: (a: number, b: number, c: number) => [number, number];
     readonly model_setLanguage: (a: number, b: number, c: number) => [number, number];

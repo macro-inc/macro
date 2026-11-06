@@ -2,10 +2,12 @@ import {
   initializeNativeNetworkStatus,
   subscribeNativeNetworkStatus,
 } from '@core/mobile/native-network-status';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { onlineManager } from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
+import { traceQueriesToFlows } from './flow-trace';
 import { setupQueryPersistence } from './persistence';
 import { createQueryPersistenceScopes } from './persistence-scopes';
 import { initSoupNormalizer } from './soup/normalized-cache/normalizer';
@@ -32,6 +34,8 @@ export const queryClient = new QueryClient({
   },
 });
 
+traceQueriesToFlows(queryClient);
+
 if (isPlatform(['ios', 'android'])) {
   // Use the native default network path on both mobile platforms.
   onlineManager.setEventListener((setOnline) =>
@@ -39,7 +43,7 @@ if (isPlatform(['ios', 'android'])) {
       if (status !== 'unknown') setOnline(status === 'online');
     })
   );
-  void initializeNativeNetworkStatus();
+  fireAndForget(initializeNativeNetworkStatus(), 'native-network-status');
 }
 
 const buster = import.meta.env.__APP_VERSION__ ?? 'dev';

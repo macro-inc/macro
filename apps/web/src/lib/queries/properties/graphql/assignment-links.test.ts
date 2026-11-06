@@ -46,4 +46,16 @@ describe('new property assignment links', () => {
       buildPropertyAssignmentLinks('USER', 'user-1', 'temporary-1', 'priority')
     ).toEqual([]);
   });
+
+  it('links nothing for an entity type from a newer server', () => {
+    const fromNewerServer = JSON.parse('"SPREADSHEET"');
+    expect(
+      buildPropertyAssignmentLinks(
+        fromNewerServer,
+        'entity-1',
+        'temporary-1',
+        'priority'
+      )
+    ).toEqual([]);
+  });
 });

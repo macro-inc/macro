@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM whatsapp_participant_receipt WHERE source_at < now() - make_interval(days => $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dfb1b287b5508eb4a8b5ba8f107e6876e54fb96526d7374f8aa29321577a0711"
+}

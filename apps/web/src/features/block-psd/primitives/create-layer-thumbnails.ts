@@ -7,6 +7,7 @@
  */
 
 import type { PsdEngine } from '@core/psd-engine/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, onCleanup } from 'solid-js';
 
 /** Thumbnails rendered at once. */
@@ -31,7 +32,7 @@ export function createLayerThumbnails(options: {
       const id = queue.shift();
       if (id === undefined) break;
       running++;
-      void load(id);
+      fireAndForget(load(id), 'psd-render');
     }
   };
 

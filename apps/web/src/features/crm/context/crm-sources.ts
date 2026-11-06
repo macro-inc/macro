@@ -21,6 +21,16 @@ export type CrmQuery<T> = {
   readonly isError: boolean;
   refetch(): Promise<unknown>;
 };
+/** Creates many companies, refreshing CRM listings once at the end. */
+export type CompanyImporter = {
+  /** `exists` when the team already tracks the domain. */
+  create(input: {
+    name: string;
+    domain: string;
+  }): Promise<'created' | 'exists'>;
+  refresh(): Promise<void>;
+};
+
 export type CrmMutation<Input, Output = unknown> = {
   readonly isPending: boolean;
   mutate(
@@ -48,6 +58,13 @@ export type TeamConfigSource = {
   isLoading: Accessor<boolean>;
   isError: Accessor<boolean>;
   update: CrmMutation<TeamCrmConfigPatch>;
+};
+/** The domains a team keeps out of email sync. */
+export type BlockedDomainsSource = {
+  domains: Accessor<string[]>;
+  isPending: Accessor<boolean>;
+  isError: Accessor<boolean>;
+  setBlocked: CrmMutation<{ domain: string; blocked: boolean }>;
 };
 export type CrmCapabilities = {
   role: Accessor<CrmTeamRole | undefined>;

@@ -24,7 +24,13 @@ impl<
             ));
         }
         let source = match intent.source {
-            FormSource::New => CreateSource::NewDatabase,
+            FormSource::New {
+                is_hidden_in_drive,
+                anonymous,
+            } => CreateSource::NewDatabase {
+                is_hidden_in_drive,
+                anonymous,
+            },
             FormSource::Table {
                 database_id,
                 table_id,

@@ -49,7 +49,7 @@ pub struct List {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum GrantAccess {
-    /// May respond; no database read grant.
+    /// May respond. When the form shares responses, also grants database View.
     View,
     /// May edit the form and its entire backing database.
     Edit,
@@ -88,6 +88,13 @@ pub struct AccessDraft {
     pub closes_at: Option<DateTime<Utc>>,
     /// Whether respondents can see aggregate choice tallies.
     pub tally_visible: bool,
+    /// Whether people with View may read individual response rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub responses_visible: Option<bool>,
+    /// Whether nobody, the owner included, can see who gave which response;
+    /// refused once anyone has responded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anonymous: Option<bool>,
     /// Direct channel changes only; this does not post messages or send invitations.
     #[serde(default)]
     pub channel_grants: Vec<GrantChange>,
@@ -131,7 +138,7 @@ pub struct Capabilities {
     pub conditional_column_cleanup: bool,
     /// Retyping through AI is unavailable until its recovery guarantees exist.
     pub safe_linked_type_changes: bool,
-    /// False: screeners reveal links, but independent booking URLs remain usable.
+    /// False: gates reveal links, but independent booking URLs remain usable.
     pub required_booking_qualification: bool,
 }
 /// An authorized snapshot of the actual durable draft and current schema.

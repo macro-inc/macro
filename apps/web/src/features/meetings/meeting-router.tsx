@@ -39,7 +39,7 @@ function EnabledMeetingRouter() {
           : getMeetingPath(target.shareToken),
         { replace: true }
       ),
-    returnToApp: () => navigate('/', { replace: true }),
+    returnToApp: (path) => navigate(path, { replace: true }),
   });
   return (
     <Suspense fallback={<div class="p-6 text-ink-muted">Loading call…</div>}>
@@ -48,7 +48,7 @@ function EnabledMeetingRouter() {
           <Switch>
             <Match when={entry.kind === 'new'}>
               <NewMeetingRoute
-                onLeave={() => navigation.leave(entry)}
+                onLeave={(path) => navigation.leave(entry, path)}
                 onCallStateChange={(connected, shareToken) =>
                   navigation.setCallState(entry, connected, shareToken)
                 }
@@ -57,7 +57,7 @@ function EnabledMeetingRouter() {
             <Match when={entry.kind === 'existing' ? entry : undefined}>
               {(existing) => (
                 <MeetingRouteContent
-                  onLeave={() => navigation.leave(entry)}
+                  onLeave={(path) => navigation.leave(entry, path)}
                   shareToken={existing().shareToken}
                   onCallStateChange={(connected) =>
                     navigation.setCallState(

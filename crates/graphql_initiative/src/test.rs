@@ -1,6 +1,7 @@
 use crate::context::{ApiFuture, InitiativeApi};
 use crate::*;
 use async_graphql::{Context, EmptySubscription, ID, Object, Request, Schema, SimpleObject};
+use entity_access::domain::models::{EntityAccessReceipt, EntityType};
 use graphql_common::require_authenticated_user;
 use graphql_soup::{GraphqlSoupInitiative, SoupEntityEdges};
 use initiative::domain::{models::*, reads::*};
@@ -256,15 +257,22 @@ impl RecordingApi {
 }
 
 impl InitiativeApi for RecordingApi {
-    fn get(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeDetail> {
+    fn read(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeRead> {
         Box::pin(async move {
-            self.record(&user, "get")?;
+            self.record(&user, "read")?;
             if self.denied_ids.lock().unwrap().contains(&id) {
                 return Err(InitiativeError::Unauthorized);
             }
             let mut detail = self.current_detail();
             detail.id = InitiativeId::from_uuid(id);
-            Ok(detail)
+            Ok(InitiativeRead::new(
+                EntityAccessReceipt::dangerously_assert_internal_user(
+                    &id.to_string(),
+                    EntityType::Initiative,
+                ),
+                detail,
+                Vec::new(),
+            ))
         })
     }
     fn ensure_description_surface(
@@ -277,12 +285,9 @@ impl InitiativeApi for RecordingApi {
             Ok(())
         })
     }
-    fn summary(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativePageRow> {
+    fn summarize<'a>(&'a self, _read: &'a InitiativeRead) -> ApiFuture<'a, InitiativePageRow> {
         Box::pin(async move {
-            self.record(&user, "summary")?;
-            if self.denied_ids.lock().unwrap().contains(&id) {
-                return Err(InitiativeError::Unauthorized);
-            }
+            self.calls.lock().unwrap().push("summarize".to_string());
             let mut summary = row();
             if let Some(count) = *self.task_count.lock().unwrap() {
                 summary.task_count = count;
@@ -367,8 +372,7 @@ fn schema_with_readers(
         .data(context.clone())
         .data(replica.loader())
         .data(InitiativeEntityLoader(primary.loader()))
-        .data(initiative_detail_loader(context.clone(), user()))
-        .data(initiative_summary_loader(context, user()))
+        .data(initiative_loader(context, user()))
         .finish()
 }
 
@@ -511,9 +515,37 @@ async fn detail_fields_load_only_when_selected_and_share_one_domain_read() {
     let data = response.data.into_json().unwrap();
     assert_eq!(data["user"]["initiative"]["taskCount"], 3);
     assert_eq!(data["user"]["initiative"]["completedTaskCount"], 2);
-    let mut calls = api.calls.lock().unwrap().clone();
-    calls.sort();
-    assert_eq!(calls, ["get", "summary"]);
+    assert_eq!(*api.calls.lock().unwrap(), ["read", "summarize"]);
+}
+
+#[tokio::test]
+async fn detail_only_selection_skips_progress_summary() {
+    let api = Arc::new(RecordingApi::default());
+    let response = schema(api.clone())
+        .execute(
+            Request::new(format!(
+                "{{ user {{ initiative(initiativeId: \"{PROJECT_ID}\") {{ memberIds taskIds sharePermission {{ owner }} }} }} }}"
+            ))
+            .data(user()),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(*api.calls.lock().unwrap(), ["read"]);
+}
+
+#[tokio::test]
+async fn progress_only_selection_reads_once_and_summarizes_once() {
+    let api = Arc::new(RecordingApi::default());
+    let response = schema(api.clone())
+        .execute(
+            Request::new(format!(
+                "{{ user {{ initiative(initiativeId: \"{PROJECT_ID}\") {{ taskCount completedTaskCount }} }} }}"
+            ))
+            .data(user()),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(*api.calls.lock().unwrap(), ["read", "summarize"]);
 }
 
 #[tokio::test]
@@ -539,7 +571,7 @@ async fn mutation_replies_use_primary_state_and_preserve_viewed_metadata() {
     assert!(replica.calls.lock().unwrap().is_empty());
     assert_eq!(
         *api.calls.lock().unwrap(),
-        ["update", "get", "update", "get"]
+        ["update", "read", "update", "read"]
     );
     let response = schema.execute(Request::new(format!(
         "{{ user {{ initiative(initiativeId: \"{PROJECT_ID}\") {{ displayName memberIds }} }} }}"
@@ -616,15 +648,11 @@ async fn detail_loaders_isolate_viewers_failures_and_subsequent_reads() {
     api.denied_ids.lock().unwrap().push(hidden);
     let other = MacroUserIdStr::try_from_email("other@example.com").unwrap();
     let context = InitiativeGraphqlContext(api.clone());
-    let viewer_loader = initiative_detail_loader(context.clone(), user());
-    let other_loader = initiative_detail_loader(context.clone(), other);
-    let summary_loader = initiative_summary_loader(context, user());
+    let viewer_loader = initiative_loader(context.clone(), user());
+    let other_loader = initiative_loader(context, other);
     let results = viewer_loader.load_many([project, hidden]).await.unwrap();
     assert!(results[&project].is_ok());
     assert!(results[&hidden].is_err());
-    let summaries = summary_loader.load_many([project, hidden]).await.unwrap();
-    assert_eq!(summaries[&project].as_ref().unwrap().task_count, 3);
-    assert!(summaries[&hidden].is_err());
     other_loader
         .load_one(project)
         .await
@@ -646,13 +674,20 @@ async fn detail_loaders_isolate_viewers_failures_and_subsequent_reads() {
         .unwrap()
         .unwrap()
         .unwrap();
-    assert_eq!(refreshed.name, "Updated after first read");
+    assert_eq!(refreshed.detail.name, "Updated after first read");
+
+    let schema = schema(api.clone());
+    let progress =
+        format!("{{ user {{ initiative(initiativeId: \"{PROJECT_ID}\") {{ taskCount }} }} }}");
+    let response = schema.execute(Request::new(&progress).data(user())).await;
+    assert_eq!(
+        response.data.into_json().unwrap()["user"]["initiative"]["taskCount"],
+        3
+    );
     *api.task_count.lock().unwrap() = Some(4);
-    let refreshed_summary = summary_loader
-        .load_one(project)
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
-    assert_eq!(refreshed_summary.task_count, 4);
+    let response = schema.execute(Request::new(&progress).data(user())).await;
+    assert_eq!(
+        response.data.into_json().unwrap()["user"]["initiative"]["taskCount"],
+        4
+    );
 }

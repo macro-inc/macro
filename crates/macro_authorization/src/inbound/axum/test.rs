@@ -20,8 +20,9 @@ use uuid::Uuid;
 
 use super::*;
 use crate::{
-    BotActingUserClaims, BotAuthentication, BotScope, InternalIdentityClaims, MacroAuthorization,
-    MacroAuthorizationError, MacroAuthorizationService, MacroUserAuthentication,
+    AccountManagerCredential, AuthorizedUserApiKey, BotActingUserClaims, BotAuthentication,
+    BotScope, InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError,
+    MacroAuthorizationService, MacroUserAuthentication,
 };
 
 const VALID_USER_ID: &str = "macro|valid@example.com";
@@ -39,6 +40,7 @@ const BOT_TEAM_ID: Uuid = Uuid::from_u128(3);
 const ACCESS_TOKEN_COOKIE: &str = "macro-access-token";
 const API_KEY_USER_ID: &str = "macro|api-key@example.com";
 const VALID_USER_API_KEY: &str = "mak_valid";
+const MANAGER_API_KEY: &str = "mak_manager";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum AuthorizationCall {
@@ -87,17 +89,38 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<crate::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(crate::ValidatedCredential::session)
+    }
+
     async fn authorize_user_api_key(
         &self,
         api_key: &str,
-    ) -> Result<UserContext, Report<MacroAuthorizationError>> {
+    ) -> Result<AuthorizedUserApiKey, Report<MacroAuthorizationError>> {
         self.calls
             .lock()
             .expect("calls lock poisoned")
             .push(AuthorizationCall::UserApiKey(api_key.to_string()));
 
         match api_key {
-            VALID_USER_API_KEY => Ok(user_context(API_KEY_USER_ID, Some(42))),
+            VALID_USER_API_KEY => Ok(AuthorizedUserApiKey {
+                user_context: user_context(API_KEY_USER_ID, Some(42)),
+                account_manager: None,
+            }),
+            MANAGER_API_KEY => Ok(AuthorizedUserApiKey {
+                user_context: user_context(API_KEY_USER_ID, Some(42)),
+                account_manager: Some(AccountManagerCredential {
+                    grant_id: Uuid::nil(),
+                    manager_user_id: MacroUserIdStr::parse_from_str("macro|agent@example.com")
+                        .expect("valid Macro user id")
+                        .into_owned(),
+                }),
+            }),
             "mak_unavailable" => Err(Report::new(MacroAuthorizationError::Unavailable)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }
@@ -179,6 +202,9 @@ fn bot_authentication(bot_scope: BotScope, acting_user_id: Option<&str>) -> BotA
         bot_scope,
         team_id: (bot_scope == BotScope::Team).then_some(BOT_TEAM_ID),
         acting_user: acting_user_id.map(|user_id| MacroUserAuthentication {
+            origin: crate::CredentialOrigin::Bot,
+            agent_id: None,
+            agent_via: None,
             macro_user_id: MacroUserIdStr::try_from(user_id.to_owned())
                 .expect("valid bot acting user id"),
             user_context: user_context(user_id, Some(42)),
@@ -275,6 +301,7 @@ async fn user_handler(
         "acting_entity": acting_entity,
         "macro_user_id": extractor.authorization.macro_user_id.to_string(),
         "user_context": extractor.authorization.user_context,
+        "origin": format!("{:?}", extractor.authorization.origin),
     }))
 }
 
@@ -359,6 +386,10 @@ fn test_router() -> (Router, FakeAuthorizationService) {
         .route(
             "/required/user-or-internal",
             get(policy_handler::<UserOrInternal>),
+        )
+        .route(
+            "/required/account-holder",
+            get(policy_handler::<AccountHolderOrInternal>),
         )
         .route(
             "/required/user-or-internal-service",
@@ -1336,6 +1367,9 @@ async fn user_api_key_authenticates_as_the_user() {
         .await;
         assert_eq!(status, StatusCode::OK, "path {path}");
         assert_eq!(body["acting_entity"], API_KEY_USER_ID);
+        if path == "/user" {
+            assert_eq!(body["origin"], "UserApiKey");
+        }
         if path != "/required/user-only" {
             assert_eq!(body["macro_user_id"], API_KEY_USER_ID);
         }
@@ -1349,6 +1383,43 @@ async fn user_api_key_authenticates_as_the_user() {
             AuthorizationCall::UserApiKey(VALID_USER_API_KEY.to_string()),
         ]
     );
+}
+
+#[tokio::test]
+async fn a_manager_credential_is_refused_only_where_the_account_holder_is_required() {
+    let (router, _) = test_router();
+
+    let (status, body) = send(
+        &router,
+        empty_body(user_api_key_request(
+            "/required/account-holder",
+            MANAGER_API_KEY,
+        )),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, json!({ "message": "forbidden" }));
+
+    let (status, body) = send(
+        &router,
+        empty_body(user_api_key_request(
+            "/required/user-or-internal",
+            MANAGER_API_KEY,
+        )),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["acting_entity"], API_KEY_USER_ID);
+
+    let (status, _) = send(
+        &router,
+        empty_body(user_api_key_request(
+            "/required/account-holder",
+            VALID_USER_API_KEY,
+        )),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
 }
 
 #[tokio::test]
@@ -2202,6 +2273,9 @@ fn policies_report_typed_acting_entity_variants_with_display_parity() {
 
 fn macro_user_authentication(user_id: &str) -> MacroUserAuthentication {
     MacroUserAuthentication {
+        origin: crate::CredentialOrigin::Session,
+        agent_id: None,
+        agent_via: None,
         macro_user_id: MacroUserIdStr::try_from(user_id.to_owned()).expect("valid Macro user ID"),
         user_context: user_context(user_id, None),
     }

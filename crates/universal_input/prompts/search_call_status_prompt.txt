@@ -1,0 +1,1 @@
+Explicit attendance filter for calls: Attended, Missed, or Unattended. Return null when absent. Do not infer attendance from the topic or turn a negated filter into a positive filter.

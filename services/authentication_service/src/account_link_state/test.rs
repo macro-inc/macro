@@ -50,8 +50,8 @@ fn payload_round_trips_deterministically() {
     assert_eq!(first_token, second_token);
     assert!(!first_token.contains('='));
     assert_eq!(
-        verify_account_link_state(&first_token, &key(), NOW).unwrap(),
-        payload
+        verify_signed_state(&first_token, &key(), NOW),
+        Ok(SignedState::AccountLink(payload))
     );
 }
 
@@ -62,8 +62,8 @@ fn payload_without_original_url_omits_the_field() {
 
     assert!(!payload_json(&token).contains("original_url"));
     assert_eq!(
-        verify_account_link_state(&token, &key(), NOW).unwrap(),
-        payload
+        verify_signed_state(&token, &key(), NOW),
+        Ok(SignedState::AccountLink(payload))
     );
 }
 
@@ -99,7 +99,7 @@ fn new_state_expires_one_ttl_from_now() {
     assert!(state.exp >= before + ttl);
     assert!(state.exp <= after + ttl);
     assert!(
-        verify_account_link_state(
+        verify_signed_state(
             &sign_account_link_state(&state, &key()).unwrap(),
             &key(),
             after
@@ -113,12 +113,12 @@ fn expiration_boundary_is_enforced_and_names_the_pending_link() {
     let token = sign_account_link_state(&state(None, NOW), &key()).unwrap();
 
     assert_eq!(
-        verify_account_link_state(&token, &key(), NOW - 1),
-        Ok(state(None, NOW))
+        verify_signed_state(&token, &key(), NOW - 1),
+        Ok(SignedState::AccountLink(state(None, NOW)))
     );
     for current_timestamp in [NOW, NOW + 1] {
         assert_eq!(
-            verify_account_link_state(&token, &key(), current_timestamp),
+            verify_signed_state(&token, &key(), current_timestamp),
             Err(AccountLinkStateError::Expired { link_id: link_id() })
         );
     }
@@ -137,14 +137,14 @@ fn malformed_tokens_are_rejected() {
         r#"{"identity_provider_id":"idp","link_id":"0192b8a0-6a2e-7c3e-9b1f-4d5e6f708192"}"#,
     ] {
         assert!(
-            verify_account_link_state(token, &key(), NOW).is_err(),
+            verify_signed_state(token, &key(), NOW).is_err(),
             "token should be rejected: {token}"
         );
     }
 
     let malformed_json = sign_raw_payload(b"not json");
     assert_eq!(
-        verify_account_link_state(&malformed_json, &key(), NOW),
+        verify_signed_state(&malformed_json, &key(), NOW),
         Err(AccountLinkStateError::Malformed)
     );
 }
@@ -169,7 +169,7 @@ fn authentic_payloads_with_bad_fields_are_rejected() {
         payload[field] = value;
         let token = sign_raw_payload(&serde_json::to_vec(&payload).unwrap());
         assert_eq!(
-            verify_account_link_state(&token, &key(), NOW),
+            verify_signed_state(&token, &key(), NOW),
             Err(AccountLinkStateError::Malformed),
             "{field} should be validated"
         );
@@ -180,7 +180,7 @@ fn authentic_payloads_with_bad_fields_are_rejected() {
         payload.as_object_mut().unwrap().remove(field);
         let token = sign_raw_payload(&serde_json::to_vec(&payload).unwrap());
         assert_eq!(
-            verify_account_link_state(&token, &key(), NOW),
+            verify_signed_state(&token, &key(), NOW),
             Err(AccountLinkStateError::Malformed),
             "{field} should be required"
         );
@@ -209,7 +209,7 @@ fn payload_tampering_is_rejected() {
         let tampered_token = format!("{tampered_payload}.{encoded_signature}");
 
         assert_eq!(
-            verify_account_link_state(&tampered_token, &key(), NOW),
+            verify_signed_state(&tampered_token, &key(), NOW),
             Err(AccountLinkStateError::InvalidSignature),
             "changing {field} should invalidate the signature"
         );
@@ -226,12 +226,58 @@ fn signature_tampering_and_wrong_keys_are_rejected() {
     let other_key = AccountLinkStateKey::new("another secret that is also long enough").unwrap();
 
     assert_eq!(
-        verify_account_link_state(&tampered_token, &key(), NOW),
+        verify_signed_state(&tampered_token, &key(), NOW),
         Err(AccountLinkStateError::InvalidSignature)
     );
     assert_eq!(
-        verify_account_link_state(&token, &other_key, NOW),
+        verify_signed_state(&token, &other_key, NOW),
         Err(AccountLinkStateError::InvalidSignature)
+    );
+}
+
+fn admin_consent_state() -> AdminConsentState {
+    AdminConsentState {
+        kind: AdminConsentKind::AdminConsent,
+        provider: LinkProvider::Microsoft,
+        original_url: "https://macro.com/app/inbox-link-callback".into(),
+    }
+}
+
+#[test]
+fn admin_consent_state_round_trips_and_never_expires() {
+    let token = sign_admin_consent_state(&admin_consent_state(), &key()).unwrap();
+
+    let json: serde_json::Value = serde_json::from_str(&payload_json(&token)).unwrap();
+    assert_eq!(json["kind"], "admin_consent");
+    assert_eq!(json["provider"], "microsoft");
+    assert!(json.get("exp").is_none());
+    for current_timestamp in [NOW, NOW + 365 * 24 * 3_600] {
+        assert_eq!(
+            verify_signed_state(&token, &key(), current_timestamp),
+            Ok(SignedState::AdminConsent(admin_consent_state()))
+        );
+    }
+}
+
+#[test]
+fn signed_kinds_cannot_be_confused() {
+    // An admin-consent payload without its tag is neither kind.
+    let untagged = serde_json::json!({
+        "provider": "microsoft",
+        "original_url": "https://macro.com/app/inbox-link-callback",
+    });
+    let token = sign_raw_payload(&serde_json::to_vec(&untagged).unwrap());
+    assert_eq!(
+        verify_signed_state(&token, &key(), NOW),
+        Err(AccountLinkStateError::Malformed)
+    );
+
+    let mut mistagged = serde_json::to_value(admin_consent_state()).unwrap();
+    mistagged["kind"] = serde_json::json!("link");
+    let token = sign_raw_payload(&serde_json::to_vec(&mistagged).unwrap());
+    assert_eq!(
+        verify_signed_state(&token, &key(), NOW),
+        Err(AccountLinkStateError::Malformed)
     );
 }
 

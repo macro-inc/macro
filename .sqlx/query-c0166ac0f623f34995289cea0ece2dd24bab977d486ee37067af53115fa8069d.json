@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT revision > synced_revision AS \"dirty!\", delete_requested, base_version\n                FROM email_mailbox_drafts WHERE message_id = $1 FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "dirty!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "delete_requested",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "base_version",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      true
+    ]
+  },
+  "hash": "c0166ac0f623f34995289cea0ece2dd24bab977d486ee37067af53115fa8069d"
+}

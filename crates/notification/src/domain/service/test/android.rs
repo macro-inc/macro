@@ -5,7 +5,7 @@ use crate::domain::models::email_notification_digest::{
     BatchSend, BulkDigestEgressStateMachine, DontSend, ResumeMachineBRequest,
 };
 use crate::domain::models::mobile::MessageAttributes;
-use crate::domain::models::queue_message::DeliverySuccess;
+use crate::domain::models::queue_message::{DeliverySuccess, UserApnsEndpoints};
 
 #[tokio::test]
 async fn queues_android_and_ios_together_after_recipient_filtering() {
@@ -239,4 +239,160 @@ async fn seen_and_done_deliver_silent_clear_to_android_only_users() {
         assert!(android[0].1["title"].is_null());
         assert!(android[0].1["body"].is_null());
     }
+}
+
+#[tokio::test]
+async fn native_call_exclusions_keep_only_unhandled_mobile_platforms() {
+    use crate::domain::models::MobilePushRecipients;
+    use crate::domain::models::queue_message::IngressQueueMessage;
+
+    for (ios, android) in [(false, false), (true, false), (false, true), (true, true)] {
+        let user = test_user_id("alice@example.com");
+        let exclusions = MobilePushRecipients {
+            ios: if ios {
+                HashSet::from([user.clone()])
+            } else {
+                HashSet::new()
+            },
+            android: if android {
+                HashSet::from([user.clone()])
+            } else {
+                HashSet::new()
+            },
+        };
+        let repo = Arc::new(
+            MockRepository::new()
+                .with_device_endpoint(user.clone(), DeviceEndpoint::Ios("ios".into()))
+                .with_device_endpoint(
+                    user.clone(),
+                    DeviceEndpoint::AndroidNativeCall("android".into()),
+                ),
+        );
+        let queue = Arc::new(MockQueue::new());
+        let service = NotificationIngressService::new(repo, queue.clone(), MockStateMachine);
+        let request = SendNotificationRequestBuilder {
+            notification_entity: EntityType::Document.with_entity_str("doc"),
+            secondary_notification_entity: None,
+            notification: TestNotification {
+                message: "Hello".into(),
+            },
+            sender_id: None,
+            recipient_ids: HashSet::from([user.clone()]),
+        }
+        .into_request()
+        .with_mobile_push_exclusions(exclusions.clone())
+        .with_apns()
+        .with_conn_gateway();
+        // Production crosses the ingress queue as a type-erased serialized request.
+        let queued = IngressQueueMessage::from_request(&request).unwrap();
+        assert_eq!(queued.request.mobile_push_exclusions, exclusions);
+        service.process_from_queue(queued.request).await.unwrap();
+        let published = queue.get_published();
+        assert!(
+            published
+                .iter()
+                .any(|message| message["content"]["ConnGateway"].is_object())
+        );
+        let mobile = published
+            .iter()
+            .find(|message| message["content"]["Ios"].is_object());
+        if ios && android {
+            assert!(mobile.is_none());
+        } else {
+            let endpoints: UserApnsEndpoints = serde_json::from_value(
+                mobile.unwrap()["content"]["Ios"]["ios_device_endpoints"][user.as_ref()].clone(),
+            )
+            .unwrap();
+            assert_eq!(
+                endpoints.endpoints,
+                if ios {
+                    Vec::<String>::new()
+                } else {
+                    vec!["ios".into()]
+                }
+            );
+            assert_eq!(
+                endpoints.android_endpoints,
+                if android {
+                    Vec::<String>::new()
+                } else {
+                    vec!["android".into()]
+                }
+            );
+        }
+    }
+}
+
+#[test]
+fn queued_requests_without_mobile_exclusions_keep_existing_delivery() {
+    use crate::domain::models::MobilePushRecipients;
+    use crate::domain::models::queue_message::IngressQueueMessage;
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc"),
+        secondary_notification_entity: None,
+        notification: TestNotification {
+            message: "Hello".into(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([test_user_id("alice@example.com")]),
+    }
+    .into_request()
+    .with_apns();
+    let mut serialized =
+        serde_json::to_value(IngressQueueMessage::from_request(&request).unwrap()).unwrap();
+    serialized["request"]
+        .as_object_mut()
+        .unwrap()
+        .remove("mobile_push_exclusions");
+    let decoded: IngressQueueMessage = serde_json::from_value(serialized).unwrap();
+    assert_eq!(
+        decoded.request.mobile_push_exclusions,
+        MobilePushRecipients::default()
+    );
+}
+
+#[tokio::test]
+async fn native_android_exclusion_preserves_ordinary_alerts_for_legacy_devices() {
+    use crate::domain::models::MobilePushRecipients;
+    let user = test_user_id("alice@example.com");
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(
+        MockRepository::new()
+            .with_device_endpoint(
+                user.clone(),
+                DeviceEndpoint::Android("legacy-android".into()),
+            )
+            .with_device_endpoint(
+                user.clone(),
+                DeviceEndpoint::AndroidNativeCall("native-android".into()),
+            ),
+        queue.clone(),
+        MockStateMachine,
+    );
+    service
+        .send_notification(
+            SendNotificationRequestBuilder {
+                notification_entity: EntityType::Document.with_entity_str("doc"),
+                secondary_notification_entity: None,
+                notification: TestNotification {
+                    message: "Hello".into(),
+                },
+                sender_id: None,
+                recipient_ids: HashSet::from([user.clone()]),
+            }
+            .into_request()
+            .with_apns()
+            .with_mobile_push_exclusions(MobilePushRecipients {
+                ios: HashSet::new(),
+                android: HashSet::from([user.clone()]),
+            }),
+        )
+        .await
+        .unwrap();
+    let published = queue.get_published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(
+        published[0]["content"]["Ios"]["ios_device_endpoints"][user.as_ref()]["android_endpoints"],
+        json!(["legacy-android"])
+    );
 }

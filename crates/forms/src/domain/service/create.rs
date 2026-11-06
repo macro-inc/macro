@@ -19,11 +19,13 @@ use super::{
 };
 use crate::domain::events::{Attribution, FormCreatedMetadata, FormTopicEvent};
 use crate::domain::models::{
-    Audience, ColumnId, DatabaseId, Form, FormAccess, FormCreation, FormDetail, FormError, FormId,
-    FormLayout, FormQuestionId, FormSection, FormSectionId, FormStatus, QuestionLayout, TableId,
+    Audience, ColumnId, DatabaseId, Form, FormAccess, FormBranding, FormCreation, FormDetail,
+    FormError, FormId, FormLayout, FormQuestionId, FormSection, FormSectionId, FormStatus,
+    QuestionLayout, TableId,
 };
 use crate::domain::ports::{
-    Clock, CreateFormCommand, CreateSource, FormAccessDirectory, FormEventPublisher, FormsRepo,
+    Clock, CreateFormCommand, CreateSource, FormAccessDirectory, FormEventPublisher,
+    FormImageFiles, FormsRepo,
 };
 
 /// The name a new database's table takes.
@@ -32,6 +34,20 @@ const RESPONSES_TABLE: &str = "Responses";
 pub(super) const SUBMITTED_COLUMN: &str = "Submitted";
 /// The person column each signed-in submission names its respondent in.
 pub(super) const RESPONDENT_COLUMN: &str = "Respondent";
+
+/// Where a new form's table came from.
+#[derive(Clone, Copy)]
+enum Provenance {
+    /// A database made for the form, which goes by its name, may stay out
+    /// of Drive with it, and has no Respondent column when the form starts
+    /// anonymous.
+    OwnDatabase {
+        is_hidden_in_drive: bool,
+        anonymous: bool,
+    },
+    /// A table of a database the creator already had.
+    ExistingTable,
+}
 
 /// A column the form writes itself: one the table already has, reused, or
 /// one to create.
@@ -113,8 +129,8 @@ pub(super) enum CreationPolicy {
     Authoring,
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -123,6 +139,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     pub(super) async fn create(
         &self,
@@ -146,8 +163,15 @@ where
         };
         let name = validated_name(&command.name)?;
         match command.source {
-            CreateSource::NewDatabase => {
-                self.create_over_new_database(creator, name, id, status, policy)
+            CreateSource::NewDatabase {
+                is_hidden_in_drive,
+                anonymous,
+            } => {
+                let provenance = Provenance::OwnDatabase {
+                    is_hidden_in_drive,
+                    anonymous,
+                };
+                self.create_over_new_database(creator, name, provenance, id, status, policy)
                     .await
             }
             CreateSource::Table { receipt, table_id } => {
@@ -164,6 +188,7 @@ where
         &self,
         creator: Viewer,
         name: String,
+        provenance: Provenance,
         id: FormId,
         status: FormStatus,
         policy: CreationPolicy,
@@ -178,7 +203,15 @@ where
             .await
             .map_err(database_error)?;
         match self
-            .attach_to_new_database(&creator, database.name, database.id, id, status, policy)
+            .attach_to_new_database(
+                &creator,
+                database.name,
+                database.id,
+                provenance,
+                id,
+                status,
+                policy,
+            )
             .await
         {
             Ok(detail) => Ok(detail),
@@ -195,11 +228,16 @@ where
         }
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Attaching carries the new form's identity, status and provenance"
+    )]
     async fn attach_to_new_database(
         &self,
         creator: &Viewer,
         name: String,
         database_id: DatabaseId,
+        provenance: Provenance,
         id: FormId,
         status: FormStatus,
         policy: CreationPolicy,
@@ -236,9 +274,16 @@ where
             id: ColumnId::new(),
             name: SUBMITTED_COLUMN.to_string(),
         };
-        let respondent = ManagedColumn::New {
-            id: ColumnId::new(),
-            name: RESPONDENT_COLUMN.to_string(),
+        let respondent = match provenance {
+            Provenance::OwnDatabase {
+                anonymous: true, ..
+            } => None,
+            Provenance::OwnDatabase { .. } | Provenance::ExistingTable => {
+                Some(ManagedColumn::New {
+                    id: ColumnId::new(),
+                    name: RESPONDENT_COLUMN.to_string(),
+                })
+            }
         };
         let mut ops = vec![DatabaseOp::Table {
             table: table.table.id,
@@ -250,7 +295,9 @@ where
         ops.extend(
             [
                 create_op(&table, &submitted, submitted_kind()),
-                create_op(&table, &respondent, respondent_kind()),
+                respondent
+                    .as_ref()
+                    .and_then(|respondent| create_op(&table, respondent, respondent_kind())),
             ]
             .into_iter()
             .flatten(),
@@ -283,15 +330,16 @@ where
                 title: String::new(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             }],
         };
         self.store_new_form(
             creator,
             name,
-            (submitted.id(), respondent.id()),
+            (submitted.id(), respondent.as_ref().map(ManagedColumn::id)),
             layout,
             &table,
-            true,
+            provenance,
             id,
             status,
         )
@@ -389,15 +437,16 @@ where
                 title: String::new(),
                 description: String::new(),
                 questions,
+                show_when: None,
             }],
         };
         self.store_new_form(
             &creator,
             name,
-            (submitted.id(), respondent.id()),
+            (submitted.id(), Some(respondent.id())),
             layout,
             &table,
-            false,
+            Provenance::ExistingTable,
             id,
             status,
         )
@@ -415,10 +464,10 @@ where
         &self,
         creator: &Viewer,
         name: String,
-        (submitted, respondent): (ColumnId, ColumnId),
+        (submitted, respondent): (ColumnId, Option<ColumnId>),
         layout: FormLayout,
         table: &TableDetail,
-        name_follows_database: bool,
+        provenance: Provenance,
         id: FormId,
         status: FormStatus,
     ) -> Result<FormDetail, FormError> {
@@ -432,18 +481,39 @@ where
             database_id,
             table_id: table.table.id,
             submitted_column_id: Some(submitted),
-            respondent_column_id: Some(respondent),
+            respondent_column_id: respondent,
             audience: Audience::Members,
             tally_visible: false,
             status,
             closes_at: None,
             confirmation_message: String::new(),
+            branding: FormBranding::default(),
             created_at: now,
             updated_at: now,
+            project_id: None,
+            is_hidden_in_drive: matches!(
+                provenance,
+                Provenance::OwnDatabase {
+                    is_hidden_in_drive: true,
+                    ..
+                }
+            ),
+            responses_visible: false,
+            anonymous: matches!(
+                provenance,
+                Provenance::OwnDatabase {
+                    anonymous: true,
+                    ..
+                }
+            ),
         };
         match self
             .repository
-            .create_form(&form, &layout, name_follows_database)
+            .create_form(
+                &form,
+                &layout,
+                matches!(provenance, Provenance::OwnDatabase { .. }),
+            )
             .await
             .map_err(repository_error)?
         {

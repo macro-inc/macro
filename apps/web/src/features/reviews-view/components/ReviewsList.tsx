@@ -1,13 +1,11 @@
 import { useListInteractions } from '@app/components/list';
 import {
-  makeCopyLinkAction,
-  makeFavoriteAction,
   toEntityActionListState,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
 import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-heading';
+import { TutorialRow } from '@app/features/video-tutorials';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   type OpenPrLink,
   PrLinkChips,
@@ -16,19 +14,15 @@ import {
 } from '@block-pr/component/PrLinks';
 import { type PrLinks, priorityTaskName } from '@block-pr/data/pr-links';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   EntitySelectionToolbar,
   type GithubPullRequestEntity,
   ListEntity,
   ListLayoutProvider,
 } from '@entity';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import SplitIcon from '@phosphor/columns.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import StarIcon from '@phosphor/star.svg';
 import type { GithubLinkStatus } from '@queries/auth/github-link';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button } from '@ui';
@@ -53,6 +47,7 @@ import {
   type ReviewsSortId,
   scopeMatchesViewerGithubId,
 } from '../reviews-types';
+import { ReviewContextMenuContent } from './ReviewContextMenu';
 import { ReviewsEmptyState } from './ReviewsEmptyState';
 
 /** What each row links to, loaded alongside the list. */
@@ -80,8 +75,6 @@ export type ReviewsListProps = {
   links: ReviewsListLinks;
 };
 
-const copyLink = makeCopyLinkAction();
-
 function ReviewListElement(props: JSX.HTMLAttributes<HTMLUListElement>) {
   return <ul {...props} aria-label="Pull requests" />;
 }
@@ -91,7 +84,6 @@ function ReviewRow(props: {
   authorDisplayName?: string;
   checked: boolean;
   onChecked: (checked: boolean, shiftKey: boolean) => void;
-  favoriteAction: ReturnType<typeof makeFavoriteAction>;
   onOpen: ReviewsListProps['onOpen'];
   links: ReviewsListLinks;
   onActivate: (newSplit: boolean) => void;
@@ -146,51 +138,13 @@ function ReviewRow(props: {
           }
         />
       </ContextMenu.Trigger>
-      <ContextMenu.Portal>
-        <ContextMenuContent class="w-56 text-xs text-ink-muted">
-          <MenuItem
-            icon={SplitIcon}
-            text="Open in new split"
-            disabled={!globalSplitManager()?.canAppendSplit()}
-            onClick={() => {
-              if (globalSplitManager()?.canAppendSplit())
-                props.onOpen(props.review.id, true);
-            }}
-          />
-          <MenuItem
-            icon={StarIcon}
-            text={
-              props.favoriteAction.isFavorited(props.review)
-                ? 'Remove from favorites'
-                : 'Add to favorites'
-            }
-            onClick={() => void props.favoriteAction.execute([props.review])}
-          />
-          <MenuItem
-            icon={CopyIcon}
-            text="Copy link"
-            onClick={() => void copyLink.execute([props.review])}
-          />
-          <MenuItem
-            icon={ArrowSquareOutIcon}
-            text="Open on GitHub"
-            onClick={() =>
-              window.open(
-                props.review.metadata.url,
-                '_blank',
-                'noopener,noreferrer'
-              )
-            }
-          />
-        </ContextMenuContent>
-      </ContextMenu.Portal>
+      <ReviewContextMenuContent review={props.review} onOpen={props.onOpen} />
     </ContextMenu>
   );
 }
 
 export function ReviewsList(props: ReviewsListProps) {
   const panel = useSplitPanelOrThrow();
-  const favoriteAction = makeFavoriteAction();
   const source = props.source;
   const list = props.list;
   const reviews = list.items.all;
@@ -201,6 +155,9 @@ export function ReviewsList(props: ReviewsListProps) {
   const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
   const listSize = createElementSize(listElement);
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
+  // The tutorial row above the virtualized rows shifts their offsets.
+  const [listStart, setListStart] = createSignal<HTMLDivElement>();
+  const listStartSize = createElementSize(listStart);
   // Date headings sit among the rows like email's; focus and selection keep
   // counting pull requests, so their indexes map to rows for scrolling.
   const rows = createMemo(() =>
@@ -290,7 +247,7 @@ export function ReviewsList(props: ReviewsListProps) {
     )
       return;
     if (element.scrollHeight - element.scrollTop - element.clientHeight < 320)
-      void loadMore();
+      fireAndForget(loadMore(), 'reviews-view');
   };
 
   useInfiniteScrollSentinel({
@@ -298,7 +255,7 @@ export function ReviewsList(props: ReviewsListProps) {
     hasNextPage: () =>
       source.hasMore() && !source.pageError() && !missingIdentity(),
     isFetchingNextPage: source.isLoadingMore,
-    fetchNextPage: () => void loadMore(),
+    fetchNextPage: () => fireAndForget(loadMore(), 'reviews-view'),
     rootMargin: '320px',
   });
 
@@ -324,6 +281,7 @@ export function ReviewsList(props: ReviewsListProps) {
             class="grid flex-1 place-items-center text-ink-muted"
           >
             <SpinnerIcon
+              aria-hidden={false}
               aria-label="Loading reviews"
               class="size-5 animate-spin"
             />
@@ -342,6 +300,7 @@ export function ReviewsList(props: ReviewsListProps) {
               class="grid flex-1 place-items-center text-ink-muted"
             >
               <SpinnerIcon
+                aria-hidden={false}
                 aria-label="Loading reviews"
                 class="size-5 animate-spin"
               />
@@ -354,9 +313,9 @@ export function ReviewsList(props: ReviewsListProps) {
             >
               <span>Reviews couldn’t be loaded.</span>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
-                onClick={() => void source.retry()}
+                onClick={() => fireAndForget(source.retry(), 'reviews-view')}
               >
                 Try again
               </Button>
@@ -412,12 +371,17 @@ export function ReviewsList(props: ReviewsListProps) {
                   </Show>
                 }
               >
+                {/* Outside the virtualized rows, so list focus skips it. */}
+                <div ref={setListStart}>
+                  <TutorialRow tutorial="github" />
+                </div>
                 <ListLayoutProvider ref={listElement}>
                   <Virtualizer
                     as={ReviewListElement}
                     item="li"
                     data={rows()}
                     scrollRef={listElement()}
+                    startMargin={listStartSize.height ?? 0}
                     ref={setVirtualizer}
                     keepMounted={
                       list.focus.index() >= 0
@@ -454,7 +418,6 @@ export function ReviewsList(props: ReviewsListProps) {
                                     ? props.viewerName
                                     : undefined
                                 }
-                                favoriteAction={favoriteAction}
                                 onOpen={props.onOpen}
                                 links={props.links}
                                 onChecked={(checked, shiftKey) =>
@@ -512,11 +475,14 @@ export function ReviewsList(props: ReviewsListProps) {
               >
                 <div class="flex justify-center p-3">
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     disabled={source.isLoadingMore()}
                     onClick={() =>
-                      void (source.hasMore() ? loadMore() : source.retry())
+                      fireAndForget(
+                        source.hasMore() ? loadMore() : source.retry(),
+                        'reviews-view'
+                      )
                     }
                   >
                     <Show

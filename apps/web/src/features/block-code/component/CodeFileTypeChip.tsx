@@ -89,7 +89,7 @@ export function CodeFileTypeChip() {
             {fileType()}
           </Popover.Trigger>
           <Popover.Portal>
-            <Popover.Content class="z-action-menu w-48 rounded-xl glass bg-menu-glass text-ink text-sm overflow-hidden">
+            <Popover.Content class="menu-surface z-action-menu w-48 text-sm overflow-hidden">
               <div class="p-1.5 border-b border-edge">
                 <input
                   ref={searchRef}

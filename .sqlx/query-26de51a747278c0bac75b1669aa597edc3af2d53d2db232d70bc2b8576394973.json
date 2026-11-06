@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM agent_preview_lease l\n                   WHERE id = $1 AND status = 'ready' AND expires_at > now()\n                   AND EXISTS (SELECT 1 FROM agent_preview_replica r WHERE r.id = l.replica_id AND r.expires_at > now())) AS \"live!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "live!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "26de51a747278c0bac75b1669aa597edc3af2d53d2db232d70bc2b8576394973"
+}

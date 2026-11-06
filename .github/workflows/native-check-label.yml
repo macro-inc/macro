@@ -1,0 +1,86 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/native_check_label.rs
+name: Native Check Label
+'on':
+  pull_request:
+    types:
+    - labeled
+    - unlabeled
+    branches:
+    - main
+jobs:
+  rerun:
+    if: (github.event.label.name == 'skip-ios-update' || github.event.label.name == 'skip-android-update') && github.event.pull_request.head.repo.full_name == github.repository
+    name: Re-run the native check
+    runs-on: namespace-profile-linux-tiny-no-cache
+    permissions:
+      actions: write
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      JOB_NAME: ${{ github.event.label.name == 'skip-ios-update' && 'iOS Native Check' || 'Android Native Check' }}
+    timeout-minutes: 30
+    steps:
+    - name: Re-run the gate job for this head
+      run: |
+        # The latest `PR CI` run that ran for commit $1, as {databaseId, status, url},
+        # or nothing. Every label starts a `PR CI` run, and runs for labels other than
+        # run-ci skip every job, so only a run whose Start job ran counts.
+        pr_ci_run() {
+          local id
+          for id in $(gh api "repos/${GH_REPO}/actions/workflows/pr-ci.yml/runs?head_sha=$1&event=pull_request&per_page=30" \
+              --jq '.workflow_runs[].id'); do
+            if [[ -n "$(gh api "repos/${GH_REPO}/actions/runs/${id}/jobs" \
+                --jq '.jobs[] | select(.name == "Start" and .conclusion != "skipped") | .id')" ]]; then
+              gh api "repos/${GH_REPO}/actions/runs/${id}" --jq '{databaseId: .id, status, url: .html_url}'
+              return 0
+            fi
+          done
+        }
+        set -euo pipefail
+        # Re-run the $JOB_NAME job of the PR CI run for $HEAD_SHA (waiting for that run
+        # to finish first: a run in progress saw the labels as they were when it
+        # started). GitHub re-runs the jobs that depend on it with it, up to the
+        # CI gate job that sets the required status. A newer CI request starts a fresh
+        # run that reads the labels itself, and cancels this head's run: nothing to
+        # re-run then.
+        current=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefOid --jq '.headRefOid')
+        if [[ "$current" != "$HEAD_SHA" ]]; then
+          echo "PR head moved from ${HEAD_SHA:0:10} to ${current:0:10}; its run reads the labels itself. Nothing to re-run."
+          exit 0
+        fi
+        deadline=$(( $(date +%s) + 25 * 60 ))
+        while true; do
+          run=$(pr_ci_run "$HEAD_SHA")
+          if [[ -z "$run" ]]; then
+            echo "No PR CI run for ${HEAD_SHA:0:10} yet; nothing to re-run (the next run reads the current labels)."
+            exit 0
+          fi
+          run_id=$(jq -r '.databaseId' <<<"$run")
+          status=$(jq -r '.status' <<<"$run")
+          if [[ "$status" == "completed" ]]; then
+            if [[ "$(gh run view "$run_id" --repo "$GH_REPO" --json conclusion --jq '.conclusion')" == "cancelled" ]]; then
+              echo "Run ${run_id} was cancelled (superseded); nothing to re-run."
+              exit 0
+            fi
+            break
+          fi
+          if (( $(date +%s) > deadline )); then
+            echo "Run ${run_id} is still ${status}; giving up. Re-run the ${JOB_NAME} job by hand." >&2
+            exit 1
+          fi
+          echo "Run ${run_id} is ${status}; waiting for it to finish before re-running the gate."
+          sleep 30
+        done
+        job_id=$(gh run view "$run_id" --repo "$GH_REPO" --json jobs \
+          --jq ".jobs[] | select(.name == \"Web App / ${JOB_NAME}\") | .databaseId")
+        if [[ -z "$job_id" ]]; then
+          echo "Run ${run_id} has no Web App / ${JOB_NAME} job; nothing to re-run."
+          exit 0
+        fi
+        echo "Re-running ${JOB_NAME} (job ${job_id} of run ${run_id}) with the current labels."
+        gh run rerun --repo "$GH_REPO" --job "$job_id"
+      shell: bash

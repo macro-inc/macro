@@ -3,17 +3,18 @@
  * boxes, links.
  */
 
-import ChatText from '@phosphor/chat-text.svg';
-import FilmStrip from '@phosphor/film-strip.svg';
-import Graph from '@phosphor/graph.svg';
-import ImageIcon from '@phosphor/image.svg';
-import LinkIcon from '@phosphor/link.svg';
-import Pi from '@phosphor/pi.svg';
-import Plus from '@phosphor/plus.svg';
-import ShapesIcon from '@phosphor/shapes.svg';
-import SpeakerHigh from '@phosphor/speaker-high.svg';
-import TableIcon from '@phosphor/table.svg';
-import TextT from '@phosphor/text-t.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ChatText from '@icon/system/regular/chat-text.svg';
+import FilmStrip from '@icon/system/regular/film-strip.svg';
+import Graph from '@icon/system/regular/graph.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import Pi from '@icon/system/regular/pi.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import ShapesIcon from '@icon/system/regular/shapes.svg';
+import SpeakerHigh from '@icon/system/regular/speaker-high.svg';
+import TableIcon from '@icon/system/regular/table.svg';
+import TextT from '@icon/system/regular/text-t.svg';
 import { createSignal, For, Index, type JSX, Show } from 'solid-js';
 import { ACCEPT } from '../../core/media';
 import {
@@ -86,9 +87,9 @@ export function InsertTab(props: {
     <>
       <RibbonGroup label="Slides">
         <RibbonTextButton
-          label="New slide"
+          aria-label="New slide"
           disabled={ro()}
-          onClick={() => void c.addSlide()}
+          onClick={() => fireAndForget(c.addSlide(), 'pptx-editor')}
         >
           <Plus />
           New slide
@@ -106,7 +107,7 @@ export function InsertTab(props: {
                     label={layout.name}
                     onClick={() => {
                       close();
-                      void c.addSlide(layout.name);
+                      fireAndForget(c.addSlide(layout.name), 'pptx-editor');
                     }}
                   />
                 )}
@@ -127,7 +128,7 @@ export function InsertTab(props: {
             <TableGridPicker
               onPick={(rows, cols) => {
                 close();
-                void c.insertTable(rows, cols);
+                fireAndForget(c.insertTable(rows, cols), 'pptx-editor');
               }}
             />
           )}
@@ -135,7 +136,7 @@ export function InsertTab(props: {
       </RibbonGroup>
       <RibbonGroup label="Images">
         <RibbonTextButton
-          label="Pictures"
+          aria-label="Pictures"
           disabled={ro()}
           onClick={() => fileInput.click()}
         >
@@ -151,7 +152,8 @@ export function InsertTab(props: {
           onChange={(e) => {
             const file = e.currentTarget.files?.[0];
             e.currentTarget.value = '';
-            if (file) void c.insertImage(file, file.name);
+            if (file)
+              fireAndForget(c.insertImage(file, file.name), 'pptx-editor');
           }}
         />
       </RibbonGroup>
@@ -167,7 +169,7 @@ export function InsertTab(props: {
               load={env.presetPaths}
               onPick={(preset) => {
                 close();
-                void c.insertShape(preset);
+                fireAndForget(c.insertShape(preset), 'pptx-editor');
               }}
             />
           )}
@@ -193,7 +195,7 @@ export function InsertTab(props: {
         ) : null}
         {props.onSmartArt ? (
           <RibbonTextButton
-            label="SmartArt"
+            aria-label="SmartArt"
             tooltip="Insert a SmartArt graphic"
             disabled={ro()}
             data-testid="pptx-insert-smartart"
@@ -206,7 +208,7 @@ export function InsertTab(props: {
       </RibbonGroup>
       <RibbonGroup label="Media">
         <RibbonTextButton
-          label="Video"
+          aria-label="Video"
           tooltip="Insert a video from this device"
           disabled={ro()}
           data-testid="pptx-insert-video"
@@ -216,7 +218,7 @@ export function InsertTab(props: {
           Video
         </RibbonTextButton>
         <RibbonTextButton
-          label="Audio"
+          aria-label="Audio"
           tooltip="Insert audio from this device"
           disabled={ro()}
           data-testid="pptx-insert-audio"
@@ -234,7 +236,8 @@ export function InsertTab(props: {
           onChange={(e) => {
             const file = e.currentTarget.files?.[0];
             e.currentTarget.value = '';
-            if (file) void c.insertMedia(file, 'video');
+            if (file)
+              fireAndForget(c.insertMedia(file, 'video'), 'pptx-editor');
           }}
         />
         <input
@@ -246,13 +249,14 @@ export function InsertTab(props: {
           onChange={(e) => {
             const file = e.currentTarget.files?.[0];
             e.currentTarget.value = '';
-            if (file) void c.insertMedia(file, 'audio');
+            if (file)
+              fireAndForget(c.insertMedia(file, 'audio'), 'pptx-editor');
           }}
         />
       </RibbonGroup>
       <RibbonGroup label="Comments">
         <RibbonTextButton
-          label="Comment"
+          aria-label="Comment"
           tooltip="New Comment (Ctrl+Alt+M)"
           disabled={ro() || !env.review}
           data-testid="pptx-insert-comment"
@@ -264,17 +268,17 @@ export function InsertTab(props: {
       </RibbonGroup>
       <RibbonGroup label="Text">
         <RibbonTextButton
-          label="Text box"
+          aria-label="Text box"
           disabled={ro()}
           data-testid="pptx-insert-textbox"
-          onClick={() => void c.insertTextBox()}
+          onClick={() => fireAndForget(c.insertTextBox(), 'pptx-editor')}
         >
           <TextT />
           Text box
         </RibbonTextButton>
         <HeaderFooterButtons />
         <RibbonTextButton
-          label="Link"
+          aria-label="Link"
           tooltip="Insert link (⌘K)"
           data-testid="pptx-insert-link"
           disabled={ro() || (!c.textActive() && env.selection().length === 0)}
@@ -288,7 +292,7 @@ export function InsertTab(props: {
         {(equation) => (
           <RibbonGroup label="Symbols">
             <RibbonTextButton
-              label="Equation"
+              aria-label="Equation"
               tooltip="Insert an equation (Alt+=)"
               data-testid="pptx-insert-equation"
               disabled={ro()}

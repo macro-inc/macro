@@ -97,11 +97,12 @@ where
 {
     type Output = SetSenderPolicyResponse;
 
+    // The sender's address is personal data, and errors can quote addresses;
+    // the span keeps the policy only.
     #[tracing::instrument(skip_all, fields(
         user_id=?request_context.user_id,
-        sender_email=%self.sender_email,
         policy=?self.policy,
-    ), err)]
+    ))]
     async fn call(
         &self,
         service_context: ServiceContext<EmailToolContext<T, G, E>>,
@@ -148,7 +149,12 @@ where
 
         service_context
             .service
-            .set_sender_policy(&link, &self.sender_email, policy)
+            .set_sender_policy(
+                &MacroUserIdStr((*request_context.user_id).clone()),
+                &link,
+                &self.sender_email,
+                policy,
+            )
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to set sender policy: {e}"),
@@ -165,7 +171,7 @@ where
                 format!("Messages from {sender_email} will now appear in Noise for {inbox}.")
             }
             ToolSenderPolicy::Block => {
-                format!("All new messages from {sender_email} will be trashed for {inbox}.")
+                format!("Queued sender blocking for {sender_email} in {inbox}.")
             }
         };
 

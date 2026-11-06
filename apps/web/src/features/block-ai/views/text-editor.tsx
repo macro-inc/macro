@@ -25,6 +25,7 @@ import {
 } from '@app/features/block-fig/core/caret';
 import type { Info, TextGeometry } from '@core/ai-engine/types';
 import { IS_MAC } from '@core/constant/isMac';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createEffect,
   createSignal,
@@ -150,7 +151,9 @@ export function TextEditor(props: {
 
   // Panel edits, undo, and other people change the layout.
   createEffect(
-    on(props.viewer.editVersion, () => void load(), { defer: true })
+    on(props.viewer.editVersion, () => fireAndForget(load(), 'ai-editor'), {
+      defer: true,
+    })
   );
 
   let pending: Promise<unknown> = Promise.resolve();
@@ -185,7 +188,7 @@ export function TextEditor(props: {
     latest = area.value;
     sync();
     goalX = undefined;
-    void send(latest, burstKey());
+    fireAndForget(send(latest, burstKey()), 'ai-editor');
   };
 
   const history = async (redo: boolean) => {
@@ -211,7 +214,8 @@ export function TextEditor(props: {
   const onDocumentDown = (e: PointerEvent) => {
     const target = e.target as Element | null;
     if (!target || root.contains(target)) return;
-    if (target.closest('[data-testid="ai-canvas"]')) void finish();
+    if (target.closest('[data-testid="ai-canvas"]'))
+      fireAndForget(finish(), 'ai-editor');
   };
   document.addEventListener('pointerdown', onDocumentDown, true);
   const onSelectionChange = () => {
@@ -246,12 +250,15 @@ export function TextEditor(props: {
     const mod = IS_MAC ? e.metaKey : e.ctrlKey;
     if (e.key === 'Escape') {
       e.preventDefault();
-      void finish();
+      fireAndForget(finish(), 'ai-editor');
       return;
     }
     if (mod && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
       e.preventDefault();
-      void history(e.key.toLowerCase() === 'y' || e.shiftKey);
+      fireAndForget(
+        history(e.key.toLowerCase() === 'y' || e.shiftKey),
+        'ai-editor'
+      );
       return;
     }
     const vertical =
@@ -266,10 +273,13 @@ export function TextEditor(props: {
       e.preventDefault();
       const { key: pressed, shiftKey } = e;
       // After what was typed is laid out.
-      void (async () => {
-        await pending;
-        moveByLine(pressed, shiftKey, vertical);
-      })();
+      fireAndForget(
+        (async () => {
+          await pending;
+          moveByLine(pressed, shiftKey, vertical);
+        })(),
+        'ai-editor'
+      );
       return;
     }
     goalX = undefined;

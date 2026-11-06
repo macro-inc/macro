@@ -110,6 +110,7 @@ fn outcome(
     versions: HashMap<TableId, TableVersion>,
 ) -> SqlOutcome {
     SqlOutcome {
+        table_databases: versions.keys().map(|table| (*table, database_id)).collect(),
         result: None,
         changes_applied: 0,
         inserted_row_ids: Vec::new(),
@@ -141,33 +142,34 @@ impl<
         if self.read_only {
             return Err(refused("This SQL surface is read-only."));
         }
-        if let SchemaStatement::CreateDatabase(name) = command {
-            let created = self
-                .databases
-                .create_database(CreateDatabase {
-                    name: name.0,
-                    owner_id: viewer.user_id,
-                    acting_bot: viewer.acting_bot,
-                })
-                .await
-                .map_err(schema_error)?;
-            return Ok(outcome(
-                created.id,
-                format!(
-                    "Created database \"{}\". Call DescribeDatabase for its starter table and column IDs.",
-                    created.name
-                ),
-                HashMap::new(),
-            ));
-        }
-        let catalog = self.catalog(&viewer, request.scope).await?;
+        // Read only by the statements that change an existing database.
+        let catalog = self.catalog(&viewer, request.scope);
         let mut ops = Vec::new();
         let (database_id, summary, rename) = match command {
-            SchemaStatement::CreateDatabase(_) => unreachable!("handled before catalog read"),
+            SchemaStatement::CreateDatabase(name) => {
+                let created = self
+                    .databases
+                    .create_database(CreateDatabase {
+                        name: name.0,
+                        owner_id: viewer.user_id.clone(),
+                        acting_bot: viewer.acting_bot,
+                    })
+                    .await
+                    .map_err(schema_error)?;
+                return Ok(outcome(
+                    created.id,
+                    format!(
+                        "Created database \"{}\". Call DescribeDatabase for its starter table and column IDs.",
+                        created.name
+                    ),
+                    HashMap::new(),
+                ));
+            }
             SchemaStatement::RenameDatabase {
                 database: name,
                 name: new_name,
             } => {
+                let catalog = catalog.await?;
                 let database = database(&catalog, Some(&name), request.scope)?;
                 (
                     database.database.id,
@@ -179,6 +181,7 @@ impl<
                 database: name,
                 tables,
             } => {
+                let catalog = catalog.await?;
                 let database = database(&catalog, Some(&name), request.scope)?;
                 let selected =
                     ViewerCatalog::new(vec![database.clone()], Some(database.database.id));
@@ -202,6 +205,7 @@ impl<
                 table: name,
                 columns,
             } => {
+                let catalog = catalog.await?;
                 let database = database(&catalog, name.database.as_ref(), request.scope)?;
                 let table = TableId::new();
                 ops.push(DatabaseOp::Table {
@@ -244,6 +248,7 @@ impl<
                 )
             }
             SchemaStatement::DropTable(name) => {
+                let catalog = catalog.await?;
                 let table = table(catalog.catalog(), &name)?;
                 ops.push(DatabaseOp::Table {
                     table: table.id,
@@ -259,6 +264,7 @@ impl<
                 table: name,
                 change,
             } => {
+                let catalog = catalog.await?;
                 let table = table(catalog.catalog(), &name)?;
                 let op = match change {
                     SchemaChange::Rename(name) => DatabaseOp::Table {

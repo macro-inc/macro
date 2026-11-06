@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 
-import { staticFileReferenceEndpoint } from '@core/constant/servers';
+import {
+  EMAIL_SERVICE_EMBEDDED_HOSTS,
+  staticFileReferenceEndpoint,
+} from '@core/constant/servers';
 import { $generateNodesFromDOM } from '@lexical/html';
 import { DocumentMentionNode } from '@macro-inc/lexical-core';
 import { $getRoot, $nodesOfType, createEditor } from 'lexical';
@@ -136,6 +139,36 @@ describe('prepareEmailBodyFromHtml', () => {
       'cid:missing',
     ]);
   });
+  it.each(['reply', 'forward'] as const)(
+    'drops Macro read-receipt pixels from a quoted %s',
+    (replyType) => {
+      const pixel = `${EMAIL_SERVICE_EMBEDDED_HOSTS[0]}/opens/token`;
+      const original = {
+        ...replyingTo,
+        body_html_sanitized: `<p>Original</p><img src="${pixel}" width="1" height="1"><img src="https://example.com/logo.png">`,
+      };
+      const prepared = prepareEmailBodyFromHtml('<p>My reply</p>', {
+        replyType,
+        replyingTo: original,
+      });
+      expect(quotedImageSources(decodeBase64Utf8(prepared.bodyHtml))).toEqual([
+        null,
+        'https://example.com/logo.png',
+      ]);
+      const editor = createEmailEditor('My reply');
+      registerToggleAppendedThread(editor);
+      editor.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
+        replyingTo: original,
+        replyType,
+        visible: true,
+      });
+      const fromEditor = prepareEmailBody(editor, {
+        replyType,
+        replyingTo: original,
+      });
+      expect(decodeBase64Utf8(fromEditor!.bodyHtml)).not.toContain('/opens/');
+    }
+  );
   it('does not add a quote block without appendReply (undo-send restore)', () => {
     const prepared = prepareEmailBodyFromHtml('<p>hi there</p>');
     const decoded = decodeBase64Utf8(prepared.bodyHtml);
@@ -166,5 +199,19 @@ describe('prepareEmailBodyFromHtml', () => {
     const quotes = body.querySelectorAll('.macro_quote');
     expect(quotes).toHaveLength(1);
     expect(quotes[0].textContent).toContain('already quoted');
+  });
+
+  it('converts booking link mentions to clickable anchor tags', () => {
+    const prepared = prepareEmailBodyFromHtml(
+      '<p>Book a meeting: <span data-booking-link-mention="true" data-booking-profile-id="abc123" data-booking-slug="30min" data-booking-label="30 Minute Meeting" data-booking-url="https://macro.com/app/book/abc123/30min">30 Minute Meeting</span></p>'
+    );
+    const decoded = decodeBase64Utf8(prepared.bodyHtml);
+    const body = new DOMParser().parseFromString(decoded, 'text/html').body;
+    const link = body.querySelector('a[data-booking-link-mention="true"]');
+    expect(link).not.toBeNull();
+    expect(link?.getAttribute('href')).toBe(
+      'https://macro.com/app/book/abc123/30min'
+    );
+    expect(link?.textContent).toBe('30 Minute Meeting');
   });
 });

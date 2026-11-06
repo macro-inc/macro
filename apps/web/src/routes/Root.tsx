@@ -7,14 +7,17 @@ import {
   useAnalytics,
 } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
+import { rememberMobileEmailAttribution } from '@app/lib/analytics/signupAttribution';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
+import { FullScreenCallPrompt } from '@channel/Call/FullScreenCallPrompt';
 import { CallKitSync } from '@channel/Call/use-callkit';
 import { dismissBootShell } from '@components/app/boot-shell';
 import { RootFrame } from '@components/app/Layout';
+import { useSessionWebsockets } from '@core/auth/session-websockets';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
@@ -24,25 +27,18 @@ import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
 import { IpadUnsupportedDialog } from '@core/mobile/IpadUnsupportedDialog';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
-import {
-  getLoginCookieOptions,
-  setCookie,
-  syncLoginStorage,
-  updateCookie,
-} from '@core/util/cookies';
+import { setCookie } from '@core/util/cookies';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
+import { useNotificationCoverTimeout } from '@macro/tauri/notification-launch';
 import { TauriRouteListener } from '@macro/tauri/TauriProvider';
 import { Telemetry } from '@macro-inc/observability';
 import { BrowserNotificationModal } from '@notifications';
-import {
-  invalidateUserInfo,
-  prefetchUserInfo,
-  useUserInfoQuery,
-} from '@queries/auth/user-info';
+import { invalidateUserInfo, prefetchUserInfo } from '@queries/auth/user-info';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -60,23 +56,16 @@ import {
 } from '@theme/utils/themeUtils';
 import { detect } from 'detect-browser';
 import { createEffect, type JSX, on, onCleanup, onMount } from 'solid-js';
+import { perfMark } from '../observability/perf-marks';
 import { AppRouterView } from './app-router-view';
 
-/** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
-function useSyncLoginCookie() {
-  const userInfoQuery = useUserInfoQuery();
-
-  createEffect(() => {
-    if (!userInfoQuery.isSuccess) return;
-
-    const authenticated = userInfoQuery.data.authenticated ?? false;
-    const { value, ...options } = getLoginCookieOptions(authenticated);
-    updateCookie('login', value, options);
-    syncLoginStorage(authenticated);
-  });
-}
+import { useSyncLoginCookie } from './use-sync-login-cookie';
 
 const rootPreload: RoutePreloadFunc = async (args) => {
+  // Before any await: the desktop link's ad parameters have to be stored
+  // before signup navigates away to the identity provider.
+  rememberMobileEmailAttribution();
+
   await prefetchUserInfo();
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history
@@ -164,6 +153,10 @@ function useUserInfoSideEffects() {
           email: user.email,
           os,
         });
+      } else {
+        // Already identified, including as the mobile-capture email on this
+        // browser. identify() will not switch that browser to the account id.
+        analytics.linkMobileCapturePerson(user.id, user.email);
       }
 
       const planKey = `${user.id}:${user.licenseStatus}`;
@@ -195,8 +188,12 @@ const BOOT_SHELL_MAX_WAIT_MS = 8000;
  */
 function AppRouteFrame(props: RouteSectionProps) {
   useUserInfoSideEffects();
+  useSessionWebsockets();
+  useNotificationCoverTimeout();
   onMount(() => {
-    const cap = setTimeout(dismissBootShell, BOOT_SHELL_MAX_WAIT_MS);
+    const cap = setTimeout(() => {
+      dismissBootShell();
+    }, BOOT_SHELL_MAX_WAIT_MS);
     onCleanup(() => clearTimeout(cap));
   });
   return <RootFrame>{props.children}</RootFrame>;
@@ -209,13 +206,14 @@ export function Root() {
 
   createEffect(() => {
     const cleanup = licenseChannel.subscribe(() => {
-      invalidateUserInfo();
+      fireAndForget(invalidateUserInfo(), 'license-update');
     });
 
     onCleanup(() => cleanup());
   });
 
   onMount(() => {
+    perfMark('boot.root-mounted');
     applyTheme(resolveActiveThemeId());
     ensureMinimalThemeContrast();
   });
@@ -232,6 +230,7 @@ export function Root() {
               <UserContextProvider>
                 <EmailLinksContextProvider>
                   <BrowserNotificationModal />
+                  <FullScreenCallPrompt />
                   <IosPushNotificationModal />
                   <IpadUnsupportedDialog />
                   <GlobalShareInboxConflictDialog />

@@ -9,6 +9,7 @@ export {
 } from './collapsed-sections';
 export {
   type ListControlOption,
+  ListFilterCountBadge,
   ListFilterDropdown,
   type ListFilterDropdownProps,
   type ListFilterGroup,
@@ -50,7 +51,12 @@ export {
   type ViewShellLayout,
   type ViewShellRootProps,
 } from './ViewShell';
-export { ViewSidebar } from './ViewSidebar';
+export {
+  ViewSidebar,
+  ViewSwitcherContext,
+  type ViewSwitcherProps,
+  ViewSwitchTrigger,
+} from './ViewSidebar';
 export {
   type AsideLayout,
   type AsideMode,

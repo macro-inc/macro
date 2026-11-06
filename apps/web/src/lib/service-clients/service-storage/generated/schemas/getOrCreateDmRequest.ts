@@ -9,6 +9,6 @@
  * Request to get or create a direct message channel.
  */
 export interface GetOrCreateDmRequest {
-  /** Recipient user id. */
+  /** Recipient user id (`macro|...`) or agent persona id (`bot|...`). */
   recipient_id: string;
 }

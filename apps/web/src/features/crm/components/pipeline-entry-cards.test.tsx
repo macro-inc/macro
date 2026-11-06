@@ -1,7 +1,15 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { PipelineEntry } from '../core/pipeline-entry';
 import { PipelineEntryCards } from './pipeline-entry-cards';
+
+const scrollIntoView = vi.fn();
+
+beforeEach(() => {
+  // jsdom has no layout, so it leaves scrolling out.
+  Element.prototype.scrollIntoView = scrollIntoView;
+  scrollIntoView.mockReset();
+});
 
 afterEach(cleanup);
 
@@ -51,8 +59,10 @@ it('shows each pipeline row as a card that collapses past four fields', () => {
   expect(sales.textContent).not.toContain('Source value');
   fireEvent.click(screen.getByRole('button', { name: 'Show 1 more' }));
   expect(sales.textContent).toContain('Source value');
+  expect(scrollIntoView).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
   expect(sales.textContent).not.toContain('Source value');
+  expect(scrollIntoView.mock.contexts).toEqual([sales]);
   expect(screen.getByLabelText('Private pipeline')).toBeTruthy();
   expect(
     screen.getByRole('article', { name: 'Partners' }).textContent

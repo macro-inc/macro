@@ -1,5 +1,6 @@
+import { Telemetry } from '@macro-inc/observability';
 import { Channel, invoke } from '@tauri-apps/api/core';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import { isTauri } from '../../internal/platform';
 import type { MinimalWebSocket, WebSocketFactory } from './minimal-websocket';
 
@@ -35,11 +36,25 @@ type TauriMessage =
  * (seanaye/feat/ws-replay-buffer). Every incoming message carries a
  * per-connection sequence number so missed messages can be recovered after
  * the webview was suspended.
+ *
+ * `message` is a `TauriMessage`, a bare string when the read failed (the
+ * plugin's display of the tungstenite error; the stream ends after it), or
+ * `null` for a raw frame. It stays `unknown` because native builds ship
+ * separately from this code and may send shapes this version does not know.
  */
 interface ReplayEnvelope {
   seq: number;
-  message: TauriMessage;
+  message: unknown;
 }
+
+/** Native builds that predate the replay fork send bare messages. */
+const toEnvelope = (payload: unknown): ReplayEnvelope =>
+  match(payload)
+    .with({ seq: P.number }, (envelope) => ({
+      seq: envelope.seq,
+      message: 'message' in envelope ? envelope.message : undefined,
+    }))
+    .otherwise((message) => ({ seq: 0, message }));
 
 interface RecoverResponse {
   messages: ReplayEnvelope[];
@@ -108,14 +123,15 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
       // We call invoke() directly and pre-register our handler BEFORE the
       // connection is made, so messages sent by the server immediately after
       // the handshake cannot be dropped (see module comment above).
-      const listeners = new Set<(message: TauriMessage) => void>();
+      const listeners = new Set<(message: unknown) => void>();
 
-      const handleMessage = (message: TauriMessage) => {
+      const handleMessage = (message: unknown) => {
         match(message)
-          .with({ type: 'Text' }, ({ data }) => {
+          .with(P.string, () => this.handleFailure('receive'))
+          .with({ type: 'Text', data: P.string }, ({ data }) => {
             this.handleMessage(data);
           })
-          .with({ type: 'Binary' }, ({ data }) => {
+          .with({ type: 'Binary', data: P.array(P.number) }, ({ data }) => {
             // Convert number array back to Uint8Array/Blob based on binaryType
             const messageData =
               this._binaryType === 'arraybuffer'
@@ -123,21 +139,32 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
                 : new Blob([new Uint8Array(data)]);
             this.handleMessage(messageData);
           })
-          .with({ type: 'Close' }, ({ data }) => {
-            const closeEvent = new CloseEvent('close', {
-              code: data?.code || 1000,
-              reason: data?.reason || '',
-              wasClean: true,
-            });
-            this.handleClose(closeEvent);
+          .with(
+            { type: 'Close', data: { code: P.number, reason: P.string } },
+            ({ data }) => {
+              this.handleClose(
+                new CloseEvent('close', {
+                  code: data.code || 1000,
+                  reason: data.reason,
+                  wasClean: true,
+                })
+              );
+            }
+          )
+          .with({ type: 'Close' }, () => {
+            this.handleClose(
+              new CloseEvent('close', { code: 1000, wasClean: true })
+            );
           })
-          .with({ type: 'Ping' }, () => {
-            // Handle ping (usually automatic)
+          .with({ type: P.union('Ping', 'Pong') }, () => {
+            // The plugin answers pings itself.
           })
-          .with({ type: 'Pong' }, () => {
-            // Handle pong (usually automatic)
-          })
-          .exhaustive();
+          .otherwise((unknown) => {
+            console.warn(
+              `Tauri WebSocket ${url}: ignoring unrecognized message`,
+              unknown
+            );
+          });
       };
 
       // Register BEFORE invoke so any message that arrives during the handshake
@@ -163,14 +190,24 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
           }
           this.lastSeq = envelope.seq;
         }
+        // A throw here would escape into Tauri's Channel, which then never
+        // advances past this message and stalls every later one.
         listeners.forEach((l) => {
-          l(envelope.message);
+          try {
+            l(envelope.message);
+          } catch (error) {
+            console.error(
+              `Tauri WebSocket ${url}: message handler threw`,
+              error
+            );
+          }
         });
       };
       this.deliver = deliver;
 
-      const onMessage = new Channel<ReplayEnvelope>();
-      onMessage.onmessage = (envelope: ReplayEnvelope) => {
+      const onMessage = new Channel<unknown>();
+      onMessage.onmessage = (payload: unknown) => {
+        const envelope = toEnvelope(payload);
         if (this.recovering) {
           this.queued.push(envelope);
         } else {
@@ -203,7 +240,9 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
       // suspended (e.g. iOS backgrounding) whenever we become visible again.
       this.visibilityHandler = () => {
         if (document.visibilityState === 'visible') {
-          void this.recover();
+          this.recover().catch((error: unknown) => {
+            console.error(`Tauri WebSocket recover failed for ${url}:`, error);
+          });
         }
       };
       document.addEventListener('visibilitychange', this.visibilityHandler);
@@ -314,17 +353,7 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
       console.warn(
         `Tauri WebSocket ${this._url}: unrecoverable missed messages, forcing reconnect`
       );
-      this.disconnectSocket().catch(() => {});
-      this._readyState = this.CLOSED;
-      this.removeListener?.();
-      this.handleError(new Event('error'));
-      this.handleClose(
-        new CloseEvent('close', {
-          code: 1006,
-          reason: 'Replay gap detected',
-          wasClean: false,
-        })
-      );
+      this.failConnection('Replay gap detected');
     }
   }
 
@@ -447,19 +476,30 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
       });
   }
 
-  private handleSendRejection(error: unknown) {
+  private handleFailure(operation: 'receive' | 'send') {
     if (this._readyState === this.CLOSING || this._readyState === this.CLOSED)
       return;
-    console.error(`Tauri WebSocket send error for ${this._url}:`, error);
+    const reason = operation === 'send' ? 'Send failed' : 'Receive failed';
+    const span = Telemetry.span('websocket.transport.failure');
+    span.setAttr('websocket.transport', 'tauri');
+    if (this.socketId !== null)
+      span.setAttr('websocket.socket_id', this.socketId);
+    span.setAttr('websocket.operation', operation);
+    span.setAttr('websocket.outcome', 'closed');
+    // Native errors may contain URLs or payloads. Record only the operation.
+    span.error(reason);
+    span.end();
+    this.failConnection(reason);
+  }
+
+  /** Reports an abnormal closure, like a browser socket's error then close. */
+  private failConnection(reason: string) {
     this._readyState = this.CLOSED;
     this.removeListener?.();
+    if (this.socketId !== null) this.disconnectSocket().catch(() => {});
     this.handleError(new Event('error'));
     this.handleClose(
-      new CloseEvent('close', {
-        code: 1006,
-        reason: 'Send failed',
-        wasClean: false,
-      })
+      new CloseEvent('close', { code: 1006, reason, wasClean: false })
     );
   }
 
@@ -472,8 +512,8 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
 
     if (typeof data === 'string') {
       // Send as text message
-      this.sendMessage({ type: 'Text', data }).catch((e: unknown) =>
-        this.handleSendRejection(e)
+      this.sendMessage({ type: 'Text', data }).catch(() =>
+        this.handleFailure('send')
       );
     } else {
       // Convert binary data to number array for Tauri
@@ -506,7 +546,7 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
 
       // Send as binary message with number array
       this.sendMessage({ type: 'Binary', data: Array.from(uint8Array) }).catch(
-        (e: unknown) => this.handleSendRejection(e)
+        () => this.handleFailure('send')
       );
     }
   }

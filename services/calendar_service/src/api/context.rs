@@ -38,7 +38,10 @@ pub type SchedulingService = calendar_scheduling::domain::service::Service<
 /// User-initiated calendar mutation service.
 pub type CalendarMutationSvc = CalendarMutationServiceImpl<
     PgCalendarRepository,
-    GoogleCalendarClient<RedisCalendarRequestGate>,
+    calendar_events::domain::providers::CalendarProviders<
+        GoogleCalendarClient<RedisCalendarRequestGate>,
+        email_api_client::OutlookApiClientRepository,
+    >,
     CalendarTokenProviderAdapter,
     CalendarEventBroker,
     ConnectionGatewayCalendarRefresh,
@@ -47,6 +50,8 @@ pub type CalendarMutationSvc = CalendarMutationServiceImpl<
 /// Shared HTTP application state for the calendar service.
 #[derive(Clone)]
 pub struct ApiContext {
+    /// Signed invocation validation and propagation.
+    pub correlation: agent_correlation::inbound::CorrelationState,
     /// Resolved service configuration.
     pub config: Arc<Config>,
     /// Authorization state for authenticated mutation routes.
@@ -59,4 +64,6 @@ pub struct ApiContext {
     pub calendar_team_service: Arc<CalendarTeamSvc>,
     /// Personal and team scheduling service.
     pub scheduling_service: Arc<SchedulingService>,
+    /// Meeting-link client minting the Macro calls new events carry.
+    pub meeting_links: Arc<calendar_scheduling::outbound::meeting_links::HttpMeetingLinks>,
 }

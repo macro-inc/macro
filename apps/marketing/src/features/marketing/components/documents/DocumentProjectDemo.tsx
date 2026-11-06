@@ -16,6 +16,7 @@ import type {
   WorkspaceComment,
   WorkspaceView,
 } from '../../core/dummy-workspace';
+import { DEMO_INTERACTION_EVENT } from '../DemoInteractionBoundary';
 import { ChannelComposer } from '../email/frozen/ChannelComposer';
 import { ProductDemo } from '../product/ProductPage';
 import { ProductWorkspace } from '../product/ProductWorkspace';
@@ -183,9 +184,28 @@ export function DocumentSourceSurface(
   );
 }
 
-export function DocumentProjectDemo() {
+export function DocumentProjectDemo(props: { teamEditing?: boolean } = {}) {
   let root!: HTMLDivElement;
-  const clock = createSceneClock({ root: () => root, end: 5200, lead: 900 });
+  const clock = createSceneClock({
+    root: () => root,
+    end: props.teamEditing ? 6500 : 5200,
+    lead: props.teamEditing ? 1200 : 900,
+    visibilityThreshold: props.teamEditing ? 0.5 : undefined,
+  });
+  onMount(() => {
+    if (!props.teamEditing) return;
+    // The hero has an outer interaction gate around the nested ProductDemo.
+    const boundary =
+      root.parentElement?.closest('.demo-interaction-boundary') ?? root;
+    boundary.addEventListener(DEMO_INTERACTION_EVENT, clock.pause);
+    root.addEventListener('focusin', clock.pause);
+    root.addEventListener('beforeinput', clock.pause);
+    onCleanup(() => {
+      boundary.removeEventListener(DEMO_INTERACTION_EVENT, clock.pause);
+      root.removeEventListener('focusin', clock.pause);
+      root.removeEventListener('beforeinput', clock.pause);
+    });
+  });
   const [source, setSource] = createSignal<DocumentSource>();
   const [focusSource, setFocusSource] = createSignal(false);
   const [comments, setComments] = createSignal<WorkspaceComment[]>([
@@ -220,7 +240,11 @@ export function DocumentProjectDemo() {
       ref={(element) => {
         root = element;
       }}
-      label="Write together in the Website brief"
+      label={
+        props.teamEditing
+          ? 'Julia and Jacob edit the Website brief together'
+          : 'Write together in the Website brief'
+      }
       onInteract={clock.pause}
       height={660}
       mobileHeight={650}
@@ -258,10 +282,65 @@ export function DocumentProjectDemo() {
           }
         >
           <h2>What we’re changing</h2>
-          <p>
-            Make the homepage easier to scan. Show what the product does before
-            asking people to sign up.
-          </p>
+          <Show
+            when={props.teamEditing}
+            fallback={
+              <p>
+                Make the homepage easier to scan. Show what the product does
+                before asking people to sign up.
+              </p>
+            }
+          >
+            <p class="doc-stable-edit doc-team-edit">
+              <span
+                class="doc-edit-measure"
+                aria-hidden="true"
+                contentEditable={false}
+                data-content="Make the homepage easier to scan on mobile. Show the product before asking people to sign up."
+              />
+              <span class="doc-edit-live">
+                Make the homepage easier to scan
+                <span
+                  class="doc-team-format"
+                  data-selecting={
+                    clock.live() && clock.t() >= 4200 && clock.t() < 4800
+                  }
+                  data-bold={clock.t() >= 4800}
+                >
+                  {typed(' on mobile', clock.t(), 2000, 3400)}
+                </span>
+                <Show
+                  when={clock.live() && clock.t() >= 2000 && clock.t() < 5000}
+                >
+                  <span
+                    class="doc-caret doc-named-caret"
+                    data-caret="jacob"
+                    data-name="Jacob"
+                    contentEditable={false}
+                    aria-hidden="true"
+                  />
+                </Show>
+                .{' '}
+                {typed(
+                  'Show the product before asking people to sign up.',
+                  clock.t(),
+                  700,
+                  5000
+                )}
+                <Show
+                  when={clock.live() && clock.t() >= 700 && clock.t() < 5400}
+                >
+                  <span
+                    class="doc-caret doc-named-caret"
+                    data-caret="julia"
+                    data-name="Julia"
+                    contentEditable={false}
+                    aria-hidden="true"
+                  />
+                </Show>
+              </span>
+            </p>
+          </Show>
           <h2>Pricing</h2>
           <p>
             {PROJECT_INTRO} Julia’s notes are in{' '}
@@ -274,8 +353,10 @@ export function DocumentProjectDemo() {
             </li>
             <li>
               Julia checks the copy.
-              {typed(' Keep the headings short.', clock.t(), 1200, 3800)}
-              <Show when={clock.live() && !clock.done()}>
+              {props.teamEditing
+                ? ' Keep the headings short.'
+                : typed(' Keep the headings short.', clock.t(), 1200, 3800)}
+              <Show when={!props.teamEditing && clock.live() && !clock.done()}>
                 <span
                   class="doc-caret doc-named-caret"
                   data-caret="julia"
@@ -285,8 +366,10 @@ export function DocumentProjectDemo() {
             </li>
             <li>
               Jacob tests signup.
-              {typed(' Check it on mobile too.', clock.t(), 2000, 5200)}
-              <Show when={clock.live() && !clock.done()}>
+              {props.teamEditing
+                ? ' Check it on mobile too.'
+                : typed(' Check it on mobile too.', clock.t(), 2000, 5200)}
+              <Show when={!props.teamEditing && clock.live() && !clock.done()}>
                 <span
                   class="doc-caret doc-named-caret"
                   data-caret="jacob"

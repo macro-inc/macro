@@ -181,8 +181,8 @@ async fn parallel_success_emits_all_calls_and_responses() {
 }
 
 // TODO: add support for concurrent execution (unsupported by rig)
-/// Long enough to let a slow tool finish so we observe full ordering, short
-/// enough to keep the suite quick.
+// Long enough to let a slow tool finish so we observe full ordering, short
+// enough to keep the suite quick.
 // const SLOW: u64 = 200;
 // const MEDIUM: u64 = 100;
 // const FAST: u64 = 10;

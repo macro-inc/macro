@@ -8,6 +8,7 @@ vi.mock('@service-storage/client', () => ({
 
 import {
   clearTypingIndicators,
+  getTypingAgents,
   getTypingUsers,
   handleCommsTyping,
   TYPING_INDICATOR_TIMEOUT_MS,
@@ -60,5 +61,53 @@ describe('channel typing indicators', () => {
 
     vi.advanceTimersByTime(1);
     expect(typingUsers()).toEqual([]);
+  });
+});
+
+describe('agent typing indicators', () => {
+  const parent = { type: 'channel', id: 'channel-1' } as const;
+  const agentTyping = (
+    action: 'start' | 'stop',
+    phase: 'thinking' | 'working' = 'thinking',
+    threadId: string | null = null
+  ) =>
+    handleCommsTyping(
+      {
+        action,
+        parent,
+        user_id: 'bot|agent',
+        thread_id: threadId,
+        agent: { session_id: 'session-1', phase },
+      },
+      currentUserId
+    );
+
+  it('keeps what an agent is doing beside its typing, updated in place', () => {
+    agentTyping('start');
+    handleCommsTyping(
+      { action: 'start', parent, user_id: 'user-typing' },
+      currentUserId
+    );
+    expect([...getTypingAgents(parent)]).toEqual([
+      ['bot|agent', { sessionId: 'session-1', phase: 'thinking' }],
+    ]);
+
+    const before = getTypingUsers(parent);
+    agentTyping('start', 'working');
+    expect(getTypingUsers(parent)).toBe(before);
+    expect(getTypingAgents(parent).get('bot|agent')?.phase).toBe('working');
+
+    agentTyping('stop');
+    expect(getTypingAgents(parent).size).toBe(0);
+    expect(typingUsers()).toEqual(['user-typing']);
+  });
+
+  it('scopes an agent to the thread it types in and expires it', () => {
+    agentTyping('start', 'thinking', 'root-1');
+    expect(getTypingAgents(parent).size).toBe(0);
+    expect(getTypingAgents(parent, 'root-1').has('bot|agent')).toBe(true);
+
+    vi.advanceTimersByTime(TYPING_INDICATOR_TIMEOUT_MS);
+    expect(getTypingAgents(parent, 'root-1').size).toBe(0);
   });
 });

@@ -10,7 +10,7 @@ import { SearchUploadHandler } from './search-upload-lambda';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'cloud-storage-search',
 };
 

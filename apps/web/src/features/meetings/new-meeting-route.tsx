@@ -5,6 +5,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useIsAuthenticated, useUserId } from '@core/context/user';
 import { readBackgroundImage } from '@core/media/read-background-image';
 import { idToDisplayName } from '@core/user/util';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useCallRecordQuery } from '@queries/call/call';
 import {
   cancelMeetingPreparation,
@@ -31,9 +32,10 @@ import { MeetingPage } from './views/meeting-page';
 function NewMeetingSetup(props: {
   userId: string;
   onCallStateChange: (connected: boolean, shareToken: string) => void;
-  onLeave: () => void;
+  onLeave: (path: string) => void;
 }) {
   const call = useCallContext();
+  const navigate = useNavigate();
   const lifecycle = useMeetingSessionLifecycle();
   const author = useAuthor();
   const people = useMeetingTeammatesSource(() => props.userId, idToDisplayName);
@@ -52,7 +54,7 @@ function NewMeetingSetup(props: {
   });
   const onPageShow = (event: PageTransitionEvent) => {
     // Back/forward cache restores the same component, whose old room was cancelled.
-    if (event.persisted) void draft.warmup();
+    if (event.persisted) fireAndForget(draft.warmup(), 'meetings');
   };
   window.addEventListener('pagehide', draft.cancel);
   window.addEventListener('pageshow', onPageShow);
@@ -87,6 +89,7 @@ function NewMeetingSetup(props: {
     <MeetingPage
       source={source}
       onLeave={props.onLeave}
+      onBack={() => navigate('/app')}
       onCallStateChange={(connected) =>
         props.onCallStateChange(connected, shareToken())
       }
@@ -144,12 +147,12 @@ function NewMeetingSetup(props: {
           if (call.isInCall() && call.activeCallId() === credentials.callId) {
             // Invitations report failures in the call; they must not hold
             // the host on the setup screen after LiveKit connects.
-            void draft.ring();
+            fireAndForget(draft.ring(), 'meetings');
           }
         },
         disconnect: call.meetingSession.disconnect,
       }}
-      renderCall={(onLeave, name) => (
+      renderCall={(onLeave, name, _credentials, copyButton) => (
         <div class="flex h-full min-h-0 flex-col">
           <Show when={draft.inviteError()}>
             <div
@@ -161,7 +164,7 @@ function NewMeetingSetup(props: {
                 type="button"
                 variant="ghost"
                 disabled={draft.inviting()}
-                onClick={() => void draft.ring()}
+                onClick={() => fireAndForget(draft.ring(), 'meetings')}
               >
                 {draft.inviting() ? 'Sending…' : 'Retry invites'}
               </Button>
@@ -171,6 +174,7 @@ function NewMeetingSetup(props: {
             <CallOverlay
               onLeave={onLeave}
               localName={name()}
+              footerLeading={copyButton}
               showTeamSharing={false}
             />
           </div>
@@ -182,7 +186,7 @@ function NewMeetingSetup(props: {
 
 export function NewMeetingRoute(props: {
   onCallStateChange: (connected: boolean, shareToken: string) => void;
-  onLeave: () => void;
+  onLeave: (path: string) => void;
 }) {
   const authenticated = useIsAuthenticated();
   const userId = useUserId();

@@ -24,9 +24,11 @@ fn jwt_expiring_at(exp: i64) -> String {
     )
 }
 
-/// Counts mints and answers with a fixed-expiry token.
+/// Counts mints, records the agent each was for, and answers with a
+/// fixed-expiry token.
 struct CountingTokens {
     minted: AtomicUsize,
+    agents: Mutex<Vec<BotId>>,
     expires_at: DateTime<Utc>,
 }
 
@@ -34,6 +36,7 @@ impl CountingTokens {
     fn expiring_at(expires_at: DateTime<Utc>) -> Self {
         Self {
             minted: AtomicUsize::new(0),
+            agents: Mutex::new(Vec::new()),
             expires_at,
         }
     }
@@ -44,7 +47,13 @@ impl CountingTokens {
 }
 
 impl MacroApiTokens for &CountingTokens {
-    async fn mint(&self, _owner: &MacroUserIdStr<'static>) -> Result<String, EgressError> {
+    async fn mint(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        agent: BotId,
+        _session: uuid::Uuid,
+    ) -> Result<String, EgressError> {
+        self.agents.lock().expect("lock").push(agent);
         let count = self.minted.fetch_add(1, Ordering::SeqCst) + 1;
         Ok(format!(
             "{}#{count}",
@@ -63,6 +72,8 @@ impl McpCredentials for &SpyInner {
     async fn resolve(
         &self,
         _owner: &MacroUserIdStr<'static>,
+        _agent: BotId,
+        _session: uuid::Uuid,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
         let McpDestination::Connected(slug) = destination else {
@@ -84,7 +95,12 @@ async fn answers_macros_own_destination_with_a_minted_token() {
     let credentials = WithMacroMcp::new(&inner, &tokens, macro_url(), false).expect("constructed");
 
     let McpResolution::Connected(call) = credentials
-        .resolve(&owner(), &McpDestination::Macro)
+        .resolve(
+            &owner(),
+            BotId::TEST_A,
+            uuid::Uuid::nil(),
+            &McpDestination::Macro,
+        )
         .await
         .expect("resolved")
     else {
@@ -108,12 +124,39 @@ async fn reuses_a_token_until_it_nears_expiry() {
 
     for _ in 0..3 {
         credentials
-            .resolve(&owner(), &McpDestination::Macro)
+            .resolve(
+                &owner(),
+                BotId::TEST_A,
+                uuid::Uuid::nil(),
+                &McpDestination::Macro,
+            )
             .await
             .expect("resolved");
     }
 
     assert_eq!(tokens.minted.load(Ordering::SeqCst), 1);
+}
+
+/// The token carries the session's agent, so one owner's two agents must
+/// each get their own: a hit for one would post the other's comments under
+/// the wrong name.
+#[tokio::test]
+async fn each_agent_of_one_owner_gets_its_own_token() {
+    let tokens = CountingTokens::fresh();
+    let inner = SpyInner::default();
+    let credentials = WithMacroMcp::new(&inner, &tokens, macro_url(), false).expect("constructed");
+
+    for agent in [BotId::TEST_A, BotId::TEST_B, BotId::TEST_A] {
+        credentials
+            .resolve(&owner(), agent, uuid::Uuid::nil(), &McpDestination::Macro)
+            .await
+            .expect("resolved");
+    }
+
+    assert_eq!(
+        *tokens.agents.lock().expect("lock"),
+        [BotId::TEST_A, BotId::TEST_B]
+    );
 }
 
 #[tokio::test]
@@ -125,7 +168,12 @@ async fn a_token_about_to_expire_is_replaced() {
 
     for _ in 0..2 {
         credentials
-            .resolve(&owner(), &McpDestination::Macro)
+            .resolve(
+                &owner(),
+                BotId::TEST_A,
+                uuid::Uuid::nil(),
+                &McpDestination::Macro,
+            )
             .await
             .expect("resolved");
     }
@@ -140,7 +188,12 @@ async fn every_other_slug_delegates_to_the_inner_resolver() {
     let credentials = WithMacroMcp::new(&inner, &tokens, macro_url(), false).expect("constructed");
 
     let refusal = credentials
-        .resolve(&owner(), &connected("linear"))
+        .resolve(
+            &owner(),
+            BotId::TEST_A,
+            uuid::Uuid::nil(),
+            &connected("linear"),
+        )
         .await
         .expect_err("the spy refuses everything");
 
@@ -164,7 +217,12 @@ async fn refuses_a_cleartext_url_unless_local_dev_permits_it() {
     let inner = SpyInner::default();
     let permitted = WithMacroMcp::new(&inner, &tokens, url, true).expect("constructed");
     let McpResolution::Connected(call) = permitted
-        .resolve(&owner(), &McpDestination::Macro)
+        .resolve(
+            &owner(),
+            BotId::TEST_A,
+            uuid::Uuid::nil(),
+            &McpDestination::Macro,
+        )
         .await
         .expect("resolved")
     else {
@@ -186,4 +244,20 @@ fn an_unreadable_token_is_an_upstream_error() {
         let refusal = token_expiry(garbage).expect_err(garbage);
         assert!(matches!(refusal, EgressError::Upstream(_)), "{garbage}");
     }
+}
+
+#[tokio::test]
+async fn sessions_of_the_same_agent_never_share_mcp_credentials() {
+    let tokens = CountingTokens::fresh();
+    let inner = SpyInner::default();
+    let credentials = WithMacroMcp::new(&inner, &tokens, macro_url(), false).unwrap();
+    let first = uuid::Uuid::now_v7();
+    let second = uuid::Uuid::now_v7();
+    for session in [first, second, first] {
+        credentials
+            .resolve(&owner(), BotId::TEST_A, session, &McpDestination::Macro)
+            .await
+            .unwrap();
+    }
+    assert_eq!(tokens.minted.load(Ordering::SeqCst), 2);
 }

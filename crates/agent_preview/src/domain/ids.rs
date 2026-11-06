@@ -3,7 +3,7 @@
 use super::PreviewError;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use rand::RngCore;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 /// Length of a routing ID in characters, and so of its DNS label.
@@ -15,7 +15,7 @@ const LENGTH: usize = 32;
 /// as user-supplied strings - one in a `Host` header, one in an entity access
 /// receipt - and the registry is keyed by the session while credentials point at
 /// the preview, so the two must not be interchangeable.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PreviewId(String);
 

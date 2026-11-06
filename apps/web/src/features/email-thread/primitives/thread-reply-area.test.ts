@@ -45,6 +45,7 @@ function setup(touch: boolean) {
     return {
       area,
       draft,
+      close: () => setMobileId(undefined),
       bottomOpen,
       mobileId,
       setThreadId,
@@ -87,6 +88,27 @@ describe('thread reply placement', () => {
     }
   );
 
+  it('keeps a closed touch composer closed when the saved draft updates', () => {
+    const state = setup(true);
+    const parent = message('parent');
+    expect(state.mobileId()).toBe('parent');
+    state.close();
+    state.setDrafts({
+      parent: { ...state.draft, updated_at: '2026-10-31T19:13:00.000Z' },
+    });
+    state.setMessages([{ ...parent }]);
+    expect(state.mobileId()).toBeUndefined();
+
+    // A draft that appears before the composer was ever shown still opens it.
+    batch(() => {
+      state.setThreadId('second');
+      state.setDrafts({});
+    });
+    expect(state.mobileId()).toBeUndefined();
+    state.setDrafts({ parent: state.draft });
+    expect(state.mobileId()).toBe('parent');
+  });
+
   it('uses draft-only threads while respecting ownership and settlement gates', () => {
     const state = setup(false);
     state.setMessages([]);
@@ -103,5 +125,12 @@ describe('thread reply placement', () => {
     expect(state.area.inFlow()).toBe(false);
     state.setAllMessages([]);
     expect(state.area.info()).toBeUndefined();
+  });
+
+  it('never reports an in-flow reply input on touch', () => {
+    const state = setup(true);
+    state.setMessages([]);
+    state.setAllMessages([state.draft]);
+    expect(state.area.inFlow()).toBe(false);
   });
 });

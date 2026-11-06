@@ -1,23 +1,54 @@
 import EmptyStateCompaniesGraphic from '@design/empty-state-companies.svg';
 import { EmptyStatePanel } from '@ui';
 import { Match, Switch } from 'solid-js';
+import {
+  CrmListEmpty,
+  CrmListError,
+  CrmListSearchEmpty,
+  CrmListSkeleton,
+} from '../components/list-state';
+import { useCrmContext } from '../context/crm-context';
 import { useCrmWorkspace } from '../context/workspace-context';
 import { useCurrentTeamQuery } from './use-crm';
 
-export function CrmEmptyState() {
-  const { host, activeTab, queryFilters } = useCrmWorkspace();
+export function CrmEmptyState(
+  props: {
+    filtered?: boolean;
+    onClearFilters?: () => void;
+    onClearPeopleSearch?: () => void;
+    onEditList?: () => void;
+  } = {}
+) {
+  const {
+    host,
+    activeTab,
+    peopleVisibility,
+    queryFilters,
+    searchText,
+    setSearchText,
+    stageFilter,
+    ownerFilter,
+  } = useCrmWorkspace();
+  const { openCreateCompany, openCreateContact } = useCrmContext();
   const peopleSearch = () => queryFilters.state.include.crmContactSearch;
   const teamQuery = useCurrentTeamQuery();
   const teamResolved = () => teamQuery.data !== undefined;
   const hasNoTeam = () => teamQuery.data === null;
   return (
     <Switch>
-      {/* Render nothing until the team query resolves — showing a wrong
-              panel for a moment is worse than a brief blank. */}
-      <Match when={!teamResolved()}>{null}</Match>
+      <Match when={teamQuery.isError && !teamResolved()}>
+        <CrmListError
+          title="Couldn't load CRM settings."
+          onRetry={() => teamQuery.refetch()}
+        />
+      </Match>
+      <Match when={!teamResolved()}>
+        <CrmListSkeleton label="Loading CRM" />
+      </Match>
       <Match when={hasNoTeam()}>
         <EmptyStatePanel
           centered
+          topSpacerClass="grow-[0.5] basis-0 mobile:basis-0"
           graphic={EmptyStateCompaniesGraphic}
           title="Join a team to enable CRM"
           description="Create or join a team in Settings > Team."
@@ -27,20 +58,71 @@ export function CrmEmptyState() {
           }}
         />
       </Match>
+      <Match when={activeTab() === 'people' && !!peopleSearch()}>
+        <CrmListSearchEmpty
+          title={
+            peopleVisibility.showRemoved()
+              ? 'No matching archived people'
+              : 'No matching people'
+          }
+          description="Try a different name or email address."
+          onClearSearch={props.onClearPeopleSearch}
+        />
+      </Match>
+      <Match when={peopleVisibility.showRemoved()}>
+        <CrmListEmpty
+          title={
+            activeTab() === 'people'
+              ? 'No archived people'
+              : 'No archived companies'
+          }
+        />
+      </Match>
+      <Match when={activeTab() === 'people' && props.filtered}>
+        <CrmListEmpty
+          filtered
+          title="No people match these filters"
+          description="Try adjusting or clearing your filters."
+          action={
+            props.onClearFilters
+              ? { label: 'Clear filters', onClick: props.onClearFilters }
+              : undefined
+          }
+        />
+      </Match>
       <Match when={activeTab() === 'people'}>
-        <EmptyStatePanel
-          graphic={EmptyStateCompaniesGraphic}
-          title={peopleSearch() ? 'No matching people' : 'No people yet'}
-          description={
-            peopleSearch()
-              ? 'Try a name or email address.'
-              : 'People connected to your CRM companies will appear here.'
+        <CrmListEmpty
+          title="No people yet"
+          description="People connected to your CRM companies will appear here."
+          action={{ label: 'Add person', onClick: () => openCreateContact() }}
+        />
+      </Match>
+      <Match when={!!searchText().trim()}>
+        <CrmListSearchEmpty
+          title="No matching companies"
+          onClearSearch={() => setSearchText('')}
+        />
+      </Match>
+      <Match
+        when={
+          (props.filtered && !activeTab()?.startsWith('list:')) ||
+          stageFilter().length > 0 ||
+          ownerFilter().length > 0
+        }
+      >
+        <CrmListEmpty
+          filtered
+          title="No companies match these filters"
+          description="Try adjusting the stage or owner filters."
+          action={
+            props.onClearFilters
+              ? { label: 'Clear filters', onClick: props.onClearFilters }
+              : undefined
           }
         />
       </Match>
       <Match when={true}>
-        <EmptyStatePanel
-          graphic={EmptyStateCompaniesGraphic}
+        <CrmListEmpty
           title={
             !activeTab() || activeTab() === 'active'
               ? 'No customers yet'
@@ -54,6 +136,13 @@ export function CrmEmptyState() {
               : activeTab()?.startsWith('list:')
                 ? 'Use Edit list to add companies to this collection.'
                 : 'Companies that match this view will appear here.'
+          }
+          action={
+            !activeTab() || activeTab() === 'active'
+              ? { label: 'Add company', onClick: openCreateCompany }
+              : props.onEditList
+                ? { label: 'Edit list', onClick: props.onEditList }
+                : undefined
           }
         />
       </Match>

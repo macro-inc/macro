@@ -1,0 +1,22 @@
+---
+title: AddSharedCalendarEvent
+description: >-
+  Add a copy of a calendar event someone shared with one of the user's channels
+  to one of the user's Google calendars, as `Add to calendar` on the event's
+  card does.
+---
+
+# AddSharedCalendarEvent
+
+Add a copy of a calendar event someone shared with one of the user's channels to one of the user's Google calendars, as `Add to calendar` on the event's card does. Use it for a calendar event mention (`blockName` `calendar`) whose meeting is not on the user's calendar; pass the mention's `documentId` as `eventId`.
+
+The copy is a snapshot, not an invitation: it keeps the real organizer and lists the user, accepted, as its only guest, while the meeting's other guests and its join link stay out. Nobody is notified, and the copy does not change when the organizer changes the meeting. The user can change only its reminders and availability, or delete it. To be added to the meeting itself, the user asks the person who shared it from the event's card.
+
+Only Google calendars take a copy. When the user has one writable Google calendar the copy goes there; when they have several, ask which one and pass its `calendarId` from ListCalendars. The result is the user's copy, whose `eventId` UpdateCalendarEvent and DeleteCalendarEvent accept. A meeting already on any of the user's calendars is refused on every calendar, so never offer to add it to another one.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `eventId` | string | Yes | The shared event's id: the `documentId` of its calendar event mention. |
+| `calendarId` | string | No | The `calendarId` of a writable Google calendar from ListCalendars. Omit when the user has only one; required when they have several. |

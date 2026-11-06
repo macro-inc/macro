@@ -34,7 +34,7 @@ export function isSharedWithViewer(
     })
     .with({ type: 'foreign' }, (row) => row.storedForId !== viewerId)
     .with({ type: P.union(...UNSHARED_ROW) }, () => false)
-    .exhaustive();
+    .exhaustive(() => false);
 }
 
 export function useIsShared(entity: EntityData) {

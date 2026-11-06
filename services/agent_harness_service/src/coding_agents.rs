@@ -7,10 +7,10 @@ use agent_session::domain::coding_agents::{
     CodingAgentServiceImpl,
 };
 use agent_session::domain::routines::RoutineSessions;
+use agent_session::domain::updates::CodingAgentUpdatesRepo;
 use agent_session::inbound::coding_agents::{CodingAgentsState, coding_agents_router};
 use axum::Router;
 use bots::domain::ports::BotService;
-use claude_cloud_agents::domain::credentials::AccountCredentials;
 use codex_connection::domain::ConnectionService;
 use harness_id::HarnessId;
 use harnesses::domain::ports::HarnessRepo;
@@ -27,7 +27,6 @@ pub struct AvailableCodingAgents<Bots, Harnesses> {
     harnesses: Harnesses,
     pool: PgPool,
     codex: Option<Arc<dyn ConnectionService>>,
-    claude: Option<AccountCredentials>,
 }
 
 impl<Bots, Harnesses> AvailableCodingAgents<Bots, Harnesses> {
@@ -37,14 +36,12 @@ impl<Bots, Harnesses> AvailableCodingAgents<Bots, Harnesses> {
         harnesses: Harnesses,
         pool: PgPool,
         codex: Option<Arc<dyn ConnectionService>>,
-        claude: Option<AccountCredentials>,
     ) -> Self {
         Self {
             bots,
             harnesses,
             pool,
             codex,
-            claude,
         }
     }
 }
@@ -92,14 +89,6 @@ impl<Bots: BotService, Harnesses: HarnessRepo> CodingAgentDirectory
         } else {
             false
         };
-        let claude_connected = if agents.iter().any(|agent| agent.harness == "claude-cloud") {
-            match &self.claude {
-                Some(claude) => claude.contains(user_id.as_ref()).await,
-                None => false,
-            }
-        } else {
-            false
-        };
         let mut candidates = vec![CodingAgentCandidate {
             agent: CodingAgent {
                 id: bot_id::CURSOR_BOT_ID.as_uuid(),
@@ -117,7 +106,6 @@ impl<Bots: BotService, Harnesses: HarnessRepo> CodingAgentDirectory
         let connections = RuntimeConnections {
             cursor: cursor.is_some(),
             codex: codex_connected,
-            claude: claude_connected,
             harnesses,
         };
         candidates.extend(agents.into_iter().map(|agent| {
@@ -165,7 +153,6 @@ fn codex_available(status: &codex_connection::domain::ConnectionStatus) -> bool 
 struct RuntimeConnections {
     cursor: bool,
     codex: bool,
-    claude: bool,
     harnesses: HashMap<HarnessId, bool>,
 }
 
@@ -174,7 +161,6 @@ impl RuntimeConnections {
         match harness {
             "cursor" => self.cursor,
             "codex-cloud" => self.codex,
-            "claude-cloud" => self.claude,
             "in-memory" | "macro-inmem" => true,
             harness_id::MACROD_HARNESS_SLUG => harness_id
                 .and_then(|id| self.harnesses.get(&id))
@@ -186,18 +172,20 @@ impl RuntimeConnections {
 }
 
 /// Reuse authorized session preparation and the normal first-prompt pipeline.
-pub fn router<Directory, Sessions, Auth>(
+pub fn router<Directory, Sessions, Updates, Auth>(
     directory: Directory,
     sessions: Sessions,
+    updates: Updates,
     authorization: MacroAuthorizationState<Auth>,
 ) -> Router
 where
     Directory: CodingAgentDirectory,
     Sessions: RoutineSessions,
+    Updates: CodingAgentUpdatesRepo,
     Auth: MacroAuthorizationService,
 {
     coding_agents_router(CodingAgentsState::new(
-        Arc::new(CodingAgentServiceImpl::new(directory, sessions)),
+        Arc::new(CodingAgentServiceImpl::new(directory, sessions, updates)),
         authorization,
     ))
 }

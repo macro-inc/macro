@@ -5,8 +5,8 @@ import {
   useViewControlHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
-import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
-import { changeSessionArchiveState } from '@app/features/block-agent/queries/change-session-archive-state';
+import { CreateMenuItem } from '@app/components/view-shell/CreateMenuItem';
+import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import {
   type EntityActionListState,
   type EntityActionViewContext,
@@ -16,22 +16,35 @@ import {
   MaybeSoupEntityActionDrawerManager,
   SoupEntityContextMenu,
 } from '@app/features/soup';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { MenuItem } from '@core/component/ContextMenu';
+import { enableAgentUpdates } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { unreadFilterFn } from '@entity/utils/filter';
-import RoutineIcon from '@phosphor/clock-clockwise.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import PlugIcon from '@phosphor/plugs-connected.svg';
-import AgentIcon from '@phosphor/sparkle.svg';
-import TrayIcon from '@phosphor/tray.svg';
+import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
+import CodeIcon from '@icon/system/regular/code.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlugIcon from '@icon/system/regular/plugs-connected.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
 import { Key } from '@solid-primitives/keyed';
-import { cn, Tabs } from '@ui';
+import { makePersisted } from '@solid-primitives/storage';
+import { cn, Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createEffect, createSignal, type JSX, Show } from 'solid-js';
+import type { AgentKind } from '../core/agent-kind';
+import {
+  activeFilterCount,
+  type ConversationFilters,
+  type ConversationGrouping,
+  conversationFacts,
+  conversationMatchesFilters,
+  groupConversations,
+} from '../core/conversation-filters';
 import { compactAge } from '../core/format-age';
-import { type AgentsMode, agentsModeLabel } from '../core/mode';
+import type { AgentsMode } from '../core/mode';
+import { selectOpenPullRequests } from '../core/open-pull-requests';
 import type { AgentsPage } from '../core/pages';
 import {
   type AgentConversationEntity,
@@ -40,9 +53,13 @@ import {
 import { AGENTS_TOUR } from '../tour';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
 import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
+import {
+  ConversationListControls,
+  type ConversationListControlsProps,
+} from './ConversationListControls';
 
-/** Rows a mode should fill before paging stops waiting for a scroll. */
-const MODE_PAGE_FILL = 20;
+/** Rows the filtered list should fill before paging stops waiting for a scroll. */
+const FILTERED_PAGE_FILL = 20;
 
 const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
@@ -50,12 +67,17 @@ const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   senderBucket: undefined,
 };
 
-export type AgentsSidebarProps = {
-  /** Only conversations of this mode are listed. */
-  mode: AgentsMode;
-  onModeChange: (mode: AgentsMode) => void;
+export type AgentsSidebarProps = Omit<
+  ConversationListControlsProps,
+  'filters' | 'grouping'
+> & {
+  /** Only conversations matching these are listed. */
+  filters: ConversationFilters;
+  grouping: ConversationGrouping;
   activePage: AgentsPage | undefined;
   onOpenPage: (page: AgentsPage) => void;
+  onCreateAgent: (kind: AgentKind) => void;
+  onCreateRoutine: () => void;
   modeForConversation: (conversation: AgentConversationEntity) => AgentsMode;
   activeConversationId: string | undefined;
   search: string;
@@ -65,7 +87,6 @@ export type AgentsSidebarProps = {
   error: boolean;
   hasNextPage: boolean;
   loadingNextPage: boolean;
-  onNewConversation: () => void;
   onSearchChange: (search: string) => void;
   onOpenConversation: (
     conversation: AgentConversationEntity,
@@ -80,15 +101,6 @@ function ConversationContextMenu(props: {
   list: EntityActionListState;
   children: JSX.Element;
 }) {
-  const userId = useUserId();
-  const setArchived = async () => {
-    if (props.conversation.type !== 'agent_session') return;
-    await changeSessionArchiveState(
-      props.conversation.id,
-      !props.conversation.isArchived
-    );
-  };
-
   return (
     <SoupEntityContextMenu
       entity={props.conversation}
@@ -99,16 +111,6 @@ function ConversationContextMenu(props: {
       // The nav is a fixed-height flex column, so the trigger's default
       // `h-full` would split that height between the rows; keep rows content-sized.
       class="block h-auto w-full shrink-0"
-      extraItems={
-        props.conversation.type === 'agent_session' &&
-        props.conversation.ownerId === userId() ? (
-          <MenuItem
-            icon={TrayIcon}
-            text={props.conversation.isArchived ? 'Unarchive' : 'Archive'}
-            onClick={setArchived}
-          />
-        ) : undefined
-      }
       onOpenChange={(open) => {
         if (!open) return;
         props.list.focus.set(props.conversation.id);
@@ -160,17 +162,46 @@ function Row(props: {
 
 export function AgentsSidebar(props: AgentsSidebarProps) {
   const panel = useSplitPanelOrThrow();
+  const userId = useUserId();
+  const agentUpdates = useFeatureFlag(enableAgentUpdates);
   const [searchOpen, setSearchOpen] = createSignal(false);
+  const [openPullRequestsOpen, setOpenPullRequestsOpen] = createSignal(true);
   const [conversationsOpen, setConversationsOpen] = createSignal(true);
+  const [archivedOpen, setArchivedOpen] = makePersisted(createSignal(false), {
+    name: 'agents-archived-open',
+  });
   let searchInput: HTMLInputElement | undefined;
-  const inMode = (conversations: AgentConversationEntity[]) =>
-    conversations.filter(
-      (conversation) => props.modeForConversation(conversation) === props.mode
+  const factsOf = (conversation: AgentConversationEntity) =>
+    conversationFacts(
+      conversation,
+      props.modeForConversation(conversation),
+      unreadFilterFn(conversation)
     );
-  const conversations = () => inMode(props.conversations);
-  const archived = () => inMode(props.archived);
+  const matching = (conversations: AgentConversationEntity[]) =>
+    conversations.filter((conversation) =>
+      conversationMatchesFilters(factsOf(conversation), props.filters)
+    );
+  const conversations = () => matching(props.conversations);
+  const openPullRequests = () =>
+    selectOpenPullRequests(
+      props.conversations,
+      userId(),
+      props.modeForConversation
+    );
+  const archived = () => matching(props.archived);
+  const groups = () =>
+    groupConversations(conversations(), factsOf, props.grouping);
+  const filtering = () => activeFilterCount(props.filters) > 0;
   const actionController = createListController({
-    items: () => [...conversations(), ...archived()],
+    items: () => [
+      ...new Map(
+        [
+          ...(agentUpdates().enabled ? openPullRequests() : []),
+          ...conversations(),
+          ...archived(),
+        ].map((conversation) => [conversation.id, conversation])
+      ).values(),
+    ],
     getKey: (conversation) => conversation.id,
     isSelectable: () => false,
   });
@@ -179,11 +210,11 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     getEntity: (conversation) => conversation,
   });
   const total = () => conversations().length + archived().length;
-  // Both modes page through one mixed query, so a short filtered list never
-  // scrolls far enough to ask for more; keep paging until it fills.
+  // Filters apply to one mixed query, so a short filtered list never scrolls
+  // far enough to ask for more; keep paging until it fills.
   createEffect(() => {
     if (
-      total() < MODE_PAGE_FILL &&
+      total() < FILTERED_PAGE_FILL &&
       props.hasNextPage &&
       !props.loading &&
       !props.loadingNextPage &&
@@ -244,7 +275,23 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     <MaybeSoupEntityActionDrawerManager>
       <ViewSidebar.Root aria-label="Agents navigation">
         <Show when={!isTouchDevice()}>
-          <ViewSidebar.Header>
+          <ViewSidebar.Header
+            searchLabel="Search conversations"
+            searchOpen={searchOpen()}
+            onSearchOpenChange={(open) => (open ? openSearch() : closeSearch())}
+            search={() => (
+              <SearchBar
+                ref={searchInput}
+                placeholder="Search conversations"
+                label="Search conversations"
+                value={props.search}
+                onValueChange={props.onSearchChange}
+                onEscape={() => {
+                  if (!props.search) closeSearch();
+                }}
+              />
+            )}
+          >
             <div class="flex min-w-0 items-center gap-1">
               <ViewSidebar.CloseButton />
               <ViewSidebar.Title>Agents</ViewSidebar.Title>
@@ -252,32 +299,14 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           </ViewSidebar.Header>
         </Show>
 
-        <div
-          ref={tourTarget(AGENTS_TOUR.modeSwitch)}
-          class="px-(--sidebar-gutter) pt-1 touch:pt-0"
-        >
-          <Tabs
-            aria-label="Agents mode"
-            fullWidth
-            list={(['chat', 'code'] as const).map((mode) => ({
-              value: mode,
-              label: agentsModeLabel(mode),
-            }))}
-            value={props.mode}
-            onChange={(value) =>
-              props.onModeChange(value === 'code' ? 'code' : 'chat')
-            }
-          />
-        </div>
-
         <Show when={!isTouchDevice()}>
-          <div class="px-(--sidebar-gutter) pt-2">
-            <SidebarCreateButton
-              label="New conversation"
-              onCreate={props.onNewConversation}
-              ref={tourTarget(AGENTS_TOUR.newChat)}
+          <ViewSidebar.Primary>
+            <AgentCreateMenu
+              onCreate={props.onCreateAgent}
+              onRoutine={props.onCreateRoutine}
+              onConversation={() => props.onOpenPage('new')}
             />
-          </div>
+          </ViewSidebar.Primary>
         </Show>
 
         <ViewSidebar.Content class="gap-2 overflow-hidden pt-2">
@@ -313,6 +342,34 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               </ViewSidebar.Item>
             </ViewSidebar.Nav>
           </Show>
+          <Show when={agentUpdates().enabled && openPullRequests().length > 0}>
+            <CollapsibleSection.Root
+              open={openPullRequestsOpen()}
+              onOpenChange={setOpenPullRequestsOpen}
+              class={cn(
+                'flex min-h-0 flex-col',
+                openPullRequestsOpen() ? 'max-h-[40%]' : 'shrink-0'
+              )}
+            >
+              <CollapsibleSection.Header>
+                <CollapsibleSection.Trigger>
+                  <span class="min-w-0 truncate">Open PRs</span>
+                  <span class="text-ink-extra-muted tabular-nums">
+                    {openPullRequests().length}
+                  </span>
+                  <CollapsibleSection.Indicator />
+                </CollapsibleSection.Trigger>
+              </CollapsibleSection.Header>
+              <CollapsibleSection.Content class="flex min-h-0 flex-col">
+                <ViewSidebar.Nav
+                  class="min-h-0 shrink overflow-auto"
+                  aria-label="Open pull requests"
+                >
+                  {rows(openPullRequests)}
+                </ViewSidebar.Nav>
+              </CollapsibleSection.Content>
+            </CollapsibleSection.Root>
+          </Show>
           <CollapsibleSection.Root
             open={conversationsOpen()}
             onOpenChange={setConversationsOpen}
@@ -326,17 +383,28 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                 <span class="min-w-0 truncate">Conversations</span>
                 <CollapsibleSection.Indicator />
               </CollapsibleSection.Trigger>
-              <CollapsibleSection.Action
-                label="Search conversations"
-                aria-pressed={searchOpen()}
-                class={cn(searchOpen() && 'bg-active text-ink')}
-                onClick={() => (searchOpen() ? closeSearch() : openSearch())}
-              >
-                <MagnifyingGlassIcon class="size-3.5" />
-              </CollapsibleSection.Action>
+              <ConversationListControls
+                filters={props.filters}
+                grouping={props.grouping}
+                onFilterChange={props.onFilterChange}
+                onClearFilters={props.onClearFilters}
+                onGroupingChange={props.onGroupingChange}
+                showUnlistedRuns={props.showUnlistedRuns}
+                onShowUnlistedRunsChange={props.onShowUnlistedRunsChange}
+              />
+              <Show when={isTouchDevice()}>
+                <CollapsibleSection.Action
+                  aria-label="Search conversations"
+                  aria-pressed={searchOpen()}
+                  class={cn(searchOpen() && 'bg-active text-ink')}
+                  onClick={() => (searchOpen() ? closeSearch() : openSearch())}
+                >
+                  <MagnifyingGlassIcon class="size-3.5" />
+                </CollapsibleSection.Action>
+              </Show>
             </CollapsibleSection.Header>
             <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col gap-1">
-              <Show when={searchOpen()}>
+              <Show when={isTouchDevice() && searchOpen()}>
                 <SearchBar
                   ref={searchInput}
                   placeholder="Search conversations"
@@ -355,7 +423,23 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                 aria-busy={props.loading || props.loadingNextPage}
                 onScroll={loadMoreNearEnd}
               >
-                {rows(conversations)}
+                <Key each={groups()} by="id">
+                  {(group) => (
+                    <>
+                      <Show when={group().label}>
+                        {(label) => (
+                          <h3 class="flex shrink-0 items-center gap-1.5 px-(--sidebar-item-inset) pt-2 pb-1 text-xs font-medium text-ink-muted">
+                            {label()}
+                            <span class="text-ink-extra-muted tabular-nums">
+                              {group().items.length}
+                            </span>
+                          </h3>
+                        )}
+                      </Show>
+                      {rows(() => group().items)}
+                    </>
+                  )}
+                </Key>
                 <Show when={props.loading && total() === 0}>
                   <AgentSessionListSkeleton />
                 </Show>
@@ -369,10 +453,16 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                   <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-muted">
                     {props.search.trim()
                       ? `No results for "${props.search.trim()}"`
-                      : props.mode === 'code'
-                        ? 'No coding conversations yet.'
+                      : filtering()
+                        ? 'No conversations match these filters.'
                         : 'No conversations yet.'}
                   </p>
+                  <Show when={filtering()}>
+                    <ViewSidebar.Item onClick={props.onClearFilters}>
+                      <ViewSidebar.Icon />
+                      <span class="truncate">Clear filters</span>
+                    </ViewSidebar.Item>
+                  </Show>
                 </Show>
                 <Show when={props.loadingNextPage}>
                   <AgentSessionListSkeleton loadingMore />
@@ -381,26 +471,90 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
             </CollapsibleSection.Content>
           </CollapsibleSection.Root>
           <Show when={archived().length}>
-            <section
+            <CollapsibleSection.Root
+              open={archivedOpen()}
+              onOpenChange={setArchivedOpen}
+              as="section"
               aria-label="Archived conversations"
-              class="mt-auto flex min-h-0 shrink-0 basis-1/4 flex-col border-t border-edge-muted pt-2"
+              class={cn(
+                'mt-auto flex min-h-0 flex-col border-t border-edge-muted pt-2',
+                archivedOpen() ? 'basis-1/4' : 'shrink-0'
+              )}
             >
-              <ViewSidebar.Toolbar class="shrink-0">
-                <h3 class="text-xs font-medium text-ink-muted">Archived</h3>
-                <span class="text-xs text-ink-extra-muted tabular-nums">
-                  {archived().length}
-                </span>
-              </ViewSidebar.Toolbar>
-              <ViewSidebar.Nav
-                class="min-h-0 flex-1 shrink overflow-auto"
-                onScroll={loadMoreNearEnd}
-              >
-                {rows(archived)}
-              </ViewSidebar.Nav>
-            </section>
+              <CollapsibleSection.Header>
+                <CollapsibleSection.Trigger>
+                  <span class="min-w-0 truncate">Archived</span>
+                  <span class="text-ink-extra-muted tabular-nums">
+                    {archived().length}
+                  </span>
+                  <CollapsibleSection.Indicator />
+                </CollapsibleSection.Trigger>
+              </CollapsibleSection.Header>
+              <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col">
+                <ViewSidebar.Nav
+                  class="min-h-0 flex-1 shrink overflow-auto"
+                  onScroll={loadMoreNearEnd}
+                >
+                  {rows(archived)}
+                </ViewSidebar.Nav>
+              </CollapsibleSection.Content>
+            </CollapsibleSection.Root>
           </Show>
         </ViewSidebar.Content>
       </ViewSidebar.Root>
     </MaybeSoupEntityActionDrawerManager>
+  );
+}
+
+export function AgentCreateMenu(props: {
+  onCreate: (kind: AgentKind) => void;
+  onRoutine: () => void;
+  onConversation: () => void;
+}) {
+  return (
+    <Dropdown placement="bottom-start">
+      <Dropdown.Trigger
+        as={ViewCreateButton}
+        presentation="sidebar"
+        menu
+        aria-label="New conversation or agent"
+      />
+      <Dropdown.Content class="w-80 max-w-[calc(100vw-2rem)]">
+        <Dropdown.Group>
+          <CreateMenuItem
+            icon={AgentIcon}
+            title={t('create.conversationLabel')}
+            description={t('create.guideConversation')}
+            onSelect={() => {
+              queueMicrotask(props.onConversation);
+            }}
+          />
+          <CreateMenuItem
+            icon={AgentIcon}
+            title={t('create.workAgentLabel')}
+            description={t('create.guideWorkAgent')}
+            onSelect={() => {
+              queueMicrotask(() => props.onCreate('agent'));
+            }}
+          />
+          <CreateMenuItem
+            icon={CodeIcon}
+            title={t('create.codingAgentLabel')}
+            description={t('create.guideCodingAgent')}
+            onSelect={() => {
+              queueMicrotask(() => props.onCreate('coder'));
+            }}
+          />
+          <CreateMenuItem
+            icon={RoutineIcon}
+            title={t('create.routineLabel')}
+            description={t('create.guideRoutine')}
+            onSelect={() => {
+              queueMicrotask(props.onRoutine);
+            }}
+          />
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }

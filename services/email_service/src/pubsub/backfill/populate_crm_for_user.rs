@@ -9,7 +9,7 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// primary mailbox. Consent and exclusions are rechecked by each contact job.
 ///
 /// Stale requests after withdrawal, account switching, or team removal no-op.
-#[tracing::instrument(skip(ctx), err, fields(macro_id = %payload.macro_id))]
+#[tracing::instrument(skip_all, err, fields(team_id, link_id))]
 pub async fn populate_crm_for_user(
     ctx: &PubSubContext,
     payload: &PopulateCrmForUserPayload,
@@ -46,6 +46,8 @@ pub async fn populate_crm_for_user(
         return Ok(());
     };
 
+    tracing::Span::current().record("team_id", tracing::field::display(team_id));
+    tracing::Span::current().record("link_id", tracing::field::display(mailbox.link_id));
     let self_email = mailbox.email_address.to_ascii_lowercase();
 
     // The by_link queries aggregate MIN/MAX of `internal_date_ts` per

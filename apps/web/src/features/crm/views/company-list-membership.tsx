@@ -1,5 +1,6 @@
 import { SidePanel } from '@components/app/side-panel';
-import ListIcon from '@phosphor/list-bullets.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { useCrmLists, useCurrentTeamQuery } from './use-crm';
@@ -35,7 +36,7 @@ export function CompanyListsSection(props: { companyId: string }) {
     }
   }
   return (
-    <SidePanel.Section id="company-lists" title="Lists" order={18} defaultOpen>
+    <SidePanel.Section id="company-lists" title="Lists" order={40} defaultOpen>
       <div class="flex flex-col gap-3">
         <Show when={team.isError || lists.query.isError}>
           <div
@@ -47,8 +48,8 @@ export function CompanyListsSection(props: { companyId: string }) {
               variant="ghost"
               size="xs"
               onClick={() => {
-                void team.refetch();
-                void lists.query.refetch();
+                fireAndForget(team.refetch(), 'crm');
+                fireAndForget(lists.query.refetch(), 'crm');
               }}
             >
               Retry
@@ -127,7 +128,10 @@ export function CompanyListsSection(props: { companyId: string }) {
                           const included = event.currentTarget.checked;
                           event.currentTarget.checked =
                             list.config.companyIds.includes(props.companyId);
-                          void setMembership(list.id, included);
+                          fireAndForget(
+                            setMembership(list.id, included),
+                            'crm'
+                          );
                         }}
                       />
                       <span class="min-w-0 truncate" title={list.name}>

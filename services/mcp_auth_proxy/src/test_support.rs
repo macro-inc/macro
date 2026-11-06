@@ -2,7 +2,7 @@
 //! tests.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
     time::SystemTime,
 };
@@ -11,14 +11,17 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use sha2::{Digest, Sha256};
 
 use crate::domain::{
+    browser_binding::BrowserBinding,
     models::{
         AccessToken, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
-        IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RegisteredClient,
-        UpstreamTokens,
+        EmailCodeRequest, IssuedAuthorizationCode, PendingAuthorization, RefreshToken,
+        RefreshTokenBinding, RegisteredClient, UpstreamLogin, UpstreamTokens, UserConsent,
     },
     ports::{
-        BoundClientIdFuture, ClientRegistrationStore, OAuthProvider, RefreshTokenBindingStore,
-        RegisteredClientFuture, StoreWriteFuture, UpstreamTokensFuture,
+        ClientRegistrationStore, EmailCodeError, EmailCodeProvider, EmailCodeRequestFuture,
+        EmailCodeTokensFuture, GrantRevokedFuture, OAuthProvider, RefreshTokenBindingFuture,
+        RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture, UpstreamGrantError,
+        UpstreamRevocationFuture, UpstreamTokensFuture,
     },
     redirect_uri::RedirectUriPolicy,
     service::{
@@ -40,11 +43,20 @@ pub const LOOPBACK_REDIRECT_URI: &str = "http://127.0.0.1:51000/oauth/callback";
 pub const TRUSTED_REDIRECT_URI: &str = "https://claude.ai/api/mcp/auth_callback";
 /// Callback under an attacker's control.
 pub const ATTACKER_REDIRECT_URI: &str = "https://attacker.example/steal";
+/// An `https` callback on a host outside the trusted list, such as a
+/// self-hosted MCP gateway's.
+pub const GATEWAY_REDIRECT_URI: &str = "https://gateway.example/oauth/callback";
 /// Access token the fake upstream provider returns for a refresh.
 pub const REFRESHED_ACCESS_TOKEN: &str = "refreshed-access-token";
 /// Upstream access token lifetime the fake provider reports, matching the one
 /// hour JWT FusionAuth issues.
 pub const UPSTREAM_EXPIRES_IN: u64 = 3600;
+/// An address the fake email provider sends codes to.
+pub const EMAIL_ADDRESS: &str = "user@example.com";
+/// An address whose domain the fake email provider routes to single sign-on.
+pub const SSO_EMAIL_ADDRESS: &str = "user@sso.example";
+/// The only code the fake email provider accepts.
+pub const EMAIL_CODE: &str = "123456";
 
 /// Computes the S256 challenge for a PKCE verifier.
 pub fn code_challenge_for(verifier: &str) -> String {
@@ -77,9 +89,14 @@ impl FakeInflightAuth {
         self.issued.lock().expect("issued lock").contains_key(code)
     }
 
+    /// Returns whether any broker code has been issued.
+    pub fn holds_any_issued_code(&self) -> bool {
+        !self.issued.lock().expect("issued lock").is_empty()
+    }
+
     /// Returns the recorded upstream expiry of the only issued code, panicking
     /// unless there is exactly one.
-    pub fn only_issued_expiry(&self) -> Option<SystemTime> {
+    pub fn only_issued_expiry(&self) -> SystemTime {
         let issued = self.issued.lock().expect("issued lock");
         assert_eq!(issued.len(), 1, "expected exactly one issued code");
         issued
@@ -101,6 +118,15 @@ impl InflightAuthStore for FakeInflightAuth {
             .expect("pending lock")
             .insert(session_id.to_owned(), pending);
         Ok(())
+    }
+
+    async fn find_pending(&self, session_id: &str) -> anyhow::Result<Option<PendingAuthorization>> {
+        Ok(self
+            .pending
+            .lock()
+            .expect("pending lock")
+            .get(session_id)
+            .cloned())
     }
 
     async fn take_pending(&self, session_id: &str) -> anyhow::Result<Option<PendingAuthorization>> {
@@ -136,7 +162,8 @@ impl InflightAuthStore for FakeInflightAuth {
 #[derive(Default)]
 pub struct FakeClientRegistry {
     clients: Mutex<HashMap<String, RegisteredClient>>,
-    refresh_bindings: Mutex<HashMap<String, String>>,
+    refresh_bindings: Mutex<HashMap<String, RefreshTokenBinding>>,
+    revoked_grants: Mutex<HashSet<String>>,
 }
 
 impl ClientRegistrationStore for FakeClientRegistry {
@@ -166,18 +193,18 @@ impl RefreshTokenBindingStore for FakeClientRegistry {
     fn bind<'a>(
         &'a self,
         refresh_token_digest: &'a str,
-        client_id: &'a str,
+        binding: &'a RefreshTokenBinding,
     ) -> StoreWriteFuture<'a> {
         Box::pin(async move {
             self.refresh_bindings
                 .lock()
                 .expect("bindings lock")
-                .insert(refresh_token_digest.to_owned(), client_id.to_owned());
+                .insert(refresh_token_digest.to_owned(), binding.clone());
             Ok(())
         })
     }
 
-    fn bound_client<'a>(&'a self, refresh_token_digest: &'a str) -> BoundClientIdFuture<'a> {
+    fn binding<'a>(&'a self, refresh_token_digest: &'a str) -> RefreshTokenBindingFuture<'a> {
         Box::pin(async move {
             Ok(self
                 .refresh_bindings
@@ -197,11 +224,37 @@ impl RefreshTokenBindingStore for FakeClientRegistry {
             Ok(())
         })
     }
+
+    fn revoke_grant<'a>(&'a self, grant_id: &'a str) -> StoreWriteFuture<'a> {
+        Box::pin(async move {
+            self.revoked_grants
+                .lock()
+                .expect("revoked grants lock")
+                .insert(grant_id.to_owned());
+            Ok(())
+        })
+    }
+
+    fn is_grant_revoked<'a>(&'a self, grant_id: &'a str) -> GrantRevokedFuture<'a> {
+        Box::pin(async move {
+            Ok(self
+                .revoked_grants
+                .lock()
+                .expect("revoked grants lock")
+                .contains(grant_id))
+        })
+    }
 }
+
+/// Builds the failure a fake upstream grant answers with.
+type GrantFailure = Box<dyn Fn() -> UpstreamGrantError + Send + Sync>;
 
 /// Upstream provider that hands back fixed tokens, standing in for FusionAuth.
 pub struct FakeOAuthProvider {
     rotated_refresh_token: Option<String>,
+    revoked_refresh_tokens: Mutex<HashSet<String>>,
+    refresh_failure: Option<GrantFailure>,
+    code_exchange_failure: Option<GrantFailure>,
 }
 
 impl FakeOAuthProvider {
@@ -210,24 +263,67 @@ impl FakeOAuthProvider {
     pub fn new() -> Self {
         Self {
             rotated_refresh_token: None,
+            revoked_refresh_tokens: Mutex::default(),
+            refresh_failure: None,
+            code_exchange_failure: None,
         }
+    }
+
+    /// This provider, with every refresh grant failing with `failure()`.
+    pub fn failing_refresh(
+        mut self,
+        failure: impl Fn() -> UpstreamGrantError + Send + Sync + 'static,
+    ) -> Self {
+        self.refresh_failure = Some(Box::new(failure));
+        self
+    }
+
+    /// This provider, with every authorization code grant failing with
+    /// `failure()`.
+    pub fn failing_code_exchange(
+        mut self,
+        failure: impl Fn() -> UpstreamGrantError + Send + Sync + 'static,
+    ) -> Self {
+        self.code_exchange_failure = Some(Box::new(failure));
+        self
+    }
+
+    /// Returns whether the provider was asked to revoke `refresh_token`.
+    pub fn revoked(&self, refresh_token: &str) -> bool {
+        self.revoked_refresh_tokens
+            .lock()
+            .expect("revoked refresh tokens lock")
+            .contains(refresh_token)
     }
 
     /// A provider whose refresh grant issues a new refresh token.
     pub fn rotating(rotated_refresh_token: &str) -> Self {
         Self {
             rotated_refresh_token: Some(rotated_refresh_token.to_owned()),
+            ..Self::new()
         }
     }
 }
 
 impl OAuthProvider for FakeOAuthProvider {
-    fn construct_authorize_url(&self, state: &str) -> anyhow::Result<String> {
-        Ok(format!("https://upstream.example/authorize?state={state}"))
+    fn construct_authorize_url(
+        &self,
+        state: &str,
+        login: UpstreamLogin<'_>,
+    ) -> anyhow::Result<String> {
+        let page = match login {
+            UpstreamLogin::Google => "authorize",
+            UpstreamLogin::LoginPage => "login",
+            UpstreamLogin::Sso { .. } => "sso",
+        };
+        Ok(format!("https://upstream.example/{page}?state={state}"))
     }
 
     fn exchange_authorization_code<'a>(&'a self, _code: &'a str) -> UpstreamTokensFuture<'a> {
         Box::pin(async move {
+            if let Some(failure) = &self.code_exchange_failure {
+                return Err(failure());
+            }
             Ok(UpstreamTokens {
                 access_token: AccessToken::from(UPSTREAM_ACCESS_TOKEN),
                 refresh_token: RefreshToken::from(UPSTREAM_REFRESH_TOKEN),
@@ -241,6 +337,19 @@ impl OAuthProvider for FakeOAuthProvider {
         refresh_token: &'a RefreshToken,
     ) -> UpstreamTokensFuture<'a> {
         Box::pin(async move {
+            if let Some(failure) = &self.refresh_failure {
+                return Err(failure());
+            }
+            if self
+                .revoked_refresh_tokens
+                .lock()
+                .expect("revoked refresh tokens lock")
+                .contains(refresh_token.as_str())
+            {
+                return Err(UpstreamGrantError::InvalidGrant {
+                    detail: "invalid_grant (refresh_token_not_found)".to_owned(),
+                });
+            }
             let next = self
                 .rotated_refresh_token
                 .clone()
@@ -248,6 +357,64 @@ impl OAuthProvider for FakeOAuthProvider {
             Ok(UpstreamTokens {
                 access_token: AccessToken::from(REFRESHED_ACCESS_TOKEN),
                 refresh_token: RefreshToken::from(next),
+                expires_in: UPSTREAM_EXPIRES_IN,
+            })
+        })
+    }
+
+    fn revoke_refresh_token<'a>(
+        &'a self,
+        refresh_token: &'a RefreshToken,
+    ) -> UpstreamRevocationFuture<'a> {
+        Box::pin(async move {
+            self.revoked_refresh_tokens
+                .lock()
+                .expect("revoked refresh tokens lock")
+                .insert(refresh_token.as_str().to_owned());
+            Ok(())
+        })
+    }
+}
+
+/// Email provider that sends codes to one address and accepts one code,
+/// standing in for the authentication service.
+#[derive(Default)]
+pub struct FakeEmailCodes {
+    requested: Mutex<Vec<String>>,
+}
+
+impl FakeEmailCodes {
+    /// The addresses a code was requested for.
+    pub fn requested(&self) -> Vec<String> {
+        self.requested.lock().expect("requested lock").clone()
+    }
+}
+
+impl EmailCodeProvider for FakeEmailCodes {
+    fn request_code<'a>(&'a self, email: &'a str) -> EmailCodeRequestFuture<'a> {
+        Box::pin(async move {
+            self.requested
+                .lock()
+                .expect("requested lock")
+                .push(email.to_owned());
+            match email {
+                EMAIL_ADDRESS => Ok(EmailCodeRequest::Sent),
+                SSO_EMAIL_ADDRESS => Ok(EmailCodeRequest::SsoRequired {
+                    idp_id: "idp-1".to_owned(),
+                }),
+                _ => Err(EmailCodeError::NotAllowed),
+            }
+        })
+    }
+
+    fn redeem_code<'a>(&'a self, _email: &'a str, code: &'a str) -> EmailCodeTokensFuture<'a> {
+        Box::pin(async move {
+            if code != EMAIL_CODE {
+                return Err(EmailCodeError::InvalidCode);
+            }
+            Ok(UpstreamTokens {
+                access_token: AccessToken::from(UPSTREAM_ACCESS_TOKEN),
+                refresh_token: RefreshToken::from(UPSTREAM_REFRESH_TOKEN),
                 expires_in: UPSTREAM_EXPIRES_IN,
             })
         })
@@ -263,6 +430,12 @@ pub struct Harness {
     pub inflight: Arc<FakeInflightAuth>,
     /// The client registry the service was built with.
     pub registry: Arc<FakeClientRegistry>,
+    /// The upstream provider the service was built with.
+    pub provider: Arc<FakeOAuthProvider>,
+    /// The email code provider the service was built with.
+    pub email_codes: Arc<FakeEmailCodes>,
+    /// The secret cookie of the browser the tests drive flows from.
+    pub browser: BrowserBinding,
 }
 
 impl Harness {
@@ -275,19 +448,25 @@ impl Harness {
     pub fn with_provider(provider: FakeOAuthProvider) -> Self {
         let inflight = Arc::new(FakeInflightAuth::default());
         let registry = Arc::new(FakeClientRegistry::default());
+        let provider = Arc::new(provider);
+        let email_codes = Arc::new(FakeEmailCodes::default());
         let service = McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
             public_url: "https://mcp.macro.com".to_owned(),
-            redirect_uri_policy: RedirectUriPolicy::new(["claude.ai"]),
+            redirect_uri_policy: RedirectUriPolicy::new(["claude.ai", "chatgpt.com"]),
             inflight_auth: Arc::clone(&inflight),
             client_registrations: Arc::clone(&registry) as Arc<dyn ClientRegistrationStore>,
             refresh_token_bindings: Arc::clone(&registry) as Arc<dyn RefreshTokenBindingStore>,
-            oauth_provider: Arc::new(provider),
+            oauth_provider: Arc::clone(&provider) as Arc<dyn OAuthProvider>,
+            email_codes: Arc::clone(&email_codes) as Arc<dyn EmailCodeProvider>,
         });
 
         Self {
             service,
             inflight,
             registry,
+            provider,
+            email_codes,
+            browser: BrowserBinding::generate(),
         }
     }
 
@@ -317,6 +496,8 @@ impl Harness {
             state: "client-state".to_owned(),
             code_challenge: code_challenge.to_owned(),
             code_challenge_method: "S256".to_owned(),
+            sign_in: None,
+            delivery: None,
             scope: None,
         }
     }
@@ -330,27 +511,30 @@ impl Harness {
         code_verifier: &str,
     ) -> String {
         self.service
-            .start_authorization(self.authorize_request(
-                client_id,
-                redirect_uri,
-                &code_challenge_for(code_verifier),
-            ))
+            .start_authorization(
+                self.authorize_request(client_id, redirect_uri, &code_challenge_for(code_verifier)),
+                self.browser.clone(),
+                UserConsent::NotAsked,
+            )
             .await
             .expect("authorize should succeed");
 
         let session_id = self.inflight.only_pending_session_id();
-        let redirect = self
+        let delivery = self
             .service
-            .complete_callback(CallbackRequest {
-                code: Some("upstream-code".to_owned()),
-                state: Some(session_id),
-                error: None,
-                error_description: None,
-            })
+            .complete_callback(
+                CallbackRequest {
+                    code: Some("upstream-code".to_owned()),
+                    state: Some(session_id),
+                    error: None,
+                    error_description: None,
+                },
+                Some(self.browser.clone()),
+            )
             .await
             .expect("callback should succeed");
 
-        query_param(&redirect, "code").expect("redirect carries a code")
+        query_param(&delivery.url, "code").expect("redirect carries a code")
     }
 }
 
@@ -362,4 +546,54 @@ pub fn query_param(url: &str, name: &str) -> Option<String> {
         .split('&')
         .find_map(|pair| pair.strip_prefix(&prefix))
         .map(str::to_owned)
+}
+
+#[cfg(feature = "outbound")]
+pub use fake_kms::FakeKms;
+
+#[cfg(feature = "outbound")]
+mod fake_kms {
+    use std::{collections::HashMap, sync::Mutex};
+
+    use cursor_api_key::cipher::{KmsCiphertexts, KmsCiphertextsError};
+    use zeroize::Zeroizing;
+
+    /// A ciphertext, the context it was encrypted under, and its plaintext.
+    type Encryption = (Vec<u8>, HashMap<String, String>, Vec<u8>);
+
+    /// A KMS that, like the real one, refuses a decrypt whose context differs
+    /// from the one the ciphertext was encrypted under.
+    #[derive(Default)]
+    pub struct FakeKms {
+        stored: Mutex<Vec<Encryption>>,
+    }
+
+    #[async_trait::async_trait]
+    impl KmsCiphertexts for FakeKms {
+        async fn encrypt(
+            &self,
+            encryption_context: HashMap<String, String>,
+            plaintext: &[u8],
+        ) -> Result<(Vec<u8>, String), KmsCiphertextsError> {
+            let mut stored = self.stored.lock().expect("lock");
+            let ciphertext = format!("ciphertext-{}", stored.len()).into_bytes();
+            stored.push((ciphertext.clone(), encryption_context, plaintext.to_vec()));
+            Ok((ciphertext, "fake-kms-key".to_owned()))
+        }
+
+        async fn decrypt(
+            &self,
+            _kms_key_id: &str,
+            ciphertext: &[u8],
+            encryption_context: HashMap<String, String>,
+        ) -> Result<Zeroizing<Vec<u8>>, KmsCiphertextsError> {
+            self.stored
+                .lock()
+                .expect("lock")
+                .iter()
+                .find(|(stored, context, _)| stored == ciphertext && *context == encryption_context)
+                .map(|(_, _, plaintext)| Zeroizing::new(plaintext.clone()))
+                .ok_or(KmsCiphertextsError)
+        }
+    }
 }

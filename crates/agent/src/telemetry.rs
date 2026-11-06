@@ -410,6 +410,30 @@ impl<M: CompletionModel> CompletionModel for TracedModel<M> {
         &self,
         request: CompletionRequest,
     ) -> Result<CompletionResponse<Self::Response>, CompletionError> {
+        let native_tool_images = request
+            .chat_history
+            .iter()
+            .filter_map(|message| match message {
+                Message::User { content } => Some(content),
+                _ => None,
+            })
+            .flat_map(|content| content.iter())
+            .map(|part| match part {
+                UserContent::Image(_) => 1,
+                UserContent::ToolResult(result) => result
+                    .content
+                    .iter()
+                    .filter(|part| matches!(part, ToolResultContent::Image(_)))
+                    .count(),
+                _ => 0,
+            })
+            .sum::<usize>();
+        if native_tool_images > 0 {
+            tracing::info!(
+                native_tool_images,
+                "agent model request contains native tool images"
+            );
+        }
         self.telemetry.record_request(&request);
         let result = self.inner.completion(request).await;
         if let Err(error) = &result {
@@ -422,6 +446,30 @@ impl<M: CompletionModel> CompletionModel for TracedModel<M> {
         &self,
         request: CompletionRequest,
     ) -> Result<StreamingCompletionResponse<Self::StreamingResponse>, CompletionError> {
+        let native_tool_images = request
+            .chat_history
+            .iter()
+            .filter_map(|message| match message {
+                Message::User { content } => Some(content),
+                _ => None,
+            })
+            .flat_map(|content| content.iter())
+            .map(|part| match part {
+                UserContent::Image(_) => 1,
+                UserContent::ToolResult(result) => result
+                    .content
+                    .iter()
+                    .filter(|part| matches!(part, ToolResultContent::Image(_)))
+                    .count(),
+                _ => 0,
+            })
+            .sum::<usize>();
+        if native_tool_images > 0 {
+            tracing::info!(
+                native_tool_images,
+                "agent model request contains native tool images"
+            );
+        }
         self.telemetry.record_request(&request);
         let result = self.inner.stream(request).await;
         if let Err(error) = &result {

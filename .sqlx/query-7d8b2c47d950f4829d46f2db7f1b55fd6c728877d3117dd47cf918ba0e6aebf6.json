@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_address_book_sources SET photo_lease_id = NULL,photo_lease_until = NULL,photo_due_at = now() + make_interval(secs => $6)\n            WHERE link_id = $1 AND folder_id = $2 AND provider_id = $3 AND revision = $4 AND photo_lease_id = $5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Int8",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7d8b2c47d950f4829d46f2db7f1b55fd6c728877d3117dd47cf918ba0e6aebf6"
+}

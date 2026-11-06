@@ -62,10 +62,26 @@ pub(crate) struct SessionCommand {
 /// What reaches a session's actor through its command channel. One channel,
 /// so a server change and the prompt behind it arrive in the order sent.
 pub(crate) enum SessionMessage {
+    /// Persist a tool card without waiting for the current turn to complete.
+    PresentTool {
+        presentation: crate::domain::model::SessionToolPresentation,
+        completed: oneshot::Sender<Result<()>>,
+    },
     /// Deliver an action.
     Action(SessionCommand),
     /// Hand the agent these MCP servers from now on.
     ReplaceMcpServers(Vec<McpServer>),
+    /// Answer the agent's permission requests this way from now on.
+    SetPermissionPolicy(PermissionPolicy),
+}
+
+/// An actor-owned operation or an input to the runtime protocol machine.
+pub(crate) enum ActorInput {
+    Protocol(Input<SessionCompletion>),
+    PresentTool {
+        presentation: crate::domain::model::SessionToolPresentation,
+        completed: oneshot::Sender<Result<()>>,
+    },
 }
 
 pub(crate) struct SessionCompletion {
@@ -106,7 +122,8 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     handshake_span: Option<tracing::Span>,
     handshake_deadline: Instant,
     /// Told when the machine reports a turn over, so the harness can dispatch
-    /// its next queued prompt.
+    /// its next queued prompt, and when the runtime reports its session
+    /// deliberately closed.
     turn_observer: Arc<dyn SessionTurnObserver>,
     /// GenAI spans for the turns and tool calls this connection carries, fed
     /// every frame the effects below send or log. See [`super::telemetry`].
@@ -209,7 +226,7 @@ where
     /// Wait for the next input without mutating protocol state. Keeping this
     /// separate from dispatch lets shutdown cancel the wait, never an effect
     /// batch after the machine has already advanced.
-    pub(crate) async fn next_input(&mut self) -> Input<SessionCompletion> {
+    pub(crate) async fn next_input(&mut self) -> ActorInput {
         loop {
             let handshake_deadline = self.handshake_deadline;
             let handshake_timeout = async {
@@ -246,7 +263,11 @@ where
                 }
             },
             command = self.commands.recv() => match command {
+                Some(SessionMessage::PresentTool { presentation, completed }) => {
+                    return ActorInput::PresentTool { presentation, completed };
+                },
                 Some(SessionMessage::ReplaceMcpServers(servers)) => Input::ReplaceMcpServers(servers),
+                Some(SessionMessage::SetPermissionPolicy(policy)) => Input::SetPermissionPolicy(policy),
                 Some(SessionMessage::Action(SessionCommand { user_id, action, action_id, completed, span, enqueued_at })) => {
                     span.record(
                         "agent.command.queue_wait_ms",
@@ -283,7 +304,41 @@ where
                 }
             },
             };
-            return input;
+            return ActorInput::Protocol(input);
+        }
+    }
+
+    /// Complete actor-owned writes outside the cancellable input wait.
+    pub(crate) async fn dispatch_input(&mut self, input: ActorInput) -> Stepped {
+        match input {
+            ActorInput::Protocol(input) => self.dispatch(input).await,
+            ActorInput::PresentTool {
+                presentation,
+                completed,
+            } => {
+                let RuntimeStatus::Live { session_id, .. } = self.machine.status() else {
+                    let _ = completed.send(Err(AgentSessionError::Disconnected(self.machine.id())));
+                    return Stepped::Continue;
+                };
+                let result = self
+                    .logs
+                    .present_tool(self.machine.id(), session_id, presentation)
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(
+                            error = ?error,
+                            id = %self.machine.id(),
+                            "agent session failed to persist a tool presentation"
+                        );
+                    });
+                let failed = result.is_err();
+                let _ = completed.send(result);
+                if failed {
+                    self.dispatch(Input::Closed(CloseReason::LogFailed)).await
+                } else {
+                    Stepped::Continue
+                }
+            }
         }
     }
 
@@ -398,6 +453,7 @@ where
                             agent_session_id: self.machine.id(),
                             user_id: None,
                             content: Message::ToServer(message),
+                            logged_at: None,
                         },
                         boundary,
                     );
@@ -447,6 +503,7 @@ where
                                 agent_session_id: self.machine.id(),
                                 user_id: None,
                                 content: Message::ToRuntime(context.request.clone()),
+                                logged_at: None,
                             })
                             .await?
                             .log_id;
@@ -458,6 +515,11 @@ where
                         .await
                         .unwrap_or_else(|_| Err(AgentSessionError::LogTimedOut(self.machine.id())));
                     if let Err(error) = result {
+                        tracing::error!(
+                            error = ?error,
+                            id = %self.machine.id(),
+                            "agent session failed to persist its shared initialization"
+                        );
                         self.fail_remaining_completions(&mut effects, error);
                         effects.extend(self.machine.handle(Input::Closed(CloseReason::LogFailed)));
                     }
@@ -505,6 +567,18 @@ where
                             .record("otel.status_description", tracing::field::display(error));
                     }
                     let _ = token.completed.send(result);
+                }
+                Effect::RuntimeClosed => {
+                    let _closed = tracing::info_span!(
+                        "agent.session.runtime_closed",
+                        agent.session.id = %self.machine.id(),
+                    )
+                    .entered();
+                    tracing::info!(
+                        id = %self.machine.id(),
+                        "agent session runtime was deliberately closed"
+                    );
+                    self.turn_observer.runtime_closed(self.machine.id());
                 }
                 Effect::Stop { reason } => {
                     self.telemetry.on_stopped(&reason);
@@ -585,7 +659,16 @@ where
             .append(AgentSessionLog {
                 agent_session_id: self.machine.id(),
                 user_id: from,
-                content: Message::ToRuntime(message.clone()),
+                content: if agent_runtime_protocol::domain::notification::input_from_runtime(
+                    &message,
+                )
+                .is_some_and(|input| input.system_turn)
+                {
+                    Message::Notification(message.clone())
+                } else {
+                    Message::ToRuntime(message.clone())
+                },
+                logged_at: None,
             })
             .await?;
         if acp_method(&message) == Some("initialize") {
@@ -610,6 +693,7 @@ where
                 agent_session_id: self.machine.id(),
                 user_id,
                 content,
+                logged_at: None,
             })
             .await?;
         self.forward_signals(appended.signals);
@@ -654,6 +738,9 @@ where
                         "agent session elicitation cleared"
                     );
                 }
+                // A reply's shape changes several times a turn; the turn's
+                // own span already covers it, so this is not logged.
+                TurnSignal::Progressed { .. } => {}
             }
             self.turn_observer.signal(self.machine.id(), signal);
         }
@@ -741,7 +828,8 @@ where
                 | Effect::Log { .. }
                 | Effect::EstablishInitialization { .. }
                 | Effect::PersistAcpSession { .. }
-                | Effect::Initialized { .. } => {}
+                | Effect::Initialized { .. }
+                | Effect::RuntimeClosed => {}
             }
         }
         if let Some(stop) = stop {

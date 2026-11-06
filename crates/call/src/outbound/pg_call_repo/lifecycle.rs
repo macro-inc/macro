@@ -87,19 +87,19 @@ impl PgCallRepo {
 
         // Copy all lifetime-distinct participants (including soft-deleted) to
         // call_record_participants. Each inserted row represents one participant.
-        let participant_count = sqlx::query!(
+        let participants = sqlx::query_scalar!(
             r#"
             INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at)
             SELECT $1, user_id, joined_at, left_at
             FROM call_participants
             WHERE call_id = $2
+            RETURNING user_id
             "#,
             call_id,
             call_id,
         )
-        .execute(tx.as_mut())
-        .await?
-        .rows_affected() as usize;
+        .fetch_all(tx.as_mut())
+        .await?;
 
         // Copy guests the same way; the archived rows keep the guest ids so
         // transcript speaker ids remain resolvable to display names.
@@ -196,6 +196,14 @@ impl PgCallRepo {
         .execute(tx.as_mut())
         .await?;
 
+        let channel_thread = sqlx::query_scalar!(
+            r#"SELECT discussion = 'channel_thread' AS "channel_thread!" FROM call_entities WHERE id = $1"#,
+            call_id,
+        )
+        .fetch_optional(tx.as_mut())
+        .await?
+        .unwrap_or(false);
+
         // Delete the ephemeral call (cascades to call_participants and call_transcripts).
         sqlx::query!(
             r#"
@@ -214,7 +222,8 @@ impl PgCallRepo {
             ended_at,
             duration_ms,
             has_recording,
-            participant_count,
+            participants,
+            channel_thread,
         };
 
         tx.commit().await?;

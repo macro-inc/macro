@@ -1,6 +1,6 @@
 /* Agents page demos. Window chrome comes from ProductDemo. */
 .agent-demo-frame { position: relative; }
-.agent-demo-pointer { position: absolute; top: 0; left: 0; z-index: 9; pointer-events: none; transition: transform 650ms cubic-bezier(.2, .8, .2, 1); }
+.agent-demo-pointer { position: absolute; top: 0; left: 0; z-index: 9; pointer-events: none; }
 .dummy-workspace .agent-session-composer { width:100%; max-width:928px; margin-inline:auto; padding:0 16px 10px; flex-shrink:0; }
 
 /* A mention opened from the answer lands in a split beside the session. */

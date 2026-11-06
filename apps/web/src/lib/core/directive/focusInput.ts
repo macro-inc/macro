@@ -3,6 +3,17 @@ import { isPlatform } from '@core/util/platform';
 import { isIOS } from '@solid-primitives/platform';
 import { type Accessor, onCleanup } from 'solid-js';
 
+const STAND_IN_ATTRIBUTE = 'data-focus-stand-in';
+
+/**
+ * Whether focus is on `triggerFocusInput`'s stand-in, holding the phone
+ * keyboard for an input still mounting. Overlays opening meanwhile leave focus
+ * there rather than taking it and dropping the keyboard.
+ */
+export function focusStandInActive() {
+  return document.activeElement?.hasAttribute(STAND_IN_ATTRIBUTE) ?? false;
+}
+
 type FocusInputOptions = {
   getTarget: () => HTMLElement | null | undefined;
   positionNear?: HTMLElement;
@@ -36,10 +47,12 @@ export function triggerFocusInput(
 
   let observer: MutationObserver | undefined;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let focusTimeoutId: ReturnType<typeof setTimeout> | undefined;
   let tempEl: HTMLInputElement | undefined;
 
   function cleanup() {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
+    if (focusTimeoutId !== undefined) clearTimeout(focusTimeoutId);
     if (tempEl && document.body.contains(tempEl))
       document.body.removeChild(tempEl);
     observer?.disconnect();
@@ -47,7 +60,10 @@ export function triggerFocusInput(
   }
 
   function handleAppearance(el: HTMLElement) {
-    setTimeout(() => {
+    // Stop watching before the timer: list mounting can deliver more mutations
+    // before focus transfers, and each focus forces synchronous WebKit layout.
+    observer?.disconnect();
+    focusTimeoutId = setTimeout(() => {
       el.focus();
       cleanup();
     }, 0);
@@ -58,6 +74,7 @@ export function triggerFocusInput(
     // click gesture so the virtual keyboard opens, then transfer focus to
     // the real target once it appears in the DOM.
     tempEl = document.createElement('input');
+    tempEl.setAttribute(STAND_IN_ATTRIBUTE, '');
     // Use fixed positioning (viewport-relative) so focusing the temp element
     // doesn't cause the page to scroll.
     const anchorRect = anchor?.getBoundingClientRect();

@@ -8,6 +8,7 @@ mod test;
 
 pub mod live_query;
 pub mod watch_query;
+mod window_observation;
 
 use crate::calendar::{CalendarError, EVENT_TYPENAME};
 use crate::denormalize::{DenormalizeError, ReadOutcome, ReadPlans, ReadSession, RecordSource};
@@ -357,6 +358,7 @@ const DOCUMENT_CACHE_CAPACITY: usize = 128;
 pub struct Engine<S: Storage> {
     schema: std::sync::Arc<crate::meta::Schema>,
     live_queries: live_query::LiveQueries,
+    window_observations: window_observation::WindowObservations,
     query_watches: watch_query::QueryWatches,
     storage: S,
     revision: CacheRevision,
@@ -390,6 +392,7 @@ impl<S: Storage> Engine<S> {
         Engine {
             schema,
             live_queries: live_query::LiveQueries::default(),
+            window_observations: window_observation::WindowObservations::default(),
             query_watches: watch_query::QueryWatches::default(),
             storage,
             revision: CacheRevision::ZERO,
@@ -946,7 +949,8 @@ impl<S: Storage> Engine<S> {
         selection: &RecordSelection,
         keys: &[EntityKey<'static>],
     ) -> Result<Revisioned<Vec<SelectedRecord>>, EngineError<S::Error>> {
-        let (records, _) = self.read_records_tracked(selection, keys).await?;
+        let (records, dependencies) = self.read_records_tracked(selection, keys).await?;
+        self.bind_window_dependencies(keys, &dependencies);
         Ok(self.revisioned(records))
     }
 
@@ -1866,12 +1870,19 @@ impl<S: Storage> Engine<S> {
                         queued.mutation.attempt_count > 0,
                         &queued.optimistic.optimistic_data_json,
                     ),
+                    queued.mutation.created_at_ms,
                 )
             });
         let expected_kind = match collision {
             None => MutationUpsertKind::Inserted,
-            Some((active_id, true)) => MutationUpsertKind::AppendedAfterActive { active_id },
-            Some((removed_id, false)) => MutationUpsertKind::ReplacedPending { removed_id },
+            Some((active_id, true, _)) => MutationUpsertKind::AppendedAfterActive { active_id },
+            Some((removed_id, false, _)) => MutationUpsertKind::ReplacedPending { removed_id },
+        };
+        // The removed row never reached the server, so its wait carries over;
+        // an active row stays queued and keeps reporting its own.
+        let enqueued_at_ms = match collision {
+            Some((_, false, replaced_at_ms)) => replaced_at_ms.min(created_at_ms),
+            _ => created_at_ms,
         };
 
         let patches = deduplicate_patches(&self.schema, link_patches)?;
@@ -1908,7 +1919,7 @@ impl<S: Storage> Engine<S> {
                     variables_json: canonical_json(&Json::Object(variables.clone())),
                     identity,
                 },
-                created_at_ms,
+                enqueued_at_ms,
             ),
             optimistic: PersistedOptimisticLayer {
                 optimistic_data_json: encode_optimistic_source(&source),
@@ -2931,6 +2942,7 @@ impl<S: Storage> Engine<S> {
         self.ensure_revision_can_advance()?;
         self.hot.clear();
         self.live_queries = live_query::LiveQueries::default();
+        self.window_observations = window_observation::WindowObservations::default();
         self.query_watches = watch_query::QueryWatches::default();
         self.docs.clear();
         self.optimistic.clear();
@@ -3011,6 +3023,7 @@ impl<S: Storage> Engine<S> {
         self.storage.clear().await.map_err(EngineError::Storage)?;
         self.hot.clear();
         self.live_queries = live_query::LiveQueries::default();
+        self.window_observations = window_observation::WindowObservations::default();
         self.query_watches = watch_query::QueryWatches::default();
         self.optimistic.clear();
         self.optimistic_hydrated = true;

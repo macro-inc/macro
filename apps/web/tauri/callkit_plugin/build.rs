@@ -4,6 +4,7 @@ use std::{
 };
 
 const COMMANDS: &[&str] = &[
+    "configure_tracing",
     "register_listener",
     "remove_listener",
     "get_voip_token",
@@ -16,12 +17,16 @@ const COMMANDS: &[&str] = &[
     "watch_participant_identities",
     "get_active_call_state",
     "start_outgoing_call",
+    "prepare_join",
+    "abort_join",
     "set_video_enabled",
     "set_video_overlay_mode",
     "set_call_drawer_channel_title",
     "set_call_drawer_theme",
     "set_participant_display_name",
     "switch_camera",
+    "can_use_full_screen_intent",
+    "open_full_screen_intent_settings",
 ];
 
 struct BuildEnv {
@@ -55,7 +60,10 @@ impl BuildEnv {
 }
 
 fn main() {
-    tauri_plugin::Builder::new(COMMANDS).try_build().unwrap();
+    tauri_plugin::Builder::new(COMMANDS)
+        .android_path("android")
+        .try_build()
+        .unwrap();
 
     let build_env = BuildEnv::from_env();
     if build_env.is_ios_target() {

@@ -17,9 +17,9 @@ const tabTypes: Record<HomeTab, ReadonlySet<HomeTypeFilter>> = {
     'tasks',
     'email',
     'channels',
-    'chats',
     'agents',
-    'projects',
+    'folders',
+    'initiatives',
     'github',
     'calendar',
   ]),
@@ -105,7 +105,18 @@ export function buildHomeSearchRequest(
   }
 
   if (types.has('agents')) {
-    filters.agent_session_filters = { include: true };
+    const agentSessionFilters: NonNullable<
+      EntityFilters['agent_session_filters']
+    > = { include: true };
+
+    const chatFilters: NonNullable<EntityFilters['chat_filters']> = {};
+
+    if (hasNotificationFilter) {
+      chatFilters.notification_filters = notificationFilters;
+    }
+
+    filters.agent_session_filters = agentSessionFilters;
+    filters.chat_filters = chatFilters;
   }
 
   if (types.has('channels')) {
@@ -120,22 +131,12 @@ export function buildHomeSearchRequest(
     }
 
     filters.channel_filters = channelFilters;
-  }
 
-  if (types.has('channels')) {
-    filters.channel_thread_filters = {
-      participant_ids: [context.userId ?? NIL_UUID],
-    };
-  }
-
-  if (types.has('chats')) {
-    const chatFilters: NonNullable<EntityFilters['chat_filters']> = {};
-
-    if (hasNotificationFilter) {
-      chatFilters.notification_filters = notificationFilters;
+    if (context.userId) {
+      filters.channel_thread_filters = {
+        participant_ids: [context.userId],
+      };
     }
-
-    filters.chat_filters = chatFilters;
   }
 
   if (documentTypes.length > 0) {
@@ -187,7 +188,7 @@ export function buildHomeSearchRequest(
     filters.foreign_entity_filters = foreignEntityFilters;
   }
 
-  if (types.has('projects')) {
+  if (types.has('folders')) {
     const projectFilters: NonNullable<EntityFilters['project_filters']> = {};
 
     if (hasNotificationFilter) {
@@ -195,6 +196,17 @@ export function buildHomeSearchRequest(
     }
 
     filters.project_filters = projectFilters;
+  }
+
+  if (types.has('initiatives')) {
+    const initiativeFilters: NonNullable<EntityFilters['initiative_filters']> =
+      { include: true };
+
+    if (hasNotificationFilter) {
+      initiativeFilters.notification_filters = notificationFilters;
+    }
+
+    filters.initiative_filters = initiativeFilters;
   }
 
   return {

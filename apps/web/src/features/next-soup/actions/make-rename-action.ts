@@ -1,6 +1,9 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import type { EntityData } from '@entity';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { canEditChannelIdentity, type EntityData } from '@entity/types/entity';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { restoreSoupFocus } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
 
@@ -12,22 +15,21 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
   const { userId } = options;
 
   const canExecute = (entity: EntityData): boolean => {
-    if (entity.type === 'agent_session' && entity.isArchived) return false;
+    if (entity.type === 'agent_session' && isSessionArchived(entity))
+      return false;
+    if (entity.type === 'database') {
+      return entity.grant === 'edit' || entity.grant === 'owner';
+    }
+    if (entity.type === 'channel') return canEditChannelIdentity(entity);
+    // The types the rename mutation supports; it rejects any other.
     if (
-      entity.type === 'email' ||
-      entity.type === 'database' ||
-      entity.type === 'form'
+      entity.type !== 'agent_session' &&
+      entity.type !== 'document' &&
+      entity.type !== 'chat' &&
+      entity.type !== 'project' &&
+      entity.type !== 'call'
     )
       return false;
-    if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
-      return false;
-    }
-    if (entity.type === 'foreign') return false;
-
-    if (entity.type === 'channel') {
-      if (entity.channelType === 'direct_message') return false;
-      return entity.isParticipant !== false;
-    }
 
     return entity.ownerId === userId();
   };
@@ -38,7 +40,9 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
       entities,
       onFinish: () => {
         toast.success(
-          entities.length > 1 ? `Renamed ${entities.length} items` : 'Renamed'
+          entities.length > 1
+            ? t('entityActions.toastRenamedCount', { count: entities.length })
+            : t('entityActions.toastRenamed')
         );
       },
     });
@@ -55,18 +59,20 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
       entities,
       onFinish: () => {
         toast.success(
-          entities.length > 1 ? `Renamed ${entities.length} items` : 'Renamed'
+          entities.length > 1
+            ? t('entityActions.toastRenamedCount', { count: entities.length })
+            : t('entityActions.toastRenamed')
         );
         if (firstEntity) {
           soup.focus.set(firstEntity.id);
         }
-        restoreSoupFocus(firstEntity?.id);
+        fireAndForget(restoreSoupFocus(firstEntity?.id), 'entity-actions');
       },
       onCancel: () => {
         if (firstEntity) {
           soup.focus.set(firstEntity.id);
         }
-        restoreSoupFocus(firstEntity?.id);
+        fireAndForget(restoreSoupFocus(firstEntity?.id), 'entity-actions');
       },
     });
   };

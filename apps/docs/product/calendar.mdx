@@ -1,28 +1,72 @@
 ---
 title: "Calendar"
 icon: "calendar"
-description: "Your Google Calendar as a Macro block alongside the email it came from."
+description: "Your Google or Outlook calendar as a Macro Block alongside the email it came from."
 ---
 
-<Frame>
-  ![A week view of the calendar, with recurring standups, meetings and today's column highlighted](/images/calendar_image.png)
-</Frame>
+<div className="cal-preview" role="img" aria-label="Calendar week for November 2026. Tuesday the 3rd is today.">
+  <div className="cal-preview-bar">
+    <div className="cal-preview-title">November 2026</div>
+    <div className="cal-preview-tools">
+      <div className="cal-preview-group" aria-hidden="true">
+        <span className="cal-preview-seg">Today</span>
+        <span className="cal-preview-seg is-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m14.5 6.75-5 5.25 5 5.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+        <span className="cal-preview-seg is-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m9.5 6.75 5 5.25-5 5.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+      </div>
+      <div className="cal-preview-group" aria-hidden="true">
+        <span className="cal-preview-seg">Week <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="m6.75 9.5 5.25 5 5.25-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+      </div>
+      <div className="cal-preview-new" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> New <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="m6.75 9.5 5.25 5 5.25-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
+      <div className="cal-preview-search" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M17.45 10.6a6.85 6.85 0 1 1-13.7 0 6.85 6.85 0 1 1 13.7 0" stroke="currentColor" strokeWidth="2" /><path d="m15.6 15.6 4.65 4.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></div>
+    </div>
+  </div>
+  <div className="cal-preview-days" aria-hidden="true">
+    <div />
+    <div className="cal-preview-day"><span className="cal-preview-weekday">Mon</span><span className="cal-preview-date">2</span></div>
+    <div className="cal-preview-day is-today"><span className="cal-preview-weekday">Tue</span><span className="cal-preview-date">3</span></div>
+    <div className="cal-preview-day"><span className="cal-preview-weekday">Wed</span><span className="cal-preview-date">4</span></div>
+    <div className="cal-preview-day"><span className="cal-preview-weekday">Thu</span><span className="cal-preview-date">5</span></div>
+    <div className="cal-preview-day"><span className="cal-preview-weekday">Fri</span><span className="cal-preview-date">6</span></div>
+  </div>
+  <div className="cal-preview-allday" aria-hidden="true">
+    <div />
+    <div /><div />
+    <div><div className="cal-preview-event"><div className="cal-preview-event-title">Office notice</div></div></div>
+    <div /><div />
+  </div>
+  <div className="cal-preview-grid" aria-hidden="true">
+    <div className="cal-preview-hours"><div>9 AM</div><div>10 AM</div><div>11 AM</div><div>12 PM</div><div>1 PM</div></div>
+    <div className="cal-preview-col"><div className="cal-preview-event is-ten"><div className="cal-preview-event-title">Interview times</div><div className="cal-preview-event-time">10–11am</div></div></div>
+    <div className="cal-preview-col is-today">
+      <div className="cal-preview-event is-nine-thirty"><div className="cal-preview-event-title">Invoice question</div><div className="cal-preview-event-time">9:30–10:30am</div></div>
+      <div className="cal-preview-event is-eleven"><div className="cal-preview-event-title">Office move</div><div className="cal-preview-event-time">11am–12pm</div></div>
+      <div className="cal-preview-now" />
+    </div>
+    <div className="cal-preview-col" />
+    <div className="cal-preview-col"><div className="cal-preview-event is-nine"><div className="cal-preview-event-title">Walkthrough</div><div className="cal-preview-event-time">9–10am</div></div></div>
+    <div className="cal-preview-col"><div className="cal-preview-event is-noon"><div className="cal-preview-event-title">Hiring sync</div><div className="cal-preview-event-time">12–1pm</div></div></div>
+  </div>
+</div>
 
-Calendar is a Macro block that syncs with Google Calendar. Events are entities in your workspace, so you can search them, @mention them, and hand them to the [Macro agent](/product/agents) the same way you would a doc or a task. Edits you make in Macro sync back to Google.
+Calendar is a Macro Block that syncs with Google Calendar and Outlook. Events are entities in your workspace, so you can search them, @mention them, and hand them to the [Macro agent](/product/agents) the same way you would a doc or a task. Edits you make in Macro sync back to Google Calendar or Outlook.
 
 Open it from **Calendar** in the sidebar, or press <kbd>g</kbd> \+ <kbd>r</kbd>.
 
+Watch a 0:54 walkthrough of Macro Calendar.
+
+<video src="https://macro.com/video/tutorials/calendar.mp4" poster="https://macro.com/video/tutorials/calendar-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
+
 ### Connecting your calendar
 
-Connect your calendar by going to **Settings → Connections**, finding the account you want, and clicking **Enable calendar**.
+Connect your calendar in **Settings → Calendar**. Click **Connect calendar** next to a Gmail or Outlook account you've already linked, or **Connect account** to add a new Google or Outlook account. You can also click **Enable calendar** next to an account in **Settings → Email**.
 
-Macro supports [multiple email accounts in one inbox](/product/email#multi-account-inbox) and multiple email calendar views. **You have to enable calendar for each account separately.** Every linked inbox in **Settings → Connections** carries its own **Enable calendar** button.
+Macro supports [multiple email accounts in one inbox](/product/email#multi-account-inbox) and multiple email calendar views. **You have to connect the calendar for each account separately.**
 
-Use the settings gear in the calendar topbar to toggle each calendar on or off, so you can view several at once or focus on just one.
+In **Settings → Calendar** you can show or hide each account's calendars and pick their colors. The settings gear in the calendar topbar also toggles each calendar on or off, so you can view several at once or focus on just one.
 
-<Frame>
-  ![The Connections settings page, with an Enable calendar button beside a linked Gmail account](/images/connect_email.png)
-</Frame>
+### Booking links
+
+**Copy booking link** in the calendar topbar copies your personal booking link. Links are managed in **Settings → Booking links**. See [Booking links](/product/booking-links).
 
 ### Creating and editing events
 
@@ -39,18 +83,14 @@ You edit details inline on the event itself. Type the title and description dire
 
   <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle-dot" iconType="regular" color="#9ca3af" size={10} /> <span><strong>Guests</strong> — who's invited, and who's optional</span></div>
 
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle-dot" iconType="regular" color="#9ca3af" size={10} /> <span><strong>Conferencing</strong> — attach or remove a Google Meet link</span></div>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle-dot" iconType="regular" color="#9ca3af" size={10} /> <span><strong>Conferencing</strong> — a new event starts as a <strong>Macro call</strong>. Switch it to Google Meet, Microsoft Teams, or no meeting link</span></div>
 
   <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle-dot" iconType="regular" color="#9ca3af" size={10} /> <span><strong>Location</strong> — where it's happening</span></div>
 </div>
 
-Once an event exists, you can also drag it to a new time and drag its edges to change its length, straight from the grid. Both sync back to Google.
+Once an event exists, you can also drag it to a new time and drag its edges to change its length, straight from the grid. Both sync back to Google Calendar or Outlook.
 
 ### Copy availability
-
-<Frame>
-  ![Copied availability pasted into a message, listing free time ranges by day with the timezone noted](/images/availability.png)
-</Frame>
 
 Click **Copy availability** in the topbar to turn your open time into pasteable text, labeled with your timezone and ready to drop into a reply.
 
@@ -64,6 +104,7 @@ You can use the same tools over Macro's MCP server:
 
 - [`ListCalendars`](/AI/mcp/tools/list-calendars)
 - [`ListCalendarEvents`](/AI/mcp/tools/list-calendar-events)
+- [`ReadCalendarEvent`](/AI/mcp/tools/read-calendar-event)
 - [`CreateCalendarEvent`](/AI/mcp/tools/create-calendar-event)
 - [`UpdateCalendarEvent`](/AI/mcp/tools/update-calendar-event)
 - [`DeleteCalendarEvent`](/AI/mcp/tools/delete-calendar-event)
@@ -72,6 +113,6 @@ To connect it, go to **Settings → MCP server**.
 
 ### Turning calendar off
 
-You can turn calendar off for a single account from **Settings → Connections**, or from the calendar's settings menu.
+You can turn calendar off for a single account with **Disconnect** in **Settings → Calendar**, or from the calendar's settings menu.
 
-Macro deletes its copy of that account's events and gives up calendar access. Your Google Calendar stays untouched and the inbox keeps syncing mail as normal. To turn calendar back on, grant access again.
+Macro deletes its copy of that account's events and gives up calendar access. Your Google Calendar or Outlook calendar stays untouched and the inbox keeps syncing mail as normal. To turn calendar back on, grant access again.
