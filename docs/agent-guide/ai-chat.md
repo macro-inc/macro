@@ -2267,7 +2267,10 @@ and built-in skills with `ListSkills`, then load the full instructions with
 `ReadSkill` using the returned `documentId`. `ListSkills` returns the 100 most
 recently updated visible skill documents plus built-ins; `SearchSkills` finds a
 skill by name, including older skills outside that list. A skill mention's id can
-also be passed directly to `ReadSkill`.
+also be passed directly to `ReadSkill`. Code-mode agents get the same through the
+SDK instead: `macro.documents.skills({ query })` lists or searches skills,
+built-ins included (cognition `GET /skills`), and each result's
+`skill.content()` reads its instructions (`GET /skills/{id}` for built-ins).
 
 ## Configuring agents from a conversation
 

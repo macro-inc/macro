@@ -109,6 +109,7 @@ use model::response::EmptyResponse;
             routine_program::AgentTask,
             routine_program::AgentSelection,
             routine_program::RoutineModelId,
+            routine_program::CodeIdentity,
         ),
     ),
     tags(

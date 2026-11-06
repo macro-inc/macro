@@ -306,4 +306,18 @@ describe('step outputs and run starts in run history', () => {
     // Runs recorded before runs kept what started them have none.
     expect(run({ kind: 'unknown' }).run).toBeUndefined();
   });
+
+  it('decodes whom code steps acted as, ignoring values it does not know', () => {
+    const manual = { kind: 'manual', by: 'macro|owner@example.com' };
+    expect(run(manual, { code_acts_as: 'owner' }).run?.codeActsAs).toBe(
+      'owner'
+    );
+    expect(run(manual, { code_acts_as: 'agent' }).run?.codeActsAs).toBe(
+      'agent'
+    );
+    expect(run(manual).run).not.toHaveProperty('codeActsAs');
+    const unknown = run(manual, { code_acts_as: 'someone' }).run;
+    expect(unknown?.start).toEqual({ kind: 'manual', by: manual.by });
+    expect(unknown).not.toHaveProperty('codeActsAs');
+  });
 });

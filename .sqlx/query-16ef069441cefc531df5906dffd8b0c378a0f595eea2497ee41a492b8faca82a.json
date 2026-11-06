@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            user_id,\n            key_ciphertext,\n            encryption_version,\n            kms_key_id,\n            default_model_id,\n            created_at,\n            updated_at\n        FROM cursor_configs\n        WHERE user_id = $1\n        ",
+  "query": "\n        SELECT\n            user_id,\n            key_ciphertext,\n            encryption_version,\n            kms_key_id,\n            default_model_id,\n            default_effort,\n            created_at,\n            updated_at\n        FROM cursor_configs\n        WHERE user_id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -30,11 +30,16 @@
       },
       {
         "ordinal": 5,
+        "name": "default_effort",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -50,9 +55,10 @@
       false,
       false,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "e96ee7a01c4296009ee3f3e9639ee559000daf0746a2d9a72b028c8450a56534"
+  "hash": "16ef069441cefc531df5906dffd8b0c378a0f595eea2497ee41a492b8faca82a"
 }
