@@ -1,29 +1,37 @@
 # Macro call rooms
 
-`@macro-inc/sdk-calls` connects SDK call handles to a real LiveKit room. Install
+The SDK’s `calls/node` and `calls/browser` entry points connect call handles to a
+real LiveKit room. Install
 `@macro-inc/sdk` and one runtime peer: `@livekit/rtc-node` for Node or Bun, or
 `livekit-client` for browsers. The core SDK grants access and issues the room
-token as `CallConnection` (import it from `@macro-inc/sdk`); this package does not store or log it.
+token as `CallConnection` (import it from `@macro-inc/sdk`); the helpers do not store or log it.
 
-The package uses `@opentelemetry/api` for `call.sdk.*` spans. Tracing is a
+The call helpers use `@opentelemetry/api` for `call.sdk.*` spans. Tracing is a
 no-op until the host installs an OpenTelemetry tracer provider.
 
 
 ## Install
 
-The version of this package always matches the `@macro-inc/sdk` it requires.
-Add the LiveKit client for your runtime:
+Call helpers ship with `@macro-inc/sdk`. Add only the LiveKit client for your runtime:
 
 ```sh
-npm install @macro-inc/sdk @macro-inc/sdk-calls @livekit/rtc-node # Node
-npm install @macro-inc/sdk @macro-inc/sdk-calls livekit-client    # browser
+npm install @macro-inc/sdk @livekit/rtc-node # Node
+npm install @macro-inc/sdk livekit-client    # browser
+```
+
+The core `@macro-inc/sdk` import does not load LiveKit or the room helpers. The
+helper files ship in the SDK tarball, but only the selected entry point enters
+your application bundle. Keep calls on demand in a browser with code splitting:
+
+```ts
+const { connectRoom } = await import('@macro-inc/sdk/calls/browser');
 ```
 
 ## Voice agent (Node or Bun)
 
 ```ts
 import { Macro } from '@macro-inc/sdk';
-import { connectRoom } from '@macro-inc/sdk-calls/node';
+import { connectRoom } from '@macro-inc/sdk/calls/node';
 
 const macro = new Macro();
 const call = await macro.channels.byId(channelId).activeCall();
@@ -54,7 +62,7 @@ I420 or RGBA frames. The helper publishes them as a screen share and closes
 the track when the stream ends or `stop()` is called.
 
 ```ts
-import { publishScreen } from '@macro-inc/sdk-calls/node';
+import { publishScreen } from '@macro-inc/sdk/calls/node';
 
 const share = await publishScreen(room, frames, { fps: 15 });
 // frames: AsyncIterable<{ data: Uint8Array; width: number; height: number;
@@ -67,7 +75,7 @@ In a browser, pass a `MediaStream` or omit it to open the browser's display
 picker. Its audio track, when present, is published as screen-share audio.
 
 ```ts
-import { publishScreen } from '@macro-inc/sdk-calls/browser';
+import { publishScreen } from '@macro-inc/sdk/calls/browser';
 
 const share = await publishScreen(room);
 await share.stopped; // resolves after the picker track ends or stop() completes
