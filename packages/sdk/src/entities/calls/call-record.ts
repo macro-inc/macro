@@ -1,10 +1,13 @@
 import type {
   EditCallTranscriptRequest,
   GetCallRecordResponses,
+  LiveCallSummary,
+  RingStatus,
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Channel } from '../channels/channel';
+import { Thread } from '../channels/thread';
 import { FavoritableEntity } from '../entity';
 import { Meeting } from '../meetings/meeting';
 import {
@@ -12,19 +15,108 @@ import {
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
 import {
   type SharePermissionOptions,
   sharePermissionBody,
 } from '../sharing/permissions';
 import { User } from '../users/user';
+import { CallConnection, type JoinOptions } from './connection';
+import { callAdmissionError } from './errors';
 import { CallMessage } from './message';
+import { CallParticipant } from './participant';
 
 type CallRecordDetail = GetCallRecordResponses[200];
 
 /** A Macro call record (an archived or still active call). */
 export class CallRecord extends FavoritableEntity<CallRecordDetail> {
+  /** Kind is available immediately on handles returned by the live list. */
+  readonly kind?: LiveCallSummary['kind'];
+
+  private constructor(
+    client: MacroClient,
+    id: string,
+    kind?: LiveCallSummary['kind'],
+  ) {
+    super(client, id);
+    this.kind = kind;
+  }
+
+  /** Build a live call handle without fetching its archived detail. */
+  static fromLive(client: MacroClient, summary: LiveCallSummary): CallRecord {
+    return new CallRecord(client, summary.callId, summary.kind);
+  }
+
+  /** Join only while this call is live; never start a replacement call. */
+  async join(opts: JoinOptions = {}): Promise<CallConnection> {
+    try {
+      const response = unwrap(
+        await this.client.storage.joinCall({
+          path: { call_id: this.id },
+          body: opts,
+        }),
+      );
+      return new CallConnection(this.client, response);
+    } catch (error) {
+      return callAdmissionError(error);
+    }
+  }
+
+  /** Read the current ring state for this account. */
+  async ringState(): Promise<RingStatus> {
+    return unwrap(
+      await this.client.storage.getCallRingState({
+        path: { call_id: this.id },
+      }),
+    ).status;
+  }
+
+  /** Read the connected room roster without joining. */
+  async participants(): Promise<CallParticipant[]> {
+    const response = unwrap(
+      await this.client.storage.getCallParticipants({
+        path: { call_id: this.id },
+      }),
+    );
+    return response.participants.map(
+      (record) => new CallParticipant(this.client, record),
+    );
+  }
+
+  /** Decline this call's ring for the current account. */
+  async decline(): Promise<void> {
+    unwrap(
+      await this.client.storage.declineCall({ path: { call_id: this.id } }),
+    );
+  }
+
+  /** Read the persistent discussion, which may be a channel thread. */
+  async discussion(): Promise<MessageThread | Thread> {
+    const discussion = (await this.detail.get()).discussion;
+    if (discussion.kind === 'channel_thread') {
+      return new Thread(this.client, discussion.channel_id, discussion.root_id);
+    }
+    return MessageThread.byId(
+      this.client,
+      { type: 'call', entity: this },
+      discussion.call_id,
+    );
+  }
+
+  /** Download recording bytes through the Macro host. */
+  readonly recording = {
+    bytes: async (): Promise<Uint8Array> => {
+      const blob = unwrap(
+        await this.client.storage.getCallRecording({
+          path: { call_id: this.id },
+          parseAs: 'blob',
+        }),
+      );
+      return new Uint8Array(await blob.arrayBuffer());
+    },
+  };
+
   /** A shared message thread scoped to this resource. */
   messageThreadById(id: string): MessageThread {
     return MessageThread.byId(this.client, { type: 'call', entity: this }, id);
@@ -142,7 +234,7 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
   readonly transcript = this.field('transcript');
 
   /** Macro-account participants, both active and historic. */
-  readonly participants = this.field('participants');
+  readonly historicParticipants = this.field('participants');
 
   /** Current and past guests; each id matches its transcript speaker id. */
   readonly guests = this.field('guests');

@@ -1,6 +1,8 @@
 //! Jev domain: question and probability value objects, the provider port, and
 //! the metered classification use case. No transport or infrastructure lives here.
 
+#[cfg(feature = "batches")]
+pub mod batches;
 #[cfg(feature = "decisions")]
 pub mod decisions;
 pub mod models;

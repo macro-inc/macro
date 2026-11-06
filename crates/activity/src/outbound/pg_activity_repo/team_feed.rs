@@ -38,6 +38,7 @@ pub(super) const TEAM_SCAN: TeamScan = TeamScan {
 
 /// One row of the team feed query: a visible row, or the frontier.
 struct TeamFeedRow {
+    agent_correlation_id: Option<Uuid>,
     id: Uuid,
     actor_id: String,
     action: String,
@@ -56,6 +57,7 @@ impl TeamFeedRow {
 
     fn into_stored(self) -> StoredRow {
         StoredRow {
+            agent_correlation_id: self.agent_correlation_id,
             id: self.id,
             actor_id: self.actor_id,
             action: self.action,

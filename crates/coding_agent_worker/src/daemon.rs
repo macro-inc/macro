@@ -7,7 +7,9 @@
 use std::path::Path;
 use std::time::Duration;
 
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::AbortOnDropHandle;
 
 use crate::config::{Config, HarnessCredentials};
 use crate::dispatch::Dispatcher;
@@ -28,6 +30,9 @@ mod test;
 /// worst-case window where a brand-new agent is deaf.
 const BOUND_AGENT_REFRESH: Duration = Duration::from_secs(10);
 
+/// How often a held runtime connection is compared with what the service says.
+const PRESENCE_CHECK_EVERY: Duration = Duration::from_secs(60);
+
 /// A running serving core: SSE listener, harness bridge.
 pub struct Daemon {
     cancel: CancellationToken,
@@ -38,6 +43,8 @@ pub struct Daemon {
         expect(dead_code, reason = "agents are handed off only on Unix")
     )]
     handoff: HandoffSender,
+    runtime_connected: watch::Receiver<bool>,
+    _presence_watch: AbortOnDropHandle<()>,
 }
 
 /// The agent a previous macrod process image handed over, ready to relay.
@@ -102,6 +109,11 @@ impl Daemon {
             adopted,
             handoffs,
         );
+        let runtime_connected = runtime.connection_state();
+        let presence_watch = AbortOnDropHandle::new(tokio::spawn(watch_presence(
+            EventStreamClient::new(&config.macro_api, &credentials),
+            runtime_connected.clone(),
+        )));
         let executor = Dispatcher::new(api, runtime, config.workspace.clone());
         #[cfg(unix)]
         let executor = executor.with_workspaces(workspaces);
@@ -150,7 +162,14 @@ impl Daemon {
             task,
             turns,
             handoff,
+            runtime_connected,
+            _presence_watch: presence_watch,
         })
+    }
+
+    /// Whether this daemon currently holds a runtime connection.
+    pub fn runtime_connected(&self) -> bool {
+        *self.runtime_connected.borrow()
     }
 
     /// Whether the serving task is still alive.
@@ -193,6 +212,47 @@ impl Daemon {
         let _ = self.task.await;
         tracing::info!("daemon stopped");
     }
+}
+
+/// Compare a held runtime connection with what the service reports.
+///
+/// The service reading this harness as offline makes the app treat its agents as
+/// unavailable, and nothing else on this machine would notice: the socket is
+/// healthy. Warns once per disagreement; the check itself lets the service log
+/// each one for its monitor.
+async fn watch_presence(client: EventStreamClient, mut runtime: watch::Receiver<bool>) {
+    let mut ticker = tokio::time::interval(PRESENCE_CHECK_EVERY);
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut disagreeing = false;
+    loop {
+        ticker.tick().await;
+
+        if !runtime_held_since_last_look(&mut runtime) {
+            disagreeing = false;
+            continue;
+        }
+
+        match client.service_reports_connected().await {
+            Ok(false) if !disagreeing => {
+                disagreeing = true;
+                tracing::warn!("macrod holds a runtime connection the service reports as offline");
+            }
+            Ok(true) if disagreeing => {
+                disagreeing = false;
+                tracing::info!("the service reports this harness connected again");
+            }
+            Ok(_) => {}
+            Err(error) => tracing::debug!(error = %error, "could not check harness presence"),
+        }
+    }
+}
+
+/// Whether the runtime has stayed connected since this was last asked. A fresh
+/// dial does not count yet: the service's record of it may still be landing.
+fn runtime_held_since_last_look(runtime: &mut watch::Receiver<bool>) -> bool {
+    let redialed = runtime.has_changed().unwrap_or(true);
+    let connected = *runtime.borrow_and_update();
+    connected && !redialed
 }
 
 /// Relay an inherited agent instead of spawning one, continuing its turns.

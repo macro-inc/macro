@@ -58,6 +58,9 @@ use graphql_properties::{
     NoOpEntityPropertyWriter, PropertiesMutationRoot, load_property_definitions,
     load_property_options,
 };
+use graphql_registered_work::{
+    GraphqlRegisteredWork, RegisteredWorkSubscriptionRoot, resolve_registered_work,
+};
 use graphql_scheduled_action::{GraphqlScheduledAction, resolve_scheduled_actions};
 use graphql_soup::{
     GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GraphqlSoupInitiative,
@@ -154,6 +157,7 @@ pub struct CompleteSubscriptionRoot<R, NS, AS, Auth, St, NR, PR, ER, FR, AR, AcR
     ActivitySubscriptionRoot<AS>,
     WorkFeedSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
     NotificationInboxSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    RegisteredWorkSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
 )
 where
     R: SoupRealtimeSubscriptionService,
@@ -469,6 +473,7 @@ where
             ActivitySubscriptionRoot::new(activity_subscription_service),
             WorkFeedSubscriptionRoot::default(),
             NotificationInboxSubscriptionRoot::default(),
+            RegisteredWorkSubscriptionRoot::default(),
         ),
     )
     .finish()
@@ -683,6 +688,11 @@ where
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|error| async_graphql::Error::new(error.to_string()));
             }
+            // The viewer reopens and refetches; this is how often it has to.
+            tracing::warn!(
+                agent.session.id = %session_id,
+                "closing an agent session log subscription that fell behind"
+            );
             yield Err(async_graphql::Error::new(
                 "agent session log subscription closed after falling behind",
             ));
@@ -887,6 +897,22 @@ where
             ctx,
             self.user_id.clone(),
             input.unwrap_or_default(),
+        )
+        .await
+    }
+
+    /// The agent sessions `accountIds` registered as their work that the
+    /// authenticated user can view, newest first, at most 50 accounts.
+    /// Registrations of sessions the user cannot view are completely hidden.
+    async fn registered_work(
+        &self,
+        ctx: &Context<'_>,
+        account_ids: Vec<ID>,
+    ) -> async_graphql::Result<Vec<GraphqlRegisteredWork<SoupEdges<NR, PR, ER, FR, AR, AcR>>>> {
+        resolve_registered_work::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            self.user_id.clone(),
+            account_ids,
         )
         .await
     }

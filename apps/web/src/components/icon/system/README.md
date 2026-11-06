@@ -100,6 +100,9 @@ flex-shrink. Group-header carets use 16 px; hit targets stay unchanged.
 Prefer one recognizable silhouette and only the detail needed to identify its
 action. Chat variants share one bubble, task variants one checked square,
 people variants two figures. The CRM icon retains its stepped building silhouette.
+The connector plug stands upright: two prongs over a 13-unit rounded body and a
+short cord, filling the same optical area as its navigation neighbors; `plugs`
+shares the drawing.
 Office glyphs use two sparse rows of windows and a baseline to avoid a face-like
 appearance. Keep the selected calendar header open around its binding posts,
 quote heads closed with trailing tails, and the filter recognizable as a funnel.

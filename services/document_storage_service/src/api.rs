@@ -49,9 +49,17 @@ mod threads;
 // auth based constants
 pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
-pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
+pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let sync_sessions = state.sync_sessions.clone();
+    let correlation = agent_correlation::inbound::CorrelationState::new(
+        state.db.clone(),
+        state.jwt_validation_args.clone(),
+    );
     let app = api_router(state.clone())
+        .layer(axum::middleware::from_fn_with_state(
+            correlation,
+            agent_correlation::inbound::propagate,
+        ))
         .layer(
             ServiceBuilder::new()
                 .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
@@ -285,6 +293,12 @@ fn api_router(state: ApiContext) -> Router {
             "/channel-labels",
             channel_labels::inbound::axum_router::channel_labels_router(
                 state.channel_labels_state.clone(),
+            ),
+        )
+        .nest(
+            "/account-managers",
+            account_manager::inbound::axum_router::account_manager_router(
+                state.account_manager_state.clone(),
             ),
         )
         .nest(
