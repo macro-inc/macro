@@ -19,6 +19,7 @@ type QuickControl = 'camera' | 'screen' | 'sharing';
 /** Compact surfaces reuse the same media owner; no second room or device capture. */
 export function CallQuickControls(props: {
   controls: readonly QuickControl[];
+  size?: 'icon-md' | 'icon-lg';
   channelName?: string;
 }) {
   const call = useCallContext();
@@ -53,7 +54,7 @@ export function CallQuickControls(props: {
     <div class="flex items-center gap-1.5 p-2">
       <Button
         variant="secondary"
-        size="icon-md"
+        size={props.size ?? 'icon-md'}
         aria-label={
           call.isAudioMuted()
             ? t('calls.microphoneOn')
@@ -72,7 +73,7 @@ export function CallQuickControls(props: {
       <Show when={props.controls.includes('camera')}>
         <Button
           variant="secondary"
-          size="icon-md"
+          size={props.size ?? 'icon-md'}
           aria-label={
             call.isVideoMuted() ? t('calls.cameraOn') : t('calls.cameraOff')
           }
@@ -92,7 +93,7 @@ export function CallQuickControls(props: {
       <Show when={props.controls.includes('screen')}>
         <Button
           variant={call.isScreenSharing() ? 'accent' : 'secondary'}
-          size="icon-md"
+          size={props.size ?? 'icon-md'}
           aria-label={t('calls.shareScreenTitle')}
           disabled={call.isConnecting() || screenUnavailable()}
           onClick={() =>
@@ -118,7 +119,7 @@ export function CallQuickControls(props: {
       <Show when={call.activeChannelId()}>
         <Button
           variant="danger"
-          size="icon-md"
+          size={props.size ?? 'icon-md'}
           class="min-w-11"
           aria-label={t('calls.leave')}
           onClick={() => fireAndForget(leave(), 'call-quick-controls')}

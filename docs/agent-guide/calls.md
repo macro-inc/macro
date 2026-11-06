@@ -334,6 +334,13 @@ controls remain read-only. The roster remains available when chat is unavailable
 without starting message queries.
 
 On phones, the full-screen call puts the self view in the participant grid.
+Away from the call, a separate live-call island sits above the phone dock with
+the speaker's neutral avatar, call name, duration, mic and Leave. It occupies its
+own float region so channel/email composers remain available. It hides with the
+keyboard and while the Call tab is open. Tap the name to open the call.
+Mobile conversation rows show live duration or inline ringing actions instead of
+the normal timestamp; the current call uses a waveform avatar.
+
 A compact bottom island holds microphone, camera, Team/Private and Leave;
 Chat is a separate island beside it. Both keep the safe-area gutters and stay
 below the tiles. The phone island has no screen-share button or device carets.

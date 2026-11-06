@@ -1,5 +1,6 @@
 export default {
   inProgress: 'Call in progress',
+  callingYou: 'Calling you',
   join: 'Join',
   leave: 'Leave call',
   copyLink: 'Copy meeting link',

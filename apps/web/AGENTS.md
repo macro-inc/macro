@@ -650,7 +650,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep active phone calls viewport-filling with visible header islands and idle
   controls below the video; Back dismisses without leaving, while setup and
   tablet/desktop chrome stay unchanged.
-  See [Calls](../../docs/agent-guide/calls.md).
+  Keep the away-call phone island in the shared `call` float region between
+  composers and the dock, without displacing either. See [Calls](../../docs/agent-guide/calls.md).
 - Diagnose browser call media with `call.media.*` spans and the `meeting.setup.id`
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
   tokens out of telemetry. See [call diagnostics](../../docs/agent-guide/calls.md#browser-call-diagnostics).

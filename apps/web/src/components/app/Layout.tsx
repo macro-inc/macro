@@ -257,6 +257,11 @@ function useNewOnboardingRedirect() {
  * and the mobile dock — around a page. Route shells supply the providers and
  * content; auth, booking, and meeting pages render without this chrome.
  */
+const MobileCallIsland = lazyNamed(
+  () => import('@channel/Call/MobileCallIsland'),
+  'MobileCallIsland'
+);
+
 export function AppChrome(props: ParentProps) {
   const isAuthenticated = useIsAuthenticated();
   // A login cookie shows the rail while sign-in is confirmed; a stale one
@@ -359,6 +364,9 @@ export function AppChrome(props: ParentProps) {
       </div>
       <Show when={isTouchDevice() && isAuthenticated()}>
         <FloatRegionHost />
+        <Suspense>
+          <MobileCallIsland />
+        </Suspense>
         <Suspense>
           <UserCardDrawer />
         </Suspense>
