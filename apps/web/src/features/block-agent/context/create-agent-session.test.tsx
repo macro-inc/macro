@@ -73,6 +73,9 @@ const { AgentSession } = await import('@core/agent-session/AgentSession');
 const { forgetRecentlyViewed } = await import(
   '@core/agent-session/recently-viewed'
 );
+const { forgetPrefetchedAgentSession, prefetchAgentSession } = await import(
+  '@core/agent-session/prefetch'
+);
 const { createAgentSession } = await import('./create-agent-session');
 const { TraceFlow } = await import('@app/observability/flow');
 
@@ -105,7 +108,9 @@ const mount = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   forgetRecentlyViewed(SESSION);
+  forgetPrefetchedAgentSession(SESSION);
   for (
     let leaked = AgentSession.get(SESSION);
     leaked;
@@ -205,6 +210,26 @@ describe('createAgentSession', () => {
       cleanup();
       // No longer held: nothing keeps the refused session open.
       expect(AgentSession.get(SESSION)).toBeUndefined();
+    });
+  });
+
+  describe('a session prefetched before it was opened', () => {
+    const prefetch = async () => {
+      prefetchAgentSession(SESSION);
+      await AgentSession.get(SESSION)?.load();
+    };
+
+    it('shows the fold it already holds, once, fetching nothing again', async () => {
+      logSource.cached.mockResolvedValue({ bot, rows: [] });
+      await prefetch();
+      const rendered = vi.spyOn(AgentSession.prototype, 'rendered');
+
+      mount();
+      expect(await screen.findByText('A session')).toBeTruthy();
+      expect(screen.queryByText('loading')).toBeNull();
+      expect(logSource.fetched).toHaveBeenCalledOnce();
+      expect(harness.get).toHaveBeenCalledOnce();
+      expect(rendered.mock.calls.map(([kind]) => kind)).toEqual(['fetched']);
     });
   });
 });

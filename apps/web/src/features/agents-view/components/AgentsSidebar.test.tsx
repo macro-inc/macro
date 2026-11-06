@@ -20,6 +20,10 @@ import {
 } from '../core/recent-conversations';
 import { AgentsSidebar } from './AgentsSidebar';
 
+const { forgetPrefetchedAgentSession } = await import(
+  '@core/agent-session/prefetch'
+);
+
 const openWithSplit = vi.fn();
 const unreadFilter = vi.hoisted(() => vi.fn(() => false));
 const sidebarState = vi.hoisted(() => ({ agentUpdates: false, touch: false }));
@@ -60,6 +64,12 @@ vi.mock('@app/features/home/components/HomeEntityIcon', () => ({
   HomeEntityIcon: () => null,
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
+const sessions = vi.hoisted(() => ({
+  acquire: vi.fn((_id: string, _purpose: string) => ({ release: () => {} })),
+}));
+vi.mock('@core/agent-session/AgentSession', () => ({
+  AgentSession: { get: () => undefined, acquire: sessions.acquire },
+}));
 vi.mock('@core/user', () => ({
   getDisplayName: () => '',
   tryMacroId: (id: string) => id,
@@ -710,6 +720,36 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     expect(screen.getByText('#42')).toBeTruthy();
     expect(screen.queryByText('Merged')).toBeNull();
     expect(screen.queryByText('Open')).toBeNull();
+  });
+
+  it('starts opening the session when the pointer rests on the row or it takes focus', () => {
+    vi.useFakeTimers();
+    try {
+      const { open } = setup();
+      const session = screen.getByRole('button', { name: 'Fix build' });
+
+      fireEvent.pointerEnter(session, { pointerType: 'mouse' });
+      fireEvent.pointerLeave(session);
+      vi.advanceTimersByTime(500);
+      expect(sessions.acquire).not.toHaveBeenCalled();
+
+      fireEvent.pointerEnter(session, { pointerType: 'mouse' });
+      vi.advanceTimersByTime(100);
+      expect(sessions.acquire).toHaveBeenCalledExactlyOnceWith(
+        'coding-session',
+        'prefetch'
+      );
+      expect(open).not.toHaveBeenCalled();
+      forgetPrefetchedAgentSession('coding-session');
+
+      fireEvent.focus(session);
+      expect(sessions.acquire).toHaveBeenCalledTimes(2);
+      forgetPrefetchedAgentSession('coding-session');
+      expect(open).not.toHaveBeenCalled();
+    } finally {
+      sessions.acquire.mockClear();
+      vi.useRealTimers();
+    }
   });
 
   it('keeps non-coding agents to one line even if unrelated coding metadata exists', () => {

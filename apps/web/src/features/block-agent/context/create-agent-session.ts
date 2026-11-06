@@ -246,7 +246,11 @@ export function createAgentSession(
     live,
     async (session) => {
       const renameRefreshAtStart = renameRefresh;
-      const reused = isRecentlyViewed(session.id);
+      // Held since an earlier view, whose row may be hours old; or loaded
+      // moments before this view, by a prefetch or the navigation that
+      // created it. (`loaded` alone would miss a held session mid-resync.)
+      const held = isRecentlyViewed(session.id);
+      const reused = held || session.loaded;
 
       batch(() => {
         setList(reconcile([]));
@@ -255,12 +259,12 @@ export function createAgentSession(
         setSettleFailure(undefined);
       });
 
-      // Held open since an earlier view: the fold is current, so it goes
-      // straight up. The row is from that view, and is read again behind it.
+      // The fold is current, so it goes straight up, once. A held session's
+      // row is read again behind it.
       if (reused) {
         const row = await settle(session, renameRefreshAtStart);
         // Started as the resource resolves, so its answer cannot land first.
-        if (!superseded(session)) {
+        if (held && !superseded(session)) {
           fireAndForget(revalidateRow(session), 'agent-session');
         }
         return row;
