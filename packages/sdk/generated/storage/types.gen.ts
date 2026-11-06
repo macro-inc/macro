@@ -3535,6 +3535,14 @@ export type ChannelPreviewData = {
 export type ChannelSender = string;
 
 /**
+ * Entity types a channel grant can cover.
+ *
+ * Values are the stored entity types. `calendar` is accepted for a calendar
+ * chip, whose stored type is `calendar_event`.
+ */
+export type ChannelShareEntityType = 'calendar_event' | 'document' | 'project' | 'database' | 'form' | 'call' | 'thread' | 'agent_session' | 'external_chat';
+
+/**
  * The channel share permission
  */
 export type ChannelSharePermission = {
@@ -16020,6 +16028,20 @@ export type SharePipeline = {
 };
 
 /**
+ * Request to share one item with a channel's current members.
+ */
+export type ShareWithChannelRequest = {
+    /**
+     * Id of the item to share. For a calendar event, the event id.
+     */
+    entityId: string;
+    /**
+     * Stored entity type of the item.
+     */
+    entityType: ChannelShareEntityType;
+};
+
+/**
  * Controls whether shared email threads are included in results.
  */
 export type SharedEmailFilter = 'exclude' | 'include' | 'only';
@@ -23956,6 +23978,40 @@ export type SetChannelPictureResponses = {
 };
 
 export type SetChannelPictureResponse = SetChannelPictureResponses[keyof SetChannelPictureResponses];
+
+export type ShareWithChannelData = {
+    body: ShareWithChannelRequest;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/shares';
+};
+
+export type ShareWithChannelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * The caller cannot share this item
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ShareWithChannelError = ShareWithChannelErrors[keyof ShareWithChannelErrors];
+
+export type ShareWithChannelResponses = {
+    /**
+     * The channel's members can see the item
+     */
+    204: void;
+};
+
+export type ShareWithChannelResponse = ShareWithChannelResponses[keyof ShareWithChannelResponses];
 
 export type PostChannelBotWebhookData = {
     body: ChannelWebhookRequest;

@@ -17,6 +17,7 @@ import type {
 } from '../../../generated/calendar/types.gen';
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Channel } from '../channels/channel';
 import { MacroEntity } from '../entity';
 import { Calendar } from './calendar';
 import { CalendarReplacement } from './replacement';
@@ -336,6 +337,21 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
       }),
     );
     return CalendarEvent.fromRecord(this.client, record);
+  }
+
+  /** Share the event with a channel's current members, as posting it in the
+   * channel does: they can then preview it, export it with {@link ics}, add it
+   * to their calendar with {@link addToCalendar} and ask to join. The caller
+   * must be in the channel and hold the event on their own calendar; private
+   * and confidential events are refused with a 403. Sharing again changes
+   * nothing. */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    unwrap(
+      await this.client.storage.shareWithChannel({
+        path: { channel_id: channel.id },
+        body: { entityType: 'calendar_event', entityId: this.id },
+      }),
+    );
   }
 
   /** The event as an iCalendar (`.ics`) document: its series, title,
