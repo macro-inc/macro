@@ -858,7 +858,7 @@ only, and code steps a routine already has still show, run and change. The
 scheduler drafts on the server (`POST /scheduled-actions/drafts`, one request
 while the button shows **Drafting…**): it reads the same code-step guide
 CreateRoutine does, plus the SDK entities relevant to the description and the
-starter routines as worked examples; the model names the SDK symbols its code
+catalog's code routines as worked examples; the model names the SDK symbols its code
 will use and reads their full reference before writing, then the scheduler
 type-checks the routine's code steps
 together (a step that misreads an earlier step's output fails) and asks the

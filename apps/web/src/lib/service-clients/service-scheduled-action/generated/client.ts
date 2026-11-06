@@ -10,17 +10,18 @@ import type {
   ActionConfigurationUpdate,
   ActionExecutionRecord,
   AiAdmissionErrorBody,
+  CatalogEntry,
   CodeUpgrade,
   Draft,
   DraftRoutineRequest,
   EmptyResponse,
   InProgressExecution,
   ListScheduledActionsParams,
+  RoutineCatalogParams,
   RoutineTemplate,
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
-  StarterRoutine,
 } from './schemas';
 
 export type scheduledActionHealthResponse200 = {
@@ -204,51 +205,68 @@ export const createScheduledAction = async (
   } as createScheduledActionResponse;
 };
 
-export type routineCodeStartersResponse200 = {
-  data: StarterRoutine[];
+export type routineCatalogResponse200 = {
+  data: CatalogEntry[];
   status: 200;
 };
 
-export type routineCodeStartersResponse401 = {
+export type routineCatalogResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type routineCatalogResponse401 = {
   data: string;
   status: 401;
 };
 
-export type routineCodeStartersResponseSuccess =
-  routineCodeStartersResponse200 & {
-    headers: Headers;
-  };
-export type routineCodeStartersResponseError =
-  routineCodeStartersResponse401 & {
-    headers: Headers;
-  };
-
-export type routineCodeStartersResponse =
-  | routineCodeStartersResponseSuccess
-  | routineCodeStartersResponseError;
-
-export const getRoutineCodeStartersUrl = () => {
-  return `/scheduled-actions/code/starters`;
+export type routineCatalogResponseSuccess = routineCatalogResponse200 & {
+  headers: Headers;
+};
+export type routineCatalogResponseError = (
+  | routineCatalogResponse400
+  | routineCatalogResponse401
+) & {
+  headers: Headers;
 };
 
-export const routineCodeStarters = async (
+export type routineCatalogResponse =
+  | routineCatalogResponseSuccess
+  | routineCatalogResponseError;
+
+export const getRoutineCatalogUrl = (params: RoutineCatalogParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/scheduled-actions/catalog?${stringifiedParams}`
+    : `/scheduled-actions/catalog`;
+};
+
+export const routineCatalog = async (
+  params: RoutineCatalogParams,
   options?: RequestInit
-): Promise<routineCodeStartersResponse> => {
-  const res = await fetch(getRoutineCodeStartersUrl(), {
+): Promise<routineCatalogResponse> => {
+  const res = await fetch(getRoutineCatalogUrl(params), {
     ...options,
     method: 'GET',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: routineCodeStartersResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
+  const data: routineCatalogResponse['data'] = body ? JSON.parse(body) : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as routineCodeStartersResponse;
+  } as routineCatalogResponse;
 };
 
 export type draftRoutineResponse200 = {

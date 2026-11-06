@@ -153,6 +153,71 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * One of Macro's routines, ready to start a new routine from.
+ */
+export type CatalogEntry = {
+    /**
+     * What it does, in a few words, for the line beside its trigger.
+     */
+    action: string;
+    /**
+     * It changes or sends what other people see.
+     */
+    affectsOthers: boolean;
+    /**
+     * Its code step, in the shape a routine's task holds it; absent where
+     * code can't be saved, or when it is an Ask AI routine.
+     */
+    code?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * What it does, in a short line.
+     */
+    description: string;
+    /**
+     * The Ask AI step's instructions: its only step without code, and the
+     * step to use where code can't be saved.
+     */
+    instructions: string;
+    /**
+     * Names it, e.g. `inbox`.
+     */
+    key: string;
+    /**
+     * The code step's text knobs whose value names one of the owner's
+     * items (a tag, channel or label), by knob name.
+     */
+    namedKnobs: {
+        [key: string]: NamedItemKind;
+    };
+    /**
+     * What someone asks for, with when it runs.
+     */
+    request: string;
+    /**
+     * It may be switched on before its owner changes anything.
+     */
+    safeDefault: boolean;
+    /**
+     * Where it is offered.
+     */
+    surface: Surface;
+    /**
+     * Offered among the templates when someone creates a routine.
+     */
+    template: boolean;
+    /**
+     * Its name once saved.
+     */
+    title: string;
+    /**
+     * When it runs; schedules are in the zone the catalog was asked for.
+     */
+    trigger: ActionTrigger;
+};
+
+/**
  * One time a routine's code was brought to a new SDK.
  */
 export type CodeUpgrade = {
@@ -418,6 +483,12 @@ export type NamedItem = {
     id: string;
     name: string;
 };
+
+/**
+ * What a text knob's value names: one of its owner's items, which a client
+ * matches by name or lets them pick.
+ */
+export type NamedItemKind = 'tag' | 'channel' | 'label';
 
 /**
  * `path` walks objects by key; `*` steps into every element of an array and
@@ -709,27 +780,6 @@ export type ShareRoutineTemplate = {
 };
 
 /**
- * A starter routine whose step is code: offered when a routine is created,
- * and shown to the drafter as a worked example.
- */
-export type StarterRoutine = {
-    /**
-     * Names it, e.g. `inbox`.
-     */
-    key: string;
-    /**
-     * What someone asks for, with when it runs.
-     */
-    request: string;
-    /**
-     * Its steps, in the shape a routine's task holds them.
-     */
-    steps: Array<{
-        [key: string]: unknown;
-    }>;
-};
-
-/**
  * Code written once, or Ask AI each run.
  */
 export type StepKind = 'code' | 'agent';
@@ -744,6 +794,11 @@ export type StepProblem = {
     index: number;
     problems: Array<string>;
 };
+
+/**
+ * The part of the app a routine is about, where it is offered.
+ */
+export type Surface = 'email' | 'calendar' | 'tasks' | 'files' | 'crm' | 'chat' | 'calls' | 'reviews' | 'agents';
 
 /**
  * A user-specific part of a shared routine.
@@ -884,27 +939,36 @@ export type CreateScheduledActionResponses = {
 
 export type CreateScheduledActionResponse = CreateScheduledActionResponses[keyof CreateScheduledActionResponses];
 
-export type RoutineCodeStartersData = {
+export type RoutineCatalogData = {
     body?: never;
     path?: never;
-    query?: never;
-    url: '/scheduled-actions/code/starters';
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/scheduled-actions/catalog';
 };
 
-export type RoutineCodeStartersErrors = {
+export type RoutineCatalogErrors = {
+    /**
+     * Not a time zone
+     */
+    400: string;
     401: string;
 };
 
-export type RoutineCodeStartersError = RoutineCodeStartersErrors[keyof RoutineCodeStartersErrors];
+export type RoutineCatalogError = RoutineCatalogErrors[keyof RoutineCatalogErrors];
 
-export type RoutineCodeStartersResponses = {
+export type RoutineCatalogResponses = {
     /**
-     * Starter routines whose step is code; empty where code steps aren't available
+     * Macro's routines, with schedules in the given zone; code steps only where code can be saved
      */
-    200: Array<StarterRoutine>;
+    200: Array<CatalogEntry>;
 };
 
-export type RoutineCodeStartersResponse = RoutineCodeStartersResponses[keyof RoutineCodeStartersResponses];
+export type RoutineCatalogResponse = RoutineCatalogResponses[keyof RoutineCatalogResponses];
 
 export type DraftRoutineData = {
     body: DraftRoutineRequest;

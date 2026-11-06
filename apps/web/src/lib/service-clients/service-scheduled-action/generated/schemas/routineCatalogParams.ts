@@ -6,4 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type StarterRoutineStepsItem = { [key: string]: unknown };
+export type RoutineCatalogParams = {
+  /**
+   * IANA time zone, e.g. `America/New_York`.
+   */
+  timezone: string;
+};

@@ -157,20 +157,41 @@
         }
       }
     },
-    "/scheduled-actions/code/starters": {
+    "/scheduled-actions/catalog": {
       "get": {
         "tags": ["scheduled actions"],
-        "operationId": "routine_code_starters",
+        "operationId": "routine_catalog",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Starter routines whose step is code; empty where code steps aren't available",
+            "description": "Macro's routines, with schedules in the given zone; code steps only where code can be saved",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/StarterRoutine"
+                    "$ref": "#/components/schemas/CatalogEntry"
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a time zone",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -1318,6 +1339,84 @@
           }
         }
       },
+      "CatalogEntry": {
+        "type": "object",
+        "description": "One of Macro's routines, ready to start a new routine from.",
+        "required": [
+          "key",
+          "surface",
+          "title",
+          "description",
+          "request",
+          "action",
+          "trigger",
+          "namedKnobs",
+          "instructions",
+          "affectsOthers",
+          "safeDefault",
+          "template"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "What it does, in a few words, for the line beside its trigger."
+          },
+          "affectsOthers": {
+            "type": "boolean",
+            "description": "It changes or sends what other people see."
+          },
+          "code": {
+            "type": ["object", "null"],
+            "description": "Its code step, in the shape a routine's task holds it; absent where\ncode can't be saved, or when it is an Ask AI routine."
+          },
+          "description": {
+            "type": "string",
+            "description": "What it does, in a short line."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "The Ask AI step's instructions: its only step without code, and the\nstep to use where code can't be saved."
+          },
+          "key": {
+            "type": "string",
+            "description": "Names it, e.g. `inbox`."
+          },
+          "namedKnobs": {
+            "type": "object",
+            "description": "The code step's text knobs whose value names one of the owner's\nitems (a tag, channel or label), by knob name.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NamedItemKind"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "request": {
+            "type": "string",
+            "description": "What someone asks for, with when it runs."
+          },
+          "safeDefault": {
+            "type": "boolean",
+            "description": "It may be switched on before its owner changes anything."
+          },
+          "surface": {
+            "$ref": "#/components/schemas/Surface",
+            "description": "Where it is offered."
+          },
+          "template": {
+            "type": "boolean",
+            "description": "Offered among the templates when someone creates a routine."
+          },
+          "title": {
+            "type": "string",
+            "description": "Its name once saved."
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger",
+            "description": "When it runs; schedules are in the zone the catalog was asked for."
+          }
+        }
+      },
       "CodeUpgrade": {
         "type": "object",
         "description": "One time a routine's code was brought to a new SDK.",
@@ -1854,6 +1953,11 @@
         },
         "additionalProperties": false
       },
+      "NamedItemKind": {
+        "type": "string",
+        "description": "What a text knob's value names: one of its owner's items, which a client\nmatches by name or lets them pick.",
+        "enum": ["tag", "channel", "label"]
+      },
       "PayloadCondition": {
         "type": "object",
         "description": "`path` walks objects by key; `*` steps into every element of an array and\na number into one. Give exactly one test. `notIn` also passes when the\npath finds nothing.",
@@ -2379,28 +2483,6 @@
         },
         "additionalProperties": false
       },
-      "StarterRoutine": {
-        "type": "object",
-        "description": "A starter routine whose step is code: offered when a routine is created,\nand shown to the drafter as a worked example.",
-        "required": ["key", "request", "steps"],
-        "properties": {
-          "key": {
-            "type": "string",
-            "description": "Names it, e.g. `inbox`."
-          },
-          "request": {
-            "type": "string",
-            "description": "What someone asks for, with when it runs."
-          },
-          "steps": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            },
-            "description": "Its steps, in the shape a routine's task holds them."
-          }
-        }
-      },
       "StepKind": {
         "type": "string",
         "description": "Code written once, or Ask AI each run.",
@@ -2423,6 +2505,21 @@
             }
           }
         }
+      },
+      "Surface": {
+        "type": "string",
+        "description": "The part of the app a routine is about, where it is offered.",
+        "enum": [
+          "email",
+          "calendar",
+          "tasks",
+          "files",
+          "crm",
+          "chat",
+          "calls",
+          "reviews",
+          "agents"
+        ]
       },
       "TemplateVariable": {
         "oneOf": [

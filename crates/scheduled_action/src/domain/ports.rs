@@ -211,9 +211,9 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
 
-    /// Starter routines whose step is code, to offer when a routine is
-    /// created; none on hosts where code can't be saved.
-    fn code_starters(&self) -> Vec<super::code_check::StarterRoutine>;
+    /// Macro's catalog routines with schedules in `timezone`, without code
+    /// steps on hosts where code can't be saved.
+    fn catalog(&self, timezone: chrono_tz::Tz) -> Vec<super::catalog::CatalogEntry>;
 
     /// How the routine's code steps were brought to new SDKs, newest first.
     fn get_code_upgrades(

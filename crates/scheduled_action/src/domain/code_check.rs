@@ -3,7 +3,7 @@
 //! checked against.
 
 use macro_user_id::user_id::MacroUserIdStr;
-use routine_program::{CODE_STEPS, RoutineProgram, STARTERS, STEP_CONTEXT, Step};
+use routine_program::{CATALOG, CODE_STEPS, RoutineProgram, STEP_CONTEXT, Step};
 use serde::Serialize;
 use serde_json::Value;
 use utoipa::ToSchema;
@@ -134,8 +134,8 @@ pub struct CodeGuide {
     pub examples: Vec<StarterRoutine>,
 }
 
-/// A starter routine whose step is code: offered when a routine is created,
-/// and shown to the drafter as a worked example.
+/// A catalog routine whose step is code, shown to the drafter as a worked
+/// example.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StarterRoutine {
@@ -148,18 +148,18 @@ pub struct StarterRoutine {
     pub steps: Vec<Value>,
 }
 
-/// The starter routines whose step is code; none where code can't be saved.
+/// The catalog routines whose step is code; none where code can't be saved.
 pub fn starters(code: &impl RoutineCode) -> Vec<StarterRoutine> {
     if code.sdk().is_none() {
         return Vec::new();
     }
-    STARTERS
+    CATALOG
         .iter()
-        .filter_map(|starter| {
-            let step = serde_json::to_value(Step::Code(starter.step.clone())).ok()?;
+        .filter_map(|routine| {
+            let step = serde_json::to_value(Step::Code(routine.code.clone()?)).ok()?;
             Some(StarterRoutine {
-                key: starter.key.to_owned(),
-                request: starter.request.to_owned(),
+                key: routine.key.to_owned(),
+                request: routine.request.to_owned(),
                 steps: vec![step],
             })
         })

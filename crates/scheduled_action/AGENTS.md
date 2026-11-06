@@ -28,9 +28,11 @@ each run.
 - `src/domain/code_check.rs`: saving a routine gives its steps ids, type-checks
   all its code steps together and stamps the task's `sdk` (the version from
   `routine_program::code_version`); unchanged code already checked against the
-  current version isn't checked again. `GET /scheduled-actions/code/starters`
-  (the starter routines, none where code can't be saved) serves the
-  new-routine flow.
+  current version isn't checked again.
+- `src/domain/catalog.rs`: `GET /scheduled-actions/catalog?timezone=` serves
+  `routine_program`'s catalog to the new-routine flow: each trigger as an
+  `ActionTrigger` with schedules in that zone, and code steps only where code
+  can be saved.
 - `src/domain/drafts.rs` + `src/inbound/draft_router.rs`: `POST
   /scheduled-actions/drafts`, AI drafting a routine, a step to add, or a
   change to a code step from the person's words (Draft it and the step

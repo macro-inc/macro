@@ -16,7 +16,7 @@ use macro_uuid::Uuid;
 use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
-use super::code_check::{StarterRoutine, checked_task, named_steps, same_task};
+use super::code_check::{checked_task, named_steps, same_task};
 use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
@@ -606,8 +606,8 @@ where
         self.repo.get_execution_records(&id).await
     }
 
-    fn code_starters(&self) -> Vec<StarterRoutine> {
-        super::code_check::starters(self.code.as_ref())
+    fn catalog(&self, timezone: chrono_tz::Tz) -> Vec<super::catalog::CatalogEntry> {
+        super::catalog::catalog(self.code.as_ref(), timezone)
     }
 
     async fn get_code_upgrades(
