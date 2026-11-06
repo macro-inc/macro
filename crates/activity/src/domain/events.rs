@@ -106,6 +106,12 @@ pub enum ActivityTopicEvent {
         /// The recorded rows this recipient may see.
         activities: Vec<ActivityWireRow>,
     },
+    /// Correlated rows for session viewers, independent of entity audiences.
+    #[serde(rename = "activity.session_recorded")]
+    SessionRecorded {
+        /// Rows with a signed agent correlation.
+        activities: Vec<ActivityWireRow>,
+    },
     /// Stored activity changed after a purge. Contains no entity or user data:
     /// even former viewers must refresh through authorized read paths.
     #[serde(rename = "activity.invalidated")]
@@ -117,6 +123,7 @@ impl ActivityTopicEvent {
     pub fn key(&self) -> &str {
         match self {
             Self::Recorded { recipient_id, .. } => recipient_id,
+            Self::SessionRecorded { .. } => "activity-session-recorded",
             Self::Invalidated => "activity-invalidated",
         }
     }
@@ -125,7 +132,8 @@ impl ActivityTopicEvent {
 impl TopicEvent for ActivityTopicEvent {
     type Topic = MacroActivityTopic;
 
-    const SCHEMA_VERSION: u8 = 1;
+    // Older consumers skip the new session event during rolling deployment.
+    const SCHEMA_VERSION: u8 = 2;
 }
 
 /// Publishable realtime activity event, keyed by its recipient.

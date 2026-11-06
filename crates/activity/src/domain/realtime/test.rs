@@ -52,6 +52,28 @@ fn recorded(recipient: &str, activities: Vec<ActivityWireRow>) -> ActivityTopicE
     }
 }
 
+#[tokio::test]
+async fn correlated_rows_reach_session_subscribers_without_user_recipients() {
+    let owner = user("owner");
+    let correlation_id = Uuid::new_v4();
+    let mut row = wire_row(&owner, "doc-1");
+    row.agent_correlation_id = Some(correlation_id);
+    let consumer = FakeConsumer {
+        messages: Mutex::new(VecDeque::from([Ok(ActivityTopicEvent::SessionRecorded {
+            activities: vec![row],
+        })])),
+        calls: Arc::new(AtomicUsize::new(0)),
+    };
+    let service = ActivityRealtimeConsumerService::new(consumer);
+    let mut receiver = service.subscribe_session_rows();
+    let run = tokio::spawn(async move { service.run().await });
+    let delivered = receiver.recv().await.expect("session activity row");
+    assert_eq!(delivered.agent_correlation_id, Some(correlation_id));
+    run.await
+        .expect("consumer task")
+        .expect_err("consumer stopped");
+}
+
 #[tokio::test(start_paused = true)]
 async fn distributes_activities_to_recipient_subscriptions() {
     let one = user("one");

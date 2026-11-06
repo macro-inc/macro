@@ -22,6 +22,7 @@ DataLoader) — plus database/form timelines and a realtime subscription.
 - `src/timeline.rs`: by-id, access-checked timelines for databases/forms
   (not Soup items, so not loader-batched).
 - `src/subscriptions.rs`: the realtime `activityUpdates` subscription.
+- `src/objects.rs`: `GraphqlActivityEvent` exposes the signed invocation correlation and stored action tag for session activity consumers; the optional display verb is wired after the activity model adds it.
 
 ## Scope
 

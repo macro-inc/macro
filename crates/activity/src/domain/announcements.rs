@@ -151,16 +151,24 @@ impl<P: ActivityEventPublisher, A: ActivityAudienceExpander> ActivityRealtimePub
                     deliveries.entry(user).or_default().push(row.clone());
                 }
             }
-            self.deliver(
-                deliveries
-                    .into_iter()
-                    .map(|(recipient_id, activities)| ActivityTopicEvent::Recorded {
-                        recipient_id,
-                        activities,
-                    })
-                    .collect(),
-            )
-            .await;
+            let mut events: Vec<_> = deliveries
+                .into_iter()
+                .map(|(recipient_id, activities)| ActivityTopicEvent::Recorded {
+                    recipient_id,
+                    activities,
+                })
+                .collect();
+            let session_rows: Vec<_> = activities
+                .iter()
+                .filter(|activity| activity.agent_correlation_id.is_some())
+                .map(ActivityWireRow::from_activity)
+                .collect();
+            if !session_rows.is_empty() {
+                events.push(ActivityTopicEvent::SessionRecorded {
+                    activities: session_rows,
+                });
+            }
+            self.deliver(events).await;
         })
         .await;
     }

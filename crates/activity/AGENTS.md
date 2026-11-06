@@ -64,3 +64,5 @@ distribution.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
 
 - Session and other activity reads preserve `agent_correlation_id` and nullable `agent_verb`; session visibility and existing entity/subject authorization still apply. The materializer restores both envelope fields before classifying an event.
+- Correlated rows publish a separate `SessionRecorded` activity-topic event even when no subject or entity viewer is addressable. The realtime consumer broadcasts those rows to session subscribers; the GraphQL adapter resolves correlation ownership through the existing agent correlation repository.
+- The activity topic schema is v2 for the session event; older realtime consumers skip v2 frames during a rolling deployment, and new consumers skip v1 frames. Both feeds recover missed frames through authorized reads on reconnect.
