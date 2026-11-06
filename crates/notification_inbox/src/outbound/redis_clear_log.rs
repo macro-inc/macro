@@ -132,20 +132,15 @@ impl ClearLog for RedisClearLog {
         Ok(())
     }
 
-    async fn take(
+    async fn receipts(
         &self,
         user: &MacroUserIdStr<'static>,
         id: Uuid,
     ) -> Result<Vec<DoneReceipt>, Report> {
-        let receipts = receipts_key(user, id);
-        let (encoded,): (Vec<String>,) = redis::pipe()
-            .atomic()
-            .lrange(&receipts, 0, -1)
-            .del(&receipts)
-            .ignore()
-            .del(state_key(user, id))
-            .ignore()
-            .query_async(&mut self.conn.clone())
+        let encoded: Vec<String> = self
+            .conn
+            .clone()
+            .lrange(receipts_key(user, id), 0, -1)
             .await?;
         Ok(encoded
             .iter()
@@ -157,5 +152,14 @@ impl ClearLog for RedisClearLog {
                 }
             })
             .collect())
+    }
+
+    async fn remove(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {
+        let _: () = self
+            .conn
+            .clone()
+            .del(&[state_key(user, id), receipts_key(user, id)])
+            .await?;
+        Ok(())
     }
 }

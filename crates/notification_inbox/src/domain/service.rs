@@ -352,8 +352,8 @@ where
                         cancelled: true,
                     });
                 }
-                // The undo ran without this batch; reverse it here so the
-                // whole clear is undone.
+                // The log is gone, so no undo will cover this batch;
+                // reverse it here.
                 ClearStep::Orphaned => {
                     self.acknowledger.undo(viewer, &batch.receipt).await?;
                     return Ok(InboxClearOutcome {
@@ -733,24 +733,38 @@ where
     ) -> Result<Vec<InboxChange<Self::Entity>>, FeedError> {
         self.clear_log.cancel(&viewer.user, id).await?;
         // A clear still running stops after its current batch; wait for it so
-        // the log holds everything it changed.
+        // the log holds everything it changed. Past the wait, keep the log and
+        // ask the caller to undo again.
         let started = tokio::time::Instant::now();
+        let mut finished = false;
         while started.elapsed() < CLEAR_STOP_WAIT {
             match self.clear_log.progress(&viewer.user, id).await? {
                 Some(progress) if !progress.finished => {
                     tokio::time::sleep(CLEAR_STOP_POLL).await;
                 }
-                _ => break,
+                _ => {
+                    finished = true;
+                    break;
+                }
             }
         }
         let span = tracing::Span::current();
         span.record("waited_ms", started.elapsed().as_millis() as u64);
-        let receipt = merge_receipts(self.clear_log.take(&viewer.user, id).await?);
-        span.record("notifications", receipt.notification_ids.len());
-        if receipt.keys.is_empty() {
-            return Ok(Vec::new());
+        if !finished {
+            return Err(FeedError::Busy(
+                "the clear is still stopping; undo it again",
+            ));
         }
-        self.undo_done(viewer, scope, receipt).await
+        let receipt = merge_receipts(self.clear_log.receipts(&viewer.user, id).await?);
+        span.record("notifications", receipt.notification_ids.len());
+        let changes = if receipt.keys.is_empty() {
+            Vec::new()
+        } else {
+            // A failed reversal keeps the log, so the undo can be retried.
+            self.undo_done(viewer.clone(), scope, receipt).await?
+        };
+        self.clear_log.remove(&viewer.user, id).await?;
+        Ok(changes)
     }
 
     #[tracing::instrument(

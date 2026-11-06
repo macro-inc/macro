@@ -679,7 +679,7 @@ async fn one_clear_reads_every_batch_until_the_inbox_ends() {
 #[derive(Clone, Default)]
 struct UndoAfterFirstBatch(MemoryClearLog);
 
-/// A log an undo took while the first batch was still running.
+/// A log that is gone (expired) by the time the first batch lands.
 #[derive(Clone, Default)]
 struct TakenDuringFirstBatch(MemoryClearLog);
 
@@ -694,7 +694,7 @@ impl ClearLog for TakenDuringFirstBatch {
         rows: usize,
         receipt: &DoneReceipt,
     ) -> Result<ClearStep, Report> {
-        self.0.take(user, id).await?;
+        self.0.remove(user, id).await?;
         self.0.record(user, id, rows, receipt).await
     }
     async fn finish(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {
@@ -710,17 +710,20 @@ impl ClearLog for TakenDuringFirstBatch {
     async fn cancel(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {
         self.0.cancel(user, id).await
     }
-    async fn take(
+    async fn receipts(
         &self,
         user: &MacroUserIdStr<'static>,
         id: Uuid,
     ) -> Result<Vec<DoneReceipt>, Report> {
-        self.0.take(user, id).await
+        self.0.receipts(user, id).await
+    }
+    async fn remove(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {
+        self.0.remove(user, id).await
     }
 }
 
 #[tokio::test]
-async fn a_batch_that_lands_after_the_undo_took_the_log_reverses_itself() {
+async fn a_batch_that_lands_after_its_log_is_gone_reverses_itself() {
     let documents = many_documents(250);
     let service = NotificationInboxServiceImpl::new(
         documents.source.clone(),
@@ -769,12 +772,15 @@ impl ClearLog for UndoAfterFirstBatch {
     async fn cancel(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {
         self.0.cancel(user, id).await
     }
-    async fn take(
+    async fn receipts(
         &self,
         user: &MacroUserIdStr<'static>,
         id: Uuid,
     ) -> Result<Vec<DoneReceipt>, Report> {
-        self.0.take(user, id).await
+        self.0.receipts(user, id).await
+    }
+    async fn remove(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {
+        self.0.remove(user, id).await
     }
 }
 
@@ -1172,4 +1178,116 @@ async fn new_activity_brings_a_read_row_back_into_an_unread_inbox() {
         panic!("the task is unread again");
     };
     assert!(entry.rows.iter().all(|row| row.unseen));
+}
+
+#[tokio::test(start_paused = true)]
+async fn undo_of_a_clear_still_running_keeps_the_log_and_asks_to_retry() {
+    let harness = inbox();
+    // A clear whose current batch is still in flight: begun, not finished.
+    harness
+        .clear_log
+        .begin(&viewer().user, uuid(CLEAR))
+        .await
+        .unwrap();
+
+    let error = harness
+        .service
+        .undo_clear(viewer(), InboxScope::default(), uuid(CLEAR))
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, FeedError::Busy(_)));
+    assert!(
+        harness
+            .clear_log
+            .progress(&viewer().user, uuid(CLEAR))
+            .await
+            .unwrap()
+            .is_some(),
+        "the log stays for the retry"
+    );
+}
+
+/// Notifications whose reopen fails.
+#[derive(Clone)]
+struct FailingReopen(FakeNotifications);
+
+impl FeedNotifications for FailingReopen {
+    async fn active(
+        &self,
+        user: MacroUserIdStr<'static>,
+        entities: Vec<Entity<'static>>,
+    ) -> Result<HashMap<Entity<'static>, Vec<FeedNotification>>, Report> {
+        self.0.active(user, entities).await
+    }
+    async fn transition(
+        &self,
+        user: MacroUserIdStr<'static>,
+        notification_ids: Vec<Uuid>,
+        transition: NotificationTransition,
+    ) -> Result<Vec<Uuid>, Report> {
+        self.0.transition(user, notification_ids, transition).await
+    }
+    async fn reopen(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _notification_ids: Vec<Uuid>,
+        _unseen: Vec<Uuid>,
+    ) -> Result<Vec<Uuid>, Report> {
+        Err(rootcause::report!("reopen failed"))
+    }
+}
+
+#[tokio::test]
+async fn a_failed_undo_of_a_clear_keeps_the_log_for_a_retry() {
+    let fixture = inbox();
+    let clear_log = MemoryClearLog::default();
+    let failing = NotificationInboxServiceImpl::new(
+        fixture.source.clone(),
+        FailingReopen(fixture.notifications.clone()),
+        fixture.mail.clone(),
+        fixture.signals.clone(),
+        clear_log.clone(),
+    );
+    failing
+        .clear(viewer(), clear_request(InboxScope::default()), uuid(CLEAR))
+        .await
+        .unwrap();
+
+    assert!(
+        failing
+            .undo_clear(viewer(), InboxScope::default(), uuid(CLEAR))
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        clear_log
+            .receipts(&viewer().user, uuid(CLEAR))
+            .await
+            .unwrap()
+            .len(),
+        1,
+        "the batch is still there to undo"
+    );
+
+    // The retry, with reopen working, undoes the clear.
+    let working = NotificationInboxServiceImpl::new(
+        fixture.source.clone(),
+        fixture.notifications.clone(),
+        fixture.mail.clone(),
+        fixture.signals.clone(),
+        clear_log.clone(),
+    );
+    working
+        .undo_clear(viewer(), InboxScope::default(), uuid(CLEAR))
+        .await
+        .unwrap();
+    assert_eq!(state(&fixture, 1), NotificationState::Unseen);
+    assert!(
+        clear_log
+            .progress(&viewer().user, uuid(CLEAR))
+            .await
+            .unwrap()
+            .is_none()
+    );
 }

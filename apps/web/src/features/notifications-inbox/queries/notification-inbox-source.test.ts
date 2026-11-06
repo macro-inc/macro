@@ -337,6 +337,38 @@ describe('createNotificationInboxSource', () => {
     expect(rowIds()).toContain('document:doc-a#task');
   });
 
+  it('tries the undo of a clear again while the server is still stopping it', async () => {
+    vi.useFakeTimers();
+    let undoCalls = 0;
+    const { fake, feed } = await loaded({
+      ClearNotificationInbox: {
+        clearNotificationInbox: {
+          rowCount: 6,
+          undoToken: 'clear:one',
+          complete: false,
+        },
+      },
+      get UndoNotificationInboxRowsDone() {
+        undoCalls += 1;
+        // The first answer is the server's "still stopping".
+        return undoCalls === 1
+          ? undefined
+          : { undoNotificationInboxRowsDone: { patches: [] } };
+      },
+    });
+    const cleared = await feed.clear({ rowTypes: ['task'], unreadOnly: false });
+
+    const undoing = cleared.undo();
+    await vi.advanceTimersByTimeAsync(2_000);
+    await undoing;
+
+    expect(
+      fake.mutations.filter(
+        ({ name }) => name === 'UndoNotificationInboxRowsDone'
+      )
+    ).toHaveLength(2);
+  });
+
   it('sends nothing when every kind is hidden', async () => {
     vi.useFakeTimers();
     const { fake, feed, rowIds } = await loaded();

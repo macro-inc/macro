@@ -30,7 +30,7 @@ fn receipt(key: &str, notification: u128) -> DoneReceipt {
 }
 
 #[tokio::test]
-async fn a_clear_is_recorded_stopped_and_taken_once() {
+async fn a_clear_is_recorded_stopped_read_and_removed() {
     let log = log().await;
     let user = viewer();
     let id = Uuid::now_v7();
@@ -66,12 +66,13 @@ async fn a_clear_is_recorded_stopped_and_taken_once() {
         })
     );
 
-    let taken = log.take(&user, id).await.unwrap();
+    let taken = log.receipts(&user, id).await.unwrap();
     assert_eq!(
         taken,
         vec![receipt("document:a", 1), receipt("document:b", 2)]
     );
-    assert!(log.take(&user, id).await.unwrap().is_empty());
+    log.remove(&user, id).await.unwrap();
+    assert!(log.receipts(&user, id).await.unwrap().is_empty());
     assert_eq!(log.progress(&user, id).await.unwrap(), None);
 }
 
@@ -85,12 +86,12 @@ async fn cancelling_an_unknown_clear_leaves_nothing_behind() {
 }
 
 #[tokio::test]
-async fn a_clear_whose_log_was_taken_stops_and_records_nothing() {
+async fn a_clear_whose_log_was_removed_stops_and_records_nothing() {
     let log = log().await;
     let user = viewer();
     let id = Uuid::now_v7();
     log.begin(&user, id).await.unwrap();
-    log.take(&user, id).await.unwrap();
+    log.remove(&user, id).await.unwrap();
 
     assert_eq!(
         log.record(&user, id, 1, &receipt("document:a", 1))
@@ -99,5 +100,5 @@ async fn a_clear_whose_log_was_taken_stops_and_records_nothing() {
         ClearStep::Orphaned
     );
     assert_eq!(log.progress(&user, id).await.unwrap(), None);
-    assert!(log.take(&user, id).await.unwrap().is_empty());
+    assert!(log.receipts(&user, id).await.unwrap().is_empty());
 }

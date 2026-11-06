@@ -86,6 +86,29 @@ export type NotificationInboxSourceOptions = {
   revalidateNotifications?: (client: Client) => Promise<void>;
 };
 
+/** Tries an undo of a clear gets, spaced by `CLEAR_UNDO_RETRY_MS`. */
+const CLEAR_UNDO_ATTEMPTS = 4;
+const CLEAR_UNDO_RETRY_MS = 2_000;
+
+/**
+ * Undo a clear. One still stopping, or a reversal that failed, keeps its log
+ * on the server and asks for the undo again, so try a few times.
+ */
+async function undoClear(
+  client: Client,
+  token: string,
+  scope: NotificationInboxScopeInput
+) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await undoInboxRowsDone(client, token, scope);
+    } catch (error) {
+      if (attempt >= CLEAR_UNDO_ATTEMPTS) throw error;
+      await new Promise((resolve) => setTimeout(resolve, CLEAR_UNDO_RETRY_MS));
+    }
+  }
+}
+
 /**
  * The inbox read from the server's notification inbox: its rows, kept
  * current by its live stream through the shared attention feed client. Done
@@ -345,11 +368,7 @@ export function createNotificationInboxSource(
       undo: async () => {
         // The filter may have changed since the clear; restore into this one.
         const scope = scopeInput();
-        const patches = await undoInboxRowsDone(
-          client,
-          cleared.undoToken,
-          scope
-        );
+        const patches = await undoClear(client, cleared.undoToken, scope);
         applyIfCurrent(scope, patches);
         setDone((current) => unmarkRows(current, hiddenIds));
         revalidate(client);

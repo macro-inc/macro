@@ -97,17 +97,21 @@ impl ClearLog for MemoryClearLog {
         Ok(())
     }
 
-    async fn take(
+    async fn receipts(
         &self,
         user: &MacroUserIdStr<'static>,
         id: Uuid,
     ) -> Result<Vec<DoneReceipt>, Report> {
         Ok(self
-            .entries
+            .with(user, id, |entry| entry.receipts.clone())
+            .unwrap_or_default())
+    }
+
+    async fn remove(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {
+        self.entries
             .lock()
             .unwrap()
-            .remove(&(user.as_ref().to_string(), id))
-            .map(|entry| entry.receipts)
-            .unwrap_or_default())
+            .remove(&(user.as_ref().to_string(), id));
+        Ok(())
     }
 }

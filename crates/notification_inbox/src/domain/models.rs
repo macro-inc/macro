@@ -285,8 +285,8 @@ pub enum ClearStep {
     Continue,
     /// An undo asked the clear to stop; the batch is recorded for it.
     Stop,
-    /// An undo already took the log, so the batch was not recorded: the
-    /// clear reverses it itself and stops.
+    /// The log is gone (undone, or expired), so the batch was not recorded:
+    /// the clear reverses it itself and stops.
     Orphaned,
 }
 

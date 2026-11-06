@@ -25,4 +25,4 @@ attention_feed = { path = "../attention_feed", features = ["test-utils"] }
 macro_env_var = { path = "../macro_env_var" }
 notification = { path = "../notification" }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }

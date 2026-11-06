@@ -20,8 +20,8 @@ pub trait ClearLog: Send + Sync + 'static {
         id: Uuid,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
-    /// Record one batch: the rows it cleared and what it changed, unless an
-    /// undo already took the log. Returns what the clear does next.
+    /// Record one batch: the rows it cleared and what it changed, unless the
+    /// log is gone (undone, or expired). Returns what the clear does next.
     fn record(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -51,10 +51,17 @@ pub trait ClearLog: Send + Sync + 'static {
         id: Uuid,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
-    /// Everything the clear changed, removing its log so it is undone once.
-    fn take(
+    /// Everything the clear changed, as recorded so far.
+    fn receipts(
         &self,
         user: &MacroUserIdStr<'static>,
         id: Uuid,
     ) -> impl Future<Output = Result<Vec<DoneReceipt>, Report>> + Send;
+
+    /// Delete the log once its undo is done, so the clear is undone once.
+    fn remove(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
