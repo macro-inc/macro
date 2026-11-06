@@ -1067,6 +1067,9 @@ keep incomplete trailing Macro XML hidden in settled agent prose, preserve
 completed chips and literal tag examples in Markdown code, and leave user prompts
 unchanged.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using the Nix Chrome binary.
+The same suite opens a tool group in the real `Transcript` while a reply streams
+below it (`transcript.browser.e2e.ts`): the press must land and the group must
+stay put, which `ThreadList`'s `holdOnDisclosure` provides.
 
 Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
