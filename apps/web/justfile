@@ -151,7 +151,7 @@ build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build
 
 build-dev: build-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
-    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+    scripts/cached-brotli-sidecar.sh dist
 
 build-staging: build-wasm
     MODE=staging NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build

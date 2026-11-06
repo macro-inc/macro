@@ -11,6 +11,29 @@ name: Web App Pr Checks
     branches:
     - main
 jobs:
+  cancel-older:
+    name: Cancel older runs
+    runs-on: namespace-profile-linux-tiny-no-cache
+    permissions:
+      actions: write
+    steps:
+    - name: Cancel this PR's older runs of this workflow
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+      with:
+        script: |
+          // [ci-speed] A workflow-level concurrency group makes the new run wait until
+          // the old one has finished cancelling. Cancelling here lets the new run start
+          // at once while the old one winds down.
+          const { owner, repo } = context.repo;
+          const { data: me } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: context.runId });
+          const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+            owner, repo, workflow_id: me.workflow_id, branch: me.head_branch, event: 'pull_request', per_page: 100,
+          });
+          for (const run of runs) {
+            if (run.id >= me.id || run.status === 'completed') continue;
+            core.info(`cancelling run ${run.id} (${run.head_sha})`);
+            await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: run.id }).catch((e) => core.warning(String(e)));
+          }
   path-check:
     runs-on: namespace-profile-linux-tiny-no-cache
     outputs:
@@ -23,6 +46,11 @@ jobs:
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        # [ci-speed] The filter reads the PR's files from the API and the schema step
+        # reads blobs on demand, so skip writing the work tree.
+        filter: blob:none
+        sparse-checkout: .github
     - id: filter
       name: Filter changed paths
       uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
@@ -340,37 +368,38 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup Prereqs
       uses: './.github/actions/setup-reqs-web'
-    - name: Check Types
-      run: bun run type-check
-      working-directory: apps/web
-    - name: Check Floating Promises
-      run: bun run lint:oxlint --quiet
-    - name: Check Functional Test Types
-      run: bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json
-      working-directory: apps/web
-    - name: Check Collaboration Package Types
-      run: bun run type-check
-      working-directory: packages/collaboration
-    - name: Check Lexical Service Types
-      run: bun run check
-      working-directory: services/lexical-service
-    - name: Test Lexical Service Endpoints
-      run: bun test src
-      working-directory: services/lexical-service
-    - name: Install SDK Documentation Dependencies
-      run: bun install --frozen-lockfile
-      working-directory: packages/sdk
-    - name: Check SDK Documentation
-      run: bun run type-check && bun run test
-      working-directory: packages/sdk-docs
-    - name: Check Editing Worker
-      run: bun run type-check
-      working-directory: services/ai-editing-worker
-    - name: Check Code Mode SDK
-      run: bun run type-check && bun run test
-      working-directory: packages/code-mode-sdk
+    - name: Typecheck in parallel
+      run: |
+        set -uo pipefail
+        logs="$RUNNER_TEMP/typecheck"
+        mkdir -p "$logs"
+        declare -A pids
+        launch() {
+          local name="$1"; shift
+          ( local t=$SECONDS; "$@"; rc=$?; echo "[$name] exit $rc after $((SECONDS - t)) s"; exit $rc ) > "$logs/$name.log" 2>&1 &
+          pids[$name]=$!
+        }
+        launch types bash -c 'cd apps/web && bun run type-check'
+        launch floating-promises bash -c 'bun run lint:oxlint --quiet'
+        launch functional-types bash -c 'cd apps/web && bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json'
+        launch collaboration bash -c 'cd packages/collaboration && bun run type-check'
+        launch lexical bash -c 'cd services/lexical-service && bun run check && bun test src'
+        launch sdk-docs bash -c 'cd packages/sdk && bun install --frozen-lockfile && cd ../sdk-docs && bun run type-check && bun run test'
+        launch editing-worker bash -c 'cd services/ai-editing-worker && bun run type-check'
+        launch code-mode-sdk bash -c 'cd packages/code-mode-sdk && bun run type-check && bun run test'
+        failed=0
+        for name in "${!pids[@]}"; do
+          wait "${pids[$name]}" || failed=1
+        done
+        for name in "${!pids[@]}"; do
+          echo "::group::$name"; cat "$logs/$name.log"; echo "::endgroup::"
+          tail -n 1 "$logs/$name.log"
+        done
+        exit "$failed"
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -559,7 +588,7 @@ jobs:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
-        fetch-depth: '0'
+        fetch-depth: '2'
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -567,13 +596,15 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
     - name: Run Biome
-      run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
+      run: biome ci --changed --since=HEAD^1 --no-errors-on-unmatched --error-on-warnings
       working-directory: apps/web
     - name: Run Collaboration Package Biome
-      run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
+      run: biome ci --changed --since=HEAD^1 --no-errors-on-unmatched --error-on-warnings
       working-directory: packages/collaboration
     - name: Check Browser Floor and Native Permissions
       run: bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'
@@ -584,7 +615,7 @@ jobs:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
-    name: Test (${{ matrix.shard }}/3)
+    name: Test (${{ matrix.shard }}/6)
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     strategy:
       matrix:
@@ -592,6 +623,9 @@ jobs:
         - 1
         - 2
         - 3
+        - 4
+        - 5
+        - 6
       fail-fast: false
     steps:
     - name: Checkout Repo
@@ -610,6 +644,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
     - name: Configure Namespace remote sccache
@@ -652,7 +688,7 @@ jobs:
       timeout-minutes: 15
       working-directory: apps/web
     - name: Test
-      run: bun run test --shard=${{ matrix.shard }}/3
+      run: bun run test --shard=${{ matrix.shard }}/6
       env:
         VITEST_MODULE_CACHE_DIR: /home/runner/.cache/vitest-modules
       working-directory: apps/web
@@ -681,6 +717,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
       with:
@@ -765,6 +803,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
       with:
@@ -829,6 +869,19 @@ jobs:
         bunx playwright install-deps chromium
         just test-calendar-details-browser
       working-directory: apps/web
+    - name: '[ci-speed] diag: bun install backends'
+      if: always()
+      continue-on-error: true
+      run: |
+        stat -f -c '%T %i' /home/runner/.bun/install/cache "$GITHUB_WORKSPACE" || true
+        findmnt -T /home/runner/.bun/install/cache || true
+        findmnt -T "$GITHUB_WORKSPACE" || true
+        for backend in hardlink copyfile clonefile hardlink; do
+          find . -name node_modules -type d -prune -exec rm -rf {} +
+          start=$(date +%s%N)
+          bun install --frozen-lockfile --backend="$backend" 2>&1 | tail -n 2
+          echo "backend=$backend ms=$(( ($(date +%s%N) - start) / 1000000 ))"
+        done
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -848,6 +901,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
     - name: Cycles Import Check
@@ -884,6 +939,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
     - name: Configure Namespace remote sccache
@@ -1417,6 +1474,3 @@ jobs:
         fi
 
         echo "All jobs passed or were skipped"
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-check
-  cancel-in-progress: true
