@@ -30,5 +30,15 @@
     ],
     "workingDir": "/",
     "user": "appuser"
+  },
+  "lgtm": {
+    "imageName": "grafana/otel-lgtm",
+    "imageTag": "0.32.0",
+    "entrypoint": [],
+    "cmd": [
+      "/otel-lgtm/run-all.sh"
+    ],
+    "workingDir": "/otel-lgtm",
+    "user": ""
   }
 }

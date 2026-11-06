@@ -177,12 +177,16 @@ rec {
 
   # Reuse the existing frontend's Rust/Wasm derivations and dependency package,
   # changing only browser-local configuration and the Vite runtime.
-  frontend =
+  frontend = frontendFor true;
+  frontendFor =
+    telemetry:
     let
       built = packages.tauri-frontend.overrideAttrs (old: {
         pname = "macro-kubernetes-frontend";
         nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.nodejs ];
         VITE_POSTHOG_API_KEY = "";
+        VITE_ENABLE_BROWSER_OTEL = lib.boolToString telemetry;
+        VITE_OTEL_EXPORTER_URL = "/i/otlp/v1/traces";
         VITE_LOCAL_SERVERS = "ALL";
         VITE_LOCAL_BACKEND_ORIGIN = "same-origin";
         VITE_LOCAL_ONLY = "true";

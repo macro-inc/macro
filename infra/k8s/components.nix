@@ -14,3 +14,4 @@ in
 ) services)
 // (import ./components/auxiliary.nix args)
 // (import ./components/bootstrap.nix args)
+// (import ./components/telemetry.nix args)

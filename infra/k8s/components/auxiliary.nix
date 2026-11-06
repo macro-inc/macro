@@ -21,6 +21,11 @@ let
     }
     :8443 {
       tls /tls/tls.crt /tls/tls.key
+      ${lib.optionalString instance.telemetry ''
+        handle /traces* {
+          reverse_proxy otel-collector:3000
+        }
+      ''}
       @preflight method OPTIONS
       handle @preflight {
         header Access-Control-Allow-Origin "{http.request.header.Origin}"
@@ -259,11 +264,18 @@ in
     readiness.tcp = 6969;
   };
   analytics-proxy = worker "analytics-proxy" 8098 ''
-    exec wrangler dev --local --env local --ip 0.0.0.0 --port 8098
+    exec wrangler dev --local --env local --ip 0.0.0.0 --port 8098 --var OTLP_TRACES_INTAKE_URL:${
+      if instance.telemetry then "http://otel-collector:4318" else "http://127.0.0.1:4318"
+    } --var OTLP_LOGS_INTAKE_URL:${
+      if instance.telemetry then "http://otel-collector:4318" else "http://127.0.0.1:4318"
+    }
   '';
   ai-editing-worker = worker "ai-editing-worker" 8933 ''
     bun scripts/generate-sandbox.ts
     printf 'OPENAI_API_KEY=%s\nANTHROPIC_API_KEY=%s\nCEREBRAS_API_KEY=%s\n' "$OPENAI_API_KEY" "$ANTHROPIC_API_KEY" "$CEREBRAS_API_KEY" > .dev.vars
+    printf 'OTEL_EXPORTER_OTLP_ENDPOINT=%s\n' '${
+      if instance.telemetry then "http://otel-collector:4318/v1/traces" else ""
+    }' >> .dev.vars
     exec wrangler dev --local --env local --ip 0.0.0.0 --port 8933 --var SYNC_WS_BASE:ws://sync-service:8787
   '';
   sync-service = {
@@ -286,7 +298,9 @@ in
         mkdir .wrangler
         ln -s /state .wrangler/state
         printf 'LOCAL_API_KEY=%s\nDOCUMENT_PERMISSIONS_SECRET=%s\nSPS_API_SECRET_KEY=%s\nDSS_INTERNAL_AUTH_KEY=%s\nLEXICAL_SERVICE_AUTH_KEY=%s\n' "$INTERNAL_API_SECRET_KEY" "$DOCUMENT_PERMISSION_JWT" "$INTERNAL_API_SECRET_KEY" "$DOCUMENT_STORAGE_SERVICE_AUTH_KEY" "$INTERNAL_API_SECRET_KEY" > .dev.vars
-        printf 'OTEL_EXPORTER_OTLP_ENDPOINT=%s\n' "''${OTEL_EXPORTER_OTLP_ENDPOINT:-}" >> .dev.vars
+        printf 'OTEL_EXPORTER_OTLP_ENDPOINT=%s\n' '${
+          if instance.telemetry then "http://otel-collector:4318" else ""
+        }' >> .dev.vars
         wrangler d1 migrations apply USER_PEER_MAPPING --local --config wrangler.toml
         exec wrangler dev --local --ip 0.0.0.0 --port 8787 --config wrangler.toml
       '';

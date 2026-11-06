@@ -118,3 +118,8 @@ For the operational workflow, see the
 [kube-local skill](../../.agents/skills/kube-local/SKILL.md).
 Performance results and methodology belong in the pull request description,
 not in repository measurement scripts or committed result tables.
+
+LGTM is declared per instance by default, with its Grafana UI at `/traces/`.
+Use `up ... --no-telemetry` to disable the collector and telemetry export;
+compare that configuration with Compose `--traces off`. Alternative collector
+profiles and the shared browser remain separate opt-in tooling.

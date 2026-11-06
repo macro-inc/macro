@@ -100,6 +100,9 @@ pub struct InstanceArgs {
     no_doppler: bool,
     #[arg(long)]
     env_file: Option<PathBuf>,
+    /// Disable the declared local LGTM collector and telemetry export.
+    #[arg(long)]
+    no_telemetry: bool,
     /// Bake service binaries into images instead of mounting the host outputs.
     #[arg(long)]
     full_images: bool,
@@ -395,7 +398,7 @@ fn parameters(args: &InstanceArgs) -> Result<Value> {
     }
     Ok(
         json!({"name": args.name, "host": super::tls::hostname()?, "slot": args.slot,
-        "devBinaries": binaries, "seeded": !args.no_seed, "expose": !args.headless }),
+        "devBinaries": binaries, "seeded": !args.no_seed, "expose": !args.headless, "telemetry": !args.no_telemetry }),
     )
 }
 

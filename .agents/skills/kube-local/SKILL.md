@@ -57,3 +57,8 @@ Common failures:
 
 Never commit benchmark tooling or numbers. Record measured medians and phase
 profiles in the PR description, with the commit and at least three runs.
+
+LGTM is declared per instance by default, with its Grafana UI at `/traces/`.
+Use `up ... --no-telemetry` to disable the collector and telemetry export;
+compare that configuration with Compose `--traces off`. Alternative collector
+profiles and the shared browser remain separate opt-in tooling.

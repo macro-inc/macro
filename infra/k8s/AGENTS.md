@@ -9,7 +9,7 @@ Compose and `run_local` remain independent.
 ## Start here
 
 - `default.nix` composes instance overlays, typed resources and rendered YAML.
-- `components/` declares the complete stack and all in-cluster initialization.
+- `components/` declares the complete stack, local LGTM and all in-cluster initialization.
 - `lib.nix` reuses the image and workload builders from the platform design.
 - The controller is `tooling/xtask/crates/xtask_local/src/local/kubernetes/`.
 

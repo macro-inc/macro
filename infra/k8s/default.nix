@@ -30,6 +30,7 @@ rec {
       frontend ? null,
       enableGmail ? false,
       seeded ? true,
+      telemetry ? true,
       expose ? true,
       size ? { },
       secrets ? "macro-env",
@@ -64,6 +65,7 @@ rec {
           enableGmail
           devBinaries
           seeded
+          telemetry
           expose
           secrets
           ingress
@@ -78,7 +80,7 @@ rec {
           packages
           ;
         instance = settings;
-        frontend = if frontend == null then platformPkgs.frontend else frontend;
+        frontend = if frontend == null then platformPkgs.frontendFor telemetry else frontend;
       };
       workloadResources = lib.foldl' lib.recursiveUpdate { } (
         lib.mapAttrsToList (
@@ -90,50 +92,58 @@ rec {
           }
         ) components
       );
-      resources = lib.recursiveUpdate workloadResources {
-        roles.bootstrap-reader = {
-          metadata.labels."macro.local/managed" = "true";
-          rules = [
-            {
-              apiGroups = [ "batch" ];
-              resources = [ "jobs" ];
-              verbs = [
-                "get"
-                "list"
-                "watch"
-              ];
-            }
-          ];
-        };
-        roleBindings.bootstrap-reader = {
-          metadata.labels."macro.local/managed" = "true";
-          roleRef = {
-            apiGroup = "rbac.authorization.k8s.io";
-            kind = "Role";
-            name = "bootstrap-reader";
-          };
-          subjects = [
-            {
-              kind = "ServiceAccount";
-              name = "default";
-              inherit namespace;
-            }
-          ];
-        };
-        services.proxy.spec =
-          ingress.service or (lib.optionalAttrs expose {
-            type = "NodePort";
-            ports = [
+      resources = lib.recursiveUpdate workloadResources (
+        {
+          roles.bootstrap-reader = {
+            metadata.labels."macro.local/managed" = "true";
+            rules = [
               {
-                name = "p8443";
-                port = 8443;
-                targetPort = 8443;
-                nodePort = 30443 + slot;
-                protocol = "TCP";
+                apiGroups = [ "batch" ];
+                resources = [ "jobs" ];
+                verbs = [
+                  "get"
+                  "list"
+                  "watch"
+                ];
               }
             ];
-          });
-      };
+          };
+          roleBindings.bootstrap-reader = {
+            metadata.labels."macro.local/managed" = "true";
+            roleRef = {
+              apiGroup = "rbac.authorization.k8s.io";
+              kind = "Role";
+              name = "bootstrap-reader";
+            };
+            subjects = [
+              {
+                kind = "ServiceAccount";
+                name = "default";
+                inherit namespace;
+              }
+            ];
+          };
+          services.proxy.spec =
+            ingress.service or (lib.optionalAttrs expose {
+              type = "NodePort";
+              ports = [
+                {
+                  name = "p8443";
+                  port = 8443;
+                  targetPort = 8443;
+                  nodePort = 30443 + slot;
+                  protocol = "TCP";
+                }
+              ];
+            });
+        }
+        // lib.optionalAttrs telemetry {
+          configMaps.lgtm-tempo = {
+            metadata.labels."macro.local/managed" = "true";
+            data."tempo-config.yaml" = builtins.readFile ../../docker/lgtm/tempo-config.yaml;
+          };
+        }
+      );
       env = nixidy.lib.mkEnv {
         inherit pkgs;
         modules = [

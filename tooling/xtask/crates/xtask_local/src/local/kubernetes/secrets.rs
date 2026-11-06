@@ -78,6 +78,14 @@ pub(super) fn create(state: &Path, args: &InstanceArgs, params: &mut Value) -> R
     )?;
     let mut env = resolved.merged;
     normalize(&mut env);
+    if args.no_telemetry {
+        env.remove("OTEL_EXPORTER_OTLP_ENDPOINT");
+    } else {
+        env.insert(
+            "OTEL_EXPORTER_OTLP_ENDPOINT".into(),
+            "http://otel-collector:4317".into(),
+        );
+    }
     // The shared local environment also supports host processes. Containers
     // need this override for document initialization, as the Compose path does.
     env.entry("OVERRIDE_SYNC_SERVICE_URL".into())
