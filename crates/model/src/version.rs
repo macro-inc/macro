@@ -1,3 +1,4 @@
+#[cfg(feature = "axum")]
 use axum::{
     extract::{Path, Request, State},
     http::StatusCode,
@@ -5,6 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "axum")]
 use std::str::FromStr;
 use strum::{EnumString, VariantArray};
 use utoipa::ToSchema;
@@ -101,10 +103,12 @@ pub fn latest<T: VariantArray + Clone>() -> T {
     T::VARIANTS.last().unwrap().clone()
 }
 
+#[cfg(feature = "axum")]
 fn parse<T: FromStr>(version: &str) -> Option<T> {
     T::from_str(version).ok()
 }
 
+#[cfg(feature = "axum")]
 fn get_latest(service_name: &VersionedApiServiceName) -> ApiVersionEnum {
     match service_name {
         VersionedApiServiceName::DocumentStorageService => {
@@ -122,6 +126,7 @@ fn get_latest(service_name: &VersionedApiServiceName) -> ApiVersionEnum {
     }
 }
 
+#[cfg(feature = "axum")]
 fn parse_version(service_name: &VersionedApiServiceName, version: &str) -> Option<ApiVersionEnum> {
     match service_name {
         VersionedApiServiceName::DocumentStorageService => {
@@ -142,6 +147,7 @@ fn parse_version(service_name: &VersionedApiServiceName, version: &str) -> Optio
     }
 }
 
+#[cfg(feature = "axum")]
 pub async fn validate_api_version(
     State(state): State<ServiceNameState>,
     Path(VersionParams { version }): Path<VersionParams>,

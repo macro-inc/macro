@@ -24,7 +24,7 @@ ip_extractor = { path = "../ip_extractor", optional = true }
 macro_db_client = { path = "../macro_db_client", optional = true }
 macro_user_id = { path = "../macro_user_id", optional = true }
 macro_uuid = { path = "../macro_uuid" }
-model = { path = "../model" }
+model = { path = "../model", features = ["axum"] }
 model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
 serde = { workspace = true }

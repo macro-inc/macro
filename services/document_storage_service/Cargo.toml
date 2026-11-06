@@ -210,7 +210,7 @@ macro_user_id = { path = "../../crates/macro_user_id" }
 mcp_client = { path = "../../crates/mcp_client" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 mockall = { workspace = true }
-model = { path = "../../crates/model" }
+model = { path = "../../crates/model", features = ["axum"] }
 model-entity = { path = "../../crates/model-entity" }
 model_notifications = { path = "../../crates/model_notifications" }
 model_owner = { path = "../../crates/model_owner" }

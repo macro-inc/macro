@@ -53,7 +53,7 @@ macro_middleware = { path = "../../crates/macro_middleware", default-features = 
 macro_queues = { path = "../../crates/macro_queues" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_user_id = { path = "../../crates/macro_user_id" }
-model = { path = "../../crates/model" }
+model = { path = "../../crates/model", features = ["axum"] }
 model-entity = { path = "../../crates/model-entity" }
 model-error-response = { path = "../../crates/model-error-response" }
 model_notifications = { path = "../../crates/model_notifications" }

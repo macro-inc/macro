@@ -136,7 +136,7 @@ mcp_client = { path = "../../crates/mcp_client" }
 mcp_select = { path = "../../crates/mcp_select" }
 memory = { path = "../../crates/memory" }
 messages = { path = "../../crates/messages", features = ["broker", "delivery", "outbound"] }
-model = { path = "../../crates/model" }
+model = { path = "../../crates/model", features = ["axum"] }
 model-entity = { path = "../../crates/model-entity" }
 model-error-response = { path = "../../crates/model-error-response" }
 model_notifications = { path = "../../crates/model_notifications" }
