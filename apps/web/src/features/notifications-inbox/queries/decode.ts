@@ -105,7 +105,8 @@ export function encodeInboxScope(
   const everyType = ALL_INBOX_ROW_TYPES.every((type) =>
     scope.rowTypes.includes(type)
   );
-  return { rowTypes: everyType ? [] : scope.rowTypes.map(toGraphqlRowType) };
+  const rowTypes = everyType ? [] : scope.rowTypes.map(toGraphqlRowType);
+  return scope.unreadOnly ? { rowTypes, unreadOnly: true } : { rowTypes };
 }
 
 /**
