@@ -20,7 +20,8 @@ export function InlineBooking(props: {
 }) {
   const profile = usePublicProfileQuery(() => props.profile);
   const source = createPublicBookingSource();
-  const loaded = () => (profile.isSuccess ? profile.data : undefined);
+  // Cached data stays on screen through a failed refetch, keeping the form.
+  const loaded = () => (profile.isPending ? undefined : profile.data);
   const event = () => loaded()?.eventTypes.find((e) => e.slug === props.event);
   const bookable = () => {
     const ready = loaded();
@@ -35,7 +36,7 @@ export function InlineBooking(props: {
         </p>
       }
     >
-      <Match when={profile.isError || (loaded() && !event())}>
+      <Match when={(profile.isError && !loaded()) || (loaded() && !event())}>
         {props.unavailable}
       </Match>
       <Match when={bookable()}>

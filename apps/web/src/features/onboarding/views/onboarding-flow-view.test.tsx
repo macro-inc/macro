@@ -720,6 +720,14 @@ describe('onboarding flow', () => {
     expect(screen.queryByText('Want a live walkthrough?')).toBeNull();
   });
 
+  it('sends an unpaid visitor from a demo link on to the plan offer', async () => {
+    const { navigate } = setup({ step: 'demo' });
+    await heading('Want a live walkthrough?');
+    click('Skip');
+    await heading('Free Claude & GPT for 30 days.');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it('sends a signed-out visitor to sign in', async () => {
     const { signedOut } = setup({ world: { viewer: null } });
     await waitFor(() => expect(signedOut).toHaveBeenCalled());

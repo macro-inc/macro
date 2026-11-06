@@ -128,10 +128,12 @@ export function OnboardingFlowView(props: {
     flow.leave(outcome);
     const viewer = context.viewer();
     const licensed = viewer.t === 'signed-in' && viewer.viewer.licensed;
-    fireAndForget(
-      licensed ? finish.finishPremium(paidTier()) : finish.finishFree(),
-      'onboarding'
-    );
+    // Reached by a `?step=demo` link without paying: the plan offer still applies.
+    if (!licensed) {
+      goTo('plan');
+      return;
+    }
+    fireAndForget(finish.finishPremium(paidTier()), 'onboarding');
   };
   // Someone who already joined a team (invite link or domain) has nothing to
   // do on the team step, so the flow passes over it in both directions.
