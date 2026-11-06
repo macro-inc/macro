@@ -1,16 +1,47 @@
+import { t } from '@app/lib/i18n';
+import { beginInteraction } from '@app/observability/flow';
+import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { UserGroup } from '@core/component/UserGroup';
 import { useActiveCallQuery, useLiveCallRecordQuery } from '@queries/call/call';
+import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { ActiveCallLink } from './ActiveCallLink';
 import { CallLiveChip } from './CallLiveChip';
+import { getCallJoinTab } from './call-tabs';
 import { useParticipantSpeaking } from './use-call-speaking';
+
+function CallHeaderPill(props: { channelId: string; startedAt?: string }) {
+  const { setActiveTab } = useChannelTab();
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-label={t('calls.openCall')}
+      tooltip={t('calls.openCall')}
+      onClick={() => {
+        const interaction = beginInteraction('call.header.open');
+        try {
+          setActiveTab(getCallJoinTab());
+        } finally {
+          interaction.end();
+        }
+      }}
+    >
+      <CallLiveChip
+        bare
+        channelId={props.channelId}
+        startedAt={props.startedAt}
+      />
+    </Button>
+  );
+}
 
 /** The channel owns its header; the call adds only its live state and link. */
 export function ActiveCallHeader(props: { channelId: string; link?: boolean }) {
   const active = useActiveCallQuery(() => props.channelId);
   return (
     <>
-      <CallLiveChip
+      <CallHeaderPill
         channelId={props.channelId}
         startedAt={active.isSuccess ? active.data?.createdAt : undefined}
       />
@@ -44,9 +75,8 @@ export function JoinableCallStatus(props: { channelId: string }) {
         maxUsers={4}
         suppressClick
       />
-      <CallLiveChip
+      <CallHeaderPill
         channelId={props.channelId}
-        bare
         startedAt={active.isSuccess ? active.data?.createdAt : undefined}
       />
     </Show>
