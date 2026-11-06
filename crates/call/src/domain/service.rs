@@ -1076,6 +1076,13 @@ impl<
             }
         }
 
+        // A person may rejoin a row a program of theirs marked. Reset it, or the
+        // program-only rule could end the call while they're in it.
+        self.repo
+            .set_participant_client(&call.id, user_id.as_ref(), "person")
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+
         // Tell the user's other devices the call was answered here so they
         // can stop showing the incoming-call UI (best-effort).
         self.send_call_answered_event(&Some(*channel_id), &call.id, user_id.copied())
@@ -1290,13 +1297,17 @@ impl<
             .is_agent_account(user_id.as_ref())
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
-        if agent || credential_is_program {
-            let client = if agent { "agent" } else { "api_key" };
-            self.repo
-                .set_participant_client(call_id, user_id.as_ref(), client)
-                .await
-                .map_err(|e| CallError::Internal(e.into()))?;
-        }
+        let client = if agent {
+            "agent"
+        } else if credential_is_program {
+            "api_key"
+        } else {
+            "person"
+        };
+        self.repo
+            .set_participant_client(call_id, user_id.as_ref(), client)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
         let token = if agent || credential_is_program {
             let program = if agent { "agent" } else { "api_key" };
             self.rtc_client

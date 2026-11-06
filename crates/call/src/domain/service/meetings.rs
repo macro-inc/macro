@@ -463,14 +463,25 @@ impl<
                     request.name.clone(),
                 )
                 .await
-        } else if let Some(name) = request.name.as_deref() {
-            self.rtc_client
-                .generate_named_token(&call.room_name, actor.copied(), name)
-                .await
         } else {
-            self.rtc_client
-                .generate_token(&call.room_name, actor.copied())
+            // A person may rejoin a row a program of theirs marked. Reset it, or
+            // the program-only rule could end the call while they're in it.
+            self.repo
+                .set_participant_client(&call.id, actor.as_ref(), "person")
                 .await
+                .map_err(|e| CallError::Internal(e.into()))?;
+            match request.name.as_deref() {
+                Some(name) => {
+                    self.rtc_client
+                        .generate_named_token(&call.room_name, actor.copied(), name)
+                        .await
+                }
+                None => {
+                    self.rtc_client
+                        .generate_token(&call.room_name, actor.copied())
+                        .await
+                }
+            }
         }
         .map_err(CallError::Internal)?;
         self.send_meeting_answered_event(meeting.id, call.id, actor.copied())

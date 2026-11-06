@@ -550,6 +550,8 @@ fn mock_get_or_create_repo_storing(
     repo.expect_find_active_call_for_user()
         .times(1)
         .returning(|_| Box::pin(async { Ok(None) }));
+    repo.expect_set_participant_client()
+        .returning(|_, _, _| Ok(()));
     repo.expect_add_participant()
         .times(1)
         .returning(|call_id, user_id| {
@@ -925,6 +927,8 @@ fn switching_repo(remaining: i64) -> MockCallRepository {
         .withf(|call_id| *call_id == SWITCHED_FROM_CALL_ID)
         .times(1)
         .returning(move |_| Box::pin(async move { Ok(remaining) }));
+    repo.expect_set_participant_client()
+        .returning(|_, _, _| Ok(()));
     repo.expect_add_participant()
         .withf(|call_id, _| *call_id == STARTED_EVENT_CALL_ID)
         .times(1)
@@ -1468,6 +1472,8 @@ async fn participant_joined_webhook_sends_call_answered_to_answering_user() {
             assert_eq!(room_name, ARCHIVED_EVENT_ROOM_NAME);
             Box::pin(async move { Ok(Some(active_call)) })
         });
+    repo.expect_set_participant_client()
+        .returning(|_, _, _| Ok(()));
     repo.expect_add_participant()
         .times(1)
         .returning(|call_id, participant_identity| {
@@ -1524,6 +1530,8 @@ async fn participant_joined_webhook_skips_call_answered_on_state_drift() {
     repo.expect_get_call_by_room_name()
         .times(1)
         .return_once(move |_| Box::pin(async move { Ok(Some(active_call)) }));
+    repo.expect_set_participant_client()
+        .returning(|_, _, _| Ok(()));
     repo.expect_add_participant()
         .times(1)
         .returning(|_, _| Box::pin(async { Err(AddParticipantError::UserAlreadyActive) }));

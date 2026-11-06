@@ -149,6 +149,17 @@ pub struct JoinCallRequest {
     pub name: Option<String>,
 }
 
+impl JoinCallRequest {
+    /// The app's join: switch out of any other call and reclaim this identity.
+    pub fn for_app() -> Self {
+        Self {
+            on_other_call: OnOtherCall::Switch,
+            replace: true,
+            name: None,
+        }
+    }
+}
+
 /// Whether a live call is associated with a channel.
 #[derive(Debug, Clone, Copy, serde::Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
