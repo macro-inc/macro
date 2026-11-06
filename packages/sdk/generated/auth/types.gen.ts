@@ -489,6 +489,12 @@ export type CurrentSystemStatus = SystemStatus & {
  */
 export type CursorApiKeyStatus = {
     /**
+     * The reasoning effort those sessions start on, as the value of the
+     * default model's effort parameter (e.g. `high`). `None` means the
+     * model's own default; never set without `default_model_id`.
+     */
+    defaultEffort?: string | null;
+    /**
      * The Cursor model id this user's sessions start on, when they have
      * chosen one. `None` means the deployment default is in effect — the
      * settings dropdown shows that as its resting value.
@@ -1618,9 +1624,14 @@ export type PutCursorApiKeyRequest = {
 };
 
 /**
- * The model the user chose for their sessions.
+ * The model the user chose for their sessions, and its effort.
  */
 export type PutCursorDefaultModelRequest = {
+    /**
+     * The value of the model's reasoning-effort parameter (e.g. `high`), or
+     * `null` for the model's own default. Ignored without a model.
+     */
+    effort?: string | null;
     /**
      * A Cursor model id (e.g. `grok-4.6`), or `null` to clear the choice and
      * fall back to the deployment default.

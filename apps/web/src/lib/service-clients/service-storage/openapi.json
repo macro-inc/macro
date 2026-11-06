@@ -6915,6 +6915,91 @@
         }
       }
     },
+    "/channels/{channel_id}/shares": {
+      "post": {
+        "tags": ["channels"],
+        "summary": "Handler for `POST /channels/{channel_id}/shares`.",
+        "description": "Grants the channel's current members access to one item, the way posting\nit in a message does. Calendar events can be shared only from the caller's\nown calendar, and private or confidential events are refused. Sharing again\nis a no-op.",
+        "operationId": "share_with_channel",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareWithChannelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The channel's members can see the item"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller cannot share this item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/webhook": {
       "post": {
         "tags": ["bots"],
@@ -28293,6 +28378,21 @@
       "ChannelSender": {
         "type": "string"
       },
+      "ChannelShareEntityType": {
+        "type": "string",
+        "description": "Entity types a channel grant can cover.\n\nValues are the stored entity types. `calendar` is accepted for a calendar\nchip, whose stored type is `calendar_event`.",
+        "enum": [
+          "calendar_event",
+          "document",
+          "project",
+          "database",
+          "form",
+          "call",
+          "thread",
+          "agent_session",
+          "external_chat"
+        ]
+      },
       "ChannelSharePermission": {
         "type": "object",
         "description": "The channel share permission",
@@ -48600,6 +48700,22 @@
           }
         },
         "additionalProperties": false
+      },
+      "ShareWithChannelRequest": {
+        "type": "object",
+        "description": "Request to share one item with a channel's current members.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Id of the item to share. For a calendar event, the event id."
+          },
+          "entityType": {
+            "$ref": "#/components/schemas/ChannelShareEntityType",
+            "description": "Stored entity type of the item."
+          }
+        }
       },
       "SharedEmailFilter": {
         "type": "string",
