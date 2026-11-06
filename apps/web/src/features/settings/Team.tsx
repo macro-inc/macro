@@ -546,8 +546,7 @@ export function InviteToTeamDialog(props: {
           )}
         </Show>
         <Show when={!sent()}>
-          <Panel.Body scroll>
-            {/* Scroll puts `class` on its root, so the column goes inside. */}
+          <Panel.Body>
             <div class="flex flex-col gap-5 px-5 py-5">
               <TeamInviteLinkSection
                 teamId={props.teamId}
@@ -608,7 +607,7 @@ function InviteHeadsUpStep(props: {
 }) {
   return (
     <>
-      <Panel.Body scroll>
+      <Panel.Body>
         <div class="flex flex-col gap-3 px-5 py-5">
           <div class="flex flex-col gap-1">
             <div class="text-sm text-ink">
