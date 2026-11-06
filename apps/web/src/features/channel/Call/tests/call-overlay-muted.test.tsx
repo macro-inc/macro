@@ -155,6 +155,8 @@ function createRemoteParticipant(
     identity,
     name,
     isAgent,
+    getVolume: () => 1,
+    setVolume: vi.fn(),
     getTrackPublication(source: string) {
       return publications[source];
     },

@@ -12,6 +12,7 @@ import { Badge, Button, cn } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import { createSignal, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { CallParticipantVolume } from './CallParticipantVolume';
 import { isProgramParticipant } from './is-program-participant';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
@@ -66,6 +67,7 @@ function ParticipantTileWrapper(props: {
   pinName?: string;
   pinEnabled?: boolean;
   hidden?: boolean;
+  actions?: JSXElement;
   class?: string;
 }) {
   const [menuOpen, setMenuOpen] = createSignal(false);
@@ -138,38 +140,45 @@ function ParticipantTileWrapper(props: {
               onClick={props.onTogglePin}
             />
           </Show>
-          <Show
-            when={
-              props.pinEnabled &&
-              props.onTogglePin &&
-              (!isMobile() || props.isPinned)
-            }
+          <div
+            class={cn(
+              'absolute top-2 right-2 z-40 flex items-center gap-1 opacity-0 pointer-events-none group-hover/tile:opacity-100 group-hover/tile:pointer-events-auto group-focus-within/tile:opacity-100 group-focus-within/tile:pointer-events-auto [&:has([data-expanded])]:opacity-100 [&:has([data-expanded])]:pointer-events-auto',
+              isMobile() && props.isPinned && 'opacity-100 pointer-events-auto'
+            )}
           >
-            <Button
-              appearance="bare"
-              variant="ghost"
-              size={props.isPinned ? 'sm' : 'icon-sm'}
-              class={cn(
-                'absolute right-2 top-2 z-40 rounded-full bg-surface/70 text-ink opacity-0 pointer-events-none group-hover/tile:opacity-100 group-hover/tile:pointer-events-auto group-focus-within/tile:opacity-100 group-focus-within/tile:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
-                props.isPinned && 'gap-1',
-                isMobile() && 'opacity-100 pointer-events-auto'
-              )}
-              aria-label={t(
-                props.isPinned ? 'calls.unpinNamed' : 'calls.pinNamed',
-                { name: props.pinName ?? '' }
-              )}
-              tooltip={{
-                content: t(props.isPinned ? 'calls.unpin' : 'calls.pin'),
-                placement: 'top',
-              }}
-              onClick={props.onTogglePin}
+            {props.actions}
+            <Show
+              when={
+                props.pinEnabled &&
+                props.onTogglePin &&
+                (!isMobile() || props.isPinned)
+              }
             >
-              <Show when={props.isPinned} fallback={<PinIcon class="size-4" />}>
-                <UnpinIcon class="size-4" />
-                {t('calls.unpin')}
-              </Show>
-            </Button>
-          </Show>
+              <Button
+                appearance="bare"
+                variant="ghost"
+                size={props.isPinned ? 'sm' : 'icon-sm'}
+                class="rounded-full bg-surface/70 text-ink gap-1"
+                aria-label={t(
+                  props.isPinned ? 'calls.unpinNamed' : 'calls.pinNamed',
+                  { name: props.pinName ?? '' }
+                )}
+                tooltip={{
+                  content: t(props.isPinned ? 'calls.unpin' : 'calls.pin'),
+                  placement: 'top',
+                }}
+                onClick={props.onTogglePin}
+              >
+                <Show
+                  when={props.isPinned}
+                  fallback={<PinIcon class="size-4" />}
+                >
+                  <UnpinIcon class="size-4" />
+                  {t('calls.unpin')}
+                </Show>
+              </Button>
+            </Show>
+          </div>
         </div>
       </div>
       <Show when={menuOpen()}>
@@ -344,6 +353,12 @@ export function ParticipantTile(props: {
       onTogglePin={props.onTogglePin}
       pinEnabled={props.pinEnabled}
       pinName={displayName()}
+      actions={
+        <CallParticipantVolume
+          participant={props.participant}
+          name={displayName()}
+        />
+      }
       hidden={props.hidden}
       class={cn(
         'min-w-0',

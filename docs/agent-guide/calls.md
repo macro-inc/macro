@@ -460,6 +460,12 @@ for 60 seconds, the call ends automatically.
 
 Hover or keyboard-focus a participant, your own view, or a shared screen to reveal Pin. Clicking the tile also pins it. The pinned tile takes the stage, with everyone else and active shares in the strip; your own view stays anchored unless pinned. A share normally occupies the stage when nobody is pinned. Hover the pinned tile for Unpin, or click it again. Switching directly to another tile replaces the pin. Pinning uses Speaker placement unless Sidebar is selected and never changes the saved Layout choice. If the pinned person leaves or the shared screen ends, the pin clears and does not return on reconnection. Pin actions record `call.pin` interactions. On phones, hold a tile for the anchored Pin/Unpin menu; plain taps do not pin. The selected tile lifts above a dimmed stage. A pinned person fills the top, with everyone else including you in one row below. The Unpin pill stays visible on phones. Moving the touch cancels the hold; Escape or touching outside dismisses the menu.
 
+On supported desktop browsers, hover or focus a remote person's tile for Volume,
+beside Pin. The slider changes only that person's microphone playback for you,
+from 0–100%. It survives track resubscription and leaving the call view, but resets
+in the next call. Your own tile, agents, phones and native mobile apps do not show
+it; screen-share audio is unchanged.
+
 ### Work in a call
 
 Behind `enable-agent-work`, the call panel gains a **Work** tab, after Chat and

@@ -22,6 +22,8 @@ export default {
   unpinNamed: 'Unpin {{name}}',
   participantScreen: "{{name}}'s screen",
   yourScreen: 'Your screen',
+  volume: 'Volume',
+  volumeForYou: '{{name}}, for you',
   hideParticipants: 'Hide participants',
   showParticipants: 'Show participants',
   whileSharing: "While someone's sharing",
