@@ -78,8 +78,7 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
     let dist = {
         let mut cmd = Command::new("bun");
         cmd.current_dir(app_dir())
-            .args(["run", "build"])
-            .env("NODE_OPTIONS", "--max-old-space-size=16384")
+            .args(["run", "--bun", "build"])
             .env("MODE", "development")
             .env("NODE_ENV", "production")
             .env("VITE_LOCAL_SERVERS", "ALL")
@@ -347,8 +346,8 @@ pub fn start(
     prepare_dependencies(stage)?;
 
     // Vite's node-http-proxy WebSocket upgrades hang under Bun (including
-    // 1.3.13). Use Node for Vite, while keeping Bun for dependency management
-    // and package scripts: https://github.com/oven-sh/bun/issues/10441.
+    // 1.3.13). Use Node for the dev server, while keeping Bun for dependencies
+    // and builds: https://github.com/oven-sh/bun/issues/10441.
     let mut cmd = Command::new("node");
     cmd.current_dir(app_dir())
         .arg(repo_root().join("node_modules/vite/bin/vite.js"))

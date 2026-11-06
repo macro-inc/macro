@@ -179,4 +179,4 @@ destroy:
 # Local Nix-declared kind cluster; see docs/development/local-kubernetes.md.
 [positional-arguments]
 kube-local *ARGS:
-  @python3 tooling/local-kubernetes/run.py "$@"
+  @cargo x kube-local "$@"
