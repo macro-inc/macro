@@ -104,15 +104,6 @@ may_depend_on = ["types", "platform"]
 name = "aws"
 paths = [
   "crates/aws/**",
-  "crates/dynamodb_client",
-  "crates/lambda_client",
-  "crates/macro_aws_config",
-  "crates/s3_client",
-  "crates/secretsmanager_client",
-  "crates/ses_client",
-  "crates/sns_client",
-  "crates/sqs_client",
-  "crates/sqs_worker",
 ]
 may_depend_on = ["types", "platform", "aws"]
 
