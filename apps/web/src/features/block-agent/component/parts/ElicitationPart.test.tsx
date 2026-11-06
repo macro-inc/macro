@@ -14,7 +14,7 @@ import type {
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
 import { fireEvent, render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const respond = vi.fn<(answer: ElicitationAnswer) => Promise<boolean>>();
 let pending: PendingElicitation | undefined;
@@ -95,44 +95,6 @@ vi.mock('@app/features/agent-interactions/components/ElicitationForm', () => ({
   },
 }));
 
-// The composers are the chat block's real editors over calendar and email
-// queries; the part's job is to pick one for the tool under review and wire
-// its sink, so each stub exposes the sink through two buttons and its notice.
-type StubSink = {
-  canAct: () => boolean;
-  lockedNotice: () => string | undefined;
-  onExecute: (args: unknown) => Promise<boolean>;
-  onReject: () => Promise<boolean>;
-};
-// The stubs' sink calls, awaited after each test so a rejection fails it.
-const sinkCalls: Promise<boolean>[] = [];
-function composerStub(kind: string) {
-  return (props: { initialData: unknown; sink: StubSink }) => (
-    <div data-testid={`${kind}-composer`} data-can-act={props.sink.canAct()}>
-      <span data-testid="locked-notice">{props.sink.lockedNotice()}</span>
-      <button
-        type="button"
-        data-testid="composer-execute"
-        onClick={() => {
-          sinkCalls.push(props.sink.onExecute(props.initialData));
-        }}
-      />
-      <button
-        type="button"
-        data-testid="composer-reject"
-        onClick={() => {
-          sinkCalls.push(props.sink.onReject());
-        }}
-      />
-    </div>
-  );
-}
-vi.mock('@core/component/AI/component/tool/calendar/DraftComposer', () => ({
-  CalendarDraftComposer: composerStub('calendar'),
-}));
-vi.mock('@core/component/AI/component/tool/email/DraftComposer', () => ({
-  EmailDraftComposer: composerStub('email'),
-}));
 vi.mock('./UserToolCall', () => ({
   UserToolCall: (props: {
     detail: { outcome: { kind: string } };
@@ -203,10 +165,6 @@ function live(): PendingElicitation {
     request: colourForm,
   };
 }
-
-afterEach(async () => {
-  await Promise.all(sinkCalls.splice(0));
-});
 
 beforeEach(() => {
   respond.mockReset();
@@ -408,7 +366,7 @@ describe('ElicitationPart', () => {
     open.mockRestore();
   });
 
-  describe('a user tool under review', () => {
+  describe('a user tool review', () => {
     const eventDraft = {
       title: 'Q3 sync',
       time: {
@@ -438,101 +396,17 @@ describe('ElicitationPart', () => {
       schema: emptySchema,
     });
 
-    it.each(['CreateBookingLink', 'EditBookingLink'])(
-      'dismisses legacy %s requests without exposing IDs or a form',
-      (tool) => {
-        const request = review(tool, { teamId: 'internal-team-id', draft: {} });
-        pending = { ...live(), request };
-        const view = render(() => (
-          <ElicitationPart turn={0} part={part({ request })} />
-        ));
-        expect(view.queryByTestId('form')).toBeNull();
-        expect(view.queryByText('internal-team-id')).toBeNull();
-        fireEvent.click(view.getByRole('button', { name: 'Dismiss request' }));
-        expect(respond).toHaveBeenCalledWith({ action: 'decline' });
-      }
-    );
-
-    it("opens the tool's own composer, and Create answers with the whole draft", () => {
-      const request = review('CreateCalendarEvent', eventDraft);
-      pending = { ...live(), request };
-      const { getByTestId, queryByTestId } = render(() => (
-        <ElicitationPart
-          turn={0}
-          part={part({ request, message: 'Create calendar event?' })}
-        />
-      ));
-      expect(queryByTestId('form')).toBeNull();
-      const composer = getByTestId('calendar-composer');
-      expect(composer.dataset.canAct).toBe('true');
-      expect(getByTestId('locked-notice').textContent).toBe('');
-      fireEvent.click(getByTestId('composer-execute'));
-      expect(respond).toHaveBeenCalledWith({
-        action: 'accept',
-        content: { draft: JSON.stringify(eventDraft) },
-      });
-      fireEvent.click(getByTestId('composer-reject'));
-      expect(respond).toHaveBeenLastCalledWith({ action: 'decline' });
-    });
-
-    it('routes SendEmail to the email composer', () => {
-      const request = review('SendEmail', {
-        to: [{ email: 'alice@example.com' }],
-        cc: [],
-        bcc: [],
-        subject: 'Q3 plan',
-        body: 'Hi Alice',
-      });
-      pending = { ...live(), request };
-      const { queryByTestId } = render(() => (
-        <ElicitationPart turn={0} part={part({ request })} />
-      ));
-      expect(queryByTestId('email-composer')).not.toBeNull();
-    });
-
-    // The email composer offers only Send, so the card carries the decline the
-    // calendar composer answers through its own Cancel.
-    it('an email review can be declined from the card', () => {
-      const request = review('SendEmail', {
-        to: [{ email: 'alice@example.com' }],
-        cc: [],
-        bcc: [],
-        subject: 'Q3 plan',
-        body: 'Hi Alice',
-      });
-      pending = { ...live(), request };
-      const { getByText } = render(() => (
-        <ElicitationPart turn={0} part={part({ request })} />
-      ));
-      fireEvent.click(getByText('Cancel'));
-      expect(respond).toHaveBeenCalledWith({ action: 'decline' });
-    });
-
-    it('a viewer who is not the owner gets the composer locked and told who can act', () => {
-      canAnswer = false;
-      const request = review('CreateCalendarEvent', eventDraft);
-      pending = { ...live(), request };
-      const { getByTestId } = render(() => (
-        <ElicitationPart turn={0} part={part({ request })} />
-      ));
-      expect(getByTestId('calendar-composer').dataset.canAct).toBe('false');
-      expect(getByTestId('locked-notice').textContent).toBe(
-        'Waiting for an editor to answer.'
-      );
-      fireEvent.click(getByTestId('composer-execute'));
-      expect(respond).not.toHaveBeenCalled();
-    });
-
-    it("falls back to the flat form for a draft the tool's schema rejects", () => {
+    // Agents now present drafts on a saved review card; a live review only
+    // survives in an old session, and answers through the flat form.
+    it('a pending review shows the flat form the agent also sent', () => {
       const request = {
-        ...review('CreateCalendarEvent', { nonsense: true }),
+        ...review('CreateCalendarEvent', eventDraft),
         schema: colourForm.schema,
       };
       pending = { ...live(), request };
       const { queryByTestId } = render(() => (
         <ElicitationPart turn={0} part={part({ request })} />
       ));
-      expect(queryByTestId('calendar-composer')).toBeNull();
       expect(queryByTestId('form')).not.toBeNull();
     });
 

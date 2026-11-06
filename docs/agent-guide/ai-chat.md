@@ -2459,7 +2459,7 @@ same services are available through `macro.ai.structuredCompletion` and
 Generation and classification do not edit a document. Use
 `document.edit(instructions)` for an AI edit.
 
-### Code-mode review stacks
+### Review stacks
 
 A completed `PresentReview` ACP call shows saved email and calendar
 reviews as their own visible cards in every agent chain, including Macro and
@@ -2468,12 +2468,12 @@ not wait for a response. Code and native tools use the same presentation path. T
 chat composer. Their status is read from the session's review API, not reconstructed
 from text claimed by the model.
 
-With `ai-code-mode` enabled, the blocking `SendEmail` and `CreateCalendarEvent`
+In every agent session, the blocking `SendEmail` and `CreateCalendarEvent`
 tools are not advertised or available through lazy discovery. Email and calendar
 drafts use these saved reviews instead. Presenting a draft must not produce an
 `elicitation/create` request or leave the session blocked waiting for approval.
-An already-running turn from before this change can still have an old elicitation;
-changing the tool list does not resolve that existing request.
+Older sessions may still show a resolved email or calendar review question; once the
+tool reported back it reads as the tool's card.
 
 Only the review’s saved acting account, with session edit access, can edit or
 submit it; historical reviews use the session owner. For an email stack, edit the
