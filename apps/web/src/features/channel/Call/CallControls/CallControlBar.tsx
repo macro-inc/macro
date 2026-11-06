@@ -115,7 +115,7 @@ export function CallControlBar(props: {
     <div data-call-controls class="@container relative z-20 w-fit max-w-full">
       <div
         class={cn(
-          isMobile() ? 'island' : 'menu-surface',
+          isMobile() ? 'island' : 'border border-edge-muted bg-panel',
           'mx-auto flex w-fit max-w-full items-center justify-center gap-2 rounded-full p-1.5 text-ink'
         )}
       >
