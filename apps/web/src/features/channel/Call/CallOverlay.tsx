@@ -252,7 +252,6 @@ export function CallOverlay(props: {
       callCtx.isScreenSharing()
     );
   const togglePin = (target: CallPin<RemoteParticipant>) => {
-    if (isMobile()) return; // Phone long-press integration belongs to L-61.
     const interaction = beginInteraction('call.pin');
     try {
       setSelectedPin(sameCallPin(activePin(), target) ? undefined : target);
@@ -378,7 +377,8 @@ export function CallOverlay(props: {
   const selfInGrid = () =>
     !localOnStage() &&
     (layout() === 'grid' ||
-      ((isMobile() || compactControls()) && !hasAnyScreenShare())) &&
+      (isMobile() && (staged() || !hasAnyScreenShare())) ||
+      (compactControls() && !hasAnyScreenShare())) &&
     participants().length > 0;
   const talking = () =>
     participants().find((participant) =>
@@ -423,7 +423,7 @@ export function CallOverlay(props: {
       )}
       avatarSize={tile.avatarSize}
       isPinned={activePin() === 'local'}
-      pinEnabled={!isMobile() && tile.pinEnabled !== false}
+      pinEnabled={tile.pinEnabled !== false}
       onTogglePin={() => togglePin('local')}
     />
   );
@@ -495,6 +495,7 @@ export function CallOverlay(props: {
             <div class="relative flex h-full min-h-0 min-w-0 flex-col @container/call-stage">
               <div
                 ref={setReactionRoot}
+                data-call-participant-stage
                 class={cn(
                   'relative flex min-h-0 flex-1',
                   staged()
@@ -511,7 +512,11 @@ export function CallOverlay(props: {
                     ? {
                         'grid-template-rows': `repeat(${sidebarRows()}, minmax(0, 1fr))`,
                       }
-                    : undefined
+                    : isMobile() && staged()
+                      ? {
+                          'grid-template-columns': `repeat(${Math.max(1, participants().length + remoteScreenShares().length + Number(callCtx.isScreenSharing()))}, minmax(0, 1fr))`,
+                        }
+                      : undefined
                 }
               >
                 {/* Screen share area */}
@@ -548,7 +553,7 @@ export function CallOverlay(props: {
                           <LocalScreenShareTile
                             isPinned={activePin() === 'local-share'}
                             inStrip={staged() && activePin() !== 'local-share'}
-                            pinEnabled={!isMobile()}
+                            pinEnabled
                             onTogglePin={() => togglePin('local-share')}
                           />
                         </div>
@@ -580,7 +585,7 @@ export function CallOverlay(props: {
                               inStrip={
                                 staged() && pinnedShare() !== participant
                               }
-                              pinEnabled={!isMobile()}
+                              pinEnabled
                               onTogglePin={() =>
                                 togglePin({ share: participant })
                               }
@@ -746,7 +751,7 @@ export function CallOverlay(props: {
                               }
                               isPinned={pinnedPerson() === participant}
                               hidden={false}
-                              pinEnabled={!isMobile()}
+                              pinEnabled
                               onTogglePin={() => togglePin(participant)}
                             />
                           </div>

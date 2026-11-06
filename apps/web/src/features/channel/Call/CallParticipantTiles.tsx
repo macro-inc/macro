@@ -1,13 +1,16 @@
 import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
+import { touchHandler } from '@core/directive/touchHandler';
+import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PinIcon from '@icon/system/regular/push-pin.svg';
 import UnpinIcon from '@icon/system/regular/push-pin-slash.svg';
 import Screencast from '@icon/system/regular/screencast.svg';
+import { Popover } from '@kobalte/core/popover';
 import { Badge, Button, cn } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
-import { type JSXElement, Show } from 'solid-js';
+import { createSignal, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { isProgramParticipant } from './is-program-participant';
 import { LK_TRACK_SOURCE } from './livekit-loader';
@@ -65,70 +68,146 @@ function ParticipantTileWrapper(props: {
   hidden?: boolean;
   class?: string;
 }) {
+  const [menuOpen, setMenuOpen] = createSignal(false);
+  let tile: HTMLDivElement | undefined;
+  const openMenu = () => {
+    if (isMobile() && props.pinEnabled) setMenuOpen(true);
+  };
   // Fills its cell, but never wider than 16:9: on a wide panel a full-width
   // tile crops a 16:9 camera to a zoomed-in strip. Taller cells (phones,
   // grids) still fill, so portrait video keeps the space.
   // Cells can shrink to fit the screen-share strip and picture-in-picture grid.
   return (
-    <div
-      hidden={props.hidden}
-      class={cn(
-        'flex size-full min-h-0 items-center justify-center [container-type:size]',
-        props.class
-      )}
+    <Popover
+      open={menuOpen()}
+      onOpenChange={setMenuOpen}
+      placement="bottom-end"
+      gutter={8}
+      getAnchorRect={() => tile?.getBoundingClientRect()}
     >
       <div
-        data-call-tile=""
-        data-call-participant={props.participantId}
+        hidden={props.hidden}
         class={cn(
-          'group/tile relative isolate flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted',
-          props.isConnecting && 'animate-pulse'
+          'flex size-full min-h-0 items-center justify-center [container-type:size]',
+          menuOpen() && 'relative z-40 scale-[1.02] motion-reduce:scale-100',
+          props.class
         )}
       >
-        {props.children}
-        <Show when={props.isSpeaking}>
-          <div
-            aria-hidden="true"
-            class="pointer-events-none absolute inset-0 z-20 rounded-[inherit] border-2 border-success"
-          />
-        </Show>
-        <Show when={props.pinEnabled && props.onTogglePin}>
-          <button
-            type="button"
-            class="absolute inset-0 z-30 rounded-[inherit] focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-accent"
-            aria-label={t(
-              props.isPinned ? 'calls.unpinNamed' : 'calls.pinNamed',
-              { name: props.pinName ?? '' }
-            )}
-            aria-pressed={props.isPinned ?? false}
-            onClick={props.onTogglePin}
-          />
-          <Button
-            appearance="bare"
-            variant="ghost"
-            size={props.isPinned ? 'sm' : 'icon-sm'}
-            class={cn(
-              'absolute right-2 top-2 z-40 rounded-full bg-surface/70 text-ink opacity-0 pointer-events-none group-hover/tile:opacity-100 group-hover/tile:pointer-events-auto group-focus-within/tile:opacity-100 group-focus-within/tile:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
-              props.isPinned && 'gap-1'
-            )}
-            aria-label={t(
-              props.isPinned ? 'calls.unpinNamed' : 'calls.pinNamed',
-              { name: props.pinName ?? '' }
-            )}
-            tooltip={{
-              content: t(props.isPinned ? 'calls.unpin' : 'calls.pin'),
-              placement: 'top',
-            }}
-            onClick={props.onTogglePin}
+        <div
+          ref={(element) => {
+            tile = element;
+            touchHandler(element, () => ({
+              onLongPress: (event) => {
+                if (
+                  event.target instanceof Element &&
+                  event.target.closest('button, input, [role="slider"]')
+                )
+                  return;
+                openMenu();
+              },
+            }));
+          }}
+          onContextMenu={(event) => {
+            if (!isMobile()) return;
+            event.preventDefault();
+            openMenu();
+          }}
+          data-call-tile=""
+          data-call-participant={props.participantId}
+          class={cn(
+            'group/tile relative isolate flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted',
+            props.isConnecting && 'animate-pulse'
+          )}
+        >
+          {props.children}
+          <Show when={props.isSpeaking}>
+            <div
+              aria-hidden="true"
+              class="pointer-events-none absolute inset-0 z-20 rounded-[inherit] border-2 border-success"
+            />
+          </Show>
+          <Show when={props.pinEnabled && props.onTogglePin && !isMobile()}>
+            <button
+              type="button"
+              class="absolute inset-0 z-30 rounded-[inherit] focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-accent"
+              aria-label={t(
+                props.isPinned ? 'calls.unpinNamed' : 'calls.pinNamed',
+                { name: props.pinName ?? '' }
+              )}
+              aria-pressed={props.isPinned ?? false}
+              onClick={props.onTogglePin}
+            />
+          </Show>
+          <Show
+            when={
+              props.pinEnabled &&
+              props.onTogglePin &&
+              (!isMobile() || props.isPinned)
+            }
           >
-            <Show when={props.isPinned} fallback={<PinIcon class="size-4" />}>
-              <UnpinIcon class="size-4" />
-              {t('calls.unpin')}
-            </Show>
-          </Button>
-        </Show>
+            <Button
+              appearance="bare"
+              variant="ghost"
+              size={props.isPinned ? 'sm' : 'icon-sm'}
+              class={cn(
+                'absolute right-2 top-2 z-40 rounded-full bg-surface/70 text-ink opacity-0 pointer-events-none group-hover/tile:opacity-100 group-hover/tile:pointer-events-auto group-focus-within/tile:opacity-100 group-focus-within/tile:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
+                props.isPinned && 'gap-1',
+                isMobile() && 'opacity-100 pointer-events-auto'
+              )}
+              aria-label={t(
+                props.isPinned ? 'calls.unpinNamed' : 'calls.pinNamed',
+                { name: props.pinName ?? '' }
+              )}
+              tooltip={{
+                content: t(props.isPinned ? 'calls.unpin' : 'calls.pin'),
+                placement: 'top',
+              }}
+              onClick={props.onTogglePin}
+            >
+              <Show when={props.isPinned} fallback={<PinIcon class="size-4" />}>
+                <UnpinIcon class="size-4" />
+                {t('calls.unpin')}
+              </Show>
+            </Button>
+          </Show>
+        </div>
       </div>
-    </div>
+      <Show when={menuOpen()}>
+        <Popover.Portal
+          mount={
+            tile?.closest<HTMLElement>('[data-call-participant-stage]') ??
+            undefined
+          }
+        >
+          <div
+            class="absolute inset-0 z-30 bg-overlay"
+            aria-hidden="true"
+            onPointerDown={() => setMenuOpen(false)}
+          />
+          <Popover.Content
+            class="menu-surface z-action-menu min-w-48 max-w-[calc(100vw-2rem)] rounded-xl p-2 outline-none"
+            onCloseAutoFocus={(event) => event.preventDefault()}
+          >
+            <Popover.Title class="px-2 py-1 text-sm text-ink-muted">
+              {props.pinName}
+            </Popover.Title>
+            <Button
+              variant="ghost"
+              class="w-full justify-start gap-2"
+              onClick={() => {
+                setMenuOpen(false);
+                props.onTogglePin?.();
+              }}
+            >
+              <Show when={props.isPinned} fallback={<PinIcon class="size-4" />}>
+                <UnpinIcon class="size-4" />
+              </Show>
+              {t(props.isPinned ? 'calls.unpin' : 'calls.pin')}
+            </Button>
+          </Popover.Content>
+        </Popover.Portal>
+      </Show>
+    </Popover>
   );
 }
 
