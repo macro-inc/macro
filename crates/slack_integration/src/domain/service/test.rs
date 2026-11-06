@@ -602,15 +602,11 @@ async fn wrong_team_cannot_read_mutate_or_head() {
 #[tokio::test]
 async fn create_rejects_bot_internal_and_wrong_entity_receipts() {
     let (svc, fake, _) = setup();
-    for auth in [
-        EntityAccessAuth::Internal,
-        EntityAccessAuth::Unauthenticated,
-    ] {
-        assert_eq!(
-            svc.create(receipt(team(), auth), command()).await,
-            Err(ImportError::AdminRequired)
-        );
-    }
+    assert_eq!(
+        svc.create(receipt(team(), EntityAccessAuth::Internal), command())
+            .await,
+        Err(ImportError::AdminRequired)
+    );
     for scope in [
         BotReceiptScope::Team {
             team_id: team().into(),

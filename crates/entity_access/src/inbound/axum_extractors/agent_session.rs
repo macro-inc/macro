@@ -20,10 +20,7 @@ use tracing::Level;
 
 use super::{ExtractorError, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
-    models::{
-        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
-        RequiredPermission,
-    },
+    models::{Entity, EntityAccessReceipt, EntityType, RequiredPermission},
     ports::EntityAccessService,
 };
 
@@ -103,17 +100,10 @@ where
         // look up.
         if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
-                entity_access_receipt: EntityAccessReceipt {
-                    entity: Entity {
-                        entity_id: session_id,
-                        entity_type: EntityType::AgentSession,
-                    },
-                    auth: EntityAccessAuth::Internal,
-                    entity_permission: EntityPermission::AccessLevel {
-                        access_level: AccessLevel::Owner,
-                    },
-                    _marker: PhantomData,
-                },
+                entity_access_receipt: EntityAccessReceipt::dangerously_assert_internal_user(
+                    &session_id,
+                    EntityType::AgentSession,
+                ),
                 _marker: PhantomData,
             });
         }
@@ -128,40 +118,30 @@ where
             .await
             .map_err(ExtractorError::from)?;
 
-        let permission = if macro_user_id.is_none() {
-            EntityPermission::AccessLevel {
-                access_level: AccessLevel::View,
-            }
-        } else {
-            permission
-        };
-
         // The other refusal: a grant exists but does not reach what this route
         // asks for. Logged separately from the no-grant case in the service,
         // because the fix is different - this one is a sharing level, not a
         // missing or not-yet-committed row.
-        if !permission.satisfies::<T>() {
+        let entity_access_receipt = EntityAccessReceipt::try_new_for_user(
+            macro_user_id.clone(),
+            Entity {
+                entity_id: session_id.clone(),
+                entity_type: EntityType::AgentSession,
+            },
+            permission,
+        )
+        .inspect_err(|_| {
             tracing::warn!(
                 entity_id = %session_id,
                 entity_type = "agent_session",
                 viewer = macro_user_id.as_deref().map_or("anonymous", AsRef::as_ref),
                 "agent session access denied: grant does not reach the required permission"
             );
-            return Err(ExtractorError::Unauthorized);
-        }
+        })
+        .map_err(ExtractorError::from)?;
 
         Ok(Self {
-            entity_access_receipt: EntityAccessReceipt {
-                entity: Entity {
-                    entity_id: session_id,
-                    entity_type: EntityType::AgentSession,
-                },
-                auth: macro_user_id
-                    .map(EntityAccessAuth::Authenticated)
-                    .unwrap_or(EntityAccessAuth::Unauthenticated),
-                entity_permission: permission,
-                _marker: PhantomData,
-            },
+            entity_access_receipt,
             _marker: PhantomData,
         })
     }
