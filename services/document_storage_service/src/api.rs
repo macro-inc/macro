@@ -333,7 +333,12 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/initiatives",
-            initiative::inbound::axum_router::initiative_router(state.initiative_state.clone()),
+            initiative::inbound::axum_router::initiative_router(state.initiative_state.clone())
+                .merge(
+                    initiative::inbound::axum_router::initiative_activity_router(
+                        state.initiative_activity_state.clone(),
+                    ),
+                ),
         )
         .nest(
             "/databases",

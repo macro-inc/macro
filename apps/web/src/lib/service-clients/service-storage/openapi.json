@@ -18240,6 +18240,128 @@
         }
       }
     },
+    "/initiatives/{initiative_id}/activity": {
+      "get": {
+        "tags": ["initiative"],
+        "summary": "Read an initiative's creation, edits, property changes and task membership\nchanges, newest first.",
+        "description": "Task references require current view access to the task, so a page can hold\nfewer records than `limit`, even none. Follow `nextCursor` with the same\nwindow until it is absent.",
+        "operationId": "get_initiative_activity",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Only changes at or after this time.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Only changes before this time.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursorOccurredAt",
+            "in": "query",
+            "description": "`occurredAt` of the previous page's `nextCursor`; send with `cursorId`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursorId",
+            "in": "query",
+            "description": "`id` of the previous page's `nextCursor`; send with `cursorOccurredAt`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Events to scan, 1 through 100; defaults to 100.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeActivityPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/instructions": {
       "get": {
         "tags": ["instructions::get_instructions"],
@@ -37694,6 +37816,80 @@
           "value": {
             "$ref": "#/components/schemas/SetPropertyValue",
             "description": "Value, validated by the properties service like any other property write."
+          }
+        }
+      },
+      "InitiativeActivityCursor": {
+        "type": "object",
+        "description": "Stable cursor for project history.",
+        "required": ["occurredAt", "id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Tie-breaker within the same timestamp."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time of the last scanned activity."
+          }
+        }
+      },
+      "InitiativeActivityPage": {
+        "type": "object",
+        "description": "History page. Access filtering can shorten records; follow nextCursor until exhausted.",
+        "required": ["records"],
+        "properties": {
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InitiativeActivityCursor",
+                "description": "The next raw-row boundary, including when this page had no visible task events."
+              }
+            ]
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InitiativeActivityRecord"
+            },
+            "description": "Visible changes in newest-first order."
+          }
+        }
+      },
+      "InitiativeActivityRecord": {
+        "type": "object",
+        "description": "One authorized activity row; task names are hydrated through existing authorized task reads.",
+        "required": ["id", "actorId", "subjectId", "action", "occurredAt"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Durable activity action tag."
+          },
+          "actionPayload": {
+            "description": "Typed payload for known actions. Absent for unknown actions."
+          },
+          "actorId": {
+            "type": "string",
+            "description": "Principal who acted."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable record identifier, also used for realtime deduplication."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time of the change."
+          },
+          "subjectId": {
+            "type": "string",
+            "description": "Acting user's feed identity when a bot acted on their behalf."
           }
         }
       },

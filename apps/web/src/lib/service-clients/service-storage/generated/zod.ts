@@ -30093,6 +30093,96 @@ export const updateInitiativeResponse = zod
   );
 
 /**
+ * Task references require current view access to the task, so a page can hold
+fewer records than `limit`, even none. Follow `nextCursor` with the same
+window until it is absent.
+ * @summary Read an initiative's creation, edits, property changes and task membership
+changes, newest first.
+ */
+export const getInitiativeActivityParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const getInitiativeActivityQueryLimitMin = 0;
+
+export const getInitiativeActivityQueryParams = zod.object({
+  after: zod.iso
+    .datetime({})
+    .optional()
+    .describe('Only changes at or after this time.'),
+  before: zod.iso
+    .datetime({})
+    .optional()
+    .describe('Only changes before this time.'),
+  cursorOccurredAt: zod.iso
+    .datetime({})
+    .optional()
+    .describe(
+      "`occurredAt` of the previous page's `nextCursor`; send with `cursorId`."
+    ),
+  cursorId: zod
+    .uuid()
+    .optional()
+    .describe(
+      "`id` of the previous page's `nextCursor`; send with `cursorOccurredAt`."
+    ),
+  limit: zod
+    .number()
+    .min(getInitiativeActivityQueryLimitMin)
+    .optional()
+    .describe('Events to scan, 1 through 100; defaults to 100.'),
+});
+
+export const getInitiativeActivityResponse = zod
+  .object({
+    nextCursor: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            id: zod.uuid().describe('Tie-breaker within the same timestamp.'),
+            occurredAt: zod.iso
+              .datetime({})
+              .describe('Time of the last scanned activity.'),
+          })
+          .describe('Stable cursor for project history.'),
+      ])
+      .optional(),
+    records: zod
+      .array(
+        zod
+          .object({
+            action: zod.string().describe('Durable activity action tag.'),
+            actionPayload: zod
+              .unknown()
+              .optional()
+              .describe(
+                'Typed payload for known actions. Absent for unknown actions.'
+              ),
+            actorId: zod.string().describe('Principal who acted.'),
+            id: zod
+              .uuid()
+              .describe(
+                'Stable record identifier, also used for realtime deduplication.'
+              ),
+            occurredAt: zod.iso.datetime({}).describe('Time of the change.'),
+            subjectId: zod
+              .string()
+              .describe(
+                "Acting user's feed identity when a bot acted on their behalf."
+              ),
+          })
+          .describe(
+            'One authorized activity row; task names are hydrated through existing authorized task reads.'
+          )
+      )
+      .describe('Visible changes in newest-first order.'),
+  })
+  .describe(
+    'History page. Access filtering can shorten records; follow nextCursor until exhausted.'
+  );
+
+/**
  * @summary Gets the instructions document for the current user
  */
 export const getInstructionsHandlerResponse = zod.object({

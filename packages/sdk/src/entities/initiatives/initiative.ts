@@ -1,8 +1,9 @@
 import type {
   CreateInitiativeRequest,
+  InitiativeActivityCursor,
   InitiativeDetail,
 } from '../../../generated/storage/types.gen';
-import { unwrap } from '../../utils';
+import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import { EntityAccess } from '../sharing/access';
@@ -25,6 +26,22 @@ export interface InitiativeOptions {
   propertyValues?: CreateInitiativeRequest['propertyValues'];
   /** Whether the current team can access it. */
   shareWithTeam?: boolean;
+}
+
+/** One change in an initiative's history. */
+export interface InitiativeActivityEntry {
+  /** Stable record id, for deduplicating entries across reads. */
+  id: string;
+  /** Who mechanically acted: a user, or an agent acting for one. */
+  actor: User;
+  /** The user the change is attributed to, the same as `actor` unless an agent acted for them. */
+  subject: User;
+  /** Activity tag, e.g. `created`, `edited`, `property_changed`, `task_added`, `task_removed`. */
+  action: string;
+  /** The action's details; absent for actions this deployment does not know. */
+  payload: unknown;
+  /** When it happened, RFC 3339. */
+  occurredAt: string;
 }
 
 /** A group of tasks and members working toward an outcome. */
@@ -107,10 +124,60 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
     );
   }
 
+  /**
+   * This initiative's history, newest first, auto-paginated: creation, edits,
+   * property changes and tasks added or removed, optionally within
+   * `[after, before)`.
+   *
+   * Task entries appear only for tasks you can currently view.
+   *
+   * @example
+   * const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+   * for await (const entry of initiative.activity({ after: since })) {
+   *   console.log(entry.occurredAt, entry.action, await entry.actor.name());
+   * }
+   */
+  activity(
+    window: { after?: Date | string; before?: Date | string } = {},
+  ): AsyncGenerator<InitiativeActivityEntry> {
+    const after = timestamp(window.after);
+    const before = timestamp(window.before);
+    return paginate<InitiativeActivityEntry, InitiativeActivityCursor>(
+      async (cursor) => {
+        const page = unwrap(
+          await this.client.storage.getInitiativeActivity({
+            path: { initiative_id: this.id },
+            query: {
+              after,
+              before,
+              cursorOccurredAt: cursor?.occurredAt,
+              cursorId: cursor?.id,
+            },
+          }),
+        );
+        return {
+          items: page.records.map((record) => ({
+            id: record.id,
+            actor: User.byId(this.client, record.actorId),
+            subject: User.byId(this.client, record.subjectId),
+            action: record.action,
+            payload: record.actionPayload ?? undefined,
+            occurredAt: record.occurredAt,
+          })),
+          nextCursor: page.nextCursor,
+        };
+      },
+    );
+  }
+
   /** Delete this initiative. */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.storage.deleteInitiative({ path: { initiative_id: this.id } }),
     );
   }
+}
+
+function timestamp(value: Date | string | undefined): string | undefined {
+  return value instanceof Date ? value.toISOString() : value;
 }

@@ -535,6 +535,7 @@ use utoipa::OpenApi;
         initiative::inbound::axum_router::list::list_initiatives_handler,
         initiative::inbound::axum_router::create::create_initiative_handler,
         initiative::inbound::axum_router::get::get_initiative_handler,
+        initiative::inbound::axum_router::activity::get_initiative_activity_handler,
         initiative::inbound::axum_router::update::update_initiative_handler,
         initiative::inbound::axum_router::delete::delete_initiative_handler,
         // databases
@@ -863,6 +864,9 @@ use utoipa::OpenApi;
             InitiativeId,
             InitiativeSummary,
             InitiativeDetail,
+            initiative::domain::history::InitiativeActivityPage,
+            initiative::domain::history::InitiativeActivityRecord,
+            initiative::domain::history::InitiativeActivityCursor,
             InitiativeList,
             CreateInitiativeRequest,
             InitialPropertyValue,

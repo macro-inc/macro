@@ -960,3 +960,20 @@ fn unrouted_prompts_inline_the_sdk_area_guidance_and_routed_ones_leave_it_to_the
         assert_eq!(prompt, tools.routed_prompt.to_string(), "{host:?}");
     }
 }
+
+#[test]
+fn code_mode_reads_memory_and_activity_through_the_sdk() {
+    let names = [
+        "ReadMemory",
+        "UpdateMemory",
+        "GetUserActivity",
+        "ReadActivity",
+        "ReadInitiativeActivity",
+    ];
+    let code_mode = tools_for_agent_code_mode();
+    let direct = tools_for(AiHost::AgentSession);
+    for name in names {
+        assert!(!code_mode.toolset.tools.contains_key(name), "{name}");
+        assert!(direct.toolset.tools.contains_key(name), "{name}");
+    }
+}
