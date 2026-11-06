@@ -218,6 +218,7 @@ fn build_job(name: &str, warm_job_id: &str, gate_output: &str) -> Job {
             max_parallel: None,
         })
         .add_step(steps::checkout_v4().add_with(("clean", false)))
+        .add_step(steps::setup_bun_pinned())
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix_with_cache())
 }
