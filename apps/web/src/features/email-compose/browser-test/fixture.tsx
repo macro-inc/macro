@@ -156,13 +156,14 @@ function Fixture() {
       subtext: `Sends ${format(sendTime, "EEE, MMM d 'at' h:mm a")}`,
       actions: [
         {
+          label: 'View message',
+          variant: 'secondary',
+          onClick: dismissThen(() => setView('compose')),
+        },
+        {
           label: 'Undo',
           icon: ArrowCounterClockwise,
           onClick: dismissThen(restoreDraft),
-        },
-        {
-          label: 'View message',
-          onClick: dismissThen(() => setView('compose')),
         },
       ],
       duration: 8_000,

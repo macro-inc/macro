@@ -1374,9 +1374,9 @@ Remote-only draft attachments cannot be copied after the original draft is gone;
 their pills are removed and a notice asks you to attach those files again.
 
 A successful initial schedule shows an **Email scheduled** notice whose description
-gives the full send time, with **Undo** and **View message** on their own row below
-it; a rescheduled email
-shows **Email rescheduled** with **View message**. Undo cancels the captured draft in
+gives the full send time, with secondary **View message** on the left and primary
+**Undo** on the right in their own row below it; a rescheduled email shows
+**Email rescheduled** with **View message**. Undo cancels the captured draft in
 the captured inbox and restores its editable body, envelope, and attachments; it must
 not overwrite a newer reply. View message opens the scheduled thread, or scrolls an
 inline reply back into view.

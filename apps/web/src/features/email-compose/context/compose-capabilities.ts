@@ -449,6 +449,7 @@ export interface ComposeNoticeOptions {
     label: string;
     onClick: () => void;
     kind?: 'undo' | 'open' | 'save';
+    variant?: 'primary' | 'secondary';
   }[];
 }
 export interface EmailComposeHost {

@@ -401,11 +401,12 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       dismissStyle: 'icon',
       actionLayout: 'inline',
       actions: [
-        { label: 'Undo', icon: ArrowCounterClockwise, onClick: dismiss },
         {
           label: 'View message',
+          variant: 'secondary',
           onClick: dismiss,
         },
+        { label: 'Undo', icon: ArrowCounterClockwise, onClick: dismiss },
       ],
     }),
   },
