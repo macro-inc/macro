@@ -45,7 +45,6 @@ let
         env.LOCALE_ARCHIVE = "${pkgs.glibcLocales}/lib/locale/locale-archive";
         entrypoint = sh ''
           export PGDATA=${data}
-          set_password=false
           create_database=false
           if [ ! -s "$PGDATA/PG_VERSION" ]; then
             ${
@@ -53,29 +52,25 @@ let
                 ''
                   cp -r ${platformPkgs.postgresSeed}/. "$PGDATA/"
                   chmod -R u+w "$PGDATA"
-                  set_password=true
-                  printf 'local all all trust\nhost all all 0.0.0.0/0 scram-sha-256\n' > "$PGDATA/pg_hba.conf"
                 ''
               else
                 ''
                   printf '%s' "$POSTGRES_PASSWORD" > /tmp/password
                   ${postgres}/bin/initdb -D "$PGDATA" -U ${user} --pwfile=/tmp/password --auth-local=trust --auth-host=scram-sha-256 --encoding=UTF8 --locale=en_US.UTF-8
                   rm /tmp/password
-                  echo 'host all all 0.0.0.0/0 scram-sha-256' >> "$PGDATA/pg_hba.conf"
                   create_database=${if main then "true" else "false"}
                 ''
             }
           fi
+          printf 'local all all trust\nhost all all 0.0.0.0/0 scram-sha-256\n' > "$PGDATA/pg_hba.conf"
           chmod 700 "$PGDATA"
           # A Nix libc upgrade can change locale ordering on a persisted volume.
           # Repair affected indexes before this pod accepts network connections.
           ${postgres}/bin/pg_ctl -D "$PGDATA" -o "-c listen_addresses= -k /tmp" -w start >/dev/null
           export PGHOST=/tmp PGUSER=${user}
-          if $set_password; then
-            ${postgres}/bin/psql -d postgres -v ON_ERROR_STOP=1 -v runtime_password="$POSTGRES_PASSWORD" <<'SQL'
-          ALTER ROLE "user" PASSWORD :'runtime_password';
+          ${postgres}/bin/psql -d postgres -v ON_ERROR_STOP=1 -v runtime_password="$POSTGRES_PASSWORD" <<'SQL'
+          ALTER ROLE "${user}" PASSWORD :'runtime_password';
           SQL
-          fi
           if $create_database; then
             ${postgres}/bin/createdb macrodb
           fi
