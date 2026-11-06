@@ -6,6 +6,7 @@ import { FilterTextSubmenu } from '@app/features/next-soup/soup-view/filters-bar
 import { t } from '@app/lib/i18n';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { EntityIcon } from '@core/component/EntityIcon';
+import StarIcon from '@icon/system/regular/star.svg';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -26,7 +27,11 @@ import {
   type EmailFilterGroupId,
   type EmailViewConditions,
 } from '../types';
-import { EMAIL_FILTER_GROUPS, EMAIL_FOCUS_FILTER_GROUP } from './email-facets';
+import {
+  EMAIL_FILTER_GROUPS,
+  EMAIL_FOCUS_FILTER_GROUP,
+  EMAIL_HAS_FACETS,
+} from './email-facets';
 
 type EmailFilterGroup = ListFilterGroup<EmailFilterGroupId, string>;
 
@@ -85,6 +90,26 @@ const conditionField = (
       : {},
 });
 
+/** Several fields as one group, each reading and writing the option ids it owns. */
+const combinedField = (
+  parts: { optionIds: readonly string[]; field: EmailFilterField }[]
+): EmailFilterField => ({
+  read: (filters) => parts.flatMap(({ field }) => field.read(filters)),
+  write: (filters, ids) =>
+    parts.reduce<Partial<EmailListFilters>>(
+      (change, { optionIds, field }) => ({
+        ...change,
+        ...field.write(
+          { ...filters, ...change },
+          ids.filter((id) => optionIds.includes(id))
+        ),
+      }),
+      {}
+    ),
+});
+
+const STARRED = 'starred';
+
 const IMPORTANCE = ['signal', 'noise'] as const;
 
 const emailFilterField = (groupId: EmailFilterGroupId): EmailFilterField =>
@@ -134,11 +159,20 @@ const emailFilterField = (groupId: EmailFilterGroupId): EmailFilterField =>
         })
       )
     )
-    .with('starred', () =>
-      conditionField(
-        (conditions) => (conditions.starred ? ['starred'] : []),
-        (ids) => ({ starred: ids.includes('starred') })
-      )
+    .with('has', () =>
+      combinedField([
+        {
+          optionIds: [STARRED],
+          field: conditionField(
+            (conditions) => (conditions.starred ? [STARRED] : []),
+            (ids) => ({ starred: ids.includes(STARRED) })
+          ),
+        },
+        ...EMAIL_HAS_FACETS.map(({ id, optionIds }) => ({
+          optionIds,
+          field: facetField(id),
+        })),
+      ])
     )
     .with(
       'inboxes',
@@ -147,9 +181,7 @@ const emailFilterField = (groupId: EmailFilterGroupId): EmailFilterField =>
         write: (_, ids) => ({ inboxIds: ids.length > 0 ? ids : undefined }),
       })
     )
-    .with('read', 'done', 'attachments', 'calendar', 'focus', 'tags', (id) =>
-      facetField(id)
-    )
+    .with('read', 'done', 'focus', 'tags', (id) => facetField(id))
     .exhaustive();
 
 const sameValues = (left: readonly string[], right: readonly string[]) =>
@@ -373,15 +405,18 @@ export function useEmailFilters() {
       ],
     },
     ...inboxes(),
-    {
-      id: 'starred',
-      label: t('emailViews.starred'),
-      selectionMode: 'single',
-      defaultOptionId: ANY,
-      options: [{ id: 'starred', label: t('emailViews.starred') }, anyOption()],
-    },
-    ...facetGroup('attachments'),
-    ...facetGroup('calendar'),
+    // Starred is a view condition, so only here does "Has" offer it.
+    ...facetGroup('has').map((group) => ({
+      ...group,
+      options: [
+        {
+          id: STARRED,
+          label: t('emailViews.starred'),
+          icon: () => <StarIcon class="size-4 shrink-0" />,
+        },
+        ...group.options,
+      ],
+    })),
   ];
 
   const model = createEmailFilterModel({

@@ -72,9 +72,7 @@ describe('useEmailFilters', () => {
       'done',
       'received',
       'inboxes',
-      'starred',
-      'attachments',
-      'calendar',
+      'has',
     ]);
     expect(filters.isSelected('importance', 'signal')).toBe(true);
     expect(filters.isSelected('done', 'not-done')).toBe(true);
@@ -120,16 +118,40 @@ describe('useEmailFilters', () => {
     expect(state.conditions?.participantFields).toEqual(['from', 'to', 'cc']);
   });
 
+  it('keeps Starred, calendar invites and attachments in one Has list', () => {
+    const { filters, state } = mountFilters('favorites');
+    const has = filters.groups().find((group) => group.id === 'has');
+
+    expect(has?.options.map((option) => option.id)).toEqual([
+      'starred',
+      'has-calendar-invite',
+      'attachment-pdf',
+      'attachment-image',
+      'attachment-document',
+    ]);
+    expect(filters.isSelected('has', 'starred')).toBe(true);
+    expect(filters.isGroupActive('has')).toBe(false);
+
+    filters.setSelected('has', 'attachment-pdf', true);
+    filters.setSelected('has', 'has-calendar-invite', true);
+    filters.setSelected('has', 'starred', false);
+
+    expect(state.facets).toEqual({
+      attachments: ['attachment-pdf'],
+      calendar: ['has-calendar-invite'],
+    });
+    expect(state.conditions?.starred).toBe(false);
+    expect(filters.selectedIds('has')).toEqual([
+      'has-calendar-invite',
+      'attachment-pdf',
+    ]);
+    expect(filters.activeCount()).toBe(1);
+  });
+
   it('picks several inboxes and keeps the facets alone where no view applies', () => {
     const { filters, state } = mountFilters('sent');
 
-    expect(groupIds(filters)).toEqual([
-      'read',
-      'done',
-      'attachments',
-      'calendar',
-      'inboxes',
-    ]);
+    expect(groupIds(filters)).toEqual(['read', 'done', 'has', 'inboxes']);
 
     filters.setSelected('inboxes', 'inbox-a', true);
     filters.setSelected('inboxes', 'inbox-b', true);

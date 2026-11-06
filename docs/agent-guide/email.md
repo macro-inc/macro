@@ -263,8 +263,10 @@ Their triggers are icon-only buttons matching the surrounding view controls;
 Clear/Reset filters and the mobile Clear all action use destructive text styling.
 Both layouts show a small accent dot beside categories with active refinements;
 default All selections are not marked.
-Email Read status and Done are single choices that close the menu; attachment filters
-stay open for multiple selections. Tags supports search, pins selected tags first
+Email Read status and Done are single choices that close the menu; Has
+(Starred, Calendar invite, PDFs, Images, Documents) stays open for multiple
+selections. Ticked Has items all apply, except attachment kinds, which match
+any one. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
 On Signal, Noise, All, Archived, Favorites and Calendar, Filters holds every
@@ -273,16 +275,17 @@ domain, `@domain` or website and pick `Add “…”`), Match from (once someone
 chosen; the last field stays on), Subject contains (a text field applied after a
 pause or on Enter), Tags, Importance, Read status, Done, Latest activity, Inboxes
 (with two or more linked; several can be chosen, in step with the account
-picker), Starred, Attachments and Calendar. Each tab's own restrictions show as
-selected (Signal: Importance Signal and Done Not done; Favorites: Starred;
-Archived: Done; Calendar: Has calendar invite) and can be changed; they don't
+picker) and Has. Each tab's own restrictions show as
+selected (Signal: Importance Signal and Done Not done; Favorites: Has Starred;
+Archived: Done; Calendar: Has Calendar invite) and can be changed; they don't
 count toward the filter badge or dots, and Clear returns to them and every
 inbox. While they stand, the list uses the tab's own query; once one changes,
 or a People, Subject or Latest activity condition is set, it lists mail as an
 open saved view would. The other tabs keep the facets, Tags and Inboxes. The
 mobile filter drawer shows the same sections, with the builder's People and
 Subject fields. Check on Signal: Filters shows Not done selected with no badge;
-choosing Done → All widens the list, shows **Save view**, and Clear restores it.
+choosing Done → All widens the list, shows **Save view** and **Revert**, and
+Revert or Clear restores it.
 
 ### Read state and trash
 
@@ -1412,12 +1415,13 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   personal tags as Filters, shown when any exist; a tag the viewer can no
   longer see reads Unavailable tag and stays), and an **Advanced settings** toggle that
   reveals Importance, Read status, Done, Latest activity, Inboxes (with two or more
-  linked), and Starred, calendar invite and attachment requirements; it starts
+  linked), and **Has** (Starred, Calendar invite, PDFs, Images, Documents); it starts
   open when the view already sets one of them. Values within one
   condition are alternatives; conditions all apply. Once the filters on Signal,
   Noise, All, Archived, Favorites or Calendar differ from the tab's own (or an
   inbox is chosen), **Save view** left of Filters opens the builder prefilled,
-  as in Tasks; Sent, Drafts, Scheduled, Reminders, Shared and Focus can't be
+  as in Tasks, and **Revert** beside it returns to the tab's own filters and
+  every inbox; Sent, Drafts, Scheduled, Reminders, Shared and Focus can't be
   saved. Search text is never saved.
 - **Open.** The view opens on All with every condition in the Filters
   controls; the header shows its name and a
@@ -1433,8 +1437,9 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   The order is personal and follows the account. A dot marks a view whose first
   unread page has unread mail.
 - **Mobile.** A saved-view pill follows Filters; its drawer lists and manages
-  views. The filter drawer shows "Save these filters as a view" above its footer
-  and Save changes/Reset in the footer while a view is edited.
+  views. The filter drawer shows "Save these filters as a view" with Save view
+  and Revert above its footer, and Save changes/Reset in the footer while a view
+  is edited.
 
 Check: create a view for a contact and a domain, open it, mark a
 thread read and watch the dot, reorder two views and reload, then search inside

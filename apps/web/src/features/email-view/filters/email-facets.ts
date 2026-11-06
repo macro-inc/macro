@@ -102,7 +102,7 @@ const EMAIL_ATTACHMENT_OPTIONS: EmailFacetOption[] = [
 const EMAIL_CALENDAR_OPTIONS: EmailFacetOption[] = [
   {
     id: 'has-calendar-invite',
-    label: 'Has calendar invite',
+    label: 'Calendar invite',
     iconType: 'calendar',
     clause: { ef: clause.eq('emailCalendarOnly', true) },
     predicate: hasCalendarInviteFilter,
@@ -191,14 +191,22 @@ export const EMAIL_FILTER_GROUPS: EmailFilterGroup[] = [
       { id: 'all', label: 'All' },
     ],
   },
+  // Ticked items must all hold, except attachment kinds: any one of those.
   {
-    id: 'attachments',
-    label: 'Attachments',
-    options: toGroupOptions(EMAIL_ATTACHMENT_OPTIONS),
-  },
-  {
-    id: 'calendar',
-    label: 'Calendar',
-    options: toGroupOptions(EMAIL_CALENDAR_OPTIONS),
+    id: 'has',
+    label: 'Has',
+    options: toGroupOptions([
+      ...EMAIL_CALENDAR_OPTIONS,
+      ...EMAIL_ATTACHMENT_OPTIONS,
+    ]),
   },
 ];
+
+/** The facets the "Has" group spans, with the option ids each one owns. */
+export const EMAIL_HAS_FACETS = [
+  { id: 'calendar', optionIds: EMAIL_CALENDAR_OPTIONS.map(({ id }) => id) },
+  {
+    id: 'attachments',
+    optionIds: EMAIL_ATTACHMENT_OPTIONS.map(({ id }) => id),
+  },
+] as const;

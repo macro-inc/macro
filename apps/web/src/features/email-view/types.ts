@@ -12,9 +12,7 @@ export type EmailFilterGroupId =
   | 'done'
   | 'received'
   | 'inboxes'
-  | 'starred'
-  | 'attachments'
-  | 'calendar'
+  | 'has'
   | 'focus'
   | 'tags';
 

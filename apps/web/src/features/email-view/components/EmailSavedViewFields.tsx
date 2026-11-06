@@ -282,7 +282,7 @@ export function EmailSavedViewFields(props: {
               </Section>
             </Show>
 
-            <Section label={t('emailViews.also')}>
+            <Section label={t('emailViews.has')}>
               <Toggle
                 label={t('emailViews.starred')}
                 checked={props.filters.starred}
@@ -296,9 +296,9 @@ export function EmailSavedViewFields(props: {
               <For
                 each={
                   [
-                    ['attachment-pdf', t('emailViews.hasPdf')],
-                    ['attachment-image', t('emailViews.hasImage')],
-                    ['attachment-document', t('emailViews.hasDocument')],
+                    ['attachment-pdf', t('emailViews.pdfs')],
+                    ['attachment-image', t('emailViews.images')],
+                    ['attachment-document', t('emailViews.documents')],
                   ] as const
                 }
               >
