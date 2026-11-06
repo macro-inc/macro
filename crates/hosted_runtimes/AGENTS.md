@@ -56,8 +56,12 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   Docker enforces/checks CPU and RAM only (overlayfs has no disk quota).
   Subscription reconcile compares saved price ids, never current catalog prices.
   `ComputerStatus` exposes `vcpus`, `memoryGib`, `diskGib`, `catalogEntry`.
-  PR B: the unpublished hosted-runtimes migration was rewritten in place;
-  reset existing local databases before applying it.
+  Read configured offers without billing through `ComputerService::catalog()`
+  and `size_spec(size)`; omitted sizes return `ComputerError::BadRequest`.
+  Apply forward migrations over the unchanged historical files. Legacy rows
+  receive original resource snapshots and `size@legacy-2026-11` catalog IDs;
+  their NULL Stripe prices require an explicit historical backfill before billing
+  operations resume. Comped rows keep NULL prices.
   Purchaser deletion is RESTRICTed to retain enrollment/billing attribution until
   the computer or team is deleted; harness deletion clears its reference, and
   user deletion cascades waitlist requests.

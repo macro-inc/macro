@@ -186,24 +186,29 @@ async fn personas_decode_after_forward_bootstrap_cleanup(pool: PgPool) {
         "extra_service": {"unit_name": "worker", "exec": "/bin/worker", "env": {"MACRO_API_KEY": "fixture-api-value", "REPO_TOKEN": "fixture-repo-value", "SOME_SECRET": "fixture-secret-value", "REPO_URL": "https://example.com/service"}}
     });
     // Insert raw JSON using the schema before stripping; no Persona has decoded it.
-    sqlx::query!(
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "The pre-migration units column is absent from the live compile-time schema"
+    )]
+    let insert = sqlx::query(
         r#"INSERT INTO hosted_runtime
-        (id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry,
-         price_id, state, persona, created_by)
-        VALUES ($1, $2, 'Worker', 'standard', 4, 8, 100, 'standard@2026-11',
-                'price_standard', $3, $4, 'macro|owner@example.com')"#,
-        id.into_inner(),
-        TEAM,
-        serde_json::to_value(ComputerState::reserved(
-            HostId::new(Uuid::from_u128(2)),
-            now()
-        ))
-        .unwrap(),
-        persona,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+        (id, team_id, name, size, units, state, persona, created_by)
+        VALUES ($1, $2, 'Worker', 'standard', 1, $3, $4, 'macro|owner@example.com')"#,
+    );
+    insert
+        .bind(id.into_inner())
+        .bind(TEAM)
+        .bind(
+            serde_json::to_value(ComputerState::reserved(
+                HostId::new(Uuid::from_u128(2)),
+                now(),
+            ))
+            .unwrap(),
+        )
+        .bind(persona)
+        .execute(&pool)
+        .await
+        .unwrap();
     let repo = PgComputerRepo::new(pool.clone());
     assert!(repo.get(id).await.is_err());
     // Apply the original strip and every forward migration before decoding.
