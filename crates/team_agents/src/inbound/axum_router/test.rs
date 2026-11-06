@@ -314,7 +314,7 @@ struct FakeAuthorizationService;
 impl MacroAuthorizationService for FakeAuthorizationService {
     async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
         let user_id = match jwt {
-            "admin" => ADMIN,
+            "admin" | "manager" => ADMIN,
             "agent" => AGENT,
             _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         };
@@ -331,9 +331,17 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         &self,
         jwt: &str,
     ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
-        self.authorize(jwt)
-            .await
-            .map(macro_authorization::ValidatedCredential::session)
+        let mut credential =
+            macro_authorization::ValidatedCredential::session(self.authorize(jwt).await?);
+        if jwt == "manager" {
+            credential.origin = macro_authorization::CredentialOrigin::AccountManager(
+                macro_authorization::AccountManagerCredential {
+                    grant_id: Uuid::nil(),
+                    manager_user_id: user(AGENT),
+                },
+            );
+        }
+        Ok(credential)
     }
 
     async fn authorize_internal(
@@ -358,6 +366,26 @@ async fn body_text(response: axum::response::Response) -> String {
         .await
         .expect("body should be readable");
     String::from_utf8(body.to_vec()).expect("body should be UTF-8")
+}
+
+#[tokio::test]
+async fn an_account_manager_cannot_provision_lasting_agent_credentials() {
+    let service = Arc::new(FakeService::default());
+    let response = router(service.clone(), TeamRole::Admin)
+        .oneshot(
+            Request::post("/")
+                .header(header::AUTHORIZATION, "Bearer manager")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    r#"{"name":"Sam","jobDescription":"Books venues.","personality":"Warm.","expectedIncluded":false,"size":"large","avatarUrl":null}"#,
+                ))
+                .expect("valid request"),
+        )
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(service.calls.lock().expect("lock").is_empty());
 }
 
 #[tokio::test]

@@ -350,7 +350,8 @@ page. The main page has a profile shortcut and the same grouped Team, Blocks, Pe
 and Developer sections as desktop, plus enabled admin settings. Search finds
 individual settings; selecting a result opens its page and reveals the section. Tap a row to open that settings
 page inside the sheet; **Back to settings** returns to the grouped list at its
-previous scroll position. `API Keys` is desktop-only and has no row here.
+previous scroll position. `API Keys` is desktop-only and has no row here; `Account Managers` has one, so
+access can be revoked from a phone.
 **Close settings** at the top right, Escape, an
 outside tap, or a downward swipe dismisses the sheet. A tap that dismisses a
 menu opened inside the sheet leaves the sheet itself open. Opening Settings again
@@ -429,7 +430,7 @@ Left nav (feature and platform gates still apply):
   sidebar is hidden, **Routines** (`/app/settings/routines`) follows Agents.
 - **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
 - **Workspace**: Tags, Integrations (email, accounts, team Slack export, AI apps and agent tools).
-- **Developer**: Runtimes, MCP server, API Keys, Bots.
+- **Developer**: Runtimes, MCP server, API Keys, Account Managers, Bots.
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
 **Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle

@@ -12,9 +12,9 @@ use uuid::Uuid;
 use super::MacroAuthorizationServiceImpl;
 use crate::domain::{
     models::{
-        BotActingUserClaims, BotAuthentication, BotScope, CredentialOrigin, InternalAuthConfig,
-        InternalIdentityClaims, MacroAuthorizationError, MacroUserAuthentication,
-        ValidatedCredential, ValidatedIdentity,
+        AuthorizedUserApiKey, BotActingUserClaims, BotAuthentication, BotScope, CredentialOrigin,
+        InternalAuthConfig, InternalIdentityClaims, MacroAuthorizationError,
+        MacroUserAuthentication, ValidatedCredential, ValidatedIdentity,
     },
     ports::{
         BotAuthorizer, JwtValidator, MacroAuthorizationService, NoBotAuthorizer,
@@ -85,13 +85,19 @@ impl UserApiKeyAuthorizer for FakeUserApiKeyAuthorizer {
     async fn authorize_user_api_key(
         &self,
         api_key: &str,
-    ) -> Result<UserContext, Report<MacroAuthorizationError>> {
+    ) -> Result<AuthorizedUserApiKey, Report<MacroAuthorizationError>> {
         self.calls
             .lock()
             .expect("calls lock poisoned")
             .push(api_key.to_string());
 
-        self.result.clone().map_err(Report::new)
+        self.result
+            .clone()
+            .map(|user_context| AuthorizedUserApiKey {
+                user_context,
+                account_manager: None,
+            })
+            .map_err(Report::new)
     }
 }
 
@@ -511,7 +517,8 @@ async fn authorize_user_api_key_delegates_the_exact_key() {
         authorizer.clone(),
     );
 
-    let context = service.authorize_user_api_key("mak_secret").await.unwrap();
+    let authorized = service.authorize_user_api_key("mak_secret").await.unwrap();
+    let context = authorized.user_context;
 
     assert_eq!(context.user_id, "macro|api-key@example.com");
     assert_eq!(context.fusion_user_id, "fusion-api-key-user");
