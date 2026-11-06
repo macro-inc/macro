@@ -1,6 +1,7 @@
 //! Postgres adapter for [`ComputerRepo`].
 
 use harness_id::HarnessId;
+use macro_user_id::user_id::MacroUserIdStr;
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
@@ -106,7 +107,7 @@ impl TryFrom<ComputerRow> for Computer {
             .transpose()?;
 
         Ok(Computer {
-            id: ComputerId::new(row.id),
+            id: ComputerId::new_from_uuid(row.id),
             team_id: row.team_id,
             name: ComputerName::try_new(&row.name)
                 .map_err(|error| PgComputerError::Corrupt(error.to_string()))?,
@@ -128,7 +129,8 @@ impl TryFrom<ComputerRow> for Computer {
             state: serde_json::from_value(row.state)?,
             harness_id: row.harness_id.map(HarnessId::new_from_uuid),
             persona,
-            created_by: row.created_by,
+            created_by: MacroUserIdStr::try_from(row.created_by)
+                .map_err(|error| PgComputerError::Corrupt(error.to_string()))?,
             created_at: row.created_at,
             enrolled_at: row.enrolled_at,
             enrollment_generation: crate::domain::persona_credentials::EnrollmentGeneration::new(
@@ -160,7 +162,7 @@ impl PgComputerRepo {
             WHERE id = $1
             FOR UPDATE
             "#,
-            computer_id.into_inner(),
+            computer_id.as_uuid(),
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -195,7 +197,7 @@ impl PgComputerRepo {
                         VALUES ($1, $2, $3)
                         ON CONFLICT (computer_id, kind) DO UPDATE SET fire_at = EXCLUDED.fire_at
                         "#,
-                        computer_id.into_inner(),
+                        computer_id.as_uuid(),
                         kind.as_ref(),
                         at,
                     )
@@ -209,7 +211,7 @@ impl PgComputerRepo {
                         INSERT INTO hosted_runtime_effect (computer_id, worker, effect, run_after, created_at)
                         VALUES ($1, $2, $3, $4, $4)
                         "#,
-                        computer_id.into_inner(),
+                        computer_id.as_uuid(),
                         worker.as_ref(),
                         serde_json::to_value(&effect)?,
                         now,
@@ -224,7 +226,7 @@ impl PgComputerRepo {
         if destroyed {
             sqlx::query!(
                 "DELETE FROM hosted_runtime_timer WHERE computer_id = $1",
-                computer_id.into_inner()
+                computer_id.as_uuid()
             )
             .execute(&mut **tx)
             .await?;
@@ -236,7 +238,7 @@ impl PgComputerRepo {
                 version = version + 1, updated_at = $6, enrollment_generation = $7
             WHERE id = $1
             "#,
-            computer_id.into_inner(),
+            computer_id.as_uuid(),
             serde_json::to_value(&state)?,
             state.is_awake(),
             state.holds_units(),
@@ -274,7 +276,7 @@ impl PgComputerRepo {
             WHERE host_id = $1 AND awake AND id <> $2
             "#,
             host.into_inner(),
-            computer.id.into_inner(),
+            computer.id.as_uuid(),
         )
         .fetch_one(&mut **tx)
         .await?;
@@ -372,14 +374,14 @@ impl ComputerRepo for PgComputerRepo {
                  persona, created_by, created_at, updated_at, vcpus, memory_gib, disk_gib, catalog_entry, price_id)
             VALUES ($1, $2, $3, $4, $5, false, true, $6, $7, $8, $9, $9, $10, $11, $12, $13, $14)
             "#,
-            computer.id.into_inner(),
+            computer.id.as_uuid(),
             computer.team_id,
             computer.name.as_str(),
             computer.size.as_ref(),
             host,
             state_json,
             persona_json,
-            computer.created_by,
+            computer.created_by.as_ref(),
             now,
             i32::try_from(computer.resources.vcpus.get()).map_err(|error| ReserveError::Storage(PgComputerError::from(error)))?,
             i32::try_from(computer.resources.memory_gib.get()).map_err(|error| ReserveError::Storage(PgComputerError::from(error)))?,
@@ -396,7 +398,7 @@ impl ComputerRepo for PgComputerRepo {
         .map_err(|error| ReserveError::Storage(PgComputerError::from(error)))?;
         sqlx::query!(
             "INSERT INTO hosted_runtime_effect (computer_id, worker, effect, run_after, created_at) VALUES ($1, 'billing', $2, $3, $4)",
-            computer.id.into_inner(),
+            computer.id.as_uuid(),
             effect_json,
             now + crate::domain::lifecycle::PAYMENT_CONFIRM_DELAY,
             now,
@@ -446,7 +448,7 @@ impl ComputerRepo for PgComputerRepo {
             FROM hosted_runtime
             WHERE id = $1
             "#,
-            computer_id.into_inner(),
+            computer_id.as_uuid(),
         )
         .fetch_optional(&self.pool)
         .await?
@@ -498,7 +500,7 @@ impl ComputerRepo for PgComputerRepo {
     ) -> Result<(), PgComputerError> {
         sqlx::query!(
             "UPDATE hosted_runtime SET harness_id = $2 WHERE id = $1",
-            computer_id.into_inner(),
+            computer_id.as_uuid(),
             harness_id.as_uuid(),
         )
         .execute(&self.pool)
@@ -513,7 +515,7 @@ impl ComputerRepo for PgComputerRepo {
     ) -> Result<(), PgComputerError> {
         sqlx::query!(
             "UPDATE hosted_runtime SET enrolled_at = COALESCE(enrolled_at, $2) WHERE id = $1",
-            computer_id.into_inner(),
+            computer_id.as_uuid(),
             now,
         )
         .execute(&self.pool)
@@ -548,7 +550,7 @@ impl ComputerRepo for PgComputerRepo {
         )
         .fetch_optional(&self.pool)
         .await?
-        .map(ComputerId::new))
+        .map(ComputerId::new_from_uuid))
     }
 
     async fn instances_expected(&self, host: HostId) -> Result<Vec<Computer>, PgComputerError> {
@@ -608,7 +610,7 @@ impl ComputerRepo for PgComputerRepo {
             .map(|row| {
                 Ok(PendingEffect {
                     id: row.id,
-                    computer_id: ComputerId::new(row.computer_id),
+                    computer_id: ComputerId::new_from_uuid(row.computer_id),
                     effect: serde_json::from_value(row.effect)?,
                     attempts: u32::try_from(row.attempts)?,
                 })
@@ -668,7 +670,7 @@ impl ComputerRepo for PgComputerRepo {
                     PgComputerError::Corrupt(format!("unknown timer {:?}", row.kind))
                 })?;
                 Ok(DueTimer {
-                    computer_id: ComputerId::new(row.computer_id),
+                    computer_id: ComputerId::new_from_uuid(row.computer_id),
                     kind,
                     fire_at: row.fire_at,
                 })
@@ -688,7 +690,7 @@ impl ComputerRepo for PgComputerRepo {
             DELETE FROM hosted_runtime_timer
             WHERE computer_id = $1 AND kind = $2 AND fire_at = $3
             "#,
-            timer.computer_id.into_inner(),
+            timer.computer_id.as_uuid(),
             timer.kind.as_ref(),
             timer.fire_at,
         )
@@ -761,7 +763,7 @@ impl ComputerRepo for PgComputerRepo {
     async fn request_notify(
         &self,
         team_id: Uuid,
-        user_id: String,
+        user_id: MacroUserIdStr<'static>,
         size: ComputerSize,
     ) -> Result<(), PgComputerError> {
         sqlx::query!(
@@ -771,7 +773,7 @@ impl ComputerRepo for PgComputerRepo {
             ON CONFLICT DO NOTHING
             "#,
             team_id,
-            user_id,
+            user_id.as_ref(),
             size.as_ref(),
         )
         .execute(&self.pool)
@@ -782,12 +784,12 @@ impl ComputerRepo for PgComputerRepo {
     async fn notify_requests(
         &self,
         team_id: Uuid,
-        user_id: String,
+        user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<ComputerSize>, PgComputerError> {
         let sizes = sqlx::query_scalar!(
             "SELECT size FROM hosted_runtime_waitlist WHERE team_id = $1 AND user_id = $2",
             team_id,
-            user_id,
+            user_id.as_ref(),
         )
         .fetch_all(&self.pool)
         .await?;

@@ -1,3 +1,4 @@
+use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -242,7 +243,7 @@ impl Harnesses for FakeHarnesses {
         let generation = enrollments.len() as u128;
         enrollments.push(computer.harness_id);
         Ok(HostedPairing {
-            pairing_id: PairingId::new(Uuid::from_u128(
+            pairing_id: PairingId::new_from_uuid(Uuid::from_u128(
                 0x0000_0000_0000_7000_8000_0000_0000_0909 + generation,
             )),
             device_secret: DeviceSecret::new(if generation == 0 {
@@ -258,7 +259,7 @@ impl Harnesses for FakeHarnesses {
     }
 
     async fn computer_for(&self, harness_id: HarnessId) -> Result<Option<ComputerId>, FakeError> {
-        Ok((harness_id == HARNESS).then_some(ComputerId::new(Uuid::from_u128(1))))
+        Ok((harness_id == HARNESS).then_some(ComputerId::new_from_uuid(Uuid::from_u128(1))))
     }
 
     async fn revoke(&self, _computer_id: ComputerId) -> Result<(), FakeError> {
@@ -292,7 +293,7 @@ async fn operator(
 async fn paid_computer(
     operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FixedCredentials>,
 ) -> ComputerId {
-    let id = ComputerId::new(Uuid::from_u128(1));
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     operator
         .repo
         .reserve(
@@ -316,7 +317,7 @@ async fn paid_computer(
                     crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
                 ),
                 persona: None,
-                created_by: "macro|owner@example.com".to_owned(),
+                created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             },
             now(),
         )
@@ -420,7 +421,7 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
             Enrollment {
                 computer_id: id,
                 generation: EnrollmentGeneration::new(1),
-                pairing_id: PairingId::new(Uuid::from_u128(
+                pairing_id: PairingId::new_from_uuid(Uuid::from_u128(
                     0x0000_0000_0000_7000_8000_0000_0000_0909
                 )),
                 device_secret: DeviceSecret::new("secret".to_owned()),
@@ -472,7 +473,8 @@ async fn an_effect_that_keeps_failing_fails_the_computer() {
 
 #[tokio::test]
 async fn reconcile_turns_a_missing_instance_into_a_crash_and_removes_orphans() {
-    let orphan = ComputerId::new(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_dead));
+    let orphan =
+        ComputerId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_dead));
     let operator = operator(FakeFleet {
         instances: Mutex::new(vec![FleetInstance {
             computer_id: orphan,
@@ -709,31 +711,31 @@ async fn reconcile_never_destroys_foreign_recent_or_unknown_age_instances() {
     let operator = operator(FakeFleet {
         instances: Mutex::new(vec![
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(1)),
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(1)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-b".to_owned()).unwrap(),
                 created_at: Some(now() - Duration::hours(1)),
             },
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(2)),
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(2)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: Some(now() - Duration::minutes(9)),
             },
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(3)),
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(3)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: None,
             },
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(4)),
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(4)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: Some(now() - Duration::minutes(10)),
             },
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(5)),
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(5)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: Some(now() + Duration::minutes(1)),
@@ -821,7 +823,7 @@ async fn unconfigured_credentials_fail_closed_for_persona_computers() {
         assert!(matches!(
             source
                 .issue(
-                    ComputerId::new(Uuid::from_u128(2)),
+                    ComputerId::new_from_uuid(Uuid::from_u128(2)),
                     EnrollmentGeneration::new(1)
                 )
                 .await,

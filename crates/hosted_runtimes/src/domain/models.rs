@@ -1,5 +1,7 @@
 //! Computers, hosts, purchases and what the team sees.
 
+use macro_user_id::user_id::MacroUserIdStr;
+
 use harness_id::HarnessId;
 
 use std::collections::BTreeMap;
@@ -71,7 +73,7 @@ pub struct Computer {
     /// Last guest creation begun by the fleet; retries keep the same generation.
     pub enrollment_generation: crate::domain::persona_credentials::EnrollmentGeneration,
     /// Macro user who purchased the computer.
-    pub created_by: String,
+    pub created_by: MacroUserIdStr<'static>,
     /// Time the computer was reserved.
     pub created_at: DateTime<Utc>,
     /// When macrod first connected; setup is over from then on.
@@ -102,7 +104,7 @@ pub struct NewComputer {
     /// Optional guest persona configuration.
     pub persona: Option<Persona>,
     /// Macro user who purchased the computer.
-    pub created_by: String,
+    pub created_by: MacroUserIdStr<'static>,
 }
 
 /// A buy request. For Stripe purchases, `extra_items` join the computer's
@@ -114,7 +116,7 @@ pub struct PurchaseRequest {
     /// Team that owns the computer.
     pub team_id: Uuid,
     /// The admin or owner buying it.
-    pub created_by: String,
+    pub created_by: MacroUserIdStr<'static>,
     /// Purchased catalog size.
     pub size: ComputerSize,
     /// Display name; defaults to the persona's name, then "Macro computer".

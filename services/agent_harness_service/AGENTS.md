@@ -40,7 +40,8 @@ Pulumi stacks; they do not host extra agent processes.
   for the session owner, and its `usage` (SSE `message_start`/`message_delta`
   or the JSON body) goes to the process's settling recorder, which charges
   only under `ENABLE_AI_USAGE_BILLING`. Span: `anthropic_gateway.messages`.
-- `src/computers.rs`: configures the optional fleet operator, runs fleet effects,
+- `src/computers.rs`: passes shared computer/pairing IDs and validated Macro buyer IDs
+  directly between the hosted-runtime and harness services; configures the optional fleet operator, runs fleet effects,
   timers, reconciliation and idle sleep, reports macrod presence, and wakes
   sleeping computers before forwarding prompts. `COMPUTERS_FLEET` selects
   `incus`, local-only `docker`, or explicit `disabled`; missing selection fails

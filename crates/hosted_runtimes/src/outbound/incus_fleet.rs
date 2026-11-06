@@ -396,7 +396,7 @@ impl Fleet for IncusFleet {
 
 /// Incus names are hostname labels: a leading letter, at most 63 characters.
 pub fn instance_name(computer_id: ComputerId) -> InstanceName {
-    InstanceName::from_uuid(computer_id.into_inner())
+    InstanceName::from_uuid(computer_id.as_uuid())
 }
 
 /// The instance config: identity, enrollment and limits.

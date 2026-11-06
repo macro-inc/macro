@@ -40,14 +40,11 @@ impl ComputerRollout {
 
     /// Evaluate the authenticated Macro user, never a team or derived identity.
     #[tracing::instrument(skip_all)]
-    pub async fn enabled(&self, user_id: &str) -> bool {
+    pub async fn enabled(&self, user_id: &MacroUserIdStr<'static>) -> bool {
         let Some(evaluate) = &self.evaluate else {
             return false;
         };
-        let Ok(user) = MacroUserIdStr::try_from(user_id.to_owned()) else {
-            return false;
-        };
-        evaluate(user).await
+        evaluate(user_id.clone()).await
     }
 }
 

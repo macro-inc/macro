@@ -2,6 +2,8 @@
 //! release. It runs where Stripe lives (authentication_service), so it also
 //! carries out billing effects.
 
+use macro_user_id::user_id::MacroUserIdStr;
+
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -135,7 +137,10 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         self
     }
 
-    async fn require_rollout(&self, user_id: &str) -> Result<(), ComputerError> {
+    async fn require_rollout(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> Result<(), ComputerError> {
         if !self.rollout.enabled(user_id).await {
             return Err(ComputerError::RolloutDisabled);
         }
@@ -195,7 +200,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     #[tracing::instrument(skip(self, user_id), err)]
     pub async fn quote_for_team(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'static>,
         team_id: Uuid,
         size: ComputerSize,
     ) -> Result<Quote, ComputerError> {
@@ -229,7 +234,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     pub async fn offers(
         &self,
         team_id: Uuid,
-        user_id: String,
+        user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<SizeOffer>, ComputerError> {
         self.require_rollout(&user_id).await?;
         let sold_out = self
@@ -283,7 +288,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
             validate_persona(persona)?;
         }
         let name = computer_name(&request)?;
-        let computer_id = ComputerId::new(Uuid::now_v7());
+        let computer_id = ComputerId::new_from_uuid(Uuid::now_v7());
         tracing::Span::current().record("computer_id", tracing::field::display(computer_id));
 
         let entry = self.size_spec(request.size)?;
@@ -427,7 +432,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     pub async fn notify_me(
         &self,
         team_id: Uuid,
-        user_id: String,
+        user_id: MacroUserIdStr<'static>,
         size: ComputerSize,
     ) -> Result<(), ComputerError> {
         self.repo

@@ -20,6 +20,7 @@ use entity_access::{
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -166,9 +167,9 @@ fn team_id<T: RequiredPermission>(
 
 fn user_id<T: RequiredPermission>(
     receipt: &EntityAccessReceipt<T>,
-) -> Result<String, ComputersHttpError> {
+) -> Result<MacroUserIdStr<'static>, ComputersHttpError> {
     match receipt.auth() {
-        EntityAccessAuth::Authenticated(user_id) => Ok(user_id.as_ref().to_owned()),
+        EntityAccessAuth::Authenticated(user_id) => Ok(user_id.clone()),
         _ => Err(ComputersHttpError(ComputerError::BadRequest(
             "computers are managed by signed-in team members".to_owned(),
         ))),
@@ -607,7 +608,9 @@ pub async fn internal_purchase<
         .purchase(PurchaseRequest {
             billing: body.billing,
             team_id: body.team_id,
-            created_by: body.created_by,
+            created_by: MacroUserIdStr::try_from(body.created_by).map_err(|error| {
+                ComputersHttpError(ComputerError::BadRequest(error.to_string()))
+            })?,
             size: body.size,
             name: body.name,
             persona: body.persona,

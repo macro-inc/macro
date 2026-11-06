@@ -1,4 +1,5 @@
 use super::*;
+use macro_user_id::user_id::MacroUserIdStr;
 
 #[tokio::test]
 async fn catalog_changes_only_apply_to_new_purchases() {
@@ -17,7 +18,7 @@ async fn catalog_changes_only_apply_to_new_purchases() {
         .purchase(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|owner@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,
@@ -38,7 +39,7 @@ async fn catalog_changes_only_apply_to_new_purchases() {
         .purchase(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|owner@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,
@@ -87,7 +88,7 @@ async fn price_rotation_does_not_cancel_an_existing_paid_computer() {
         .purchase(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|owner@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,
@@ -101,7 +102,7 @@ async fn price_rotation_does_not_cancel_an_existing_paid_computer() {
         .purchase(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|owner@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,

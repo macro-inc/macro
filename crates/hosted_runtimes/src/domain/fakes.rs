@@ -1,5 +1,7 @@
 //! In-memory fakes of the ports, for domain tests.
 
+use macro_user_id::user_id::MacroUserIdStr;
+
 use crate::domain::ids::ComputerId;
 use harness_id::HarnessId;
 
@@ -333,7 +335,7 @@ impl ComputerRepo for FakeRepo {
     async fn request_notify(
         &self,
         _team_id: Uuid,
-        _user_id: String,
+        _user_id: MacroUserIdStr<'static>,
         _size: ComputerSize,
     ) -> Result<(), FakeError> {
         Ok(())
@@ -342,7 +344,7 @@ impl ComputerRepo for FakeRepo {
     async fn notify_requests(
         &self,
         _team_id: Uuid,
-        _user_id: String,
+        _user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<ComputerSize>, FakeError> {
         Ok(vec![])
     }

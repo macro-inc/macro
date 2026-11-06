@@ -35,7 +35,7 @@ async fn purchase_for_team_refuses_flag_off_before_reserving_or_billing() {
         .purchase_for_team(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,
@@ -53,7 +53,11 @@ async fn team_quote_refuses_flag_off_before_billing() {
         .with_rollout(disabled_rollout());
     assert!(matches!(
         service
-            .quote_for_team("macro|admin@example.com", TEAM, ComputerSize::Standard)
+            .quote_for_team(
+                &MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
+                TEAM,
+                ComputerSize::Standard
+            )
             .await,
         Err(ComputerError::RolloutDisabled)
     ));
@@ -66,7 +70,10 @@ async fn offers_refuse_flag_off_before_billing() {
         .with_rollout(disabled_rollout());
     assert!(matches!(
         service
-            .offers(TEAM, "macro|admin@example.com".to_owned())
+            .offers(
+                TEAM,
+                MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap()
+            )
             .await,
         Err(ComputerError::RolloutDisabled)
     ));
@@ -90,7 +97,7 @@ async fn existing_computer_with_flag_off() -> (
         .purchase(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: Some("Build box".to_owned()),
             persona: None,

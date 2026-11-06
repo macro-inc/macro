@@ -116,7 +116,7 @@ async fn main() -> Result<(), rootcause::Report> {
 
     let now = Utc::now();
     let mut computer = Computer {
-        id: ComputerId::new(Uuid::now_v7()),
+        id: ComputerId::new_from_uuid(Uuid::now_v7()),
         team_id: Uuid::now_v7(),
         name: ComputerName::try_new("fleet smoke test")?,
         size: ComputerSize::Standard,
@@ -134,7 +134,9 @@ async fn main() -> Result<(), rootcause::Report> {
         state: ComputerState::reserved(HostId::new(Uuid::now_v7()), now),
         harness_id: None,
         persona: None,
-        created_by: "incus_fleet_smoke".to_owned(),
+        created_by: macro_user_id::user_id::MacroUserIdStr::try_from(
+            "macro|smoke@example.com".to_owned(),
+        )?,
         created_at: now,
         enrolled_at: None,
         enrollment_generation: Default::default(),
@@ -146,7 +148,7 @@ async fn main() -> Result<(), rootcause::Report> {
     let enrollment = Enrollment {
         computer_id: computer.id,
         generation: hosted_runtimes::domain::persona_credentials::EnrollmentGeneration::new(1),
-        pairing_id: PairingId::new(Uuid::now_v7()),
+        pairing_id: PairingId::new_from_uuid(Uuid::now_v7()),
         device_secret: DeviceSecret::new("smoke-test-not-a-secret".to_owned()),
         name: computer.name.clone(),
         service_url_overrides: BTreeMap::new(),

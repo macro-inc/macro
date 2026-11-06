@@ -1,3 +1,4 @@
+use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Mutex;
 
@@ -148,7 +149,7 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: Some(persona()),
@@ -241,7 +242,7 @@ async fn declined_payment_drops_the_reservation() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Large,
             name: Some("Build box".to_owned()),
             persona: None,
@@ -305,7 +306,7 @@ async fn sold_out_size_is_not_billed() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Xl,
             name: None,
             persona: None,
@@ -337,7 +338,7 @@ async fn persona_with_a_multiline_value_is_rejected_before_anything_is_held() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: Some(multiline),
@@ -363,7 +364,7 @@ async fn release_now_needs_the_name_and_removes_the_item_once() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: Some("Build box".to_owned()),
             persona: None,
@@ -411,7 +412,7 @@ async fn other_teams_cannot_see_or_change_a_computer() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,
@@ -446,9 +447,9 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
         state.phase = Phase::Running { host: HOST };
         state.payment = PaymentOutcome::Paid;
         repo.computers.lock().unwrap().insert(
-            ComputerId::new(Uuid::from_u128(index as u128 + 1)),
+            ComputerId::new_from_uuid(Uuid::from_u128(index as u128 + 1)),
             Computer {
-                id: ComputerId::new(Uuid::from_u128(index as u128 + 1)),
+                id: ComputerId::new_from_uuid(Uuid::from_u128(index as u128 + 1)),
                 team_id: TEAM,
                 name: ComputerName::try_new(&format!("Computer {index}")).unwrap(),
                 size: ComputerSize::Standard,
@@ -467,7 +468,7 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
                 state,
                 harness_id: None,
                 persona: None,
-                created_by: "macro|admin@example.com".to_owned(),
+                created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
                 created_at,
                 enrolled_at: Some(created_at),
                 enrollment_generation: Default::default(),
@@ -490,13 +491,13 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
     assert_eq!(
         *service.repo.events.lock().unwrap(),
         vec![(
-            ComputerId::new(Uuid::from_u128(2)),
+            ComputerId::new_from_uuid(Uuid::from_u128(2)),
             Event::SubscriptionCanceled
         )]
     );
     let newest = service
         .repo
-        .get(ComputerId::new(Uuid::from_u128(2)))
+        .get(ComputerId::new_from_uuid(Uuid::from_u128(2)))
         .await
         .unwrap()
         .unwrap();
@@ -509,7 +510,7 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
 
 #[tokio::test]
 async fn retry_failed_computer_restarts_without_billing() {
-    let computer_id = ComputerId::new(Uuid::from_u128(1));
+    let computer_id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     let repo = FakeRepo::default();
     repo.computers.lock().unwrap().insert(
         computer_id,
@@ -540,7 +541,7 @@ async fn retry_failed_computer_restarts_without_billing() {
             },
             harness_id: None,
             persona: None,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             created_at: now(),
             enrolled_at: Some(now()),
             enrollment_generation: Default::default(),
@@ -580,7 +581,7 @@ async fn retry_failed_computer_restarts_without_billing() {
 
 #[tokio::test]
 async fn retry_running_computer_is_rejected_without_applying_events() {
-    let computer_id = ComputerId::new(Uuid::from_u128(1));
+    let computer_id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     let repo = FakeRepo::default();
     repo.computers.lock().unwrap().insert(
         computer_id,
@@ -611,7 +612,7 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
             },
             harness_id: None,
             persona: None,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             created_at: now(),
             enrolled_at: Some(now()),
             enrollment_generation: Default::default(),
@@ -629,7 +630,7 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
 
 #[tokio::test]
 async fn retry_another_teams_computer_is_not_found() {
-    let computer_id = ComputerId::new(Uuid::from_u128(1));
+    let computer_id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     let repo = FakeRepo::default();
     repo.computers.lock().unwrap().insert(
         computer_id,
@@ -660,7 +661,7 @@ async fn retry_another_teams_computer_is_not_found() {
             },
             harness_id: None,
             persona: None,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             created_at: now(),
             enrolled_at: Some(now()),
             enrollment_generation: Default::default(),
@@ -691,7 +692,7 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "test-admin".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Large,
             name: Some("Build box".to_owned()),
             persona: None,
@@ -772,7 +773,7 @@ async fn provider_error_stays_pending_and_confirmation_keeps_retrying() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "test-admin".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,
@@ -827,7 +828,7 @@ async fn already_confirmed_purchase_completes_confirmation_without_billing_again
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "test-admin".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,
@@ -856,7 +857,7 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
         },
         FixedClock,
     );
-    let id = ComputerId::new(Uuid::from_u128(17));
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(17));
     service
         .repo
         .reserve(
@@ -879,7 +880,7 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
                     crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
                 ),
                 persona: None,
-                created_by: "test-admin".to_owned(),
+                created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
                 extra_items: vec![],
             },
             now(),
@@ -912,7 +913,7 @@ async fn disabled_sales_reject_purchase_before_reserving_capacity() {
         .purchase(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "test-admin".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,

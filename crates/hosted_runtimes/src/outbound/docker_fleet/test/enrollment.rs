@@ -2,6 +2,7 @@ use super::*;
 use crate::domain::enrollment::DeviceSecret;
 use crate::domain::models::ComputerName;
 use crate::domain::persona_credentials::{PersonaCredentials, PersonaEnrollment, PersonaEnv};
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicU32, Ordering},
@@ -38,7 +39,7 @@ struct TestEnrollment {
 
 impl FleetEnrollment for TestEnrollment {
     async fn claimed(&self, pairing: PairingId) -> Result<bool, PersonaCredentialError> {
-        assert_eq!(pairing, PairingId::new(Uuid::from_u128(1)));
+        assert_eq!(pairing, PairingId::new_from_uuid(Uuid::from_u128(1)));
         Ok(self.claimed)
     }
 
@@ -47,7 +48,7 @@ impl FleetEnrollment for TestEnrollment {
         Ok(Enrollment {
             computer_id: COMPUTER_ID,
             generation: EnrollmentGeneration::new(1),
-            pairing_id: PairingId::new(Uuid::from_u128(1)),
+            pairing_id: PairingId::new_from_uuid(Uuid::from_u128(1)),
             device_secret: DeviceSecret::new("fixture-pairing-value".to_owned()),
             name: ComputerName::try_new("Fixture computer").unwrap(),
             service_url_overrides: Default::default(),
@@ -126,7 +127,7 @@ async fn docker_create_claim_gate_controls_issuance_rewrite_and_restart() {
             },
             harness_id: None,
             persona: None,
-            created_by: "fixture-owner".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             created_at: Utc::now(),
             enrolled_at: None,
             enrollment_generation: EnrollmentGeneration::new(if exists { 1 } else { 0 }),

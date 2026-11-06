@@ -25,6 +25,7 @@ ports = ["dep:tokio"]
 [dependencies]
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
+computer_id = { path = "../computer_id" }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
 feature_flags = { path = "../feature_flags" }
 harness_id = { path = "../harness_id" }
@@ -34,6 +35,7 @@ macro_authorization = { path = "../macro_authorization", optional = true, defaul
 macro_env = { path = "../macro_env", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response", optional = true }
+pairing_id = { path = "../pairing_id" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

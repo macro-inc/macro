@@ -548,7 +548,7 @@ where
     ) -> Result<harnesses::domain::models::Harness, ComputerRouteError> {
         if !self
             .rollout
-            .enabled(caller.authorization.user.macro_user_id.as_ref())
+            .enabled(&caller.authorization.user.macro_user_id)
             .await
         {
             return Err(ComputerRouteError::RolloutDisabled);

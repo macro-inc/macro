@@ -32,12 +32,10 @@ use hosted_runtimes::outbound::docker_fleet::{DockerFleet, DockerFleetConfig};
 use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig};
 use hosted_runtimes::outbound::pg::PgComputerRepo;
 use incus_client::{ImageReference, ImageSource, IncusEndpoint, IncusTimeouts};
-use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::Instrument;
-use uuid::Uuid;
 
 use crate::config::{ComputerFleetConfig, Config};
 
@@ -253,13 +251,13 @@ pub trait HostedHarnessService: Send + Sync + 'static {
 
     fn revoke_hosted_harness(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Pin<Box<dyn Future<Output = Result<(), HarnessError>> + Send + '_>>;
 
     fn harness_computer(
         &self,
         harness_id: HarnessId,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<Uuid>, HarnessError>> + Send + '_>>;
+    ) -> Pin<Box<dyn Future<Output = Result<Option<ComputerId>, HarnessError>> + Send + '_>>;
 }
 
 impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for Service {
@@ -280,31 +278,21 @@ impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for S
         &self,
         pairing_id: PairingId,
     ) -> Pin<Box<dyn Future<Output = Result<bool, HarnessError>> + Send + '_>> {
-        Box::pin(HarnessService::hosted_pairing_claimed(
-            self,
-            pairing_id::PairingId::new_from_uuid(pairing_id.into_inner()),
-        ))
+        Box::pin(HarnessService::hosted_pairing_claimed(self, pairing_id))
     }
 
     fn revoke_hosted_harness(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Pin<Box<dyn Future<Output = Result<(), HarnessError>> + Send + '_>> {
-        Box::pin(HarnessService::revoke_hosted_harness(
-            self,
-            computer_id::ComputerId::new_from_uuid(computer_id),
-        ))
+        Box::pin(HarnessService::revoke_hosted_harness(self, computer_id))
     }
 
     fn harness_computer(
         &self,
         harness_id: HarnessId,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<Uuid>, HarnessError>> + Send + '_>> {
-        Box::pin(async move {
-            Ok(HarnessService::harness_computer(self, harness_id)
-                .await?
-                .map(computer_id::ComputerId::as_uuid))
-        })
+    ) -> Pin<Box<dyn Future<Output = Result<Option<ComputerId>, HarnessError>> + Send + '_>> {
+        Box::pin(HarnessService::harness_computer(self, harness_id))
     }
 }
 
@@ -318,29 +306,25 @@ pub struct HostedHarnesses {
 pub enum HostedHarnessError {
     #[error(transparent)]
     Harness(#[from] HarnessError),
-    #[error("the computer's buyer is not a valid user id: {0}")]
-    InvalidBuyer(String),
 }
 
 impl Harnesses for HostedHarnesses {
     type Err = HostedHarnessError;
 
     async fn create_hosted_pairing(&self, computer: &Computer) -> Result<HostedPairing, Self::Err> {
-        let created_by = MacroUserIdStr::try_from(computer.created_by.clone())
-            .map_err(|_| HostedHarnessError::InvalidBuyer(computer.created_by.clone()))?;
         let pairing = self
             .service
             .create_hosted_pairing(CreateHostedPairing {
                 team_id: computer.team_id,
                 name: computer.name.as_str().to_owned(),
-                created_by,
+                created_by: computer.created_by.clone(),
                 // The computer is the team's own isolated VM, run for agents.
                 allow_permission_bypass: true,
-                computer_id: computer_id::ComputerId::new_from_uuid(computer.id.into_inner()),
+                computer_id: computer.id,
             })
             .await?;
         Ok(HostedPairing {
-            pairing_id: PairingId::new(pairing.pairing_id.as_uuid()),
+            pairing_id: pairing.pairing_id,
             device_secret: hosted_runtimes::domain::enrollment::DeviceSecret::new(
                 pairing.device_secret.expose().to_owned(),
             ),
@@ -352,18 +336,11 @@ impl Harnesses for HostedHarnesses {
     }
 
     async fn computer_for(&self, harness_id: HarnessId) -> Result<Option<ComputerId>, Self::Err> {
-        Ok(self
-            .service
-            .harness_computer(harness_id)
-            .await?
-            .map(ComputerId::new))
+        Ok(self.service.harness_computer(harness_id).await?)
     }
 
     async fn revoke(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
-        Ok(self
-            .service
-            .revoke_hosted_harness(computer_id.into_inner())
-            .await?)
+        Ok(self.service.revoke_hosted_harness(computer_id).await?)
     }
 }
 

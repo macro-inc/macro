@@ -1,5 +1,7 @@
 //! What the computer services need from the outside world.
 
+use macro_user_id::user_id::MacroUserIdStr;
+
 use harness_id::HarnessId;
 
 use chrono::{DateTime, Utc};
@@ -200,7 +202,7 @@ pub trait ComputerRepo: Send + Sync + 'static {
     fn request_notify(
         &self,
         team_id: Uuid,
-        user_id: String,
+        user_id: MacroUserIdStr<'static>,
         size: ComputerSize,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
@@ -208,7 +210,7 @@ pub trait ComputerRepo: Send + Sync + 'static {
     fn notify_requests(
         &self,
         team_id: Uuid,
-        user_id: String,
+        user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<ComputerSize>, Self::Err>> + Send;
 }
 

@@ -32,7 +32,7 @@ async fn generations_and_create_outbox_never_persist_issuance_material(pool: PgP
             .enrollment_generation,
         EnrollmentGeneration::new(0)
     );
-    let creates = sqlx::query_scalar!("SELECT count(*) FROM hosted_runtime_effect WHERE computer_id = $1 AND effect->>'effect' = 'create'", computer.id.into_inner())
+    let creates = sqlx::query_scalar!("SELECT count(*) FROM hosted_runtime_effect WHERE computer_id = $1 AND effect->>'effect' = 'create'", computer.id.as_uuid())
         .fetch_one(&pool).await.unwrap();
     assert_eq!(creates, Some(0));
     let computer = repo
@@ -41,7 +41,7 @@ async fn generations_and_create_outbox_never_persist_issuance_material(pool: PgP
         .unwrap()
         .unwrap();
     assert_eq!(computer.enrollment_generation, EnrollmentGeneration::new(1));
-    let outbox = sqlx::query_scalar!("SELECT effect FROM hosted_runtime_effect WHERE computer_id = $1 AND effect->>'effect' = 'create'", computer.id.into_inner())
+    let outbox = sqlx::query_scalar!("SELECT effect FROM hosted_runtime_effect WHERE computer_id = $1 AND effect->>'effect' = 'create'", computer.id.as_uuid())
         .fetch_one(&pool).await.unwrap();
     assert_eq!(
         outbox,
@@ -104,7 +104,7 @@ async fn cleanup_removes_bootstrap_values_from_both_maps_and_keeps_non_secret_co
     });
     sqlx::query!(
         "UPDATE hosted_runtime SET persona = $2 WHERE id = $1",
-        computer.id.into_inner(),
+        computer.id.as_uuid(),
         persona
     )
     .execute(&pool)
@@ -143,18 +143,18 @@ async fn cleanup_removes_bootstrap_values_from_both_maps_and_keeps_non_secret_co
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn enrollment_guard_uses_the_claim_transaction_namespace(pool: PgPool) {
     let repo = PgComputerRepo::new(pool.clone());
-    let id = ComputerId::new(Uuid::from_u128(1));
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     let guard = repo.lock_enrollment(id).await.unwrap();
     let mut claim = pool.begin().await.unwrap();
     let locked = sqlx::query_scalar!(
         r#"SELECT pg_try_advisory_xact_lock(hashtextextended('hosted-enrollment:' || $1::uuid::text, 0)) AS "locked!""#,
-        id.into_inner(),
+        id.as_uuid(),
     ).fetch_one(&mut *claim).await.unwrap();
     assert!(!locked);
     guard.rollback().await.unwrap();
     let locked = sqlx::query_scalar!(
         r#"SELECT pg_try_advisory_xact_lock(hashtextextended('hosted-enrollment:' || $1::uuid::text, 0)) AS "locked!""#,
-        id.into_inner(),
+        id.as_uuid(),
     ).fetch_one(&mut *claim).await.unwrap();
     assert!(locked);
 }
@@ -179,7 +179,7 @@ async fn personas_decode_after_forward_bootstrap_cleanup(pool: PgPool) {
     };
     before_strip.run(&pool).await.unwrap();
     insert_team(&pool).await;
-    let id = ComputerId::new(Uuid::from_u128(1));
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     let persona = serde_json::json!({
         "name": "Worker", "os_user": "worker",
         "config": {"MACRO_API_KEY": "fixture-api-value", "REPO_TOKEN": "fixture-repo-value", "SOME_SECRET": "fixture-secret-value", "REPO_URL": "https://example.com/repo"},
@@ -196,7 +196,7 @@ async fn personas_decode_after_forward_bootstrap_cleanup(pool: PgPool) {
         VALUES ($1, $2, 'Worker', 'standard', 1, $3, $4, 'macro|owner@example.com')"#,
     );
     insert
-        .bind(id.into_inner())
+        .bind(id.as_uuid())
         .bind(TEAM)
         .bind(
             serde_json::to_value(ComputerState::reserved(
@@ -233,7 +233,7 @@ async fn personas_decode_after_forward_bootstrap_cleanup(pool: PgPool) {
     });
     sqlx::query!(
         "UPDATE hosted_runtime SET persona = $2 WHERE id = $1",
-        id.into_inner(),
+        id.as_uuid(),
         persona
     )
     .execute(&pool)

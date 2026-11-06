@@ -1,10 +1,11 @@
 use incus_client::{ImageProtocol, ImageRemote, IncusTimeouts};
+use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
 use uuid::Uuid;
 
 const COMPUTER_ID: ComputerId =
-    ComputerId::new(Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001));
+    ComputerId::new_from_uuid(Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001));
 
 fn endpoint() -> IncusEndpoint {
     IncusEndpoint {
@@ -99,7 +100,7 @@ fn recorded_limits_and_units_survive_catalog_changes() {
         ),
         harness_id: None,
         persona: None,
-        created_by: "macro|owner@example.com".to_owned(),
+        created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         enrolled_at: None,
         enrollment_generation: Default::default(),
@@ -206,7 +207,7 @@ fn a_remote_image_names_its_server_and_protocol() {
         ),
         harness_id: None,
         persona: None,
-        created_by: "macro|owner@example.com".to_owned(),
+        created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         enrolled_at: None,
         enrollment_generation: Default::default(),
@@ -280,7 +281,7 @@ fn listing_keeps_only_computer_instances_and_maps_their_status() {
         .unwrap(),
         [
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(
                     0x0190_0000_0000_7000_8000_0000_0000_0001
                 )),
                 status: InstanceStatus::Running,
@@ -288,7 +289,7 @@ fn listing_keeps_only_computer_instances_and_maps_their_status() {
                 created_at: None,
             },
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(
                     0x0190_0000_0000_7000_8000_0000_0000_0002
                 )),
                 status: InstanceStatus::Frozen,
@@ -296,7 +297,7 @@ fn listing_keeps_only_computer_instances_and_maps_their_status() {
                 created_at: None,
             },
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(
                     0x0190_0000_0000_7000_8000_0000_0000_0003
                 )),
                 status: InstanceStatus::Stopped,
