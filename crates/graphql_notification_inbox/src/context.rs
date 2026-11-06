@@ -242,8 +242,10 @@ impl NotificationInboxGraphqlContext {
 pub(crate) fn to_graphql_error(error: FeedError) -> async_graphql::Error {
     match error {
         FeedError::InvalidInput(message) => async_graphql::Error::new(message),
-        FeedError::Busy(message) => async_graphql::Error::new(message)
-            .extend_with(|_, extensions| extensions.set("code", "RETRY")),
+        FeedError::Busy(message) => async_graphql::ErrorExtensions::extend_with(
+            async_graphql::Error::new(message),
+            |_, extensions| extensions.set("code", "RETRY"),
+        ),
         FeedError::Unavailable(report) => {
             tracing::error!(error = ?report, "notification inbox request failed");
             async_graphql::Error::new("the notification inbox is unavailable")
