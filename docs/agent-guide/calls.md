@@ -104,7 +104,7 @@ without speech data, and reduced-motion preferences show a low, even five-bar
 resting mark. Speech eases into the existing waveform loop and settles back to
 that resting mark when speech stops.
 Speaking participants have the same success-colored ring in tiles and the
-filmstrip, the People roster, header/sidebar avatar groups, and the floating
+filmstrip, the Participants roster, header/sidebar avatar groups, and the floating
 player. Avatar groups without a matching joined room have no speaking ring.
 Browser calls sample existing microphone tracks for quieter speech, with a
 250ms release hold between syllables; muting clears the indicator immediately.
@@ -135,7 +135,7 @@ When it ends the line says how long it lasted. The join card remains above the
 composer while the viewer is outside the call, independent of scroll position.
 
 In the call, the panel opens on desktop and tablet, closed on phones. Its first tab is **Chat**.
-On phones, Chat and People fill the shared sheet's tab row; the sheet opens at 64% height. It shows the channel up to the call's row, opened on the call-specific chat illustration at the default 192px size and “Start the conversation.” when the thread is empty
+On phones, Chat and Participants fill the shared sheet's tab row; Participants keeps the attendee count. The sheet opens at 64% height. It shows the channel up to the call's row, opened on the call-specific chat illustration at the default 192px size and “Start the conversation.” when the thread is empty
 and at the newest message otherwise. The composer shares the messages' horizontal inset
 in both docked and overlay panels while keeping its bottom spacing. The composer opens as a plain message input bound to the call discussion. Reply
 mode appears only after choosing Reply on a message; closing or sending that reply
@@ -391,9 +391,9 @@ editable content and buttons. Releasing Space, losing window focus or leaving th
 view restores mute; a delayed action never mutes a replacement call. These
 bindings use the app hotkey registry without changing the global shortcut sheet.
 
-Open **Chat** and **People** from the button beside the media controls.
+Open **Chat** and **Participants** from the button beside the media controls.
 The sidebar and phone drawer share a compact grouped section switcher at the top.
-**People** shows the live attendee count on phones and a scrollable roster, including
+**Participants** shows the live attendee count on phones and a scrollable roster, including
 you and connected guests but excluding recording agents. Rows show names,
 avatars, microphone and camera state, and a speaking indicator. Off microphones
 and cameras use the failure color. Known users use the shared user icon:
@@ -481,7 +481,7 @@ it; screen-share audio is unchanged.
 ### Work in a call
 
 Behind `enable-agent-work`, the call panel gains a **Work** tab, after Chat and
-People, while any other participant has registered work you can open.
+Participants, while any other participant has registered work you can open.
 Chat stays the default tab. Each participant with work gets a section; rows keep
 their order, and clicking one opens the session in a new split so the call stays
 live. Registering is SDK-only (`session.registerAsWork()`).

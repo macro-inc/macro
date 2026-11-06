@@ -450,9 +450,9 @@ for (const shell of ['docked', 'overlay'] as const) {
         );
       }
       await expectBottom();
-      await page.getByText(/^(People|Participants)( \d+)?$/).click();
+      await page.getByText(/^Participants( \d+)?$/).click();
       await expect(
-        page.getByRole('radio', { name: /^(People|Participants)/ })
+        page.getByRole('radio', { name: /^Participants/ })
       ).toBeChecked();
       await page.getByText('Chat', { exact: true }).click();
       await expectBottom();
@@ -506,9 +506,9 @@ for (const readingHistory of [false, true]) {
       await expect(latest).not.toBeInViewport();
     }
     const previous = await scroll.evaluate((el) => el.scrollTop);
-    await page.getByText(/^(People|Participants)$/).click();
+    await page.getByText(/^Participants$/).click();
     await expect(
-      page.getByRole('radio', { name: /^(People|Participants)/ })
+      page.getByRole('radio', { name: /^Participants/ })
     ).toBeChecked();
     await page.evaluate(
       () =>
@@ -554,6 +554,35 @@ for (const readingHistory of [false, true]) {
     expect(JSON.stringify(posted[0])).toContain('Draft in the call');
   });
 }
+
+test('the participant tab keeps its name and phone count', async ({
+  page,
+}, testInfo) => {
+  await open(page, 'panel', {
+    status: { state: 'live' },
+    shell: testInfo.project.name === 'phone' ? 'overlay' : 'docked',
+  });
+  await expect(page.getByRole('radio', { name: 'Chat' })).toBeVisible({
+    timeout: 30_000,
+  });
+  const directory = process.env.CALL_REPRO_DIR;
+  if (directory) {
+    await mkdir(directory, { recursive: true });
+    const path = `${directory}/L-80-${testInfo.project.name}-${process.env.CALL_REPRO_PHASE ?? 'after'}.png`;
+    await page.screenshot({ path });
+    await testInfo.attach('Participant tab label', {
+      path,
+      contentType: 'image/png',
+    });
+  }
+  const name =
+    testInfo.project.name === 'phone' ? 'Participants 2' : 'Participants';
+  await expect(page.getByRole('radio', { name, exact: true })).toBeVisible();
+  await page.getByText('Participants', { exact: true }).click();
+  await expect(
+    page.getByText('Call participant', { exact: true })
+  ).toBeVisible();
+});
 
 for (const baseline of [false, true]) {
   for (const work of ['present', 'empty', 'off'] as const) {

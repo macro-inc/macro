@@ -138,7 +138,7 @@ export function CallChatPanel(props: {
               },
               {
                 value: 'participants',
-                label: t('calls.people'),
+                label: t('calls.participants'),
                 count: isMobile()
                   ? props.participantCount.toLocaleString(formatLocale())
                   : undefined,
