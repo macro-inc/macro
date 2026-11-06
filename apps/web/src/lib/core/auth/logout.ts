@@ -55,36 +55,41 @@ const unauthenticatedUserInfo: UserInfoData = {
   createdAt: undefined,
 };
 
-export async function clearLocalAuthSession(
+export function clearLocalAuthSession(
   cause: 'logout' | 'session-expired' = 'logout'
 ) {
-  await clearNativeDiagnostics();
-  clearPipedreamCallbacks();
-  document.cookie =
-    'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
-  setEmailOutboxSession(undefined);
-  syncLoginStorage(false);
-  const documentContextsCleared = clearOfflineDocumentContexts();
-  clearDocumentQueryCache(queryClient);
-  clearTeamCalendarQueries();
-  // Start every wipe before waiting, including stores not hydrated this session.
-  const results = await Promise.allSettled([
-    // Reads the queue before the cache wipe below deletes it.
-    recordGraphqlMutationQueueCleared(cause),
-    Promise.resolve().then(clearComposerStorage),
-    documentContextsCleared,
-    clearRegisteredCaches(),
-    queryPersistence.clear(),
-    clearLocalDrafts(),
-  ]);
-  if (results.some((result) => result.status === 'rejected')) {
-    await rotateCacheScope();
-  }
-  // Only after the wipes: clearing the cache needs its registered host.
-  setGraphqlSoupSessionActive(false);
-  resetGraphqlSoupDoneSession();
-  queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
-  clearMcpAuthAttempts();
+  return clearRegisteredCaches(async (clearCaches) => {
+    await clearNativeDiagnostics();
+    clearPipedreamCallbacks();
+    document.cookie =
+      'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
+    setEmailOutboxSession(undefined);
+    syncLoginStorage(false);
+    const documentContextsCleared = clearOfflineDocumentContexts();
+    clearDocumentQueryCache(queryClient);
+    clearTeamCalendarQueries();
+    // Start every wipe before waiting, including stores not hydrated this session.
+    const results = await Promise.allSettled([
+      // Reads the queue before the cache wipe below deletes it.
+      recordGraphqlMutationQueueCleared(cause),
+      Promise.resolve().then(clearComposerStorage),
+      documentContextsCleared,
+      clearCaches(),
+      queryPersistence.clear(),
+      clearLocalDrafts(),
+    ]);
+    if (results.some((result) => result.status === 'rejected')) {
+      await rotateCacheScope();
+    }
+    // Only after the wipes: clearing the cache needs its registered host.
+    setGraphqlSoupSessionActive(false);
+    resetGraphqlSoupDoneSession();
+    queryClient.setQueryData(
+      authKeys.userInfo.queryKey,
+      unauthenticatedUserInfo
+    );
+    clearMcpAuthAttempts();
+  });
 }
 
 export function useLogout() {

@@ -1,12 +1,19 @@
+import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
+import type { CacheHost } from '@graphql-cache/host/types';
+import {
+  beginCacheWriteSession,
+  captureCacheWriteSession,
+} from '@graphql-cache/session-writes';
 import { notificationKeys } from '@queries/notification/keys';
 import { graphqlSoupKeys } from '@queries/soup/graphql/keys';
 import { isCancelledError, QueryClient } from '@tanstack/solid-query';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
-const { client, isTauri } = vi.hoisted(() => ({
+const { client, isTauri, soup } = vi.hoisted(() => ({
   client: { current: undefined as QueryClient | undefined },
   isTauri: vi.fn(() => false),
+  soup: { client: {}, host: undefined as CacheHost | undefined },
 }));
 vi.mock('@queries/client', () => ({
   queryPersistence: {
@@ -43,10 +50,17 @@ vi.mock('@core/util/platform', async (importOriginal) => ({
   isTauri,
 }));
 vi.mock('@core/util/cookies', () => ({ syncLoginStorage: vi.fn() }));
-vi.mock('@graphql-cache/lifecycle', () => ({
-  clearRegisteredCaches: vi.fn(async () => {}),
-}));
+vi.mock('@graphql-cache/lifecycle', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@graphql-cache/lifecycle')>();
+  return {
+    ...original,
+    clearRegisteredCaches: vi.fn(original.clearRegisteredCaches),
+  };
+});
 vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupClient: () => soup.client,
+  getGraphqlSoupCacheHost: () => soup.host,
   recordGraphqlMutationQueueCleared: vi.fn(async () => {}),
   setGraphqlSoupSessionActive: vi.fn(),
 }));
@@ -66,7 +80,11 @@ vi.mock('./push-registration-lifecycle', () => ({
   unregisterPushRegistrationsForLogout: vi.fn(async () => {}),
 }));
 
-import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
+import {
+  clearRegisteredCaches,
+  registerCacheHost,
+  replaceCacheWriteSession,
+} from '@graphql-cache/lifecycle';
 import {
   clearLocalDrafts,
   flushLocalDrafts,
@@ -82,9 +100,13 @@ describe('logout GraphQL session teardown', () => {
   it('ends the GraphQL session only after the cache wipe', async () => {
     client.current = new QueryClient();
     const order: string[] = [];
-    vi.mocked(clearRegisteredCaches).mockImplementationOnce(async () => {
-      order.push('wipe');
-    });
+    vi.mocked(clearRegisteredCaches).mockImplementationOnce(
+      async (clearSession) => {
+        await clearSession?.(async () => {
+          order.push('wipe');
+        });
+      }
+    );
     vi.mocked(setGraphqlSoupSessionActive).mockImplementationOnce(() => {
       order.push('teardown');
     });
@@ -274,4 +296,46 @@ describe('local draft logout warning', () => {
       dispose();
     }
   });
+});
+
+it('keeps replacement contact writes closed until every logout wipe and teardown finishes', async () => {
+  client.current = new QueryClient();
+  await beginCacheWriteSession(async () => {}).ready;
+  let wiped!: () => void;
+  const cacheWiped = new Promise<void>((resolve) => {
+    wiped = resolve;
+  });
+  const host = {
+    ...createNoopCacheHost(),
+    disabled: false,
+    clear: async () => {
+      wiped();
+      return createNoopCacheHost().clear();
+    },
+  };
+  const unregister = registerCacheHost(host);
+  let release!: () => void;
+  const otherWipe = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.mocked(clearLocalDrafts).mockImplementationOnce(() => otherWipe);
+  const logout = clearLocalAuthSession();
+  await cacheWiped;
+  const replacement = replaceCacheWriteSession();
+  const capturedDuringLogout = captureCacheWriteSession();
+  const wrote = vi.fn(async () => {});
+  try {
+    await capturedDuringLogout.run(wrote);
+    expect(replacement.isCurrent()).toBe(false);
+    expect(wrote).not.toHaveBeenCalled();
+  } finally {
+    release();
+    await Promise.all([logout, replacement.ready]);
+    unregister();
+    client.current.clear();
+  }
+  expect(replacement.isCurrent()).toBe(true);
+  expect(capturedDuringLogout.isCurrent()).toBe(false);
+  await captureCacheWriteSession().run(wrote);
+  expect(wrote).toHaveBeenCalledOnce();
 });
