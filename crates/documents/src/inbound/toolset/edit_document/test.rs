@@ -588,7 +588,10 @@ impl EditingWorkerService for FakeEditingWorker {
         _document_id: &str,
         _document_token: &DocumentPermissionToken,
         _request: &crate::domain::spreadsheet::SpreadsheetRequest,
-    ) -> anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse> {
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetResponse,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
         panic!("unexpected spreadsheet call")
     }
 
