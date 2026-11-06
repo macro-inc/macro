@@ -9,6 +9,7 @@ on one Nix-declared kind node. This is a local development runtime only.
 
 - `run.py`: ownership, cluster lifecycle, Compose conversion, initialization.
 - `nix/local-kubernetes.nix`: pinned tools and node configuration.
+- `local.env.example`: explicit stub provider metadata for offline smoke tests.
 - `xtask_local/src/local/kubernetes.rs`: shared local initialization.
 
 ## Scope
