@@ -1,3 +1,4 @@
+import { formatLocale, t } from '@app/lib/i18n';
 import { startUiOperation } from '@app/observability/ui-operation';
 import { ThrownResultError } from '@core/util/result';
 import XIcon from '@icon/system/regular/x.svg';
@@ -18,6 +19,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { formatBillingAmount } from '../core/format-billing-amount';
 import { recommendedVoice, type VoicePickerSource } from '../core/voices';
 import { AgentPortrait, type AgentPortraitSource } from './agent-portrait';
@@ -65,7 +67,7 @@ export function AgentFormSurface(props: {
             as={Button}
             variant="ghost"
             size="icon-sm"
-            aria-label={props.closeLabel ?? 'Close invitation'}
+            aria-label={props.closeLabel ?? t('agentInvite.close')}
           >
             <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
@@ -209,7 +211,19 @@ export function InviteAgentForm(props: {
     }
   };
   const price = (amount: number, quote: TeamAgentQuote) =>
-    formatBillingAmount(amount, quote.currency);
+    formatBillingAmount(amount, quote.currency, formatLocale());
+  const sizeLabel = (size: ComputerSize) =>
+    match(size)
+      .with('standard', () => t('settingsBilling.standard'))
+      .with('large', () => t('settingsBilling.large'))
+      .with('xl', () => t('settingsBilling.xl'))
+      .exhaustive();
+  const intervalLabel = (quote: TeamAgentQuote) =>
+    t(
+      quote.interval === 'month'
+        ? 'settingsBilling.month'
+        : 'settingsBilling.year'
+    );
   function IdentityFields() {
     return (
       <div class="space-y-4">
@@ -218,10 +232,10 @@ export function InviteAgentForm(props: {
           onChange={setName}
           validationState={nameTooLong() ? 'invalid' : 'valid'}
         >
-          <TextField.Label>Name</TextField.Label>
+          <TextField.Label>{t('agentInvite.name')}</TextField.Label>
           <TextField.Input maxLength={128} required />
           <TextField.ErrorMessage>
-            Use 64 characters or fewer.
+            {t('agentInvite.characterLimit', { count: 64 })}
           </TextField.ErrorMessage>
         </TextField>
         <TextField
@@ -229,10 +243,10 @@ export function InviteAgentForm(props: {
           onChange={setRole}
           validationState={roleTooLong() ? 'invalid' : 'valid'}
         >
-          <TextField.Label>Role / job description</TextField.Label>
+          <TextField.Label>{t('agentInvite.role')}</TextField.Label>
           <TextField.TextArea maxLength={8000} required />
           <TextField.ErrorMessage>
-            Use 4,000 characters or fewer.
+            {t('agentInvite.characterLimit', { count: 4000 })}
           </TextField.ErrorMessage>
         </TextField>
       </div>
@@ -241,7 +255,7 @@ export function InviteAgentForm(props: {
   return (
     <AgentFormSurface
       open={props.open}
-      title={review() ? 'Confirm agent invitation' : 'Invite agent'}
+      title={review() ? t('agentInvite.confirmTitle') : t('common.inviteAgent')}
       close={close}
       actions={
         <>
@@ -250,7 +264,7 @@ export function InviteAgentForm(props: {
             disabled={busy()}
             onClick={() => (review() ? back() : close())}
           >
-            {review() ? 'Back' : 'Cancel'}
+            {review() ? t('common.back') : t('common.cancel')}
           </Button>
           <Show
             when={review()}
@@ -278,7 +292,7 @@ export function InviteAgentForm(props: {
                   operation.afterPaint();
                 }}
               >
-                Review price
+                {t('agentInvite.reviewPrice')}
               </Button>
             }
           >
@@ -295,7 +309,7 @@ export function InviteAgentForm(props: {
               }
               onClick={confirm}
             >
-              {busy() ? 'Inviting…' : 'Confirm and invite'}
+              {busy() ? t('agentInvite.inviting') : t('agentInvite.confirm')}
             </Button>
           </Show>
         </>
@@ -303,12 +317,9 @@ export function InviteAgentForm(props: {
     >
       <Show when={props.source.needsSubscription()}>
         <div role="alert" class="space-y-2 mb-4 text-sm">
-          <p>
-            Your team needs an active plan before you can invite an agent. Ask
-            the team owner to activate a plan in Billing.
-          </p>
+          <p>{t('agentInvite.needsPlan')}</p>
           <Button as="a" variant="secondary" href="/app/settings/billing">
-            Go to billing
+            {t('agentInvite.goToBilling')}
           </Button>
         </div>
       </Show>
@@ -317,11 +328,13 @@ export function InviteAgentForm(props: {
         fallback={
           <div class="space-y-4 text-sm">
             <p class="break-words">
-              Invite <strong>{name()}</strong> with a{' '}
-              <span class="capitalize">{props.size}</span> computer.
+              {t('agentInvite.reviewDescription', {
+                name: name(),
+                size: sizeLabel(props.size),
+              })}
             </p>
             <Show when={props.source.quoteLoading()}>
-              <p role="status">Loading price…</p>
+              <p role="status">{t('agentInvite.loadingPrice')}</p>
             </Show>
             <Show
               when={
@@ -329,9 +342,9 @@ export function InviteAgentForm(props: {
               }
             >
               <div role="alert">
-                Couldn't load the price.{' '}
+                {t('agentInvite.priceFailed')}{' '}
                 <Button variant="secondary" onClick={props.source.reloadQuote}>
-                  Try again
+                  {t('agentInvite.tryAgain')}
                 </Button>
               </div>
             </Show>
@@ -339,40 +352,42 @@ export function InviteAgentForm(props: {
               {(quote) => (
                 <Show
                   when={!quote().included}
-                  fallback={<p class="font-semibold">Included for Macro</p>}
+                  fallback={
+                    <p class="font-semibold">{t('settingsBilling.included')}</p>
+                  }
                 >
                   <dl class="grid grid-cols-2 gap-3">
-                    <dt>Agent seat</dt>
+                    <dt>{t('agentInvite.agentSeat')}</dt>
                     <dd class="text-right">{price(quote().seat, quote())}</dd>
-                    <dt>Computer</dt>
+                    <dt>{t('settingsBilling.computer')}</dt>
                     <dd class="text-right">
                       {price(quote().computer, quote())}
                     </dd>
-                    <dt class="font-semibold">Total per {quote().interval}</dt>
+                    <dt class="font-semibold">
+                      {t('settingsBilling.total', {
+                        interval: intervalLabel(quote()),
+                      })}
+                    </dt>
                     <dd class="text-right font-semibold">
                       {price(quote().total, quote())}
                     </dd>
                   </dl>
                   <p class="text-ink-muted">
-                    The seat and computer are added to your team's subscription
-                    together.
+                    {t('agentInvite.subscriptionChange')}
                   </p>
                 </Show>
               )}
             </Show>
             <Show when={createFailed()}>
               <p role="alert">
-                {failureMessage() ||
-                  "Couldn't confirm the invitation. Check the members list before trying again."}
+                {failureMessage() || t('agentInvite.invitationFailed')}
               </p>
             </Show>
           </div>
         }
       >
         <div class="space-y-4">
-          <p class="text-sm text-ink-muted">
-            Give your new teammate a role and a computer.
-          </p>
+          <p class="text-sm text-ink-muted">{t('agentInvite.intro')}</p>
           <Show when={props.portrait} fallback={<IdentityFields />}>
             {(source) => (
               <AgentPortrait
@@ -393,10 +408,10 @@ export function InviteAgentForm(props: {
             onChange={setPersonality}
             validationState={personalityTooLong() ? 'invalid' : 'valid'}
           >
-            <TextField.Label>Personality</TextField.Label>
+            <TextField.Label>{t('agentInvite.personality')}</TextField.Label>
             <TextField.TextArea maxLength={8000} required />
             <TextField.ErrorMessage>
-              Use 4,000 characters or fewer.
+              {t('agentInvite.characterLimit', { count: 4000 })}
             </TextField.ErrorMessage>
           </TextField>
           <Show when={props.voices}>
@@ -415,9 +430,9 @@ export function InviteAgentForm(props: {
               if (value === 'standard' || value === 'large' || value === 'xl')
                 props.setSize(value);
             }}
-            aria-label="Computer size"
+            aria-label={t('agentInvite.computerSize')}
           >
-            <RadioGroup.Label>Computer size</RadioGroup.Label>
+            <RadioGroup.Label>{t('agentInvite.computerSize')}</RadioGroup.Label>
             <For each={['standard', 'large', 'xl'] as const}>
               {(size) => (
                 <RadioGroup.Item
@@ -427,14 +442,17 @@ export function InviteAgentForm(props: {
                   <RadioGroup.ItemControl class="self-center" />
                   <div class="flex items-baseline justify-between gap-2 min-w-0">
                     <RadioGroup.ItemLabel class="capitalize text-sm font-medium">
-                      {size === 'xl' ? 'XL' : size}
+                      {sizeLabel(size)}
                     </RadioGroup.ItemLabel>
                     <Show when={props.source.quoteForSize?.(size)}>
                       {(quote) => (
                         <span class="shrink-0 text-xs tabular-nums text-ink-muted">
                           {quote().included
-                            ? 'Included'
-                            : `${price(quote().computer, quote())}/${quote().interval}`}
+                            ? t('agentInvite.included')
+                            : t('agentInvite.pricePerInterval', {
+                                amount: price(quote().computer, quote()),
+                                interval: intervalLabel(quote()),
+                              })}
                         </span>
                       )}
                     </Show>
@@ -442,24 +460,26 @@ export function InviteAgentForm(props: {
                   <RadioGroup.ItemDescription class="col-start-2 flex flex-wrap gap-x-1.5 gap-y-1 text-xs text-ink-muted">
                     <Show
                       when={props.source.specsForSize(size)}
-                      fallback="Specifications unavailable"
+                      fallback={t('agentInvite.specsUnavailable')}
                     >
                       {(spec) => (
                         <>
                           <span class="whitespace-nowrap">
-                            {spec().vcpus} vCPUs
+                            {t('agentInvite.vcpus', { count: spec().vcpus })}
                           </span>
                           <span class="whitespace-nowrap">
                             <span aria-hidden="true" class="mr-1.5">
                               ·
                             </span>
-                            {spec().memoryGb} GB RAM
+                            {t('agentInvite.memory', {
+                              count: spec().memoryGb,
+                            })}
                           </span>
                           <span class="whitespace-nowrap">
                             <span aria-hidden="true" class="mr-1.5">
                               ·
                             </span>
-                            {spec().diskGb} GB disk
+                            {t('agentInvite.disk', { count: spec().diskGb })}
                           </span>
                         </>
                       )}

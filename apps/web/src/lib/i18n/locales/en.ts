@@ -1,5 +1,6 @@
 import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
+import agentInvite from './en/agent-invite';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
 import calls from './en/calls';
@@ -32,6 +33,7 @@ import viewMenus from './en/view-menus';
  */
 export default {
   agentAutoArchive,
+  agentInvite,
   accountManager,
   agentSetup,
   agentWork,

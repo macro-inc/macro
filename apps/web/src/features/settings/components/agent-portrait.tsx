@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import UserIcon from '@icon/system/regular/user.svg';
@@ -32,7 +33,9 @@ export function AgentPortrait(props: {
   children?: JSX.Element;
 }) {
   const [pending, setPending] = createSignal(false);
-  const [error, setError] = createSignal<string>();
+  const [error, setError] = createSignal<
+    'agentInvite.profileChanged' | 'agentInvite.photoFailed'
+  >();
   let revision = 0;
   let disposed = false;
   let generated = false;
@@ -56,10 +59,10 @@ export function AgentPortrait(props: {
       )
         props.onChange(url);
       else if (!disposed && current === revision)
-        setError('The name changed. Generate a new photo for this profile.');
+        setError('agentInvite.profileChanged');
     } catch {
       if (!disposed && current === revision)
-        setError("Couldn't prepare the photo. Try again or upload one.");
+        setError('agentInvite.photoFailed');
     } finally {
       if (!disposed && current === revision) {
         setPending(false);
@@ -97,6 +100,10 @@ export function AgentPortrait(props: {
       }
     )
   );
+  const errorText = () => {
+    const key = error();
+    return key ? t(key) : undefined;
+  };
   const waitingForPhoto = () =>
     pending() || (!!props.name.trim() && !props.avatar && !error());
 
@@ -109,7 +116,7 @@ export function AgentPortrait(props: {
             fallback={
               <div
                 role="status"
-                aria-label="Generating agent photo"
+                aria-label={t('agentInvite.generatingPhoto')}
                 class="size-full skeleton-shimmer bg-skeleton"
               />
             }
@@ -120,7 +127,7 @@ export function AgentPortrait(props: {
             >
               <img
                 src={props.avatar}
-                alt="Agent portrait"
+                alt={t('agentInvite.portrait')}
                 class="size-full object-cover"
               />
             </Show>
@@ -133,9 +140,7 @@ export function AgentPortrait(props: {
         </div>
         <div class="min-w-0 space-y-4">{props.children}</div>
       </div>
-      <p class="text-xs text-ink-muted">
-        A fictional face, generated from your agent's profile.
-      </p>
+      <p class="text-xs text-ink-muted">{t('agentInvite.fictionalFace')}</p>
       <div class="flex flex-wrap gap-2">
         <Button
           variant="secondary"
@@ -143,7 +148,7 @@ export function AgentPortrait(props: {
           disabled={pending() || !props.name.trim()}
           onClick={generate}
         >
-          Generate another
+          {t('agentInvite.generateAnother')}
         </Button>
         <Button
           variant="secondary"
@@ -151,7 +156,7 @@ export function AgentPortrait(props: {
           disabled={pending()}
           onClick={() => picker?.click()}
         >
-          Upload photo
+          {t('agentInvite.uploadPhoto')}
         </Button>
       </div>
       <input
@@ -159,7 +164,7 @@ export function AgentPortrait(props: {
         type="file"
         accept="image/*"
         class="hidden"
-        aria-label="Upload agent photo"
+        aria-label={t('agentInvite.uploadAgentPhoto')}
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           event.currentTarget.value = '';
@@ -174,7 +179,7 @@ export function AgentPortrait(props: {
       />
       <Show when={pending()}>
         <p role="status" class="text-xs text-ink-muted">
-          Preparing photo…
+          {t('agentInvite.preparingPhoto')}
         </p>
       </Show>
       <Show when={error()}>
@@ -182,14 +187,14 @@ export function AgentPortrait(props: {
           role="alert"
           class="flex flex-wrap items-center gap-2 text-xs text-failure"
         >
-          <span>{error()}</span>
+          <span>{errorText()}</span>
           <Button
             variant="secondary"
             size="sm"
             disabled={pending() || !props.name.trim()}
             onClick={generate}
           >
-            Try again
+            {t('agentInvite.tryAgain')}
           </Button>
         </div>
       </Show>

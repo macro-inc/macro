@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
 import { enableTeamAgents } from '@core/constant/featureFlags';
 import { queryReadyGate } from '@queries/gate';
@@ -19,7 +20,7 @@ export function ConnectedTeamBillingBreakdown(props: {
   return (
     <Show
       when={!flag().loading}
-      fallback={<p role="status">Loading agent features…</p>}
+      fallback={<p role="status">{t('agentInvite.loadingFeatures')}</p>}
     >
       <Show when={flag().enabled} fallback={<BillingComputers />}>
         <TeamBillingBreakdown

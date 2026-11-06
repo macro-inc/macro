@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { TraceFlow, usePending } from '@app/observability/flow';
 import { enableTeamAgents } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -98,10 +99,12 @@ export function InviteAgentDialog(props: {
     <Show when={props.open}>
       <Show
         when={!flag().loading}
-        fallback={<p role="status">Loading agent features…</p>}
+        fallback={<p role="status">{t('agentInvite.loadingFeatures')}</p>}
       >
         <Show when={flag().enabled}>
-          <Suspense fallback={<p role="status">Loading invitation…</p>}>
+          <Suspense
+            fallback={<p role="status">{t('agentInvite.loadingInvitation')}</p>}
+          >
             <TraceFlow
               name="team-agent.invite.open"
               attributes={{

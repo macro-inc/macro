@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -82,7 +83,7 @@ export function VoicePicker(props: {
   return (
     <div class="space-y-2">
       <div id={label} class="text-sm font-medium">
-        Voice
+        {t('agentInvite.voice')}
       </div>
       <div class="flex items-center gap-2">
         <Combobox<Voice>
@@ -107,7 +108,9 @@ export function VoicePicker(props: {
             !props.source.choices().length
           }
           placeholder={
-            props.source.loading() ? 'Loading voices…' : 'Choose a voice'
+            props.source.loading()
+              ? t('agentInvite.loadingVoices')
+              : t('agentInvite.chooseVoice')
           }
           itemComponent={(item) => (
             <Combobox.Item
@@ -138,7 +141,7 @@ export function VoicePicker(props: {
               aria-labelledby={label}
               class="min-w-0 w-full bg-transparent text-sm text-ink outline-none"
             />
-            <Combobox.Trigger aria-label="Show voices">
+            <Combobox.Trigger aria-label={t('agentInvite.showVoices')}>
               <CaretDownIcon class="size-3" />
             </Combobox.Trigger>
           </Combobox.Control>
@@ -158,23 +161,23 @@ export function VoicePicker(props: {
           onClick={() => fireAndForget(preview(), 'team-agent.voice.preview')}
         >
           {loading()
-            ? 'Cancel sample'
+            ? t('agentInvite.cancelSample')
             : playing()
-              ? 'Stop sample'
-              : 'Play sample'}
+              ? t('agentInvite.stopSample')
+              : t('agentInvite.playSample')}
         </Button>
       </div>
       <Show when={props.source.failed()}>
         <p role="alert" class="text-sm text-failure">
-          Couldn't load voices.{' '}
+          {t('agentInvite.voicesFailed')}{' '}
           <Button variant="link" onClick={props.source.retry}>
-            Try again
+            {t('agentInvite.tryAgain')}
           </Button>
         </p>
       </Show>
       <Show when={failed()}>
         <p role="alert" class="text-sm text-failure">
-          Couldn't play this sample. Try again.
+          {t('agentInvite.sampleFailed')}
         </p>
       </Show>
     </div>
