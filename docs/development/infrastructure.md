@@ -169,8 +169,8 @@ local resources.
 | Manual, observability host only | `deploy-observability.yml`: builds the NixOS image, publishes and smoke-boots the AMI, then replaces the prod observability host (a few minutes of Grafana, Loki and Tempo downtime). `dry_run`, the default, stops before `pulumi up`. See `infra/stacks/observability/README.md`, "Deploying" |
 
 - Only stacks listed in `services-config.json` deploy automatically. `gateway`,
-  `macrodb`, `doppler-projects`, `monitoring`, `observability`,
-  `observability-deploy` and a few others are manual.
+  `macrodb`, `doppler-projects`, `monitoring`, `observability` and a few
+  others are manual.
 - Dev MacroDB's primary and replica are both configured as `db.t4g.large`
   (8 GiB). Replica resizing requires a separate `macrodb` deployment; dev's
   `applyImmediately` setting makes that resize interrupt replica connections.

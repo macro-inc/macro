@@ -386,17 +386,22 @@ to roll out. The steps, all in `deploy/release.ts`:
    imports an encrypted snapshot through the `macro-observability-vmimport` role
    and registers a private AMI tagged `project`, `ImageSHA256`, `NixSystem` and
    `GitCommit`. A rerun reuses an AMI or import task for the same VHD.
-4. **Smoke boot.** `deploy/smoke.ts` launches the AMI as an `m7i.xlarge` in the
-   host's subnet and security group, with its own blank 20 GiB volume, the
-   `observability-smoke-*` buckets and the `observability/smoke` secret filled
-   with fresh throwaway values. Never production storage: Loki and Tempo
-   compactors delete blocks they consider expired. The smoke host's role has no
-   CloudWatch, SNS or production access, and its alarm topic does not exist, so
-   it cannot page anyone. Over SSM it waits up to 15 minutes for every unit to be
+4. **Smoke boot.** `deploy/smoke.ts` creates this run's own resources, named
+   after the run: two buckets (`observability-smoke-<run>-logs` and `-traces`),
+   a secret `observability/smoke-<run>` of fresh throwaway values, and an IAM
+   role and instance profile under the path `/observability-smoke/` that may
+   only reach those buckets and that secret, plus SSM. It launches the AMI as an
+   `m7i.xlarge` in the host's subnet and security group with a blank 20 GiB
+   volume. Never production storage: Loki and Tempo compactors delete blocks they
+   consider expired. The smoke host has no CloudWatch, SNS or production access,
+   and its alarm topic does not exist, so it cannot page anyone. Over SSM it waits up to 15 minutes for every unit to be
    active and for `/healthz`, `/goalert-healthz`, Loki, Tempo and Prometheus to
    answer, then sends an OTLP log and span and finds them in Loki and Tempo, and
    checks ingestion refuses a missing token. Cleanup stops the host, detaches and
-   terminates it and deletes the volume, the same calls a rollout makes. A pass
+   terminates it (the calls a rollout makes), then deletes the volume, buckets,
+   secret, instance profile and role. It sweeps every smoke resource, not only
+   this run's, so a cancelled or crashed run's leftovers go too, and a cleanup
+   that cannot delete something fails the run. A pass
    tags the AMI `Smoke=passed` and `ImageSource:<hash>`; a failure tags
    `Smoke=failed`, prints the failing units' journals and the console, and stops
    the run with production untouched.
@@ -416,9 +421,10 @@ to roll out. The steps, all in `deploy/release.ts`:
 
 One rollout runs at a time (concurrency group `deploy-observability-prod`,
 never cancelled). Pull requests that change the image run only the build, with
-no credentials, so a broken image fails before merge. The workflow assumes
-`macro-observability-deploy` through GitHub OIDC; there are no stored AWS keys.
-Pulumi uses the repository's `PULUMI_ACCESS_TOKEN`, like every other deploy.
+no credentials, so a broken image fails before merge. The deploy job uses the
+repository's deploy credentials (`AWS_ACCESS_KEY`, `AWS_SECRET_ACCESS_KEY` and
+`PULUMI_ACCESS_TOKEN`), the same ones `deploy_on_push` and `deploy_web_app` use.
+Nothing needs setting up first.
 
 **If the new host fails after the rollout.** The old instance is already gone:
 the stack deletes it before creating the replacement, since one host owns the
@@ -458,11 +464,9 @@ image built from `main` is the source of truth. For host changes or security
 updates, update `nixos/host.nix` or the pinned input with
 `nix flake update nixpkgs`, merge, then deploy.
 
-**Bootstrap.** The workflow's role and smoke resources live in the separate
-`infra/stacks/observability-deploy` stack (see its `AGENTS.md`), deployed by
-hand once, so the workflow cannot change its own permissions. It needs the
-image bucket and import role above, which predate it, and the GitHub OIDC
-provider this stack creates.
+**Prerequisites.** The image bucket and `macro-observability-vmimport` role
+above, which earlier hand publishing created. Nothing persistent exists for the
+smoke boot; each run creates and deletes its own resources.
 
 To publish by hand, with credentials that may write the bucket and import:
 

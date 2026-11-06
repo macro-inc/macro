@@ -10,11 +10,10 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { gunzipSync } from 'node:zlib';
-import { deployStatements } from '../../observability-deploy/policy';
 import {
   type StackResources,
   replacementChecks,
-  roleArnOf,
+  principalArnOf,
   stackResources,
 } from './iam-preflight';
 import { IMAGE_INPUTS, imageFiles, imageSourceKey } from './image-key';
@@ -22,9 +21,11 @@ import { DURABLE, INSTANCE, checkPlan, resourceOf } from './plan';
 import { imageFile } from './publish';
 import {
   SMOKE_ALARM_TOPIC,
-  SMOKE_PROJECT_TAG,
+  SMOKE_PREFIX,
   UNITS,
   hostCheckScript,
+  smokeHostPolicy,
+  smokeNames,
   smokeSecret,
   smokeUserData,
 } from './smoke';
@@ -210,18 +211,72 @@ describe('plan check', () => {
 });
 
 describe('smoke boot', () => {
+  const names = smokeNames('42135788731-2');
   const target = {
-    ami: 'ami-0123456789abcdef0',
-    subnetId: 'subnet-1',
-    securityGroupId: 'sg-1',
-    availabilityZone: 'us-east-2a',
-    instanceProfile: 'macro-observability-smoke-host',
-    secretArn:
-      'arn:aws:secretsmanager:us-east-2:569036502058:secret:observability/smoke-AbCdEf',
-    logsBucket: 'observability-smoke-logs-1234567',
-    tracesBucket: 'observability-smoke-traces-1234567',
-    runId: '1-1',
+    instanceProfile: names.role,
+    secretArn: `arn:aws:secretsmanager:us-east-2:569036502058:secret:${names.secret}-AbCdEf`,
+    logsBucket: names.logsBucket,
+    tracesBucket: names.tracesBucket,
   };
+
+  test('names every resource after the run, inside the sweep prefixes', () => {
+    expect(names).toEqual({
+      role: 'observability-smoke-42135788731-2',
+      logsBucket: 'observability-smoke-42135788731-2-logs',
+      tracesBucket: 'observability-smoke-42135788731-2-traces',
+      secret: 'observability/smoke-42135788731-2',
+    });
+    for (const bucket of [names.logsBucket, names.tracesBucket]) {
+      expect(bucket).toMatch(/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/);
+      expect(bucket.startsWith(SMOKE_PREFIX)).toBe(true);
+    }
+    expect(() => smokeNames('../x')).toThrow();
+  });
+
+  test('the smoke host may reach only its own buckets and secret', () => {
+    const policy = JSON.stringify(
+      smokeHostPolicy(names.logsBucket, names.tracesBucket, target.secretArn)
+    );
+    const resources = [...policy.matchAll(/"arn:aws:[^"]+"/g)].map(
+      (match) => match[0]
+    );
+    for (const arn of resources) {
+      expect(
+        arn.includes(names.logsBucket) ||
+          arn.includes(names.tracesBucket) ||
+          arn.includes(names.secret),
+        arn
+      ).toBe(true);
+    }
+    expect(policy).not.toMatch(
+      /cloudwatch|sns:|"\*"|observability-logs|observability-traces/
+    );
+  });
+
+  test('cleanup removes every kind of resource the smoke boot creates', () => {
+    const source = readFileSync(join(import.meta.dir, 'smoke.ts'), 'utf8');
+    const pairs: [string, string][] = [
+      ["'create-bucket'", "'rb'"],
+      ["'create-secret'", "'delete-secret'"],
+      ["'create-role'", "'delete-role'"],
+      ["'put-role-policy'", "'delete-role-policy'"],
+      ["'attach-role-policy'", "'detach-role-policy'"],
+      ["'create-instance-profile'", "'delete-instance-profile'"],
+      ["'add-role-to-instance-profile'", "'remove-role-from-instance-profile'"],
+      ["'create-volume'", "'delete-volume'"],
+      ["'run-instances'", "'terminate-instances'"],
+    ];
+    const created = [
+      ...source.matchAll(
+        /'(create-[a-z-]+|run-instances|put-role-policy|attach-role-policy|add-role-to-instance-profile)'/g
+      ),
+    ].map((match) => `'${match[1]}'`);
+    for (const call of new Set(created)) {
+      const pair = pairs.find(([create]) => create === call);
+      expect(pair, `no cleanup for ${call}`).toBeDefined();
+      expect(source).toContain(pair?.[1] ?? '');
+    }
+  });
 
   test('user data points only at smoke storage and a topic nobody reads', () => {
     const payload = JSON.parse(
@@ -302,116 +357,6 @@ const stack: StackResources = {
   ],
 };
 
-describe('deploy role', () => {
-  const statements = deployStatements({
-    account: '569036502058',
-    region: 'us-east-2',
-    imageBucket: 'macro-observability-images-569036502058-us-east-2',
-    importRole: 'macro-observability-vmimport',
-    smokeTag: SMOKE_PROJECT_TAG,
-    smokeRoleArn:
-      'arn:aws:iam::569036502058:role/macro-observability-smoke-host',
-    smokeSecretArn:
-      'arn:aws:secretsmanager:us-east-2:569036502058:secret:observability/smoke-AbCdEf',
-  });
-  const glob = (pattern: string) =>
-    new RegExp(
-      `^${pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`,
-      'i'
-    );
-  const list = (value: string | string[]) =>
-    Array.isArray(value) ? value : [value];
-  const grants = (action: string, resource = '*') =>
-    statements.some(
-      (statement) =>
-        list(statement.Action).some((pattern) => glob(pattern).test(action)) &&
-        list(statement.Resource).some(
-          (pattern) => resource === '*' || glob(pattern).test(resource)
-        )
-    );
-
-  test('grants every call a replacement makes, on the stack resources', () => {
-    for (const check of replacementChecks(stack, 'ami-0123')) {
-      for (const resource of check.resources) {
-        expect(
-          grants(check.action, resource),
-          `${check.action} on ${resource}`
-        ).toBe(true);
-      }
-    }
-  });
-
-  test('grants every AWS CLI call the deploy scripts make', () => {
-    const special: Record<string, string> = {
-      's3api get-public-access-block': 's3:GetBucketPublicAccessBlock',
-      's3api get-bucket-location': 's3:GetBucketLocation',
-    };
-    const services: Record<string, string> = {
-      s3api: 's3',
-      elbv2: 'elasticloadbalancing',
-    };
-    const waits: Record<string, string> = {
-      'instance-running': 'ec2:DescribeInstances',
-      'instance-stopped': 'ec2:DescribeInstances',
-      'instance-terminated': 'ec2:DescribeInstances',
-      'volume-available': 'ec2:DescribeVolumes',
-      'image-available': 'ec2:DescribeImages',
-    };
-    const calls = new Set<string>(['s3:PutObject']); // `aws s3 cp`
-    for (const file of [
-      'publish.ts',
-      'smoke.ts',
-      'release.ts',
-      'iam-preflight.ts',
-    ]) {
-      const source = readFileSync(join(import.meta.dir, file), 'utf8');
-      for (const [, service, command, rest] of source.matchAll(
-        /aws(?:<[^(]*?>)?\(\s*[\w'-]+,\s*'([a-z0-9]+)',\s*'([a-z-]+)'(,\s*'([a-z-]+)')?/g
-      )) {
-        if (service === 'sts') continue;
-        if (command === 'wait') {
-          const action = waits[rest?.replace(/[,\s']/g, '') ?? ''];
-          expect(action, `wait ${rest}`).toBeDefined();
-          calls.add(action);
-          continue;
-        }
-        const pascal = command.replace(/(^|-)([a-z])/g, (_, __, letter) =>
-          letter.toUpperCase()
-        );
-        calls.add(
-          special[`${service} ${command}`] ??
-            `${services[service] ?? service}:${pascal}`
-        );
-      }
-    }
-    expect(calls.size).toBeGreaterThan(20);
-    for (const action of calls) expect(grants(action), action).toBe(true);
-  });
-
-  test('cannot touch untagged instances, other volumes or the retained buckets', () => {
-    const manage = statements.find(
-      (statement) => statement.Sid === 'ManageHosts'
-    );
-    expect(manage?.Condition?.StringEquals['aws:ResourceTag/project']).toEqual([
-      'observability',
-      SMOKE_PROJECT_TAG,
-    ]);
-    const deletes = statements.filter((statement) =>
-      list(statement.Action).includes('ec2:DeleteVolume')
-    );
-    expect(
-      deletes.map(
-        (statement) =>
-          statement.Condition?.StringEquals['aws:ResourceTag/project']
-      )
-    ).toEqual([[SMOKE_PROJECT_TAG]]);
-    const all = JSON.stringify(statements);
-    expect(all).not.toContain('observability-logs');
-    expect(all).not.toContain('observability-traces');
-    expect(all).not.toMatch(/"s3:\*"|"ec2:\*"|"iam:\*"/);
-  });
-});
-
 describe('preflight helpers', () => {
   test('reads the stack export', () => {
     const resource = (
@@ -458,13 +403,42 @@ describe('preflight helpers', () => {
     expect(resources).toEqual(stack);
   });
 
-  test('turns an assumed-role session into its role', () => {
+  test('checks every call a replacement makes, on the real resources', () => {
+    const checks = replacementChecks(stack, 'ami-0123');
+    const on = (action: string) =>
+      checks
+        .filter((check) => check.action === action)
+        .flatMap((check) => check.resources);
+    expect(on('ec2:StopInstances')).toEqual([stack.instanceArn]);
+    expect(on('ec2:DetachVolume')).toEqual([
+      stack.instanceArn,
+      stack.volumeArn,
+    ]);
+    expect(on('ec2:TerminateInstances')).toEqual([stack.instanceArn]);
+    expect(on('ec2:RunInstances')).toContain(
+      'arn:aws:ec2:us-east-2::image/ami-0123'
+    );
+    expect(on('ec2:AttachVolume')).toContain(stack.volumeArn);
+    expect(on('iam:PassRole')).toEqual([stack.hostRoleArn]);
+    expect(on('elasticloadbalancing:RegisterTargets')).toEqual(
+      stack.targetGroupArns
+    );
+    expect(on('elasticloadbalancing:DeregisterTargets')).toEqual(
+      stack.targetGroupArns
+    );
+    expect(on('cloudwatch:PutMetricAlarm')).toEqual(stack.alarmArns);
+  });
+
+  test('simulates the calling user, or an assumed role', () => {
+    expect(principalArnOf('arn:aws:iam::569036502058:user/deploy')).toBe(
+      'arn:aws:iam::569036502058:user/deploy'
+    );
     expect(
-      roleArnOf(
-        'arn:aws:sts::569036502058:assumed-role/macro-observability-deploy/GitHubActions'
-      )
-    ).toBe('arn:aws:iam::569036502058:role/macro-observability-deploy');
-    expect(() => roleArnOf('arn:aws:iam::569036502058:user/someone')).toThrow();
+      principalArnOf('arn:aws:sts::569036502058:assumed-role/some-role/session')
+    ).toBe('arn:aws:iam::569036502058:role/some-role');
+    expect(() =>
+      principalArnOf('arn:aws:sts::569036502058:federated-user/x')
+    ).toThrow();
   });
 
   test('publish accepts only a UEFI x86_64 VHD', () => {

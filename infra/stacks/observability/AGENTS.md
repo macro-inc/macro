@@ -32,8 +32,8 @@ us-east-1. `README.md` is the full operations guide.
   dry run first. Pulumi picks the AMI by the source-hash tag; there is no `amiId`.
 - A new file the image reads must sit under `flake.nix`, `flake.lock`, `nixos/`
   or `assets/` (`deploy/image-key.ts`); the key test fails otherwise.
-- A new AWS call in `deploy/` needs a grant in
-  `../observability-deploy/policy.ts`; `deploy/deploy.test.ts` checks every call.
+- A new kind of smoke resource needs its delete in `cleanupSmoke` (`deploy/smoke.ts`);
+  `deploy/deploy.test.ts` fails on a create without one.
 
 ## Checks
 

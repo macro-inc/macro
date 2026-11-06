@@ -1,7 +1,7 @@
-// Before Pulumi deletes the old host, prove the deploy role may make every
-// call the replacement needs. A missing permission otherwise surfaces only
-// after the old instance is gone. IAM's policy simulator evaluates the role's
-// real policies against the stack's real resource ARNs.
+// Before Pulumi deletes the old host, prove the deploy credentials may make
+// every call the replacement needs. A missing permission otherwise surfaces
+// only after the old instance is gone. IAM's policy simulator evaluates the
+// caller's real policies against the stack's real resource ARNs.
 import { ACCOUNT, REGION, aws } from './aws';
 
 export interface StackResources {
@@ -141,13 +141,13 @@ export function replacementChecks(stack: StackResources, ami: string): Check[] {
   ];
 }
 
-/** `arn:aws:sts::<account>:assumed-role/<role>/<session>` → the role's ARN. */
-export function roleArnOf(callerArn: string): string {
+/** The IAM principal behind the caller: a user as is, an assumed-role session as its role. */
+export function principalArnOf(callerArn: string): string {
+  if (/^arn:aws:iam::\d{12}:user\/.+$/.test(callerArn)) return callerArn;
   const match = /^arn:aws:sts::(\d{12}):assumed-role\/([^/]+)\/.+$/.exec(
     callerArn
   );
-  if (!match)
-    throw new Error(`Run the preflight as an assumed role, not ${callerArn}`);
+  if (!match) throw new Error(`Cannot simulate the policy of ${callerArn}`);
   return `arn:aws:iam::${match[1]}:role/${match[2]}`;
 }
 
@@ -160,7 +160,7 @@ interface Evaluation {
 /** Returns the denied `action on resource` pairs; empty means the replacement can complete. */
 export function simulate(checks: Check[]): string[] {
   const caller = aws<{ Arn: string }>(REGION, 'sts', 'get-caller-identity').Arn;
-  const role = roleArnOf(caller);
+  const principal = principalArnOf(caller);
   const denied: string[] = [];
   for (const check of checks) {
     const context = Object.entries({
@@ -175,7 +175,7 @@ export function simulate(checks: Check[]): string[] {
       'iam',
       'simulate-principal-policy',
       '--policy-source-arn',
-      role,
+      principal,
       '--action-names',
       check.action,
       '--resource-arns',

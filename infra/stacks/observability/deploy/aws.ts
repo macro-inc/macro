@@ -9,11 +9,18 @@ export function aws<T = Record<string, unknown>>(
   region: string,
   ...args: string[]
 ): T {
-  const stdout = execFileSync(
-    'aws',
-    ['--region', region, '--output', 'json', ...args],
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }
-  );
+  let stdout: string;
+  try {
+    stdout = execFileSync(
+      'aws',
+      ['--region', region, '--output', 'json', ...args],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+  } catch (error) {
+    // Keep the CLI's own message, which callers match on to retry.
+    const stderr = String((error as { stderr?: string }).stderr ?? '').trim();
+    throw new Error(`aws ${args.slice(0, 2).join(' ')} failed: ${stderr}`);
+  }
   return (stdout.trim() ? JSON.parse(stdout) : {}) as T;
 }
 

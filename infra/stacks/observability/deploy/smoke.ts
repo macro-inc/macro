@@ -1,30 +1,226 @@
 // Boot a candidate AMI on a throwaway host and check every service comes up,
-// before the production host is touched. The smoke host gets its own blank
-// volume, buckets and secret of throwaway values: never production storage,
-// because Loki and Tempo compactors delete blocks they consider expired.
+// before the production host is touched. The run creates the smoke host's own
+// blank volume, buckets, secret of throwaway values and IAM role, and deletes
+// them all afterwards. Never production storage: Loki and Tempo compactors
+// delete blocks they consider expired.
+import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { renderUserData } from '../render';
-import { ACCOUNT, REGION, aws, waitFor } from './aws';
+import { ACCOUNT, REGION, aws, sleep, waitFor } from './aws';
 
 export const SMOKE_PROJECT_TAG = 'observability-smoke';
 // The same type as production, so the check covers its boot and drivers.
 const INSTANCE_TYPE = 'm7i.xlarge';
+
+// Every smoke resource is named or tagged with these, so a sweep finds all of
+// them. Rollouts never overlap, so any smoke resource left is a dead run's.
+export const SMOKE_PREFIX = 'observability-smoke-';
+const SMOKE_SECRET_PREFIX = 'observability/smoke-';
+const SMOKE_IAM_PATH = '/observability-smoke/';
 
 export interface SmokeTarget {
   ami: string;
   subnetId: string;
   securityGroupId: string;
   availabilityZone: string;
-  /** From the observability-deploy stack's outputs. */
+  /** Names this run's smoke resources (`GITHUB_RUN_ID-GITHUB_RUN_ATTEMPT`). */
+  runId: string;
+}
+
+export interface SmokeResources {
   instanceProfile: string;
   secretArn: string;
   logsBucket: string;
   tracesBucket: string;
-  /** Labels the smoke resources so cleanup only touches this run's. */
-  runId: string;
+}
+
+export function smokeNames(runId: string) {
+  if (!/^[0-9]+-[0-9]+$/.test(runId)) throw new Error(`Bad run id ${runId}`);
+  const name = `${SMOKE_PREFIX}${runId}`;
+  return {
+    role: name,
+    logsBucket: `${name}-logs`,
+    tracesBucket: `${name}-traces`,
+    secret: `${SMOKE_SECRET_PREFIX}${runId}`,
+  };
+}
+
+/**
+ * The smoke host's only permissions: its own buckets and secret. No CloudWatch,
+ * SNS or production storage, so it cannot delete telemetry or page anyone.
+ */
+export function smokeHostPolicy(
+  logsBucket: string,
+  tracesBucket: string,
+  secretArn: string
+) {
+  const buckets = [logsBucket, tracesBucket].map(
+    (bucket) => `arn:aws:s3:::${bucket}`
+  );
+  return {
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Action: [
+          's3:ListBucket',
+          's3:GetBucketLocation',
+          's3:ListBucketMultipartUploads',
+        ],
+        Resource: buckets,
+      },
+      {
+        Effect: 'Allow',
+        Action: [
+          's3:GetObject',
+          's3:PutObject',
+          's3:DeleteObject',
+          's3:AbortMultipartUpload',
+          's3:ListMultipartUploadParts',
+        ],
+        Resource: buckets.map((arn) => `${arn}/*`),
+      },
+      {
+        Effect: 'Allow',
+        Action: 'secretsmanager:GetSecretValue',
+        Resource: secretArn,
+      },
+    ],
+  };
+}
+
+const SSM_POLICY = 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore';
+const smokeTagList = (runId: string) => [
+  { Key: 'project', Value: SMOKE_PROJECT_TAG },
+  { Key: 'SmokeRun', Value: runId },
+];
+
+/** Create this run's buckets, secret and instance profile. */
+export async function createSmokeResources(
+  runId: string
+): Promise<SmokeResources> {
+  const names = smokeNames(runId);
+  for (const bucket of [names.logsBucket, names.tracesBucket]) {
+    aws(
+      REGION,
+      's3api',
+      'create-bucket',
+      '--bucket',
+      bucket,
+      '--create-bucket-configuration',
+      `LocationConstraint=${REGION}`
+    );
+    aws(
+      REGION,
+      's3api',
+      'put-public-access-block',
+      '--bucket',
+      bucket,
+      '--public-access-block-configuration',
+      'BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true'
+    );
+    aws(
+      REGION,
+      's3api',
+      'put-bucket-tagging',
+      '--bucket',
+      bucket,
+      '--tagging',
+      JSON.stringify({ TagSet: smokeTagList(runId) })
+    );
+  }
+  const secretArn = aws<{ ARN: string }>(
+    REGION,
+    'secretsmanager',
+    'create-secret',
+    '--name',
+    names.secret,
+    '--description',
+    'Throwaway credentials for one observability AMI smoke boot',
+    '--secret-string',
+    JSON.stringify(smokeSecret()),
+    '--tags',
+    JSON.stringify(smokeTagList(runId))
+  ).ARN;
+  aws(
+    REGION,
+    'iam',
+    'create-role',
+    '--role-name',
+    names.role,
+    '--path',
+    SMOKE_IAM_PATH,
+    '--assume-role-policy-document',
+    JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Principal: { Service: 'ec2.amazonaws.com' },
+          Action: 'sts:AssumeRole',
+        },
+      ],
+    }),
+    '--tags',
+    JSON.stringify(smokeTagList(runId))
+  );
+  aws(
+    REGION,
+    'iam',
+    'put-role-policy',
+    '--role-name',
+    names.role,
+    '--policy-name',
+    'smoke-storage',
+    '--policy-document',
+    JSON.stringify(
+      smokeHostPolicy(names.logsBucket, names.tracesBucket, secretArn)
+    )
+  );
+  aws(
+    REGION,
+    'iam',
+    'attach-role-policy',
+    '--role-name',
+    names.role,
+    '--policy-arn',
+    SSM_POLICY
+  );
+  aws(
+    REGION,
+    'iam',
+    'create-instance-profile',
+    '--instance-profile-name',
+    names.role,
+    '--path',
+    SMOKE_IAM_PATH
+  );
+  aws(
+    REGION,
+    'iam',
+    'add-role-to-instance-profile',
+    '--instance-profile-name',
+    names.role,
+    '--role-name',
+    names.role
+  );
+  aws(
+    REGION,
+    'iam',
+    'wait',
+    'instance-profile-exists',
+    '--instance-profile-name',
+    names.role
+  );
+  return {
+    instanceProfile: names.role,
+    secretArn,
+    logsBucket: names.logsBucket,
+    tracesBucket: names.tracesBucket,
+  };
 }
 
 export const SMOKE_HOSTS = {
@@ -36,15 +232,18 @@ export const SMOKE_HOSTS = {
 // host's alerts must never page anyone.
 export const SMOKE_ALARM_TOPIC = `arn:aws:sns:${REGION}:${ACCOUNT}:observability-smoke-unused`;
 
-export function smokeUserData(target: SmokeTarget, volumeId: string): string {
+export function smokeUserData(
+  resources: SmokeResources,
+  volumeId: string
+): string {
   return renderUserData({
     region: REGION,
     ...SMOKE_HOSTS,
-    secretArn: target.secretArn,
+    secretArn: resources.secretArn,
     alarmTopicArn: SMOKE_ALARM_TOPIC,
     volumeId,
-    logsBucket: target.logsBucket,
-    tracesBucket: target.tracesBucket,
+    logsBucket: resources.logsBucket,
+    tracesBucket: resources.tracesBucket,
   });
 }
 
@@ -253,16 +452,28 @@ function consoleOutput(instanceId: string): void {
   }
 }
 
+const failures: string[] = [];
+
+/** Run one removal; a failure is recorded and the sweep continues. */
+function attempt(what: string, action: () => void): void {
+  try {
+    action();
+  } catch (error) {
+    console.error(`Could not ${what}: ${error}`);
+    failures.push(what);
+  }
+}
+
 /**
- * Remove this run's smoke host and volume. Stops and detaches before
- * terminating, the same calls a production replacement makes, so the deploy
- * role's permissions for them are exercised before production depends on them.
+ * Remove every smoke resource: this run's and any a cancelled or crashed run
+ * left. Rollouts never overlap, so none belongs to a live run. The host is
+ * stopped and detached before it is terminated, the calls a production
+ * replacement makes, so they are exercised before production depends on them.
+ * Throws when something could not be removed, so a leak fails the run.
  */
-export function cleanupSmoke(runId: string): void {
-  const filters = [
-    `Name=tag:project,Values=${SMOKE_PROJECT_TAG}`,
-    `Name=tag:SmokeRun,Values=${runId}`,
-  ];
+export function cleanupSmoke(): void {
+  const filters = [`Name=tag:project,Values=${SMOKE_PROJECT_TAG}`];
+  failures.length = 0;
   const instances = aws<{
     Reservations: {
       Instances: { InstanceId: string; State: { Name: string } }[];
@@ -275,44 +486,179 @@ export function cleanupSmoke(runId: string): void {
   }>(REGION, 'ec2', 'describe-volumes', '--filters', ...filters).Volumes;
   const ids = instances.map((instance) => instance.InstanceId);
   if (ids.length) {
-    aws(REGION, 'ec2', 'stop-instances', '--instance-ids', ...ids);
-    aws(REGION, 'ec2', 'wait', 'instance-stopped', '--instance-ids', ...ids);
+    attempt('stop smoke hosts', () => {
+      aws(REGION, 'ec2', 'stop-instances', '--instance-ids', ...ids);
+      aws(REGION, 'ec2', 'wait', 'instance-stopped', '--instance-ids', ...ids);
+    });
     for (const volume of volumes.filter((entry) => entry.Attachments.length)) {
-      aws(REGION, 'ec2', 'detach-volume', '--volume-id', volume.VolumeId);
+      attempt(`detach ${volume.VolumeId}`, () =>
+        aws(REGION, 'ec2', 'detach-volume', '--volume-id', volume.VolumeId)
+      );
     }
-    aws(REGION, 'ec2', 'terminate-instances', '--instance-ids', ...ids);
-    aws(REGION, 'ec2', 'wait', 'instance-terminated', '--instance-ids', ...ids);
+    attempt('terminate smoke hosts', () => {
+      aws(REGION, 'ec2', 'terminate-instances', '--instance-ids', ...ids);
+      aws(
+        REGION,
+        'ec2',
+        'wait',
+        'instance-terminated',
+        '--instance-ids',
+        ...ids
+      );
+    });
   }
   for (const volume of volumes) {
-    aws(
-      REGION,
-      'ec2',
-      'wait',
-      'volume-available',
-      '--volume-ids',
-      volume.VolumeId
+    attempt(`delete ${volume.VolumeId}`, () => {
+      aws(
+        REGION,
+        'ec2',
+        'wait',
+        'volume-available',
+        '--volume-ids',
+        volume.VolumeId
+      );
+      aws(REGION, 'ec2', 'delete-volume', '--volume-id', volume.VolumeId);
+    });
+  }
+  const buckets = aws<{ Buckets: { Name: string }[] }>(
+    REGION,
+    's3api',
+    'list-buckets'
+  )
+    .Buckets.map((bucket) => bucket.Name)
+    .filter((name) => name.startsWith(SMOKE_PREFIX));
+  for (const bucket of buckets) {
+    attempt(`delete bucket ${bucket}`, () =>
+      execFileSync(
+        'aws',
+        ['--region', REGION, 's3', 'rb', `s3://${bucket}`, '--force'],
+        {
+          stdio: ['ignore', 'ignore', 'inherit'],
+        }
+      )
     );
-    aws(REGION, 'ec2', 'delete-volume', '--volume-id', volume.VolumeId);
+  }
+  const secrets = aws<{ SecretList: { ARN: string; Name: string }[] }>(
+    REGION,
+    'secretsmanager',
+    'list-secrets',
+    '--filters',
+    `Key=name,Values=${SMOKE_SECRET_PREFIX}`
+  ).SecretList.filter((secret) => secret.Name.startsWith(SMOKE_SECRET_PREFIX));
+  for (const secret of secrets) {
+    attempt(`delete secret ${secret.Name}`, () =>
+      aws(
+        REGION,
+        'secretsmanager',
+        'delete-secret',
+        '--secret-id',
+        secret.ARN,
+        '--force-delete-without-recovery'
+      )
+    );
+  }
+  const profiles = aws<{
+    InstanceProfiles: {
+      InstanceProfileName: string;
+      Roles: { RoleName: string }[];
+    }[];
+  }>(
+    REGION,
+    'iam',
+    'list-instance-profiles',
+    '--path-prefix',
+    SMOKE_IAM_PATH
+  ).InstanceProfiles;
+  for (const profile of profiles) {
+    attempt(`delete instance profile ${profile.InstanceProfileName}`, () => {
+      for (const role of profile.Roles) {
+        aws(
+          REGION,
+          'iam',
+          'remove-role-from-instance-profile',
+          '--instance-profile-name',
+          profile.InstanceProfileName,
+          '--role-name',
+          role.RoleName
+        );
+      }
+      aws(
+        REGION,
+        'iam',
+        'delete-instance-profile',
+        '--instance-profile-name',
+        profile.InstanceProfileName
+      );
+    });
+  }
+  const roles = aws<{ Roles: { RoleName: string }[] }>(
+    REGION,
+    'iam',
+    'list-roles',
+    '--path-prefix',
+    SMOKE_IAM_PATH
+  ).Roles;
+  for (const { RoleName } of roles) {
+    attempt(`delete role ${RoleName}`, () => {
+      aws(
+        REGION,
+        'iam',
+        'detach-role-policy',
+        '--role-name',
+        RoleName,
+        '--policy-arn',
+        SSM_POLICY
+      );
+      aws(
+        REGION,
+        'iam',
+        'delete-role-policy',
+        '--role-name',
+        RoleName,
+        '--policy-name',
+        'smoke-storage'
+      );
+      aws(REGION, 'iam', 'delete-role', '--role-name', RoleName);
+    });
   }
   console.log(
-    `Removed smoke instances [${ids.join(', ')}] and volumes [${volumes.map((volume) => volume.VolumeId).join(', ')}]`
+    `Smoke cleanup: instances [${ids.join(', ')}], volumes [${volumes.map((volume) => volume.VolumeId).join(', ')}], ` +
+      `buckets [${buckets.join(', ')}], secrets [${secrets.map((secret) => secret.Name).join(', ')}], ` +
+      `instance profiles [${profiles.map((profile) => profile.InstanceProfileName).join(', ')}], roles [${roles.map((role) => role.RoleName).join(', ')}]`
   );
+  if (failures.length) {
+    throw new Error(
+      `Could not ${failures.join('; ')}. Delete anything left by hand: tagged project=${SMOKE_PROJECT_TAG}, or named ${SMOKE_PREFIX}* or ${SMOKE_SECRET_PREFIX}*`
+    );
+  }
+}
+
+/** Launch, retrying while a new instance profile propagates through IAM. */
+async function launch(args: string[]): Promise<string> {
+  for (let tries = 1; ; tries++) {
+    try {
+      return aws<{ Instances: { InstanceId: string }[] }>(
+        REGION,
+        'ec2',
+        'run-instances',
+        ...args
+      ).Instances[0].InstanceId;
+    } catch (error) {
+      if (tries >= 12 || !/instance profile/i.test(String(error))) throw error;
+      console.log('Waiting for the new instance profile to reach EC2');
+      await sleep(10);
+    }
+  }
 }
 
 /** Boot `target.ami`, run the host check, and always clean up. Returns whether it passed. */
 export async function smokeBoot(target: SmokeTarget): Promise<boolean> {
-  aws(
-    REGION,
-    'secretsmanager',
-    'put-secret-value',
-    '--secret-id',
-    target.secretArn,
-    '--secret-string',
-    JSON.stringify(smokeSecret())
-  );
+  // Leftovers from a run that died before its own cleanup.
+  cleanupSmoke();
   const directory = mkdtempSync(join(tmpdir(), 'observability-smoke-'));
   let instanceId: string | undefined;
   try {
+    const resources = await createSmokeResources(target.runId);
     const volumeId = aws<{ VolumeId: string }>(
       REGION,
       'ec2',
@@ -330,12 +676,9 @@ export async function smokeBoot(target: SmokeTarget): Promise<boolean> {
     const userData = join(directory, 'user-data.gz');
     writeFileSync(
       userData,
-      Buffer.from(smokeUserData(target, volumeId), 'base64')
+      Buffer.from(smokeUserData(resources, volumeId), 'base64')
     );
-    instanceId = aws<{ Instances: { InstanceId: string }[] }>(
-      REGION,
-      'ec2',
-      'run-instances',
+    instanceId = await launch([
       '--image-id',
       target.ami,
       '--instance-type',
@@ -346,7 +689,7 @@ export async function smokeBoot(target: SmokeTarget): Promise<boolean> {
       target.securityGroupId,
       '--no-associate-public-ip-address',
       '--iam-instance-profile',
-      `Name=${target.instanceProfile}`,
+      `Name=${resources.instanceProfile}`,
       '--metadata-options',
       'HttpEndpoint=enabled,HttpTokens=required,HttpPutResponseHopLimit=1',
       '--block-device-mappings',
@@ -365,8 +708,8 @@ export async function smokeBoot(target: SmokeTarget): Promise<boolean> {
       `fileb://${userData}`,
       '--tag-specifications',
       // The root volume is deleted with the instance, so only the instance is labelled.
-      JSON.stringify([smokeTags(target.runId, 'instance')])
-    ).Instances[0].InstanceId;
+      JSON.stringify([smokeTags(target.runId, 'instance')]),
+    ]);
     const id = instanceId;
     console.log(`Smoke host ${id} from ${target.ami}`);
     aws(REGION, 'ec2', 'wait', 'instance-running', '--instance-ids', id);
@@ -411,6 +754,6 @@ export async function smokeBoot(target: SmokeTarget): Promise<boolean> {
     throw error;
   } finally {
     rmSync(directory, { recursive: true, force: true });
-    cleanupSmoke(target.runId);
+    cleanupSmoke();
   }
 }

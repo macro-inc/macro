@@ -7,9 +7,9 @@
 //   deploy   check the plan and permissions, then (unless DRY_RUN=true)
 //            `pulumi up` and wait for health. Replacing the host takes
 //            Grafana, Loki, Tempo and GoAlert down for several minutes.
-//   cleanup  remove this run's smoke host, if a cancelled run left one
+//   cleanup  remove every smoke resource, if a cancelled run left any
 //
-// Run from infra/stacks/observability with deploy-role credentials, e.g.
+// Run from infra/stacks/observability with the deploy AWS credentials, e.g.
 // `bun deploy/release.ts find`. See the README's "Deploying".
 import { execFileSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
@@ -22,7 +22,6 @@ import { publishImage } from './publish';
 import { cleanupSmoke, smokeBoot } from './smoke';
 
 export const STACK = 'macro-inc/observability/prod';
-export const DEPLOY_STACK = 'macro-inc/observability-deploy/prod';
 export const IMAGE_BUCKET = 'macro-observability-images-569036502058-us-east-2';
 export const IMPORT_ROLE = 'macro-observability-vmimport';
 export const STACK_PATHS = ['infra/stacks/observability'];
@@ -172,12 +171,6 @@ function stackExport() {
   );
 }
 
-function deployOutputs(): Record<string, string> {
-  return JSON.parse(
-    pulumi(['stack', 'output', '--stack', DEPLOY_STACK, '--json'])
-  );
-}
-
 function runId(): string {
   return `${env('GITHUB_RUN_ID')}-${env('GITHUB_RUN_ATTEMPT')}`;
 }
@@ -185,16 +178,11 @@ function runId(): string {
 async function smoke(): Promise<void> {
   const ami = env('AMI');
   const stack = stackExport();
-  const outputs = deployOutputs();
   const passed = await smokeBoot({
     ami,
     subnetId: stack.subnetId,
     securityGroupId: stack.securityGroupIds[0],
     availabilityZone: stack.availabilityZone,
-    instanceProfile: outputs.smokeInstanceProfile,
-    secretArn: outputs.smokeSecretArn,
-    logsBucket: outputs.smokeLogsBucket,
-    tracesBucket: outputs.smokeTracesBucket,
     runId: runId(),
   });
   tag(ami, `Key=Smoke,Value=${passed ? 'passed' : 'failed'}`);
@@ -268,7 +256,7 @@ async function deploy(): Promise<void> {
   const denied = simulate(replacementChecks(stackExport(), ami));
   if (denied.length) {
     throw new Error(
-      `The deploy role cannot complete a replacement; production was not touched:\n${denied.join('\n')}`
+      `The deploy credentials cannot complete a replacement; production was not touched:\n${denied.join('\n')}`
     );
   }
   if (!plan.instanceUrn) throw new Error('The plan has no instance URN');
@@ -305,7 +293,7 @@ const commands: Record<string, () => void | Promise<void>> = {
   publish,
   smoke,
   deploy,
-  cleanup: () => cleanupSmoke(runId()),
+  cleanup: cleanupSmoke,
 };
 
 if (import.meta.main) {
