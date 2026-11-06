@@ -62,8 +62,10 @@ and operation waiting.
   instance; the caller decides whether that is success. Incus refuses to delete
   a running instance; stop it first.
 - A stateful stop needs `migration.stateful=true` on the VM (set it at create).
-- `run_operation` gives up after 15 one-minute `/wait` calls with
-  `OperationTimedOut`; the operation keeps running on the host.
+- Require explicit `IncusEndpoint::timeouts` (request, connect, operation wait
+  seconds/count and state-change seconds); no transport defaults. `run_operation`
+  gives up with `OperationTimedOut` at the configured limit; the operation
+  keeps running on the host.
 - `remove_config_key` is a GET plus an ETag-guarded PUT (PATCH cannot remove a
   key); a concurrent edit fails with a 412 `Rejected`.
 - No trace headers are sent; Incus does not read them. Methods open

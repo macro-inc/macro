@@ -406,7 +406,46 @@ upgrades. Bun is still used for dependency installation and builds.
 
 `agent_harness_service` runs the Macro computer control plane when
 `COMPUTERS_FLEET` is set. The stack sets every `COMPUTERS_*` value from the
-fleet you pick:
+fleet you pick. An enabled fleet requires explicit configuration; missing values
+fail startup with the variable name. With `COMPUTERS_FLEET` unset, these values
+are not required.
+
+Harness config required for either fleet:
+`COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,
+`COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`.
+Local orchestration supplies reserve `7` GB and oversell factor `3` for both
+fleets; images are `macro-box:latest` for Docker and `macro-box` for Incus.
+
+Docker additionally requires `COMPUTERS_DOCKER_NETWORK`,
+`COMPUTERS_DOCKER_ENROLLMENT_DIR`, and `COMPUTERS_DOCKER_MEMORY_GB` (`32` locally).
+Incus additionally requires `COMPUTERS_INCUS_URL`,
+`COMPUTERS_INCUS_CLIENT_CERT`, `COMPUTERS_INCUS_CLIENT_KEY`,
+`COMPUTERS_INCUS_SERVER_CERT`, and these explicit settings:
+
+| Variable | Local value |
+| --- | --- |
+| `COMPUTERS_INCUS_PROFILE` | `macro-box` |
+| `COMPUTERS_INCUS_STORAGE_POOL` | `default` |
+| `COMPUTERS_INCUS_REQUEST_TIMEOUT_SECS` | `90` |
+| `COMPUTERS_INCUS_CONNECT_TIMEOUT_SECS` | `10` |
+| `COMPUTERS_INCUS_OPERATION_WAIT_SECS` | `60` |
+| `COMPUTERS_INCUS_OPERATION_WAITS` | `15` |
+| `COMPUTERS_INCUS_STATE_CHANGE_TIMEOUT_SECS` | `60` |
+| `COMPUTERS_INCUS_SHUTDOWN_GRACE_SECS` | `60` |
+
+Authentication also reads `COMPUTERS_FLEET`. When enabled, all six
+`STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values must be
+nonblank. Missing prices fail startup; no size or interval receives a fallback
+price. Local Doppler supplies test-mode prices. `--no-doppler` supplies explicit
+placeholder price IDs for startup only; replace them with real test prices
+before buying a computer.
+
+Provision the same required keys in each service's deployment Doppler config
+before enabling a fleet there. Request/connect/operation/state-change/shutdown
+deadlines are infrastructure config; lifecycle idle, suspension, retention,
+retry and reconciliation timings remain named policy constants.
+
+Select a fleet with:
 
 | Flag | Fleet | Computers run on |
 | --- | --- | --- |

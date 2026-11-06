@@ -215,6 +215,18 @@ is set. Read the stable identity from Doppler in deployed environments; local
 stacks explicitly set `local-<instance>`. Distinct control planes sharing a host
 must use distinct identities; replicas of one control plane share an identity.
 
+An enabled fleet also requires `COMPUTERS_IMAGE`, `COMPUTERS_HOST_NAME`,
+`COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`. Docker additionally
+requires `COMPUTERS_DOCKER_MEMORY_GB`, network and enrollment directory. Incus
+requires its endpoint and mTLS material, `COMPUTERS_INCUS_PROFILE`,
+`COMPUTERS_INCUS_STORAGE_POOL`, `COMPUTERS_INCUS_REQUEST_TIMEOUT_SECS`,
+`COMPUTERS_INCUS_CONNECT_TIMEOUT_SECS`, `COMPUTERS_INCUS_OPERATION_WAIT_SECS`,
+`COMPUTERS_INCUS_OPERATION_WAITS`, `COMPUTERS_INCUS_STATE_CHANGE_TIMEOUT_SECS`,
+and `COMPUTERS_INCUS_SHUTDOWN_GRACE_SECS`. Missing values fail startup with the
+variable name; fleet-specific values are required only for that fleet.
+Local orchestration supplies every value explicitly for each fleet; see
+[required variables and local values](../../docs/development/running-locally.md#macro-computers).
+
 All feature configs read the same harness `APP_SECRETS_JSON`; the harness
 Doppler validation binary validates each config. Stable public origins resolve
 once at startup through `macro_service_urls`: `McpPublicUrl` preserves the

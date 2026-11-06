@@ -471,3 +471,39 @@ fn staff_domain_has_no_implicit_local_default() {
     let config: Config = serde_json::from_value(config_values()).unwrap();
     assert!(config.team_agents_included_email_domain.is_empty());
 }
+
+#[test]
+fn enabled_computers_require_every_price_at_startup() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    config.validate_computer_config().unwrap();
+
+    let keys = [
+        "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID",
+        "STRIPE_COMPUTER_LARGE_MONTHLY_PRICE_ID",
+        "STRIPE_COMPUTER_XL_MONTHLY_PRICE_ID",
+        "STRIPE_COMPUTER_STANDARD_YEARLY_PRICE_ID",
+        "STRIPE_COMPUTER_LARGE_YEARLY_PRICE_ID",
+        "STRIPE_COMPUTER_XL_YEARLY_PRICE_ID",
+    ];
+    let mut values = config_values();
+    values["COMPUTERS_FLEET"] = serde_json::json!("incus");
+    for key in keys {
+        values[key] = serde_json::json!("price_test");
+    }
+    let config: Config = serde_json::from_value(values.clone()).unwrap();
+    config.validate_computer_config().unwrap();
+    for key in keys {
+        for missing in [serde_json::Value::Null, serde_json::json!(" ")] {
+            let mut incomplete = values.clone();
+            incomplete[key] = missing;
+            let config: Config = serde_json::from_value(incomplete).unwrap();
+            assert!(
+                config
+                    .validate_computer_config()
+                    .unwrap_err()
+                    .to_string()
+                    .contains(key)
+            );
+        }
+    }
+}

@@ -30,7 +30,7 @@ use hosted_runtimes::outbound::configured_fleet::ConfiguredFleet;
 use hosted_runtimes::outbound::docker_fleet::{DockerFleet, DockerFleetConfig};
 use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig};
 use hosted_runtimes::outbound::pg::PgComputerRepo;
-use incus_client::{ImageReference, ImageSource, IncusEndpoint};
+use incus_client::{ImageReference, ImageSource, IncusEndpoint, IncusTimeouts};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
@@ -133,34 +133,77 @@ pub async fn operator(
     )?)?;
     let host_name = required(&config.computers_host_name, "COMPUTERS_HOST_NAME")?;
 
+    let image = required(&config.computers_image, "COMPUTERS_IMAGE")?;
+    let reserve_gb = required_value(
+        &config.computers_host_reserve_gb,
+        "COMPUTERS_HOST_RESERVE_GB",
+    )?;
+    let oversell_factor = required_value(
+        &config.computers_oversell_factor,
+        "COMPUTERS_OVERSELL_FACTOR",
+    )?;
+    anyhow::ensure!(
+        oversell_factor > 0,
+        "COMPUTERS_OVERSELL_FACTOR must be positive"
+    );
+
     let fleet = match kind {
         "incus" => ConfiguredFleet::Incus(
             IncusFleet::new(IncusFleetConfig {
-                image: ImageSource {
-                    reference: ImageReference::Alias(config.computers_image.clone()),
-                    remote: None,
-                },
-                ..IncusFleetConfig::macro_box(
-                    IncusEndpoint {
-                        url: required(&config.computers_incus_url, "COMPUTERS_INCUS_URL")?,
-                        client_cert_pem: required(
-                            &config.computers_incus_client_cert,
-                            "COMPUTERS_INCUS_CLIENT_CERT",
+                endpoint: IncusEndpoint {
+                    url: required(&config.computers_incus_url, "COMPUTERS_INCUS_URL")?,
+                    timeouts: IncusTimeouts {
+                        state_change_secs: required_value(
+                            &config.computers_incus_state_change_timeout_secs,
+                            "COMPUTERS_INCUS_STATE_CHANGE_TIMEOUT_SECS",
                         )?,
-                        client_key_pem: required(
-                            &config.computers_incus_client_key,
-                            "COMPUTERS_INCUS_CLIENT_KEY",
+                        request: Duration::from_secs(required_value(
+                            &config.computers_incus_request_timeout_secs,
+                            "COMPUTERS_INCUS_REQUEST_TIMEOUT_SECS",
+                        )?),
+                        connect: Duration::from_secs(required_value(
+                            &config.computers_incus_connect_timeout_secs,
+                            "COMPUTERS_INCUS_CONNECT_TIMEOUT_SECS",
+                        )?),
+                        operation_wait_secs: required_value(
+                            &config.computers_incus_operation_wait_secs,
+                            "COMPUTERS_INCUS_OPERATION_WAIT_SECS",
                         )?,
-                        server_cert_pem: required(
-                            &config.computers_incus_server_cert,
-                            "COMPUTERS_INCUS_SERVER_CERT",
+                        operation_waits: required_value(
+                            &config.computers_incus_operation_waits,
+                            "COMPUTERS_INCUS_OPERATION_WAITS",
                         )?,
                     },
-                    host_name,
-                    control_plane_id,
-                    config.computers_host_reserve_gb,
-                    config.computers_oversell_factor,
-                )
+                    client_cert_pem: required(
+                        &config.computers_incus_client_cert,
+                        "COMPUTERS_INCUS_CLIENT_CERT",
+                    )?,
+                    client_key_pem: required(
+                        &config.computers_incus_client_key,
+                        "COMPUTERS_INCUS_CLIENT_KEY",
+                    )?,
+                    server_cert_pem: required(
+                        &config.computers_incus_server_cert,
+                        "COMPUTERS_INCUS_SERVER_CERT",
+                    )?,
+                },
+                host_name,
+                control_plane_id,
+                reserve_gb,
+                oversell_factor,
+                image: ImageSource {
+                    reference: ImageReference::Alias(image),
+                    remote: None,
+                },
+                profile: required(&config.computers_incus_profile, "COMPUTERS_INCUS_PROFILE")?,
+                storage_pool: required(
+                    &config.computers_incus_storage_pool,
+                    "COMPUTERS_INCUS_STORAGE_POOL",
+                )?,
+                shutdown_grace: Duration::from_secs(required_value(
+                    &config.computers_incus_shutdown_grace_secs,
+                    "COMPUTERS_INCUS_SHUTDOWN_GRACE_SECS",
+                )?),
             })
             .context("could not build the Incus fleet")?,
         ),
@@ -168,7 +211,7 @@ pub async fn operator(
             DockerFleet::new(
                 DockerFleetConfig {
                     control_plane_id,
-                    image: config.computers_image.clone(),
+                    image,
                     network: required(
                         &config.computers_docker_network,
                         "COMPUTERS_DOCKER_NETWORK",
@@ -179,9 +222,12 @@ pub async fn operator(
                     )?
                     .into(),
                     host_name,
-                    memory_gb: config.computers_docker_memory_gb,
-                    reserve_gb: config.computers_host_reserve_gb,
-                    oversell_factor: config.computers_oversell_factor,
+                    memory_gb: required_value(
+                        &config.computers_docker_memory_gb,
+                        "COMPUTERS_DOCKER_MEMORY_GB",
+                    )?,
+                    reserve_gb,
+                    oversell_factor,
                 },
                 config.environment,
             )
@@ -231,6 +277,14 @@ pub(super) fn service_url_overrides(config: &Config) -> anyhow::Result<BTreeMap<
 fn required(value: &Option<String>, name: &str) -> anyhow::Result<String> {
     value
         .clone()
+        .filter(|value| !value.trim().is_empty())
+        .with_context(|| format!("{name} is required when COMPUTERS_FLEET is set"))
+}
+
+fn required_value<T: Copy>(value: &Option<T>, name: &str) -> anyhow::Result<T> {
+    value
+        .as_ref()
+        .copied()
         .with_context(|| format!("{name} is required when COMPUTERS_FLEET is set"))
 }
 

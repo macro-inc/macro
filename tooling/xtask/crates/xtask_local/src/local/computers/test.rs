@@ -30,6 +30,9 @@ fn docker_computers_dial_the_stack_in_network() {
     assert_eq!(env["COMPUTERS_CONTROL_PLANE_ID"], "local-computers");
     assert_eq!(env["COMPUTERS_HOST_NAME"], "local-docker");
     assert_eq!(env["COMPUTERS_IMAGE"], "macro-box:latest");
+    assert_eq!(env["COMPUTERS_HOST_RESERVE_GB"], "7");
+    assert_eq!(env["COMPUTERS_OVERSELL_FACTOR"], "3");
+    assert_eq!(env["COMPUTERS_DOCKER_MEMORY_GB"], "32");
     assert_eq!(env["COMPUTERS_DOCKER_NETWORK"], "macro-computers_services");
     assert_eq!(env["COMPUTERS_DOCKER_ENROLLMENT_DIR"], enrollment_dir);
     let overrides: BTreeMap<String, String> =
@@ -86,6 +89,16 @@ fn incus_control_uses_tailnet_and_persona_bootstrap_uses_reverse_bridge() {
     assert_eq!(env["COMPUTERS_CONTROL_PLANE_ID"], "local-computers");
     assert_eq!(env["COMPUTERS_HOST_NAME"], "runtime-dev-1");
     assert_eq!(env["COMPUTERS_IMAGE"], "macro-box");
+    assert_eq!(env["COMPUTERS_HOST_RESERVE_GB"], "7");
+    assert_eq!(env["COMPUTERS_OVERSELL_FACTOR"], "3");
+    assert_eq!(env["COMPUTERS_INCUS_PROFILE"], "macro-box");
+    assert_eq!(env["COMPUTERS_INCUS_STORAGE_POOL"], "default");
+    assert_eq!(env["COMPUTERS_INCUS_REQUEST_TIMEOUT_SECS"], "90");
+    assert_eq!(env["COMPUTERS_INCUS_CONNECT_TIMEOUT_SECS"], "10");
+    assert_eq!(env["COMPUTERS_INCUS_OPERATION_WAIT_SECS"], "60");
+    assert_eq!(env["COMPUTERS_INCUS_OPERATION_WAITS"], "15");
+    assert_eq!(env["COMPUTERS_INCUS_STATE_CHANGE_TIMEOUT_SECS"], "60");
+    assert_eq!(env["COMPUTERS_INCUS_SHUTDOWN_GRACE_SECS"], "60");
     assert_eq!(env["COMPUTERS_INCUS_URL"], "https://100.101.102.103:8443");
     assert_eq!(env["COMPUTERS_INCUS_CLIENT_CERT"], "client cert");
     assert_eq!(env["COMPUTERS_INCUS_CLIENT_KEY"], "client key");

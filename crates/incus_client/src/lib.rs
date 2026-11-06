@@ -17,6 +17,6 @@ pub use client::IncusClient;
 pub use error::IncusError;
 pub use model::{
     CreateInstance, HostResources, ImageAliasInfo, ImageInfo, ImageProtocol, ImageReference,
-    ImageRemote, ImageSource, IncusEndpoint, InstanceInfo, InstanceKind, InstanceStatus,
-    InstanceUsage, RootDisk, ServerAuth, ServerInfo,
+    ImageRemote, ImageSource, IncusEndpoint, IncusTimeouts, InstanceInfo, InstanceKind,
+    InstanceStatus, InstanceUsage, RootDisk, ServerAuth, ServerInfo,
 };

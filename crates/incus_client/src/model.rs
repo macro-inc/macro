@@ -1,3 +1,20 @@
+use std::time::Duration;
+
+/// Explicit Incus transport and operation limits.
+#[derive(Debug, Clone)]
+pub struct IncusTimeouts {
+    /// Deadline for each HTTP request.
+    pub request: Duration,
+    /// Deadline for establishing a connection.
+    pub connect: Duration,
+    /// Seconds each operation wait blocks server-side.
+    pub operation_wait_secs: u32,
+    /// Server-side state change deadline, in seconds.
+    pub state_change_secs: u32,
+    /// Maximum number of operation wait calls.
+    pub operation_waits: u32,
+}
+
 use std::collections::BTreeMap;
 
 use strum::{AsRefStr, EnumString};
@@ -7,6 +24,8 @@ use strum::{AsRefStr, EnumString};
 pub struct IncusEndpoint {
     /// Base URL, e.g. `https://10.200.0.2:8443`.
     pub url: String,
+    /// Explicit transport and operation deadlines.
+    pub timeouts: IncusTimeouts,
     /// PEM certificate the server has in its trust store.
     pub client_cert_pem: String,
     /// PEM private key for `client_cert_pem`.

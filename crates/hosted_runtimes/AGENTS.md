@@ -31,6 +31,16 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 - `src/outbound/`: Postgres repo, `IncusFleet`, dev-only `DockerFleet`, and
   `ConfiguredFleet` (explicit `COMPUTERS_FLEET`, never a fallback).
 
+## Explicit configuration
+
+Require image, host reserve and oversell factor for either enabled fleet;
+require Docker memory for Docker, and explicit profile, storage pool,
+request/connect/operation/state-change limits and shutdown grace for Incus.
+See [the required variable list](../../docs/development/running-locally.md#macro-computers).
+Keep lifecycle timings (`IDLE_AFTER`, `SUSPEND_AFTER`, `RETENTION`, backoffs,
+leases and polling intervals) as named policy constants, not config defaults.
+Reject invalid stored numeric capacity and retry counts rather than substituting values.
+
 ## Contracts (PR B, agent brains, builds on these — keep them stable)
 
 - **Fleet ownership**: Require explicit `COMPUTERS_CONTROL_PLANE_ID` whenever

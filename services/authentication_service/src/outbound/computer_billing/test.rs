@@ -96,7 +96,10 @@ fn prices() -> ComputerPrices {
             monthly: Some("price_large_month".into()),
             yearly: None,
         },
-        xl: IntervalPrices::default(),
+        xl: IntervalPrices {
+            monthly: None,
+            yearly: None,
+        },
     }
 }
 

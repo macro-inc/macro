@@ -4,7 +4,7 @@
 use hosted_runtimes::domain::{models::BillingInterval, size::ComputerSize};
 
 /// One size's price per billing interval; `None` when not sold at it.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntervalPrices {
     pub monthly: Option<String>,
     pub yearly: Option<String>,
@@ -25,7 +25,7 @@ impl IntervalPrices {
 
 /// The Stripe prices computers are billed at. Not seat plans: seat
 /// accounting ignores these prices.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComputerPrices {
     pub standard: IntervalPrices,
     pub large: IntervalPrices,
@@ -33,6 +33,14 @@ pub struct ComputerPrices {
 }
 
 impl ComputerPrices {
+    /// Whether this deployment has no computer billing prices configured.
+    pub fn is_empty(&self) -> bool {
+        ComputerSize::ALL.into_iter().all(|size| {
+            let prices = self.of(size);
+            prices.monthly.is_none() && prices.yearly.is_none()
+        })
+    }
+
     fn of(&self, size: ComputerSize) -> &IntervalPrices {
         match size {
             ComputerSize::Standard => &self.standard,

@@ -154,14 +154,27 @@ pub struct Config {
     /// Name of the computer host this control plane drives.
     pub computers_host_name: Option<String>,
     /// Base image computers are created from (Incus alias or Docker image).
-    #[macro_config_default(String::from("macro-box"))]
-    pub computers_image: String,
+    pub computers_image: Option<String>,
     /// RAM kept for the host itself, in GB.
-    #[macro_config_default(7)]
-    pub computers_host_reserve_gb: u32,
+    pub computers_host_reserve_gb: Option<u32>,
     /// Units sold per awake unit of host capacity.
-    #[macro_config_default(3)]
-    pub computers_oversell_factor: u32,
+    pub computers_oversell_factor: Option<u32>,
+    /// Incus request deadline, in seconds.
+    pub computers_incus_request_timeout_secs: Option<u64>,
+    /// Incus connection deadline, in seconds.
+    pub computers_incus_connect_timeout_secs: Option<u64>,
+    /// Seconds each Incus operation wait blocks on the server.
+    pub computers_incus_operation_wait_secs: Option<u32>,
+    /// Server-side Incus state change deadline, in seconds.
+    pub computers_incus_state_change_timeout_secs: Option<u32>,
+    /// Maximum Incus operation wait calls.
+    pub computers_incus_operation_waits: Option<u32>,
+    /// Clean shutdown deadline before forcibly stopping a VM, in seconds.
+    pub computers_incus_shutdown_grace_secs: Option<u64>,
+    /// Incus profile installed on the host.
+    pub computers_incus_profile: Option<String>,
+    /// Incus storage pool for root volumes.
+    pub computers_incus_storage_pool: Option<String>,
     /// Incus API origin of the computer host.
     pub computers_incus_url: Option<String>,
     /// PEM client certificate the Incus host trusts.
@@ -175,8 +188,7 @@ pub struct Config {
     /// Host directory holding each Docker computer's enrollment file.
     pub computers_docker_enrollment_dir: Option<String>,
     /// RAM the Docker fleet may hand to computers, in GB.
-    #[macro_config_default(32)]
-    pub computers_docker_memory_gb: u32,
+    pub computers_docker_memory_gb: Option<u32>,
     /// JSON object of `OVERRIDE_*` service URLs written into every
     /// computer's enrollment; local stacks only.
     pub computers_service_url_overrides: Option<String>,

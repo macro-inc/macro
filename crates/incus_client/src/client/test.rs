@@ -23,7 +23,17 @@ async fn missing_instance_is_not_found() {
         })))
         .mount(&server)
         .await;
-    let client = IncusClient::with_http_client(&server.uri(), reqwest::Client::new());
+    let client = IncusClient::with_http_client(
+        &server.uri(),
+        reqwest::Client::new(),
+        IncusTimeouts {
+            request: Duration::from_secs(90),
+            connect: Duration::from_secs(10),
+            operation_wait_secs: 60,
+            operation_waits: 15,
+            state_change_secs: 60,
+        },
+    );
 
     let result = client.instance("box-1").await;
 
@@ -49,7 +59,17 @@ async fn other_error_envelopes_are_rejected_with_status_and_message() {
         })))
         .mount(&server)
         .await;
-    let client = IncusClient::with_http_client(&server.uri(), reqwest::Client::new());
+    let client = IncusClient::with_http_client(
+        &server.uri(),
+        reqwest::Client::new(),
+        IncusTimeouts {
+            request: Duration::from_secs(90),
+            connect: Duration::from_secs(10),
+            operation_wait_secs: 60,
+            operation_waits: 15,
+            state_change_secs: 60,
+        },
+    );
 
     let result = client.stop("box-1", false, false).await;
 
@@ -97,7 +117,17 @@ async fn instance_decodes_the_sync_envelope() {
         })))
         .mount(&server)
         .await;
-    let client = IncusClient::with_http_client(&server.uri(), reqwest::Client::new());
+    let client = IncusClient::with_http_client(
+        &server.uri(),
+        reqwest::Client::new(),
+        IncusTimeouts {
+            request: Duration::from_secs(90),
+            connect: Duration::from_secs(10),
+            operation_wait_secs: 60,
+            operation_waits: 15,
+            state_change_secs: 60,
+        },
+    );
 
     let instance = client.instance("box-1").await.unwrap();
 
@@ -161,7 +191,7 @@ async fn create_instance_maps_a_failed_operation() {
         .await;
     Mock::given(method("GET"))
         .and(path("/1.0/operations/6916c8a6-9b7d-4abd-90b3-aaaaaaaaaaaa/wait"))
-        .and(query_param("timeout", "60"))
+        .and(query_param("timeout", "7"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "type": "sync",
             "status": "Success",
@@ -186,7 +216,17 @@ async fn create_instance_maps_a_failed_operation() {
         })))
         .mount(&server)
         .await;
-    let client = IncusClient::with_http_client(&server.uri(), reqwest::Client::new());
+    let client = IncusClient::with_http_client(
+        &server.uri(),
+        reqwest::Client::new(),
+        IncusTimeouts {
+            request: Duration::from_secs(90),
+            connect: Duration::from_secs(10),
+            operation_wait_secs: 7,
+            operation_waits: 15,
+            state_change_secs: 60,
+        },
+    );
 
     let result = client
         .create_instance(CreateInstance {
@@ -225,7 +265,7 @@ async fn stateful_stop_waits_for_the_operation_to_succeed() {
     Mock::given(method("PUT"))
         .and(path("/1.0/instances/box-1/state"))
         .and(body_json(
-            json!({"action": "stop", "stateful": true, "force": false}),
+            json!({"action": "stop", "stateful": true, "force": false, "timeout": 60}),
         ))
         .respond_with(ResponseTemplate::new(202).set_body_json(json!({
             "type": "async",
@@ -281,7 +321,17 @@ async fn stateful_stop_waits_for_the_operation_to_succeed() {
         .expect(1)
         .mount(&server)
         .await;
-    let client = IncusClient::with_http_client(&server.uri(), reqwest::Client::new());
+    let client = IncusClient::with_http_client(
+        &server.uri(),
+        reqwest::Client::new(),
+        IncusTimeouts {
+            request: Duration::from_secs(90),
+            connect: Duration::from_secs(10),
+            operation_wait_secs: 60,
+            operation_waits: 15,
+            state_change_secs: 60,
+        },
+    );
 
     let result = client.stop("box-1", true, false).await;
 
@@ -345,7 +395,17 @@ async fn remove_config_key_rewrites_the_instance_under_its_etag() {
         .expect(1)
         .mount(&server)
         .await;
-    let client = IncusClient::with_http_client(&server.uri(), reqwest::Client::new());
+    let client = IncusClient::with_http_client(
+        &server.uri(),
+        reqwest::Client::new(),
+        IncusTimeouts {
+            request: Duration::from_secs(90),
+            connect: Duration::from_secs(10),
+            operation_wait_secs: 60,
+            operation_waits: 15,
+            state_change_secs: 60,
+        },
+    );
 
     let result = client
         .remove_config_key("box-1", "user.macro.enrollment")
@@ -371,7 +431,17 @@ async fn resources_reads_host_totals() {
         })))
         .mount(&server)
         .await;
-    let client = IncusClient::with_http_client(&server.uri(), reqwest::Client::new());
+    let client = IncusClient::with_http_client(
+        &server.uri(),
+        reqwest::Client::new(),
+        IncusTimeouts {
+            request: Duration::from_secs(90),
+            connect: Duration::from_secs(10),
+            operation_wait_secs: 60,
+            operation_waits: 15,
+            state_change_secs: 60,
+        },
+    );
 
     let resources = client.resources().await.unwrap();
 
@@ -405,7 +475,17 @@ async fn server_info_reports_untrusted_certificates() {
         })))
         .mount(&server)
         .await;
-    let client = IncusClient::with_http_client(&server.uri(), reqwest::Client::new());
+    let client = IncusClient::with_http_client(
+        &server.uri(),
+        reqwest::Client::new(),
+        IncusTimeouts {
+            request: Duration::from_secs(90),
+            connect: Duration::from_secs(10),
+            operation_wait_secs: 60,
+            operation_waits: 15,
+            state_change_secs: 60,
+        },
+    );
 
     let info = client.server_info().await.unwrap();
 

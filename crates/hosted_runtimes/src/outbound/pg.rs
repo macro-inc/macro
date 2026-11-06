@@ -15,6 +15,11 @@ use crate::domain::size::ComputerSize;
 #[cfg(test)]
 mod test;
 
+/// Payment guards may not occupy every connection needed to persist outcomes.
+const PAYMENT_GUARD_CONNECTIONS: u32 = 4;
+/// Release unused payment-guard connections between billing passes.
+const PAYMENT_GUARD_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// Errors from the Postgres adapter.
 #[derive(Debug, thiserror::Error)]
 pub enum PgComputerError {
@@ -22,6 +27,12 @@ pub enum PgComputerError {
     Sqlx(#[from] sqlx::Error),
     #[error("stored computer data is invalid: {0}")]
     Corrupt(String),
+}
+
+impl From<std::num::TryFromIntError> for PgComputerError {
+    fn from(error: std::num::TryFromIntError) -> Self {
+        Self::Corrupt(error.to_string())
+    }
 }
 
 impl From<serde_json::Error> for PgComputerError {
@@ -41,8 +52,12 @@ impl PgComputerRepo {
         // Payment guards outlive provider calls; keep their waiters off the
         // pool used to persist the outcome while the guard is held.
         let payment_locks = sqlx::postgres::PgPoolOptions::new()
-            .max_connections(pool.options().get_max_connections().min(4))
-            .idle_timeout(std::time::Duration::from_secs(60))
+            .max_connections(
+                pool.options()
+                    .get_max_connections()
+                    .min(PAYMENT_GUARD_CONNECTIONS),
+            )
+            .idle_timeout(PAYMENT_GUARD_IDLE_TIMEOUT)
             .connect_lazy_with(pool.connect_options().as_ref().clone());
         Self {
             pool,
@@ -92,8 +107,8 @@ impl TryFrom<ComputerRow> for Computer {
     }
 }
 
-fn units(size: ComputerSize) -> i32 {
-    i32::try_from(size.units()).unwrap_or(i32::MAX)
+fn units(size: ComputerSize) -> Result<i32, PgComputerError> {
+    Ok(i32::try_from(size.units())?)
 }
 
 impl PgComputerRepo {
@@ -247,7 +262,7 @@ impl PgComputerRepo {
         .fetch_one(&mut **tx)
         .await?;
 
-        Ok(others + units(computer.size) <= capacity)
+        Ok(others + units(computer.size)? <= capacity)
     }
 
     async fn fetch_many(&self, rows: Vec<ComputerRow>) -> Result<Vec<Computer>, PgComputerError> {
@@ -276,6 +291,7 @@ impl ComputerRepo for PgComputerRepo {
         now: DateTime<Utc>,
     ) -> Result<Computer, ReserveError<PgComputerError>> {
         let storage = |error: sqlx::Error| ReserveError::Storage(PgComputerError::from(error));
+        let computer_units = units(computer.size).map_err(ReserveError::Storage)?;
         let mut tx = self.pool.begin().await.map_err(storage)?;
 
         // Lock every host: purchases are rare and hosts few, and this keeps
@@ -294,7 +310,7 @@ impl ComputerRepo for PgComputerRepo {
             ORDER BY locked.sold_capacity_units - COALESCE(SUM(computer.units), 0) DESC
             LIMIT 1
             "#,
-            i64::from(units(computer.size)),
+            i64::from(computer_units),
         )
         .fetch_optional(&mut *tx)
         .await
@@ -327,7 +343,7 @@ impl ComputerRepo for PgComputerRepo {
             computer.team_id,
             computer.name,
             computer.size.as_ref(),
-            units(computer.size),
+            computer_units,
             host,
             state_json,
             persona_json,
@@ -549,7 +565,7 @@ impl ComputerRepo for PgComputerRepo {
                     id: row.id,
                     computer_id: row.computer_id,
                     effect: serde_json::from_value(row.effect)?,
-                    attempts: u32::try_from(row.attempts).unwrap_or(0),
+                    attempts: u32::try_from(row.attempts)?,
                 })
             })
             .collect()
@@ -643,8 +659,8 @@ impl ComputerRepo for PgComputerRepo {
     }
 
     async fn register_host(&self, registration: HostRegistration) -> Result<Host, PgComputerError> {
-        let awake = i32::try_from(registration.awake_capacity_units()).unwrap_or(i32::MAX);
-        let sold = i32::try_from(registration.sold_capacity_units()).unwrap_or(i32::MAX);
+        let awake = i32::try_from(registration.awake_capacity_units())?;
+        let sold = i32::try_from(registration.sold_capacity_units())?;
         let row = sqlx::query!(
             r#"
             INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units)
@@ -666,8 +682,8 @@ impl ComputerRepo for PgComputerRepo {
         Ok(Host {
             id: row.id,
             name: row.name,
-            awake_capacity_units: u32::try_from(row.awake_capacity_units).unwrap_or(0),
-            sold_capacity_units: u32::try_from(row.sold_capacity_units).unwrap_or(0),
+            awake_capacity_units: u32::try_from(row.awake_capacity_units)?,
+            sold_capacity_units: u32::try_from(row.sold_capacity_units)?,
         })
     }
 
@@ -689,7 +705,7 @@ impl ComputerRepo for PgComputerRepo {
 
         Ok(ComputerSize::ALL
             .into_iter()
-            .filter(|size| units(*size) > free)
+            .filter(|size| i64::from(size.units()) > i64::from(free))
             .collect())
     }
 
@@ -726,9 +742,13 @@ impl ComputerRepo for PgComputerRepo {
         )
         .fetch_all(&self.pool)
         .await?;
-        Ok(sizes
+        sizes
             .iter()
-            .filter_map(|size| size.parse::<ComputerSize>().ok())
-            .collect())
+            .map(|size| {
+                size.parse::<ComputerSize>().map_err(|_| {
+                    PgComputerError::Corrupt(format!("invalid computer size {size:?}"))
+                })
+            })
+            .collect()
     }
 }

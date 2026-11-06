@@ -863,7 +863,7 @@ async fn handle_team_subscription_event<'a>(
 /// arrive out of order. Never fails the webhook.
 #[tracing::instrument(skip(ctx))]
 async fn reconcile_team_computers(ctx: &ApiContext, subscription_id: &str, team_id: &uuid::Uuid) {
-    if ctx.computer_prices == crate::domain::computer_billing::ComputerPrices::default() {
+    if ctx.computer_prices.is_empty() {
         return;
     }
     let subscription = match stripe::SubscriptionId::from_str(subscription_id) {

@@ -1,4 +1,4 @@
-use incus_client::{ImageProtocol, ImageRemote};
+use incus_client::{ImageProtocol, ImageRemote, IncusTimeouts};
 
 use super::*;
 
@@ -7,6 +7,13 @@ const COMPUTER_ID: Uuid = Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0
 fn endpoint() -> IncusEndpoint {
     IncusEndpoint {
         url: "https://localhost:18443".to_owned(),
+        timeouts: IncusTimeouts {
+            request: Duration::from_secs(90),
+            connect: Duration::from_secs(10),
+            operation_wait_secs: 60,
+            operation_waits: 15,
+            state_change_secs: 60,
+        },
         client_cert_pem: String::new(),
         client_key_pem: String::new(),
         server_cert_pem: String::new(),
@@ -40,13 +47,20 @@ fn instance_names_start_with_a_letter_and_fit_a_hostname_label() {
 
 #[test]
 fn a_large_computer_gets_its_limits_disk_and_state_room() {
-    let config = IncusFleetConfig::macro_box(
-        endpoint(),
-        "runtime-dev-1".to_owned(),
-        ControlPlaneId::parse("test-a".to_owned()).unwrap(),
-        4,
-        3,
-    );
+    let config = IncusFleetConfig {
+        endpoint: endpoint(),
+        host_name: "test-host".to_owned(),
+        control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+        reserve_gb: 4,
+        oversell_factor: 3,
+        shutdown_grace: Duration::from_secs(60),
+        image: ImageSource {
+            reference: ImageReference::Alias("macro-box".to_owned()),
+            remote: None,
+        },
+        profile: "macro-box".to_owned(),
+        storage_pool: "default".to_owned(),
+    };
 
     let body = instance_body(
         &config,
@@ -97,13 +111,14 @@ fn a_remote_image_names_its_server_and_protocol() {
                 protocol: ImageProtocol::Simplestreams,
             }),
         },
-        ..IncusFleetConfig::macro_box(
-            endpoint(),
-            "runtime-dev-1".to_owned(),
-            ControlPlaneId::parse("test-a".to_owned()).unwrap(),
-            4,
-            3,
-        )
+        endpoint: endpoint(),
+        host_name: "test-host".to_owned(),
+        control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+        reserve_gb: 4,
+        oversell_factor: 3,
+        shutdown_grace: Duration::from_secs(60),
+        profile: "macro-box".to_owned(),
+        storage_pool: "default".to_owned(),
     };
 
     let body = instance_body(

@@ -82,7 +82,7 @@ maybe_env_vars! {
     /// and plan changes answer 400 and every subscription maps to Premium.
     pub struct StripeMaxPriceId;
     /// Stripe price ids for Macro computers, one per size and billing
-    /// interval. Optional: a size is not sold at an interval whose price is unset.
+    /// interval. Required whenever COMPUTERS_FLEET is set.
     pub struct StripeComputerStandardMonthlyPriceId;
     pub struct StripeComputerLargeMonthlyPriceId;
     pub struct StripeComputerXlMonthlyPriceId;
@@ -171,7 +171,7 @@ pub struct Config {
     /// The environment we are in
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
-    /// Local fleet selector; enables validation of computer-facing overrides.
+    /// Enabled fleet; requires explicit billing prices and local computer-facing overrides.
     pub computers_fleet: Option<String>,
     /// Computer-facing local service URLs, shared with macrod enrollment.
     pub computers_service_url_overrides: Option<String>,
@@ -224,7 +224,7 @@ pub struct Config {
     /// The stripe price id for the Max plan seat (optional, see
     /// [`StripeMaxPriceId`])
     pub stripe_max_price_id: StripeMaxPriceId,
-    /// Macro computer prices (optional, see [`StripeComputerStandardMonthlyPriceId`]).
+    /// Macro computer prices (required with COMPUTERS_FLEET).
     pub stripe_computer_standard_monthly_price_id: StripeComputerStandardMonthlyPriceId,
     pub stripe_computer_large_monthly_price_id: StripeComputerLargeMonthlyPriceId,
     pub stripe_computer_xl_monthly_price_id: StripeComputerXlMonthlyPriceId,
@@ -264,6 +264,49 @@ impl Config {
         )
     }
 
+    /// Require all computer prices before enabling a fleet.
+    pub fn validate_computer_config(&self) -> anyhow::Result<()> {
+        let Some(fleet) = self.computers_fleet.as_deref() else {
+            return Ok(());
+        };
+        anyhow::ensure!(
+            matches!(fleet, "incus" | "docker"),
+            "COMPUTERS_FLEET must be incus or docker"
+        );
+        for (name, value) in [
+            (
+                "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID",
+                self.stripe_computer_standard_monthly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_LARGE_MONTHLY_PRICE_ID",
+                self.stripe_computer_large_monthly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_XL_MONTHLY_PRICE_ID",
+                self.stripe_computer_xl_monthly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_STANDARD_YEARLY_PRICE_ID",
+                self.stripe_computer_standard_yearly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_LARGE_YEARLY_PRICE_ID",
+                self.stripe_computer_large_yearly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_XL_YEARLY_PRICE_ID",
+                self.stripe_computer_xl_yearly_price_id.value(),
+            ),
+        ] {
+            anyhow::ensure!(
+                nonblank_value(value).is_some(),
+                "{name} is required when COMPUTERS_FLEET is set"
+            );
+        }
+        Ok(())
+    }
+
     /// The Stripe price of each computer size per billing interval.
     pub fn computer_prices(&self) -> crate::domain::computer_billing::ComputerPrices {
         let price = |id: Option<&str>| nonblank_value(id).map(str::to_owned);
@@ -292,6 +335,7 @@ impl Config {
             .context("failed to load authentication service config")?;
         config.enable_ai_usage_enforcement = enforcement;
         config.enable_ai_usage_billing = billing;
+        config.validate_computer_config()?;
         Ok(config)
     }
 

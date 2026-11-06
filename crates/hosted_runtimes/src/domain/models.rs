@@ -294,7 +294,7 @@ impl Computer {
 }
 
 /// Values every computer's enrollment carries, set per environment.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnrollmentDefaults {
     /// `OVERRIDE_*` service URLs for stacks the image's default environment
     /// can't reach (local stacks); empty in dev and prod.
